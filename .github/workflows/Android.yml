@@ -1,0 +1,134 @@
+name: Android
+on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  repository_dispatch:
+  push:
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '!tools/odbc/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Android.yml'
+
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '!tools/odbc/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Android.yml'
+
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+
+jobs:
+ android_armv7a:
+    # Builds binaries for linux_amd64_gcc4
+    name: Android armv7a
+    runs-on: ubuntu-latest
+    env:
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - name: Install Android NDK
+      shell: bash
+      run: |
+        wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
+        unzip android-ndk-r26d-linux.zip
+        ls .
+
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        zip -j libduckdb-android_armv7a.zip build/release/src/libduckdb*.*  src/include/duckdb.h
+
+        ./scripts/upload-assets-to-staging.sh libduckdb-android_armv7a.zip
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: duckdb-binaries-android-armv7a
+        path: |
+          libduckdb-android_armv7a.zip
+
+#
+# # Linux extensions for builds that use C++11 ABI, currently these are all linux builds based on ubuntu >= 18 (e.g. NodeJS)
+# # note that the linux-release-64 is based on the manylinux-based extensions, which are built in .github/workflows/Python.yml
+# linux-extensions-64:
+#    # Builds extensions for linux_amd64
+#    name: Linux Extensions (x64)
+#    runs-on: ubuntu-latest
+#    container: ubuntu:18.04
+#    needs: linux-release-64
+#
+#    steps:
+#    - uses: actions/checkout@v3
+#      with:
+#        fetch-depth: 0
+#        ref: ${{ inputs.git_ref }}
+#
+#    - uses: ./.github/actions/ubuntu_18_setup
+#      with:
+#        vcpkg: 1
+#        openssl: 1
+#        ccache: 1
+#
+#    - name: Checkout (again)
+#      shell: bash
+#      run: git checkout ${{ inputs.git_ref }}
+#
+#    - uses: ./.github/actions/build_extensions
+#      with:
+#        vcpkg_target_triplet: x64-linux
+#        post_install: rm build/release/src/libduckdb*
+#        deploy_as: linux_amd64
+#        treat_warn_as_error: 0
+#        run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+#        run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+#        s3_id: ${{ secrets.S3_ID }}
+#        s3_key: ${{ secrets.S3_KEY }}
+#        signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+#        ninja: 1
+#
+#    - uses: actions/upload-artifact@v3
+#      with:
+#        name: linux-extensions-64
+#        path: |
+#          build/release/extension/*/*.duckdb_extension
