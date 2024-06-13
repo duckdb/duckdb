@@ -518,6 +518,9 @@ bool PandasAnalyzer::Analyze(py::object column) {
 			type = GetItemType(obj, can_convert);
 		}
 	}
+	if (type == LogicalType::SQLNULL) {
+		type = LogicalType(LogicalTypeId::VARCHAR);
+	}
 	if (can_convert) {
 		analyzed_type = type;
 	}

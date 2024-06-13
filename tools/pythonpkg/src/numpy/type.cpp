@@ -55,6 +55,9 @@ static NumpyNullableType ConvertNumpyTypeInternal(const string &col_type_str) {
 	if (col_type_str == "float64" || col_type_str == "Float64") {
 		return NumpyNullableType::FLOAT_64;
 	}
+	if (col_type_str == "string") {
+		return NumpyNullableType::STRING;
+	}
 	if (col_type_str == "object" || col_type_str == "string") {
 		//! this better be castable to strings
 		return NumpyNullableType::OBJECT;
@@ -134,6 +137,8 @@ LogicalType NumpyToLogicalType(const NumpyType &col_type) {
 		return LogicalType::FLOAT;
 	case NumpyNullableType::FLOAT_64:
 		return LogicalType::DOUBLE;
+	case NumpyNullableType::STRING:
+		return LogicalType::VARCHAR;
 	case NumpyNullableType::OBJECT:
 		return LogicalType::VARCHAR;
 	case NumpyNullableType::TIMEDELTA:
