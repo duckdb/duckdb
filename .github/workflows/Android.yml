@@ -55,6 +55,8 @@ jobs:
   android:
     name: Android
     runs-on: ubuntu-latest
+    container: ubuntu:18.04
+
     strategy:
       matrix:
         arch: [ armeabi-v7a, arm64-v8a ]
@@ -73,16 +75,20 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
+    - uses: ./.github/actions/ubuntu_18_setup
+      with:
+        ccache: 1
+
+    - name: Checkout (again)
+      shell: bash
+      run: git checkout ${{ inputs.git_ref }}
+
     - name: Install Android NDK
       shell: bash
       run: |
         wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
         unzip android-ndk-r26d-linux.zip
         mv android-ndk-r26d android-ndk
-
-    - name: Install Ninja
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name:  Build
       shell: bash
@@ -109,7 +115,7 @@ jobs:
     name: Android Extensions
     runs-on: ubuntu-latest
     container: ubuntu:18.04
-    
+
     strategy:
       matrix:
         arch: [ armeabi-v7a, arm64-v8a ]
