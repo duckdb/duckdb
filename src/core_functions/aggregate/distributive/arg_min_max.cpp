@@ -172,7 +172,33 @@ struct ArgMinMaxBase {
 	}
 };
 
-template <typename COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE>
+
+
+struct SpecializedGenericArgMinMaxState {
+	static bool CreateExtraState() {
+		// nop extra state
+		return false;
+	}
+
+	static void PrepareData(Vector &by, idx_t input_count, bool &extra_state, UnifiedVectorFormat &result) {
+		by.ToUnifiedFormat(input_count, result);
+	}
+};
+
+template<OrderType ORDER_TYPE>
+struct GenericArgMinMaxState {
+	static Vector CreateExtraState() {
+		return Vector(LogicalType::BLOB);
+	}
+
+	static void PrepareData(Vector &by, idx_t input_count, Vector &extra_state, UnifiedVectorFormat &result) {
+		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
+		CreateSortKeyHelpers::CreateSortKey(by, input_count, modifiers, extra_state);
+		extra_state.ToUnifiedFormat(input_count, result);
+	}
+};
+
+template <typename COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE, class UPDATE_TYPE = SpecializedGenericArgMinMaxState>
 struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 	template <class STATE>
 	static void Update(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector, idx_t count) {
@@ -184,7 +210,8 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		using BY_TYPE = typename STATE::BY_TYPE;
 		auto &by = inputs[1];
 		UnifiedVectorFormat bdata;
-		by.ToUnifiedFormat(count, bdata);
+		auto extra_state = UPDATE_TYPE::CreateExtraState();
+		UPDATE_TYPE::PrepareData(by, input_count, extra_state, bdata);
 		const auto bys = UnifiedVectorFormat::GetData<BY_TYPE>(bdata);
 
 		UnifiedVectorFormat sdata;
@@ -419,6 +446,16 @@ void AddDecimalArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType 
 	                                  nullptr, nullptr, nullptr, nullptr, BindDecimalArgMinMax<OP>));
 }
 
+template<class OP>
+void AddGenericArgMinMaxFunction(AggregateFunctionSet &fun) {
+	using STATE = ArgMinMaxState<string_t, string_t>;
+	fun.AddFunction(AggregateFunction(
+		    {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+		    OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
+		    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>));
+
+}
+
 template <class COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE>
 static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 	using OP = ArgMinMaxBase<COMPARATOR, IGNORE_NULL>;
@@ -438,6 +475,10 @@ static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 
 	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, IGNORE_NULL, ORDER_TYPE>;
 	AddVectorArgMinMaxFunctionBy<VECTOR_OP, string_t>(fun, LogicalType::ANY);
+
+	// we always use LessThan when using sort keys because the ORDER_TYPE takes care of selecting the lowest or highest
+	using GENERIC_VECTOR_OP = VectorArgMinMaxBase<LessThan, IGNORE_NULL, ORDER_TYPE, GenericArgMinMaxState<ORDER_TYPE>>;
+	AddGenericArgMinMaxFunction<GENERIC_VECTOR_OP>(fun);
 }
 
 AggregateFunctionSet ArgMinFun::GetFunctions() {
