@@ -57,6 +57,14 @@ jobs:
     name: Android armv7a
     runs-on: ubuntu-latest
 
+    env:
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+      EXTENSION_STATIC_BUILD: 1
+      DUCKDB_PLATFORM: android_armv7a
+      CMAKE_VARS_BUILD: -DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=armeabi-v7a -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake
+
     steps:
     - uses: actions/checkout@v3
       with:
@@ -70,13 +78,13 @@ jobs:
         unzip android-ndk-r26d-linux.zip
         mv android-ndk-r26d android-ndk
 
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
     - name:  Build
       shell: bash
-      run: |
-        export EXTENSION_STATIC_BUILD=1
-        export DUCKDB_PLATFORM=android_armv7a
-        export CMAKE_VARS_BUILD="-DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=armeabi-v7a -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake"
-        make
+      run: make
 
     - name: Deploy
       shell: bash
