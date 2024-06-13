@@ -56,7 +56,6 @@ jobs:
     # Builds binaries for linux_amd64_gcc4
     name: Android armv7a
     runs-on: ubuntu-latest
-    env:
 
     steps:
     - uses: actions/checkout@v3
