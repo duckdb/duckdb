@@ -58,8 +58,7 @@ static NumpyNullableType ConvertNumpyTypeInternal(const string &col_type_str) {
 	if (col_type_str == "string") {
 		return NumpyNullableType::STRING;
 	}
-	if (col_type_str == "object" || col_type_str == "string") {
-		//! this better be castable to strings
+	if (col_type_str == "object") {
 		return NumpyNullableType::OBJECT;
 	}
 	if (col_type_str == "timedelta64[ns]") {
