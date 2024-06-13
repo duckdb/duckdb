@@ -822,6 +822,43 @@ void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector
 	ListVector::SetListSize(result, new_list_size);
 }
 
+void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+	// check if the top-level is valid or not
+	auto validity_byte = decode_data.data[decode_data.position];
+	decode_data.position++;
+	if (validity_byte == vector_data.null_byte) {
+		// entire list is NULL
+		FlatVector::Validity(result).SetInvalid(result_idx);
+		return;
+	}
+	// array is valid - decode child elements
+	// arrays need to encode exactly array_size child elements
+	// however the decoded data still contains a list delimiter
+	// we use this delimiter to verify we successfully decoded the entire array
+	auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
+	if (decode_data.flip_bytes) {
+		list_delimiter = ~list_delimiter;
+	}
+	auto &child_vector = ArrayVector::GetEntry(result);
+	auto array_size = ArrayType::GetSize(result.GetType());
+
+	idx_t found_elements = 0;
+	auto child_start = array_size * result_idx;
+	// loop until we find the list delimiter
+	while(decode_data.data[decode_data.position] != list_delimiter) {
+		found_elements++;
+		if (found_elements > array_size) {
+			// error - found too many elements
+			break;
+		}
+		// now decode the entry
+		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[0], child_vector, child_start + found_elements - 1);
+	}
+	if (found_elements != array_size) {
+		throw InvalidInputException("Failed to decode array - found %d elements but expected %d", found_elements, array_size);
+	}
+}
+
 void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -879,9 +916,9 @@ void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 	case PhysicalType::LIST:
 		DecodeSortKeyList(decode_data, vector_data, result, result_idx);
 		break;
-	// case PhysicalType::ARRAY:
-	// 	ConstructSortKeyList<SortKeyArrayEntry>(vector_data, chunk, info);
-	// 	break;
+	case PhysicalType::ARRAY:
+		DecodeSortKeyArray(decode_data, vector_data, result, result_idx);
+		break;
 	default:
 		throw NotImplementedException("Unsupported type %s in DecodeSortKey", vector_data.vec.GetType());
 	}

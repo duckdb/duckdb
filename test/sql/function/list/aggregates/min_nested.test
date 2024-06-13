@@ -173,5 +173,19 @@ SELECT MAX(s) FROM struct_with_lists;
 {'i': NULL}
 
 # arrays
+statement ok
+CREATE TABLE arrays AS SELECT (case when i<500 then [i, i + 1, i + 2] else [i, 0, 0] end)::BIGINT[3] AS l FROM range(1000) t(i);
 
-# test_all_types?
+query II
+SELECT MIN(l), MAX(l) FROM arrays;
+----
+[0, 1, 2]	[999, 0, 0]
+
+# null entries
+statement ok
+INSERT INTO arrays VALUES (NULL), ([NULL, NULL, NULL]);
+
+query II
+SELECT MIN(l), MAX(l) FROM arrays;
+----
+[0, 1, 2]	[NULL, NULL, NULL]
