@@ -816,6 +816,8 @@ void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector
 		// now decode the entry
 		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[0], child_vector, new_list_size - 1);
 	}
+	// skip the list delimiter
+	decode_data.position++;
 	// set the list_entry_t information and update the list size
 	list_data[result_idx].length = new_list_size - start_list_size;
 	list_data[result_idx].offset = start_list_size;
@@ -827,9 +829,9 @@ void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vecto
 	auto validity_byte = decode_data.data[decode_data.position];
 	decode_data.position++;
 	if (validity_byte == vector_data.null_byte) {
-		// entire list is NULL
+		// entire array is NULL
+		// note that we still read the child elements
 		FlatVector::Validity(result).SetInvalid(result_idx);
-		return;
 	}
 	// array is valid - decode child elements
 	// arrays need to encode exactly array_size child elements
@@ -854,6 +856,8 @@ void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vecto
 		// now decode the entry
 		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[0], child_vector, child_start + found_elements - 1);
 	}
+	// skip the list delimiter
+	decode_data.position++;
 	if (found_elements != array_size) {
 		throw InvalidInputException("Failed to decode array - found %d elements but expected %d", found_elements, array_size);
 	}

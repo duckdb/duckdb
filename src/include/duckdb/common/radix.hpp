@@ -56,13 +56,13 @@ public:
 
 	static inline uint32_t EncodeFloat(float x) {
 		uint32_t buff;
+        //! zero
+        if (x == 0) {
+            buff = 0;
+            buff |= (1u << 31);
+            return buff;
+        }
 
-		//! zero
-		if (x == 0) {
-			buff = 0;
-			buff |= (1u << 31);
-			return buff;
-		}
 		// nan
 		if (Value::IsNan(x)) {
 			return UINT_MAX;
@@ -76,8 +76,8 @@ public:
 			return 0;
 		}
 		buff = Load<uint32_t>(const_data_ptr_cast(&x));
-		if ((buff & (1u << 31)) == 0) { //! +0 and positive numbers
-			buff |= (1u << 31);
+		if ((buff & (1U << 31)) == 0) { //! +0 and positive numbers
+			buff |= (1U << 31);
 		} else {          //! negative numbers
 			buff = ~buff; //! complement 1
 		}
@@ -85,12 +85,35 @@ public:
 		return buff;
 	}
 
+	static inline float DecodeFloat(uint32_t input) {
+		// nan
+		if (input == UINT_MAX) {
+			return NAN;
+		}
+		if (input == UINT_MAX - 1) {
+			return INFINITY;
+		}
+		if (input == 0) {
+			return -INFINITY;
+		}
+		float result;
+		if (input & (1U << 31)) {
+			// positive numbers - flip sign bit
+			input = input ^ (1U << 31);
+		} else {
+			// negative numbers - invert
+			input = ~input;
+		}
+		Store<uint32_t>(input, data_ptr_cast(&result));
+		return result;
+	}
+
 	static inline uint64_t EncodeDouble(double x) {
 		uint64_t buff;
 		//! zero
 		if (x == 0) {
 			buff = 0;
-			buff += (1ull << 63);
+			buff += (1ULL << 63);
 			return buff;
 		}
 		// nan
@@ -106,13 +129,36 @@ public:
 			return 0;
 		}
 		buff = Load<uint64_t>(const_data_ptr_cast(&x));
-		if (buff < (1ull << 63)) { //! +0 and positive numbers
-			buff += (1ull << 63);
+		if (buff < (1ULL << 63)) { //! +0 and positive numbers
+			buff += (1ULL << 63);
 		} else {          //! negative numbers
 			buff = ~buff; //! complement 1
 		}
 		return buff;
 	}
+	static inline double DecodeDouble(uint64_t input) {
+		// nan
+		if (input == ULLONG_MAX) {
+			return NAN;
+		}
+		if (input == ULLONG_MAX - 1) {
+			return INFINITY;
+		}
+		if (input == 0) {
+			return -INFINITY;
+		}
+		double result;
+		if (input & (1ULL << 63)) {
+			// positive numbers - flip sign bit
+			input = input ^ (1ULL << 63);
+		} else {
+			// negative numbers - invert
+			input = ~input;
+		}
+		Store<uint64_t>(input, data_ptr_cast(&result));
+		return result;
+	}
+
 private:
 	template<class T>
 	static void EncodeSigned(data_ptr_t dataptr, T value);
@@ -245,47 +291,57 @@ inline int64_t Radix::DecodeData(const_data_ptr_t input) {
 
 template <>
 inline uint8_t Radix::DecodeData(const_data_ptr_t input) {
-	throw InternalException("FIXME Radix::DecodeData");
+	return Load<uint8_t>(input);
 }
 
 template <>
 inline uint16_t Radix::DecodeData(const_data_ptr_t input) {
-	throw InternalException("FIXME Radix::DecodeData");
+	return BSwap(Load<uint16_t>(input));
 }
 
 template <>
 inline uint32_t Radix::DecodeData(const_data_ptr_t input) {
-	throw InternalException("FIXME Radix::DecodeData");
+	return BSwap(Load<uint32_t>(input));
 }
 
 template <>
 inline uint64_t Radix::DecodeData(const_data_ptr_t input) {
-	throw InternalException("FIXME Radix::DecodeData");
+	return BSwap(Load<uint64_t>(input));
 }
 
 template <>
 inline hugeint_t Radix::DecodeData(const_data_ptr_t input) {
-	throw InternalException("FIXME Radix::DecodeData");
+	hugeint_t result;
+	result.upper = DecodeData<int64_t>(input);
+	result.lower = DecodeData<uint64_t>(input + sizeof(int64_t));
+	return result;
 }
 
 template <>
 inline uhugeint_t Radix::DecodeData(const_data_ptr_t input) {
-	throw InternalException("FIXME Radix::DecodeData");
+	uhugeint_t result;
+	result.upper = DecodeData<uint64_t>(input);
+	result.lower = DecodeData<uint64_t>(input + sizeof(uint64_t));
+	return result;
 }
 
 template <>
 inline float Radix::DecodeData(const_data_ptr_t input) {
-	throw InternalException("FIXME Radix::DecodeData");
+	return DecodeFloat(BSwap(Load<uint32_t>(input)));
 }
 
 template <>
 inline double Radix::DecodeData(const_data_ptr_t input) {
-	throw InternalException("FIXME Radix::DecodeData");
+	return DecodeDouble(BSwap(Load<uint64_t>(input)));
 }
 
 template <>
 inline interval_t Radix::DecodeData(const_data_ptr_t input) {
-	throw InternalException("FIXME Radix::DecodeData");
+	interval_t result;
+	result.months = DecodeData<int32_t>(input);
+	result.days = DecodeData<int32_t>(input + sizeof(int32_t));
+	result.micros = DecodeData<int64_t>(input + sizeof(int32_t) + sizeof(int32_t));
+	return result;
 }
 
 } // namespace duckdb

@@ -1,6 +1,9 @@
-# name: test/sql/function/list/aggregates/min_nested.test
-# description: Test the list_min aggregate function
+# name: test/sql/function/list/aggregates/minmax_nested.test
+# description: Test the min/max functions on complex nested types aggregate function
 # group: [aggregates]
+
+statement ok
+pragma enable_verification
 
 # structs
 statement ok
@@ -189,3 +192,36 @@ query II
 SELECT MIN(l), MAX(l) FROM arrays;
 ----
 [0, 1, 2]	[NULL, NULL, NULL]
+
+# floats
+statement ok
+CREATE TABLE float_values(f FLOAT);
+
+statement ok
+INSERT INTO float_values VALUES ('0'), ('-3.4e38'), ('3.4e38'), ('nan'), ('inf'), ('-inf')
+
+query II
+SELECT f, (SELECT MIN({'v': x}) FROM (VALUES (f)) t(x)) FROM float_values;
+----
+0.0	{'v': 0.0}
+-3.4e+38	{'v': -3.4e+38}
+3.4e+38	{'v': 3.4e+38}
+nan	{'v': nan}
+inf	{'v': inf}
+-inf	{'v': -inf}
+
+statement ok
+CREATE TABLE double_values(d DOUBLE);
+
+statement ok
+INSERT INTO double_values VALUES ('0'), ('-1e308'), ('1e308'), ('nan'), ('inf'), ('-inf')
+
+query II
+SELECT d, (SELECT MIN({'v': x}) FROM (VALUES (d)) t(x)) FROM double_values;
+----
+0.0	{'v': 0.0}
+-1e+308	{'v': -1e+308}
+1e+308	{'v': 1e+308}
+nan	{'v': nan}
+inf	{'v': inf}
+-inf	{'v': -inf}
