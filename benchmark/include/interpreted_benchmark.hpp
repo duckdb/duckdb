@@ -7,6 +7,7 @@
 #pragma once
 
 #include "benchmark.hpp"
+#include "duckdb/main/query_result.hpp"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -83,7 +84,7 @@ private:
 	string subgroup;
 
 	bool in_memory = true;
-	bool streaming = false;
+	QueryResultType result_type = QueryResultType::MATERIALIZED_RESULT;
 	bool require_reinit = false;
 };
 

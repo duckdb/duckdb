@@ -4,10 +4,13 @@
 #include "duckdb.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/common/arrow/physical_arrow_collector.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -181,11 +184,18 @@ void InterpretedBenchmark::LoadBenchmark() {
 			if (splits.size() != 2) {
 				throw std::runtime_error(reader.FormatException("resultmode requires a single parameter"));
 			}
-			if (splits[1] != "streaming") {
-				throw std::runtime_error(
-				    reader.FormatException("Invalid argument for resultmode, valid option is 'streaming'"));
+			if (splits[1] == "streaming") {
+				result_type = QueryResultType::STREAM_RESULT;
+			} else if (splits[1] == "arrow") {
+				result_type = QueryResultType::ARROW_RESULT;
+			} else if (splits[1] == "materialized") {
+				result_type = QueryResultType::MATERIALIZED_RESULT;
+			} else {
+				vector<string> valid_options = {"streaming", "arrow", "materialized"};
+				auto error = StringUtil::Format("Invalid argument for resultmode, valid options are: %s",
+				                                StringUtil::Join(valid_options, ", "));
+				throw std::runtime_error(reader.FormatException(error));
 			}
-			streaming = true;
 		} else if (splits[0] == "cache") {
 			if (splits.size() == 2) {
 				cache_db = splits[1];
@@ -428,13 +438,38 @@ string InterpretedBenchmark::GetQuery() {
 	return run_query;
 }
 
+ScopedConfigSetting PrepareResultCollector(ClientConfig &config, QueryResultType result_type) {
+	if (result_type == QueryResultType::ARROW_RESULT) {
+		return ScopedConfigSetting(
+		    config,
+		    [](ClientConfig &config) {
+			    config.result_collector = [](ClientContext &context, PreparedStatementData &data) {
+				    return PhysicalArrowCollector::Create(context, data, STANDARD_VECTOR_SIZE);
+			    };
+		    },
+		    [](ClientConfig &config) { config.result_collector = nullptr; });
+	}
+	return ScopedConfigSetting(config);
+}
+
 void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	auto &context = state.con.context;
-	auto temp_result = context->Query(run_query, streaming);
+
+	auto &config = ClientConfig::GetConfig(*context);
+	auto result_collector_setting = PrepareResultCollector(config, result_type);
+	const bool use_streaming = result_type == QueryResultType::STREAM_RESULT;
+	auto temp_result = context->Query(run_query, use_streaming);
+	if (temp_result->type != result_type) {
+		throw InternalException("Query did not produce the right result type, expected %s but got %s",
+		                        EnumUtil::ToString(result_type), EnumUtil::ToString(temp_result->type));
+	}
 	if (temp_result->type == QueryResultType::STREAM_RESULT) {
 		auto &stream_query = temp_result->Cast<StreamQueryResult>();
 		state.result = stream_query.Materialize();
+	} else if (temp_result->type == QueryResultType::ARROW_RESULT) {
+		/* no-op, this is only used to test the overhead of the result collector */
+		state.result = nullptr;
 	} else {
 		state.result = unique_ptr_cast<duckdb::QueryResult, duckdb::MaterializedQueryResult>(std::move(temp_result));
 	}
@@ -512,6 +547,11 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, Materialize
 
 string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
+	if (!state.result) {
+		D_ASSERT(result_type != QueryResultType::MATERIALIZED_RESULT);
+		return string();
+	}
+
 	if (state.result->HasError()) {
 		return state.result->GetError();
 	}
