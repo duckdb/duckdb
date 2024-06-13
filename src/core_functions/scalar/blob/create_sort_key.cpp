@@ -123,7 +123,6 @@ struct SortKeyVectorData {
 	SortKeyVectorData &operator=(const SortKeyVectorData &) = delete;
 
 	void Initialize() {
-
 	}
 
 	PhysicalType GetPhysicalType() {
@@ -192,12 +191,13 @@ struct SortKeyVarcharOperator {
 			string_delimiter = ~string_delimiter;
 		}
 		idx_t pos;
-		for(pos = 0; input[pos] != string_delimiter; pos++) {}
+		for (pos = 0; input[pos] != string_delimiter; pos++) {
+		}
 		idx_t str_len = pos;
 		// now allocate the string data and fill it with the decoded data
 		result_data[result_idx] = StringVector::EmptyString(result, str_len);
 		auto str_data = data_ptr_cast(result_data[result_idx].GetDataWriteable());
-		for(pos = 0; pos < str_len; pos++) {
+		for (pos = 0; pos < str_len; pos++) {
 			if (flip_bytes) {
 				str_data[pos] = (~input[pos]) - 1;
 			} else {
@@ -253,7 +253,7 @@ struct SortKeyBlobOperator {
 		}
 		idx_t blob_len = 0;
 		idx_t pos;
-		for(pos = 0; input[pos] != string_delimiter; pos++) {
+		for (pos = 0; input[pos] != string_delimiter; pos++) {
 			blob_len++;
 			if (input[pos] == escape_character) {
 				// escape character - skip the next byte
@@ -263,7 +263,7 @@ struct SortKeyBlobOperator {
 		// now allocate the blob data and fill it with the decoded data
 		result_data[result_idx] = StringVector::EmptyString(result, blob_len);
 		auto str_data = data_ptr_cast(result_data[result_idx].GetDataWriteable());
-		for(idx_t input_pos = 0, result_pos = 0; input_pos < pos; input_pos++) {
+		for (idx_t input_pos = 0, result_pos = 0; input_pos < pos; input_pos++) {
 			if (input[input_pos] == escape_character) {
 				// if we encounter an escape character - copy the NEXT byte
 				input_pos++;
@@ -691,7 +691,8 @@ static void FinalizeSortData(Vector &result, idx_t size) {
 	}
 }
 
-static void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data, const vector<OrderModifiers> &modifiers, Vector &result, idx_t row_count) {
+static void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
+                                  const vector<OrderModifiers> &modifiers, Vector &result, idx_t row_count) {
 	// two phases
 	// a) get the length of the final sorted key
 	// b) allocate the sorted key and construct
@@ -712,12 +713,12 @@ static void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_ke
 		ConstructSortKey(*sort_key_data[c], info);
 	}
 	FinalizeSortData(result, row_count);
-
 }
 
-void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, OrderModifiers order_modifier, Vector &result) {
+void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, OrderModifiers order_modifier,
+                                         Vector &result) {
 	// prepare the sort key data
-	vector<OrderModifiers> modifiers { order_modifier };
+	vector<OrderModifiers> modifiers {order_modifier};
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
 
@@ -743,8 +744,9 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 // Decode Sort Key
 //===--------------------------------------------------------------------===//
 struct DecodeSortKeyData {
-	explicit DecodeSortKeyData(OrderModifiers modifiers, string_t &sort_key) :
-		data(const_data_ptr_cast(sort_key.GetData())), size(sort_key.GetSize()), position(0), flip_bytes(modifiers.order_type == OrderType::DESCENDING) {
+	explicit DecodeSortKeyData(OrderModifiers modifiers, string_t &sort_key)
+	    : data(const_data_ptr_cast(sort_key.GetData())), size(sort_key.GetSize()), position(0),
+	      flip_bytes(modifiers.order_type == OrderType::DESCENDING) {
 	}
 
 	const_data_ptr_t data;
@@ -753,10 +755,12 @@ struct DecodeSortKeyData {
 	bool flip_bytes;
 };
 
-void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx);
+void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+                            idx_t result_idx);
 
 template <class OP>
-void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+                            idx_t result_idx) {
 	auto validity_byte = decode_data.data[decode_data.position];
 	decode_data.position++;
 	if (validity_byte == vector_data.null_byte) {
@@ -768,7 +772,8 @@ void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 	decode_data.position += increment;
 }
 
-void DecodeSortKeyStruct(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+void DecodeSortKeyStruct(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+                         idx_t result_idx) {
 	// check if the top-level is valid or not
 	auto validity_byte = decode_data.data[decode_data.position];
 	decode_data.position++;
@@ -779,13 +784,14 @@ void DecodeSortKeyStruct(DecodeSortKeyData &decode_data, SortKeyVectorData &vect
 	}
 	// recurse into children
 	auto &child_entries = StructVector::GetEntries(result);
-	for(idx_t c = 0; c < child_entries.size(); c++) {
+	for (idx_t c = 0; c < child_entries.size(); c++) {
 		auto &child_entry = child_entries[c];
 		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[c], *child_entry, result_idx);
 	}
 }
 
-void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+                       idx_t result_idx) {
 	// check if the top-level is valid or not
 	auto validity_byte = decode_data.data[decode_data.position];
 	decode_data.position++;
@@ -807,7 +813,7 @@ void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector
 	auto start_list_size = ListVector::GetListSize(result);
 	auto new_list_size = start_list_size;
 	// loop until we find the list delimiter
-	while(decode_data.data[decode_data.position] != list_delimiter) {
+	while (decode_data.data[decode_data.position] != list_delimiter) {
 		// found a valid entry here - decode it
 		// first reserve space for it
 		new_list_size++;
@@ -824,7 +830,8 @@ void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector
 	ListVector::SetListSize(result, new_list_size);
 }
 
-void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+                        idx_t result_idx) {
 	// check if the top-level is valid or not
 	auto validity_byte = decode_data.data[decode_data.position];
 	decode_data.position++;
@@ -847,7 +854,7 @@ void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vecto
 	idx_t found_elements = 0;
 	auto child_start = array_size * result_idx;
 	// loop until we find the list delimiter
-	while(decode_data.data[decode_data.position] != list_delimiter) {
+	while (decode_data.data[decode_data.position] != list_delimiter) {
 		found_elements++;
 		if (found_elements > array_size) {
 			// error - found too many elements
@@ -859,11 +866,13 @@ void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vecto
 	// skip the list delimiter
 	decode_data.position++;
 	if (found_elements != array_size) {
-		throw InvalidInputException("Failed to decode array - found %d elements but expected %d", found_elements, array_size);
+		throw InvalidInputException("Failed to decode array - found %d elements but expected %d", found_elements,
+		                            array_size);
 	}
 }
 
-void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+                            idx_t result_idx) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 		TemplatedDecodeSortKey<SortKeyConstantOperator<bool>>(decode_data, vector_data, result, result_idx);
@@ -928,8 +937,8 @@ void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 	}
 }
 
-
-void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx, OrderModifiers modifiers) {
+void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
+                                         OrderModifiers modifiers) {
 	SortKeyVectorData sort_key_data(result, 0, modifiers);
 	DecodeSortKeyData decode_data(modifiers, sort_key);
 	DecodeSortKeyRecursive(decode_data, sort_key_data, result, result_idx);

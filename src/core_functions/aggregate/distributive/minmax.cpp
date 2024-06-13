@@ -214,7 +214,7 @@ struct MaxOperationString : public StringMinMaxBase {
 	}
 };
 
-template<OrderType ORDER_TYPE>
+template <OrderType ORDER_TYPE>
 struct VectorMinMaxBase {
 	static bool IgnoreNull() {
 		return true;
@@ -248,7 +248,8 @@ struct VectorMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t input_count, Vector &state_vector, idx_t count) {
+	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t input_count, Vector &state_vector,
+	                   idx_t count) {
 		auto &input = inputs[0];
 
 		Vector sort_key(LogicalType::BLOB);
@@ -303,7 +304,8 @@ struct VectorMinMaxBase {
 		if (!state.isset) {
 			finalize_data.ReturnNull();
 		} else {
-			CreateSortKeyHelpers::DecodeSortKey(state.value, finalize_data.result, finalize_data.result_idx, OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST));
+			CreateSortKeyHelpers::DecodeSortKey(state.value, finalize_data.result, finalize_data.result_idx,
+			                                    OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST));
 		}
 	}
 
@@ -315,13 +317,9 @@ struct VectorMinMaxBase {
 	}
 };
 
-struct MinOperationVector : VectorMinMaxBase<OrderType::ASCENDING> {
+struct MinOperationVector : VectorMinMaxBase<OrderType::ASCENDING> {};
 
-};
-
-struct MaxOperationVector : VectorMinMaxBase<OrderType::DESCENDING> {
-
-};
+struct MaxOperationVector : VectorMinMaxBase<OrderType::DESCENDING> {};
 
 template <class OP>
 unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunction &function,

@@ -56,12 +56,12 @@ public:
 
 	static inline uint32_t EncodeFloat(float x) {
 		uint32_t buff;
-        //! zero
-        if (x == 0) {
-            buff = 0;
-            buff |= (1u << 31);
-            return buff;
-        }
+		//! zero
+		if (x == 0) {
+			buff = 0;
+			buff |= (1u << 31);
+			return buff;
+		}
 
 		// nan
 		if (Value::IsNan(x)) {
@@ -160,9 +160,9 @@ public:
 	}
 
 private:
-	template<class T>
+	template <class T>
 	static void EncodeSigned(data_ptr_t dataptr, T value);
-	template<class T>
+	template <class T>
 	static T DecodeSigned(const_data_ptr_t input);
 };
 
@@ -171,7 +171,7 @@ inline void Radix::EncodeData(data_ptr_t dataptr, bool value) {
 	Store<uint8_t>(value ? 1 : 0, dataptr);
 }
 
-template<class T>
+template <class T>
 void Radix::EncodeSigned(data_ptr_t dataptr, T value) {
 	using UNSIGNED = typename MakeUnsigned<T>::type;
 	UNSIGNED bytes;
@@ -258,7 +258,7 @@ inline bool Radix::DecodeData(const_data_ptr_t input) {
 	return Load<uint8_t>(input) != 0;
 }
 
-template<class T>
+template <class T>
 T Radix::DecodeSigned(const_data_ptr_t input) {
 	using UNSIGNED = typename MakeUnsigned<T>::type;
 	UNSIGNED bytes = Load<UNSIGNED>(input);
