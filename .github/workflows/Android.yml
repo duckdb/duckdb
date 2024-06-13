@@ -59,7 +59,6 @@ jobs:
       matrix:
         arch: [ armeabi-v7a, arm64-v8a ]
 
-
     env:
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
@@ -96,7 +95,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         zip -j libduckdb-android_${{matrix.arch}}.zip build/release/src/libduckdb*.*  src/include/duckdb.h
-        ./scripts/upload-assets-to-staging.sh libduckdb-android_${{matrix.arch}}.zip
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-android_${{matrix.arch}}.zip
 
     - uses: actions/upload-artifact@v3
       with:
