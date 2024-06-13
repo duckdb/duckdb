@@ -43,6 +43,11 @@ void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	}
 }
 
+void PendingQueryResult::WaitForTask() {
+	auto lock = LockContext();
+	context->WaitForTask(*lock, *this);
+}
+
 PendingExecutionResult PendingQueryResult::ExecuteTask() {
 	auto lock = LockContext();
 	return ExecuteTaskInternal(*lock);

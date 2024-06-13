@@ -474,15 +474,18 @@ static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQuer
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
 	auto is_finished = FinishedCondition(pending_query);
-	do {
-		execution_result = pending_query.ExecuteTask();
+	while (!is_finished(execution_result = pending_query.ExecuteTask())) {
 		{
 			py::gil_scoped_acquire gil;
 			if (PyErr_CheckSignals() != 0) {
 				throw std::runtime_error("Query interrupted");
 			}
 		}
-	} while (!is_finished(execution_result));
+		if (execution_result == PendingExecutionResult::BLOCKED ||
+		    execution_result == PendingExecutionResult::NO_TASKS_AVAILABLE) {
+			pending_query.WaitForTask();
+		}
+	}
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
 	}
