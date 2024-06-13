@@ -761,7 +761,7 @@ void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 	decode_data.position++;
 	if (validity_byte == vector_data.null_byte) {
 		// NULL value
-		FlatVector::SetNull(result, result_idx, true);
+		FlatVector::Validity(result).SetInvalid(result_idx);
 		return;
 	}
 	idx_t increment = OP::Decode(decode_data.data + decode_data.position, result, result_idx, decode_data.flip_bytes);
@@ -774,8 +774,8 @@ void DecodeSortKeyStruct(DecodeSortKeyData &decode_data, SortKeyVectorData &vect
 	decode_data.position++;
 	if (validity_byte == vector_data.null_byte) {
 		// entire struct is NULL
-		FlatVector::SetNull(result, result_idx, true);
-		return;
+		// note that we still deserialize the children
+		FlatVector::Validity(result).SetInvalid(result_idx);
 	}
 	// recurse into children
 	auto &child_entries = StructVector::GetEntries(result);
@@ -783,6 +783,43 @@ void DecodeSortKeyStruct(DecodeSortKeyData &decode_data, SortKeyVectorData &vect
 		auto &child_entry = child_entries[c];
 		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[c], *child_entry, result_idx);
 	}
+}
+
+void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+	// check if the top-level is valid or not
+	auto validity_byte = decode_data.data[decode_data.position];
+	decode_data.position++;
+	if (validity_byte == vector_data.null_byte) {
+		// entire list is NULL
+		FlatVector::Validity(result).SetInvalid(result_idx);
+		return;
+	}
+	// list is valid - decode child elements
+	// we don't know how many there will be
+	// decode child elements until we encounter the list delimiter
+	auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
+	if (decode_data.flip_bytes) {
+		list_delimiter = ~list_delimiter;
+	}
+	auto list_data = FlatVector::GetData<list_entry_t>(result);
+	auto &child_vector = ListVector::GetEntry(result);
+	// get the current list size
+	auto start_list_size = ListVector::GetListSize(result);
+	auto new_list_size = start_list_size;
+	// loop until we find the list delimiter
+	while(decode_data.data[decode_data.position] != list_delimiter) {
+		// found a valid entry here - decode it
+		// first reserve space for it
+		new_list_size++;
+		ListVector::Reserve(result, new_list_size);
+
+		// now decode the entry
+		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[0], child_vector, new_list_size - 1);
+	}
+	// set the list_entry_t information and update the list size
+	list_data[result_idx].length = new_list_size - start_list_size;
+	list_data[result_idx].offset = start_list_size;
+	ListVector::SetListSize(result, new_list_size);
 }
 
 void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
@@ -839,9 +876,9 @@ void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 	case PhysicalType::STRUCT:
 		DecodeSortKeyStruct(decode_data, vector_data, result, result_idx);
 		break;
-	// case PhysicalType::LIST:
-	// 	ConstructSortKeyList<SortKeyListEntry>(vector_data, chunk, info);
-	// 	break;
+	case PhysicalType::LIST:
+		DecodeSortKeyList(decode_data, vector_data, result, result_idx);
+		break;
 	// case PhysicalType::ARRAY:
 	// 	ConstructSortKeyList<SortKeyArrayEntry>(vector_data, chunk, info);
 	// 	break;

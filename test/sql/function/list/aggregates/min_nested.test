@@ -74,17 +74,104 @@ SELECT MIN(s), MAX(s) FROM blob_structs;
 ----
 {'i': \x00z\x00\x00z\x00zzzz\x00}	{'i': zzzzzz\x01\x01\x01\x00\x01\x01\x00}
 
+# multi-member structs
+statement ok
+CREATE TABLE multi_member_struct AS SELECT {'i': (1000-i)//5, 'j': i} s FROM range(1000) t(i);
 
+query II
+SELECT MIN(s), MAX(s) FROM multi_member_struct;
+----
+{'i': 0, 'j': 996}	{'i': 200, 'j': 0}
 
-
-# NULLs
-
-# structs with multiple elements
 # lists
-# structs with lists
+statement ok
+CREATE TABLE lists AS SELECT case when i<500 then [i, i + 1, i + 2] else [i, 0] end AS l FROM range(1000) t(i);
+
+query II
+SELECT MIN(l), MAX(l) FROM lists;
+----
+[0, 1, 2]	[999, 0]
+
+# empty list and null entries
+statement ok
+INSERT INTO lists VALUES ([]), (NULL), ([NULL, NULL, NULL]);
+
+query II
+SELECT MIN(l), MAX(l) FROM lists;
+----
+[]	[NULL, NULL, NULL]
+
 # lists with structs
+statement ok
+CREATE TABLE list_with_structs AS SELECT case when i<500 then [{'i': i}, {'i': i + 1}, {'i': i + 2}] else [{'i': i}, {'i': 0}] end AS l FROM range(1000) t(i);
+
+query II
+SELECT MIN(l), MAX(l) FROM list_with_structs;
+----
+[{'i': 0}, {'i': 1}, {'i': 2}]	[{'i': 999}, {'i': 0}]
+
+# null within a struct
+statement ok
+INSERT INTO list_with_structs VALUES ([{'i': NULL}, {'i': 100}, NULL, {'i': NULL}]);
+
+query II
+SELECT MIN(l), MAX(l) FROM list_with_structs;
+----
+[{'i': 0}, {'i': 1}, {'i': 2}]	[{'i': NULL}, {'i': 100}, NULL, {'i': NULL}]
+
+# empty list and null entries
+statement ok
+INSERT INTO list_with_structs VALUES ([]), (NULL), ([NULL, NULL, NULL]);
+
+query II
+SELECT MIN(l), MAX(l) FROM list_with_structs;
+----
+[]	[NULL, NULL, NULL]
+
+# list with multi member struct
+statement ok
+CREATE TABLE list_multi_member_struct AS SELECT [NULL, {'i': (1000-i)//5, 'j': i}, NULL] l FROM range(1000) t(i);
+
+query II
+SELECT MIN(l), MAX(l) FROM list_multi_member_struct;
+----
+[NULL, {'i': 0, 'j': 996}, NULL]	[NULL, {'i': 200, 'j': 0}, NULL]
+
+# nulls at different levels
+statement ok
+INSERT INTO list_multi_member_struct VALUES ([{'i': NULL, 'j': 42}]), ([NULL, NULL, {'i': 84, 'j': NULL}])
+
+query II
+SELECT MIN(l), MAX(l) FROM list_multi_member_struct;
+----
+[{'i': NULL, 'j': 42}]	[NULL, NULL, {'i': 84, 'j': NULL}]
+
+# struct with lists
+statement ok
+CREATE TABLE struct_with_lists AS SELECT {'i': case when i<500 then [i, i + 1, i + 2] else [i, 0] end} AS s FROM range(1000) t(i);
+
+query II
+SELECT MIN(s), MAX(s) FROM struct_with_lists;
+----
+{'i': [0, 1, 2]}	{'i': [999, 0]}
+
+# empty list and null entries
+statement ok
+INSERT INTO struct_with_lists VALUES ({'i': []}), (NULL), ({'i': [NULL, NULL, NULL]})
+
+query II
+SELECT MIN(s), MAX(s) FROM struct_with_lists;
+----
+{'i': []}	{'i': [NULL, NULL, NULL]}
+
+statement ok
+INSERT INTO struct_with_lists VALUES ({'i': NULL})
+
+query I
+SELECT MAX(s) FROM struct_with_lists;
+----
+{'i': NULL}
+
 # arrays
-# structs with arrays
-# all mixed
 
 # test_all_types?
