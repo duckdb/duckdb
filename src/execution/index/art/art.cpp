@@ -1119,7 +1119,7 @@ void ART::WritePartialBlocks() {
 
 	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
-	PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT, nullptr);
+	PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
 
 	for (auto &allocator : *allocators) {
 		allocator->SerializeBuffers(partial_block_manager);
