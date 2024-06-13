@@ -57,7 +57,6 @@ jobs:
     name: Android armv7a
     runs-on: ubuntu-latest
     env:
-      GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
@@ -70,7 +69,13 @@ jobs:
       run: |
         wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
         unzip android-ndk-r26d-linux.zip
-        ls .
+        mv android-ndk-r26d android-ndk
+
+    - name:  Build
+      shell: bash
+      run: |
+        export CMAKE_VARS_BUILD="-DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=armeabi-v7a -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake"
+        make
 
     - name: Deploy
       shell: bash
