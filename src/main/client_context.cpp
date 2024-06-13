@@ -532,6 +532,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	return PendingPreparedStatementInternal(lock, prepared, parameters);
 }
 
+void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
+	active_query->executor->WaitForTask();
+}
+
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
                                                           bool dry_run) {
 	D_ASSERT(active_query);

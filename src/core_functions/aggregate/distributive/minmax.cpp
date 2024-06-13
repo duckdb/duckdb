@@ -399,7 +399,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 
 			// Create a copied child and PushCollation for it.
 			arguments.push_back(arguments[0]->Copy());
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[0]->return_type, false);
+			ExpressionBinder::PushCollation(context, arguments[1], arguments[0]->return_type);
 
 			// Bind function like arg_min/arg_max.
 			function.arguments[0] = arguments[0]->return_type;
