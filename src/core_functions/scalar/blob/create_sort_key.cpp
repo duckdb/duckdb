@@ -243,7 +243,39 @@ struct SortKeyBlobOperator {
 	}
 
 	static idx_t Decode(const_data_ptr_t input, Vector &result, idx_t result_idx, bool flip_bytes) {
-		throw InternalException("Decode blob");
+		auto result_data = FlatVector::GetData<TYPE>(result);
+		// scan until we find the delimiter, keeping in mind escapes
+		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
+		data_t escape_character = SortKeyVectorData::BLOB_ESCAPE_CHARACTER;
+		if (flip_bytes) {
+			string_delimiter = ~string_delimiter;
+			escape_character = ~escape_character;
+		}
+		idx_t blob_len = 0;
+		idx_t pos;
+		for(pos = 0; input[pos] != string_delimiter; pos++) {
+			blob_len++;
+			if (input[pos] == escape_character) {
+				// escape character - skip the next byte
+				pos++;
+			}
+		}
+		// now allocate the blob data and fill it with the decoded data
+		result_data[result_idx] = StringVector::EmptyString(result, blob_len);
+		auto str_data = data_ptr_cast(result_data[result_idx].GetDataWriteable());
+		for(idx_t input_pos = 0, result_pos = 0; input_pos < pos; input_pos++) {
+			if (input[input_pos] == escape_character) {
+				// if we encounter an escape character - copy the NEXT byte
+				input_pos++;
+			}
+			if (flip_bytes) {
+				str_data[result_pos++] = ~input[input_pos];
+			} else {
+				str_data[result_pos++] = input[input_pos];
+			}
+		}
+		result_data[result_idx].Finalize();
+		return pos + 1;
 	}
 };
 
