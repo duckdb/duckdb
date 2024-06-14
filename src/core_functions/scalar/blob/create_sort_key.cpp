@@ -451,7 +451,7 @@ static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChu
 	}
 }
 
-static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
+static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result, SortKeyChunk chunk) {
 	// top-level method
 	auto physical_type = vector_data.GetPhysicalType();
 	if (TypeIsConstantSize(physical_type)) {
@@ -460,7 +460,11 @@ static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &
 		result.constant_length += GetTypeIdSize(physical_type);
 		return;
 	}
-	GetSortKeyLengthRecursive(vector_data, SortKeyChunk(0, vector_data.size), result);
+	GetSortKeyLengthRecursive(vector_data, chunk, result);
+}
+
+static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
+	GetSortKeyLength(vector_data, result, SortKeyChunk(0, vector_data.size));
 }
 
 //===--------------------------------------------------------------------===//
