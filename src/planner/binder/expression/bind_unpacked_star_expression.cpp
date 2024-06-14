@@ -5,7 +5,8 @@ namespace duckdb {
 
 using expression_list_t = vector<unique_ptr<ParsedExpression>>;
 
-static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new_children, expression_list_t &replacements) {
+static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new_children,
+                     expression_list_t &replacements) {
 	if (!StarExpression::IsColumnsUnpacked(*child)) {
 		// Just add the child directly
 		new_children.push_back(std::move(child));
@@ -80,9 +81,8 @@ void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr, e
 	}
 
 	// Visit the children of this expression, collecting the unpacked expressions
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child_expr) {
-		ReplaceUnpackedStarExpression(child_expr, star_list);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceUnpackedStarExpression(child_expr, star_list); });
 }
 
 } // namespace duckdb
