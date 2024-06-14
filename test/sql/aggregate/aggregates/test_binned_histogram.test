@@ -1,0 +1,46 @@
+# name: test/sql/aggregate/aggregates/test_binned_histogram.test
+# description: Test binned histograms
+# group: [aggregates]
+
+statement ok
+CREATE TABLE obs(n BIGINT);
+
+statement ok
+INSERT INTO obs VALUES (0), (5), (7), (12), (20), (23), (24), (25), (26), (28), (31), (34), (36), (41), (47)
+
+query I
+SELECT histogram(n, [10, 20, 30, 40, 50]) FROM obs
+----
+{10=3, 20=2, 30=5, 40=3, 50=2}
+
+# 3 in [-inf, 10] (0, 5, 7)
+# 2 in (10, 20] (12, 20)
+# 5 in (20, 30] (23, 24, 25, 26, 28)
+# 3 in (30, 40] (31, 34, 36)
+# 2 in (40, 50] (41, 47)
+
+# values bigger than the max bin are ignored
+query I
+SELECT histogram(n, [10, 20, 30, 40, 50]) FROM obs
+----
+{10=3, 20=2, 30=5, 40=3, 50=2}
+
+
+
+# null WITHIN bins
+statement error
+SELECT histogram(n, [10, 20, NULL]) FROM obs
+----
+Histogram bin entry cannot be NULL
+
+# empty bins
+statement error
+SELECT histogram(n, []) FROM obs
+----
+Histogram bin list cannot be empty
+
+# NULL bins
+statement error
+SELECT histogram(n, NULL::BIGINT[]) FROM obs
+----
+Histogram bin list cannot be NULL

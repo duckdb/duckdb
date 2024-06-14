@@ -272,6 +272,7 @@ AggregateFunctionSet HistogramFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AggregateFunction histogram_function("histogram", {LogicalType::ANY}, LogicalTypeId::MAP, nullptr, nullptr, nullptr,
 	                                     nullptr, nullptr, nullptr, HistogramBindFunction, nullptr);
+	fun.AddFunction(HistogramFun::BinnedHistogramFunction());
 	fun.AddFunction(histogram_function);
 	return fun;
 }
