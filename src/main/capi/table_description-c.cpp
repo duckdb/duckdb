@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using duckdb::Connection;
 using duckdb::ErrorData;
@@ -71,8 +72,8 @@ duckdb_state duckdb_column_has_default(duckdb_table_description table_descriptio
 
 	auto &table = wrapper->description;
 	if (index >= table->columns.size()) {
-		wrapper->error = StringUtil::Format("Column index %d is out of range, table only has %d columns", index,
-		                                    table->columns.size());
+		wrapper->error = duckdb::StringUtil::Format("Column index %d is out of range, table only has %d columns", index,
+		                                            table->columns.size());
 		return DuckDBError;
 	}
 	auto &column = table->columns[index];
