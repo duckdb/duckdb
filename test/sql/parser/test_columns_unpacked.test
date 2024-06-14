@@ -100,12 +100,12 @@ select struct_pack(*COLUMNS(*)) from data
 statement error
 SELECT COLUMNS(*COLUMNS(*)) FROM (VALUES ('test'))
 ----
-(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
+COLUMNS expression is not allowed inside another COLUMNS expression
 
 statement error
 SELECT *COLUMNS(COLUMNS(*)) FROM (VALUES ('test'))
 ----
-(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
+COLUMNS expression is not allowed inside another COLUMNS expression
 
 # COLUMNS and *COLUMNS of different expressions
 query III
@@ -158,12 +158,12 @@ select CONCAT(*COLUMNS(*), *COLUMNS(*)) from data
 statement error
 select COLUMNS(col -> *COLUMNS('id')) from data
 ----
-(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
+COLUMNS expression is not allowed inside another COLUMNS expression
 
 statement error
 select *COLUMNS(col -> *COLUMNS(*)) from data
 ----
-(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
+COLUMNS expression is not allowed inside another COLUMNS expression
 
 # *COLUMNS expanding to more than one column in binary op
 statement error

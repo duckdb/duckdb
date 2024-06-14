@@ -59,7 +59,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 			return true;
 		}
 		if (in_columns) {
-			throw BinderException("(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression");
+			throw BinderException("COLUMNS expression is not allowed inside another COLUMNS expression");
 		}
 		in_columns = true;
 
@@ -67,7 +67,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 			// we can have multiple
 			if (!(*star)->Equals(current_star)) {
 				throw BinderException(
-				    *expr, "Multiple different STAR/COLUMNS/*COLUMNS in the same expression are not supported");
+				    *expr, "Multiple different STAR/COLUMNS in the same expression are not supported");
 			}
 			return true;
 		}
