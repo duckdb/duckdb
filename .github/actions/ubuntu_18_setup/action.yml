@@ -16,6 +16,9 @@ inputs:
   ccache:
     description: 'Install ccache'
     default: 0
+  git_ref:
+    description: 'git reference to checkout'
+    default: ''
 
 runs:
   using: "composite"
@@ -48,6 +51,7 @@ runs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - name: Install CMake 3.21
       shell: bash
