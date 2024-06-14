@@ -27,10 +27,11 @@ public:
 	//! Path to this file
 	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, const idx_t file_idx,
 	            const ReadCSVData &bind_data, const vector<column_t> &column_ids,
-	            const vector<LogicalType> &file_schema);
+	            const vector<LogicalType> &file_schema, bool per_file_single_threaded);
 
 	CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options);
 
+	void SetStart();
 	const string &GetFileName();
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
@@ -67,5 +68,7 @@ public:
 
 	//! Options for this CSV Reader
 	CSVReaderOptions options;
+
+	CSVIterator start_iterator;
 };
 } // namespace duckdb

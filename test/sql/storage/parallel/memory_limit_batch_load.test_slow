@@ -4,6 +4,10 @@
 
 require parquet
 
+# FIXME: Occassionally fails in the CI nightly with "No space left on device".
+# FIXME: Most likely a false positive, as it is one of the last tests running.
+require block_size 262144
+
 load __TEST_DIR__/memory_limit_batch_load.db
 
 # in this test we load data of around 100M rows - uncompressed this will be 1.4GB~2GB (without/with NULLs)

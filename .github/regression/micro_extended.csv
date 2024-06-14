@@ -1,3 +1,4 @@
+benchmark/micro/aggregate/any_value_uuid.benchmark
 benchmark/micro/aggregate/bitstring_aggregate.benchmark
 benchmark/micro/aggregate/bitwise_aggregate.benchmark
 benchmark/micro/aggregate/grouped_distinct.benchmark
@@ -129,6 +130,7 @@ benchmark/micro/join/asof_join.benchmark
 benchmark/micro/join/asof_join_small_probe.benchmark
 benchmark/micro/join/blockwise_nl_join.benchmark
 benchmark/micro/join/delim_join_no_blowup.benchmark
+benchmark/micro/join/hashjoin_dups_rhs.benchmark
 benchmark/micro/join/hashjoin_highcardinality.benchmark
 benchmark/micro/join/hashjoin_lhsarithmetic.benchmark
 benchmark/micro/join/iejoin_employees.benchmark
@@ -162,7 +164,9 @@ benchmark/micro/list/column_data_collection_copy/small_lists.benchmark
 benchmark/micro/list/column_data_collection_copy/unnest.benchmark
 benchmark/micro/list/list_few_rows.benchmark
 benchmark/micro/list/list_many_rows.benchmark
+benchmark/micro/list/list_min_max.benchmark
 benchmark/micro/list/list_order_by.benchmark
+benchmark/micro/list/list_value.benchmark
 benchmark/micro/list/string_split.benchmark
 benchmark/micro/list/string_split_regexp.benchmark
 benchmark/micro/list/string_split_unicode.benchmark
