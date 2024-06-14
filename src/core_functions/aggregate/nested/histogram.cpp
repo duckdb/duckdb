@@ -255,7 +255,7 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	}
 }
 
-template<bool IS_ORDERED = true>
+template <bool IS_ORDERED = true>
 unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
@@ -270,21 +270,15 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 
 AggregateFunctionSet HistogramFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AggregateFunction histogram_function("histogram", {LogicalType::ANY}, LogicalTypeId::MAP, nullptr,
-	                         nullptr,
-	                         nullptr, nullptr,
-	                         nullptr, nullptr, HistogramBindFunction,
-	                         nullptr);
+	AggregateFunction histogram_function("histogram", {LogicalType::ANY}, LogicalTypeId::MAP, nullptr, nullptr, nullptr,
+	                                     nullptr, nullptr, nullptr, HistogramBindFunction, nullptr);
 	fun.AddFunction(histogram_function);
 	return fun;
 }
 
 AggregateFunction HistogramFun::GetHistogramUnorderedMap(LogicalType &type) {
-	return AggregateFunction("histogram", {LogicalType::ANY}, LogicalTypeId::MAP, nullptr,
-	                         nullptr,
-	                         nullptr, nullptr,
-	                         nullptr, nullptr, HistogramBindFunction<false>,
-	                         nullptr);
+	return AggregateFunction("histogram", {LogicalType::ANY}, LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr,
+	                         nullptr, nullptr, HistogramBindFunction<false>, nullptr);
 }
 
 } // namespace duckdb
