@@ -68,6 +68,13 @@ idx_t StructColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
 }
 
+void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		sub_columns[i]->InitializePrefetch(prefetch_state, scan_state.child_states[i + 1], rows);
+	}
+}
+
 void StructColumnData::InitializeScan(ColumnScanState &state) {
 	D_ASSERT(state.child_states.size() == sub_columns.size() + 1);
 	state.row_index = 0;

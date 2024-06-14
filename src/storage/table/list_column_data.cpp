@@ -29,6 +29,20 @@ bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	return false;
 }
 
+void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+
+	// we can't know how many rows we need to prefetch for the child of this list without looking at the actual data
+	// we make an estimation by looking at how many rows the child column has versus this column
+	// e.g if the child column has 10K rows, and we have 1K rows, we estimate that each list has 10 elements
+	idx_t rows_per_list = 1;
+	if (child_column->count > this->count && this->count > 0) {
+		rows_per_list = child_column->count / this->count;
+	}
+	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * rows_per_list);
+}
+
 void ListColumnData::InitializeScan(ColumnScanState &state) {
 	ColumnData::InitializeScan(state);
 

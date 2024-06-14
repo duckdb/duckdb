@@ -103,8 +103,8 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      BUILD_EXTENSIONS: ""
       RUN_SLOW_VERIFIERS: 1
 
     steps:
@@ -149,8 +149,8 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      BUILD_EXTENSIONS: "inet"
 
     steps:
     - uses: actions/checkout@v3

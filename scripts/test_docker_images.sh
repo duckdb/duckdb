@@ -8,6 +8,7 @@ make clean
 # Currently not working due to cmake version being too low
 # docker run -i --rm -v $(pwd):/duckdb --workdir /duckdb amazonlinux:2 <<< "yum install gcc gcc-c++ git make cmake ninja-build -y && GEN=ninja make && $TEST" 2>&1
 
+docker run -i --rm -v $(pwd):/duckdb --workdir /duckdb alpine:latest <<< "apk add g++ git make cmake ninja python3 && cmake -Bbuild . && cmake --build build && cmake --install build && g++ -std=c++11 examples/embedded-c++/main.cpp"
 docker run -i --rm -v $(pwd):/duckdb --workdir /duckdb amazonlinux:latest <<< "yum install clang git make cmake ninja-build -y && GEN=ninja make && $TEST" 2>&1
 docker run -i --platform linux/arm64 --rm -v $(pwd):/duckdb --workdir /duckdb alpine:latest <<< "apk add g++ git make cmake ninja && GEN=ninja make && $TEST" 2>&1
 docker run -i --platform linux/amd64 --rm -v $(pwd):/duckdb --workdir /duckdb alpine:latest <<< "apk add g++ git make cmake ninja && GEN=ninja make && $TEST" 2>&1

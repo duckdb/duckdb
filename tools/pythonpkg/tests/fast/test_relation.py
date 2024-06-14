@@ -419,10 +419,9 @@ class TestRelation(object):
             1000000,
             pytest.param(
                 10000000,
-                marks=pytest.mark.xfail(
+                marks=pytest.mark.skipif(
                     condition=platform.system() == "Emscripten",
-                    raises=MemoryError,
-                    reason="Emscripten/Pyodide builds run out of memory at this scale",
+                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not thrown reliably",
                 ),
             ),
         ],
@@ -528,10 +527,7 @@ class TestRelation(object):
             duckdb_cursor.sql(
                 """
                 create table tbl(a varchar);
-                insert into tbl values ('test');
-                SELECT
-                    *
-                FROM tbl
+                insert into tbl values ('test') returning *
             """
             ).to_view('vw')
             res = duckdb_cursor.sql("select * from vw").fetchone()

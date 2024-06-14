@@ -502,7 +502,8 @@
         "name": "types",
         "children": [
             "types.UnionType",
-            "types.GenericAlias"
+            "types.GenericAlias",
+            "types.BuiltinFunctionType"
         ]
     },
     "types.UnionType": {
@@ -515,6 +516,12 @@
         "type": "attribute",
         "full_path": "types.GenericAlias",
         "name": "GenericAlias",
+        "children": []
+    },
+    "types.BuiltinFunctionType": {
+        "type": "attribute",
+        "full_path": "types.BuiltinFunctionType",
+        "name": "BuiltinFunctionType",
         "children": []
     },
     "typing": {

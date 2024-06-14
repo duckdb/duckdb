@@ -94,10 +94,13 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ForceBitpackingModeSetting),
     DUCKDB_LOCAL(HomeDirectorySetting),
     DUCKDB_LOCAL(LogQueryPathSetting),
+    DUCKDB_GLOBAL(EnableMacrosDependencies),
+    DUCKDB_GLOBAL(EnableViewDependencies),
     DUCKDB_GLOBAL(LockConfigurationSetting),
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
     DUCKDB_LOCAL(MaximumExpressionDepthSetting),
+    DUCKDB_LOCAL(StreamingBufferSize),
     DUCKDB_GLOBAL(MaximumMemorySetting),
     DUCKDB_GLOBAL(MaximumTempDirectorySize),
     DUCKDB_GLOBAL(OldImplicitCasting),
@@ -113,6 +116,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfileOutputSetting),
     DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
+    DUCKDB_LOCAL(CustomProfilingSettings),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
@@ -276,15 +280,21 @@ CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
 }
 
+CollationBinding &DBConfig::GetCollationBinding() {
+	return *collation_bindings;
+}
+
 IndexTypeSet &DBConfig::GetIndexTypes() {
 	return *index_types;
 }
 
 void DBConfig::SetDefaultMaxMemory() {
 	auto memory = FileSystem::GetAvailableMemory();
-	if (memory.IsValid()) {
-		options.maximum_memory = memory.GetIndex() * 8 / 10;
+	if (!memory.IsValid()) {
+		options.maximum_memory = DBConfigOptions().maximum_memory;
+		return;
 	}
+	options.maximum_memory = memory.GetIndex() * 8 / 10;
 }
 
 void DBConfig::SetDefaultTempDirectory() {

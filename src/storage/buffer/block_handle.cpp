@@ -14,7 +14,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
       can_destroy(false), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
 	eviction_seq_num = 0;
 	state = BlockState::BLOCK_UNLOADED;
-	memory_usage = Storage::BLOCK_ALLOC_SIZE;
+	memory_usage = block_manager.GetBlockAllocSize();
 }
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag,
@@ -68,6 +68,17 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 		// no re-usable buffer: allocate a new block
 		return block_manager.CreateBlock(block_id, nullptr);
 	}
+}
+
+BufferHandle BlockHandle::LoadFromBuffer(shared_ptr<BlockHandle> &handle, data_ptr_t data,
+                                         unique_ptr<FileBuffer> reusable_buffer) {
+	D_ASSERT(handle->state != BlockState::BLOCK_LOADED);
+	// copy over the data into the block from the file buffer
+	auto block = AllocateBlock(handle->block_manager, std::move(reusable_buffer), handle->block_id);
+	memcpy(block->InternalBuffer(), data, block->AllocSize());
+	handle->buffer = std::move(block);
+	handle->state = BlockState::BLOCK_LOADED;
+	return BufferHandle(handle, handle->buffer.get());
 }
 
 BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {

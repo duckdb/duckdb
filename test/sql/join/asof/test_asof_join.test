@@ -37,6 +37,42 @@ FROM trades t ASOF JOIN prices p
 ----
 2020-01-01 00:00:03	1	42
 
+# Ignore non-join conditions 
+query II
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON 1 = 1 AND p.ts >= e.begin
+ORDER BY p.ts ASC
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+query II
+WITH samples AS (
+	SELECT col0 AS starts, col1 AS ends
+	FROM (VALUES
+		(5, 9),
+		(10, 13),
+		(14, 20),
+		(21, 23)
+	)
+)
+SELECT
+      s1.starts as s1_starts,
+      s2.starts as s2_starts,
+FROM samples AS s1 ASOF JOIN samples as s2 ON s2.ends >= (s1.ends - 5)
+WHERE s1_starts <> s2_starts;
+----
+21 	14
+10	5
+
 # Use an ASOF join inside of a correlated subquery
 
 
@@ -51,16 +87,7 @@ FROM range(0,10) p(ts) ASOF JOIN events0 e
 ON p.ts <> e.begin
 ORDER BY p.ts ASC
 ----
-Binder Error: Invalid ASOF JOIN comparison
-
-# Invalid ASOF JOIN condition
-statement error
-SELECT p.ts, e.value
-FROM range(0,10) p(ts) ASOF JOIN events0 e
-ON 1 = 1 AND p.ts >= e.begin
-ORDER BY p.ts ASC
-----
-Binder Error: Invalid ASOF JOIN condition
+Binder Error: Missing ASOF JOIN inequality
 
 # Missing ASOF JOIN inequality
 statement error

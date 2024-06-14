@@ -39,6 +39,7 @@ public:
 	virtual unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) = 0;
 	//! Return the next free block id
 	virtual block_id_t GetFreeBlockId() = 0;
+	virtual block_id_t PeekFreeBlockId() = 0;
 	//! Returns whether or not a specified block is the root block
 	virtual bool IsRootBlock(MetaBlockPointer root) = 0;
 	//! Mark a block as "free"; free blocks are immediately added to the free list and can be immediately overwritten
@@ -53,6 +54,8 @@ public:
 	virtual idx_t GetMetaBlock() = 0;
 	//! Read the content of the block from disk
 	virtual void Read(Block &block) = 0;
+	//! Read the content of the block from disk
+	virtual void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
 	//! Writes the block to disk
 	virtual void Write(FileBuffer &block, block_id_t block_id) = 0;
 	//! Writes the block to disk
@@ -66,6 +69,12 @@ public:
 	virtual idx_t TotalBlocks() = 0;
 	//! Returns the number of free blocks
 	virtual idx_t FreeBlocks() = 0;
+	//! Whether or not the attached database is a remote file (e.g. attached over s3/https)
+	virtual bool IsRemote() {
+		return false;
+	}
+	//! Whether or not the attached database is in-memory
+	virtual bool InMemory() = 0;
 
 	//! Truncate the underlying database file after a checkpoint
 	virtual void Truncate();
@@ -80,12 +89,16 @@ public:
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
 	//! Returns the block allocation size of this block manager.
-	//! Not to be confused with the block size.
 	inline idx_t GetBlockAllocSize() const {
 		return block_alloc_size.GetIndex();
 	}
+	//! Returns the possibly invalid block allocation size of this block manager.
 	inline optional_idx GetOptionalBlockAllocSize() const {
 		return block_alloc_size;
+	}
+	//! Returns the block size of this block manager.
+	inline idx_t GetBlockSize() const {
+		return block_alloc_size.GetIndex() - Storage::BLOCK_HEADER_SIZE;
 	}
 	//! Sets the block allocation size. This should only happen when initializing an existing database.
 	//! When initializing an existing database, we construct the block manager before reading the file header,
