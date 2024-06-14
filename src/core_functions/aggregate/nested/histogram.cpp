@@ -4,11 +4,11 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/core_functions/create_sort_key.hpp"
 
 namespace duckdb {
 
 struct HistogramFunctor {
-
 	template <class T, class MAP_TYPE = map<T, idx_t>>
 	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data, idx_t count) {
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
@@ -27,12 +27,20 @@ struct HistogramFunctor {
 	}
 
 	template <class T>
-	static T HistogramFinalize(T value, Vector &result) {
-		return value;
+	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
+		FlatVector::GetData<T>(result)[offset] = value;
+	}
+
+	static bool CreateExtraState() {
+		return false;
+	}
+
+	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
+		input.ToUnifiedFormat(count, result);
 	}
 };
 
-struct HistogramStringFunctor {
+struct HistogramStringFunctorBase {
 	template <class T, class MAP_TYPE = map<T, idx_t>>
 	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data, idx_t count) {
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
@@ -51,8 +59,39 @@ struct HistogramStringFunctor {
 	}
 
 	template <class T>
-	static string_t HistogramFinalize(T value, Vector &result) {
-		return StringVector::AddStringOrBlob(result, value);
+	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
+		FlatVector::GetData<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
+	}
+};
+
+struct HistogramStringFunctor : HistogramStringFunctorBase {
+	static bool CreateExtraState() {
+		return false;
+	}
+
+	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
+		input.ToUnifiedFormat(count, result);
+	}
+};
+
+struct HistogramGenericFunctor : HistogramStringFunctorBase {
+	template <class T>
+	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
+		CreateSortKeyHelpers::DecodeSortKey(value, result, offset,
+		                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
+	}
+
+	static Vector CreateExtraState() {
+		return Vector(LogicalType::BLOB);
+	}
+
+	static void PrepareData(Vector &input, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
+		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, extra_state);
+		input.Flatten(count);
+		extra_state.Flatten(count);
+		FlatVector::Validity(extra_state).Initialize(FlatVector::Validity(input));
+		extra_state.ToUnifiedFormat(count, result);
 	}
 };
 
@@ -83,8 +122,10 @@ static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &, idx_t
 	auto &input = inputs[0];
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
+
+	auto extra_state = OP::CreateExtraState();
 	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	OP::PrepareData(input, count, extra_state, input_data);
 
 	OP::template HistogramUpdate<T, MAP_TYPE>(sdata, input_data, count);
 }
@@ -114,7 +155,7 @@ static void HistogramCombineFunction(Vector &state_vector, Vector &combined, Agg
 	}
 }
 
-template <class OP, class T, class MAP_TYPE, class KEY_TYPE>
+template <class OP, class T, class MAP_TYPE>
 static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
                                       idx_t offset) {
 
@@ -138,7 +179,6 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 	auto &keys = MapVector::GetKeys(result);
 	auto &values = MapVector::GetValues(result);
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
-	auto key_entries = FlatVector::GetData<KEY_TYPE>(keys);
 	auto count_entries = FlatVector::GetData<uint64_t>(values);
 
 	idx_t current_offset = old_len;
@@ -153,7 +193,7 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 		auto &list_entry = list_entries[rid];
 		list_entry.offset = current_offset;
 		for (auto &entry : *state.hist) {
-			key_entries[current_offset] = OP::template HistogramFinalize<T>(entry.first, keys);
+			OP::template HistogramFinalize<T>(entry.first, keys, current_offset);
 			count_entries[current_offset] = entry.second;
 			current_offset++;
 		}
@@ -164,24 +204,24 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 	result.Verify(count);
 }
 
-template <class OP, class T, class MAP_TYPE = map<T, idx_t>, class KEY_TYPE=T>
+template <class OP, class T, class MAP_TYPE = map<T, idx_t>>
 static AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	using STATE_TYPE = HistogramAggState<T, MAP_TYPE>;
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
-	return AggregateFunction("histogram", {LogicalType::ANY}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
+	return AggregateFunction("histogram", {type}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
 	                         AggregateFunction::StateInitialize<STATE_TYPE, HistogramFunction>,
 	                         HistogramUpdateFunction<OP, T, MAP_TYPE>, HistogramCombineFunction<T, MAP_TYPE>,
-	                         HistogramFinalizeFunction<OP, T, MAP_TYPE, KEY_TYPE>, nullptr, nullptr,
+	                         HistogramFinalizeFunction<OP, T, MAP_TYPE>, nullptr, nullptr,
 	                         AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
 }
 
-template <class OP, class T, bool IS_ORDERED, class KEY_TYPE=T>
+template <class OP, class T, bool IS_ORDERED>
 AggregateFunction GetMapType(const LogicalType &type) {
 	if (IS_ORDERED) {
-		return GetHistogramFunction<OP, T, map<T, idx_t>, KEY_TYPE>(type);
+		return GetHistogramFunction<OP, T, map<T, idx_t>>(type);
 	}
-	return GetHistogramFunction<OP, T, unordered_map<T, idx_t>, KEY_TYPE>(type);
+	return GetHistogramFunction<OP, T, unordered_map<T, idx_t>>(type);
 }
 
 template <bool IS_ORDERED = true>
@@ -210,12 +250,13 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	case PhysicalType::DOUBLE:
 		return GetMapType<HistogramFunctor, double, IS_ORDERED>(type);
 	case PhysicalType::VARCHAR:
-		return GetMapType<HistogramStringFunctor, string, IS_ORDERED, string_t>(type);
+		return GetMapType<HistogramStringFunctor, string, IS_ORDERED>(type);
 	default:
-		throw InternalException("Unimplemented histogram aggregate");
+		return GetMapType<HistogramGenericFunctor, string, IS_ORDERED>(type);
 	}
 }
 
+template<bool IS_ORDERED = true>
 unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
@@ -224,12 +265,7 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	if (arguments[0]->return_type.id() == LogicalTypeId::LIST ||
-	    arguments[0]->return_type.id() == LogicalTypeId::STRUCT ||
-	    arguments[0]->return_type.id() == LogicalTypeId::MAP) {
-		throw NotImplementedException("Unimplemented type for histogram %s", arguments[0]->return_type.ToString());
-	}
-	function = GetHistogramFunction<>(arguments[0]->return_type);
+	function = GetHistogramFunction<IS_ORDERED>(arguments[0]->return_type);
 	return make_uniq<VariableReturnBindData>(function.return_type);
 }
 
@@ -245,8 +281,11 @@ AggregateFunctionSet HistogramFun::GetFunctions() {
 }
 
 AggregateFunction HistogramFun::GetHistogramUnorderedMap(LogicalType &type) {
-	const auto &const_type = type;
-	return GetHistogramFunction<false>(const_type);
+	return AggregateFunction("histogram", {LogicalType::ANY}, LogicalTypeId::MAP, nullptr,
+	                         nullptr,
+	                         nullptr, nullptr,
+	                         nullptr, nullptr, HistogramBindFunction<false>,
+	                         nullptr);
 }
 
 } // namespace duckdb

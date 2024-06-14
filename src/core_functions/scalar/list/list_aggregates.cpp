@@ -486,8 +486,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 
 	// create the unordered map histogram function
 	D_ASSERT(best_function.arguments.size() == 1);
-	auto key_type = best_function.arguments[0];
-	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(key_type);
+	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(child_type);
 	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }
 
