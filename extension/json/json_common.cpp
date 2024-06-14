@@ -1,6 +1,7 @@
 #include "json_common.hpp"
 
 #include "duckdb/common/exception/binder_exception.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -283,6 +284,14 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 				yyjson_val *key, *obj_val;
 				yyjson_obj_foreach(val, idx, max, key, obj_val) {
 					GetWildcardPathInternal(obj_val, ptr, end, vals);
+
+					if (yyjson_is_arr(obj_val)) {
+						JSONCommon::GetWildcardPath(obj_val, "$[*]", 4, vals);
+					}
+					if (yyjson_is_obj(obj_val)) {
+						JSONCommon::GetWildcardPath(obj_val, "$.*", 3, vals);
+					}
+
 				}
 				return;
 			}
@@ -308,6 +317,12 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 				yyjson_val *arr_val;
 				yyjson_arr_foreach(val, idx, max, arr_val) {
 					GetWildcardPathInternal(arr_val, ptr, end, vals);
+					if (yyjson_is_obj(arr_val)) {
+						JSONCommon::GetWildcardPath(arr_val, "$.*", 3, vals);
+					}
+					if (yyjson_is_arr(arr_val)) {
+						JSONCommon::GetWildcardPath(arr_val, "$[*]", 4, vals);
+					}
 				}
 				return;
 			}
