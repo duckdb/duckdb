@@ -148,27 +148,46 @@ struct MaxOperation : public NumericMinMaxBase {
 	}
 };
 
+struct MinMaxStringState : MinMaxState<string_t> {
+	void Destroy() {
+		if (isset && !value.IsInlined()) {
+			delete[] value.GetData();
+		}
+	}
+
+	void Assign(string_t input) {
+		if (input.IsInlined()) {
+			// inlined string - we can directly store it into the string_t without having to allocate anything
+			Destroy();
+			value = input;
+		} else {
+			// non-inlined string, need to allocate space for it somehow
+			auto len = input.GetSize();
+			char *ptr;
+			if (!isset || value.GetSize() < len) {
+				// we cannot fit this into the current slot - destroy it and re-allocate
+				Destroy();
+				ptr = new char[len];
+			} else {
+				// this fits into the current slot - take over the pointer
+				ptr = value.GetDataWriteable();
+			}
+			memcpy(ptr, input.GetData(), len);
+
+			value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+		}
+	}
+};
+
 struct StringMinMaxBase : public MinMaxBase {
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.isset && !state.value.IsInlined()) {
-			delete[] state.value.GetData();
-		}
+		state.Destroy();
 	}
 
 	template <class INPUT_TYPE, class STATE>
 	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
-		Destroy(state, input_data);
-		if (input.IsInlined()) {
-			state.value = input;
-		} else {
-			// non-inlined string, need to allocate space for it
-			auto len = input.GetSize();
-			auto ptr = new char[len];
-			memcpy(ptr, input.GetData(), len);
-
-			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
-		}
+		state.Assign(input);
 	}
 
 	template <class T, class STATE>
@@ -227,24 +246,12 @@ struct VectorMinMaxBase {
 
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.isset && !state.value.IsInlined()) {
-			delete[] state.value.GetData();
-		}
+		state.Destroy();
 	}
 
 	template <class INPUT_TYPE, class STATE>
 	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
-		Destroy(state, input_data);
-		if (input.IsInlined()) {
-			state.value = input;
-		} else {
-			// non-inlined string, need to allocate space for it
-			auto len = input.GetSize();
-			auto ptr = new char[len];
-			memcpy(ptr, input.GetData(), len);
-
-			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
-		}
+		state.Assign(input);
 	}
 
 	template <class STATE, class OP>
@@ -360,12 +367,12 @@ static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
 	auto internal_type = type.InternalType();
 	switch (internal_type) {
 	case PhysicalType::VARCHAR:
-		return AggregateFunction::UnaryAggregateDestructor<MinMaxState<string_t>, string_t, string_t, OP_STRING>(
-		    type.id(), type.id());
+		return AggregateFunction::UnaryAggregateDestructor<MinMaxStringState, string_t, string_t, OP_STRING>(type.id(),
+		                                                                                                     type.id());
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
 	case PhysicalType::ARRAY:
-		return GetMinMaxFunction<OP_VECTOR, MinMaxState<string_t>>(type);
+		return GetMinMaxFunction<OP_VECTOR, MinMaxStringState>(type);
 	default:
 		return GetUnaryAggregate<OP>(type);
 	}
