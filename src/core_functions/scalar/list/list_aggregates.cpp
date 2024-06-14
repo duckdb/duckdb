@@ -338,11 +338,11 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::VARCHAR:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string>(
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string_t>(
 			    result, state_vector.state_vector, count);
 			break;
 		default:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeGenericValueFunctor, string>(
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeGenericValueFunctor, string_t>(
 			    result, state_vector.state_vector, count);
 			break;
 		}
