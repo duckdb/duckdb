@@ -22,17 +22,18 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 			if (settings[i] == "EXTRA_INFO") {
 				REQUIRE(value[0] == '\"');
 				REQUIRE(value[strlen(value) - 1] == '\"');
+				duckdb_free((void *) value);
 				continue;
-			} else {
-				double result = 0;
-				try {
-					result = std::stod(value);
-				} catch (std::invalid_argument &e) {
-					REQUIRE(false);
-				}
-
-				REQUIRE(result >= 0);
 			}
+            double result = 0;
+            try {
+                result = std::stod(value);
+            } catch (std::invalid_argument &e) {
+                REQUIRE(false);
+            }
+
+			duckdb_free((void *) value);
+            REQUIRE(result >= 0);
 		}
 	}
 }
@@ -41,10 +42,16 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string> &settings) {
 	static idx_t DEPTH = 0;
 	if (DEPTH == 0) {
+		auto query = duckdb_profiling_info_get_query(profiling_info);
+        REQUIRE(query != nullptr);
+		duckdb_free((void *) query);
+
 		REQUIRE(duckdb_profiling_info_get_name(profiling_info) == nullptr);
-		REQUIRE(duckdb_profiling_info_get_query(profiling_info) != nullptr);
 	} else {
-		REQUIRE(duckdb_profiling_info_get_name(profiling_info) != nullptr);
+		auto name = duckdb_profiling_info_get_name(profiling_info);
+		REQUIRE(name != nullptr);
+		duckdb_free((void *) name);
+
 		REQUIRE(duckdb_profiling_info_get_query(profiling_info) == nullptr);
 	}
 

@@ -2711,6 +2711,8 @@ DUCKDB_API duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection con
 
 //! Returns the value of the setting key of the current profiling info node. If the setting does not exist or is not
 //! enabled, nullptr is returned.
+//!
+//! The result must be freed with `duckdb_free`.
 DUCKDB_API const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
 
 //! Returns the number of children of the current profiling info node.
@@ -2720,9 +2722,13 @@ DUCKDB_API idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info inf
 DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
 
 //! Returns the name of the current profiling info node, if the node is an operation node. Returns nullptr otherwise.
+//!
+//! The result must be freed with `duckdb_free`.
 DUCKDB_API const char *duckdb_profiling_info_get_name(duckdb_profiling_info info);
 
 //! Returns the query of the current profiling info node, if the node the root. Returns nullptr otherwise.
+//!
+//! The result must be freed with `duckdb_free`.
 DUCKDB_API const char *duckdb_profiling_info_get_query(duckdb_profiling_info info);
 
 //===--------------------------------------------------------------------===//

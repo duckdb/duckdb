@@ -20,7 +20,7 @@ const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const ch
 	}
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
 	auto &profiling_info = node.profiling_info;
-	auto key_enum = EnumUtil::FromString<MetricsType>(StringUtil::Upper(key));
+	auto key_enum = EnumUtil::FromString<MetricsType>(duckdb::StringUtil::Upper(key));
 	if (!profiling_info.Enabled(key_enum)) {
 		return nullptr;
 	}
