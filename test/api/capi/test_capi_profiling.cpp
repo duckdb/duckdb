@@ -105,6 +105,3 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 	// Cleanup
 	tester.Cleanup();
 }
-
-// TODO:
-//- retrieve "NAME" and "TYPE" from OperatorProfilingNode and "QUERY" from QueryProfilingNode?

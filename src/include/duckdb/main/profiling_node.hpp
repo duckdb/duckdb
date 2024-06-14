@@ -31,6 +31,9 @@ class QueryProfilingNode;
 // Recursive tree that mirrors the operator tree
 class ProfilingNode {
 public:
+	virtual ~ProfilingNode() {};
+
+public:
 	ProfilingInfo profiling_info;
 	vector<unique_ptr<ProfilingNode>> children;
 	idx_t depth = 0;
@@ -61,6 +64,9 @@ public:
 // Holds the top level query info
 class QueryProfilingNode : public ProfilingNode {
 public:
+	~QueryProfilingNode() override {};
+
+public:
 	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::QUERY;
 
 	string query;
@@ -68,10 +74,13 @@ public:
 
 class OperatorProfilingNode : public ProfilingNode {
 public:
-	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::OPERATOR;
+    ~OperatorProfilingNode() override {};
 
-	PhysicalOperatorType type;
-	string name;
+public:
+    static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::OPERATOR;
+
+    PhysicalOperatorType type;
+    string name;
 };
 
 } // namespace duckdb
