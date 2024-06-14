@@ -29,21 +29,11 @@ string ArrowQueryResult::ToString() {
 	return "";
 }
 
-string ArrowQueryResult::ToBox(ClientContext &context, const BoxRendererConfig &config) {
-	// FIXME: can't throw an exception here as it's used for verification
-	return "";
-}
-
-idx_t ArrowQueryResult::RowCount() const {
-	return row_count;
-}
-
 vector<unique_ptr<ArrowArrayWrapper>> ArrowQueryResult::ConsumeArrays() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to fetch ArrowArrays from an unsuccessful query result\n: Error %s",
 		                            GetError());
 	}
-	it = arrays.end();
 	return std::move(arrays);
 }
 
@@ -58,20 +48,6 @@ vector<unique_ptr<ArrowArrayWrapper>> &ArrowQueryResult::Arrays() {
 void ArrowQueryResult::SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays) {
 	D_ASSERT(this->arrays.empty());
 	this->arrays = std::move(arrays);
-	this->it = this->arrays.begin();
-}
-
-unique_ptr<ArrowArrayWrapper> ArrowQueryResult::FetchArray() {
-	if (it == arrays.end()) {
-		return nullptr;
-	}
-	auto current_array = std::move(*it);
-	it++;
-	return current_array;
-}
-
-idx_t ArrowQueryResult::BatchSize() const {
-	return batch_size;
 }
 
 } // namespace duckdb

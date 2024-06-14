@@ -54,8 +54,15 @@ static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientPr
 	return 0;
 }
 
-static int NextFromArrow(ArrowQueryResult &res, struct ArrowArray *out) {
-	auto next_array = res.FetchArray();
+static int NextFromArrow(ArrowTestFactory &factory, struct ArrowArray *out) {
+	auto &it = factory.chunk_iterator;
+
+	unique_ptr<ArrowArrayWrapper> next_array;
+	if (it != factory.prefetched_chunks.end()) {
+		next_array = std::move(*it);
+		it++;
+	}
+
 	if (!next_array) {
 		return 0;
 	}
@@ -74,8 +81,7 @@ int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, s
 		return NextFromMaterialized(materialized_result, data.factory.big_result, data.options, out);
 	} else {
 		D_ASSERT(data.factory.result->type == QueryResultType::ARROW_RESULT);
-		auto &arrow_result = data.factory.result->Cast<ArrowQueryResult>();
-		return NextFromArrow(arrow_result, out);
+		return NextFromArrow(data.factory, out);
 	}
 }
 

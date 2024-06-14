@@ -38,21 +38,17 @@ public:
 	DUCKDB_API unique_ptr<DataChunk> FetchRaw() override;
 	//! Converts the QueryResult to a string
 	DUCKDB_API string ToString() override;
-	DUCKDB_API string ToBox(ClientContext &context, const BoxRendererConfig &config) override;
 
 public:
 	vector<unique_ptr<ArrowArrayWrapper>> ConsumeArrays();
 	vector<unique_ptr<ArrowArrayWrapper>> &Arrays();
 	void SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays);
-	idx_t BatchSize() const;
-	idx_t RowCount() const;
 	unique_ptr<ArrowArrayWrapper> FetchArray();
 
 private:
 	vector<unique_ptr<ArrowArrayWrapper>> arrays;
 	idx_t row_count;
 	idx_t batch_size;
-	vector<unique_ptr<ArrowArrayWrapper>>::iterator it;
 };
 
 } // namespace duckdb

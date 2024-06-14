@@ -187,6 +187,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 			if (splits[1] == "streaming") {
 				result_type = QueryResultType::STREAM_RESULT;
 			} else if (splits[1] == "arrow") {
+				// FIXME: perhaps it makes sense to be able to set a 'batch_size' to use for the result collector
 				result_type = QueryResultType::ARROW_RESULT;
 			} else if (splits[1] == "materialized") {
 				result_type = QueryResultType::MATERIALIZED_RESULT;
