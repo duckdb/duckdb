@@ -74,8 +74,7 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 	const auto is_finished = allow_stream_result ? IsFinishedOrBlocked : IsFinished;
 	PendingExecutionResult execution_result;
 	while (!is_finished(execution_result = ExecuteTaskInternal(lock))) {
-		if (execution_result == PendingExecutionResult::BLOCKED ||
-		    execution_result == PendingExecutionResult::NO_TASKS_AVAILABLE) {
+		if (execution_result == PendingExecutionResult::BLOCKED) {
 			CheckExecutableInternal(lock);
 			context->WaitForTask(lock, *this);
 		}

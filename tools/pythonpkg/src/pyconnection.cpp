@@ -481,8 +481,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 				throw std::runtime_error("Query interrupted");
 			}
 		}
-		if (execution_result == PendingExecutionResult::BLOCKED ||
-		    execution_result == PendingExecutionResult::NO_TASKS_AVAILABLE) {
+		if (execution_result == PendingExecutionResult::BLOCKED) {
 			pending_query.WaitForTask();
 		}
 	}
