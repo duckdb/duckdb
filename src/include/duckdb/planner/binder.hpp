@@ -77,39 +77,6 @@ struct CorrelatedColumnInfo {
 	}
 };
 
-struct ColumnUnpackResult {
-public:
-	ColumnUnpackResult() {
-	}
-
-public:
-	void AddChild(unique_ptr<ParsedExpression> original) {
-		vector<unique_ptr<ParsedExpression>> tmp;
-		tmp.push_back(std::move(original));
-		columns.push_back(std::move(tmp));
-	}
-	void AddChild(vector<unique_ptr<ParsedExpression>> unpacked_children) {
-		columns.push_back(std::move(unpacked_children));
-		unpacked = true;
-	}
-
-public:
-	vector<unique_ptr<ParsedExpression>> GetChild() {
-		D_ASSERT(retrieval_iterator < columns.size());
-		return std::move(columns[retrieval_iterator++]);
-	}
-
-	//! Whether at least one child contained a COLUMNS expression that was expanded
-	bool AnyChildUnpacked() const {
-		return unpacked;
-	}
-
-private:
-	vector<vector<unique_ptr<ParsedExpression>>> columns;
-	idx_t retrieval_iterator = 0;
-	bool unpacked = false;
-};
-
 //! Bind the parsed query tree to the actual columns present in the catalog.
 /*!
   The binder is responsible for binding tables and columns to actual physical
@@ -421,7 +388,7 @@ private:
 	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
 	bool FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root, bool in_columns);
 	void ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr,
-	                                   vector<unique_ptr<ParsedExpression>> &replacements, ColumnUnpackResult &parent);
+	                                   vector<unique_ptr<ParsedExpression>> &replacements);
 	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
 

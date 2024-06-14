@@ -25,8 +25,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 	bool has_star = false;
 	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
 		auto &current_star = expr->Cast<StarExpression>();
-		if (!current_star.columns) {
-			// This is a regular (non-COLUMNS) * expression.
+		if (StarExpression::IsStar(*expr)) {
 			if (is_root) {
 				D_ASSERT(!in_columns);
 				// At the root level
@@ -85,7 +84,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 
 void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement) {
 	D_ASSERT(expr);
-	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
+	if (StarExpression::IsColumns(*expr) || StarExpression::IsStar(*expr)) {
 		D_ASSERT(replacement);
 		auto alias = expr->alias;
 		expr = replacement->Copy();
@@ -96,102 +95,6 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceStarExpression(child_expr, replacement); });
-}
-
-void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr,
-                                           vector<unique_ptr<ParsedExpression>> &replacements,
-                                           ColumnUnpackResult &parent) {
-	D_ASSERT(expr);
-	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
-		// Let the parent know that the child was replaced with an unpacked COLUMNS expression
-		D_ASSERT(!replacements.empty());
-		auto original_alias = expr->alias;
-		// Replace the current expression with the expressions of the unpacked COLUMNS expression
-		vector<unique_ptr<ParsedExpression>> new_children;
-		for (auto &replacement : replacements) {
-			D_ASSERT(replacement);
-			auto new_child = replacement->Copy();
-			if (!original_alias.empty()) {
-				new_child->alias = original_alias;
-			}
-			new_children.push_back(std::move(new_child));
-		}
-		parent.AddChild(std::move(new_children));
-		return;
-	}
-	ColumnUnpackResult children;
-	// Visit the children of this expression, collecting the unpacked expressions
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child_expr) {
-		ReplaceUnpackedStarExpression(child_expr, replacements, children);
-	});
-	if (children.AnyChildUnpacked()) {
-		auto expression_class = expr->GetExpressionClass();
-		switch (expression_class) {
-		case ExpressionClass::FUNCTION: {
-			auto &function_expr = expr->Cast<FunctionExpression>();
-
-			// Replace children
-			vector<unique_ptr<ParsedExpression>> new_children;
-			for (auto &unused : function_expr.children) {
-				(void)unused;
-				auto child_expressions = children.GetChild();
-				for (auto &child : child_expressions) {
-					new_children.push_back(std::move(child));
-				}
-			}
-			function_expr.children = std::move(new_children);
-
-			// Replace FILTER
-			if (function_expr.filter) {
-				auto child_expressions = children.GetChild();
-				if (child_expressions.size() != 1) {
-					throw NotImplementedException("*COLUMNS(...) is not supported in the filter expression");
-				}
-				function_expr.filter = std::move(child_expressions[0]);
-			}
-
-			// Replace ORDER_BY
-			if (function_expr.order_bys) {
-				vector<unique_ptr<ParsedExpression>> new_orders;
-				for (auto &order : function_expr.order_bys->orders) {
-					(void)order;
-					auto child_expressions = children.GetChild();
-					for (auto &child : child_expressions) {
-						new_orders.push_back(std::move(child));
-					}
-				}
-				if (new_orders.size() != function_expr.order_bys->orders.size()) {
-					throw NotImplementedException("*COLUMNS(...) is not supported in the order expression");
-				}
-				for (idx_t i = 0; i < new_orders.size(); i++) {
-					auto &new_order = new_orders[i];
-					function_expr.order_bys->orders[i].expression = std::move(new_order);
-				}
-			}
-			break;
-		}
-		case ExpressionClass::OPERATOR: {
-			auto &operator_expr = expr->Cast<OperatorExpression>();
-
-			// Replace children
-			vector<unique_ptr<ParsedExpression>> new_children;
-			for (auto &child : operator_expr.children) {
-				(void)child;
-				auto child_expressions = children.GetChild();
-				for (auto &child : child_expressions) {
-					new_children.push_back(std::move(child));
-				}
-			}
-			operator_expr.children = std::move(new_children);
-			break;
-		}
-		default: {
-			throw BinderException("Unpacked columns (*COLUMNS(...)) are not allowed in this expression");
-		}
-		}
-	}
-	// This child was not replaced, copy it
-	parent.AddChild(expr->Copy());
 }
 
 static string ReplaceColumnsAlias(const string &alias, const string &column_name, optional_ptr<duckdb_re2::RE2> regex) {
@@ -326,23 +229,18 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 	}
 
 	// now perform the replacement
-	if (star->unpacked) {
-		D_ASSERT(star->columns);
-		ColumnUnpackResult children;
-		ReplaceUnpackedStarExpression(expr, star_list, children);
-		if (children.AnyChildUnpacked()) {
+	if (StarExpression::IsColumnsUnpacked(*star)) {
+		if (StarExpression::IsColumnsUnpacked(*expr)) {
 			throw BinderException("*COLUMNS not allowed at the root level, use COLUMNS instead");
 		}
-		auto unpacked_expressions = children.GetChild();
-		for (auto &unpacked_expr : unpacked_expressions) {
-			new_select_list.push_back(std::move(unpacked_expr));
-		}
+		ReplaceUnpackedStarExpression(expr, star_list);
+		new_select_list.push_back(std::move(expr));
 		return;
 	}
 	for (idx_t i = 0; i < star_list.size(); i++) {
 		auto new_expr = expr->Copy();
 		ReplaceStarExpression(new_expr, star_list[i]);
-		if (star->columns) {
+		if (StarExpression::IsColumns(*star)) {
 			optional_ptr<ParsedExpression> expr = star_list[i].get();
 			while (expr) {
 				if (expr->type == ExpressionType::COLUMN_REF) {

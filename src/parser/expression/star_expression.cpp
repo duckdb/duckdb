@@ -86,6 +86,30 @@ bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
 	return true;
 }
 
+bool StarExpression::IsStar(const ParsedExpression &a) {
+	if (a.GetExpressionClass() != ExpressionClass::STAR) {
+		return false;
+	}
+	auto &star = a.Cast<StarExpression>();
+	return star.columns == false;
+}
+
+bool StarExpression::IsColumns(const ParsedExpression &a) {
+	if (a.GetExpressionClass() != ExpressionClass::STAR) {
+		return false;
+	}
+	auto &star = a.Cast<StarExpression>();
+	return star.columns == true && star.unpacked == false;
+}
+
+bool StarExpression::IsColumnsUnpacked(const ParsedExpression &a) {
+	if (a.GetExpressionClass() != ExpressionClass::STAR) {
+		return false;
+	}
+	auto &star = a.Cast<StarExpression>();
+	return star.columns == true && star.unpacked == true;
+}
+
 unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	auto copy = make_uniq<StarExpression>(relation_name);
 	copy->exclude_list = exclude_list;

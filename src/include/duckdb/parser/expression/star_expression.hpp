@@ -38,6 +38,9 @@ public:
 	string ToString() const override;
 
 	static bool Equal(const StarExpression &a, const StarExpression &b);
+	static bool IsStar(const ParsedExpression &a);
+	static bool IsColumns(const ParsedExpression &a);
+	static bool IsColumnsUnpacked(const ParsedExpression &a);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
