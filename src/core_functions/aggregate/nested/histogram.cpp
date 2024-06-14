@@ -158,7 +158,6 @@ static void HistogramCombineFunction(Vector &state_vector, Vector &combined, Agg
 template <class OP, class T, class MAP_TYPE>
 static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
                                       idx_t offset) {
-
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
