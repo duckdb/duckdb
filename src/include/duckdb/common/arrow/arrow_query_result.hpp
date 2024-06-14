@@ -43,7 +43,6 @@ public:
 	vector<unique_ptr<ArrowArrayWrapper>> ConsumeArrays();
 	vector<unique_ptr<ArrowArrayWrapper>> &Arrays();
 	void SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays);
-	unique_ptr<ArrowArrayWrapper> FetchArray();
 
 private:
 	vector<unique_ptr<ArrowArrayWrapper>> arrays;
