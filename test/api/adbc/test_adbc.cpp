@@ -975,8 +975,7 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 
 	// Broken Plan
 	REQUIRE(!SUCCESS(AdbcStatementSetSubstraitPlan(&adbc_statement, plan, 5, &adbc_error)));
-	REQUIRE(std::strcmp(adbc_error.message, "Conversion Error: Invalid hex escape code encountered in string -> blob "
-	                                        "conversion: unterminated escape code at end of blob") == 0);
+	REQUIRE(StringUtil::Contains(adbc_error.message, "unterminated escape code at end of blob"));
 
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));

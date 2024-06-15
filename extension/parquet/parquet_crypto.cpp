@@ -4,8 +4,9 @@
 #include "thrift_tools.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/common.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #endif
 
@@ -358,15 +359,34 @@ uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffe
 	return etrans.Finalize();
 }
 
+string Base64Decode(const string &key) {
+	auto result_size = Blob::FromBase64Size(key);
+	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
+	Blob::FromBase64(key, output.get(), result_size);
+	string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
+	return decoded_key;
+}
+
 void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &parameters) {
 	const auto &key_name = StringValue::Get(parameters.values[0]);
 	const auto &key = StringValue::Get(parameters.values[1]);
-	if (!AESGCMState::ValidKey(key)) {
-		throw InvalidInputException(
-		    "Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)");
-	}
+
 	auto &keys = ParquetKeys::Get(context);
-	keys.AddKey(key_name, key);
+	if (AESGCMState::ValidKey(key)) {
+		keys.AddKey(key_name, key);
+	} else {
+		string decoded_key;
+		try {
+			decoded_key = Base64Decode(key);
+		} catch (const ConversionException &e) {
+			throw InvalidInputException("Invalid AES key. Not a plain AES key NOR a base64 encoded string");
+		}
+		if (!AESGCMState::ValidKey(decoded_key)) {
+			throw InvalidInputException(
+			    "Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)");
+		}
+		keys.AddKey(key_name, decoded_key);
+	}
 }
 
 } // namespace duckdb

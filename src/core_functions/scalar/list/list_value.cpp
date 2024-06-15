@@ -21,7 +21,7 @@ struct ListValueAssign {
 struct ListValueStringAssign {
 	template <class T>
 	static T Assign(const T &input, Vector &result) {
-		return StringVector::AddString(result, input);
+		return StringVector::AddStringOrBlob(result, input);
 	}
 };
 
@@ -81,7 +81,7 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
 	}
-	auto &result_type = result.GetType();
+	auto &result_type = ListVector::GetEntry(result).GetType();
 	switch (result_type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

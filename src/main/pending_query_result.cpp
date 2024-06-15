@@ -43,6 +43,11 @@ void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	}
 }
 
+void PendingQueryResult::WaitForTask() {
+	auto lock = LockContext();
+	context->WaitForTask(*lock, *this);
+}
+
 PendingExecutionResult PendingQueryResult::ExecuteTask() {
 	auto lock = LockContext();
 	return ExecuteTaskInternal(*lock);
@@ -69,14 +74,17 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 	const auto is_finished = allow_stream_result ? IsFinishedOrBlocked : IsFinished;
 	PendingExecutionResult execution_result;
 	while (!is_finished(execution_result = ExecuteTaskInternal(lock))) {
-		if (execution_result == PendingExecutionResult::BLOCKED ||
-		    execution_result == PendingExecutionResult::NO_TASKS_AVAILABLE) {
+		if (execution_result == PendingExecutionResult::BLOCKED) {
 			CheckExecutableInternal(lock);
 			context->WaitForTask(lock, *this);
 		}
 	}
 	if (HasError()) {
-		return make_uniq<MaterializedQueryResult>(error);
+		if (allow_stream_result) {
+			return make_uniq<StreamQueryResult>(error);
+		} else {
+			return make_uniq<MaterializedQueryResult>(error);
+		}
 	}
 	auto result = context->FetchResultInternal(lock, *this);
 	Close();
