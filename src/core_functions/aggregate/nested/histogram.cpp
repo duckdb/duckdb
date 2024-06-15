@@ -50,15 +50,21 @@ static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_in
 			state.hist = new MAP_TYPE();
 		}
 		auto &input_value = input_values[idx];
-		auto entry = state.hist->find(input_value);
-		if (entry != state.hist->end()) {
-			// entry already exists - increment
-			++entry->second;
-			continue;
+		if (OP::RequiresExtract()) {
+			// for entries that require an extract - we first search, and only call extract if the entry does not exist
+			auto entry = state.hist->find(input_value);
+			if (entry != state.hist->end()) {
+				// entry already exists - increment
+				++entry->second;
+				continue;
+			}
+			// entry does not exist yet - we need to insert it
+			auto insert_value = OP::template ExtractValue<T>(input_data, i, aggr_input);
+			state.hist->insert(make_pair(insert_value, 1));
+		} else {
+			// for entries that do not need ExtractValue (i.e. all primitive types) we can simplify this operation
+			++(*state.hist)[input_value];
 		}
-		// entry does not exist yet - we need to insert it
-		auto insert_value = OP::template ExtractValue<T>(input_data, i, aggr_input);
-		state.hist->insert(make_pair(insert_value, 1));
 	}
 }
 
