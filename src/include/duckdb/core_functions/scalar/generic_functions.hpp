@@ -150,4 +150,13 @@ struct VersionFun {
 	static ScalarFunction GetFunction();
 };
 
+struct EquiWidthBinsFun {
+	static constexpr const char *Name = "equi_width_bins";
+	static constexpr const char *Parameters = "min,max,bin_count";
+	static constexpr const char *Description = "Generates bin_count equi-width bins between the min and max ";
+	static constexpr const char *Example = "equi_width_bins(0, 10, 2)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

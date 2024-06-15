@@ -1,0 +1,53 @@
+# name: test/sql/function/list/aggregates/binning.test
+# description: Test binning functions
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT equi_width_bins(0, 10, 2, true)
+----
+[5, 10]
+
+# we cannot have duplicate bin boundaries
+query I
+SELECT equi_width_bins(0, 5, 10, true)
+----
+[1, 2, 3, 4, 5]
+
+query I
+SELECT equi_width_bins(0, 10, 5, true)
+----
+[2, 4, 6, 8, 10]
+
+query I
+SELECT equi_width_bins(0, 9, 5, true)
+----
+[1, 3, 5, 7, 9]
+
+query I
+SELECT equi_width_bins(0, 1734, 10, true)
+----
+[180, 360, 540, 720, 900, 1080, 1260, 1440, 1620, 1800]
+
+# not nice
+query I
+SELECT equi_width_bins(0, 1734, 10, false)
+----
+[173, 346, 520, 693, 867, 1040, 1213, 1387, 1560, 1734]
+
+query I
+SELECT equi_width_bins(0, 39343341, 10, true)
+----
+[4000000, 8000000, 12000000, 16000000, 20000000, 24000000, 28000000, 32000000, 36000000, 40000000]
+
+query I
+SELECT equi_width_bins(1, 6000000, 7, true)
+----
+[840000, 1700000, 2560000, 3420000, 4280000, 5140000, 6000000]
+
+query I
+SELECT equi_width_bins(1, 6000000, 7, false)
+----
+[857143, 1714286, 2571429, 3428571, 4285714, 5142857, 6000000]
