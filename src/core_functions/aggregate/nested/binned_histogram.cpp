@@ -33,8 +33,8 @@ struct HistogramBinState {
 		return bin_boundaries;
 	}
 
-	template<class OP>
-	void InitializeBins(Vector &bin_vector, idx_t count, idx_t pos) {
+	template <class OP>
+	void InitializeBins(Vector &bin_vector, idx_t count, idx_t pos, AggregateInputData &aggr_input) {
 		bin_boundaries = new unsafe_vector<T>();
 		counts = new unsafe_vector<idx_t>();
 		UnifiedVectorFormat bin_data;
@@ -52,17 +52,17 @@ struct HistogramBinState {
 		OP::PrepareData(bin_child, ListVector::GetListSize(bin_vector), extra_state, bin_child_data);
 
 		bin_boundaries->reserve(bin_list.length);
-		for(idx_t i = 0; i < bin_list.length; i++) {
+		for (idx_t i = 0; i < bin_list.length; i++) {
 			auto bin_child_idx = bin_child_data.sel->get_index(bin_list.offset + i);
 			if (!bin_child_data.validity.RowIsValid(bin_child_idx)) {
 				throw BinderException("Histogram bin entry cannot be NULL");
 			}
-			OP::template ExtractBoundary<T>(*bin_boundaries, bin_child_data, bin_list.offset + i);
+			OP::template ExtractBoundary<T>(*bin_boundaries, bin_child_data, bin_list.offset + i, aggr_input);
 		}
 		// sort the bin boundaries
 		std::sort(bin_boundaries->begin(), bin_boundaries->end());
 		// ensure there are no duplicate bin boundaries
-		for(idx_t i = 1; i < bin_boundaries->size(); i++) {
+		for (idx_t i = 1; i < bin_boundaries->size(); i++) {
 			if (Equals::Operation((*bin_boundaries)[i - 1], (*bin_boundaries)[i])) {
 				throw BinderException("Histogram bin boundaries cannot contain duplicates");
 			}
@@ -87,7 +87,8 @@ struct HistogramBinFunctor {
 	}
 
 	template <class T>
-	static void ExtractBoundary(unsafe_vector<T> &boundaries, UnifiedVectorFormat &bin_data, idx_t offset) {
+	static void ExtractBoundary(unsafe_vector<T> &boundaries, UnifiedVectorFormat &bin_data, idx_t offset,
+	                            AggregateInputData &) {
 		boundaries.push_back(UnifiedVectorFormat::GetData<T>(bin_data)[bin_data.sel->get_index(offset)]);
 	}
 };
@@ -99,8 +100,22 @@ struct HistogramBinStringFunctorBase {
 	}
 
 	template <class T>
-	static void ExtractBoundary(unsafe_vector<T> &boundaries, UnifiedVectorFormat &bin_data, idx_t offset) {
-		throw InternalException("FIXME extract string boundary");
+	static void ExtractBoundary(unsafe_vector<T> &boundaries, UnifiedVectorFormat &bin_data, idx_t offset,
+	                            AggregateInputData &aggr_input) {
+		auto &input_str = UnifiedVectorFormat::GetData<T>(bin_data)[bin_data.sel->get_index(offset)];
+		if (input_str.IsInlined()) {
+			// inlined strings can be inserted directly
+			boundaries.push_back(input_str);
+		} else {
+			// if the string is not inlined we need to allocate space for it
+			auto input_str_size = UnsafeNumericCast<uint32_t>(input_str.GetSize());
+			auto string_memory = aggr_input.allocator.Allocate(input_str_size);
+			// copy over the string
+			memcpy(string_memory, input_str.GetData(), input_str_size);
+			// now insert it into the histogram
+			string_t histogram_str(char_ptr_cast(string_memory), input_str_size);
+			boundaries.push_back(histogram_str);
+		}
 	}
 };
 
@@ -111,11 +126,6 @@ struct HistogramBinStringFunctor : HistogramBinStringFunctorBase {
 
 	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
 		input.ToUnifiedFormat(count, result);
-	}
-
-	template <class T>
-	static void ExtractBoundary(unsafe_vector<T> &boundaries, UnifiedVectorFormat &bin_data, idx_t offset) {
-		throw InternalException("FIXME extract generic");
 	}
 };
 
@@ -157,8 +167,8 @@ struct HistogramBinFunction {
 };
 
 template <class OP, class T>
-static void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
-                                    idx_t count) {
+static void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count,
+                                       Vector &state_vector, idx_t count) {
 	auto &input = inputs[0];
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
@@ -178,7 +188,7 @@ static void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &, id
 		}
 		auto &state = *states[sdata.sel->get_index(i)];
 		if (!state.IsSet()) {
-			state.template InitializeBins<OP>(bin_vector, count, i);
+			state.template InitializeBins<OP>(bin_vector, count, i, aggr_input);
 		}
 		auto entry = std::lower_bound(state.bin_boundaries->begin(), state.bin_boundaries->end(), data[idx]);
 		auto bin_entry = UnsafeNumericCast<idx_t>(entry - state.bin_boundaries->begin());
@@ -210,13 +220,14 @@ static void HistogramBinCombineFunction(Vector &state_vector, Vector &combined, 
 		} else {
 			// both source and target have bin boundaries
 			if (*target.bin_boundaries != *state.bin_boundaries) {
-				throw NotImplementedException("Histogram - cannot combine histograms with different bin boundaries. Bin boundaries must be the same for all histograms");
+				throw NotImplementedException("Histogram - cannot combine histograms with different bin boundaries. "
+				                              "Bin boundaries must be the same for all histograms");
 			}
 			if (target.counts->size() != state.counts->size()) {
 				throw InternalException("Histogram combine - bin boundaries are the same but counts are different");
 			}
 			D_ASSERT(target.counts->size() == state.counts->size());
-			for(idx_t bin_idx = 0; bin_idx < target.counts->size(); bin_idx++) {
+			for (idx_t bin_idx = 0; bin_idx < target.counts->size(); bin_idx++) {
 				(*target.counts)[bin_idx] += (*state.counts)[bin_idx];
 			}
 		}
@@ -225,7 +236,7 @@ static void HistogramBinCombineFunction(Vector &state_vector, Vector &combined, 
 
 template <class OP, class T>
 static void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
-                                      idx_t offset) {
+                                         idx_t offset) {
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = UnifiedVectorFormat::GetData<HistogramBinState<T> *>(sdata);
@@ -259,7 +270,7 @@ static void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputDat
 
 		auto &list_entry = list_entries[rid];
 		list_entry.offset = current_offset;
-		for(idx_t bin_idx = 0; bin_idx < state.bin_boundaries->size(); bin_idx++) {
+		for (idx_t bin_idx = 0; bin_idx < state.bin_boundaries->size(); bin_idx++) {
 			OP::template HistogramFinalize<T>((*state.bin_boundaries)[bin_idx], keys, current_offset);
 			count_entries[current_offset] = (*state.counts)[bin_idx];
 			current_offset++;
@@ -276,11 +287,11 @@ static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	using STATE_TYPE = HistogramBinState<T>;
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
-	return AggregateFunction("histogram", {type, LogicalType::LIST(type)}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
-	                         AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>,
-	                         HistogramBinUpdateFunction<OP, T>, HistogramBinCombineFunction<T>,
-	                         HistogramBinFinalizeFunction<OP, T>, nullptr, nullptr,
-	                         AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
+	return AggregateFunction(
+	    "histogram", {type, LogicalType::LIST(type)}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
+	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T>,
+	    HistogramBinCombineFunction<T>, HistogramBinFinalizeFunction<OP, T>, nullptr, nullptr,
+	    AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
 }
 
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
@@ -307,18 +318,16 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 		return GetHistogramBinFunction<HistogramBinFunctor, float>(type);
 	case PhysicalType::DOUBLE:
 		return GetHistogramBinFunction<HistogramBinFunctor, double>(type);
+	case PhysicalType::VARCHAR:
+		return GetHistogramBinFunction<HistogramBinStringFunctor, string_t>(type);
 	default:
-		throw InternalException("FIXME bin function type");
-	// case PhysicalType::VARCHAR:
-	// 	return GetHistogramBinFunction<HistogramBinStringFunctor, string_t>(type);
-	// default:
-	// 	return GetHistogramBinFunction<HistogramBinGenericFunctor, string_t>(type);
+		return GetHistogramBinFunction<HistogramBinGenericFunctor, string_t>(type);
 	}
 }
 
 unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, AggregateFunction &function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-	for(auto &arg : arguments) {
+                                                  vector<unique_ptr<Expression>> &arguments) {
+	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
@@ -329,8 +338,8 @@ unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, Aggreg
 }
 
 AggregateFunction HistogramFun::BinnedHistogramFunction() {
-	return AggregateFunction("histogram", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)}, LogicalTypeId::MAP, nullptr, nullptr, nullptr,
-	                                     nullptr, nullptr, nullptr, HistogramBinBindFunction, nullptr);
+	return AggregateFunction("histogram", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)}, LogicalTypeId::MAP,
+	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, HistogramBinBindFunction, nullptr);
 }
 
 } // namespace duckdb

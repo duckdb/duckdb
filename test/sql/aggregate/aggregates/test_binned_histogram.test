@@ -70,20 +70,38 @@ SELECT histogram(v, ['-infinity'::double, -10, 0, 10, 'infinity']) FROM
 ----
 {-inf=1, -10.0=1, 0.0=2, 10.0=1, inf=1}
 
-## timestamps
-#query I
-#SELECT histogram(v, range(timestamp '2000-01-01', timestamp '2005-01-01', interval '1 year')) FROM
-#(VALUES (timestamp '2000-01-01'), (timestamp '2003-01-01') t(v)
-#----
-#{-inf=1, -10.0=1, 0.0=2, 10.0=1, inf=1}
+# timestamps
+query I
+SELECT histogram(v, range(timestamp '2000-01-01', timestamp '2005-01-01', interval '1 year')) FROM
+(VALUES (timestamp '2000-01-01'), (timestamp '2003-01-01')) t(v)
+----
+{2000-01-01 00:00:00=1, 2001-01-01 00:00:00=0, 2002-01-01 00:00:00=0, 2003-01-01 00:00:00=1, 2004-01-01 00:00:00=0}
 
 # strings
+query I
+SELECT histogram(v, ['a', 'b', 'c', 'z']) FROM
+(VALUES ('a'), ('aaaa'), ('b'), ('c'), ('d')) t(v)
+----
+{a=1, b=2, c=1, z=1}
 
-# nested types?
+# non-inlined strings
+query I
+SELECT histogram(concat('thisisalongprefix_', v), ['thisisalongprefix_'||x for x in ['a', 'b', 'c', 'z']]) FROM
+(VALUES ('a'), ('aaaa'), ('b'), ('c'), ('d')) t(v)
+----
+{thisisalongprefix_a=1, thisisalongprefix_b=2, thisisalongprefix_c=1, thisisalongprefix_z=1}
 
-# test groups with different bins for each group (but constant within each group)
-# test different bins within the same group (error)
-# bins with different types (dates, timestamps, strings, nested types)
+# structs
+query I
+SELECT histogram({'i': n}, [{'i': x} for x in [10, 20, 30, 40, 50]]) FROM obs
+----
+{{'i': 10}=3, {'i': 20}=2, {'i': 30}=5, {'i': 40}=3, {'i': 50}=2}
+
+# lists
+query I
+SELECT histogram([n], [[x] for x in [10, 20, 30, 40, 50]]) FROM obs
+----
+{[10]=3, [20]=2, [30]=5, [40]=3, [50]=2}
 
 # duplicate bounds in bins
 statement error
