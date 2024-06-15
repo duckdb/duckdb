@@ -11,7 +11,8 @@ namespace duckdb {
 
 struct HistogramFunctor {
 	template <class T, class MAP_TYPE = map<T, idx_t>>
-	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data, AggregateInputData &, idx_t count) {
+	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data, AggregateInputData &,
+	                            idx_t count) {
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = input_data.sel->get_index(i);
@@ -43,7 +44,8 @@ struct HistogramFunctor {
 
 struct HistogramStringFunctorBase {
 	template <class T, class MAP_TYPE = map<T, idx_t>>
-	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data, AggregateInputData &aggr_input, idx_t count) {
+	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data,
+	                            AggregateInputData &aggr_input, idx_t count) {
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
 		auto input_strings = UnifiedVectorFormat::GetData<string_t>(input_data);
 		for (idx_t i = 0; i < count; i++) {
@@ -135,8 +137,8 @@ struct HistogramFunction {
 };
 
 template <class OP, class T, class MAP_TYPE>
-static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
-                                    idx_t count) {
+static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count,
+                                    Vector &state_vector, idx_t count) {
 
 	D_ASSERT(input_count == 1);
 
