@@ -141,8 +141,9 @@ static void HistogramBinCombineFunction(Vector &state_vector, Vector &combined, 
 		} else {
 			// both source and target have bin boundaries
 			if (*target.bin_boundaries != *state.bin_boundaries) {
-				throw NotImplementedException("Histogram - cannot combine histograms with different bin boundaries. "
-				                              "Bin boundaries must be the same for all histograms");
+				throw NotImplementedException(
+				    "Histogram - cannot combine histograms with different bin boundaries. "
+				    "Bin boundaries must be the same for all histograms within the same group");
 			}
 			if (target.counts->size() != state.counts->size()) {
 				throw InternalException("Histogram combine - bin boundaries are the same but counts are different");
