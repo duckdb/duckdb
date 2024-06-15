@@ -96,4 +96,4 @@ struct HistogramGenericFunctor : HistogramStringFunctorBase {
 	}
 };
 
-}
+} // namespace duckdb
