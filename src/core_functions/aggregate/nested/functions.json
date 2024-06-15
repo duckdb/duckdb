@@ -5,7 +5,7 @@
         "description": "Returns a LIST of STRUCTs with the fields bucket and count.",
         "example": "histogram(A)",
         "type": "aggregate_function_set",
-        "extra_functions": ["static AggregateFunction GetHistogramUnorderedMap(LogicalType &type);"]
+        "extra_functions": ["static AggregateFunction GetHistogramUnorderedMap(LogicalType &type);", "static AggregateFunction BinnedHistogramFunction();"]
     },
     {
         "name": "list",

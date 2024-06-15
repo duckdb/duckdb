@@ -169,7 +169,12 @@ string PhysicalTableScan::ParamsToString() const {
 	if (!extra_info.file_filters.empty()) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "File Filters: " + extra_info.file_filters;
+		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
+			result += StringUtil::Format("\nScanning: %llu/%llu files", extra_info.filtered_files.GetIndex(),
+			                             extra_info.total_files.GetIndex());
+		}
 	}
+
 	result += "\n[INFOSEPARATOR]\n";
 	result += StringUtil::Format("EC: %llu", estimated_cardinality);
 	return result;

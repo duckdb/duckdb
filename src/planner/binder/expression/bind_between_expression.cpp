@@ -46,9 +46,9 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	lower = BoundCastExpression::AddCastToType(context, std::move(lower), input_type);
 	upper = BoundCastExpression::AddCastToType(context, std::move(upper), input_type);
 	// handle collation
-	PushCollation(context, input, input_type, false);
-	PushCollation(context, lower, input_type, false);
-	PushCollation(context, upper, input_type, false);
+	PushCollation(context, input, input_type);
+	PushCollation(context, lower, input_type);
+	PushCollation(context, upper, input_type);
 
 	if (!input->IsVolatile() && !input->HasParameter() && !input->HasSubquery()) {
 		// the expression does not have side effects and can be copied: create two comparisons

@@ -1,3 +1,4 @@
+# Requires `python3 -m pip install libclang==16.0.6`
 import clang.cindex
 import os
 

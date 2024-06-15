@@ -1,0 +1,44 @@
+# name: test/sql/storage/test_purge_queue.test_slow
+# description: Test purging the eviction queue
+# group: [storage]
+
+require noforcestorage
+
+require skip_reload
+
+require 64bit
+
+# attach files
+
+loop i 0 10
+
+statement ok
+ATTACH '__TEST_DIR__/num${i}.db';
+
+statement ok
+CREATE OR REPLACE TABLE num${i}.tbl AS SELECT range AS id, range + 10 AS other FROM range(200);
+
+endloop
+
+# repeatedly query the DBs
+
+concurrentloop cl 0 400
+
+loop i 0 10
+
+query II
+SELECT id, other FROM num${i}.tbl WHERE id > 50 ORDER BY other LIMIT 2;
+----
+51	61
+52	62
+
+endloop
+
+endloop
+
+loop i 0 10
+
+statement ok
+DROP TABLE num${i}.tbl;
+
+endloop

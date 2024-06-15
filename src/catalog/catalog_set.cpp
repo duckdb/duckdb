@@ -523,14 +523,10 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 		// no defaults either: return null
 		return nullptr;
 	}
+	read_lock.unlock();
 	// this catalog set has a default map defined
 	// check if there is a default entry that we can create with this name
-	if (!transaction.context) {
-		// no context - cannot create default entry
-		return nullptr;
-	}
-	read_lock.unlock();
-	auto entry = defaults->CreateDefaultEntry(*transaction.context, name);
+	auto entry = defaults->CreateDefaultEntry(transaction, name);
 
 	read_lock.lock();
 	if (!entry) {
@@ -609,7 +605,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 }
 
 void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &read_lock) {
-	if (!defaults || defaults->created_all_entries || !transaction.context) {
+	if (!defaults || defaults->created_all_entries) {
 		return;
 	}
 	// this catalog set has a default set defined:
@@ -620,7 +616,7 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 			// we unlock during the CreateEntry, since it might reference other catalog sets...
 			// specifically for views this can happen since the view will be bound
 			read_lock.unlock();
-			auto entry = defaults->CreateDefaultEntry(*transaction.context, default_entry);
+			auto entry = defaults->CreateDefaultEntry(transaction, default_entry);
 			if (!entry) {
 				throw InternalException("Failed to create default entry for %s", default_entry);
 			}

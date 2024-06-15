@@ -4,11 +4,11 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -425,7 +425,7 @@ bool SingleFileBlockManager::IsRemote() {
 }
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
-	D_ASSERT(source_buffer.AllocSize() == Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
 	return make_uniq<Block>(source_buffer, block_id);
 }
 
@@ -434,14 +434,14 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id);
+		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize());
 	}
 	result->Initialize(options.debug_initialize);
 	return result;
 }
 
 idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) {
-	return BLOCK_START + NumericCast<idx_t>(block_id) * Storage::BLOCK_ALLOC_SIZE;
+	return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
 }
 
 void SingleFileBlockManager::Read(Block &block) {
@@ -462,22 +462,22 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 	auto ptr = buffer.InternalBuffer();
 	for (idx_t i = 0; i < block_count; i++) {
 		// compute the checksum
-		auto start_ptr = ptr + i * Storage::BLOCK_ALLOC_SIZE;
+		auto start_ptr = ptr + i * GetBlockAllocSize();
 		auto stored_checksum = Load<uint64_t>(start_ptr);
-		uint64_t computed_checksum = Checksum(start_ptr + Storage::BLOCK_HEADER_SIZE, Storage::BLOCK_SIZE);
+		uint64_t computed_checksum = Checksum(start_ptr + Storage::BLOCK_HEADER_SIZE, GetBlockSize());
 		// verify the checksum
 		if (stored_checksum != computed_checksum) {
 			throw IOException(
 			    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
 			    "at location %llu",
-			    computed_checksum, stored_checksum, location + i * Storage::BLOCK_ALLOC_SIZE);
+			    computed_checksum, stored_checksum, location + i * GetBlockAllocSize());
 		}
 	}
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * Storage::BLOCK_ALLOC_SIZE);
+	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
 }
 
 void SingleFileBlockManager::Truncate() {
@@ -499,15 +499,16 @@ void SingleFileBlockManager::Truncate() {
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
-	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * Storage::BLOCK_ALLOC_SIZE));
+	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	vector<MetadataHandle> free_list_blocks;
+	auto &metadata_manager = GetMetadataManager();
 
 	// reserve all blocks that we are going to write the free list to
 	// since these blocks are no longer free we cannot just include them in the free list!
-	auto block_size = MetadataManager::METADATA_BLOCK_SIZE - sizeof(idx_t);
+	auto block_size = metadata_manager.GetMetadataBlockSize() - sizeof(idx_t);
 	idx_t allocated_size = 0;
 	while (true) {
 		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
@@ -630,8 +631,8 @@ void SingleFileBlockManager::TrimFreeBlocks() {
 			// We are now one too far.
 			--itr;
 			// Trim the range.
-			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * Storage::BLOCK_ALLOC_SIZE),
-			             NumericCast<idx_t>(last + 1 - first) * Storage::BLOCK_ALLOC_SIZE);
+			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * GetBlockAllocSize()),
+			             NumericCast<idx_t>(last + 1 - first) * GetBlockAllocSize());
 		}
 	}
 	newly_freed_list.clear();

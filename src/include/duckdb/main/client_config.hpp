@@ -96,6 +96,9 @@ struct ClientConfig {
 	//! The number of rows to accumulate before flushing during a partitioned write
 	idx_t partitioned_write_flush_threshold = idx_t(1) << idx_t(19);
 
+	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
+	idx_t streaming_buffer_size = 1000000;
+
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
 
@@ -134,6 +137,9 @@ public:
 	bool AnyVerification() {
 		return query_verification_enabled || verify_external || verify_serializer || verify_fetch_row;
 	}
+
+public:
+	void SetDefaultStreamingBufferSize();
 };
 
 } // namespace duckdb
