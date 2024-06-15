@@ -1,122 +1,10 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/core_functions/aggregate/nested_functions.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/core_functions/create_sort_key.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/core_functions/aggregate/histogram_helpers.hpp"
 
 namespace duckdb {
-
-struct HistogramFunctor {
-	template <class T, class MAP_TYPE = map<T, idx_t>>
-	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data, AggregateInputData &,
-	                            idx_t count) {
-		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = input_data.sel->get_index(i);
-			if (!input_data.validity.RowIsValid(idx)) {
-				continue;
-			}
-			auto &state = *states[sdata.sel->get_index(i)];
-			if (!state.hist) {
-				state.hist = new MAP_TYPE();
-			}
-			auto value = UnifiedVectorFormat::GetData<T>(input_data);
-			++(*state.hist)[value[idx]];
-		}
-	}
-
-	template <class T>
-	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<T>(result)[offset] = value;
-	}
-
-	static bool CreateExtraState() {
-		return false;
-	}
-
-	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
-		input.ToUnifiedFormat(count, result);
-	}
-};
-
-struct HistogramStringFunctorBase {
-	template <class T, class MAP_TYPE = map<T, idx_t>>
-	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data,
-	                            AggregateInputData &aggr_input, idx_t count) {
-		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
-		auto input_strings = UnifiedVectorFormat::GetData<string_t>(input_data);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = input_data.sel->get_index(i);
-			if (!input_data.validity.RowIsValid(idx)) {
-				continue;
-			}
-			auto &state = *states[sdata.sel->get_index(i)];
-			if (!state.hist) {
-				state.hist = new MAP_TYPE();
-			}
-			auto &input_str = input_strings[idx];
-			auto entry = state.hist->find(input_str);
-			if (entry != state.hist->end()) {
-				// entry already exists - increment
-				++entry->second;
-				continue;
-			}
-			// entry does not exist yet - we need to insert it
-			if (input_str.IsInlined()) {
-				// inlined strings can be inserted directly
-				state.hist->insert(make_pair(input_str, 1));
-			} else {
-				// if the string is not inlined we need to allocate space for it
-				auto input_str_size = UnsafeNumericCast<uint32_t>(input_str.GetSize());
-				auto string_memory = aggr_input.allocator.Allocate(input_str_size);
-				// copy over the string
-				memcpy(string_memory, input_str.GetData(), input_str_size);
-				// now insert it into the histogram
-				string_t histogram_str(char_ptr_cast(string_memory), input_str_size);
-				state.hist->insert(make_pair(histogram_str, 1));
-			}
-		}
-	}
-
-	template <class T>
-	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
-	}
-};
-
-struct HistogramStringFunctor : HistogramStringFunctorBase {
-	static bool CreateExtraState() {
-		return false;
-	}
-
-	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
-		input.ToUnifiedFormat(count, result);
-	}
-};
-
-struct HistogramGenericFunctor : HistogramStringFunctorBase {
-	template <class T>
-	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		CreateSortKeyHelpers::DecodeSortKey(value, result, offset,
-		                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
-	}
-
-	static Vector CreateExtraState() {
-		return Vector(LogicalType::BLOB);
-	}
-
-	static void PrepareData(Vector &input, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
-		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, extra_state);
-		input.Flatten(count);
-		extra_state.Flatten(count);
-		FlatVector::Validity(extra_state).Initialize(FlatVector::Validity(input));
-		extra_state.ToUnifiedFormat(count, result);
-	}
-};
 
 struct HistogramFunction {
 	template <class STATE>
@@ -150,7 +38,28 @@ static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_in
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
-	OP::template HistogramUpdate<T, MAP_TYPE>(sdata, input_data, aggr_input, count);
+	auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
+	auto input_values = UnifiedVectorFormat::GetData<T>(input_data);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = input_data.sel->get_index(i);
+		if (!input_data.validity.RowIsValid(idx)) {
+			continue;
+		}
+		auto &state = *states[sdata.sel->get_index(i)];
+		if (!state.hist) {
+			state.hist = new MAP_TYPE();
+		}
+		auto &input_value = input_values[idx];
+		auto entry = state.hist->find(input_value);
+		if (entry != state.hist->end()) {
+			// entry already exists - increment
+			++entry->second;
+			continue;
+		}
+		// entry does not exist yet - we need to insert it
+		auto insert_value = OP::template ExtractValue<T>(input_data, i, aggr_input);
+		state.hist->insert(make_pair(insert_value, 1));
+	}
 }
 
 template <class T, class MAP_TYPE>

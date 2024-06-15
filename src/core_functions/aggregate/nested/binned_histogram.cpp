@@ -1,10 +1,9 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/core_functions/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/core_functions/create_sort_key.hpp"
+#include "duckdb/core_functions/aggregate/histogram_helpers.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 
@@ -57,7 +56,7 @@ struct HistogramBinState {
 			if (!bin_child_data.validity.RowIsValid(bin_child_idx)) {
 				throw BinderException("Histogram bin entry cannot be NULL");
 			}
-			OP::template ExtractBoundary<T>(*bin_boundaries, bin_child_data, bin_list.offset + i, aggr_input);
+			bin_boundaries->push_back(OP::template ExtractValue<T>(bin_child_data, bin_list.offset + i, aggr_input));
 		}
 		// sort the bin boundaries
 		std::sort(bin_boundaries->begin(), bin_boundaries->end());
@@ -69,84 +68,6 @@ struct HistogramBinState {
 		}
 
 		counts->resize(bin_list.length + 1);
-	}
-};
-
-struct HistogramBinFunctor {
-	template <class T>
-	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<T>(result)[offset] = value;
-	}
-
-	static bool CreateExtraState() {
-		return false;
-	}
-
-	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
-		input.ToUnifiedFormat(count, result);
-	}
-
-	template <class T>
-	static void ExtractBoundary(unsafe_vector<T> &boundaries, UnifiedVectorFormat &bin_data, idx_t offset,
-	                            AggregateInputData &) {
-		boundaries.push_back(UnifiedVectorFormat::GetData<T>(bin_data)[bin_data.sel->get_index(offset)]);
-	}
-};
-
-struct HistogramBinStringFunctorBase {
-	template <class T>
-	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		FlatVector::GetData<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
-	}
-
-	template <class T>
-	static void ExtractBoundary(unsafe_vector<T> &boundaries, UnifiedVectorFormat &bin_data, idx_t offset,
-	                            AggregateInputData &aggr_input) {
-		auto &input_str = UnifiedVectorFormat::GetData<T>(bin_data)[bin_data.sel->get_index(offset)];
-		if (input_str.IsInlined()) {
-			// inlined strings can be inserted directly
-			boundaries.push_back(input_str);
-		} else {
-			// if the string is not inlined we need to allocate space for it
-			auto input_str_size = UnsafeNumericCast<uint32_t>(input_str.GetSize());
-			auto string_memory = aggr_input.allocator.Allocate(input_str_size);
-			// copy over the string
-			memcpy(string_memory, input_str.GetData(), input_str_size);
-			// now insert it into the histogram
-			string_t histogram_str(char_ptr_cast(string_memory), input_str_size);
-			boundaries.push_back(histogram_str);
-		}
-	}
-};
-
-struct HistogramBinStringFunctor : HistogramBinStringFunctorBase {
-	static bool CreateExtraState() {
-		return false;
-	}
-
-	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
-		input.ToUnifiedFormat(count, result);
-	}
-};
-
-struct HistogramBinGenericFunctor : HistogramBinStringFunctorBase {
-	template <class T>
-	static void HistogramFinalize(T value, Vector &result, idx_t offset) {
-		CreateSortKeyHelpers::DecodeSortKey(value, result, offset,
-		                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
-	}
-
-	static Vector CreateExtraState() {
-		return Vector(LogicalType::BLOB);
-	}
-
-	static void PrepareData(Vector &input, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
-		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, extra_state);
-		input.Flatten(count);
-		extra_state.Flatten(count);
-		FlatVector::Validity(extra_state).Initialize(FlatVector::Validity(input));
-		extra_state.ToUnifiedFormat(count, result);
 	}
 };
 
@@ -297,31 +218,31 @@ static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		return GetHistogramBinFunction<HistogramBinFunctor, bool>(type);
+		return GetHistogramBinFunction<HistogramFunctor, bool>(type);
 	case PhysicalType::UINT8:
-		return GetHistogramBinFunction<HistogramBinFunctor, uint8_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint8_t>(type);
 	case PhysicalType::UINT16:
-		return GetHistogramBinFunction<HistogramBinFunctor, uint16_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint16_t>(type);
 	case PhysicalType::UINT32:
-		return GetHistogramBinFunction<HistogramBinFunctor, uint32_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint32_t>(type);
 	case PhysicalType::UINT64:
-		return GetHistogramBinFunction<HistogramBinFunctor, uint64_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint64_t>(type);
 	case PhysicalType::INT8:
-		return GetHistogramBinFunction<HistogramBinFunctor, int8_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int8_t>(type);
 	case PhysicalType::INT16:
-		return GetHistogramBinFunction<HistogramBinFunctor, int16_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int16_t>(type);
 	case PhysicalType::INT32:
-		return GetHistogramBinFunction<HistogramBinFunctor, int32_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int32_t>(type);
 	case PhysicalType::INT64:
-		return GetHistogramBinFunction<HistogramBinFunctor, int64_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int64_t>(type);
 	case PhysicalType::FLOAT:
-		return GetHistogramBinFunction<HistogramBinFunctor, float>(type);
+		return GetHistogramBinFunction<HistogramFunctor, float>(type);
 	case PhysicalType::DOUBLE:
-		return GetHistogramBinFunction<HistogramBinFunctor, double>(type);
+		return GetHistogramBinFunction<HistogramFunctor, double>(type);
 	case PhysicalType::VARCHAR:
-		return GetHistogramBinFunction<HistogramBinStringFunctor, string_t>(type);
+		return GetHistogramBinFunction<HistogramStringFunctor, string_t>(type);
 	default:
-		return GetHistogramBinFunction<HistogramBinGenericFunctor, string_t>(type);
+		return GetHistogramBinFunction<HistogramGenericFunctor, string_t>(type);
 	}
 }
 
