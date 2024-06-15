@@ -3,6 +3,9 @@
 # group: [aggregates]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE obs(n BIGINT);
 
 statement ok
@@ -13,11 +16,31 @@ SELECT histogram(n, [10, 20, 30, 40, 50]) FROM obs
 ----
 {10=3, 20=2, 30=5, 40=3, 50=2}
 
-# 3 in [-inf, 10] (0, 5, 7)
-# 2 in (10, 20] (12, 20)
-# 5 in (20, 30] (23, 24, 25, 26, 28)
-# 3 in (30, 40] (31, 34, 36)
-# 2 in (40, 50] (41, 47)
+# duplicate bounds
+query I
+SELECT histogram(n, [10, 10, 10, 10]) FROM obs
+----
+
+# bounds that are not sorted
+query I
+SELECT histogram(n, [10, 40, 50, 40, 20]) FROM obs
+----
+
+# grouped aggregation
+# uneven: 5, 7, 23, 25, 31, 41, 47
+# even: 0, 12, 20, 24, 26, 28, 34, 36
+query II
+SELECT n%2=0 is_even, histogram(n, [10, 20, 30, 40, 50]) FROM obs GROUP BY is_even ORDER BY is_even
+----
+false	{10=2, 20=0, 30=2, 40=1, 50=2}
+true	{10=1, 20=2, 30=3, 40=2, 50=0}
+
+# different bounds per group
+query II
+SELECT n%2=0 is_even, histogram(n, case when n%2=0 then [10, 20, 30, 40, 50] else [11, 21, 31, 41, 51] end) FROM obs GROUP BY is_even ORDER BY is_even
+----
+0	{11=2, 21=0, 31=3, 41=1, 51=1}
+1	{10=1, 20=2, 30=3, 40=2, 50=0}
 
 # values bigger than the max bin are ignored
 query I
@@ -25,7 +48,40 @@ SELECT histogram(n, [10, 20, 30, 40, 50]) FROM obs
 ----
 {10=3, 20=2, 30=5, 40=3, 50=2}
 
+# larger bins
+query I
+SELECT histogram(i, range(999, 10000, 1000)) FROM range(10000) t(i)
+----
+{999=1000, 1999=1000, 2999=1000, 3999=1000, 4999=1000, 5999=1000, 6999=1000, 7999=1000, 8999=1000, 9999=1000}
 
+# extreme values
+query I
+SELECT histogram(v, [-9223372036854775808, -9223372036854775807, 9223372036854775807]) FROM
+(VALUES (-9223372036854775808), (-9223372036854775807), (0), (9223372036854775807)) t(v)
+----
+{-9223372036854775808=1, -9223372036854775807=1, 9223372036854775807=2}
+
+# extreme doubles/negative values
+query I
+SELECT histogram(v, ['-infinity'::double, -10, 0, 10, 'infinity']) FROM
+(VALUES (-1e308), (-0.5), (0), ('inf'), ('-inf'), (0.5)) t(v)
+----
+{-inf=1, -10.0=1, 0.0=2, 10.0=1, inf=1}
+
+# timestamps
+query I
+SELECT histogram(v, range(timestamp '2000-01-01', timestamp '2005-01-01', interval '1 year')) FROM
+(VALUES (timestamp '2000-01-01'), (timestamp '2003-01-01') t(v)
+----
+{-inf=1, -10.0=1, 0.0=2, 10.0=1, inf=1}
+
+# strings
+
+# nested types?
+
+# test groups with different bins for each group (but constant within each group)
+# test different bins within the same group (error)
+# bins with different types (dates, timestamps, strings, nested types)
 
 # null WITHIN bins
 statement error
