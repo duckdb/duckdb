@@ -18,4 +18,13 @@ SELECT histogram[min], histogram[max] FROM (
 ----
 [1]	[1]
 
+# binned histogram
+query II
+SELECT histogram[min], histogram[max] FROM (
+	SELECT HISTOGRAM("${col}", [(select min("${col}") from all_types), ((select max("${col}") from all_types))]) histogram, MIN("${col}") min, MAX("${col}") max
+	FROM all_types
+)
+----
+[1]	[1]
+
 endloop
