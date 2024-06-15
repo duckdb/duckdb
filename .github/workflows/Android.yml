@@ -67,6 +67,7 @@ jobs:
       GEN: ninja
       EXTENSION_STATIC_BUILD: 1
       DUCKDB_PLATFORM: android_${{ matrix.arch}}
+      DUCKDB_CUSTOM_PLATFORM: android_${{ matrix.arch}}
       CMAKE_VARS_BUILD: -DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=${{ matrix.arch}} -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake
 
     steps:
