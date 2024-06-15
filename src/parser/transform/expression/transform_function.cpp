@@ -27,6 +27,11 @@ void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef &window_spec
 			throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
 		}
 		TransformOrderBy(window_spec.orderClause, expr.orders);
+		for (auto &order : expr.orders) {
+			if (order.expression->GetExpressionType() == ExpressionType::STAR) {
+				throw ParserException("Cannot ORDER BY ALL in a window expression");
+			}
+		}
 	}
 }
 
