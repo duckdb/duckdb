@@ -45,9 +45,6 @@ struct HistogramBinState {
 		if (!bin_data.validity.RowIsValid(bin_index)) {
 			throw BinderException("Histogram bin list cannot be NULL");
 		}
-		if (bin_list.length == 0) {
-			throw BinderException("Histogram bin list cannot be empty");
-		}
 
 		auto &bin_child = ListVector::GetEntry(bin_vector);
 		UnifiedVectorFormat bin_child_data;
@@ -62,6 +59,15 @@ struct HistogramBinState {
 			}
 			OP::template ExtractBoundary<T>(*bin_boundaries, bin_child_data, bin_list.offset + i);
 		}
+		// sort the bin boundaries
+		std::sort(bin_boundaries->begin(), bin_boundaries->end());
+		// ensure there are no duplicate bin boundaries
+		for(idx_t i = 1; i < bin_boundaries->size(); i++) {
+			if (Equals::Operation((*bin_boundaries)[i - 1], (*bin_boundaries)[i])) {
+				throw BinderException("Histogram bin boundaries cannot contain duplicates");
+			}
+		}
+
 		counts->resize(bin_list.length + 1);
 	}
 };

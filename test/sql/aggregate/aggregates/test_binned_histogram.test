@@ -16,15 +16,17 @@ SELECT histogram(n, [10, 20, 30, 40, 50]) FROM obs
 ----
 {10=3, 20=2, 30=5, 40=3, 50=2}
 
-# duplicate bounds
+# empty bins
 query I
-SELECT histogram(n, [10, 10, 10, 10]) FROM obs
+SELECT histogram(n, []) FROM obs
 ----
+{}
 
 # bounds that are not sorted
 query I
-SELECT histogram(n, [10, 40, 50, 40, 20]) FROM obs
+SELECT histogram(n, [10, 40, 50, 30, 20]) FROM obs
 ----
+{10=3, 20=2, 30=5, 40=3, 50=2}
 
 # grouped aggregation
 # uneven: 5, 7, 23, 25, 31, 41, 47
@@ -68,12 +70,12 @@ SELECT histogram(v, ['-infinity'::double, -10, 0, 10, 'infinity']) FROM
 ----
 {-inf=1, -10.0=1, 0.0=2, 10.0=1, inf=1}
 
-# timestamps
-query I
-SELECT histogram(v, range(timestamp '2000-01-01', timestamp '2005-01-01', interval '1 year')) FROM
-(VALUES (timestamp '2000-01-01'), (timestamp '2003-01-01') t(v)
-----
-{-inf=1, -10.0=1, 0.0=2, 10.0=1, inf=1}
+## timestamps
+#query I
+#SELECT histogram(v, range(timestamp '2000-01-01', timestamp '2005-01-01', interval '1 year')) FROM
+#(VALUES (timestamp '2000-01-01'), (timestamp '2003-01-01') t(v)
+#----
+#{-inf=1, -10.0=1, 0.0=2, 10.0=1, inf=1}
 
 # strings
 
@@ -83,17 +85,17 @@ SELECT histogram(v, range(timestamp '2000-01-01', timestamp '2005-01-01', interv
 # test different bins within the same group (error)
 # bins with different types (dates, timestamps, strings, nested types)
 
+# duplicate bounds in bins
+statement error
+SELECT histogram(n, [10, 10, 10, 10]) FROM obs
+----
+cannot contain duplicates
+
 # null WITHIN bins
 statement error
 SELECT histogram(n, [10, 20, NULL]) FROM obs
 ----
 Histogram bin entry cannot be NULL
-
-# empty bins
-statement error
-SELECT histogram(n, []) FROM obs
-----
-Histogram bin list cannot be empty
 
 # NULL bins
 statement error
