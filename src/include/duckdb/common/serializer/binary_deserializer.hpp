@@ -57,11 +57,7 @@ public:
 		return stream;
 	}
 
-	DeserializationData &GetSerializationData() {
-		return data;
-	}
-
-	void SetSerializationData(const DeserializationData &other) {
+	void SetSerializationData(const SerializationData &other) {
 		data = other;
 	}
 

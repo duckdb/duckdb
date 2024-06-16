@@ -23,7 +23,7 @@ class DatabaseInstance;
 class CompressionInfo;
 enum class ExpressionType : uint8_t;
 
-struct DeserializationData {
+struct SerializationData {
 	struct CustomData {
 		virtual ~CustomData() = default;
 	};
@@ -48,7 +48,7 @@ struct DeserializationData {
 	template <class T>
 	inline void AssertNotEmpty(const stack<T> &e) {
 		if (e.empty()) {
-			throw InternalException("DeserializationData - unexpected empty stack");
+			throw InternalException("SerializationData - unexpected empty stack");
 		}
 	}
 
@@ -61,7 +61,7 @@ struct DeserializationData {
 		}
 		auto &stack = iter->second;
 		if (stack.empty()) {
-			throw duckdb::InternalException("DeserializationData - unexpected empty stack for %s", type);
+			throw duckdb::InternalException("SerializationData - unexpected empty stack for %s", type);
 		}
 		return dynamic_cast<T &>(stack.top().get());
 	}
@@ -79,148 +79,148 @@ struct DeserializationData {
 };
 
 template <>
-inline void DeserializationData::Set(ExpressionType type) {
+inline void SerializationData::Set(ExpressionType type) {
 	enums.push(idx_t(type));
 }
 
 template <>
-inline ExpressionType DeserializationData::Get() {
+inline ExpressionType SerializationData::Get() {
 	AssertNotEmpty(enums);
 	return ExpressionType(enums.top());
 }
 
 template <>
-inline void DeserializationData::Unset<ExpressionType>() {
+inline void SerializationData::Unset<ExpressionType>() {
 	AssertNotEmpty(enums);
 	enums.pop();
 }
 
 template <>
-inline void DeserializationData::Set(LogicalOperatorType type) {
+inline void SerializationData::Set(LogicalOperatorType type) {
 	enums.push(idx_t(type));
 }
 
 template <>
-inline LogicalOperatorType DeserializationData::Get() {
+inline LogicalOperatorType SerializationData::Get() {
 	AssertNotEmpty(enums);
 	return LogicalOperatorType(enums.top());
 }
 
 template <>
-inline void DeserializationData::Unset<LogicalOperatorType>() {
+inline void SerializationData::Unset<LogicalOperatorType>() {
 	AssertNotEmpty(enums);
 	enums.pop();
 }
 
 template <>
-inline void DeserializationData::Set(CompressionType type) {
+inline void SerializationData::Set(CompressionType type) {
 	enums.push(idx_t(type));
 }
 
 template <>
-inline CompressionType DeserializationData::Get() {
+inline CompressionType SerializationData::Get() {
 	AssertNotEmpty(enums);
 	return CompressionType(enums.top());
 }
 
 template <>
-inline void DeserializationData::Unset<CompressionType>() {
+inline void SerializationData::Unset<CompressionType>() {
 	AssertNotEmpty(enums);
 	enums.pop();
 }
 
 template <>
-inline void DeserializationData::Set(CatalogType type) {
+inline void SerializationData::Set(CatalogType type) {
 	enums.push(idx_t(type));
 }
 
 template <>
-inline CatalogType DeserializationData::Get() {
+inline CatalogType SerializationData::Get() {
 	AssertNotEmpty(enums);
 	return CatalogType(enums.top());
 }
 
 template <>
-inline void DeserializationData::Unset<CatalogType>() {
+inline void SerializationData::Unset<CatalogType>() {
 	AssertNotEmpty(enums);
 	enums.pop();
 }
 
 template <>
-inline void DeserializationData::Set(ClientContext &context) {
+inline void SerializationData::Set(ClientContext &context) {
 	contexts.emplace(context);
 }
 
 template <>
-inline ClientContext &DeserializationData::Get() {
+inline ClientContext &SerializationData::Get() {
 	AssertNotEmpty(contexts);
 	return contexts.top();
 }
 
 template <>
-inline void DeserializationData::Unset<ClientContext>() {
+inline void SerializationData::Unset<ClientContext>() {
 	AssertNotEmpty(contexts);
 	contexts.pop();
 }
 
 template <>
-inline void DeserializationData::Set(DatabaseInstance &db) {
+inline void SerializationData::Set(DatabaseInstance &db) {
 	databases.emplace(db);
 }
 
 template <>
-inline DatabaseInstance &DeserializationData::Get() {
+inline DatabaseInstance &SerializationData::Get() {
 	AssertNotEmpty(databases);
 	return databases.top();
 }
 
 template <>
-inline void DeserializationData::Unset<DatabaseInstance>() {
+inline void SerializationData::Unset<DatabaseInstance>() {
 	AssertNotEmpty(databases);
 	databases.pop();
 }
 
 template <>
-inline void DeserializationData::Set(bound_parameter_map_t &context) {
+inline void SerializationData::Set(bound_parameter_map_t &context) {
 	parameter_data.emplace(context);
 }
 
 template <>
-inline bound_parameter_map_t &DeserializationData::Get() {
+inline bound_parameter_map_t &SerializationData::Get() {
 	AssertNotEmpty(parameter_data);
 	return parameter_data.top();
 }
 
 template <>
-inline void DeserializationData::Unset<bound_parameter_map_t>() {
+inline void SerializationData::Unset<bound_parameter_map_t>() {
 	AssertNotEmpty(parameter_data);
 	parameter_data.pop();
 }
 
 template <>
-inline void DeserializationData::Set(LogicalType &type) {
+inline void SerializationData::Set(LogicalType &type) {
 	types.emplace(type);
 }
 
 template <>
-inline void DeserializationData::Unset<LogicalType>() {
+inline void SerializationData::Unset<LogicalType>() {
 	AssertNotEmpty(types);
 	types.pop();
 }
 
 template <>
-inline void DeserializationData::Set(const LogicalType &type) {
+inline void SerializationData::Set(const LogicalType &type) {
 	types.emplace(type);
 }
 
 template <>
-inline const LogicalType &DeserializationData::Get() {
+inline const LogicalType &SerializationData::Get() {
 	AssertNotEmpty(types);
 	return types.top();
 }
 
 template <>
-inline void DeserializationData::Unset<const LogicalType>() {
+inline void SerializationData::Unset<const LogicalType>() {
 	AssertNotEmpty(types);
 	types.pop();
 }

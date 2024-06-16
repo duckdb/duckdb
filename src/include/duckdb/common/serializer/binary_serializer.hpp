@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/serializer/encoding_util.hpp"
-#include "duckdb/common/serializer/deserialization_data.hpp"
+#include "duckdb/common/serializer/serialization_data.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 
 namespace duckdb {
 
@@ -69,11 +69,11 @@ public:
 		OnObjectEnd();
 	}
 
-	DeserializationData &GetSerializationData() {
+	SerializationData &GetSerializationData() {
 		return data;
 	}
 
-	void SetSerializationData(const DeserializationData &other) {
+	void SetSerializationData(const SerializationData &other) {
 		data = other;
 	}
 
@@ -121,7 +121,7 @@ private:
 	WriteStream &stream;
 
 protected:
-	duckdb::DeserializationData data;
+	duckdb::SerializationData data;
 };
 
 } // namespace duckdb
