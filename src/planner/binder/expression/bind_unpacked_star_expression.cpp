@@ -1,5 +1,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
