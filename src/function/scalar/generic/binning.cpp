@@ -78,6 +78,8 @@ double MakeNumberNice(double input) {
 }
 
 struct EquiWidthBinsInteger {
+	static constexpr LogicalTypeId LOGICAL_TYPE = LogicalTypeId::BIGINT;
+
 	static vector<PrimitiveType<int64_t>> Operation(int64_t input_min, int64_t input_max, idx_t bin_count,
 	                                                bool nice_rounding) {
 		vector<PrimitiveType<int64_t>> result;
@@ -116,6 +118,8 @@ struct EquiWidthBinsInteger {
 };
 
 struct EquiWidthBinsDouble {
+	static constexpr LogicalTypeId LOGICAL_TYPE = LogicalTypeId::DOUBLE;
+
 	static vector<PrimitiveType<double>> Operation(double min, double max, idx_t bin_count, bool nice_rounding) {
 		if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
 			throw InvalidInputException("equi_width_bucket does not support infinite or nan as min/max value");
@@ -153,17 +157,29 @@ struct EquiWidthBinsDouble {
 	}
 };
 
+unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &bound_function,
+                                                           vector<unique_ptr<Expression>> &arguments) {
+	// while internally the bins are computed over a unified type
+	// the equi_width_bins function returns the same type as the input MAX
+	if (arguments[1]->return_type.id() != LogicalTypeId::UNKNOWN &&
+		arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
+		bound_function.return_type = LogicalType::LIST(arguments[1]->return_type);
+	}
+	return nullptr;
+}
+
 template <class T, class OP>
 static void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	static constexpr const int64_t MAX_BIN_COUNT = 1000000;
+	static constexpr int64_t MAX_BIN_COUNT = 1000000;
 	auto &min_arg = args.data[0];
 	auto &max_arg = args.data[1];
 	auto &bin_count = args.data[2];
 	auto &nice_rounding = args.data[3];
 
+	Vector intermediate_result(LogicalType::LIST(OP::LOGICAL_TYPE));
 	GenericExecutor::ExecuteQuaternary<PrimitiveType<T>, PrimitiveType<T>, PrimitiveType<int64_t>, PrimitiveType<bool>,
 	                                   GenericListType<PrimitiveType<T>>>(
-	    min_arg, max_arg, bin_count, nice_rounding, result, args.size(),
+	    min_arg, max_arg, bin_count, nice_rounding, intermediate_result, args.size(),
 	    [&](PrimitiveType<T> min_p, PrimitiveType<T> max_p, PrimitiveType<int64_t> bins_p,
 	        PrimitiveType<bool> nice_rounding_p) {
 		    if (max_p.val < min_p.val) {
@@ -186,16 +202,17 @@ static void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector
 		    }
 		    return result_bins;
 	    });
+	VectorOperations::DefaultCast(intermediate_result, result, args.size());
 }
 
 ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	ScalarFunctionSet functions("equi_width_bins");
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::BIGINT), EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>));
+	                   LogicalType::LIST(LogicalType::BIGINT), EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>, BindEquiWidthFunction));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::DOUBLE), EquiWidthBinFunction<double, EquiWidthBinsDouble>));
+	                   LogicalType::LIST(LogicalType::DOUBLE), EquiWidthBinFunction<double, EquiWidthBinsDouble>, BindEquiWidthFunction));
 	return functions;
 }
 
