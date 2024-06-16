@@ -144,23 +144,23 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 } duckdb_type;
 //! An enum over the returned state of different functions.
-typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
+typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 //! An enum over the pending state of a pending query result.
-typedef enum {
+typedef enum duckdb_pending_state {
 	DUCKDB_PENDING_RESULT_READY = 0,
 	DUCKDB_PENDING_RESULT_NOT_READY = 1,
 	DUCKDB_PENDING_ERROR = 2,
 	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
 } duckdb_pending_state;
 //! An enum over DuckDB's different result types.
-typedef enum {
+typedef enum duckdb_result_type {
 	DUCKDB_RESULT_TYPE_INVALID = 0,
 	DUCKDB_RESULT_TYPE_CHANGED_ROWS = 1,
 	DUCKDB_RESULT_TYPE_NOTHING = 2,
 	DUCKDB_RESULT_TYPE_QUERY_RESULT = 3,
 } duckdb_result_type;
 //! An enum over DuckDB's different statement types.
-typedef enum {
+typedef enum duckdb_statement_type {
 	DUCKDB_STATEMENT_TYPE_INVALID = 0,
 	DUCKDB_STATEMENT_TYPE_SELECT = 1,
 	DUCKDB_STATEMENT_TYPE_INSERT = 2,
