@@ -10,6 +10,28 @@ SELECT equi_width_bins(0, 10, 2, true)
 ----
 [5, 10]
 
+# small bins with big base
+query I
+SELECT equi_width_bins(1000000, 1000010, 2, true)
+----
+[1000005, 1000010]
+
+# bounds cannot be nice because of step size
+query I
+SELECT equi_width_bins(99, 101, 2, true)
+----
+[100, 101]
+
+query I
+SELECT equi_width_bins(9, 11, 2, true)
+----
+[10, 11]
+
+query I
+SELECT equi_width_bins(10, 11, 2, true)
+----
+[11]
+
 # we cannot have duplicate bin boundaries
 query I
 SELECT equi_width_bins(0, 5, 10, true)
@@ -39,7 +61,12 @@ SELECT equi_width_bins(0, 9, 5, true)
 query I
 SELECT equi_width_bins(0, 1734, 10, true)
 ----
-[180, 360, 540, 720, 900, 1080, 1260, 1440, 1620, 1800]
+[120, 300, 480, 660, 840, 1020, 1200, 1380, 1560, 1740]
+
+query I
+SELECT equi_width_bins(0, 1724, 10, true)
+----
+[120, 300, 480, 660, 840, 1020, 1200, 1380, 1560, 1740]
 
 # not nice
 query I
@@ -50,7 +77,7 @@ SELECT equi_width_bins(0, 1734, 10, false)
 query I
 SELECT equi_width_bins(0, 39343341, 10, true)
 ----
-[4000000, 8000000, 12000000, 16000000, 20000000, 24000000, 28000000, 32000000, 36000000, 40000000]
+[3400000, 7400000, 11400000, 15400000, 19400000, 23400000, 27400000, 31400000, 35400000, 39400000]
 
 query I
 SELECT equi_width_bins(1, 6000000, 7, true)
@@ -66,7 +93,7 @@ SELECT equi_width_bins(1, 6000000, 7, false)
 query I
 SELECT equi_width_bins(-9223372036854775808, 9223372036854775807, 5, true)
 ----
-[-5200000000000000000, -1600000000000000000, 2000000000000000000, 5600000000000000000, 9200000000000000000]
+[-5000000000000000000, -1400000000000000000, 2200000000000000000, 5800000000000000000, 9223372036854775807]
 
 # floating point numbers
 query I
@@ -91,7 +118,7 @@ SELECT unnest(equi_width_bins(0.0, 9.0, 7, false));
 9.0
 
 query I
-SELECT equi_width_bins(0.0, 90, 5, true);
+SELECT equi_width_bins(0.0, 90.0, 5, true);
 ----
 [18.0, 36.0, 54.0, 72.0, 90.0]
 
@@ -119,11 +146,79 @@ SELECT equi_width_bins(-1.0, 1.0, 5, true);
 query I
 SELECT unnest(equi_width_bins(-1e308, 1e308, 5, true));
 ----
--6e+307
--2e+307
-2e+307
-6e+307
-1e+308
+-5.8e+307
+-1.8e+307
+2.2e+307
+6.2e+307
+1.02e+308
+
+# last bin should always be bigger than the input max
+query I
+select equi_width_bins(0, 101, 5, true);
+----
+[22, 42, 62, 82, 102]
+
+query I
+select equi_width_bins(0, 101.5, 5, true);
+----
+[22.0, 42.0, 62.0, 82.0, 102.0]
+
+# dates/timestamps
+query I
+SELECT equi_width_bins(date '1992-01-01', date '2000-01-01', 2, true)
+----
+[1996-01-01, 2000-01-01]
+
+query I
+SELECT equi_width_bins(timestamp '1992-01-01', timestamp '2000-01-01', 2, true)
+----
+[1996-01-01 00:00:00, 2000-01-01 00:00:00]
+
+query I
+SELECT equi_width_bins(timestamp '1992-01-01 12:23:37', timestamp '2000-01-01 04:03:21', 2, true)
+----
+[1992-02-01 00:00:00, 1996-02-01 00:00:00, 2000-02-01 00:00:00]
+
+query I
+SELECT equi_width_bins(timestamp '1992-01-01 12:23:37', timestamp '2000-01-01 04:03:21', 5, true)
+----
+[1992-03-01 00:00:00, 1993-10-01 00:00:00, 1995-05-01 00:00:00, 1996-12-01 00:00:00, 1998-07-01 00:00:00, 2000-02-01 00:00:00]
+
+# bins within a year
+query I
+SELECT equi_width_bins(timestamp '1992-01-01 12:23:37', timestamp '1992-12-01 04:03:21', 4, true)
+----
+[1992-02-02 00:00:00, 1992-04-02 00:00:00, 1992-06-02 00:00:00, 1992-08-02 00:00:00, 1992-10-02 00:00:00, 1992-12-02 00:00:00]
+
+# bins within a month
+query I
+SELECT equi_width_bins(timestamp '1992-01-01 12:23:37', timestamp '1992-01-31 04:03:21', 4, true)
+----
+[1992-01-04 00:00:00, 1992-01-11 00:00:00, 1992-01-18 00:00:00, 1992-01-25 00:00:00, 1992-02-01 00:00:00]
+
+# bins within a day
+query I
+SELECT equi_width_bins(timestamp '1992-01-01 01:23:37.999', timestamp '1992-01-01 23:03:21.3', 4, true)
+----
+[1992-01-01 02:00:00, 1992-01-01 07:30:00, 1992-01-01 13:00:00, 1992-01-01 18:30:00, 1992-01-02 00:00:00]
+
+# bins within an hour
+query I
+SELECT equi_width_bins(timestamp '1992-01-01 01:23:37.999', timestamp '1992-01-01 01:53:21.3', 4, true)
+----
+[1992-01-01 01:24:00, 1992-01-01 01:31:30, 1992-01-01 01:39:00, 1992-01-01 01:46:30, 1992-01-01 01:54:00]
+
+# bins within a minute
+query I
+SELECT equi_width_bins(timestamp '1992-01-01 01:23:01.999', timestamp '1992-01-01 01:23:49.377', 4, true)
+----
+[1992-01-01 01:23:02, 1992-01-01 01:23:14, 1992-01-01 01:23:26, 1992-01-01 01:23:38, 1992-01-01 01:23:50]
+
+# bins within a second
+query I
+SELECT equi_width_bins(timestamp '1992-01-01 01:23:01.2', timestamp '1992-01-01 01:23:01.943', 4, true)
+----
+[1992-01-01 01:23:01.38575, 1992-01-01 01:23:01.5715, 1992-01-01 01:23:01.75725, 1992-01-01 01:23:01.943]
 
 statement error
 SELECT equi_width_bins(-0.0, -1.0, 5, true);

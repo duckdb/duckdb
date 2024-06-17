@@ -1,7 +1,11 @@
-#include "duckdb/core_functions/scalar/generic_functions.hpp"
-#include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector_operations/generic_executor.hpp"
+#include "duckdb/core_functions/scalar/generic_functions.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 
@@ -13,14 +17,15 @@ hugeint_t GetPreviousPowerOfTen(hugeint_t input) {
 	return power_of_ten / 10;
 }
 
-hugeint_t MakeNumberNice(hugeint_t input) {
+enum class NiceRounding { CEILING, ROUND };
+
+hugeint_t MakeNumberNice(hugeint_t input, hugeint_t power_of_ten, NiceRounding rounding) {
 	// we consider numbers nice if they are divisible by 2 or 5 times the power-of-ten one lower than the current
 	// e.g. 120 is a nice number because it is divisible by 20
 	//      122 is not a nice number -> we make it nice by turning it into 120 [/20]
 	//      153 is not a nice number -> we make it nice by turning it into 150 [/50]
 	//      1220 is not a nice number -> we turn it into 1200                  [/200]
 	// first figure out the previous power of 10 (i.e. for 67 we return 10)
-	hugeint_t power_of_ten = GetPreviousPowerOfTen(input);
 	// now the power of ten is the power BELOW the current number
 	// i.e. for 67, it is not 10
 	// now we can get the 2 or 5 divisors
@@ -29,8 +34,16 @@ hugeint_t MakeNumberNice(hugeint_t input) {
 
 	// compute the closest round number by adding the divisor / 2 and truncating
 	// do this for both divisors
-	hugeint_t round_to_two = (input + (two / 2)) / two * two;
-	hugeint_t round_to_five = (input + (five / 2)) / five * five;
+	hugeint_t round_to_two, round_to_five;
+	if (rounding == NiceRounding::ROUND) {
+		// round
+		round_to_two = (input + (two / 2)) / two * two;
+		round_to_five = (input + (five / 2)) / five * five;
+	} else {
+		// ceil
+		round_to_two = (input + (two - 1)) / two * two;
+		round_to_five = (input + (five - 1)) / five * five;
+	}
 	// now pick the closest number of the two (i.e. for 147 we pick 150, not 140)
 	if (AbsValue(input - round_to_two) < AbsValue(input - round_to_five)) {
 		return round_to_two;
@@ -53,19 +66,24 @@ double GetPreviousPowerOfTen(double input) {
 	return power_of_ten / 10;
 }
 
-double MakeNumberNice(double input) {
+double MakeNumberNice(double input, const double power_of_ten, NiceRounding rounding) {
 	if (input == 0) {
 		return 0;
 	}
-	const double power_of_ten = GetPreviousPowerOfTen(input);
 	// now the power of ten is the power BELOW the current number
 	// i.e. for 67, it is not 10
 	// now we can get the 2 or 5 divisors
 	const double two = power_of_ten / 5;
 	const double five = power_of_ten / 2;
 
-	const double round_to_two = std::round(input / two) * two;
-	const double round_to_five = std::round(input / five) * five;
+	double round_to_two, round_to_five;
+	if (rounding == NiceRounding::ROUND) {
+		round_to_two = std::round(input / two) * two;
+		round_to_five = std::round(input / five) * five;
+	} else {
+		round_to_two = std::ceil(input / two) * two;
+		round_to_five = std::ceil(input / five) * five;
+	}
 	if (!Value::IsFinite(round_to_two) || !Value::IsFinite(round_to_five)) {
 		return input;
 	}
@@ -91,10 +109,11 @@ struct EquiWidthBinsInteger {
 
 		const hugeint_t span = max - min;
 		hugeint_t step = span / Hugeint::Convert(bin_count);
+		hugeint_t power_of_ten = GetPreviousPowerOfTen(step);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
-			step = MakeNumberNice(step);
-			max = MakeNumberNice(max);
+			step = MakeNumberNice(step, power_of_ten, NiceRounding::ROUND);
+			max = MakeNumberNice(max, power_of_ten, NiceRounding::CEILING);
 		}
 
 		for (hugeint_t bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
@@ -112,7 +131,6 @@ struct EquiWidthBinsInteger {
 			}
 			result.push_back(real_boundary);
 		}
-		std::reverse(result.begin(), result.end());
 		return result;
 	}
 };
@@ -120,7 +138,8 @@ struct EquiWidthBinsInteger {
 struct EquiWidthBinsDouble {
 	static constexpr LogicalTypeId LOGICAL_TYPE = LogicalTypeId::DOUBLE;
 
-	static vector<PrimitiveType<double>> Operation(double min, double max, idx_t bin_count, bool nice_rounding) {
+	static vector<PrimitiveType<double>> Operation(double min, double input_max, idx_t bin_count, bool nice_rounding) {
+		double max = input_max;
 		if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
 			throw InvalidInputException("equi_width_bucket does not support infinite or nan as min/max value");
 		}
@@ -133,13 +152,13 @@ struct EquiWidthBinsDouble {
 		} else {
 			step = span / static_cast<double>(bin_count);
 		}
+		const double step_power_of_ten = GetPreviousPowerOfTen(step);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
-			step = MakeNumberNice(step);
-			max = MakeNumberNice(max);
+			step = MakeNumberNice(step, step_power_of_ten, NiceRounding::ROUND);
+			max = MakeNumberNice(input_max, step_power_of_ten, NiceRounding::CEILING);
 		}
 
-		const double step_power_of_ten = GetPreviousPowerOfTen(step);
 		const double round_multiplication = 10 / step_power_of_ten;
 		for (double bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			// because floating point addition adds inaccuracies, we add rounding at every step
@@ -152,17 +171,191 @@ struct EquiWidthBinsDouble {
 			}
 			result.push_back(bin_boundary);
 		}
-		std::reverse(result.begin(), result.end());
+		return result;
+	}
+};
+
+void NextMonth(int32_t &year, int32_t &month) {
+	month++;
+	if (month == 13) {
+		year++;
+		month = 1;
+	}
+}
+
+void NextDay(int32_t &year, int32_t &month, int32_t &day) {
+	day++;
+	if (!Date::IsValid(year, month, day)) {
+		// day is out of range for month, move to next month
+		NextMonth(year, month);
+		day = 1;
+	}
+}
+
+void NextHour(int32_t &year, int32_t &month, int32_t &day, int32_t &hour) {
+	hour++;
+	if (hour >= 24) {
+		NextDay(year, month, day);
+		hour = 0;
+	}
+}
+
+void NextMinute(int32_t &year, int32_t &month, int32_t &day, int32_t &hour, int32_t &minute) {
+	minute++;
+	if (minute >= 60) {
+		NextHour(year, month, day, hour);
+		minute = 0;
+	}
+}
+
+void NextSecond(int32_t &year, int32_t &month, int32_t &day, int32_t &hour, int32_t &minute, int32_t &sec) {
+	sec++;
+	if (sec >= 60) {
+		NextMinute(year, month, day, hour, minute);
+		sec = 0;
+	}
+}
+
+timestamp_t MakeTimestampNice(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t minute, int32_t sec,
+                              int32_t micros, interval_t step) {
+	// how to make a timestamp nice depends on the step
+	if (step.months >= 12) {
+		// if the step involves one year or more, ceil to months
+		// set time component to 00:00:00.00
+		if (day > 1 || hour > 0 || minute > 0 || sec > 0 || micros > 0) {
+			// move to next month
+			NextMonth(year, month);
+			hour = minute = sec = micros = 0;
+			day = 1;
+		}
+	} else if (step.months > 0 || step.days >= 1) {
+		// if the step involves more than one day, ceil to days
+		if (hour > 0 || minute > 0 || sec > 0 || micros > 0) {
+			NextDay(year, month, day);
+			hour = minute = sec = micros = 0;
+		}
+	} else if (step.days > 0 || step.micros >= Interval::MICROS_PER_HOUR) {
+		// if the step involves more than one hour, ceil to hours
+		if (minute > 0 || sec > 0 || micros > 0) {
+			NextHour(year, month, day, hour);
+			minute = sec = micros = 0;
+		}
+	} else if (step.micros >= Interval::MICROS_PER_MINUTE) {
+		// if the step involves more than one minute, ceil to minutes
+		if (sec > 0 || micros > 0) {
+			NextMinute(year, month, day, hour, minute);
+			sec = micros = 0;
+		}
+	} else if (step.micros >= Interval::MICROS_PER_SEC) {
+		// if the step involves more than one second, ceil to seconds
+		if (micros > 0) {
+			NextSecond(year, month, day, hour, minute, sec);
+			micros = 0;
+		}
+	}
+	return Timestamp::FromDatetime(Date::FromDate(year, month, day), Time::FromTime(hour, minute, sec, micros));
+}
+
+int64_t RoundNumberToDivisor(int64_t number, int64_t divisor) {
+	return (number + (divisor / 2)) / divisor * divisor;
+}
+
+interval_t MakeIntervalNice(interval_t interval) {
+	if (interval.months >= 6) {
+		// if we have more than 6 months, we don't care about days
+		interval.days = interval.micros = 0;
+	} else if (interval.months > 0 || interval.days >= 5) {
+		// if we have any months or more than 5 days, we don't care about micros
+		interval.micros = 0;
+	} else if (interval.days > 0 || interval.micros >= 6 * Interval::MICROS_PER_HOUR) {
+		// if we any days or more than 6 hours, we want micros to be roundable by hours at least
+		interval.micros = RoundNumberToDivisor(interval.micros, Interval::MICROS_PER_HOUR);
+	} else if (interval.micros >= Interval::MICROS_PER_HOUR) {
+		// if we have more than an hour, we want micros to be divisible by quarter hours
+		interval.micros = RoundNumberToDivisor(interval.micros, Interval::MICROS_PER_MINUTE * 15);
+	} else if (interval.micros >= Interval::MICROS_PER_MINUTE * 10) {
+		// if we have more than 10 minutes, we want micros to be divisible by minutes
+		interval.micros = RoundNumberToDivisor(interval.micros, Interval::MICROS_PER_MINUTE);
+	} else if (interval.micros >= Interval::MICROS_PER_MINUTE) {
+		// if we have more than a minute, we want micros to be divisible by quarter minutes
+		interval.micros = RoundNumberToDivisor(interval.micros, Interval::MICROS_PER_SEC * 15);
+	} else if (interval.micros >= Interval::MICROS_PER_SEC * 10) {
+		// if we have more than 10 seconds, we want micros to be divisible by seconds
+		interval.micros = RoundNumberToDivisor(interval.micros, Interval::MICROS_PER_SEC);
+	}
+	return interval;
+}
+
+void GetTimestampComponents(timestamp_t input, int32_t &year, int32_t &month, int32_t &day, int32_t &hour,
+                            int32_t &minute, int32_t &sec, int32_t &micros) {
+	date_t date;
+	dtime_t time;
+
+	Timestamp::Convert(input, date, time);
+	Date::Convert(date, year, month, day);
+	Time::Convert(time, hour, minute, sec, micros);
+}
+
+struct EquiWidthBinsTimestamp {
+	static constexpr LogicalTypeId LOGICAL_TYPE = LogicalTypeId::TIMESTAMP;
+
+	static vector<PrimitiveType<timestamp_t>> Operation(timestamp_t input_min, timestamp_t input_max, idx_t bin_count,
+	                                                    bool nice_rounding) {
+		if (!Value::IsFinite(input_min) || !Value::IsFinite(input_max)) {
+			throw InvalidInputException("equi_width_bucket does not support infinite or nan as min/max value");
+		}
+
+		if (!nice_rounding) {
+			// if we are not doing nice rounding it is pretty simple - just interpolate between the timestamp values
+			auto interpolated_values =
+			    EquiWidthBinsInteger::Operation(input_min.value, input_max.value, bin_count, false);
+
+			vector<PrimitiveType<timestamp_t>> result;
+			for (auto &val : interpolated_values) {
+				result.push_back(timestamp_t(val.val));
+			}
+			return result;
+		}
+		// fetch the components of the timestamps
+		int32_t min_year, min_month, min_day, min_hour, min_minute, min_sec, min_micros;
+		int32_t max_year, max_month, max_day, max_hour, max_minute, max_sec, max_micros;
+		GetTimestampComponents(input_min, min_year, min_month, min_day, min_hour, min_minute, min_sec, min_micros);
+		GetTimestampComponents(input_max, max_year, max_month, max_day, max_hour, max_minute, max_sec, max_micros);
+
+		// get the interval differences per component
+		// note: these can be negative (except for the largest non-zero difference)
+		interval_t interval_diff;
+		interval_diff.months = (max_year - min_year) * Interval::MONTHS_PER_YEAR + (max_month - min_month);
+		interval_diff.days = max_day - min_day;
+		interval_diff.micros = (max_hour - min_hour) * Interval::MICROS_PER_HOUR +
+		                       (max_minute - min_minute) * Interval::MICROS_PER_MINUTE +
+		                       (max_sec - min_sec) * Interval::MICROS_PER_SEC + (max_micros - min_micros);
+
+		interval_t step;
+		step.months = interval_diff.months / static_cast<int32_t>(bin_count);
+		step.days = interval_diff.days / static_cast<int32_t>(bin_count);
+		step.micros = interval_diff.micros / static_cast<int64_t>(bin_count);
+
+		// now we make the max, and the step nice
+		step = MakeIntervalNice(step);
+		timestamp_t timestamp_val =
+		    MakeTimestampNice(max_year, max_month, max_day, max_hour, max_minute, max_sec, max_micros, step);
+
+		vector<PrimitiveType<timestamp_t>> result;
+		while (timestamp_val.value > input_min.value) {
+			result.push_back(timestamp_val);
+			timestamp_val = SubtractOperator::Operation<timestamp_t, interval_t, timestamp_t>(timestamp_val, step);
+		}
 		return result;
 	}
 };
 
 unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &bound_function,
-                                                           vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 	// while internally the bins are computed over a unified type
 	// the equi_width_bins function returns the same type as the input MAX
 	if (arguments[1]->return_type.id() != LogicalTypeId::UNKNOWN &&
-		arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
+	    arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalType::LIST(arguments[1]->return_type);
 	}
 	return nullptr;
@@ -199,6 +392,11 @@ static void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector
 		    } else {
 			    result_bins.values =
 			        OP::Operation(min_p.val, max_p.val, static_cast<idx_t>(bins_p.val), nice_rounding_p.val);
+			    // last bin should always be the input max
+			    if (result_bins.values[0].val < max_p.val) {
+				    result_bins.values[0].val = max_p.val;
+			    }
+			    std::reverse(result_bins.values.begin(), result_bins.values.end());
 		    }
 		    return result_bins;
 	    });
@@ -209,10 +407,16 @@ ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	ScalarFunctionSet functions("equi_width_bins");
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::BIGINT), EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>, BindEquiWidthFunction));
+	                   LogicalType::LIST(LogicalType::BIGINT), EquiWidthBinFunction<int64_t, EquiWidthBinsInteger>,
+	                   BindEquiWidthFunction));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::BIGINT, LogicalType::BOOLEAN},
-	                   LogicalType::LIST(LogicalType::DOUBLE), EquiWidthBinFunction<double, EquiWidthBinsDouble>, BindEquiWidthFunction));
+	                   LogicalType::LIST(LogicalType::DOUBLE), EquiWidthBinFunction<double, EquiWidthBinsDouble>,
+	                   BindEquiWidthFunction));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::BIGINT, LogicalType::BOOLEAN},
+	                   LogicalType::LIST(LogicalType::DATE), EquiWidthBinFunction<timestamp_t, EquiWidthBinsTimestamp>,
+	                   BindEquiWidthFunction));
 	return functions;
 }
 
