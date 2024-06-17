@@ -50,4 +50,8 @@ void ArrowQueryResult::SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays
 	this->arrays = std::move(arrays);
 }
 
+idx_t ArrowQueryResult::BatchSize() const {
+	return batch_size;
+}
+
 } // namespace duckdb

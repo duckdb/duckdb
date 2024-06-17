@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/arrow/arrow_wrapper.hpp"
 
 namespace duckdb {
 
@@ -43,6 +43,7 @@ public:
 	vector<unique_ptr<ArrowArrayWrapper>> ConsumeArrays();
 	vector<unique_ptr<ArrowArrayWrapper>> &Arrays();
 	void SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays);
+	idx_t BatchSize() const;
 
 private:
 	vector<unique_ptr<ArrowArrayWrapper>> arrays;

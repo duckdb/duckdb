@@ -1,5 +1,6 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/common/arrow/physical_arrow_batch_collector.hpp"
 #include "duckdb/common/arrow/arrow_query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -16,7 +17,7 @@ unique_ptr<PhysicalResultCollector> PhysicalArrowCollector::Create(ClientContext
 		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
 		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, false, batch_size);
 	} else {
-		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, false, batch_size);
+		return make_uniq_base<PhysicalResultCollector, PhysicalArrowBatchCollector>(data, batch_size);
 	}
 }
 
