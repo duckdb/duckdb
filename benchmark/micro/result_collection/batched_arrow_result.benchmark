@@ -1,8 +1,8 @@
 # name: benchmark/micro/result_collection/batched_arrow_result.benchmark
-# description: Show the performance of the Batched StreamQueryResult
+# description: Show the performance of the Batched ArrowQueryResult
 # group: [result_collection]
 
-name batched_stream_query
+name batched_arrow_result
 group micro
 subgroup result_collection
 
