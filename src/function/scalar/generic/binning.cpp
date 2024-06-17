@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-hugeint_t GetPreviousPowerOfTen(hugeint_t input) {
+static hugeint_t GetPreviousPowerOfTen(hugeint_t input) {
 	hugeint_t power_of_ten = 1;
 	while (power_of_ten < input) {
 		power_of_ten *= 10;
@@ -52,7 +52,7 @@ hugeint_t MakeNumberNice(hugeint_t input, hugeint_t power_of_ten, NiceRounding r
 	}
 }
 
-double GetPreviousPowerOfTen(double input) {
+static double GetPreviousPowerOfTen(double input) {
 	double power_of_ten = 1;
 	if (input < 1) {
 		while (power_of_ten > input) {
@@ -117,7 +117,7 @@ struct EquiWidthBinsInteger {
 		}
 
 		for (hugeint_t bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
-			const hugeint_t target_boundary = Hugeint::Divide(bin_boundary, FACTOR);
+			const hugeint_t target_boundary = bin_boundary / FACTOR;
 			int64_t real_boundary = Hugeint::Cast<int64_t>(target_boundary);
 			if (!result.empty()) {
 				if (real_boundary <= input_min || result.size() >= bin_count) {
