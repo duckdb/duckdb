@@ -4,1432 +4,591 @@
 from duckdb import FunctionExpression
 
 
-def approx_quantile(x, pos, /) -> FunctionExpression:
-    """Computes the approximate quantile using T-Digest. Function category: Holistic"""
-    return FunctionExpression("approx_quantile", x, pos)
+def __internal_compress_integral_ubigint(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_compress_integral_ubigint", col0, col1)
 
 
-def mad(x, /) -> FunctionExpression:
-    """Returns the median absolute deviation for the values within x. NULL values are
-    ignored. Temporal types return a positive INTERVAL. Function category:
-    Holistic"""
-    return FunctionExpression("mad", x)
+def __internal_compress_integral_uinteger(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_compress_integral_uinteger", col0, col1)
 
 
-def median(x, /) -> FunctionExpression:
-    """Returns the middle value of the set. NULL values are ignored. For even value
-    counts, quantitiative values are averaged and ordinal values return the
-    lower value. Function category: Holistic"""
-    return FunctionExpression("median", x)
+def __internal_compress_integral_usmallint(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_compress_integral_usmallint", col0, col1)
 
 
-def mode(x, /) -> FunctionExpression:
-    """Returns the most frequent value for the values within x. NULL values are
-    ignored. Function category: Holistic"""
-    return FunctionExpression("mode", x)
+def __internal_compress_integral_utinyint(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_compress_integral_utinyint", col0, col1)
 
 
-def quantile_disc(x, pos, /) -> FunctionExpression:
-    """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
-    then the result is a LIST of the corresponding exact quantiles. Function
-    category: Holistic"""
-    return FunctionExpression("quantile_disc", x, pos)
+def __internal_compress_string_hugeint(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_compress_string_hugeint", col0)
 
 
-def quantile(x, pos, /) -> FunctionExpression:
-    """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
-    then the result is a LIST of the corresponding exact quantiles. Alias for
-    quantile_disc. Function category: Holistic"""
-    return FunctionExpression("quantile", x, pos)
+def __internal_compress_string_ubigint(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_compress_string_ubigint", col0)
 
 
-def quantile_cont(x, pos, /) -> FunctionExpression:
-    """Returns the intepolated quantile number between 0 and 1 . If pos is a LIST of
-    FLOATs, then the result is a LIST of the corresponding intepolated
-    quantiles. Function category: Holistic"""
-    return FunctionExpression("quantile_cont", x, pos)
+def __internal_compress_string_uinteger(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_compress_string_uinteger", col0)
 
 
-def reservoir_quantile(x, quantile, sample_size, /) -> FunctionExpression:
-    """Gives the approximate quantile using reservoir sampling, the sample size is
-    optional and uses 8192 as a default size. Function category: Holistic"""
-    return FunctionExpression("reservoir_quantile", x, quantile, sample_size)
+def __internal_compress_string_usmallint(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_compress_string_usmallint", col0)
 
 
-def approx_count_distinct(x, /) -> FunctionExpression:
-    """Computes the approximate count of distinct elements using HyperLogLog. Function
-    category: Distributive"""
-    return FunctionExpression("approx_count_distinct", x)
+def __internal_compress_string_utinyint(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_compress_string_utinyint", col0)
 
 
-def arg_min(arg, val, /) -> FunctionExpression:
-    """Finds the row with the minimum val. Calculates the non-NULL arg expression at
-    that row. Function category: Distributive"""
-    return FunctionExpression("arg_min", arg, val)
+def __internal_decompress_integral_bigint(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_decompress_integral_bigint", col0, col1)
 
 
-def argmin(arg, val, /) -> FunctionExpression:
-    """Finds the row with the minimum val. Calculates the non-NULL arg expression at
-    that row. Alias for arg_min. Function category: Distributive"""
-    return FunctionExpression("argmin", arg, val)
+def __internal_decompress_integral_hugeint(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_decompress_integral_hugeint", col0, col1)
 
 
-def min_by(arg, val, /) -> FunctionExpression:
-    """Finds the row with the minimum val. Calculates the non-NULL arg expression at
-    that row. Alias for arg_min. Function category: Distributive"""
-    return FunctionExpression("min_by", arg, val)
+def __internal_decompress_integral_integer(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_decompress_integral_integer", col0, col1)
 
 
-def arg_min_null(arg, val, /) -> FunctionExpression:
-    """Finds the row with the minimum val. Calculates the arg expression at that row.
-    Function category: Distributive"""
-    return FunctionExpression("arg_min_null", arg, val)
+def __internal_decompress_integral_smallint(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_decompress_integral_smallint", col0, col1)
 
 
-def arg_max(arg, val, /) -> FunctionExpression:
-    """Finds the row with the maximum val. Calculates the non-NULL arg expression at
-    that row. Function category: Distributive"""
-    return FunctionExpression("arg_max", arg, val)
+def __internal_decompress_integral_ubigint(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_decompress_integral_ubigint", col0, col1)
 
 
-def argmax(arg, val, /) -> FunctionExpression:
-    """Finds the row with the maximum val. Calculates the non-NULL arg expression at
-    that row. Alias for arg_max. Function category: Distributive"""
-    return FunctionExpression("argmax", arg, val)
+def __internal_decompress_integral_uinteger(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_decompress_integral_uinteger", col0, col1)
 
 
-def max_by(arg, val, /) -> FunctionExpression:
-    """Finds the row with the maximum val. Calculates the non-NULL arg expression at
-    that row. Alias for arg_max. Function category: Distributive"""
-    return FunctionExpression("max_by", arg, val)
+def __internal_decompress_integral_usmallint(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_decompress_integral_usmallint", col0, col1)
 
 
-def arg_max_null(arg, val, /) -> FunctionExpression:
-    """Finds the row with the maximum val. Calculates the arg expression at that row.
-    Function category: Distributive"""
-    return FunctionExpression("arg_max_null", arg, val)
-
-
-def bit_and(arg, /) -> FunctionExpression:
-    """Returns the bitwise AND of all bits in a given expression. Function category:
-    Distributive"""
-    return FunctionExpression("bit_and", arg)
-
-
-def bit_or(arg, /) -> FunctionExpression:
-    """Returns the bitwise OR of all bits in a given expression. Function category:
-    Distributive"""
-    return FunctionExpression("bit_or", arg)
-
-
-def bit_xor(arg, /) -> FunctionExpression:
-    """Returns the bitwise XOR of all bits in a given expression. Function category:
-    Distributive"""
-    return FunctionExpression("bit_xor", arg)
-
-
-def bitstring_agg(arg, /) -> FunctionExpression:
-    """Returns a bitstring with bits set for each distinct value. Function category:
-    Distributive"""
-    return FunctionExpression("bitstring_agg", arg)
-
-
-def bool_and(arg, /) -> FunctionExpression:
-    """Returns TRUE if every input value is TRUE, otherwise FALSE. Function category:
-    Distributive"""
-    return FunctionExpression("bool_and", arg)
-
-
-def bool_or(arg, /) -> FunctionExpression:
-    """Returns TRUE if any input value is TRUE, otherwise FALSE. Function category:
-    Distributive"""
-    return FunctionExpression("bool_or", arg)
-
-
-def entropy(x, /) -> FunctionExpression:
-    """Returns the log-2 entropy of count input-values. Function category: Distributive"""
-    return FunctionExpression("entropy", x)
-
-
-def kahan_sum(arg, /) -> FunctionExpression:
-    """Calculates the sum using a more accurate floating point summation (Kahan Sum).
-    Function category: Distributive"""
-    return FunctionExpression("kahan_sum", arg)
-
-
-def fsum(arg, /) -> FunctionExpression:
-    """Calculates the sum using a more accurate floating point summation (Kahan Sum).
-    Alias for kahan_sum. Function category: Distributive"""
-    return FunctionExpression("fsum", arg)
-
-
-def sumkahan(arg, /) -> FunctionExpression:
-    """Calculates the sum using a more accurate floating point summation (Kahan Sum).
-    Alias for kahan_sum. Function category: Distributive"""
-    return FunctionExpression("sumkahan", arg)
-
-
-def kurtosis(x, /) -> FunctionExpression:
-    """Returns the excess kurtosis (Fisher’s definition) of all input values, with a
-    bias correction according to the sample size. Function category:
-    Distributive"""
-    return FunctionExpression("kurtosis", x)
-
-
-def kurtosis_pop(x, /) -> FunctionExpression:
-    """Returns the excess kurtosis (Fisher’s definition) of all input values, without
-    bias correction. Function category: Distributive"""
-    return FunctionExpression("kurtosis_pop", x)
-
-
-def min(arg, /) -> FunctionExpression:
-    """Returns the minimum value present in arg. Function category: Distributive"""
-    return FunctionExpression("min", arg)
-
-
-def max(arg, /) -> FunctionExpression:
-    """Returns the maximum value present in arg. Function category: Distributive"""
-    return FunctionExpression("max", arg)
-
-
-def product(arg, /) -> FunctionExpression:
-    """Calculates the product of all tuples in arg. Function category: Distributive"""
-    return FunctionExpression("product", arg)
-
-
-def skewness(x, /) -> FunctionExpression:
-    """Returns the skewness of all input values. Function category: Distributive"""
-    return FunctionExpression("skewness", x)
-
-
-def string_agg(str, arg, /) -> FunctionExpression:
-    """Concatenates the column string values with an optional separator. Function
-    category: Distributive"""
-    return FunctionExpression("string_agg", str, arg)
-
-
-def group_concat(str, arg, /) -> FunctionExpression:
-    """Concatenates the column string values with an optional separator. Alias for
-    string_agg. Function category: Distributive"""
-    return FunctionExpression("group_concat", str, arg)
-
-
-def listagg(str, arg, /) -> FunctionExpression:
-    """Concatenates the column string values with an optional separator. Alias for
-    string_agg. Function category: Distributive"""
-    return FunctionExpression("listagg", str, arg)
-
-
-def sum(arg, /) -> FunctionExpression:
-    """Calculates the sum value for all tuples in arg. Function category: Distributive"""
-    return FunctionExpression("sum", arg)
-
-
-def sum_no_overflow(arg, /) -> FunctionExpression:
-    """Internal only. Calculates the sum value for all tuples in arg without overflow
-    checks. Function category: Distributive"""
-    return FunctionExpression("sum_no_overflow", arg)
-
-
-def avg(x, /) -> FunctionExpression:
-    """Calculates the average value for all tuples in x. Function category: Algebraic"""
-    return FunctionExpression("avg", x)
-
-
-def mean(x, /) -> FunctionExpression:
-    """Calculates the average value for all tuples in x. Alias for avg. Function
-    category: Algebraic"""
-    return FunctionExpression("mean", x)
-
-
-def corr(y, x, /) -> FunctionExpression:
-    """Returns the correlation coefficient for non-null pairs in a group. Function
-    category: Algebraic"""
-    return FunctionExpression("corr", y, x)
-
-
-def covar_pop(y, x, /) -> FunctionExpression:
-    """Returns the population covariance of input values. Function category: Algebraic"""
-    return FunctionExpression("covar_pop", y, x)
-
-
-def covar_samp(y, x, /) -> FunctionExpression:
-    """Returns the sample covariance for non-null pairs in a group. Function category:
-    Algebraic"""
-    return FunctionExpression("covar_samp", y, x)
-
-
-def favg(x, /) -> FunctionExpression:
-    """Calculates the average using a more accurate floating point summation (Kahan
-    Sum). Function category: Algebraic"""
-    return FunctionExpression("favg", x)
-
-
-def sem(x, /) -> FunctionExpression:
-    """Returns the standard error of the mean. Function category: Algebraic"""
-    return FunctionExpression("sem", x)
-
-
-def stddev_pop(x, /) -> FunctionExpression:
-    """Returns the population standard deviation. Function category: Algebraic"""
-    return FunctionExpression("stddev_pop", x)
-
-
-def stddev_samp(x, /) -> FunctionExpression:
-    """Returns the sample standard deviation. Function category: Algebraic"""
-    return FunctionExpression("stddev_samp", x)
-
-
-def stddev(x, /) -> FunctionExpression:
-    """Returns the sample standard deviation Alias for stddev_samp. Function category:
-    Algebraic"""
-    return FunctionExpression("stddev", x)
-
-
-def var_pop(x, /) -> FunctionExpression:
-    """Returns the population variance. Function category: Algebraic"""
-    return FunctionExpression("var_pop", x)
-
-
-def var_samp(x, /) -> FunctionExpression:
-    """Returns the sample variance of all input values. Function category: Algebraic"""
-    return FunctionExpression("var_samp", x)
-
-
-def variance(x, /) -> FunctionExpression:
-    """Returns the sample variance of all input values. Alias for var_samp. Function
-    category: Algebraic"""
-    return FunctionExpression("variance", x)
-
-
-def regr_avgx(y, x, /) -> FunctionExpression:
-    """Returns the average of the independent variable for non-null pairs in a group,
-    where x is the independent variable and y is the dependent variable.
-    Function category: Regression"""
-    return FunctionExpression("regr_avgx", y, x)
-
-
-def regr_avgy(y, x, /) -> FunctionExpression:
-    """Returns the average of the dependent variable for non-null pairs in a group,
-    where x is the independent variable and y is the dependent variable.
-    Function category: Regression"""
-    return FunctionExpression("regr_avgy", y, x)
-
-
-def regr_count(y, x, /) -> FunctionExpression:
-    """Returns the number of non-null number pairs in a group. Function category:
-    Regression"""
-    return FunctionExpression("regr_count", y, x)
-
-
-def regr_intercept(y, x, /) -> FunctionExpression:
-    """Returns the intercept of the univariate linear regression line for non-null
-    pairs in a group. Function category: Regression"""
-    return FunctionExpression("regr_intercept", y, x)
-
-
-def regr_r2(y, x, /) -> FunctionExpression:
-    """Returns the coefficient of determination for non-null pairs in a group. Function
-    category: Regression"""
-    return FunctionExpression("regr_r2", y, x)
-
-
-def regr_slope(y, x, /) -> FunctionExpression:
-    """Returns the slope of the linear regression line for non-null pairs in a group.
-    Function category: Regression"""
-    return FunctionExpression("regr_slope", y, x)
-
-
-def regr_sxx(y, x, /) -> FunctionExpression:
-    """Function category: Regression"""
-    return FunctionExpression("regr_sxx", y, x)
-
-
-def regr_sxy(y, x, /) -> FunctionExpression:
-    """Returns the population covariance of input values. Function category: Regression"""
-    return FunctionExpression("regr_sxy", y, x)
-
-
-def regr_syy(y, x, /) -> FunctionExpression:
-    """Function category: Regression"""
-    return FunctionExpression("regr_syy", y, x)
-
-
-def histogram(arg, /) -> FunctionExpression:
-    """Returns a LIST of STRUCTs with the fields bucket and count. Function category:
-    Nested"""
-    return FunctionExpression("histogram", arg)
-
-
-def list(arg, /) -> FunctionExpression:
-    """Returns a LIST containing all the values of a column. Function category: Nested"""
-    return FunctionExpression("list", arg)
-
-
-def array_agg(arg, /) -> FunctionExpression:
-    """Returns a LIST containing all the values of a column. Alias for list. Function
-    category: Nested"""
-    return FunctionExpression("array_agg", arg)
-
-
-def get_bit(bitstring, index, /) -> FunctionExpression:
-    """Extracts the nth bit from bitstring; the first (leftmost) bit is indexed 0.
-    Function category: Bit"""
-    return FunctionExpression("get_bit", bitstring, index)
-
-
-def set_bit(bitstring, index, new_value, /) -> FunctionExpression:
-    """Sets the nth bit in bitstring to newvalue; the first (leftmost) bit is indexed
-    0. Returns a new bitstring. Function category: Bit"""
-    return FunctionExpression("set_bit", bitstring, index, new_value)
-
-
-def bit_position(substring, bitstring, /) -> FunctionExpression:
-    """Returns first starting index of the specified substring within bits, or zero if
-    it is not present. The first (leftmost) bit is indexed 1. Function category:
-    Bit"""
-    return FunctionExpression("bit_position", substring, bitstring)
-
-
-def bitstring(bitstring, length, /) -> FunctionExpression:
-    """Pads the bitstring until the specified length. Function category: Bit"""
-    return FunctionExpression("bitstring", bitstring, length)
-
-
-def xor(left, right, /) -> FunctionExpression:
-    """Bitwise XOR. Function category: Operators"""
-    return FunctionExpression("xor", left, right)
-
-
-def array_value(any, /, *args) -> FunctionExpression:
-    """Create an ARRAY containing the argument values. Function category: Array"""
-    return FunctionExpression("array_value", any, *args)
-
-
-def array_cross_product(array1, array2, /) -> FunctionExpression:
-    """Compute the cross product of two arrays of size 3. The array elements can not be
-    NULL. Function category: Array"""
-    return FunctionExpression("array_cross_product", array1, array2)
-
-
-def array_cosine_similarity(array1, array2, /) -> FunctionExpression:
-    """Compute the cosine similarity between two arrays of the same size. The array
-    elements can not be NULL. The arrays can have any size as long as the size
-    is the same for both arguments. Function category: Array"""
-    return FunctionExpression("array_cosine_similarity", array1, array2)
-
-
-def array_distance(array1, array2, /) -> FunctionExpression:
-    """Compute the distance between two arrays of the same size. The array elements can
-    not be NULL. The arrays can have any size as long as the size is the same
-    for both arguments. Function category: Array"""
-    return FunctionExpression("array_distance", array1, array2)
-
-
-def array_inner_product(array1, array2, /) -> FunctionExpression:
-    """Compute the inner product between two arrays of the same size. The array
-    elements can not be NULL. The arrays can have any size as long as the size
-    is the same for both arguments. Function category: Array"""
-    return FunctionExpression("array_inner_product", array1, array2)
-
-
-def array_dot_product(array1, array2, /) -> FunctionExpression:
-    """Compute the inner product between two arrays of the same size. The array
-    elements can not be NULL. The arrays can have any size as long as the size
-    is the same for both arguments. Alias for array_inner_product. Function
-    category: Array"""
-    return FunctionExpression("array_dot_product", array1, array2)
-
-
-def age(timestamp1, timestamp2, /) -> FunctionExpression:
-    """Subtract arguments, resulting in the time difference between the two timestamps.
-    Function category: Date"""
-    return FunctionExpression("age", timestamp1, timestamp2)
-
-
-def century(ts, /) -> FunctionExpression:
-    """Extract the century component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("century", ts)
-
-
-def current_date() -> FunctionExpression:
-    """Returns the current date. Function category: Date"""
-    return FunctionExpression("current_date")
-
-
-def today() -> FunctionExpression:
-    """Returns the current date Alias for current_date. Function category: Date"""
-    return FunctionExpression("today")
-
-
-def date_diff(part, startdate, enddate, /) -> FunctionExpression:
-    """The number of partition boundaries between the timestamps. Function category:
-    Date"""
-    return FunctionExpression("date_diff", part, startdate, enddate)
-
-
-def datediff(part, startdate, enddate, /) -> FunctionExpression:
-    """The number of partition boundaries between the timestamps Alias for date_diff.
-    Function category: Date"""
-    return FunctionExpression("datediff", part, startdate, enddate)
-
-
-def date_part(ts, /) -> FunctionExpression:
-    """Get subfield (equivalent to extract). Function category: Date"""
-    return FunctionExpression("date_part", ts)
-
-
-def datepart(ts, /) -> FunctionExpression:
-    """Get subfield (equivalent to extract) Alias for date_part. Function category:
-    Date"""
-    return FunctionExpression("datepart", ts)
-
-
-def date_sub(part, startdate, enddate, /) -> FunctionExpression:
-    """The number of complete partitions between the timestamps. Function category:
-    Date"""
-    return FunctionExpression("date_sub", part, startdate, enddate)
-
-
-def datesub(part, startdate, enddate, /) -> FunctionExpression:
-    """The number of complete partitions between the timestamps Alias for date_sub.
-    Function category: Date"""
-    return FunctionExpression("datesub", part, startdate, enddate)
-
-
-def date_trunc(part, timestamp, /) -> FunctionExpression:
-    """Truncate to specified precision. Function category: Date"""
-    return FunctionExpression("date_trunc", part, timestamp)
-
-
-def datetrunc(part, timestamp, /) -> FunctionExpression:
-    """Truncate to specified precision Alias for date_trunc. Function category: Date"""
-    return FunctionExpression("datetrunc", part, timestamp)
-
-
-def day(ts, /) -> FunctionExpression:
-    """Extract the day component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("day", ts)
-
-
-def dayname(ts, /) -> FunctionExpression:
-    """The (English) name of the weekday. Function category: Date"""
-    return FunctionExpression("dayname", ts)
-
-
-def dayofmonth(ts, /) -> FunctionExpression:
-    """Extract the dayofmonth component from a date or timestamp. Function category:
-    Date"""
-    return FunctionExpression("dayofmonth", ts)
-
-
-def dayofweek(ts, /) -> FunctionExpression:
-    """Extract the dayofweek component from a date or timestamp. Function category:
-    Date"""
-    return FunctionExpression("dayofweek", ts)
-
-
-def dayofyear(ts, /) -> FunctionExpression:
-    """Extract the dayofyear component from a date or timestamp. Function category:
-    Date"""
-    return FunctionExpression("dayofyear", ts)
-
-
-def decade(ts, /) -> FunctionExpression:
-    """Extract the decade component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("decade", ts)
-
-
-def epoch(temporal, /) -> FunctionExpression:
-    """Extract the epoch component from a temporal type. Function category: Date"""
-    return FunctionExpression("epoch", temporal)
-
-
-def epoch_ms(temporal, /) -> FunctionExpression:
-    """Extract the epoch component in milliseconds from a temporal type. Function
-    category: Date"""
-    return FunctionExpression("epoch_ms", temporal)
-
-
-def epoch_us(temporal, /) -> FunctionExpression:
-    """Extract the epoch component in microseconds from a temporal type. Function
-    category: Date"""
-    return FunctionExpression("epoch_us", temporal)
-
-
-def epoch_ns(temporal, /) -> FunctionExpression:
-    """Extract the epoch component in nanoseconds from a temporal type. Function
-    category: Date"""
-    return FunctionExpression("epoch_ns", temporal)
-
-
-def era(ts, /) -> FunctionExpression:
-    """Extract the era component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("era", ts)
-
-
-def get_current_time() -> FunctionExpression:
-    """Returns the current time. Function category: Date"""
-    return FunctionExpression("get_current_time")
-
-
-def get_current_timestamp() -> FunctionExpression:
-    """Returns the current timestamp. Function category: Date"""
-    return FunctionExpression("get_current_timestamp")
-
-
-def now() -> FunctionExpression:
-    """Returns the current timestamp Alias for get_current_timestamp. Function
-    category: Date"""
-    return FunctionExpression("now")
-
-
-def transaction_timestamp() -> FunctionExpression:
-    """Returns the current timestamp Alias for get_current_timestamp. Function
-    category: Date"""
-    return FunctionExpression("transaction_timestamp")
-
-
-def hour(ts, /) -> FunctionExpression:
-    """Extract the hour component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("hour", ts)
-
-
-def isodow(ts, /) -> FunctionExpression:
-    """Extract the isodow component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("isodow", ts)
-
-
-def isoyear(ts, /) -> FunctionExpression:
-    """Extract the isoyear component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("isoyear", ts)
-
-
-def julian(ts, /) -> FunctionExpression:
-    """Extract the Julian Day number from a date or timestamp. Function category: Date"""
-    return FunctionExpression("julian", ts)
-
-
-def last_day(ts, /) -> FunctionExpression:
-    """Returns the last day of the month. Function category: Date"""
-    return FunctionExpression("last_day", ts)
-
-
-def make_date(year, month, day, /) -> FunctionExpression:
-    """The date for the given parts. Function category: Date"""
-    return FunctionExpression("make_date", year, month, day)
-
-
-def make_time(hour, minute, seconds, /) -> FunctionExpression:
-    """The time for the given parts. Function category: Date"""
-    return FunctionExpression("make_time", hour, minute, seconds)
-
-
-def make_timestamp(year, month, day, hour, minute, seconds, /) -> FunctionExpression:
-    """The timestamp for the given parts. Function category: Date"""
-    return FunctionExpression("make_timestamp", year, month, day, hour, minute, seconds)
-
-
-def microsecond(ts, /) -> FunctionExpression:
-    """Extract the microsecond component from a date or timestamp. Function category:
-    Date"""
-    return FunctionExpression("microsecond", ts)
-
-
-def millennium(ts, /) -> FunctionExpression:
-    """Extract the millennium component from a date or timestamp. Function category:
-    Date"""
-    return FunctionExpression("millennium", ts)
-
-
-def millisecond(ts, /) -> FunctionExpression:
-    """Extract the millisecond component from a date or timestamp. Function category:
-    Date"""
-    return FunctionExpression("millisecond", ts)
-
-
-def minute(ts, /) -> FunctionExpression:
-    """Extract the minute component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("minute", ts)
-
-
-def month(ts, /) -> FunctionExpression:
-    """Extract the month component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("month", ts)
-
-
-def monthname(ts, /) -> FunctionExpression:
-    """The (English) name of the month. Function category: Date"""
-    return FunctionExpression("monthname", ts)
-
-
-def quarter(ts, /) -> FunctionExpression:
-    """Extract the quarter component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("quarter", ts)
-
-
-def second(ts, /) -> FunctionExpression:
-    """Extract the second component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("second", ts)
-
-
-def strftime(text, format, /) -> FunctionExpression:
-    """Converts timestamp to string according to the format string. Function category:
-    Date"""
-    return FunctionExpression("strftime", text, format)
-
-
-def strptime(text, format, /) -> FunctionExpression:
-    """Converts string to timestamp with time zone according to the format string if %Z
-    is specified. Function category: Date"""
-    return FunctionExpression("strptime", text, format)
-
-
-def time_bucket(bucket_width, timestamp, origin, /) -> FunctionExpression:
-    """Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned
-    relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03
-    00:00:00+00 for buckets that do not include a month or year interval, and to
-    2000-01-01 00:00:00+00 for month and year buckets. Function category: Date"""
-    return FunctionExpression("time_bucket", bucket_width, timestamp, origin)
-
-
-def timezone(ts, /) -> FunctionExpression:
-    """Extract the timezone component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("timezone", ts)
-
-
-def timezone_hour(ts, /) -> FunctionExpression:
-    """Extract the timezone_hour component from a date or timestamp. Function category:
-    Date"""
-    return FunctionExpression("timezone_hour", ts)
-
-
-def timezone_minute(ts, /) -> FunctionExpression:
-    """Extract the timezone_minute component from a date or timestamp. Function
-    category: Date"""
-    return FunctionExpression("timezone_minute", ts)
-
-
-def timetz_byte_comparable(time_tz, /) -> FunctionExpression:
-    """Converts a TIME WITH TIME ZONE to an integer sort key. Function category: Date"""
-    return FunctionExpression("timetz_byte_comparable", time_tz)
-
-
-def to_centuries(integer, /) -> FunctionExpression:
-    """Construct a century interval. Function category: Date"""
-    return FunctionExpression("to_centuries", integer)
-
-
-def to_days(integer, /) -> FunctionExpression:
-    """Construct a day interval. Function category: Date"""
-    return FunctionExpression("to_days", integer)
-
-
-def to_decades(integer, /) -> FunctionExpression:
-    """Construct a decade interval. Function category: Date"""
-    return FunctionExpression("to_decades", integer)
-
-
-def to_hours(integer, /) -> FunctionExpression:
-    """Construct a hour interval. Function category: Date"""
-    return FunctionExpression("to_hours", integer)
-
-
-def to_microseconds(integer, /) -> FunctionExpression:
-    """Construct a microsecond interval. Function category: Date"""
-    return FunctionExpression("to_microseconds", integer)
-
-
-def to_millennia(integer, /) -> FunctionExpression:
-    """Construct a millenium interval. Function category: Date"""
-    return FunctionExpression("to_millennia", integer)
-
-
-def to_milliseconds(double, /) -> FunctionExpression:
-    """Construct a millisecond interval. Function category: Date"""
-    return FunctionExpression("to_milliseconds", double)
-
-
-def to_minutes(integer, /) -> FunctionExpression:
-    """Construct a minute interval. Function category: Date"""
-    return FunctionExpression("to_minutes", integer)
-
-
-def to_months(integer, /) -> FunctionExpression:
-    """Construct a month interval. Function category: Date"""
-    return FunctionExpression("to_months", integer)
-
-
-def to_quarters(integer, /) -> FunctionExpression:
-    """Construct a quarter interval. Function category: Date"""
-    return FunctionExpression("to_quarters", integer)
-
-
-def to_seconds(double, /) -> FunctionExpression:
-    """Construct a second interval. Function category: Date"""
-    return FunctionExpression("to_seconds", double)
-
-
-def to_timestamp(sec, /) -> FunctionExpression:
-    """Converts secs since epoch to a timestamp with time zone. Function category: Date"""
-    return FunctionExpression("to_timestamp", sec)
-
-
-def to_weeks(integer, /) -> FunctionExpression:
-    """Construct a week interval. Function category: Date"""
-    return FunctionExpression("to_weeks", integer)
-
-
-def to_years(integer, /) -> FunctionExpression:
-    """Construct a year interval. Function category: Date"""
-    return FunctionExpression("to_years", integer)
-
-
-def try_strptime(text, format, /) -> FunctionExpression:
-    """Converts string to timestamp using the format string (timestamp with time zone
-    if %Z is specified). Returns NULL on failure. Function category: Date"""
-    return FunctionExpression("try_strptime", text, format)
-
-
-def week(ts, /) -> FunctionExpression:
-    """Extract the week component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("week", ts)
-
-
-def weekday(ts, /) -> FunctionExpression:
-    """Extract the weekday component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("weekday", ts)
-
-
-def weekofyear(ts, /) -> FunctionExpression:
-    """Extract the weekofyear component from a date or timestamp. Function category:
-    Date"""
-    return FunctionExpression("weekofyear", ts)
-
-
-def year(ts, /) -> FunctionExpression:
-    """Extract the year component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("year", ts)
-
-
-def yearweek(ts, /) -> FunctionExpression:
-    """Extract the yearweek component from a date or timestamp. Function category: Date"""
-    return FunctionExpression("yearweek", ts)
-
-
-def enum_first(enum, /) -> FunctionExpression:
-    """Returns the first value of the input enum type. Function category: Enum"""
-    return FunctionExpression("enum_first", enum)
-
-
-def enum_last(enum, /) -> FunctionExpression:
-    """Returns the last value of the input enum type. Function category: Enum"""
-    return FunctionExpression("enum_last", enum)
-
-
-def enum_code(enum, /) -> FunctionExpression:
-    """Returns the numeric value backing the given enum value. Function category: Enum"""
-    return FunctionExpression("enum_code", enum)
-
-
-def enum_range(enum, /) -> FunctionExpression:
-    """Returns all values of the input enum type as an array. Function category: Enum"""
-    return FunctionExpression("enum_range", enum)
-
-
-def enum_range_boundary(start, end, /) -> FunctionExpression:
-    """Returns the range between the two given enum values as an array. The values must
-    be of the same enum type. When the first parameter is NULL, the result
-    starts with the first value of the enum type. When the second parameter is
-    NULL, the result ends with the last value of the enum type. Function
-    category: Enum"""
-    return FunctionExpression("enum_range_boundary", start, end)
+def __internal_decompress_string(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("__internal_decompress_string", col0)
 
 
 def abs(x, /) -> FunctionExpression:
-    """Absolute value Alias for @. Function category: Math"""
+    """Absolute value"""
     return FunctionExpression("abs", x)
 
 
-def pow(x, y, /) -> FunctionExpression:
-    """Computes x to the power of y Alias for **. Function category: Math"""
-    return FunctionExpression("pow", x, y)
-
-
-def power(x, y, /) -> FunctionExpression:
-    """Computes x to the power of y Alias for **. Function category: Math"""
-    return FunctionExpression("power", x, y)
-
-
-def factorial(x, /) -> FunctionExpression:
-    """Factorial of x. Computes the product of the current integer and all integers
-    below it Alias for !. Function category: Math"""
-    return FunctionExpression("factorial", x)
-
-
 def acos(x, /) -> FunctionExpression:
-    """Computes the arccosine of x. Function category: Math"""
+    """Computes the arccosine of x"""
     return FunctionExpression("acos", x)
 
 
-def asin(x, /) -> FunctionExpression:
-    """Computes the arcsine of x. Function category: Math"""
-    return FunctionExpression("asin", x)
+def add(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("add", col0)
+    return FunctionExpression("add", col0, col1)
 
 
-def atan(x, /) -> FunctionExpression:
-    """Computes the arctangent of x. Function category: Math"""
-    return FunctionExpression("atan", x)
+def age(timestamp1=None, timestamp2=None, /) -> FunctionExpression:
+    """Subtract arguments, resulting in the time difference between the two timestamps"""
+    if timestamp1 is None:
+        return FunctionExpression("age", timestamp2)
+    if timestamp2 is None:
+        return FunctionExpression("age", timestamp1)
+    if timestamp1 is None and timestamp2 is None:
+        return FunctionExpression("age")
+    return FunctionExpression("age", timestamp1, timestamp2)
 
 
-def atan2(y, x, /) -> FunctionExpression:
-    """Computes the arctangent (y, x). Function category: Math"""
-    return FunctionExpression("atan2", y, x)
+def aggregate(*args) -> FunctionExpression:
+    """Executes the aggregate function name on the elements of list"""
+    return FunctionExpression("aggregate", *args)
 
 
-def bit_count(x, /) -> FunctionExpression:
-    """Returns the number of bits that are set. Function category: Math"""
-    return FunctionExpression("bit_count", x)
+def alias(expr, /) -> FunctionExpression:
+    """Returns the name of a given expression"""
+    return FunctionExpression("alias", expr)
 
 
-def cbrt(x, /) -> FunctionExpression:
-    """Returns the cube root of x. Function category: Math"""
-    return FunctionExpression("cbrt", x)
+def any_value(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("any_value", col0)
 
 
-def ceil(x, /) -> FunctionExpression:
-    """Rounds the number up. Function category: Math"""
-    return FunctionExpression("ceil", x)
+def approx_count_distinct(x, /) -> FunctionExpression:
+    """Computes the approximate count of distinct elements using HyperLogLog."""
+    return FunctionExpression("approx_count_distinct", x)
 
 
-def ceiling(x, /) -> FunctionExpression:
-    """Rounds the number up Alias for ceil. Function category: Math"""
-    return FunctionExpression("ceiling", x)
+def approx_quantile(x, pos, /) -> FunctionExpression:
+    """Computes the approximate quantile using T-Digest."""
+    return FunctionExpression("approx_quantile", x, pos)
 
 
-def cos(x, /) -> FunctionExpression:
-    """Computes the cos of x. Function category: Math"""
-    return FunctionExpression("cos", x)
+def arbitrary(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("arbitrary", col0)
 
 
-def cot(x, /) -> FunctionExpression:
-    """Computes the cotangent of x. Function category: Math"""
-    return FunctionExpression("cot", x)
+def arg_max(arg, val, /) -> FunctionExpression:
+    """Finds the row with the maximum val. Calculates the arg expression at that row."""
+    return FunctionExpression("arg_max", arg, val)
 
 
-def degrees(x, /) -> FunctionExpression:
-    """Converts radians to degrees. Function category: Math"""
-    return FunctionExpression("degrees", x)
+def arg_min(arg, val, /) -> FunctionExpression:
+    """Finds the row with the minimum val. Calculates the arg expression at that row."""
+    return FunctionExpression("arg_min", arg, val)
 
 
-def even(x, /) -> FunctionExpression:
-    """Rounds x to next even number by rounding away from zero. Function category: Math"""
-    return FunctionExpression("even", x)
+def argmax(arg, val, /) -> FunctionExpression:
+    """Finds the row with the maximum val. Calculates the arg expression at that row."""
+    return FunctionExpression("argmax", arg, val)
 
 
-def exp(x, /) -> FunctionExpression:
-    """Computes e to the power of x. Function category: Math"""
-    return FunctionExpression("exp", x)
+def argmin(arg, val, /) -> FunctionExpression:
+    """Finds the row with the minimum val. Calculates the arg expression at that row."""
+    return FunctionExpression("argmin", arg, val)
 
 
-def floor(x, /) -> FunctionExpression:
-    """Rounds the number down. Function category: Math"""
-    return FunctionExpression("floor", x)
+def array_agg(arg, /) -> FunctionExpression:
+    """Returns a LIST containing all the values of a column."""
+    return FunctionExpression("array_agg", arg)
 
 
-def isfinite(x, /) -> FunctionExpression:
-    """Returns true if the floating point value is finite, false otherwise. Function
-    category: Math"""
-    return FunctionExpression("isfinite", x)
+def array_aggr(*args) -> FunctionExpression:
+    """Executes the aggregate function name on the elements of list"""
+    return FunctionExpression("array_aggr", *args)
 
 
-def isinf(x, /) -> FunctionExpression:
-    """Returns true if the floating point value is infinite, false otherwise. Function
-    category: Math"""
-    return FunctionExpression("isinf", x)
+def array_aggregate(*args) -> FunctionExpression:
+    """Executes the aggregate function name on the elements of list"""
+    return FunctionExpression("array_aggregate", *args)
 
 
-def isnan(x, /) -> FunctionExpression:
-    """Returns true if the floating point value is not a number, false otherwise.
-    Function category: Math"""
-    return FunctionExpression("isnan", x)
+def array_append(arr, el, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_append", arr, el)
 
 
-def gamma(x, /) -> FunctionExpression:
-    """Interpolation of (x-1) factorial (so decimal inputs are allowed). Function
-    category: Math"""
-    return FunctionExpression("gamma", x)
+def array_cat(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_cat", col0, col1)
 
 
-def greatest_common_divisor(x, y, /) -> FunctionExpression:
-    """Computes the greatest common divisor of x and y. Function category: Math"""
-    return FunctionExpression("greatest_common_divisor", x, y)
+def array_concat(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_concat", col0, col1)
 
 
-def gcd(x, y, /) -> FunctionExpression:
-    """Computes the greatest common divisor of x and y Alias for
-    greatest_common_divisor. Function category: Math"""
-    return FunctionExpression("gcd", x, y)
-
-
-def least_common_multiple(x, y, /) -> FunctionExpression:
-    """Computes the least common multiple of x and y. Function category: Math"""
-    return FunctionExpression("least_common_multiple", x, y)
-
-
-def lcm(x, y, /) -> FunctionExpression:
-    """Computes the least common multiple of x and y Alias for least_common_multiple.
-    Function category: Math"""
-    return FunctionExpression("lcm", x, y)
-
-
-def lgamma(x, /) -> FunctionExpression:
-    """Computes the log of the gamma function. Function category: Math"""
-    return FunctionExpression("lgamma", x)
-
-
-def ln(x, /) -> FunctionExpression:
-    """Computes the natural logarithm of x. Function category: Math"""
-    return FunctionExpression("ln", x)
-
-
-def log2(x, /) -> FunctionExpression:
-    """Computes the 2-log of x. Function category: Math"""
-    return FunctionExpression("log2", x)
-
-
-def log10(x, /) -> FunctionExpression:
-    """Computes the 10-log of x. Function category: Math"""
-    return FunctionExpression("log10", x)
-
-
-def log(b, x, /) -> FunctionExpression:
-    """Computes the logarithm of x to base b. b may be omitted, in which case the
-    default 10. Function category: Math"""
-    return FunctionExpression("log", b, x)
-
-
-def nextafter(x, y, /) -> FunctionExpression:
-    """Returns the next floating point value after x in the direction of y. Function
-    category: Math"""
-    return FunctionExpression("nextafter", x, y)
-
-
-def pi() -> FunctionExpression:
-    """Returns the value of pi. Function category: Math"""
-    return FunctionExpression("pi")
-
-
-def radians(x, /) -> FunctionExpression:
-    """Converts degrees to radians. Function category: Math"""
-    return FunctionExpression("radians", x)
-
-
-def round(x, precision, /) -> FunctionExpression:
-    """Rounds x to s decimal places. Function category: Math"""
-    return FunctionExpression("round", x, precision)
-
-
-def sign(x, /) -> FunctionExpression:
-    """Returns the sign of x as -1, 0 or 1. Function category: Math"""
-    return FunctionExpression("sign", x)
-
-
-def signbit(x, /) -> FunctionExpression:
-    """Returns whether the signbit is set or not. Function category: Math"""
-    return FunctionExpression("signbit", x)
-
-
-def sin(x, /) -> FunctionExpression:
-    """Computes the sin of x. Function category: Math"""
-    return FunctionExpression("sin", x)
-
-
-def sqrt(x, /) -> FunctionExpression:
-    """Returns the square root of x. Function category: Math"""
-    return FunctionExpression("sqrt", x)
-
-
-def tan(x, /) -> FunctionExpression:
-    """Computes the tan of x. Function category: Math"""
-    return FunctionExpression("tan", x)
-
-
-def trunc(x, /) -> FunctionExpression:
-    """Truncates the number. Function category: Math"""
-    return FunctionExpression("trunc", x)
-
-
-def struct_insert(struct, any, /) -> FunctionExpression:
-    """Adds field(s)/value(s) to an existing STRUCT with the argument values. The entry
-    name(s) will be the bound variable name(s). Function category: Struct"""
-    return FunctionExpression("struct_insert", struct, any)
-
-
-def struct_pack(any, /) -> FunctionExpression:
-    """Creates a STRUCT containing the argument values. The entry name will be the
-    bound variable name. Function category: Struct"""
-    return FunctionExpression("struct_pack", any)
-
-
-def row(any, /) -> FunctionExpression:
-    """Creates an unnamed STRUCT containing the argument values. Function category:
-    Struct"""
-    return FunctionExpression("row", any)
-
-
-def cardinality(map, /) -> FunctionExpression:
-    """Returns the size of the map (or the number of entries in the map). Function
-    category: Map"""
-    return FunctionExpression("cardinality", map)
-
-
-def map(keys, values, /) -> FunctionExpression:
-    """Creates a map from a set of keys and values. Function category: Map"""
-    return FunctionExpression("map", keys, values)
-
-
-def map_entries(map, /) -> FunctionExpression:
-    """Returns the map entries as a list of keys/values. Function category: Map"""
-    return FunctionExpression("map_entries", map)
-
-
-def map_extract(map, key, /) -> FunctionExpression:
-    """Returns a list containing the value for a given key or an empty list if the key
-    is not contained in the map. The type of the key provided in the second
-    parameter must match the type of the map’s keys else an error is returned.
-    Function category: Map"""
-    return FunctionExpression("map_extract", map, key)
-
-
-def element_at(map, key, /) -> FunctionExpression:
-    """Returns a list containing the value for a given key or an empty list if the key
-    is not contained in the map. The type of the key provided in the second
-    parameter must match the type of the map’s keys else an error is returned
-    Alias for map_extract. Function category: Map"""
-    return FunctionExpression("element_at", map, key)
-
-
-def map_from_entries(map, /) -> FunctionExpression:
-    """Returns a map created from the entries of the array. Function category: Map"""
-    return FunctionExpression("map_from_entries", map)
-
-
-def map_concat(any, /, *args) -> FunctionExpression:
-    """Returns a map created from merging the input maps, on key collision the value is
-    taken from the last map with that key. Function category: Map"""
-    return FunctionExpression("map_concat", any, *args)
-
-
-def map_keys(map, /) -> FunctionExpression:
-    """Returns the keys of a map as a list. Function category: Map"""
-    return FunctionExpression("map_keys", map)
-
-
-def map_values(map, /) -> FunctionExpression:
-    """Returns the values of a map as a list. Function category: Map"""
-    return FunctionExpression("map_values", map)
-
-
-def flatten(nested_list, /) -> FunctionExpression:
-    """Flatten a nested list by one level. Function category: List"""
-    return FunctionExpression("flatten", nested_list)
-
-
-def list_aggregate(list, name, /) -> FunctionExpression:
-    """Executes the aggregate function name on the elements of list. Function category:
-    List"""
-    return FunctionExpression("list_aggregate", list, name)
-
-
-def array_aggregate(list, name, /) -> FunctionExpression:
-    """Executes the aggregate function name on the elements of list Alias for
-    list_aggregate. Function category: List"""
-    return FunctionExpression("array_aggregate", list, name)
-
-
-def list_aggr(list, name, /) -> FunctionExpression:
-    """Executes the aggregate function name on the elements of list Alias for
-    list_aggregate. Function category: List"""
-    return FunctionExpression("list_aggr", list, name)
-
-
-def array_aggr(list, name, /) -> FunctionExpression:
-    """Executes the aggregate function name on the elements of list Alias for
-    list_aggregate. Function category: List"""
-    return FunctionExpression("array_aggr", list, name)
-
-
-def aggregate(list, name, /) -> FunctionExpression:
-    """Executes the aggregate function name on the elements of list Alias for
-    list_aggregate. Function category: List"""
-    return FunctionExpression("aggregate", list, name)
-
-
-def list_distinct(list, /) -> FunctionExpression:
-    """Removes all duplicates and NULLs from a list. Does not preserve the original
-    order. Function category: List"""
-    return FunctionExpression("list_distinct", list)
+def array_contains(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_contains", col0, col1)
 
 
 def array_distinct(list, /) -> FunctionExpression:
     """Removes all duplicates and NULLs from a list. Does not preserve the original
-    order Alias for list_distinct. Function category: List"""
+    order"""
     return FunctionExpression("array_distinct", list)
 
 
-def list_unique(list, /) -> FunctionExpression:
-    """Counts the unique elements of a list. Function category: List"""
-    return FunctionExpression("list_unique", list)
+def array_extract(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_extract", col0, col1)
 
 
-def array_unique(list, /) -> FunctionExpression:
-    """Counts the unique elements of a list Alias for list_unique. Function category:
-    List"""
-    return FunctionExpression("array_unique", list)
+def array_has(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_has", col0, col1)
 
 
-def list_value(any, /, *args) -> FunctionExpression:
-    """Create a LIST containing the argument values. Function category: List"""
-    return FunctionExpression("list_value", any, *args)
+def array_has_all(l1, l2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_has_all", l1, l2)
 
 
-def list_pack(any, /, *args) -> FunctionExpression:
-    """Create a LIST containing the argument values Alias for list_value. Function
-    category: List"""
-    return FunctionExpression("list_pack", any, *args)
+def array_has_any(l1, l2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_has_any", l1, l2)
 
 
-def list_slice(list, begin, end, step=None, /) -> FunctionExpression:
-    """Extract a sublist using slice conventions. Negative values are accepted.
-    Function category: List"""
-    if step is None:
-        return FunctionExpression("list_slice", list, begin, end)
-    return FunctionExpression("list_slice", list, begin, end, step)
+def array_indexof(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_indexof", col0, col1)
+
+
+def array_intersect(l1, l2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_intersect", l1, l2)
+
+
+def array_length(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("array_length", col0)
+    return FunctionExpression("array_length", col0, col1)
+
+
+def array_pop_back(arr, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_pop_back", arr)
+
+
+def array_pop_front(arr, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_pop_front", arr)
+
+
+def array_position(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_position", col0, col1)
+
+
+def array_prepend(el, arr, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_prepend", el, arr)
+
+
+def array_push_back(arr, e, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_push_back", arr, e)
+
+
+def array_push_front(arr, e, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_push_front", arr, e)
+
+
+def array_resize(col0, col1, col2=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("array_resize", col0, col1)
+    return FunctionExpression("array_resize", col0, col1, col2)
+
+
+def array_reverse(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_reverse", l)
+
+
+def array_reverse_sort(list, col1=None, /) -> FunctionExpression:
+    """Sorts the elements of the list in reverse order"""
+    if col1 is None:
+        return FunctionExpression("array_reverse_sort", list)
+    return FunctionExpression("array_reverse_sort", list, col1)
 
 
 def array_slice(list, begin, end, step=None, /) -> FunctionExpression:
-    """Extract a sublist using slice conventions. Negative values are accepted Alias
-    for list_slice. Function category: List"""
+    """Extract a sublist using slice conventions. Negative values are accepted"""
     if step is None:
         return FunctionExpression("array_slice", list, begin, end)
     return FunctionExpression("array_slice", list, begin, end, step)
 
 
-def list_sort(list, /) -> FunctionExpression:
-    """Sorts the elements of the list. Function category: List"""
-    return FunctionExpression("list_sort", list)
+def array_sort(list, col2=None, col1=None, /) -> FunctionExpression:
+    """Sorts the elements of the list"""
+    if col2 is None:
+        return FunctionExpression("array_sort", list, col1)
+    if col1 is None:
+        return FunctionExpression("array_sort", list, col2)
+    if col2 is None and col1 is None:
+        return FunctionExpression("array_sort", list)
+    return FunctionExpression("array_sort", list, col1, col2)
 
 
-def array_sort(list, /) -> FunctionExpression:
-    """Sorts the elements of the list Alias for list_sort. Function category: List"""
-    return FunctionExpression("array_sort", list)
+def array_to_json(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_to_json", *args)
 
 
-def list_grade_up(list, /) -> FunctionExpression:
-    """Returns the index of their sorted position. Function category: List"""
-    return FunctionExpression("list_grade_up", list)
+def array_to_string(arr, sep, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("array_to_string", arr, sep)
 
 
-def array_grade_up(list, /) -> FunctionExpression:
-    """Returns the index of their sorted position. Alias for list_grade_up. Function
-    category: List"""
-    return FunctionExpression("array_grade_up", list)
-
-
-def grade_up(list, /) -> FunctionExpression:
-    """Returns the index of their sorted position. Alias for list_grade_up. Function
-    category: List"""
-    return FunctionExpression("grade_up", list)
-
-
-def list_reverse_sort(list, /) -> FunctionExpression:
-    """Sorts the elements of the list in reverse order. Function category: List"""
-    return FunctionExpression("list_reverse_sort", list)
-
-
-def array_reverse_sort(list, /) -> FunctionExpression:
-    """Sorts the elements of the list in reverse order Alias for list_reverse_sort.
-    Function category: List"""
-    return FunctionExpression("array_reverse_sort", list)
-
-
-def generate_series(start, stop, step, /) -> FunctionExpression:
-    """Create a list of values between start and stop - the stop parameter is
-    inclusive. Function category: List"""
-    return FunctionExpression("generate_series", start, stop, step)
-
-
-def range(start, stop, step, /) -> FunctionExpression:
-    """Create a list of values between start and stop - the stop parameter is
-    exclusive. Function category: List"""
-    return FunctionExpression("range", start, stop, step)
-
-
-def list_cosine_similarity(list1, list2, /) -> FunctionExpression:
-    """Compute the cosine similarity between two lists. Function category: List"""
-    return FunctionExpression("list_cosine_similarity", list1, list2)
-
-
-def list_distance(list1, list2, /) -> FunctionExpression:
-    """Compute the distance between two lists. Function category: List"""
-    return FunctionExpression("list_distance", list1, list2)
-
-
-def list_inner_product(list1, list2, /) -> FunctionExpression:
-    """Compute the inner product between two lists. Function category: List"""
-    return FunctionExpression("list_inner_product", list1, list2)
-
-
-def list_dot_product(list1, list2, /) -> FunctionExpression:
-    """Compute the inner product between two lists Alias for list_inner_product.
-    Function category: List"""
-    return FunctionExpression("list_dot_product", list1, list2)
-
-
-def unpivot_list(any, /, *args) -> FunctionExpression:
-    """Identical to list_value, but generated as part of unpivot for better error
-    messages. Function category: List"""
-    return FunctionExpression("unpivot_list", any, *args)
-
-
-def union_extract(union, tag, /) -> FunctionExpression:
-    """Extract the value with the named tags from the union. NULL if the tag is not
-    currently selected. Function category: Union"""
-    return FunctionExpression("union_extract", union, tag)
-
-
-def union_tag(union, /) -> FunctionExpression:
-    """Retrieve the currently selected tag of the union as an ENUM. Function category:
-    Union"""
-    return FunctionExpression("union_tag", union)
-
-
-def union_value(tag, /) -> FunctionExpression:
-    """Create a single member UNION containing the argument value. The tag of the value
-    will be the bound variable name. Function category: Union"""
-    return FunctionExpression("union_value", tag)
-
-
-def alias(expr, /) -> FunctionExpression:
-    """Returns the name of a given expression. Function category: Generic"""
-    return FunctionExpression("alias", expr)
-
-
-def current_setting(setting_name, /) -> FunctionExpression:
-    """Returns the current value of the configuration setting. Function category:
-    Generic"""
-    return FunctionExpression("current_setting", setting_name)
-
-
-def error(message, /) -> FunctionExpression:
-    """Throws the given error message. Function category: Generic"""
-    return FunctionExpression("error", message)
-
-
-def hash(param, /) -> FunctionExpression:
-    """Returns an integer with the hash of the value. Note that this is not a
-    cryptographic hash. Function category: Generic"""
-    return FunctionExpression("hash", param)
-
-
-def least(arg1, arg2, /, *args) -> FunctionExpression:
-    """Returns the lowest value of the set of input parameters. Function category:
-    Generic"""
-    return FunctionExpression("least", arg1, arg2, *args)
-
-
-def greatest(arg1, arg2, /, *args) -> FunctionExpression:
-    """Returns the highest value of the set of input parameters. Function category:
-    Generic"""
-    return FunctionExpression("greatest", arg1, arg2, *args)
-
-
-def stats(expression, /) -> FunctionExpression:
-    """Returns a string with statistics about the expression. Expression can be a
-    column, constant, or SQL expression. Function category: Generic"""
-    return FunctionExpression("stats", expression)
-
-
-def typeof(expression, /) -> FunctionExpression:
-    """Returns the name of the data type of the result of the expression. Function
-    category: Generic"""
-    return FunctionExpression("typeof", expression)
-
-
-def current_query() -> FunctionExpression:
-    """Returns the current query as a string. Function category: Generic"""
-    return FunctionExpression("current_query")
-
-
-def current_schema() -> FunctionExpression:
-    """Returns the name of the currently active schema. Default is main. Function
-    category: Generic"""
-    return FunctionExpression("current_schema")
-
-
-def current_schemas(include_implicit, /) -> FunctionExpression:
-    """Returns list of schemas. Pass a parameter of True to include implicit schemas.
-    Function category: Generic"""
-    return FunctionExpression("current_schemas", include_implicit)
-
-
-def current_database() -> FunctionExpression:
-    """Returns the name of the currently active database. Function category: Generic"""
-    return FunctionExpression("current_database")
-
-
-def in_search_path(database_name, schema_name, /) -> FunctionExpression:
-    """Returns whether or not the database/schema are in the search path. Function
-    category: Generic"""
-    return FunctionExpression("in_search_path", database_name, schema_name)
-
-
-def txid_current() -> FunctionExpression:
-    """Returns the current transaction’s ID (a BIGINT). It will assign a new one if the
-    current transaction does not have one already. Function category: Generic"""
-    return FunctionExpression("txid_current")
-
-
-def version() -> FunctionExpression:
-    """Returns the currently active version of DuckDB in this format: v0.3.2. Function
-    category: Generic"""
-    return FunctionExpression("version")
-
-
-def starts_with(string, search_string, /) -> FunctionExpression:
-    """Returns true if string begins with search_string Alias for ^@. Function
-    category: String"""
-    return FunctionExpression("starts_with", string, search_string)
+def array_unique(list, /) -> FunctionExpression:
+    """Counts the unique elements of a list"""
+    return FunctionExpression("array_unique", list)
 
 
 def ascii(string, /) -> FunctionExpression:
     """Returns an integer that represents the Unicode code point of the first character
-    of the string. Function category: String"""
+    of the string"""
     return FunctionExpression("ascii", string)
 
 
-def bar(x, min, max, width, /) -> FunctionExpression:
+def asin(x, /) -> FunctionExpression:
+    """Computes the arcsine of x"""
+    return FunctionExpression("asin", x)
+
+
+def atan(x, /) -> FunctionExpression:
+    """Computes the arctangent of x"""
+    return FunctionExpression("atan", x)
+
+
+def atan2(y, x, /) -> FunctionExpression:
+    """Computes the arctangent (y, x)"""
+    return FunctionExpression("atan2", y, x)
+
+
+def avg(x, /) -> FunctionExpression:
+    """Calculates the average value for all tuples in x."""
+    return FunctionExpression("avg", x)
+
+
+def bar(x, min, max, width=None, /) -> FunctionExpression:
     """Draws a band whose width is proportional to (x - min) and equal to width
-    characters when x = max. width defaults to 80. Function category: String"""
+    characters when x = max. width defaults to 80"""
+    if width is None:
+        return FunctionExpression("bar", x, min, max)
     return FunctionExpression("bar", x, min, max, width)
 
 
+def base64(blob, /) -> FunctionExpression:
+    """Convert a blob to a base64 encoded string"""
+    return FunctionExpression("base64", blob)
+
+
 def bin(value, /) -> FunctionExpression:
-    """Converts the value to binary representation. Function category: String"""
+    """Converts the value to binary representation"""
     return FunctionExpression("bin", value)
 
 
-def to_binary(value, /) -> FunctionExpression:
-    """Converts the value to binary representation Alias for bin. Function category:
-    String"""
-    return FunctionExpression("to_binary", value)
+def bit_and(arg, /) -> FunctionExpression:
+    """Returns the bitwise AND of all bits in a given expression."""
+    return FunctionExpression("bit_and", arg)
+
+
+def bit_count(x, /) -> FunctionExpression:
+    """Returns the number of bits that are set"""
+    return FunctionExpression("bit_count", x)
+
+
+def bit_length(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("bit_length", col0)
+
+
+def bit_or(arg, /) -> FunctionExpression:
+    """Returns the bitwise OR of all bits in a given expression."""
+    return FunctionExpression("bit_or", arg)
+
+
+def bit_position(substring, bitstring, /) -> FunctionExpression:
+    """Returns first starting index of the specified substring within bits, or zero if
+    it is not present. The first (leftmost) bit is indexed 1"""
+    return FunctionExpression("bit_position", substring, bitstring)
+
+
+def bit_xor(arg, /) -> FunctionExpression:
+    """Returns the bitwise XOR of all bits in a given expression."""
+    return FunctionExpression("bit_xor", arg)
+
+
+def bitstring(bitstring, length, /) -> FunctionExpression:
+    """Pads the bitstring until the specified length"""
+    return FunctionExpression("bitstring", bitstring, length)
+
+
+def bitstring_agg(arg, col2=None, col1=None, /) -> FunctionExpression:
+    """Returns a bitstring with bits set for each distinct value."""
+    if col2 is None:
+        return FunctionExpression("bitstring_agg", arg, col1)
+    if col1 is None:
+        return FunctionExpression("bitstring_agg", arg, col2)
+    if col2 is None and col1 is None:
+        return FunctionExpression("bitstring_agg", arg)
+    return FunctionExpression("bitstring_agg", arg, col1, col2)
+
+
+def bool_and(arg, /) -> FunctionExpression:
+    """Returns TRUE if every input value is TRUE, otherwise FALSE."""
+    return FunctionExpression("bool_and", arg)
+
+
+def bool_or(arg, /) -> FunctionExpression:
+    """Returns TRUE if any input value is TRUE, otherwise FALSE."""
+    return FunctionExpression("bool_or", arg)
+
+
+def cardinality(*args) -> FunctionExpression:
+    """Returns the size of the map (or the number of entries in the map)"""
+    return FunctionExpression("cardinality", *args)
+
+
+def cbrt(x, /) -> FunctionExpression:
+    """Returns the cube root of x"""
+    return FunctionExpression("cbrt", x)
+
+
+def ceil(x, /) -> FunctionExpression:
+    """Rounds the number up"""
+    return FunctionExpression("ceil", x)
+
+
+def ceiling(x, /) -> FunctionExpression:
+    """Rounds the number up"""
+    return FunctionExpression("ceiling", x)
+
+
+def century(ts, /) -> FunctionExpression:
+    """Extract the century component from a date or timestamp"""
+    return FunctionExpression("century", ts)
 
 
 def chr(code_point, /) -> FunctionExpression:
     """Returns a character which is corresponding the ASCII code value or Unicode code
-    point. Function category: String"""
+    point"""
     return FunctionExpression("chr", code_point)
+
+
+def col_description(table_oid, column_number, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("col_description", table_oid, column_number)
+
+
+def combine(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("combine", col0, col1)
+
+
+def concat(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("concat", *args)
+
+
+def concat_ws(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("concat_ws", *args)
+
+
+def constant_or_null(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("constant_or_null", *args)
+
+
+def contains(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("contains", col0, col1)
+
+
+def corr(y, x, /) -> FunctionExpression:
+    """Returns the correlation coefficient for non-null pairs in a group."""
+    return FunctionExpression("corr", y, x)
+
+
+def cos(x, /) -> FunctionExpression:
+    """Computes the cos of x"""
+    return FunctionExpression("cos", x)
+
+
+def cot(x, /) -> FunctionExpression:
+    """Computes the cotangent of x"""
+    return FunctionExpression("cot", x)
+
+
+def count(col0=None, /) -> FunctionExpression:
+    """"""
+    if col0 is None:
+        return FunctionExpression("count")
+    return FunctionExpression("count", col0)
+
+
+def count_if(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("count_if", l)
+
+
+def count_star() -> FunctionExpression:
+    """"""
+    return FunctionExpression("count_star")
+
+
+def covar_pop(y, x, /) -> FunctionExpression:
+    """Returns the population covariance of input values."""
+    return FunctionExpression("covar_pop", y, x)
+
+
+def covar_samp(y, x, /) -> FunctionExpression:
+    """Returns the sample covariance for non-null pairs in a group."""
+    return FunctionExpression("covar_samp", y, x)
+
+
+def current_catalog() -> FunctionExpression:
+    """"""
+    return FunctionExpression("current_catalog")
+
+
+def current_database() -> FunctionExpression:
+    """Returns the name of the currently active database"""
+    return FunctionExpression("current_database")
+
+
+def current_date() -> FunctionExpression:
+    """Returns the current date"""
+    return FunctionExpression("current_date")
+
+
+def current_localtime() -> FunctionExpression:
+    """"""
+    return FunctionExpression("current_localtime")
+
+
+def current_localtimestamp() -> FunctionExpression:
+    """"""
+    return FunctionExpression("current_localtimestamp")
+
+
+def current_query() -> FunctionExpression:
+    """Returns the current query as a string"""
+    return FunctionExpression("current_query")
+
+
+def current_role() -> FunctionExpression:
+    """"""
+    return FunctionExpression("current_role")
+
+
+def current_schema() -> FunctionExpression:
+    """Returns the name of the currently active schema. Default is main"""
+    return FunctionExpression("current_schema")
+
+
+def current_schemas(include_implicit, /) -> FunctionExpression:
+    """Returns list of schemas. Pass a parameter of True to include implicit schemas"""
+    return FunctionExpression("current_schemas", include_implicit)
+
+
+def current_setting(setting_name, /) -> FunctionExpression:
+    """Returns the current value of the configuration setting"""
+    return FunctionExpression("current_setting", setting_name)
+
+
+def current_user() -> FunctionExpression:
+    """"""
+    return FunctionExpression("current_user")
+
+
+def currval(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("currval", col0)
 
 
 def damerau_levenshtein(str1, str2, /) -> FunctionExpression:
@@ -1437,382 +596,2457 @@ def damerau_levenshtein(str1, str2, /) -> FunctionExpression:
     characters as an allowed edit operation. In other words, the minimum number
     of edit operations (insertions, deletions, substitutions or transpositions)
     required to change one string to another. Different case is considered
-    different. Function category: String"""
+    different"""
     return FunctionExpression("damerau_levenshtein", str1, str2)
 
 
-def format(format, /, *parameters) -> FunctionExpression:
-    """Formats a string using fmt syntax. Function category: String"""
-    return FunctionExpression("format", format, *parameters)
+def date_add(date, interval, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("date_add", date, interval)
 
 
-def format_bytes(bytes, /) -> FunctionExpression:
-    """Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB).
-    Function category: String"""
-    return FunctionExpression("format_bytes", bytes)
+def date_diff(part, startdate, enddate, /) -> FunctionExpression:
+    """The number of partition boundaries between the timestamps"""
+    return FunctionExpression("date_diff", part, startdate, enddate)
 
 
-def formatReadableSize(bytes, /) -> FunctionExpression:
-    """Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB) Alias
-    for format_bytes. Function category: String"""
-    return FunctionExpression("formatReadableSize", bytes)
+def date_part(ts, col1, /) -> FunctionExpression:
+    """Get subfield (equivalent to extract)"""
+    return FunctionExpression("date_part", ts, col1)
 
 
-def formatReadableDecimalSize(bytes, /) -> FunctionExpression:
-    """Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB).
-    Function category: String"""
-    return FunctionExpression("formatReadableDecimalSize", bytes)
+def date_sub(part, startdate, enddate, /) -> FunctionExpression:
+    """The number of complete partitions between the timestamps"""
+    return FunctionExpression("date_sub", part, startdate, enddate)
 
 
-def hamming(str1, str2, /) -> FunctionExpression:
-    """The number of positions with different characters for 2 strings of equal length.
-    Different case is considered different. Function category: String"""
-    return FunctionExpression("hamming", str1, str2)
+def date_trunc(part, timestamp, /) -> FunctionExpression:
+    """Truncate to specified precision"""
+    return FunctionExpression("date_trunc", part, timestamp)
 
 
-def mismatches(str1, str2, /) -> FunctionExpression:
-    """The number of positions with different characters for 2 strings of equal length.
-    Different case is considered different Alias for hamming. Function category:
-    String"""
-    return FunctionExpression("mismatches", str1, str2)
+def datediff(part, startdate, enddate, /) -> FunctionExpression:
+    """The number of partition boundaries between the timestamps"""
+    return FunctionExpression("datediff", part, startdate, enddate)
 
 
-def hex(value, /) -> FunctionExpression:
-    """Converts the value to hexadecimal representation. Function category: String"""
-    return FunctionExpression("hex", value)
+def datepart(ts, col1, /) -> FunctionExpression:
+    """Get subfield (equivalent to extract)"""
+    return FunctionExpression("datepart", ts, col1)
 
 
-def to_hex(value, /) -> FunctionExpression:
-    """Converts the value to hexadecimal representation Alias for hex. Function
-    category: String"""
-    return FunctionExpression("to_hex", value)
+def datesub(part, startdate, enddate, /) -> FunctionExpression:
+    """The number of complete partitions between the timestamps"""
+    return FunctionExpression("datesub", part, startdate, enddate)
 
 
-def instr(haystack, needle, /) -> FunctionExpression:
-    """Returns location of first occurrence of needle in haystack, counting from 1.
-    Returns 0 if no match found. Function category: String"""
-    return FunctionExpression("instr", haystack, needle)
+def datetrunc(part, timestamp, /) -> FunctionExpression:
+    """Truncate to specified precision"""
+    return FunctionExpression("datetrunc", part, timestamp)
 
 
-def strpos(haystack, needle, /) -> FunctionExpression:
-    """Returns location of first occurrence of needle in haystack, counting from 1.
-    Returns 0 if no match found Alias for instr. Function category: String"""
-    return FunctionExpression("strpos", haystack, needle)
+def day(ts, /) -> FunctionExpression:
+    """Extract the day component from a date or timestamp"""
+    return FunctionExpression("day", ts)
 
 
-def position(haystack, needle, /) -> FunctionExpression:
-    """Returns location of first occurrence of needle in haystack, counting from 1.
-    Returns 0 if no match found Alias for instr. Function category: String"""
-    return FunctionExpression("position", haystack, needle)
+def dayname(ts, /) -> FunctionExpression:
+    """The (English) name of the weekday"""
+    return FunctionExpression("dayname", ts)
 
 
-def jaccard(str1, str2, /) -> FunctionExpression:
-    """The Jaccard similarity between two strings. Different case is considered
-    different. Returns a number between 0 and 1. Function category: String"""
-    return FunctionExpression("jaccard", str1, str2)
+def dayofmonth(ts, /) -> FunctionExpression:
+    """Extract the dayofmonth component from a date or timestamp"""
+    return FunctionExpression("dayofmonth", ts)
 
 
-def jaro_similarity(str1, str2, /) -> FunctionExpression:
-    """The Jaro similarity between two strings. Different case is considered different.
-    Returns a number between 0 and 1. Function category: String"""
-    return FunctionExpression("jaro_similarity", str1, str2)
+def dayofweek(ts, /) -> FunctionExpression:
+    """Extract the dayofweek component from a date or timestamp"""
+    return FunctionExpression("dayofweek", ts)
 
 
-def jaro_winkler_similarity(str1, str2, /) -> FunctionExpression:
-    """The Jaro-Winkler similarity between two strings. Different case is considered
-    different. Returns a number between 0 and 1. Function category: String"""
-    return FunctionExpression("jaro_winkler_similarity", str1, str2)
+def dayofyear(ts, /) -> FunctionExpression:
+    """Extract the dayofyear component from a date or timestamp"""
+    return FunctionExpression("dayofyear", ts)
 
 
-def left(string, count, /) -> FunctionExpression:
-    """Extract the left-most count characters. Function category: String"""
-    return FunctionExpression("left", string, count)
+def decade(ts, /) -> FunctionExpression:
+    """Extract the decade component from a date or timestamp"""
+    return FunctionExpression("decade", ts)
 
 
-def left_grapheme(string, count, /) -> FunctionExpression:
-    """Extract the left-most count grapheme clusters. Function category: String"""
-    return FunctionExpression("left_grapheme", string, count)
+def decimal(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("decimal", col0)
 
 
-def levenshtein(str1, str2, /) -> FunctionExpression:
-    """The minimum number of single-character edits (insertions, deletions or
-    substitutions) required to change one string to the other. Different case is
-    considered different. Function category: String"""
-    return FunctionExpression("levenshtein", str1, str2)
+def decimal_add(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("decimal_add", col0, col1)
+
+
+def decimal_cmp(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("decimal_cmp", col0, col1)
+
+
+def decimal_mul(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("decimal_mul", col0, col1)
+
+
+def decimal_sub(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("decimal_sub", col0, col1)
+
+
+def decode(blob, /) -> FunctionExpression:
+    """Convert blob to varchar. Fails if blob is not valid utf-8"""
+    return FunctionExpression("decode", blob)
+
+
+def degrees(x, /) -> FunctionExpression:
+    """Converts radians to degrees"""
+    return FunctionExpression("degrees", x)
+
+
+def divide(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("divide", col0, col1)
+
+
+def edit(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("edit", col0)
+    return FunctionExpression("edit", col0, col1)
 
 
 def editdist3(str1, str2, /) -> FunctionExpression:
     """The minimum number of single-character edits (insertions, deletions or
     substitutions) required to change one string to the other. Different case is
-    considered different Alias for levenshtein. Function category: String"""
+    considered different"""
     return FunctionExpression("editdist3", str1, str2)
 
 
+def element_at(*args) -> FunctionExpression:
+    """Returns a list containing the value for a given key or an empty list if the key
+    is not contained in the map. The type of the key provided in the second
+    parameter must match the type of the map’s keys else an error is returned"""
+    return FunctionExpression("element_at", *args)
+
+
+def encode(string, /) -> FunctionExpression:
+    """Convert varchar to blob. Converts utf-8 characters into literal encoding"""
+    return FunctionExpression("encode", string)
+
+
+def ends_with(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("ends_with", col0, col1)
+
+
+def entropy(x, /) -> FunctionExpression:
+    """Returns the log-2 entropy of count input-values."""
+    return FunctionExpression("entropy", x)
+
+
+def enum_code(enum, /) -> FunctionExpression:
+    """Returns the numeric value backing the given enum value"""
+    return FunctionExpression("enum_code", enum)
+
+
+def enum_first(enum, /) -> FunctionExpression:
+    """Returns the first value of the input enum type"""
+    return FunctionExpression("enum_first", enum)
+
+
+def enum_last(enum, /) -> FunctionExpression:
+    """Returns the last value of the input enum type"""
+    return FunctionExpression("enum_last", enum)
+
+
+def enum_range(enum, /) -> FunctionExpression:
+    """Returns all values of the input enum type as an array"""
+    return FunctionExpression("enum_range", enum)
+
+
+def enum_range_boundary(start, end, /) -> FunctionExpression:
+    """Returns the range between the two given enum values as an array. The values must
+    be of the same enum type. When the first parameter is NULL, the result
+    starts with the first value of the enum type. When the second parameter is
+    NULL, the result ends with the last value of the enum type"""
+    return FunctionExpression("enum_range_boundary", start, end)
+
+
+def epoch(temporal, /) -> FunctionExpression:
+    """Extract the epoch component from a temporal type"""
+    return FunctionExpression("epoch", temporal)
+
+
+def epoch_ms(temporal, /) -> FunctionExpression:
+    """Extract the epoch component in milliseconds from a temporal type"""
+    return FunctionExpression("epoch_ms", temporal)
+
+
+def epoch_ns(temporal, /) -> FunctionExpression:
+    """Extract the epoch component in nanoseconds from a temporal type"""
+    return FunctionExpression("epoch_ns", temporal)
+
+
+def epoch_us(temporal, /) -> FunctionExpression:
+    """Extract the epoch component in microseconds from a temporal type"""
+    return FunctionExpression("epoch_us", temporal)
+
+
+def era(ts, /) -> FunctionExpression:
+    """Extract the era component from a date or timestamp"""
+    return FunctionExpression("era", ts)
+
+
+def error(message, /) -> FunctionExpression:
+    """Throws the given error message"""
+    return FunctionExpression("error", message)
+
+
+def even(x, /) -> FunctionExpression:
+    """Rounds x to next even number by rounding away from zero"""
+    return FunctionExpression("even", x)
+
+
+def exp(x, /) -> FunctionExpression:
+    """Computes e to the power of x"""
+    return FunctionExpression("exp", x)
+
+
+def factorial(x, /) -> FunctionExpression:
+    """Factorial of x. Computes the product of the current integer and all integers
+    below it"""
+    return FunctionExpression("factorial", x)
+
+
+def favg(x, /) -> FunctionExpression:
+    """Calculates the average using a more accurate floating point summation (Kahan
+    Sum)"""
+    return FunctionExpression("favg", x)
+
+
+def fdiv(x, y, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("fdiv", x, y)
+
+
+def finalize(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("finalize", col0)
+
+
+def first(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("first", col0)
+
+
+def flatten(nested_list, /) -> FunctionExpression:
+    """Flatten a nested list by one level"""
+    return FunctionExpression("flatten", nested_list)
+
+
+def floor(x, /) -> FunctionExpression:
+    """Rounds the number down"""
+    return FunctionExpression("floor", x)
+
+
+def fmod(x, y, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("fmod", x, y)
+
+
+def format(*args) -> FunctionExpression:
+    """Formats a string using fmt syntax"""
+    return FunctionExpression("format", *args)
+
+
+def formatReadableDecimalSize(bytes, /) -> FunctionExpression:
+    """Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)"""
+    return FunctionExpression("formatReadableDecimalSize", bytes)
+
+
+def format_bytes(bytes, /) -> FunctionExpression:
+    """Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)"""
+    return FunctionExpression("format_bytes", bytes)
+
+
+def format_pg_type(type_name, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("format_pg_type", type_name)
+
+
+def format_type(type_oid, typemod, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("format_type", type_oid, typemod)
+
+
+def from_base64(string, /) -> FunctionExpression:
+    """Convert a base64 encoded string to a character string"""
+    return FunctionExpression("from_base64", string)
+
+
+def from_binary(value, /) -> FunctionExpression:
+    """Converts a value from binary representation to a blob"""
+    return FunctionExpression("from_binary", value)
+
+
+def from_hex(value, /) -> FunctionExpression:
+    """Converts a value from hexadecimal representation to a blob"""
+    return FunctionExpression("from_hex", value)
+
+
+def from_json(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("from_json", col0, col1)
+
+
+def from_json_strict(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("from_json_strict", col0, col1)
+
+
+def fsum(arg, /) -> FunctionExpression:
+    """Calculates the sum using a more accurate floating point summation (Kahan Sum)."""
+    return FunctionExpression("fsum", arg)
+
+
+def gamma(x, /) -> FunctionExpression:
+    """Interpolation of (x-1) factorial (so decimal inputs are allowed)"""
+    return FunctionExpression("gamma", x)
+
+
+def gcd(x, y, /) -> FunctionExpression:
+    """Computes the greatest common divisor of x and y"""
+    return FunctionExpression("gcd", x, y)
+
+
+def gen_random_uuid() -> FunctionExpression:
+    """Returns a random UUID similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687"""
+    return FunctionExpression("gen_random_uuid")
+
+
+def generate_series(start, stop=None, step=None, /) -> FunctionExpression:
+    """Create a list of values between start and stop - the stop parameter is inclusive"""
+    if stop is None:
+        return FunctionExpression("generate_series", start, step)
+    if step is None:
+        return FunctionExpression("generate_series", start, stop)
+    if stop is None and step is None:
+        return FunctionExpression("generate_series", start)
+    return FunctionExpression("generate_series", start, stop, step)
+
+
+def generate_subscripts(arr, dim, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("generate_subscripts", arr, dim)
+
+
+def geomean(x, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("geomean", x)
+
+
+def geometric_mean(x, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("geometric_mean", x)
+
+
+def get_bit(bitstring, index, /) -> FunctionExpression:
+    """Extracts the nth bit from bitstring; the first (leftmost) bit is indexed 0"""
+    return FunctionExpression("get_bit", bitstring, index)
+
+
+def get_current_time() -> FunctionExpression:
+    """Returns the current time"""
+    return FunctionExpression("get_current_time")
+
+
+def get_current_timestamp() -> FunctionExpression:
+    """Returns the current timestamp"""
+    return FunctionExpression("get_current_timestamp")
+
+
+def greatest(*args) -> FunctionExpression:
+    """Returns the highest value of the set of input parameters"""
+    return FunctionExpression("greatest", *args)
+
+
+def greatest_common_divisor(x, y, /) -> FunctionExpression:
+    """Computes the greatest common divisor of x and y"""
+    return FunctionExpression("greatest_common_divisor", x, y)
+
+
+def group_concat(str, arg=None, /) -> FunctionExpression:
+    """Concatenates the column string values with an optional separator."""
+    if arg is None:
+        return FunctionExpression("group_concat", str)
+    return FunctionExpression("group_concat", str, arg)
+
+
+def hamming(str1, str2, /) -> FunctionExpression:
+    """The number of positions with different characters for 2 strings of equal length.
+    Different case is considered different"""
+    return FunctionExpression("hamming", str1, str2)
+
+
+def has_any_column_privilege(table, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_any_column_privilege", table, privilege)
+
+
+def has_column_privilege(table, column, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_column_privilege", table, column, privilege)
+
+
+def has_database_privilege(database, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_database_privilege", database, privilege)
+
+
+def has_foreign_data_wrapper_privilege(fdw, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_foreign_data_wrapper_privilege", fdw, privilege)
+
+
+def has_function_privilege(function, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_function_privilege", function, privilege)
+
+
+def has_language_privilege(language, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_language_privilege", language, privilege)
+
+
+def has_schema_privilege(schema, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_schema_privilege", schema, privilege)
+
+
+def has_sequence_privilege(sequence, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_sequence_privilege", sequence, privilege)
+
+
+def has_server_privilege(server, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_server_privilege", server, privilege)
+
+
+def has_table_privilege(table, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_table_privilege", table, privilege)
+
+
+def has_tablespace_privilege(tablespace, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("has_tablespace_privilege", tablespace, privilege)
+
+
+def hash(*args) -> FunctionExpression:
+    """Returns an integer with the hash of the value. Note that this is not a
+    cryptographic hash"""
+    return FunctionExpression("hash", *args)
+
+
+def hex(value, /) -> FunctionExpression:
+    """Converts the value to hexadecimal representation"""
+    return FunctionExpression("hex", value)
+
+
+def histogram(arg, /) -> FunctionExpression:
+    """Returns a LIST of STRUCTs with the fields bucket and count."""
+    return FunctionExpression("histogram", arg)
+
+
+def hour(ts, /) -> FunctionExpression:
+    """Extract the hour component from a date or timestamp"""
+    return FunctionExpression("hour", ts)
+
+
+def icu_sort_key(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("icu_sort_key", col0, col1)
+
+
+def ieee754(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("ieee754", col0)
+    return FunctionExpression("ieee754", col0, col1)
+
+
+def ieee754_exponent(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("ieee754_exponent", col0)
+
+
+def ieee754_from_blob(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("ieee754_from_blob", col0)
+
+
+def ieee754_mantissa(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("ieee754_mantissa", col0)
+
+
+def ieee754_to_blob(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("ieee754_to_blob", col0)
+
+
+def ilike_escape(col0, col1, col2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("ilike_escape", col0, col1, col2)
+
+
+def in_search_path(database_name, schema_name, /) -> FunctionExpression:
+    """Returns whether or not the database/schema are in the search path"""
+    return FunctionExpression("in_search_path", database_name, schema_name)
+
+
+def inet_client_addr() -> FunctionExpression:
+    """"""
+    return FunctionExpression("inet_client_addr")
+
+
+def inet_client_port() -> FunctionExpression:
+    """"""
+    return FunctionExpression("inet_client_port")
+
+
+def inet_server_addr() -> FunctionExpression:
+    """"""
+    return FunctionExpression("inet_server_addr")
+
+
+def inet_server_port() -> FunctionExpression:
+    """"""
+    return FunctionExpression("inet_server_port")
+
+
+def instr(haystack, needle, /) -> FunctionExpression:
+    """Returns location of first occurrence of needle in haystack, counting from 1.
+    Returns 0 if no match found"""
+    return FunctionExpression("instr", haystack, needle)
+
+
+def isfinite(x, /) -> FunctionExpression:
+    """Returns true if the floating point value is finite, false otherwise"""
+    return FunctionExpression("isfinite", x)
+
+
+def isinf(x, /) -> FunctionExpression:
+    """Returns true if the floating point value is infinite, false otherwise"""
+    return FunctionExpression("isinf", x)
+
+
+def isnan(x, /) -> FunctionExpression:
+    """Returns true if the floating point value is not a number, false otherwise"""
+    return FunctionExpression("isnan", x)
+
+
+def isodow(ts, /) -> FunctionExpression:
+    """Extract the isodow component from a date or timestamp"""
+    return FunctionExpression("isodow", ts)
+
+
+def isoyear(ts, /) -> FunctionExpression:
+    """Extract the isoyear component from a date or timestamp"""
+    return FunctionExpression("isoyear", ts)
+
+
+def jaccard(str1, str2, /) -> FunctionExpression:
+    """The Jaccard similarity between two strings. Different case is considered
+    different. Returns a number between 0 and 1"""
+    return FunctionExpression("jaccard", str1, str2)
+
+
+def jaro_similarity(str1, str2, /) -> FunctionExpression:
+    """The Jaro similarity between two strings. Different case is considered different.
+    Returns a number between 0 and 1"""
+    return FunctionExpression("jaro_similarity", str1, str2)
+
+
+def jaro_winkler_similarity(str1, str2, /) -> FunctionExpression:
+    """The Jaro-Winkler similarity between two strings. Different case is considered
+    different. Returns a number between 0 and 1"""
+    return FunctionExpression("jaro_winkler_similarity", str1, str2)
+
+
+def json(x, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json", x)
+
+
+def json_array(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_array", *args)
+
+
+def json_array_length(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("json_array_length", col0)
+    return FunctionExpression("json_array_length", col0, col1)
+
+
+def json_contains(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_contains", col0, col1)
+
+
+def json_deserialize_sql(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_deserialize_sql", col0)
+
+
+def json_extract(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_extract", col0, col1)
+
+
+def json_extract_path(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_extract_path", col0, col1)
+
+
+def json_extract_path_text(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_extract_path_text", col0, col1)
+
+
+def json_extract_string(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_extract_string", col0, col1)
+
+
+def json_group_array(x, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_group_array", x)
+
+
+def json_group_object(name, value, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_group_object", name, value)
+
+
+def json_group_structure(x, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_group_structure", x)
+
+
+def json_keys(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("json_keys", col0)
+    return FunctionExpression("json_keys", col0, col1)
+
+
+def json_merge_patch(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_merge_patch", *args)
+
+
+def json_object(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_object", *args)
+
+
+def json_quote(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_quote", *args)
+
+
+def json_serialize_sql(col0, col2=None, col1=None, col3=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("json_serialize_sql", col0, col1, col3)
+    if col1 is None:
+        return FunctionExpression("json_serialize_sql", col0, col2, col3)
+    if col3 is None:
+        return FunctionExpression("json_serialize_sql", col0, col1, col2)
+    if col2 is None and col1 is None:
+        return FunctionExpression("json_serialize_sql", col0, col3)
+    if col2 is None and col3 is None:
+        return FunctionExpression("json_serialize_sql", col0, col1)
+    if col1 is None and col3 is None:
+        return FunctionExpression("json_serialize_sql", col0, col2)
+    if col2 is None and col1 is None and col3 is None:
+        return FunctionExpression("json_serialize_sql", col0)
+    return FunctionExpression("json_serialize_sql", col0, col1, col2, col3)
+
+
+def json_structure(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_structure", col0)
+
+
+def json_transform(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_transform", col0, col1)
+
+
+def json_transform_strict(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_transform_strict", col0, col1)
+
+
+def json_type(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("json_type", col0)
+    return FunctionExpression("json_type", col0, col1)
+
+
+def json_valid(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("json_valid", col0)
+
+
+def julian(ts, /) -> FunctionExpression:
+    """Extract the Julian Day number from a date or timestamp"""
+    return FunctionExpression("julian", ts)
+
+
+def kahan_sum(arg, /) -> FunctionExpression:
+    """Calculates the sum using a more accurate floating point summation (Kahan Sum)."""
+    return FunctionExpression("kahan_sum", arg)
+
+
+def kurtosis(x, /) -> FunctionExpression:
+    """Returns the excess kurtosis (Fisher’s definition) of all input values, with a
+    bias correction according to the sample size"""
+    return FunctionExpression("kurtosis", x)
+
+
+def last(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("last", col0)
+
+
+def last_day(ts, /) -> FunctionExpression:
+    """Returns the last day of the month"""
+    return FunctionExpression("last_day", ts)
+
+
+def lcase(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("lcase", col0)
+
+
+def lcm(x, y, /) -> FunctionExpression:
+    """Computes the least common multiple of x and y"""
+    return FunctionExpression("lcm", x, y)
+
+
+def least(*args) -> FunctionExpression:
+    """Returns the lowest value of the set of input parameters"""
+    return FunctionExpression("least", *args)
+
+
+def least_common_multiple(x, y, /) -> FunctionExpression:
+    """Computes the least common multiple of x and y"""
+    return FunctionExpression("least_common_multiple", x, y)
+
+
+def left(string, count, /) -> FunctionExpression:
+    """Extract the left-most count characters"""
+    return FunctionExpression("left", string, count)
+
+
+def left_grapheme(string, count, /) -> FunctionExpression:
+    """Extract the left-most count grapheme clusters"""
+    return FunctionExpression("left_grapheme", string, count)
+
+
+def len(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("len", col0)
+
+
+def length(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("length", col0)
+
+
+def length_grapheme(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("length_grapheme", col0)
+
+
+def levenshtein(str1, str2, /) -> FunctionExpression:
+    """The minimum number of single-character edits (insertions, deletions or
+    substitutions) required to change one string to the other. Different case is
+    considered different"""
+    return FunctionExpression("levenshtein", str1, str2)
+
+
+def lgamma(x, /) -> FunctionExpression:
+    """Computes the log of the gamma function"""
+    return FunctionExpression("lgamma", x)
+
+
+def like_escape(col0, col1, col2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("like_escape", col0, col1, col2)
+
+
+def list(arg, /) -> FunctionExpression:
+    """Returns a LIST containing all the values of a column."""
+    return FunctionExpression("list", arg)
+
+
+def list_aggr(*args) -> FunctionExpression:
+    """Executes the aggregate function name on the elements of list"""
+    return FunctionExpression("list_aggr", *args)
+
+
+def list_aggregate(*args) -> FunctionExpression:
+    """Executes the aggregate function name on the elements of list"""
+    return FunctionExpression("list_aggregate", *args)
+
+
+def list_any_value(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_any_value", l)
+
+
+def list_append(l, e, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_append", l, e)
+
+
+def list_approx_count_distinct(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_approx_count_distinct", l)
+
+
+def list_avg(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_avg", l)
+
+
+def list_bit_and(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_bit_and", l)
+
+
+def list_bit_or(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_bit_or", l)
+
+
+def list_bit_xor(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_bit_xor", l)
+
+
+def list_bool_and(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_bool_and", l)
+
+
+def list_bool_or(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_bool_or", l)
+
+
+def list_cat(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_cat", col0, col1)
+
+
+def list_concat(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_concat", col0, col1)
+
+
+def list_contains(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_contains", col0, col1)
+
+
+def list_cosine_similarity(list1, list2, /) -> FunctionExpression:
+    """Compute the cosine similarity between two lists"""
+    return FunctionExpression("list_cosine_similarity", list1, list2)
+
+
+def list_count(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_count", l)
+
+
+def list_distance(list1, list2, /) -> FunctionExpression:
+    """Compute the distance between two lists"""
+    return FunctionExpression("list_distance", list1, list2)
+
+
+def list_distinct(list, /) -> FunctionExpression:
+    """Removes all duplicates and NULLs from a list. Does not preserve the original
+    order"""
+    return FunctionExpression("list_distinct", list)
+
+
+def list_dot_product(list1, list2, /) -> FunctionExpression:
+    """Compute the inner product between two lists"""
+    return FunctionExpression("list_dot_product", list1, list2)
+
+
+def list_element(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_element", col0, col1)
+
+
+def list_entropy(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_entropy", l)
+
+
+def list_extract(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_extract", col0, col1)
+
+
+def list_first(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_first", l)
+
+
+def list_has(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_has", col0, col1)
+
+
+def list_has_all(l1, l2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_has_all", l1, l2)
+
+
+def list_has_any(l1, l2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_has_any", l1, l2)
+
+
+def list_histogram(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_histogram", l)
+
+
+def list_indexof(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_indexof", col0, col1)
+
+
+def list_inner_product(list1, list2, /) -> FunctionExpression:
+    """Compute the inner product between two lists"""
+    return FunctionExpression("list_inner_product", list1, list2)
+
+
+def list_intersect(l1, l2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_intersect", l1, l2)
+
+
+def list_kurtosis(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_kurtosis", l)
+
+
+def list_last(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_last", l)
+
+
+def list_mad(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_mad", l)
+
+
+def list_max(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_max", l)
+
+
+def list_median(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_median", l)
+
+
+def list_min(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_min", l)
+
+
+def list_mode(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_mode", l)
+
+
+def list_pack(*args) -> FunctionExpression:
+    """Create a LIST containing the argument values"""
+    return FunctionExpression("list_pack", *args)
+
+
+def list_position(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_position", col0, col1)
+
+
+def list_prepend(e, l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_prepend", e, l)
+
+
+def list_product(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_product", l)
+
+
+def list_resize(col0, col1, col2=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("list_resize", col0, col1)
+    return FunctionExpression("list_resize", col0, col1, col2)
+
+
+def list_reverse(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_reverse", l)
+
+
+def list_reverse_sort(list, col1=None, /) -> FunctionExpression:
+    """Sorts the elements of the list in reverse order"""
+    if col1 is None:
+        return FunctionExpression("list_reverse_sort", list)
+    return FunctionExpression("list_reverse_sort", list, col1)
+
+
+def list_sem(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_sem", l)
+
+
+def list_skewness(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_skewness", l)
+
+
+def list_slice(list, begin, end, step=None, /) -> FunctionExpression:
+    """Extract a sublist using slice conventions. Negative values are accepted"""
+    if step is None:
+        return FunctionExpression("list_slice", list, begin, end)
+    return FunctionExpression("list_slice", list, begin, end, step)
+
+
+def list_sort(list, col2=None, col1=None, /) -> FunctionExpression:
+    """Sorts the elements of the list"""
+    if col2 is None:
+        return FunctionExpression("list_sort", list, col1)
+    if col1 is None:
+        return FunctionExpression("list_sort", list, col2)
+    if col2 is None and col1 is None:
+        return FunctionExpression("list_sort", list)
+    return FunctionExpression("list_sort", list, col1, col2)
+
+
+def list_stddev_pop(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_stddev_pop", l)
+
+
+def list_stddev_samp(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_stddev_samp", l)
+
+
+def list_string_agg(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_string_agg", l)
+
+
+def list_sum(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_sum", l)
+
+
+def list_unique(list, /) -> FunctionExpression:
+    """Counts the unique elements of a list"""
+    return FunctionExpression("list_unique", list)
+
+
+def list_value(*args) -> FunctionExpression:
+    """Create a LIST containing the argument values"""
+    return FunctionExpression("list_value", *args)
+
+
+def list_var_pop(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_var_pop", l)
+
+
+def list_var_samp(l, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("list_var_samp", l)
+
+
+def ln(x, /) -> FunctionExpression:
+    """Computes the natural logarithm of x"""
+    return FunctionExpression("ln", x)
+
+
+def log(x, /) -> FunctionExpression:
+    """Computes the 10-log of x"""
+    return FunctionExpression("log", x)
+
+
+def log10(x, /) -> FunctionExpression:
+    """Computes the 10-log of x"""
+    return FunctionExpression("log10", x)
+
+
+def log2(x, /) -> FunctionExpression:
+    """Computes the 2-log of x"""
+    return FunctionExpression("log2", x)
+
+
+def lower(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("lower", col0)
+
+
 def lpad(string, count, character, /) -> FunctionExpression:
-    """Pads the string with the character from the left until it has count characters.
-    Function category: String"""
+    """Pads the string with the character from the left until it has count characters"""
     return FunctionExpression("lpad", string, count, character)
 
 
-def ltrim(string, characters, /) -> FunctionExpression:
+def lsmode(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("lsmode", col0)
+
+
+def ltrim(string, characters=None, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from the left side of the
-    string. Function category: String"""
+    string"""
+    if characters is None:
+        return FunctionExpression("ltrim", string)
     return FunctionExpression("ltrim", string, characters)
 
 
+def mad(x, /) -> FunctionExpression:
+    """Returns the median absolute deviation for the values within x. NULL values are
+    ignored. Temporal types return a positive INTERVAL."""
+    return FunctionExpression("mad", x)
+
+
+def make_date(year, month=None, day=None, /) -> FunctionExpression:
+    """The date for the given parts"""
+    if month is None:
+        return FunctionExpression("make_date", year, day)
+    if day is None:
+        return FunctionExpression("make_date", year, month)
+    if month is None and day is None:
+        return FunctionExpression("make_date", year)
+    return FunctionExpression("make_date", year, month, day)
+
+
+def make_time(hour, minute, seconds, /) -> FunctionExpression:
+    """The time for the given parts"""
+    return FunctionExpression("make_time", hour, minute, seconds)
+
+
+def make_timestamp(year, month=None, minute=None, seconds=None, day=None, hour=None, /) -> FunctionExpression:
+    """The timestamp for the given parts"""
+    if month is None:
+        return FunctionExpression("make_timestamp", year, day, hour, minute, seconds)
+    if minute is None:
+        return FunctionExpression("make_timestamp", year, month, day, hour, seconds)
+    if seconds is None:
+        return FunctionExpression("make_timestamp", year, month, day, hour, minute)
+    if day is None:
+        return FunctionExpression("make_timestamp", year, month, hour, minute, seconds)
+    if hour is None:
+        return FunctionExpression("make_timestamp", year, month, day, minute, seconds)
+    if month is None and minute is None:
+        return FunctionExpression("make_timestamp", year, day, hour, seconds)
+    if month is None and seconds is None:
+        return FunctionExpression("make_timestamp", year, day, hour, minute)
+    if month is None and day is None:
+        return FunctionExpression("make_timestamp", year, hour, minute, seconds)
+    if month is None and hour is None:
+        return FunctionExpression("make_timestamp", year, day, minute, seconds)
+    if minute is None and seconds is None:
+        return FunctionExpression("make_timestamp", year, month, day, hour)
+    if minute is None and day is None:
+        return FunctionExpression("make_timestamp", year, month, hour, seconds)
+    if minute is None and hour is None:
+        return FunctionExpression("make_timestamp", year, month, day, seconds)
+    if seconds is None and day is None:
+        return FunctionExpression("make_timestamp", year, month, hour, minute)
+    if seconds is None and hour is None:
+        return FunctionExpression("make_timestamp", year, month, day, minute)
+    if day is None and hour is None:
+        return FunctionExpression("make_timestamp", year, month, minute, seconds)
+    if month is None and minute is None and seconds is None:
+        return FunctionExpression("make_timestamp", year, day, hour)
+    if month is None and minute is None and day is None:
+        return FunctionExpression("make_timestamp", year, hour, seconds)
+    if month is None and minute is None and hour is None:
+        return FunctionExpression("make_timestamp", year, day, seconds)
+    if month is None and seconds is None and day is None:
+        return FunctionExpression("make_timestamp", year, hour, minute)
+    if month is None and seconds is None and hour is None:
+        return FunctionExpression("make_timestamp", year, day, minute)
+    if month is None and day is None and hour is None:
+        return FunctionExpression("make_timestamp", year, minute, seconds)
+    if minute is None and seconds is None and day is None:
+        return FunctionExpression("make_timestamp", year, month, hour)
+    if minute is None and seconds is None and hour is None:
+        return FunctionExpression("make_timestamp", year, month, day)
+    if minute is None and day is None and hour is None:
+        return FunctionExpression("make_timestamp", year, month, seconds)
+    if seconds is None and day is None and hour is None:
+        return FunctionExpression("make_timestamp", year, month, minute)
+    if month is None and minute is None and seconds is None and day is None:
+        return FunctionExpression("make_timestamp", year, hour)
+    if month is None and minute is None and seconds is None and hour is None:
+        return FunctionExpression("make_timestamp", year, day)
+    if month is None and minute is None and day is None and hour is None:
+        return FunctionExpression("make_timestamp", year, seconds)
+    if month is None and seconds is None and day is None and hour is None:
+        return FunctionExpression("make_timestamp", year, minute)
+    if minute is None and seconds is None and day is None and hour is None:
+        return FunctionExpression("make_timestamp", year, month)
+    if month is None and minute is None and seconds is None and day is None and hour is None:
+        return FunctionExpression("make_timestamp", year)
+    return FunctionExpression("make_timestamp", year, month, day, hour, minute, seconds)
+
+
+def make_timestamptz(col0, col3=None, col5=None, col4=None, col2=None, col6=None, col1=None, /) -> FunctionExpression:
+    """"""
+    if col3 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col4, col5, col6)
+    if col5 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col6)
+    if col4 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col5, col6)
+    if col2 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col3, col4, col5, col6)
+    if col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5)
+    if col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col3, col4, col5, col6)
+    if col3 is None and col5 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col4, col6)
+    if col3 is None and col4 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col5, col6)
+    if col3 is None and col2 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col4, col5, col6)
+    if col3 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col4, col5)
+    if col3 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col4, col5, col6)
+    if col5 is None and col4 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col6)
+    if col5 is None and col2 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col3, col4, col6)
+    if col5 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4)
+    if col5 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col3, col4, col6)
+    if col4 is None and col2 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col3, col5, col6)
+    if col4 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col5)
+    if col4 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col3, col5, col6)
+    if col2 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col3, col4, col5)
+    if col2 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col3, col4, col5, col6)
+    if col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col3, col4, col5)
+    if col3 is None and col5 is None and col4 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col6)
+    if col3 is None and col5 is None and col2 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col4, col6)
+    if col3 is None and col5 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col4)
+    if col3 is None and col5 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col4, col6)
+    if col3 is None and col4 is None and col2 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col5, col6)
+    if col3 is None and col4 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col5)
+    if col3 is None and col4 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col5, col6)
+    if col3 is None and col2 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col4, col5)
+    if col3 is None and col2 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col4, col5, col6)
+    if col3 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col4, col5)
+    if col5 is None and col4 is None and col2 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col3, col6)
+    if col5 is None and col4 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col3)
+    if col5 is None and col4 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col3, col6)
+    if col5 is None and col2 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col3, col4)
+    if col5 is None and col2 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col3, col4, col6)
+    if col5 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col3, col4)
+    if col4 is None and col2 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col3, col5)
+    if col4 is None and col2 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col3, col5, col6)
+    if col4 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col3, col5)
+    if col2 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col3, col4, col5)
+    if col3 is None and col5 is None and col4 is None and col2 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col6)
+    if col3 is None and col5 is None and col4 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2)
+    if col3 is None and col5 is None and col4 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col6)
+    if col3 is None and col5 is None and col2 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col4)
+    if col3 is None and col5 is None and col2 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col4, col6)
+    if col3 is None and col5 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col4)
+    if col3 is None and col4 is None and col2 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col5)
+    if col3 is None and col4 is None and col2 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col5, col6)
+    if col3 is None and col4 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col5)
+    if col3 is None and col2 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col4, col5)
+    if col5 is None and col4 is None and col2 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col3)
+    if col5 is None and col4 is None and col2 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col3, col6)
+    if col5 is None and col4 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2, col3)
+    if col5 is None and col2 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col3, col4)
+    if col4 is None and col2 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col3, col5)
+    if col3 is None and col5 is None and col4 is None and col2 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1)
+    if col3 is None and col5 is None and col4 is None and col2 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col6)
+    if col3 is None and col5 is None and col4 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col2)
+    if col3 is None and col5 is None and col2 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col4)
+    if col3 is None and col4 is None and col2 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col5)
+    if col5 is None and col4 is None and col2 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0, col3)
+    if col3 is None and col5 is None and col4 is None and col2 is None and col6 is None and col1 is None:
+        return FunctionExpression("make_timestamptz", col0)
+    return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5, col6)
+
+
+def map(*args) -> FunctionExpression:
+    """Creates a map from a set of keys and values"""
+    return FunctionExpression("map", *args)
+
+
+def map_concat(*args) -> FunctionExpression:
+    """Returns a map created from merging the input maps, on key collision the value is
+    taken from the last map with that key"""
+    return FunctionExpression("map_concat", *args)
+
+
+def map_entries(*args) -> FunctionExpression:
+    """Returns the map entries as a list of keys/values"""
+    return FunctionExpression("map_entries", *args)
+
+
+def map_extract(*args) -> FunctionExpression:
+    """Returns a list containing the value for a given key or an empty list if the key
+    is not contained in the map. The type of the key provided in the second
+    parameter must match the type of the map’s keys else an error is returned"""
+    return FunctionExpression("map_extract", *args)
+
+
+def map_from_entries(*args) -> FunctionExpression:
+    """Returns a map created from the entries of the array"""
+    return FunctionExpression("map_from_entries", *args)
+
+
+def map_keys(*args) -> FunctionExpression:
+    """Returns the keys of a map as a list"""
+    return FunctionExpression("map_keys", *args)
+
+
+def map_values(*args) -> FunctionExpression:
+    """Returns the values of a map as a list"""
+    return FunctionExpression("map_values", *args)
+
+
+def max(arg, /) -> FunctionExpression:
+    """Returns the maximum value present in arg."""
+    return FunctionExpression("max", arg)
+
+
+def max_by(arg, val, /) -> FunctionExpression:
+    """Finds the row with the maximum val. Calculates the arg expression at that row."""
+    return FunctionExpression("max_by", arg, val)
+
+
 def md5(value, /) -> FunctionExpression:
-    """Returns the MD5 hash of the value as a string. Function category: String"""
+    """Returns the MD5 hash of the value as a string"""
     return FunctionExpression("md5", value)
 
 
 def md5_number(value, /) -> FunctionExpression:
-    """Returns the MD5 hash of the value as an INT128. Function category: String"""
+    """Returns the MD5 hash of the value as an INT128"""
     return FunctionExpression("md5_number", value)
 
 
 def md5_number_lower(value, /) -> FunctionExpression:
-    """Returns the MD5 hash of the value as an INT128. Function category: String"""
+    """Returns the MD5 hash of the value as an INT128"""
     return FunctionExpression("md5_number_lower", value)
 
 
 def md5_number_upper(value, /) -> FunctionExpression:
-    """Returns the MD5 hash of the value as an INT128. Function category: String"""
+    """Returns the MD5 hash of the value as an INT128"""
     return FunctionExpression("md5_number_upper", value)
 
 
-def parse_dirname(string, separator, /) -> FunctionExpression:
-    """Returns the top-level directory name. separator options: system, both_slash
-    (default), forward_slash, backslash. Function category: String"""
-    return FunctionExpression("parse_dirname", string, separator)
+def mean(x, /) -> FunctionExpression:
+    """Calculates the average value for all tuples in x."""
+    return FunctionExpression("mean", x)
 
 
-def parse_dirpath(string, separator, /) -> FunctionExpression:
-    """Returns the head of the path similarly to Python's os.path.dirname. separator
-    options: system, both_slash (default), forward_slash, backslash. Function
-    category: String"""
-    return FunctionExpression("parse_dirpath", string, separator)
+def median(x, /) -> FunctionExpression:
+    """Returns the middle value of the set. NULL values are ignored. For even value
+    counts, quantitiative values are averaged and ordinal values return the
+    lower value."""
+    return FunctionExpression("median", x)
 
 
-def parse_filename(string, trim_extension, separator, /) -> FunctionExpression:
-    """Returns the last component of the path similarly to Python's os.path.basename.
-    If trim_extension is true, the file extension will be removed (it defaults
-    to false). separator options: system, both_slash (default), forward_slash,
-    backslash. Function category: String"""
-    return FunctionExpression("parse_filename", string, trim_extension, separator)
+def microsecond(ts, /) -> FunctionExpression:
+    """Extract the microsecond component from a date or timestamp"""
+    return FunctionExpression("microsecond", ts)
 
 
-def parse_path(string, separator, /) -> FunctionExpression:
-    """Returns a list of the components (directories and filename) in the path
-    similarly to Python's pathlib.PurePath::parts. separator options: system,
-    both_slash (default), forward_slash, backslash. Function category: String"""
-    return FunctionExpression("parse_path", string, separator)
+def millennium(ts, /) -> FunctionExpression:
+    """Extract the millennium component from a date or timestamp"""
+    return FunctionExpression("millennium", ts)
 
 
-def printf(format, /, *parameters) -> FunctionExpression:
-    """Formats a string using printf syntax. Function category: String"""
-    return FunctionExpression("printf", format, *parameters)
+def millisecond(ts, /) -> FunctionExpression:
+    """Extract the millisecond component from a date or timestamp"""
+    return FunctionExpression("millisecond", ts)
+
+
+def min(arg, /) -> FunctionExpression:
+    """Returns the minimum value present in arg."""
+    return FunctionExpression("min", arg)
+
+
+def min_by(arg, val, /) -> FunctionExpression:
+    """Finds the row with the minimum val. Calculates the arg expression at that row."""
+    return FunctionExpression("min_by", arg, val)
+
+
+def minute(ts, /) -> FunctionExpression:
+    """Extract the minute component from a date or timestamp"""
+    return FunctionExpression("minute", ts)
+
+
+def mismatches(str1, str2, /) -> FunctionExpression:
+    """The number of positions with different characters for 2 strings of equal length.
+    Different case is considered different"""
+    return FunctionExpression("mismatches", str1, str2)
+
+
+def mod(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("mod", col0, col1)
+
+
+def mode(x, /) -> FunctionExpression:
+    """Returns the most frequent value for the values within x. NULL values are
+    ignored."""
+    return FunctionExpression("mode", x)
+
+
+def month(ts, /) -> FunctionExpression:
+    """Extract the month component from a date or timestamp"""
+    return FunctionExpression("month", ts)
+
+
+def monthname(ts, /) -> FunctionExpression:
+    """The (English) name of the month"""
+    return FunctionExpression("monthname", ts)
+
+
+def multiply(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("multiply", col0, col1)
+
+
+def nextafter(x, y, /) -> FunctionExpression:
+    """Returns the next floating point value after x in the direction of y"""
+    return FunctionExpression("nextafter", x, y)
+
+
+def nextval(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("nextval", col0)
+
+
+def nfc_normalize(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("nfc_normalize", col0)
+
+
+def not_ilike_escape(col0, col1, col2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("not_ilike_escape", col0, col1, col2)
+
+
+def not_like_escape(col0, col1, col2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("not_like_escape", col0, col1, col2)
+
+
+def now() -> FunctionExpression:
+    """Returns the current timestamp"""
+    return FunctionExpression("now")
+
+
+def nullif(a, b, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("nullif", a, b)
+
+
+def obj_description(object_oid, catalog_name, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("obj_description", object_oid, catalog_name)
+
+
+def octet_length(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("octet_length", col0)
+
+
+def ord(str, /) -> FunctionExpression:
+    """Returns the unicode codepoint of the first character of the string"""
+    return FunctionExpression("ord", str)
+
+
+def pg_collation_is_visible(collation_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_collation_is_visible", collation_oid)
+
+
+def pg_conf_load_time() -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_conf_load_time")
+
+
+def pg_conversion_is_visible(conversion_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_conversion_is_visible", conversion_oid)
+
+
+def pg_function_is_visible(function_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_function_is_visible", function_oid)
+
+
+def pg_get_constraintdef(constraint_oid, pretty_bool, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_get_constraintdef", constraint_oid, pretty_bool)
+
+
+def pg_get_expr(pg_node_tree, relation_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_get_expr", pg_node_tree, relation_oid)
+
+
+def pg_get_viewdef(oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_get_viewdef", oid)
+
+
+def pg_has_role(user, role, privilege, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_has_role", user, role, privilege)
+
+
+def pg_is_other_temp_schema(schema_id, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_is_other_temp_schema", schema_id)
+
+
+def pg_my_temp_schema() -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_my_temp_schema")
+
+
+def pg_opclass_is_visible(opclass_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_opclass_is_visible", opclass_oid)
+
+
+def pg_operator_is_visible(operator_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_operator_is_visible", operator_oid)
+
+
+def pg_opfamily_is_visible(opclass_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_opfamily_is_visible", opclass_oid)
+
+
+def pg_postmaster_start_time() -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_postmaster_start_time")
+
+
+def pg_size_pretty(bytes, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_size_pretty", bytes)
+
+
+def pg_table_is_visible(table_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_table_is_visible", table_oid)
+
+
+def pg_ts_config_is_visible(config_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_ts_config_is_visible", config_oid)
+
+
+def pg_ts_dict_is_visible(dict_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_ts_dict_is_visible", dict_oid)
+
+
+def pg_ts_parser_is_visible(parser_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_ts_parser_is_visible", parser_oid)
+
+
+def pg_ts_template_is_visible(template_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_ts_template_is_visible", template_oid)
+
+
+def pg_type_is_visible(type_oid, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_type_is_visible", type_oid)
+
+
+def pg_typeof(expression, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("pg_typeof", expression)
+
+
+def pi() -> FunctionExpression:
+    """Returns the value of pi"""
+    return FunctionExpression("pi")
+
+
+def position(haystack, needle, /) -> FunctionExpression:
+    """Returns location of first occurrence of needle in haystack, counting from 1.
+    Returns 0 if no match found"""
+    return FunctionExpression("position", haystack, needle)
+
+
+def pow(x, y, /) -> FunctionExpression:
+    """Computes x to the power of y"""
+    return FunctionExpression("pow", x, y)
+
+
+def power(x, y, /) -> FunctionExpression:
+    """Computes x to the power of y"""
+    return FunctionExpression("power", x, y)
+
+
+def prefix(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("prefix", col0, col1)
+
+
+def printf(*args) -> FunctionExpression:
+    """Formats a string using printf syntax"""
+    return FunctionExpression("printf", *args)
+
+
+def product(arg, /) -> FunctionExpression:
+    """Calculates the product of all tuples in arg."""
+    return FunctionExpression("product", arg)
+
+
+def quantile(x, pos, /) -> FunctionExpression:
+    """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
+    then the result is a LIST of the corresponding exact quantiles."""
+    return FunctionExpression("quantile", x, pos)
+
+
+def quantile_cont(x, pos, /) -> FunctionExpression:
+    """Returns the intepolated quantile number between 0 and 1 . If pos is a LIST of
+    FLOATs, then the result is a LIST of the corresponding intepolated
+    quantiles."""
+    return FunctionExpression("quantile_cont", x, pos)
+
+
+def quantile_disc(x, pos, /) -> FunctionExpression:
+    """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
+    then the result is a LIST of the corresponding exact quantiles."""
+    return FunctionExpression("quantile_disc", x, pos)
+
+
+def quarter(ts, /) -> FunctionExpression:
+    """Extract the quarter component from a date or timestamp"""
+    return FunctionExpression("quarter", ts)
+
+
+def radians(x, /) -> FunctionExpression:
+    """Converts degrees to radians"""
+    return FunctionExpression("radians", x)
+
+
+def random() -> FunctionExpression:
+    """Returns a random number between 0 and 1"""
+    return FunctionExpression("random")
+
+
+def range(start, stop=None, step=None, /) -> FunctionExpression:
+    """Create a list of values between start and stop - the stop parameter is exclusive"""
+    if stop is None:
+        return FunctionExpression("range", start, step)
+    if step is None:
+        return FunctionExpression("range", start, stop)
+    if stop is None and step is None:
+        return FunctionExpression("range", start)
+    return FunctionExpression("range", start, stop, step)
+
+
+def readfile(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("readfile", col0)
+
+
+def regexp_extract(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("regexp_extract", col0, col1, col3)
+    if col3 is None:
+        return FunctionExpression("regexp_extract", col0, col1, col2)
+    if col2 is None and col3 is None:
+        return FunctionExpression("regexp_extract", col0, col1)
+    return FunctionExpression("regexp_extract", col0, col1, col2, col3)
+
+
+def regexp_extract_all(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("regexp_extract_all", col0, col1, col3)
+    if col3 is None:
+        return FunctionExpression("regexp_extract_all", col0, col1, col2)
+    if col2 is None and col3 is None:
+        return FunctionExpression("regexp_extract_all", col0, col1)
+    return FunctionExpression("regexp_extract_all", col0, col1, col2, col3)
+
+
+def regexp_full_match(col0, col1, col2=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("regexp_full_match", col0, col1)
+    return FunctionExpression("regexp_full_match", col0, col1, col2)
+
+
+def regexp_matches(col0, col1, col2=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("regexp_matches", col0, col1)
+    return FunctionExpression("regexp_matches", col0, col1, col2)
+
+
+def regexp_replace(col0, col1, col2, col3=None, /) -> FunctionExpression:
+    """"""
+    if col3 is None:
+        return FunctionExpression("regexp_replace", col0, col1, col2)
+    return FunctionExpression("regexp_replace", col0, col1, col2, col3)
+
+
+def regexp_split_to_array(string, separator, col2=None, /) -> FunctionExpression:
+    """Splits the string along the regex"""
+    if col2 is None:
+        return FunctionExpression("regexp_split_to_array", string, separator)
+    return FunctionExpression("regexp_split_to_array", string, separator, col2)
+
+
+def regr_avgx(y, x, /) -> FunctionExpression:
+    """Returns the average of the independent variable for non-null pairs in a group,
+    where x is the independent variable and y is the dependent variable."""
+    return FunctionExpression("regr_avgx", y, x)
+
+
+def regr_avgy(y, x, /) -> FunctionExpression:
+    """Returns the average of the dependent variable for non-null pairs in a group,
+    where x is the independent variable and y is the dependent variable."""
+    return FunctionExpression("regr_avgy", y, x)
+
+
+def regr_count(y, x, /) -> FunctionExpression:
+    """Returns the number of non-null number pairs in a group."""
+    return FunctionExpression("regr_count", y, x)
+
+
+def regr_intercept(y, x, /) -> FunctionExpression:
+    """Returns the intercept of the univariate linear regression line for non-null
+    pairs in a group."""
+    return FunctionExpression("regr_intercept", y, x)
+
+
+def regr_r2(y, x, /) -> FunctionExpression:
+    """Returns the coefficient of determination for non-null pairs in a group."""
+    return FunctionExpression("regr_r2", y, x)
+
+
+def regr_slope(y, x, /) -> FunctionExpression:
+    """Returns the slope of the linear regression line for non-null pairs in a group."""
+    return FunctionExpression("regr_slope", y, x)
+
+
+def regr_sxx(y, x, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("regr_sxx", y, x)
+
+
+def regr_sxy(y, x, /) -> FunctionExpression:
+    """Returns the population covariance of input values"""
+    return FunctionExpression("regr_sxy", y, x)
+
+
+def regr_syy(y, x, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("regr_syy", y, x)
 
 
 def repeat(string, count, /) -> FunctionExpression:
-    """Repeats the string count number of times. Function category: String"""
+    """Repeats the string count number of times"""
     return FunctionExpression("repeat", string, count)
 
 
 def replace(string, source, target, /) -> FunctionExpression:
-    """Replaces any occurrences of the source with target in string. Function category:
-    String"""
+    """Replaces any occurrences of the source with target in string"""
     return FunctionExpression("replace", string, source, target)
 
 
+def reservoir_quantile(x, quantile, sample_size=None, /) -> FunctionExpression:
+    """Gives the approximate quantile using reservoir sampling, the sample size is
+    optional and uses 8192 as a default size."""
+    if sample_size is None:
+        return FunctionExpression("reservoir_quantile", x, quantile)
+    return FunctionExpression("reservoir_quantile", x, quantile, sample_size)
+
+
 def reverse(string, /) -> FunctionExpression:
-    """Reverses the string. Function category: String"""
+    """Reverses the string"""
     return FunctionExpression("reverse", string)
 
 
 def right(string, count, /) -> FunctionExpression:
-    """Extract the right-most count characters. Function category: String"""
+    """Extract the right-most count characters"""
     return FunctionExpression("right", string, count)
 
 
 def right_grapheme(string, count, /) -> FunctionExpression:
-    """Extract the right-most count grapheme clusters. Function category: String"""
+    """Extract the right-most count grapheme clusters"""
     return FunctionExpression("right_grapheme", string, count)
 
 
+def round(x, precision=None, /) -> FunctionExpression:
+    """Rounds x to s decimal places"""
+    if precision is None:
+        return FunctionExpression("round", x)
+    return FunctionExpression("round", x, precision)
+
+
+def round_even(x, n, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("round_even", x, n)
+
+
+def roundbankers(x, n, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("roundbankers", x, n)
+
+
+def row(*args) -> FunctionExpression:
+    """Creates an unnamed STRUCT containing the argument values."""
+    return FunctionExpression("row", *args)
+
+
+def row_to_json(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("row_to_json", *args)
+
+
 def rpad(string, count, character, /) -> FunctionExpression:
-    """Pads the string with the character from the right until it has count characters.
-    Function category: String"""
+    """Pads the string with the character from the right until it has count characters"""
     return FunctionExpression("rpad", string, count, character)
 
 
-def rtrim(string, characters, /) -> FunctionExpression:
+def rtrim(string, characters=None, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from the right side of the
-    string. Function category: String"""
+    string"""
+    if characters is None:
+        return FunctionExpression("rtrim", string)
     return FunctionExpression("rtrim", string, characters)
 
 
+def second(ts, /) -> FunctionExpression:
+    """Extract the second component from a date or timestamp"""
+    return FunctionExpression("second", ts)
+
+
+def sem(x, /) -> FunctionExpression:
+    """Returns the standard error of the mean"""
+    return FunctionExpression("sem", x)
+
+
+def session_user() -> FunctionExpression:
+    """"""
+    return FunctionExpression("session_user")
+
+
+def set_bit(bitstring, index, new_value, /) -> FunctionExpression:
+    """Sets the nth bit in bitstring to newvalue; the first (leftmost) bit is indexed
+    0. Returns a new bitstring"""
+    return FunctionExpression("set_bit", bitstring, index, new_value)
+
+
+def setseed() -> FunctionExpression:
+    """Sets the seed to be used for the random function"""
+    return FunctionExpression("setseed")
+
+
 def sha256(value, /) -> FunctionExpression:
-    """Returns the SHA256 hash of the value. Function category: String"""
+    """Returns the SHA256 hash of the value"""
     return FunctionExpression("sha256", value)
 
 
-def string_split(string, separator, /) -> FunctionExpression:
-    """Splits the string along the separator. Function category: String"""
-    return FunctionExpression("string_split", string, separator)
+def sha3(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("sha3", col0)
+    return FunctionExpression("sha3", col0, col1)
 
 
-def str_split(string, separator, /) -> FunctionExpression:
-    """Splits the string along the separator Alias for string_split. Function category:
-    String"""
-    return FunctionExpression("str_split", string, separator)
+def sha3_query(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("sha3_query", col0)
+    return FunctionExpression("sha3_query", col0, col1)
 
 
-def string_to_array(string, separator, /) -> FunctionExpression:
-    """Splits the string along the separator Alias for string_split. Function category:
-    String"""
-    return FunctionExpression("string_to_array", string, separator)
+def shell_add_schema(col0, col1, col2, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("shell_add_schema", col0, col1, col2)
+
+
+def shell_escape_crnl(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("shell_escape_crnl", col0)
+
+
+def shell_idquote(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("shell_idquote", col0)
+
+
+def shell_int32(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("shell_int32", col0, col1)
+
+
+def shell_module_schema(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("shell_module_schema", col0)
+
+
+def shell_putsnl(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("shell_putsnl", col0)
+
+
+def shobj_description(object_oid, catalog_name, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("shobj_description", object_oid, catalog_name)
+
+
+def sign(x, /) -> FunctionExpression:
+    """Returns the sign of x as -1, 0 or 1"""
+    return FunctionExpression("sign", x)
+
+
+def signbit(x, /) -> FunctionExpression:
+    """Returns whether the signbit is set or not"""
+    return FunctionExpression("signbit", x)
+
+
+def sin(x, /) -> FunctionExpression:
+    """Computes the sin of x"""
+    return FunctionExpression("sin", x)
+
+
+def skewness(x, /) -> FunctionExpression:
+    """Returns the skewness of all input values."""
+    return FunctionExpression("skewness", x)
 
 
 def split(string, separator, /) -> FunctionExpression:
-    """Splits the string along the separator Alias for string_split. Function category:
-    String"""
+    """Splits the string along the separator"""
     return FunctionExpression("split", string, separator)
 
 
-def string_split_regex(string, separator, /) -> FunctionExpression:
-    """Splits the string along the regex. Function category: String"""
-    return FunctionExpression("string_split_regex", string, separator)
+def split_part(string, delimiter, position, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("split_part", string, delimiter, position)
 
 
-def str_split_regex(string, separator, /) -> FunctionExpression:
-    """Splits the string along the regex Alias for string_split_regex. Function
-    category: String"""
-    return FunctionExpression("str_split_regex", string, separator)
+def sqrt(x, /) -> FunctionExpression:
+    """Returns the square root of x"""
+    return FunctionExpression("sqrt", x)
 
 
-def regexp_split_to_array(string, separator, /) -> FunctionExpression:
-    """Splits the string along the regex Alias for string_split_regex. Function
-    category: String"""
-    return FunctionExpression("regexp_split_to_array", string, separator)
+def starts_with(string, search_string, /) -> FunctionExpression:
+    """Returns true if string begins with search_string"""
+    return FunctionExpression("starts_with", string, search_string)
+
+
+def stats(expression, /) -> FunctionExpression:
+    """Returns a string with statistics about the expression. Expression can be a
+    column, constant, or SQL expression"""
+    return FunctionExpression("stats", expression)
+
+
+def stddev(x, /) -> FunctionExpression:
+    """Returns the sample standard deviation"""
+    return FunctionExpression("stddev", x)
+
+
+def stddev_pop(x, /) -> FunctionExpression:
+    """Returns the population standard deviation."""
+    return FunctionExpression("stddev_pop", x)
+
+
+def stddev_samp(x, /) -> FunctionExpression:
+    """Returns the sample standard deviation"""
+    return FunctionExpression("stddev_samp", x)
+
+
+def str_split(string, separator, /) -> FunctionExpression:
+    """Splits the string along the separator"""
+    return FunctionExpression("str_split", string, separator)
+
+
+def str_split_regex(string, separator, col2=None, /) -> FunctionExpression:
+    """Splits the string along the regex"""
+    if col2 is None:
+        return FunctionExpression("str_split_regex", string, separator)
+    return FunctionExpression("str_split_regex", string, separator, col2)
+
+
+def strftime(text, format, /) -> FunctionExpression:
+    """Converts timestamp to string according to the format string"""
+    return FunctionExpression("strftime", text, format)
+
+
+def string_agg(str, arg=None, /) -> FunctionExpression:
+    """Concatenates the column string values with an optional separator."""
+    if arg is None:
+        return FunctionExpression("string_agg", str)
+    return FunctionExpression("string_agg", str, arg)
+
+
+def string_split(string, separator, /) -> FunctionExpression:
+    """Splits the string along the separator"""
+    return FunctionExpression("string_split", string, separator)
+
+
+def string_split_regex(string, separator, col2=None, /) -> FunctionExpression:
+    """Splits the string along the regex"""
+    if col2 is None:
+        return FunctionExpression("string_split_regex", string, separator)
+    return FunctionExpression("string_split_regex", string, separator, col2)
+
+
+def string_to_array(string, separator, /) -> FunctionExpression:
+    """Splits the string along the separator"""
+    return FunctionExpression("string_to_array", string, separator)
+
+
+def strip_accents(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("strip_accents", col0)
+
+
+def strlen(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("strlen", col0)
+
+
+def strpos(haystack, needle, /) -> FunctionExpression:
+    """Returns location of first occurrence of needle in haystack, counting from 1.
+    Returns 0 if no match found"""
+    return FunctionExpression("strpos", haystack, needle)
+
+
+def strptime(text, format, /) -> FunctionExpression:
+    """Converts string to timestamp with time zone according to the format string if %Z
+    is specified"""
+    return FunctionExpression("strptime", text, format)
+
+
+def struct_extract(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("struct_extract", col0, col1)
+
+
+def struct_insert(*args) -> FunctionExpression:
+    """Adds field(s)/value(s) to an existing STRUCT with the argument values. The entry
+    name(s) will be the bound variable name(s)"""
+    return FunctionExpression("struct_insert", *args)
+
+
+def struct_pack(*args) -> FunctionExpression:
+    """Creates a STRUCT containing the argument values. The entry name will be the
+    bound variable name"""
+    return FunctionExpression("struct_pack", *args)
+
+
+def substr(col0, col1, col2=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("substr", col0, col1)
+    return FunctionExpression("substr", col0, col1, col2)
+
+
+def substring(col0, col1, col2=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("substring", col0, col1)
+    return FunctionExpression("substring", col0, col1, col2)
+
+
+def substring_grapheme(col0, col1, col2=None, /) -> FunctionExpression:
+    """"""
+    if col2 is None:
+        return FunctionExpression("substring_grapheme", col0, col1)
+    return FunctionExpression("substring_grapheme", col0, col1, col2)
+
+
+def subtract(col0, col1=None, /) -> FunctionExpression:
+    """"""
+    if col1 is None:
+        return FunctionExpression("subtract", col0)
+    return FunctionExpression("subtract", col0, col1)
+
+
+def suffix(col0, col1, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("suffix", col0, col1)
+
+
+def sum(arg, /) -> FunctionExpression:
+    """Calculates the sum value for all tuples in arg."""
+    return FunctionExpression("sum", arg)
+
+
+def sum_no_overflow(arg, /) -> FunctionExpression:
+    """Calculates the sum value for all tuples in arg without overflow checks."""
+    return FunctionExpression("sum_no_overflow", arg)
+
+
+def sumkahan(arg, /) -> FunctionExpression:
+    """Calculates the sum using a more accurate floating point summation (Kahan Sum)."""
+    return FunctionExpression("sumkahan", arg)
+
+
+def tan(x, /) -> FunctionExpression:
+    """Computes the tan of x"""
+    return FunctionExpression("tan", x)
+
+
+def time_bucket(bucket_width, timestamp, origin=None, /) -> FunctionExpression:
+    """Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned
+    relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03
+    00:00:00+00 for buckets that do not include a month or year interval, and to
+    2000-01-01 00:00:00+00 for month and year buckets"""
+    if origin is None:
+        return FunctionExpression("time_bucket", bucket_width, timestamp)
+    return FunctionExpression("time_bucket", bucket_width, timestamp, origin)
+
+
+def timezone(ts, col1=None, /) -> FunctionExpression:
+    """Extract the timezone component from a date or timestamp"""
+    if col1 is None:
+        return FunctionExpression("timezone", ts)
+    return FunctionExpression("timezone", ts, col1)
+
+
+def timezone_hour(ts, /) -> FunctionExpression:
+    """Extract the timezone_hour component from a date or timestamp"""
+    return FunctionExpression("timezone_hour", ts)
+
+
+def timezone_minute(ts, /) -> FunctionExpression:
+    """Extract the timezone_minute component from a date or timestamp"""
+    return FunctionExpression("timezone_minute", ts)
+
+
+def to_base(number, radix, min_length=None, /) -> FunctionExpression:
+    """Converts a value to a string in the given base radix, optionally padding with
+    leading zeros to the minimum length"""
+    if min_length is None:
+        return FunctionExpression("to_base", number, radix)
+    return FunctionExpression("to_base", number, radix, min_length)
+
+
+def to_base64(blob, /) -> FunctionExpression:
+    """Convert a blob to a base64 encoded string"""
+    return FunctionExpression("to_base64", blob)
+
+
+def to_binary(value, /) -> FunctionExpression:
+    """Converts the value to binary representation"""
+    return FunctionExpression("to_binary", value)
+
+
+def to_days(integer, /) -> FunctionExpression:
+    """Construct a day interval"""
+    return FunctionExpression("to_days", integer)
+
+
+def to_hex(value, /) -> FunctionExpression:
+    """Converts the value to hexadecimal representation"""
+    return FunctionExpression("to_hex", value)
+
+
+def to_hours(integer, /) -> FunctionExpression:
+    """Construct a hour interval"""
+    return FunctionExpression("to_hours", integer)
+
+
+def to_json(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("to_json", *args)
+
+
+def to_microseconds(integer, /) -> FunctionExpression:
+    """Construct a microsecond interval"""
+    return FunctionExpression("to_microseconds", integer)
+
+
+def to_milliseconds(integer, /) -> FunctionExpression:
+    """Construct a millisecond interval"""
+    return FunctionExpression("to_milliseconds", integer)
+
+
+def to_minutes(integer, /) -> FunctionExpression:
+    """Construct a minute interval"""
+    return FunctionExpression("to_minutes", integer)
+
+
+def to_months(integer, /) -> FunctionExpression:
+    """Construct a month interval"""
+    return FunctionExpression("to_months", integer)
+
+
+def to_seconds(integer, /) -> FunctionExpression:
+    """Construct a second interval"""
+    return FunctionExpression("to_seconds", integer)
+
+
+def to_timestamp(sec, /) -> FunctionExpression:
+    """Converts secs since epoch to a timestamp with time zone"""
+    return FunctionExpression("to_timestamp", sec)
+
+
+def to_years(integer, /) -> FunctionExpression:
+    """Construct a year interval"""
+    return FunctionExpression("to_years", integer)
+
+
+def today() -> FunctionExpression:
+    """Returns the current date"""
+    return FunctionExpression("today")
+
+
+def transaction_timestamp() -> FunctionExpression:
+    """Returns the current timestamp"""
+    return FunctionExpression("transaction_timestamp")
 
 
 def translate(string, from_, to, /) -> FunctionExpression:
     """Replaces each character in string that matches a character in the from set with
     the corresponding character in the to set. If from is longer than to,
-    occurrences of the extra characters in from are deleted. Function category:
-    String"""
+    occurrences of the extra characters in from are deleted"""
     return FunctionExpression("translate", string, from_, to)
 
 
-def trim(string, characters, /) -> FunctionExpression:
-    """Removes any occurrences of any of the characters from either side of the string.
-    Function category: String"""
+def trim(string, characters=None, /) -> FunctionExpression:
+    """Removes any occurrences of any of the characters from either side of the string"""
+    if characters is None:
+        return FunctionExpression("trim", string)
     return FunctionExpression("trim", string, characters)
 
 
+def trunc(x, /) -> FunctionExpression:
+    """Truncates the number"""
+    return FunctionExpression("trunc", x)
+
+
+def try_strptime(text, format, /) -> FunctionExpression:
+    """Converts string to timestamp using the format string (timestamp with time zone
+    if %Z is specified). Returns NULL on failure"""
+    return FunctionExpression("try_strptime", text, format)
+
+
+def txid_current() -> FunctionExpression:
+    """Returns the current transaction’s ID (a BIGINT). It will assign a new one if the
+    current transaction does not have one already"""
+    return FunctionExpression("txid_current")
+
+
+def typeof(expression, /) -> FunctionExpression:
+    """Returns the name of the data type of the result of the expression"""
+    return FunctionExpression("typeof", expression)
+
+
+def ucase(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("ucase", col0)
+
+
 def unbin(value, /) -> FunctionExpression:
-    """Converts a value from binary representation to a blob. Function category: String"""
+    """Converts a value from binary representation to a blob"""
     return FunctionExpression("unbin", value)
 
 
-def from_binary(value, /) -> FunctionExpression:
-    """Converts a value from binary representation to a blob Alias for unbin. Function
-    category: String"""
-    return FunctionExpression("from_binary", value)
-
-
 def unhex(value, /) -> FunctionExpression:
-    """Converts a value from hexadecimal representation to a blob. Function category:
-    String"""
+    """Converts a value from hexadecimal representation to a blob"""
     return FunctionExpression("unhex", value)
 
 
-def from_hex(value, /) -> FunctionExpression:
-    """Converts a value from hexadecimal representation to a blob Alias for unhex.
-    Function category: String"""
-    return FunctionExpression("from_hex", value)
-
-
 def unicode(str, /) -> FunctionExpression:
-    """Returns the unicode codepoint of the first character of the string. Function
-    category: String"""
+    """Returns the unicode codepoint of the first character of the string"""
     return FunctionExpression("unicode", str)
 
 
-def ord(str, /) -> FunctionExpression:
-    """Returns the unicode codepoint of the first character of the string Alias for
-    unicode. Function category: String"""
-    return FunctionExpression("ord", str)
+def union_extract(union, tag, /) -> FunctionExpression:
+    """Extract the value with the named tags from the union. NULL if the tag is not
+    currently selected"""
+    return FunctionExpression("union_extract", union, tag)
 
 
-def to_base(number, radix, min_length, /) -> FunctionExpression:
-    """Converts a value to a string in the given base radix, optionally padding with
-    leading zeros to the minimum length. Function category: String"""
-    return FunctionExpression("to_base", number, radix, min_length)
+def union_tag(union, /) -> FunctionExpression:
+    """Retrieve the currently selected tag of the union as an ENUM"""
+    return FunctionExpression("union_tag", union)
 
 
-def regexp_escape(string, /) -> FunctionExpression:
-    """Escapes all potentially meaningful regexp characters in the input string.
-    Function category: String"""
-    return FunctionExpression("regexp_escape", string)
+def union_value(*args) -> FunctionExpression:
+    """Create a single member UNION containing the argument value. The tag of the value
+    will be the bound variable name"""
+    return FunctionExpression("union_value", *args)
 
 
-def random() -> FunctionExpression:
-    """Returns a random number between 0 and 1. Function category: Random"""
-    return FunctionExpression("random")
+def upper(col0, /) -> FunctionExpression:
+    """"""
+    return FunctionExpression("upper", col0)
 
 
-def setseed() -> FunctionExpression:
-    """Sets the seed to be used for the random function. Function category: Random"""
-    return FunctionExpression("setseed")
+def user() -> FunctionExpression:
+    """"""
+    return FunctionExpression("user")
 
 
 def uuid() -> FunctionExpression:
-    """Returns a random UUID similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687.
-    Function category: Random"""
+    """Returns a random UUID similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687"""
     return FunctionExpression("uuid")
 
 
-def gen_random_uuid() -> FunctionExpression:
-    """Returns a random UUID similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687
-    Alias for uuid. Function category: Random"""
-    return FunctionExpression("gen_random_uuid")
+def var_pop(x, /) -> FunctionExpression:
+    """Returns the population variance."""
+    return FunctionExpression("var_pop", x)
 
 
-def decode(blob, /) -> FunctionExpression:
-    """Convert blob to varchar. Fails if blob is not valid utf-8. Function category:
-    Blob"""
-    return FunctionExpression("decode", blob)
+def var_samp(x, /) -> FunctionExpression:
+    """Returns the sample variance of all input values."""
+    return FunctionExpression("var_samp", x)
 
 
-def encode(string, /) -> FunctionExpression:
-    """Convert varchar to blob. Converts utf-8 characters into literal encoding.
-    Function category: Blob"""
-    return FunctionExpression("encode", string)
-
-
-def from_base64(string, /) -> FunctionExpression:
-    """Convert a base64 encoded string to a character string. Function category: Blob"""
-    return FunctionExpression("from_base64", string)
-
-
-def to_base64(blob, /) -> FunctionExpression:
-    """Convert a blob to a base64 encoded string. Function category: Blob"""
-    return FunctionExpression("to_base64", blob)
-
-
-def base64(blob, /) -> FunctionExpression:
-    """Convert a blob to a base64 encoded string Alias for to_base64. Function
-    category: Blob"""
-    return FunctionExpression("base64", blob)
-
-
-def create_sort_key(*parameters) -> FunctionExpression:
-    """Constructs a binary-comparable sort key based on a set of input parameters and
-    sort qualifiers. Function category: Blob"""
-    return FunctionExpression("create_sort_key", *parameters)
+def variance(x, /) -> FunctionExpression:
+    """Returns the sample variance of all input values."""
+    return FunctionExpression("variance", x)
 
 
 def vector_type(col, /) -> FunctionExpression:
-    """Returns the VectorType of a given column. Function category: Debug"""
+    """Returns the VectorType of a given column"""
     return FunctionExpression("vector_type", col)
+
+
+def version() -> FunctionExpression:
+    """Returns the currently active version of DuckDB in this format: v0.3.2"""
+    return FunctionExpression("version")
+
+
+def week(ts, /) -> FunctionExpression:
+    """Extract the week component from a date or timestamp"""
+    return FunctionExpression("week", ts)
+
+
+def weekday(ts, /) -> FunctionExpression:
+    """Extract the weekday component from a date or timestamp"""
+    return FunctionExpression("weekday", ts)
+
+
+def weekofyear(ts, /) -> FunctionExpression:
+    """Extract the weekofyear component from a date or timestamp"""
+    return FunctionExpression("weekofyear", ts)
+
+
+def writefile(*args) -> FunctionExpression:
+    """"""
+    return FunctionExpression("writefile", *args)
+
+
+def xor(left, right, /) -> FunctionExpression:
+    """Bitwise XOR"""
+    return FunctionExpression("xor", left, right)
+
+
+def year(ts, /) -> FunctionExpression:
+    """Extract the year component from a date or timestamp"""
+    return FunctionExpression("year", ts)
+
+
+def yearweek(ts, /) -> FunctionExpression:
+    """Extract the yearweek component from a date or timestamp"""
+    return FunctionExpression("yearweek", ts)

@@ -1,19 +1,30 @@
 import json
 import keyword
 import os
+import itertools as it
 import textwrap
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
+from subprocess import check_output
 from typing import Dict, List, Tuple, Optional
 
 os.chdir(os.path.dirname(__file__))
 
-JSON_FOLDER = Path("../../../src/core_functions")
 FUNC_FILE = Path("../duckdb/func.py")
 
 
+@dataclass
+class FunctionMetaData:
+    name: str
+    description: str
+    all_parameters: List[str]
+    optional_parameters: List[str]
+    has_variable_parameters: bool
+
+
 def generate() -> None:
-    functions_metadata = parse_json_files(JSON_FOLDER)
+    functions_metadata = get_functions_metadata()
     indent = " " * 4
 
     content = [
@@ -24,30 +35,53 @@ def generate() -> None:
     for f in functions_metadata:
         function_def: List[str] = []
 
-        name = f["name"]
-        if not name.isidentifier() or "lambda" in f["parameters_raw"]:
+        name = f.name
+        if not name.isidentifier() or any("lambda" in p for p in f.all_parameters):
             # Skip functions with invalid names such as "||", "&", etc.
             # Skip functions which accept lambda functions as there is currently
             # no way to pass a lambda function as an argument to FunctionExpression
             continue
 
-        description = prepare_description(description=f["description"], category=f["category"])
-        def_parameters, optional_parameter = prepare_parameters(f["parameters_raw"])
+        # We make parameters positional-only to have more flexibility in the future
+        # to rename them. Maybe they are not stable across duckdb versions.
+        # That would not be an issue in SQL but would be in Python.
+        # We do this by placing "/" at the end.
+        # Variable number of arguments are represented by a single "*args" parameter.
+        prepared_parameters: List[str]
+        if f.has_variable_parameters:
+            prepared_parameters = ["*args"]
+        else:
+            prepared_parameters = [
+                p for p in f.all_parameters if p not in f.optional_parameters
+            ]
+            prepared_parameters.extend([f"{p}=None" for p in f.optional_parameters])
+            if prepared_parameters:
+                prepared_parameters.append("/")
 
-        def_parameters_str = ", ".join([p if p != optional_parameter else p + "=None" for p in def_parameters])
+        def_parameters_str = ", ".join(prepared_parameters)
         function_def.append(f"def {name}({def_parameters_str}) -> FunctionExpression:")
-        function_def.append(f'{indent}"""{description}"""')
+        function_def.append(f'{indent}"""{f.description}"""')
 
-        expression_parameters = [p for p in def_parameters if p != "/"]
-        if optional_parameter:
-            function_def.append(f"{indent}if {optional_parameter} is None:")
-            return_statement = make_return_statement(
-                name, [p for p in expression_parameters if p != optional_parameter]
-            )
-            function_def.append(f'{indent*2}{return_statement}')
+        if f.optional_parameters:
+            # For all combinations of optional parameters, add a if statement
+            # with a return statement.
+            combinations = []
+            for r in range(1, len(f.optional_parameters) + 1):
+                combinations.extend(it.combinations(f.optional_parameters, r))
 
-        return_statement = make_return_statement(name, expression_parameters)
-        function_def.append(f'{indent}{return_statement}')
+            for combo in combinations:
+                expressions = [f"{p} is None" for p in combo]
+                function_def.append(f"{indent}if {' and '.join(expressions)}:")
+                return_statement = make_return_statement(
+                    name, [p for p in f.all_parameters if p not in combo]
+                )
+                function_def.append(f"{indent*2}{return_statement}")
+
+        # The return statement if all parameters are provided
+        return_statement = make_return_statement(
+            name, ["*args"] if f.has_variable_parameters else f.all_parameters
+        )
+        function_def.append(f"{indent}{return_statement}")
 
         content.append("\n".join(function_def))
 
@@ -63,81 +97,119 @@ def make_return_statement(function_name: str, expression_parameters: List[str]) 
     return statement + ")"
 
 
-_FunctionsMetadata = List[Dict[str, str]]
+_FunctionsMetadata = List[FunctionMetaData]
 
 
-def parse_json_files(json_folder: Path) -> _FunctionsMetadata:
-    """Parses the json files in core_functions. Code is based on
+def get_functions_metadata() -> _FunctionsMetadata:
+    """Parses the json files in core_functions. Code is partially based on
     https://github.com/duckdb/duckdb-web/blob/main/scripts/generate_function_json.py
+    but we get the information from duckdb_functions instead of the JSON files as the
+    later do not contain information on all functions.
     """
-    json_files = list(json_folder.glob("**/*.json"))
-    assert len(json_files) > 10
+    # In this list, you can have multiple entries per function_name if the function
+    # accepts optional arguments. We handle this further below
+    functions = get_duckdb_functions()
 
+    keyfunc = lambda x: x["function_name"]
+    functions = sorted(functions, key=keyfunc)
+
+    # This list will have only one entry per function_name
     functions_metadata: _FunctionsMetadata = []
-    for file in json_files:
-        category = file.parent.stem
-        with file.open() as fh:
-            for function in json.load(fh):
-                f_info = {
-                    "name": clean_function_name(function["name"]),
-                    "parameters_raw": (function.get("parameters", "")),
-                    "description": function["description"].strip(),
-                    "category": category,
-                }
-                functions_metadata.append(f_info)
-                aliases = function.get("aliases", [])
-                for alias in aliases:
-                    functions_metadata.append(
-                        {
-                            **f_info,
-                            "name": clean_function_name(alias),
-                            "description": (f_info["description"] + f"\nAlias for {f_info['name']}").strip(),
-                        }
-                    )
+    for function_name, grouped_metadata in it.groupby(functions, keyfunc):
+        grouped_metadata = list(grouped_metadata)
+        if any(g["varargs"] for g in grouped_metadata):
+            assert all(
+                g["varargs"] for g in grouped_metadata
+            ), "This case is not handled"
+            has_variable_parameters = True
 
+            # No need to record any parameter names as we can just use a single *args
+            # statement in the Python function definition. That's the easiest for now
+            # based on the metadata we get from duckdb_functions.
+            all_parameters = []
+            optional_parameters = []
+        else:
+            has_variable_parameters = False
+
+            if len(grouped_metadata) == 1:
+                all_parameters = grouped_metadata[0]["parameters"]
+                optional_parameters = []
+            else:
+                # Take the parameters from the function definition with the most
+                # parameters. Then, consider the ones optional which are not in the
+                # function definition with the least parameters.
+                all_parameters = max(
+                    [m["parameters"] for m in grouped_metadata], key=len
+                )
+
+                optional_parameters = set(all_parameters) - set(
+                    min([m["parameters"] for m in grouped_metadata], key=len)
+                )
+
+        metadata = FunctionMetaData(
+            name=function_name,
+            all_parameters=all_parameters,
+            optional_parameters=optional_parameters,
+            # Descriptions are expected to be all the same
+            description=prepare_description(grouped_metadata[0]["description"]),
+            has_variable_parameters=has_variable_parameters,
+        )
+        functions_metadata.append(metadata)
     return functions_metadata
 
 
-def clean_function_name(name: str) -> str:
-    return name.replace("__postfix", "")
+def get_duckdb_functions() -> List[Dict[str, str]]:
+    out = check_output(
+        [
+            "duckdb",
+            "-json",
+            "-c",
+            "select distinct function_name, description, parameters, varargs from duckdb_functions() where function_type in ('scalar', 'aggregate', 'macro')",
+        ]
+    )
+    # Replace \t as it raises an error that it's an invalid control character. It only
+    # appears in 1 description of a function so far.
+    functions = []
+    for line in (
+        out.decode("utf-8").strip().removeprefix("[").removesuffix("]").splitlines()
+    ):
+        r = json.loads(line.removesuffix(",").replace("\t", ""))
+        r["parameters_raw"] = r["parameters"]
+        r["parameters"] = parse_parameters(r["parameters_raw"])
+        r["function_name"] = clean_function_name(r["function_name"])
+        r["vargs"] = (
+            r["varargs"].strip() if isinstance(r["varargs"], str) else r["varargs"]
+        )
+        functions.append(r)
+
+    assert (
+        len(functions) > 100
+    ), "Something seems wrong with the discovery of the functions. We'd expect many more functions."
+    return functions
 
 
-def prepare_description(description: str, category: str) -> str:
-    if description:
-        description = removesuffix(description, ".") + ". "
-    description += "Function category: " + category.title()
-    description = "\n".join(textwrap.wrap(description, width=80, initial_indent="", subsequent_indent=" " * 4))
-    return description
-
-
-def removesuffix(string: str, suffix: str) -> str:
-    if string.endswith(suffix) and suffix:
-        return string[: -len(suffix)]
-    return string
-
-
-def prepare_parameters(parameters_raw: str) -> Tuple[List[str], Optional[str]]:
+def parse_parameters(parameters_raw: str) -> list[str]:
     parameters_raw = parameters_raw.strip()
-    if not parameters_raw:
-        return [], None
+    if not parameters_raw or parameters_raw == "[]":
+        return []
 
-    # Check if any optional arguments at the end. Right now this only happens
-    # for list_slice and it only is for one argument. We raise below if there
-    # would ever be a function with multiple optional arguments -> Would need to
-    # adapt this code.
-    parameters: List[str]
-    optional_parameter: Optional[str] = None
-    if parameters_raw.endswith("]"):
-        assert (
-            parameters_raw.count("[") == 1 and parameters_raw.count("]") == 1
-        ), "Only one optional argument is supported in this script"
-        parameters_raw, optional_parameter = parameters_raw.split("[,")
-        optional_parameter = removesuffix(optional_parameter, "]").strip()
+    assert (
+        parameters_raw.startswith("[")
+        and parameters_raw.endswith("]")
+        and len(parameters_raw) > 2
+    ), f"Invalid parameters: {parameters_raw}"
 
-        parameters = parameters_raw.split(",") + [optional_parameter]
-    else:
-        parameters = parameters_raw.split(",")
-    parameters = [p.strip() for p in parameters]
+    # Should look like '[param1, param2]'.
+    # Functions with optional arguments appear multiple times, once per possible
+    # combination of arguments. Sometimes, the optional argument is also wrapped in
+    # square brackets such as for list_slice. As this is not done consistently,
+    # and as we don't need the square brackets (as we already have this
+    # information due to the functions appearing multiple times), we remove
+    # the square bracketes here.
+    parameters = [
+        p.strip() for p in parameters_raw.replace("[", "").replace("]", "").split(",")
+    ]
+
     # Some functions such as `translate` have parameter names which are keywords
     # in Python
     parameters = [p + "_" if keyword.iskeyword(p) else p for p in parameters]
@@ -146,7 +218,9 @@ def prepare_parameters(parameters_raw: str) -> Tuple[List[str], Optional[str]]:
     # We need to enumerate them so they are unique. We start enumerating with 1
     # as this is also used for other functions where parameters are already
     # deduplicated such as for array_cosine_similarity.
-    duplicated_parameter_number = {p: 1 for p, count in Counter(parameters).items() if count > 1}
+    duplicated_parameter_number = {
+        p: 1 for p, count in Counter(parameters).items() if count > 1
+    }
 
     deduplicated_parameters: List[str] = []
     for p in parameters:
@@ -155,42 +229,28 @@ def prepare_parameters(parameters_raw: str) -> Tuple[List[str], Optional[str]]:
             duplicated_parameter_number[p] += 1
         else:
             deduplicated_parameters.append(p)
+    return deduplicated_parameters
 
-    # If a variable number of parameters are allowed, it's represented as "...",
-    # for example "any, ..." which would mean that one value is required (any) and then
-    # any number of values can be passed or none. Sometimes, the "..." includes
-    # already a name such as "parameters...". We use "*args" for "..." and else
-    # the existing name, e.g. "*parameters".
 
-    # We also make parameters positional-only to have more flexibility in the future
-    # to rename them. Are they stable across duckdb versions or can there
-    # be breaking changes through renames? That would not be an issue in SQL
-    # but would be in Python.
-    # If there is such a variable number of parameters, we need to add a "/" before
-    # them to make the previous one positional-only. Else, "/" is to be placed at
-    # the end.
-    prepared_parameters: List[str] = []
-    has_variable_args = False
-    for idx, p in enumerate(deduplicated_parameters):
-        if p == "...":
-            if not has_variable_args and idx > 0:
-                # Only add it if there was a parameter before
-                prepared_parameters.append("/")
-            prepared_parameters.append("*args")
-            has_variable_args = True
-        elif p.endswith("..."):
-            if not has_variable_args and idx > 0:
-                # Only add it if there was a parameter before
-                prepared_parameters.append("/")
-            prepared_parameters.append(f"*{removesuffix(p, '...')}")
-            has_variable_args = True
-        else:
-            prepared_parameters.append(p)
+def clean_function_name(name: str) -> str:
+    return name.replace("__postfix", "")
 
-    if not has_variable_args and prepared_parameters:
-        prepared_parameters.append("/")
 
-    return prepared_parameters, optional_parameter
+def prepare_description(description: str | None) -> str:
+    if not description:
+        return ""
+    description = "\n".join(
+        textwrap.wrap(
+            description.strip(), width=80, initial_indent="", subsequent_indent=" " * 4
+        )
+    )
+    return description
+
+
+def removesuffix(string: str, suffix: str) -> str:
+    if string.endswith(suffix) and suffix:
+        return string[: -len(suffix)]
+    return string
 
 
 if __name__ == "__main__":
