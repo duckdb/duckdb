@@ -190,9 +190,6 @@ JSONPathType JSONCommon::ValidatePath(const char *ptr, const idx_t &len, const b
 	ptr++; // Skip past '$'
 	while (ptr != end) {
 		const auto &c = *ptr++;
-		if (path_type == JSONPathType::WILDCARD && c == '*') {
-			break;
-		}
 		if (ptr == end) {
 			ThrowPathError(ptr, end, binder);
 		}
@@ -205,6 +202,9 @@ JSONPathType JSONCommon::ValidatePath(const char *ptr, const idx_t &len, const b
 				path_type = JSONPathType::WILDCARD;
 			}
 			ptr += key.chars_read;
+			if (key.IsWildCard() &&*ptr == '*') {
+				ptr++;
+			}
 			break;
 		}
 		case '[': { // Array index
