@@ -104,14 +104,13 @@ SinkFinalizeType PhysicalArrowCollector::Finalize(Pipeline &pipeline, Event &eve
 			    gstate.tuple_count);
 		}
 		gstate.result =
-		    make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
-		                                gstate.tuple_count, record_batch_size);
+		    make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties());
 		return SinkFinalizeType::READY;
 	}
 
 	auto tuple_count = gstate.tuple_count;
-	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
-	                                            tuple_count, record_batch_size);
+	gstate.result =
+	    make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties());
 	auto &arrow_result = gstate.result->Cast<ArrowQueryResult>();
 	arrow_result.SetArrowData(std::move(gstate.chunks));
 
