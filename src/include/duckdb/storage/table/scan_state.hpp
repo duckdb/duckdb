@@ -128,6 +128,8 @@ public:
 	idx_t max_row;
 	//! The current batch index
 	idx_t batch_index;
+	//! The valid selection
+	SelectionVector valid_sel;
 
 public:
 	void Initialize(const vector<LogicalType> &types);

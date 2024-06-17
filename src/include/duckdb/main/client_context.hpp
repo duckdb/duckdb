@@ -60,9 +60,10 @@ struct PendingQueryParameters {
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public enable_shared_from_this<ClientContext> {
-	friend class PendingQueryResult; // LockContext
-	friend class SimpleBufferedData; // ExecuteTaskInternal
-	friend class StreamQueryResult;  // LockContext
+	friend class PendingQueryResult;  // LockContext
+	friend class SimpleBufferedData;  // ExecuteTaskInternal
+	friend class BatchedBufferedData; // ExecuteTaskInternal
+	friend class StreamQueryResult;   // LockContext
 	friend class ConnectionManager;
 
 public:

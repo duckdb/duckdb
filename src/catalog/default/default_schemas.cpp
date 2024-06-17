@@ -11,7 +11,7 @@ struct DefaultSchema {
 
 static const DefaultSchema internal_schemas[] = {{"information_schema"}, {"pg_catalog"}, {nullptr}};
 
-static bool GetDefaultSchema(const string &input_schema) {
+bool DefaultSchemaGenerator::IsDefaultSchema(const string &input_schema) {
 	auto schema = StringUtil::Lower(input_schema);
 	for (idx_t index = 0; internal_schemas[index].name != nullptr; index++) {
 		if (internal_schemas[index].name == schema) {
@@ -24,8 +24,9 @@ static bool GetDefaultSchema(const string &input_schema) {
 DefaultSchemaGenerator::DefaultSchemaGenerator(Catalog &catalog) : DefaultGenerator(catalog) {
 }
 
-unique_ptr<CatalogEntry> DefaultSchemaGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
-	if (GetDefaultSchema(entry_name)) {
+unique_ptr<CatalogEntry> DefaultSchemaGenerator::CreateDefaultEntry(CatalogTransaction transaction,
+                                                                    const string &entry_name) {
+	if (IsDefaultSchema(entry_name)) {
 		CreateSchemaInfo info;
 		info.schema = StringUtil::Lower(entry_name);
 		info.internal = true;
