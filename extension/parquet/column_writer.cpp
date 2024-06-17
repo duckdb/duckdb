@@ -4,6 +4,7 @@
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
+#include "geo_parquet.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -22,8 +23,6 @@
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
-
-#include <geo_parquet.hpp>
 
 namespace duckdb {
 

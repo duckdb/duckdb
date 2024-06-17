@@ -20,9 +20,8 @@
 
 #include "column_writer.hpp"
 #include "parquet_types.h"
+#include "geo_parquet.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
-
-#include <geo_parquet.hpp>
 
 namespace duckdb {
 class FileSystem;

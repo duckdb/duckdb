@@ -1,15 +1,15 @@
 
 #include "geo_parquet.hpp"
-#include "parquet_reader.hpp"
-#include "column_reader.hpp"
-#include "expression_column_reader.hpp"
 
+#include "column_reader.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/function/scalar_function.hpp"
-
+#include "duckdb/main/extension_helper.hpp"
+#include "expression_column_reader.hpp"
+#include "parquet_reader.hpp"
 #include "yyjson.hpp"
 
 namespace duckdb {
@@ -377,19 +377,8 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 }
 
 bool GeoParquetFileMetadata::IsSpatialExtensionInstalled(ClientContext &context) {
-	auto &catalog = Catalog::GetSystemCatalog(context);
-
-	// Look for ST_GeomFromWKB in the catalog
-	// TODO: Check for more functions
-	try {
-		auto &conversion_func_set =
-		    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geomfromwkb")
-		        .Cast<ScalarFunctionCatalogEntry>();
-		auto _ = conversion_func_set.functions.GetFunctionByArguments(context, {LogicalType::BLOB});
-		return true;
-	} catch (...) {
-		return false;
-	}
+	// Try to load the spatial extension
+	return ExtensionHelper::TryAutoLoadExtension(context, "spatial");
 }
 
 } // namespace duckdb

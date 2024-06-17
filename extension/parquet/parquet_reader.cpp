@@ -15,6 +15,7 @@
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
+#include "geo_parquet.hpp"
 #include "thrift_tools.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
@@ -38,7 +39,6 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
-#include <geo_parquet.hpp>
 #include <sstream>
 
 namespace duckdb {
