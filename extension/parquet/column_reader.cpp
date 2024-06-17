@@ -20,7 +20,6 @@
 #include "utf8proc_wrapper.hpp"
 #include "zstd.h"
 
-
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/bit.hpp"
