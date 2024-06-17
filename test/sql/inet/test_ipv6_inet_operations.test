@@ -71,9 +71,21 @@ SELECT id, i, j FROM tbl JOIN tbl2 USING (id)
 ----
 3	ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/127	::1
 
-
 query IIII
 SELECT tbl.id, tbl2.id, i, j FROM tbl JOIN tbl2 ON (i=j) ORDER BY tbl.id
 ----
 1	3	::1	::1
 5	3	::1	::1
+
+# subset
+query I
+SELECT i FROM tbl WHERE i >>= '::1/8'
+----
+::/0
+
+query I
+SELECT i FROM tbl WHERE i <<= '::1/8'
+----
+::1
+::1
+::1/127

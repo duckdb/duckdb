@@ -30,6 +30,39 @@ SELECT family('::ffff:127.0.0.1/17')
 ----
 6
 
+# netmask
+query I
+SELECT netmask(INET '2001:db8:3c4d::/48')
+----
+ffff:ffff:ffff::/48
+
+query I
+SELECT netmask(INET '2001:db8:3c4d::/32')
+----
+ffff:ffff::/32
+
+# network
+query I
+SELECT network(INET '2001:db8:3c4d::/48')
+----
+2001:db8:3c4d::/48
+
+query I
+SELECT network(INET '2001:db8:3c4d::/32')
+----
+2001:db8::/32
+
+# broadcast
+query I
+SELECT broadcast(INET '2001:db8:3c4d::/48')
+----
+2001:db8:3c4d:ffff:ffff:ffff:ffff:ffff/48
+
+query I
+SELECT broadcast(INET '2001:db8:3c4d::/32')
+----
+2001:db8:ffff:ffff:ffff:ffff:ffff:ffff/32
+
 # subtract
 query I
 SELECT INET '::ffff:127.0.0.255' - 32;

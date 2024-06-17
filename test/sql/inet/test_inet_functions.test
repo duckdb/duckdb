@@ -30,6 +30,39 @@ SELECT family('127.0.0.1/17');
 ----
 4
 
+# netmask
+query I
+SELECT netmask(INET '192.168.1.5/24')
+----
+255.255.255.0/24
+
+query I
+SELECT netmask(INET '192.168.1.5/16')
+----
+255.255.0.0/16
+
+# network
+query I
+SELECT network(INET '192.168.1.5/24')
+----
+192.168.1.0/24
+
+query I
+SELECT network(INET '192.168.1.5/16')
+----
+192.168.0.0/16
+
+# broadcast
+query I
+SELECT broadcast(INET '192.168.1.5/24')
+----
+192.168.1.255/24
+
+query I
+SELECT broadcast(INET '192.168.1.5/16')
+----
+192.168.255.255/16
+
 # subtract
 query I
 SELECT INET '127.0.0.255' - 32;
