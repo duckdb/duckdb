@@ -57,10 +57,6 @@ public:
 		return stream;
 	}
 
-	void SetSerializationData(const SerializationData &other) {
-		data = other;
-	}
-
 private:
 	ReadStream &stream;
 	idx_t nesting_level = 0;

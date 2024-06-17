@@ -69,14 +69,6 @@ public:
 		OnObjectEnd();
 	}
 
-	SerializationData &GetSerializationData() {
-		return data;
-	}
-
-	void SetSerializationData(const SerializationData &other) {
-		data = other;
-	}
-
 protected:
 	//-------------------------------------------------------------------------
 	// Nested Type Hooks

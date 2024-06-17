@@ -169,6 +169,10 @@ public:
 		return data;
 	}
 
+	void SetSerializationData(const SerializationData &other) {
+		data = other;
+	}
+
 	template <class FUNC>
 	void ReadList(const field_id_t field_id, const char *tag, FUNC func) {
 		OnPropertyBegin(field_id, tag);
