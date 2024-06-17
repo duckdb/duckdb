@@ -11,10 +11,6 @@ scripts_folder = os.path.dirname(os.path.abspath(__file__))
 
 class FunctionParam:
     def __init__(self, name: str, proto: str):
-        if proto.endswith("="):
-            # We currently can't retrieve the default value, the definition of the arg just ends in '='
-            # Instead we remove this and rely on the py::arg(...) = ... to set a default value
-            proto = proto[:-2]
         self.proto = proto
         self.name = name
 
