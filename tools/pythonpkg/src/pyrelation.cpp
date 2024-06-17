@@ -82,7 +82,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const strin
 	return projected_relation;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, const py::kwargs &kwargs) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, const string &groups) {
 	if (!rel) {
 		return nullptr;
 	}
@@ -105,7 +105,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, con
 			expressions.push_back(std::move(expr));
 		}
 		vector<string> empty_aliases;
-		auto groups = kwargs.contains("groups") ? std::string(py::cast<py::str>(kwargs["groups"])) : "";
 		if (groups.empty()) {
 			// No groups provided
 			return make_uniq<DuckDBPyRelation>(rel->Project(std::move(expressions), empty_aliases));
@@ -1395,6 +1394,9 @@ string DuckDBPyRelation::ToStringInternal(const BoxRendererConfig &config, bool 
 string DuckDBPyRelation::ToString() {
 	BoxRendererConfig config;
 	config.limit = 10000;
+	if (DuckDBPyConnection::IsJupyter()) {
+		config.max_width = 10000;
+	}
 	return ToStringInternal(config);
 }
 
@@ -1408,6 +1410,9 @@ void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional
                              const py::object &render_mode) {
 	BoxRendererConfig config;
 	config.limit = 10000;
+	if (DuckDBPyConnection::IsJupyter()) {
+		config.max_width = 10000;
+	}
 
 	bool invalidate_cache = false;
 	if (!py::none().is(max_width)) {

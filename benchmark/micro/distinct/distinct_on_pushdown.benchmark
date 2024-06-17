@@ -1,0 +1,21 @@
+# name: benchmark/micro/distinct/distinct_on_pushdown.benchmark
+# description: pushdown columns using distinct on.
+# group: [distinct]
+
+name Distinct on pushdown
+group micro
+subgroup filter
+
+load
+create table t0 as select random()%100000 col0, random()*10000 col1, random()*100 col2, '1' col3, '2' col4, '3' col5 from range(10000000);
+
+run
+SELECT col0
+FROM 
+(
+    SELECT 
+    DISTINCT ON (floor(col0))
+    *
+    FROM t0
+    ORDER by col0 DESC
+);

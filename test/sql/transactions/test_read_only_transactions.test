@@ -1,0 +1,30 @@
+# name: test/sql/transactions/test_read_only_transactions.test
+# description: Test read only transactions
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE a(i INTEGER)
+
+statement ok
+INSERT INTO a VALUES (42)
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+# we can read from the database
+query I
+SELECT * FROM a
+----
+42
+
+# we cannot modify the database in a read-only transaction
+statement error
+INSERT INTO a VALUES (48)
+----
+transaction is launched in read-only mode
+
+statement ok
+COMMIT

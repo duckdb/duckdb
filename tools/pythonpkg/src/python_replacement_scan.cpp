@@ -153,31 +153,37 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, const string &name, C
 }
 
 static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string &table_name) {
-	py::gil_scoped_acquire acquire;
-	// Here we do an exhaustive search on the frame lineage
-	auto current_frame = py::module::import("inspect").attr("currentframe")();
-	while (hasattr(current_frame, "f_locals")) {
-		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
-		// search local dictionary
-		if (local_dict) {
-			auto result = TryReplacement(local_dict, table_name, context, current_frame);
-			if (result) {
-				return result;
-			}
-		}
-		// search global dictionary
-		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
-		if (global_dict) {
-			auto result = TryReplacement(global_dict, table_name, context, current_frame);
-			if (result) {
-				return result;
-			}
-		}
-		current_frame = current_frame.attr("f_back");
+	Value result;
+	auto lookup_result = context.TryGetCurrentSetting("python_enable_replacements", result);
+	D_ASSERT((bool)lookup_result);
+	auto enabled = result.GetValue<bool>();
+
+	if (!enabled) {
+		return nullptr;
 	}
-	// Not found :(
+
+	py::gil_scoped_acquire acquire;
+	auto current_frame = py::module::import("inspect").attr("currentframe")();
+
+	auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
+	// search local dictionary
+	if (local_dict) {
+		auto result = TryReplacement(local_dict, table_name, context, current_frame);
+		if (result) {
+			return result;
+		}
+	}
+	// search global dictionary
+	auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
+	if (global_dict) {
+		auto result = TryReplacement(global_dict, table_name, context, current_frame);
+		if (result) {
+			return result;
+		}
+	}
 	return nullptr;
 }
+
 unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, ReplacementScanInput &input,
                                                     optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
@@ -187,35 +193,8 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
 		return nullptr;
 	}
 
-	auto &table_ref = input.ref;
-	if (table_ref.external_dependency) {
-		auto dependency_item = table_ref.external_dependency->GetDependency("replacement_cache");
-		if (dependency_item) {
-			py::gil_scoped_acquire acquire;
-			auto &python_dependency = dependency_item->Cast<PythonDependencyItem>();
-			auto &registered_object = *python_dependency.object;
-			auto &py_object = registered_object.obj;
-			auto result = TryReplacementObject(py_object, table_name, context);
-			// This was cached, so it was successful before, it should be successfull now
-			D_ASSERT(result);
-			return std::move(result);
-		}
-	}
-
 	unique_ptr<TableRef> result;
 	result = ReplaceInternal(context, table_name);
-	if (!result) {
-		return nullptr;
-	}
-	if (table_ref.external_dependency) {
-		D_ASSERT(result->external_dependency);
-
-		D_ASSERT(result->external_dependency->GetDependency("replacement_cache") != nullptr);
-		result->external_dependency->ScanDependencies(
-		    [&table_ref](const string &name, shared_ptr<DependencyItem> item) {
-			    table_ref.external_dependency->AddDependency(name, std::move(item));
-		    });
-	}
 	return result;
 }
 

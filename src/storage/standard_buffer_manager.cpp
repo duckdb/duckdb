@@ -53,8 +53,8 @@ StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
     : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_uniq<BufferAllocatorData>(*this)) {
+	temp_block_manager = make_uniq<InMemoryBlockManager>(*this, DEFAULT_BLOCK_ALLOC_SIZE);
 	temporary_directory.path = std::move(tmp);
-	temp_block_manager = make_uniq<InMemoryBlockManager>(*this);
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		evicted_data_per_tag[i] = 0;
 	}
@@ -107,17 +107,28 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 	return std::move(r.reservation);
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_size) {
-	D_ASSERT(block_size < Storage::BLOCK_SIZE);
-	auto reservation =
-	    EvictBlocksOrThrow(MemoryTag::BASE_TABLE, block_size, nullptr, "could not allocate block of size %s%s",
-	                       StringUtil::BytesToHumanReadableString(block_size));
+shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size) {
+	const idx_t block_size = Storage::BLOCK_SIZE;
+	D_ASSERT(size <= block_size);
+	if (size < block_size) {
+		return RegisterSmallMemory(size);
+	}
 
-	auto buffer = ConstructManagedBuffer(block_size, nullptr, FileBufferType::TINY_BUFFER);
+	shared_ptr<BlockHandle> block;
+	Allocate(MemoryTag::IN_MEMORY_TABLE, size, false, &block);
+	return block;
+}
 
-	// create a new block pointer for this block
+shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t size) {
+	D_ASSERT(size < Storage::BLOCK_SIZE);
+	auto reservation = EvictBlocksOrThrow(MemoryTag::BASE_TABLE, size, nullptr, "could not allocate block of size %s%s",
+	                                      StringUtil::BytesToHumanReadableString(size));
+
+	auto buffer = ConstructManagedBuffer(size, nullptr, FileBufferType::TINY_BUFFER);
+
+	// Create a new block pointer for this block.
 	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
-	                                           std::move(buffer), false, block_size, std::move(reservation));
+	                                           std::move(buffer), false, size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
 	WriteGarbageIntoBuffer(*result->buffer);
@@ -128,14 +139,14 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_s
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	auto alloc_size = GetAllocSize(block_size);
-	// first evict blocks until we have enough memory to store this buffer
+
+	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;
 	auto res = EvictBlocksOrThrow(tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
+	// Create a new buffer and a block to hold the buffer.
 	auto buffer = ConstructManagedBuffer(block_size, std::move(reusable_buffer));
-
-	// create a new block pointer for this block
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer), can_destroy,
 	                                    alloc_size, std::move(res));
 }
@@ -182,6 +193,97 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 	}
 
 	handle->ResizeBuffer(block_size, memory_delta);
+}
+
+void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
+                                      block_id_t first_block, block_id_t last_block) {
+	auto &block_manager = handles[0]->block_manager;
+	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
+	if (block_count == 1) {
+		// prefetching with block_count == 1 has no performance impact since we can't batch reads
+		// skip the prefetch in this case
+		// we do it anyway if alternative_verify is on for extra testing
+		return;
+	}
+#endif
+
+	// allocate a buffer to hold the data of all of the blocks
+	auto intermediate_buffer = Allocate(MemoryTag::BASE_TABLE, block_count * Storage::BLOCK_SIZE);
+	// perform a batch read of the blocks into the buffer
+	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
+
+	// the blocks are read - now we need to assign them to the individual blocks
+	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
+		block_id_t block_id = first_block + NumericCast<block_id_t>(block_idx);
+		auto entry = load_map.find(block_id);
+		D_ASSERT(entry != load_map.end()); // if we allow gaps we might not return true here
+		auto &handle = handles[entry->second];
+
+		// reserve memory for the block
+		idx_t required_memory = handle->memory_usage;
+		unique_ptr<FileBuffer> reusable_buffer;
+		auto reservation =
+		    EvictBlocksOrThrow(handle->tag, required_memory, &reusable_buffer, "failed to pin block of size %s%s",
+		                       StringUtil::BytesToHumanReadableString(required_memory));
+		// now load the block from the buffer
+		// note that we discard the buffer handle - we do not keep it around
+		// the prefetching relies on the block handle being pinned again during the actual read before it is evicted
+		BufferHandle buf;
+		{
+			lock_guard<mutex> lock(handle->lock);
+			if (handle->state == BlockState::BLOCK_LOADED) {
+				// the block is loaded already by another thread - free up the reservation and continue
+				reservation.Resize(0);
+				continue;
+			}
+			auto block_ptr =
+			    intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * Storage::BLOCK_ALLOC_SIZE;
+			buf = BlockHandle::LoadFromBuffer(handle, block_ptr, std::move(reusable_buffer));
+			handle->readers = 1;
+			handle->memory_charge = std::move(reservation);
+		}
+	}
+}
+
+void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
+	// figure out which set of blocks we should load
+	map<block_id_t, idx_t> to_be_loaded;
+	for (idx_t block_idx = 0; block_idx < handles.size(); block_idx++) {
+		auto &handle = handles[block_idx];
+		lock_guard<mutex> lock(handle->lock);
+		if (handle->state != BlockState::BLOCK_LOADED) {
+			// need to load this block - add it to the map
+			to_be_loaded.insert(make_pair(handle->BlockId(), block_idx));
+		}
+	}
+	if (to_be_loaded.empty()) {
+		// nothing to fetch
+		return;
+	}
+	// iterate over the blocks and perform bulk reads
+	block_id_t first_block = -1;
+	block_id_t previous_block_id = -1;
+	for (auto &entry : to_be_loaded) {
+		if (previous_block_id < 0) {
+			// this the first block we are seeing
+			first_block = entry.first;
+			previous_block_id = first_block;
+		} else if (previous_block_id + 1 == entry.first) {
+			// this block is adjacent to the previous block - add it to the batch read
+			previous_block_id = entry.first;
+		} else {
+			// this block is not adjacent to the previous block
+			// perform the batch read for the previous batch
+			BatchRead(handles, to_be_loaded, first_block, previous_block_id);
+
+			// set the first_block and previous_block_id to the current block
+			first_block = entry.first;
+			previous_block_id = entry.first;
+		}
+	}
+	// batch read the final batch
+	BatchRead(handles, to_be_loaded, first_block, previous_block_id);
 }
 
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
@@ -244,8 +346,8 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return buf;
 }
 
-void StandardBufferManager::PurgeQueue() {
-	buffer_pool.PurgeQueue();
+void StandardBufferManager::PurgeQueue(FileBufferType type) {
+	buffer_pool.PurgeQueue(type);
 }
 
 void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
@@ -279,12 +381,15 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 
 	// We do not have to keep the handle locked while purging.
 	if (purge) {
-		PurgeQueue();
+		PurgeQueue(handle->buffer->type);
 	}
 }
 
 void StandardBufferManager::SetMemoryLimit(idx_t limit) {
 	buffer_pool.SetLimit(limit, InMemoryWarning());
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 }
 
 void StandardBufferManager::SetSwapLimit(optional_idx limit) {
@@ -337,17 +442,22 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
+
 	RequireTemporaryDirectory();
+
+	// Append to a few grouped files.
 	if (buffer.size == Storage::BLOCK_SIZE) {
 		evicted_data_per_tag[uint8_t(tag)] += Storage::BLOCK_SIZE;
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
 	}
-	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
-	// get the path to write to
-	auto path = GetTemporaryPath(block_id);
+
+	// Get the path to write to.
 	D_ASSERT(buffer.size > Storage::BLOCK_SIZE);
-	// create the file and write the size followed by the buffer contents
+	auto path = GetTemporaryPath(block_id);
+	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
+
+	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
@@ -362,18 +472,20 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 		evicted_data_per_tag[uint8_t(tag)] -= Storage::BLOCK_SIZE;
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
 	}
+
+	// Open the temporary file and read its size.
 	idx_t block_size;
-	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	handle->Read(&block_size, sizeof(idx_t), 0);
 	evicted_data_per_tag[uint8_t(tag)] -= block_size;
 
-	// now allocate a buffer of this size and read the data into that buffer
+	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
-
 	handle.reset();
+
+	// Delete the file and return the buffer.
 	DeleteTemporaryFile(id);
 	return buffer;
 }
@@ -425,9 +537,15 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 		if (!StringUtil::EndsWith(name, ".block")) {
 			return;
 		}
+
+		// Another process or thread can delete the file before we can get its file size.
+		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+		if (!handle) {
+			return;
+		}
+
 		TemporaryFileInformation info;
 		info.path = name;
-		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ);
 		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 		handle.reset();
 		result.push_back(info);

@@ -81,6 +81,9 @@ inputs:
   unittest_script:
     description: 'Script/program to execute the unittests'
     default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
+  cmake_flags:
+    description: 'Flags to be passed to cmake'
+    default: ''
 
 runs:
   using: "composite"
@@ -116,17 +119,6 @@ runs:
         ls -al
         pwd
 
-    - name: Fix for MSVC issue (see e.g. https://github.com/TileDB-Inc/TileDB/pull/4759)
-      shell: bash
-      if: inputs.deploy_as == 'windows_amd64'
-      env:
-        OVERLAY_TRIPLET_SRC: ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
-        OVERLAY_TRIPLET_DST: ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
-      run: |
-        mkdir overlay_triplets
-        cp $OVERLAY_TRIPLET_SRC $OVERLAY_TRIPLET_DST
-        echo "set(VCPKG_PLATFORM_TOOLSET_VERSION "14.39")" >> $OVERLAY_TRIPLET_DST
-
     - name: Set Openssl dir
       if: inputs.openssl_path != ''
       shell: bash
@@ -155,7 +147,8 @@ runs:
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
         DUCKDB_PLATFORM: ${{ inputs.duckdb_arch }}
-        VCPKG_OVERLAY_TRIPLETS: "${{ github.workspace }}/overlay_triplets"
+        CMAKE_VARS_BUILD: ${{ inputs.cmake_flags }}
+
       run: |
         ls
         mkdir -p ~/.ssh

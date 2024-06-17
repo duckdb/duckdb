@@ -110,11 +110,14 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"worker_threads", {42}},
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
-	    {"allocator_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_large_buffer_size", {true}},
+	    {"arrow_output_list_view", {true}},
+	    {"produce_arrow_string_view", {true}},
 	    {"enable_http_logging", {true}},
 	    {"http_logging_output", {"my_cool_outputfile"}},
-	};
+	    {"produce_arrow_string_view", {true}},
+	    {"allocator_flush_threshold", {"4.0 GiB"}},
+	    {"allocator_background_threads", {true}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");
@@ -135,6 +138,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allow_unsigned_extensions",  // cant change this while db is running
 	    "allow_community_extensions", // cant change this while db is running
 	    "allow_unredacted_secrets",   // cant change this while db is running
+	    "streaming_buffer_size",
 	    "log_query_path",
 	    "password",
 	    "username",
@@ -142,7 +146,10 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "custom_user_agent"};
+	    "custom_user_agent",
+	    "custom_profiling_settings",
+	    "custom_user_agent",
+	    "default_block_size"};
 	return excluded_options.count(name) == 1;
 }
 

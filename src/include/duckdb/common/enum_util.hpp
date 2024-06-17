@@ -60,6 +60,8 @@ enum class ArrowDateTimeType : uint8_t;
 
 enum class ArrowOffsetSize : uint8_t;
 
+enum class ArrowTypeInfoType : uint8_t;
+
 enum class ArrowVariableSizeType : uint8_t;
 
 enum class BinderType : uint8_t;
@@ -97,6 +99,8 @@ enum class CompressionType : uint8_t;
 enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
+
+enum class CopyFunctionReturnType : uint8_t;
 
 enum class CopyOverwriteMode : uint8_t;
 
@@ -187,6 +191,8 @@ enum class MacroType : uint8_t;
 enum class MapInvalidReason : uint8_t;
 
 enum class MemoryTag : uint8_t;
+
+enum class MetricsType : uint8_t;
 
 enum class NType : uint8_t;
 
@@ -310,6 +316,8 @@ enum class TaskExecutionResult : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
+enum class TransactionModifierType : uint8_t;
+
 enum class TransactionType : uint8_t;
 
 enum class TupleDataPinProperties : uint8_t;
@@ -380,6 +388,9 @@ template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
 
 template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
+
+template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
 
 template<>
@@ -435,6 +446,9 @@ const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
 
 template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
+
+template<>
+const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value);
 
 template<>
 const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
@@ -570,6 +584,9 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
+
+template<>
+const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -755,6 +772,9 @@ template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
+const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
+
+template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
 
 template<>
@@ -837,6 +857,9 @@ template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
 
 template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
+
+template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
 
 template<>
@@ -892,6 +915,9 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
+
+template<>
+CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value);
 
 template<>
 CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
@@ -1027,6 +1053,9 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
+
+template<>
+MetricsType EnumUtil::FromString<MetricsType>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);
@@ -1210,6 +1239,9 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);

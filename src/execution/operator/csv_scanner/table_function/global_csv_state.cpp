@@ -1,9 +1,11 @@
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
+
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
+#include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -30,13 +32,13 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	last_file_idx = 0;
 	scanner_idx = 0;
 	running_threads = MaxThreads();
-	if (single_threaded) {
-		current_boundary = CSVIterator();
-	} else {
-		auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
-		current_boundary = CSVIterator(0, 0, 0, 0, buffer_size);
+	current_boundary = file_scans.back()->start_iterator;
+	current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+	if (current_boundary.done && context.client_data->debug_set_max_line_length) {
+		context.client_data->debug_max_line_length = current_boundary.pos.buffer_pos;
 	}
-	current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
+	current_buffer_in_use =
+	    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
@@ -70,6 +72,10 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			file_scans.emplace_back(make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options,
 			                                                     cur_idx, bind_data, column_ids, file_schema, true));
 			current_file = file_scans.back();
+			current_boundary = current_file->start_iterator;
+			current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+			current_buffer_in_use =
+			    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 		}
 		if (previous_scanner) {
 			lock_guard<mutex> parallel_lock(main_mutex);
@@ -115,9 +121,10 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			                                                     bind_data.options, current_file_idx, bind_data,
 			                                                     column_ids, file_schema, false));
 			// And re-start the boundary-iterator
-			auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
-			current_boundary = CSVIterator(current_file_idx, 0, 0, 0, buffer_size);
-			current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
+			current_boundary = file_scans.back()->start_iterator;
+			current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+			current_buffer_in_use =
+			    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 		} else {
 			// If not we are done with this CSV Scanning
 			finished = true;

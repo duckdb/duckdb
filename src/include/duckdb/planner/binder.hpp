@@ -55,7 +55,7 @@ struct BoundLimitNode;
 struct PivotColumnEntry;
 struct UnpivotEntry;
 
-enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
+enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES, EXTRACT_REPLACEMENT_SCANS };
 enum class BinderType : uint8_t { REGULAR_BINDER, VIEW_BINDER };
 
 struct CorrelatedColumnInfo {
@@ -196,7 +196,9 @@ public:
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
 	void AddTableName(string table_name);
+	void AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement);
 	const unordered_set<string> &GetTableNames();
+	case_insensitive_map_t<unique_ptr<TableRef>> &GetReplacementScans();
 	optional_ptr<SQLStatement> GetRootStatement() {
 		return root_statement;
 	}
@@ -227,6 +229,8 @@ private:
 	BindingMode mode = BindingMode::STANDARD_BINDING;
 	//! Table names extracted for BindingMode::EXTRACT_NAMES
 	unordered_set<string> table_names;
+	//! Replacement Scans extracted for BindingMode::EXTRACT_REPLACEMENT_SCANS
+	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
@@ -331,8 +335,8 @@ private:
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
 	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
 	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
-	bool BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
-	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
+	void BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
+	                                 unique_ptr<BoundSubqueryRef> &subquery);
 	unique_ptr<LogicalOperator> BindTableFunction(TableFunction &function, vector<Value> parameters);
 	unique_ptr<LogicalOperator> BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
 	                                                      vector<Value> parameters,

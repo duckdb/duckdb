@@ -126,10 +126,6 @@ public:
 		return available_memory;
 	}
 
-	idx_t GetMinimumBatchIndex() const {
-		return min_batch_index;
-	}
-
 	mutex &GetBlockedTaskLock() {
 		return blocked_task_lock;
 	}

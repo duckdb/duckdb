@@ -676,6 +676,70 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Custom Profiling Settings
+//===--------------------------------------------------------------------===//
+
+static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &json) {
+	profiler_settings_t metrics;
+
+	string invalid_settings;
+	for (auto &entry : json) {
+		MetricsType setting;
+		try {
+			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
+		} catch (std::exception &ex) {
+			if (!invalid_settings.empty()) {
+				invalid_settings += ", ";
+			}
+			invalid_settings += entry.first;
+			continue;
+		}
+		if (StringUtil::Lower(entry.second) == "true") {
+			metrics.insert(setting);
+		}
+	}
+
+	if (!invalid_settings.empty()) {
+		throw IOException("Invalid custom profiler settings: \"%s\"", invalid_settings);
+	}
+	return metrics;
+}
+
+void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+
+	// parse the file content
+	unordered_map<string, string> json;
+	try {
+		json = StringUtil::ParseJSONMap(input.ToString());
+	} catch (std::exception &ex) {
+		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
+		                  "all the keys and values start with a quote. ",
+		                  input.ToString());
+	}
+
+	config.profiler_settings = FillTreeNodeSettings(json);
+}
+
+void CustomProfilingSettings::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.profiler_settings = ProfilingInfo::DefaultSettings();
+}
+
+Value CustomProfilingSettings::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+
+	string profiling_settings_str;
+	for (auto &entry : config.profiler_settings) {
+		if (!profiling_settings_str.empty()) {
+			profiling_settings_str += ", ";
+		}
+		profiling_settings_str += StringUtil::Format("\"%s\": \"true\"", EnumUtil::ToString(entry));
+	}
+	return Value(StringUtil::Format("{%s}", profiling_settings_str));
+}
+
+//===--------------------------------------------------------------------===//
 // Custom Extension Repository
 //===--------------------------------------------------------------------===//
 void CustomExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -1071,6 +1135,24 @@ Value MaximumMemorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Streaming Buffer Size
+//===--------------------------------------------------------------------===//
+void StreamingBufferSize::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
+}
+
+void StreamingBufferSize::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.SetDefaultStreamingBufferSize();
+}
+
+Value StreamingBufferSize::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.streaming_buffer_size));
+}
+
+//===--------------------------------------------------------------------===//
 // Maximum Temp Directory Size
 //===--------------------------------------------------------------------===//
 void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1145,6 +1227,24 @@ void PartitionedWriteFlushThreshold::SetLocal(ClientContext &context, const Valu
 
 Value PartitionedWriteFlushThreshold::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).partitioned_write_flush_threshold));
+}
+
+//===--------------------------------------------------------------------===//
+// Preferred block allocation size
+//===--------------------------------------------------------------------===//
+void DefaultBlockAllocSize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	idx_t block_alloc_size = input.GetValue<uint64_t>();
+	Storage::VerifyBlockAllocSize(block_alloc_size);
+	config.options.default_block_alloc_size = block_alloc_size;
+}
+
+void DefaultBlockAllocSize::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.default_block_alloc_size = DBConfig().options.default_block_alloc_size;
+}
+
+Value DefaultBlockAllocSize::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.default_block_alloc_size);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1259,6 +1359,39 @@ Value ExportLargeBufferArrow::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	bool export_large_buffers_arrow = config.options.arrow_offset_size == ArrowOffsetSize::LARGE;
 	return Value::BOOLEAN(export_large_buffers_arrow);
+}
+
+//===--------------------------------------------------------------------===//
+// ArrowOutputListView
+//===--------------------------------------------------------------------===//
+void ArrowOutputListView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto arrow_output_list_view = input.GetValue<bool>();
+
+	config.options.arrow_use_list_view = arrow_output_list_view;
+}
+
+void ArrowOutputListView::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_use_list_view = DBConfig().options.arrow_use_list_view;
+}
+
+Value ArrowOutputListView::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool arrow_output_list_view = config.options.arrow_use_list_view;
+	return Value::BOOLEAN(arrow_output_list_view);
+}
+
+// ProduceArrowStringView
+//===--------------------------------------------------------------------===//
+void ProduceArrowStringView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.produce_arrow_string_views = input.GetValue<bool>();
+}
+
+void ProduceArrowStringView::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.produce_arrow_string_views = DBConfig().options.produce_arrow_string_views;
+}
+
+Value ProduceArrowStringView::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(DBConfig::GetConfig(context).options.produce_arrow_string_views);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1480,6 +1613,28 @@ void FlushAllocatorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) 
 Value FlushAllocatorSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_flush_threshold));
+}
+
+//===--------------------------------------------------------------------===//
+// Allocator Background Thread
+//===--------------------------------------------------------------------===//
+void AllocatorBackgroundThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.allocator_background_threads = input.GetValue<bool>();
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(config.options.allocator_background_threads);
+	}
+}
+
+void AllocatorBackgroundThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allocator_background_threads = DBConfig().options.allocator_background_threads;
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(config.options.allocator_background_threads);
+	}
+}
+
+Value AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.allocator_background_threads);
 }
 
 //===--------------------------------------------------------------------===//
