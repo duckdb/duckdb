@@ -922,7 +922,7 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCast::Operation(string_t input, bool &result, bool strict) {
-	auto input_data = reinterpret_cast<const uint8_t*>(input.GetData());
+	auto input_data = reinterpret_cast<const uint8_t *>(input.GetData());
 	auto input_size = input.GetSize();
 
 	switch (input_size) {
