@@ -98,8 +98,8 @@ double MakeNumberNice(double input, const double power_of_ten, NiceRounding roun
 struct EquiWidthBinsInteger {
 	static constexpr LogicalTypeId LOGICAL_TYPE = LogicalTypeId::BIGINT;
 
-	static vector<PrimitiveType<int64_t>> Operation(int64_t input_min, int64_t input_max, idx_t bin_count,
-	                                                bool nice_rounding) {
+	static vector<PrimitiveType<int64_t>> Operation(const Expression &expr, int64_t input_min, int64_t input_max,
+	                                                idx_t bin_count, bool nice_rounding) {
 		vector<PrimitiveType<int64_t>> result;
 		// to prevent integer truncation from affecting the bin boundaries we calculate them with numbers multiplied by
 		// 1000 we then divide to get the actual boundaries
@@ -138,7 +138,8 @@ struct EquiWidthBinsInteger {
 struct EquiWidthBinsDouble {
 	static constexpr LogicalTypeId LOGICAL_TYPE = LogicalTypeId::DOUBLE;
 
-	static vector<PrimitiveType<double>> Operation(double min, double input_max, idx_t bin_count, bool nice_rounding) {
+	static vector<PrimitiveType<double>> Operation(const Expression &expr, double min, double input_max,
+	                                               idx_t bin_count, bool nice_rounding) {
 		double max = input_max;
 		if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
 			throw InvalidInputException("equi_width_bucket does not support infinite or nan as min/max value");
@@ -299,16 +300,16 @@ void GetTimestampComponents(timestamp_t input, int32_t &year, int32_t &month, in
 struct EquiWidthBinsTimestamp {
 	static constexpr LogicalTypeId LOGICAL_TYPE = LogicalTypeId::TIMESTAMP;
 
-	static vector<PrimitiveType<timestamp_t>> Operation(timestamp_t input_min, timestamp_t input_max, idx_t bin_count,
-	                                                    bool nice_rounding) {
+	static vector<PrimitiveType<timestamp_t>> Operation(const Expression &expr, timestamp_t input_min,
+	                                                    timestamp_t input_max, idx_t bin_count, bool nice_rounding) {
 		if (!Value::IsFinite(input_min) || !Value::IsFinite(input_max)) {
-			throw InvalidInputException("equi_width_bucket does not support infinite or nan as min/max value");
+			throw InvalidInputException(expr, "equi_width_bucket does not support infinite or nan as min/max value");
 		}
 
 		if (!nice_rounding) {
 			// if we are not doing nice rounding it is pretty simple - just interpolate between the timestamp values
 			auto interpolated_values =
-			    EquiWidthBinsInteger::Operation(input_min.value, input_max.value, bin_count, false);
+			    EquiWidthBinsInteger::Operation(expr, input_min.value, input_max.value, bin_count, false);
 
 			vector<PrimitiveType<timestamp_t>> result;
 			for (auto &val : interpolated_values) {
@@ -376,13 +377,14 @@ static void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector
 	    [&](PrimitiveType<T> min_p, PrimitiveType<T> max_p, PrimitiveType<int64_t> bins_p,
 	        PrimitiveType<bool> nice_rounding_p) {
 		    if (max_p.val < min_p.val) {
-			    throw InvalidInputException("Invalid input for bin function - max value is smaller than min value");
+			    throw InvalidInputException(state.expr,
+			                                "Invalid input for bin function - max value is smaller than min value");
 		    }
 		    if (bins_p.val <= 0) {
-			    throw InvalidInputException("Invalid input for bin function - there must be > 0 bins");
+			    throw InvalidInputException(state.expr, "Invalid input for bin function - there must be > 0 bins");
 		    }
 		    if (bins_p.val > MAX_BIN_COUNT) {
-			    throw InvalidInputException("Invalid input for bin function - max bin count of %d exceeded",
+			    throw InvalidInputException(state.expr, "Invalid input for bin function - max bin count of %d exceeded",
 			                                MAX_BIN_COUNT);
 		    }
 		    GenericListType<PrimitiveType<T>> result_bins;
@@ -390,8 +392,8 @@ static void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector
 			    // if max = min return a single bucket
 			    result_bins.values.push_back(max_p.val);
 		    } else {
-			    result_bins.values =
-			        OP::Operation(min_p.val, max_p.val, static_cast<idx_t>(bins_p.val), nice_rounding_p.val);
+			    result_bins.values = OP::Operation(state.expr, min_p.val, max_p.val, static_cast<idx_t>(bins_p.val),
+			                                       nice_rounding_p.val);
 			    // last bin should always be the input max
 			    if (result_bins.values[0].val < max_p.val) {
 				    result_bins.values[0].val = max_p.val;
@@ -401,6 +403,10 @@ static void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector
 		    return result_bins;
 	    });
 	VectorOperations::DefaultCast(intermediate_result, result, args.size());
+}
+
+static void UnsupportedEquiWidth(DataChunk &args, ExpressionState &state, Vector &) {
+	throw BinderException(state.expr, "Unsupported type \"%s\" for equi_width_bins", args.data[0].GetType());
 }
 
 ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
@@ -417,6 +423,10 @@ ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::BIGINT, LogicalType::BOOLEAN},
 	                   LogicalType::LIST(LogicalType::DATE), EquiWidthBinFunction<timestamp_t, EquiWidthBinsTimestamp>,
 	                   BindEquiWidthFunction));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::ANY_PARAMS(LogicalType::ANY, 150), LogicalType::ANY_PARAMS(LogicalType::ANY, 150),
+	                    LogicalType::BIGINT, LogicalType::BOOLEAN},
+	                   LogicalType::LIST(LogicalType::ANY), UnsupportedEquiWidth, BindEquiWidthFunction));
 	return functions;
 }
 
