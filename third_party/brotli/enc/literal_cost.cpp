@@ -13,7 +13,7 @@
 
 #include <brotli/types.h>
 
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "fast_log.h"
 #include "utf8_util.h"
 

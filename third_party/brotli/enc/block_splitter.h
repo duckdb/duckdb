@@ -11,7 +11,7 @@
 
 #include <brotli/types.h>
 
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "command.h"
 #include "memory.h"
 #include "quality.h"

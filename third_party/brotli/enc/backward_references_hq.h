@@ -11,12 +11,12 @@
 
 #include <brotli/types.h>
 
-#include "../common/constants.h"
+#include "../common/brotli_constants.h"
 #include "../common/context.h"
 #include "../common/dictionary.h"
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "command.h"
-#include "hash.h"
+#include "brotli_hash.h"
 #include "memory.h"
 #include "quality.h"
 

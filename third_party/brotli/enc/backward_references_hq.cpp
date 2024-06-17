@@ -12,8 +12,8 @@
 
 #include <brotli/types.h>
 
-#include "../common/constants.h"
-#include "../common/platform.h"
+#include "../common/brotli_constants.h"
+#include "../common/brotli_platform.h"
 #include "command.h"
 #include "compound_dictionary.h"
 #include "encoder_dict.h"
@@ -21,7 +21,7 @@
 #include "find_match_length.h"
 #include "literal_cost.h"
 #include "memory.h"
-#include "params.h"
+#include "brotli_params.h"
 #include "prefix.h"
 #include "quality.h"
 

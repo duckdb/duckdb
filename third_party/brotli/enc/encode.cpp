@@ -13,9 +13,9 @@
 #include <stdlib.h>  /* free, malloc */
 #include <string.h>  /* memcpy, memset */
 
-#include "../common/constants.h"
+#include "../common/brotli_constants.h"
 #include "../common/context.h"
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "../common/version.h"
 #include "backward_references.h"
 #include "backward_references_hq.h"
@@ -27,7 +27,7 @@
 #include "encoder_dict.h"
 #include "entropy_encode.h"
 #include "fast_log.h"
-#include "hash.h"
+#include "brotli_hash.h"
 #include "histogram.h"
 #include "memory.h"
 #include "metablock.h"

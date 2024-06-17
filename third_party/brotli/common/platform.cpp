@@ -8,7 +8,7 @@
 
 #include <brotli/types.h>
 
-#include "platform.h"
+#include "brotli_platform.h"
 
 
 /* Default brotli_alloc_func */

@@ -9,14 +9,14 @@
 #include <stdlib.h>  /* malloc, free */
 
 #include "../common/dictionary.h"
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "../common/shared_dictionary_internal.h"
 #include "../common/transform.h"
 #include "compound_dictionary.h"
 #include "dictionary_hash.h"
 #include "memory.h"
 #include "quality.h"
-#include "hash.h"
+#include "brotli_hash.h"
 
 using namespace duckdb_brotli;
 

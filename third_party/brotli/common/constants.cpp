@@ -4,7 +4,7 @@
    See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
 */
 
-#include "constants.h"
+#include "brotli_constants.h"
 
 using namespace duckdb_brotli;
 

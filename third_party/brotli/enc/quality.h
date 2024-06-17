@@ -12,8 +12,8 @@
 
 #include <brotli/encode.h>
 
-#include "../common/platform.h"
-#include "params.h"
+#include "../common/brotli_platform.h"
+#include "brotli_params.h"
 
 #define FAST_ONE_PASS_COMPRESSION_QUALITY 0
 #define FAST_TWO_PASS_COMPRESSION_QUALITY 1
