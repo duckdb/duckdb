@@ -1,0 +1,21 @@
+# name: test/sql/aggregate/aggregates/histogram_table_function.test
+# description: Test the histogram table function
+# group: [aggregates]
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table integers(i int);
+
+statement ok
+insert into integers values (42);
+
+statement ok
+insert into integers values (84);
+
+query II
+SELECT * FROM histogram_values(integers, i, bin_count := 2)
+----
+64	1
+84	1
