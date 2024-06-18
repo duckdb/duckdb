@@ -63,7 +63,8 @@ struct HistogramBinState {
 		// ensure there are no duplicate bin boundaries
 		for (idx_t i = 1; i < bin_boundaries->size(); i++) {
 			if (Equals::Operation((*bin_boundaries)[i - 1], (*bin_boundaries)[i])) {
-				throw BinderException("Histogram bin boundaries cannot contain duplicates");
+				bin_boundaries->erase_at(i);
+				i--;
 			}
 		}
 
