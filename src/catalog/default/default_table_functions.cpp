@@ -20,7 +20,7 @@ WITH bins AS (
          list(distinct col_name)[:bin_count]
       WHEN technique='equi-height'
       THEN
-         quantile(col_name, [x / 1000000000.0 for x in range((1000000000 / bin_count)::BIGINT, 1000000000, (1000000000 / bin_count)::BIGINT)] + [1.0])
+         quantile(col_name, [x / bin_count::DOUBLE for x in generate_series(1, bin_count)])
       WHEN technique='equi-width'
       THEN
          equi_width_bins(MIN(col_name), MAX(col_name), bin_count, false)
@@ -41,10 +41,13 @@ FROM (
 	{DEFAULT_SCHEMA, "histogram", {"source", "col_name", nullptr}, {{"bin_count", "10"}, {"technique", "'auto'"}, {nullptr, nullptr}},  R"(
 SELECT
    CASE
-   WHEN typeof(bin) = 'VARCHAR'
+   WHEN (NOT (can_cast_implicitly(bin, NULL::BIGINT) OR
+              can_cast_implicitly(bin, NULL::DOUBLE) OR
+              can_cast_implicitly(bin, NULL::TIMESTAMP)) AND technique='auto')
+              OR technique='sample'
    THEN bin::VARCHAR
    WHEN row_number() over () = 1
-   THEN concat('x < ', bin::VARCHAR)
+   THEN concat('x <= ', bin::VARCHAR)
    ELSE concat(lag(bin::VARCHAR) over (), ' < x <= ', bin::VARCHAR)
    END AS bin,
    count,

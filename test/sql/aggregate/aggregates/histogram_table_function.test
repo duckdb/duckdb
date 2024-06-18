@@ -5,6 +5,7 @@
 statement ok
 pragma enable_verification
 
+# integers
 statement ok
 create table integers(i int);
 
@@ -19,3 +20,101 @@ SELECT * FROM histogram_values(integers, i, bin_count := 2)
 ----
 64	1
 84	1
+
+statement ok
+INSERT INTO integers FROM range(127)
+
+query II
+SELECT * FROM histogram_values(integers, i, bin_count := 10, technique := 'equi-width')
+----
+12	13
+25	13
+37	12
+50	14
+63	13
+75	12
+88	14
+100	12
+113	13
+126	13
+
+query II
+SELECT bin, count FROM histogram(integers, i, bin_count := 10, technique := 'equi-width')
+----
+x < 12	13
+12 < x <= 25	13
+25 < x <= 37	12
+37 < x <= 50	14
+50 < x <= 63	13
+63 < x <= 75	12
+75 < x <= 88	14
+88 < x <= 100	12
+100 < x <= 113	13
+113 < x <= 126	13
+
+statement ok
+INSERT INTO integers VALUES (99999999)
+
+query II
+SELECT * FROM histogram_values(integers, i, technique := 'equi-height')
+----
+12	13
+25	13
+38	13
+50	13
+63	13
+76	13
+88	13
+101	13
+114	13
+99999999	13
+
+# sample integers
+query II
+SELECT * FROM histogram_values(integers, i%2, technique := 'sample')
+----
+0	66
+1	64
+
+# varchar
+query II
+SELECT * FROM histogram_values(integers, (i%2)::VARCHAR)
+----
+0	66
+1	64
+
+# varchar does not work with equi-width-bins
+statement error
+SELECT * FROM histogram_values(integers, (i%2)::VARCHAR, technique := 'equi-width')
+----
+Unsupported
+
+# but it works with equi-height
+query II
+SELECT * FROM histogram_values(integers, i::VARCHAR, technique := 'equi-height')
+----
+109	13
+120	13
+19	13
+30	13
+42	14
+53	12
+65	13
+77	13
+88	13
+99999999	13
+
+# histogram with ranges
+query II
+SELECT bin, count FROM histogram(integers, i::VARCHAR, technique := 'equi-height')
+----
+x < 109	13
+109 < x <= 120	13
+120 < x <= 19	13
+19 < x <= 30	13
+30 < x <= 42	14
+42 < x <= 53	12
+53 < x <= 65	13
+65 < x <= 77	13
+77 < x <= 88	13
+88 < x <= 99999999	13
