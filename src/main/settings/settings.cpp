@@ -654,11 +654,12 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	} else if (parameter == "query_tree_optimizer") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
 	} else if (parameter == "no_output") {
-        config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
+		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
 		config.emit_profiler_output = false;
 	} else {
 		throw ParserException(
-		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]", parameter);
+		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]",
+		    parameter);
 	}
 }
 

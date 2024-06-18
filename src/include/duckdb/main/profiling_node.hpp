@@ -74,13 +74,13 @@ public:
 
 class OperatorProfilingNode : public ProfilingNode {
 public:
-    ~OperatorProfilingNode() override {};
+	~OperatorProfilingNode() override {};
 
 public:
-    static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::OPERATOR;
+	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::OPERATOR;
 
-    PhysicalOperatorType type;
-    string name;
+	PhysicalOperatorType type;
+	string name;
 };
 
 } // namespace duckdb

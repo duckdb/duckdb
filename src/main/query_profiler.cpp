@@ -189,8 +189,8 @@ string QueryProfiler::ToString() const {
 		return QueryTreeToString();
 	case ProfilerPrintFormat::JSON:
 		return ToJSON();
-    case ProfilerPrintFormat::NO_OUTPUT:
-        return "";
+	case ProfilerPrintFormat::NO_OUTPUT:
+		return "";
 	default:
 		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", format);
 	}
