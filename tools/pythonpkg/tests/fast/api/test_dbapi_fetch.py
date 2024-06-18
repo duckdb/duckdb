@@ -81,3 +81,55 @@ class TestDBApiFetch(object):
         assert res.fetchone() == (1,)
         assert res.fetchone() == (2,)
         assert res.fetchone() is None
+
+    @pytest.mark.parametrize(
+        'test_case',
+        [
+            ('BOOLEAN', False),
+            ('VARCHAR', '🦆🦆🦆🦆🦆🦆'),
+            ('TINYINT', -128),
+            ('SMALLINT', -32768),
+            ('INTEGER', -2147483648),
+            ('BIGINT', -9223372036854775808),
+            ('HUGEINT', -170141183460469231731687303715884105728),
+            ('UTINYINT', 0),
+            ('USMALLINT', 0),
+            ('UINTEGER', 0),
+            ('UBIGINT', 0),
+            ('UHUGEINT', 0),
+            ('BITSTRING', '0010001001011100010101011010111'),
+        ],
+    )
+    def test_fetch_dict_coverage(self, duckdb_cursor, test_case):
+        key_type, expected = test_case
+        query = f"""
+        with map_cte as (
+            select * from test_vector_types(
+                NULL::MAP(
+                    {key_type},
+                    INTEGER
+                )
+            ) t(a) limit 1
+        )
+        select a from map_cte;
+        """
+        res = duckdb_cursor.sql(query).fetchone()
+        print(res)
+        assert res[0][expected] == -2147483648
+
+    @pytest.mark.parametrize('test_case', ['VARCHAR[]'])
+    def test_fetch_dict_key_not_hashable(self, duckdb_cursor, test_case):
+        key_type = test_case
+        query = f"""
+        with map_cte as (
+            select * from test_vector_types(
+                NULL::MAP(
+                    {key_type},
+                    INTEGER
+                )
+            ) t(a) limit 1
+        )
+        select a from map_cte;
+        """
+        res = duckdb_cursor.sql(query).fetchone()
+        assert 'key' in res[0].keys()

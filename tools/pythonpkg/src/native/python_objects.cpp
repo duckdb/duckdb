@@ -438,6 +438,7 @@ static bool KeyIsHashable(const LogicalType &type) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::MAP:
+		return false;
 	case LogicalTypeId::UNION: {
 		idx_t count = UnionType::GetMemberCount(type);
 		for (idx_t i = 0; i < count; i++) {

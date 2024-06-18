@@ -78,6 +78,14 @@ struct TestVectorFlat {
 			break;
 		}
 		case PhysicalType::LIST: {
+			if (type.id() == LogicalTypeId::MAP) {
+				auto &child_type = ListType::GetChildType(type);
+				auto child_values = GenerateValues(info, child_type);
+				result.push_back(Value::MAP(child_type, {child_values[0]}));
+				result.push_back(Value(type));
+				result.push_back(Value::MAP(child_type, {child_values[1]}));
+				break;
+			}
 			auto &child_type = ListType::GetChildType(type);
 			auto child_values = GenerateValues(info, child_type);
 
@@ -170,6 +178,7 @@ struct TestVectorSequence {
 			break;
 		}
 		case PhysicalType::LIST: {
+			D_ASSERT(type.id() != LogicalTypeId::MAP);
 			auto data = FlatVector::GetData<list_entry_t>(result);
 			data[0].offset = 0;
 			data[0].length = 2;
@@ -201,6 +210,10 @@ struct TestVectorSequence {
 		result->Initialize(Allocator::DefaultAllocator(), info.types);
 
 		for (idx_t c = 0; c < info.types.size(); c++) {
+			if (info.types[c].id() == LogicalTypeId::MAP) {
+				// FIXME: we don't support MAP in the TestVectorSequence
+				return;
+			}
 			GenerateVector(info, info.types[c], result->data[c]);
 		}
 		result->SetCardinality(3);
