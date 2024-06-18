@@ -335,7 +335,8 @@ struct EquiWidthBinsTimestamp {
 		double step_months = static_cast<double>(interval_diff.months) / static_cast<double>(bin_count);
 		double step_days = static_cast<double>(interval_diff.days) / static_cast<int32_t>(bin_count);
 		double step_micros = static_cast<double>(interval_diff.micros) / static_cast<double>(bin_count);
-		// since we truncate the months/days, propagate any fractional component to the unit below (i.e. 0.2 months becomes 6 days)
+		// since we truncate the months/days, propagate any fractional component to the unit below (i.e. 0.2 months
+		// becomes 6 days)
 		if (step_months > 0) {
 			double overflow_months = step_months - std::floor(step_months);
 			step_days += overflow_months * Interval::DAYS_PER_MONTH;
@@ -353,7 +354,7 @@ struct EquiWidthBinsTimestamp {
 		step = MakeIntervalNice(step);
 		timestamp_t timestamp_val =
 		    MakeTimestampNice(max_year, max_month, max_day, max_hour, max_minute, max_sec, max_micros, step);
-		if (step.months <= 0 && step.days  <= 0 && step.micros <= 0) {
+		if (step.months <= 0 && step.days <= 0 && step.micros <= 0) {
 			// interval must be at least one microsecond
 			step.months = step.days = 0;
 			step.micros = 1;

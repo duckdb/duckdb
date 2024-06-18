@@ -62,17 +62,19 @@ DefaultTableFunctionGenerator::DefaultTableFunctionGenerator(Catalog &catalog, S
     : DefaultGenerator(catalog), schema(schema) {
 }
 
-unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro, unique_ptr<MacroFunction> function) {
+unique_ptr<CreateMacroInfo>
+DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro,
+                                                            unique_ptr<MacroFunction> function) {
 	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
-		function->parameters.push_back(
-		    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
+		function->parameters.push_back(make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 	}
-	for(idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
+	for (idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
 		auto expr_list = Parser::ParseExpressionList(default_macro.named_parameters[named_idx].default_value);
 		if (expr_list.size() != 1) {
 			throw InternalException("Expected a single expression");
 		}
-		function->default_parameters.insert(make_pair(default_macro.named_parameters[named_idx].name, std::move(expr_list[0])));
+		function->default_parameters.insert(
+		    make_pair(default_macro.named_parameters[named_idx].name, std::move(expr_list[0])));
 	}
 
 	auto type = CatalogType::TABLE_MACRO_ENTRY;
@@ -83,10 +85,10 @@ unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateInternalTableMa
 	bind_info->internal = true;
 	bind_info->function = std::move(function);
 	return bind_info;
-
 }
 
-unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro) {
+unique_ptr<CreateMacroInfo>
+DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro) {
 	Parser parser;
 	parser.ParseQuery(default_macro.macro);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
@@ -110,7 +112,7 @@ static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const string &inpu
 }
 
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
-                                                                      const string &entry_name) {
+                                                                           const string &entry_name) {
 	auto info = GetDefaultTableFunction(schema.name, entry_name);
 	if (info) {
 		return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
@@ -131,6 +133,4 @@ vector<string> DefaultTableFunctionGenerator::GetDefaultEntries() {
 	return result;
 }
 
-
-}
-
+} // namespace duckdb

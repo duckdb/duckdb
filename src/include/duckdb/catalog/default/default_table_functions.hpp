@@ -40,7 +40,8 @@ public:
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro);
 
 private:
-	static unique_ptr<CreateMacroInfo> CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro, unique_ptr<MacroFunction> function);
+	static unique_ptr<CreateMacroInfo> CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro,
+	                                                                unique_ptr<MacroFunction> function);
 };
 
 } // namespace duckdb
