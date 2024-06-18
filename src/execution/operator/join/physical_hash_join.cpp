@@ -94,15 +94,31 @@ public:
 	      scanned_data(false) {
 		hash_table = op.InitializeHashTable(context);
 
-		// for perfect hash join
+		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table, op.perfect_join_statistics);
-		// for external hash join
+		// For external hash join
 		external = ClientConfig::GetConfig(context).force_external;
 		// Set probe types
 		const auto &payload_types = op.children[0]->types;
 		probe_types.insert(probe_types.end(), op.condition_types.begin(), op.condition_types.end());
 		probe_types.insert(probe_types.end(), payload_types.begin(), payload_types.end());
 		probe_types.emplace_back(LogicalType::HASH);
+
+		// Compute minimum reservation
+		auto tuples_per_block = Storage::BLOCK_SIZE / hash_table->layout.GetRowWidth();
+		auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
+		if (!hash_table->layout.AllConstant()) {
+			blocks_per_chunk += 2;
+		}
+		auto size_per_partition = blocks_per_chunk * Storage::BLOCK_ALLOC_SIZE;
+		auto num_partitions = RadixPartitioning::NumberOfPartitions(hash_table->GetRadixBits());
+
+		// This really is the minimum reservation that we can do
+		auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		auto minimum_reservation = num_threads * num_partitions * size_per_partition;
+
+		temporary_memory_state->SetMinimumReservation(minimum_reservation);
+		temporary_memory_state->SetRemainingSize(context, minimum_reservation);
 	}
 
 	void ScheduleFinalize(Pipeline &pipeline, Event &event);
@@ -805,12 +821,8 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 
 	// Try to put the next partitions in the block collection of the HT
 	if (!sink.external || !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation())) {
-		lock_guard<mutex> guard(lock);
-		if (global_stage != HashJoinSourceStage::DONE) {
-			global_stage = HashJoinSourceStage::DONE;
-			ht.Reset();
-			sink.temporary_memory_state->SetRemainingSize(sink.context, 0);
-		}
+		global_stage = HashJoinSourceStage::DONE;
+		sink.temporary_memory_state->SetRemainingSize(sink.context, 0);
 		return;
 	}
 
@@ -1031,6 +1043,7 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 		lock_guard<mutex> guard(gstate.lock);
 		if (gstate.global_stage != HashJoinSourceStage::DONE) {
 			gstate.global_stage = HashJoinSourceStage::DONE;
+			sink.hash_table->Reset();
 			sink.temporary_memory_state->SetRemainingSize(context.client, 0);
 		}
 		return SourceResultType::FINISHED;

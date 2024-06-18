@@ -102,6 +102,7 @@ public:
 	void SetRadixBits(idx_t radix_bits_p);
 	bool SetRadixBitsToExternal();
 	idx_t GetRadixBits() const;
+	idx_t GetMaxRadixBits() const;
 
 private:
 	void SetRadixBitsInternal(const idx_t radix_bits_p, bool external);
@@ -200,12 +201,16 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       any_combined(false), finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
       count_before_combining(0), max_partition_size(0) {
 
-	auto tuples_per_block = Storage::BLOCK_ALLOC_SIZE / radix_ht.GetLayout().GetRowWidth();
+	// Compute minimum reservation
+	auto tuples_per_block = Storage::BLOCK_SIZE / radix_ht.GetLayout().GetRowWidth();
 	idx_t ht_count =
 	    NumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
-	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetRadixBits());
+	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetMaxRadixBits());
 	auto count_per_partition = ht_count / num_partitions;
 	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block + 1;
+	if (!radix_ht.GetLayout().AllConstant()) {
+		blocks_per_partition += 2;
+	}
 	auto ht_size = blocks_per_partition * Storage::BLOCK_ALLOC_SIZE + config.sink_capacity * sizeof(ht_entry_t);
 
 	// This really is the minimum reservation that we can do
@@ -268,6 +273,10 @@ bool RadixHTConfig::SetRadixBitsToExternal() {
 
 idx_t RadixHTConfig::GetRadixBits() const {
 	return sink_radix_bits;
+}
+
+idx_t RadixHTConfig::GetMaxRadixBits() const {
+	return external_radix_bits;
 }
 
 void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external) {
@@ -749,6 +758,9 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	// Update thread-global state
 	lock_guard<mutex> global_guard(sink.lock);
 	sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
+	if (task_idx == sink.partitions.size()) {
+		ht.reset();
+	}
 	const auto finalizes_done = ++sink.finalize_done;
 	D_ASSERT(finalizes_done <= sink.partitions.size());
 	if (finalizes_done == sink.partitions.size()) {

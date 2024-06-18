@@ -216,6 +216,12 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 				D_ASSERT(child2_entry != event_map.end());
 				child1_entry->second.pipeline_finish_event.AddDependency(child2_entry->second.pipeline_event);
 			}
+			// also make the finish event depend on the initialize even of the base pipeline
+			// so that the sink will be initialized before the child pipelines are finished
+			auto &meta_base = *meta_pipeline->GetBasePipeline();
+			auto meta_entry = event_map.find(meta_base);
+			D_ASSERT(meta_entry != event_map.end());
+			child1_entry->second.pipeline_finish_event.AddDependency(meta_entry->second.pipeline_initialize_event);
 		}
 	}
 
