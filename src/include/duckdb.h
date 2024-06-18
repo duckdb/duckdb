@@ -2706,7 +2706,7 @@ DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info i
 // Profiling Info
 //===--------------------------------------------------------------------===//
 
-//! Returns the root node from the profiling information.
+//! Returns the root node from the profiling information. Returns NULL if profiling is not enabled
 DUCKDB_API duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection);
 
 //! Returns the value of the setting key of the current profiling info node. If the setting does not exist or is not

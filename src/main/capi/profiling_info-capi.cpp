@@ -10,7 +10,12 @@ duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection) {
 		return nullptr;
 	}
 	Connection *conn = reinterpret_cast<Connection *>(connection);
-	auto profiling_info = conn->GetProfilingTree();
+	duckdb::ProfilingNode *profiling_info;
+	try {
+		profiling_info = conn->GetProfilingTree();
+	} catch (std::exception &ex) {
+        return nullptr;
+	}
 	return reinterpret_cast<duckdb_profiling_info>(profiling_info);
 }
 
