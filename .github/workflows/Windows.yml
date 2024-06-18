@@ -252,7 +252,7 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_CUSTOM_PLATFORM=windows_arm64
+         cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64
          cmake --build . --config Release --parallel
 
      - name: Deploy
