@@ -41,17 +41,17 @@ class TestPandasNA(object):
         items = [x[0] for x in [y for y in res]]
         assert_nullness(items, [null_index])
 
-        # Test if pd.NA behaves the same as np.NaN once converted
+        # Test if pd.NA behaves the same as np.nan once converted
         nan_df = pd.DataFrame(
             {
                 'a': [
                     1.123,
                     5.23234,
-                    np.NaN,
+                    np.nan,
                     7234.0000124,
                     0.000000124,
                     0000000000000.0000001,
-                    np.NaN,
+                    np.nan,
                     -2342349234.00934580345,
                 ]
             }
