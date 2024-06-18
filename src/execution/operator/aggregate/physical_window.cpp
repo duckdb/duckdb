@@ -294,7 +294,7 @@ public:
 	OrderMasks order_masks;
 	//! External paging
 	bool external;
-	//! The current execution functions
+	//! The function global states for this hash group
 	ExecutorGlobalStates gestates;
 
 	//! The bin number
@@ -698,7 +698,7 @@ double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gs
 
 	auto &gsink = gsource.gsink;
 	const auto count = gsink.global_partition->count.load();
-	return count ? (returned / double(count)) : -1;
+	return count ? (double(returned) / double(count)) : -1;
 }
 
 idx_t PhysicalWindow::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
