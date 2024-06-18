@@ -1309,6 +1309,10 @@ unique_ptr<QueryResult> ClientContext::CreateSnapshot() {
     snapshot_file = transaction.Snapshot();
   });
 
+  if (snapshot_file.length() == 0) {
+    return unique_ptr<QueryResult>(nullptr);
+  }
+  
   StatementType statement_type = StatementType::SELECT_STATEMENT;
   string query = "SELECT blob_column";
   auto lock = LockContext();

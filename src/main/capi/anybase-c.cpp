@@ -31,6 +31,9 @@ duckdb_state duckdb_create_snapshot(duckdb_connection connection, duckdb_result 
 {
   Connection *conn = reinterpret_cast<Connection *>(connection);
   auto result = conn->CreateSnapshot();
+  if (! result) {
+    return DuckDBError;
+  }
   return DuckDBTranslateResult(std::move(result), out_result);
 }
 

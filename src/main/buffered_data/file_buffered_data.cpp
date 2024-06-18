@@ -31,7 +31,10 @@ PendingExecutionResult FileBufferedData::ReplenishBuffer(StreamQueryResult &resu
 		// The buffer isn't empty yet, just return
 		return PendingExecutionResult::RESULT_READY;
 	}
-	uint32_t max_blob_size = std::numeric_limits<int32_t>::max();
+
+	// max blob size is std::numeric_limits<int32_t>::max().
+
+	uint32_t max_blob_size = 64 * 1024;
 	auto to_append = make_uniq<DataChunk>();
 	vector<LogicalType> types{LogicalType::BLOB};
 

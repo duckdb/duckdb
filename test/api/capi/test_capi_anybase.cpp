@@ -148,3 +148,22 @@ TEST_CASE("Test DataChunk C API reference", "[capi]") {
 	duckdb_destroy_logical_type(&types[0]);
 	duckdb_destroy_logical_type(&types[1]);
 }
+
+TEST_CASE("Test Snapshot in C API", "[capi]") {
+	duckdb_database db;
+	duckdb_connection con;
+	duckdb_result result;
+
+	REQUIRE(duckdb_open(NULL, &db) != DuckDBError);
+	REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+
+	REQUIRE(duckdb_query(con, "CREATE TABLE test(i INTEGER);", NULL) != DuckDBError);
+	REQUIRE(duckdb_query(con, "Insert INTO test VALUES (1), (2);", NULL) != DuckDBError);
+	
+	// For in memory databases, snapshot id == 0 and it is an error to create a snapshot
+	REQUIRE(duckdb_get_snapshot_id(con) == 0);
+	REQUIRE(duckdb_create_snapshot(con, &result) == DuckDBError);
+
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+}
