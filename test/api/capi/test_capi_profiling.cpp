@@ -73,11 +73,13 @@ TEST_CASE("Test Profiling with Single Metric", "[capi]") {
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
 
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
+
 	// test only CPU_TIME profiling
 	std::vector<string> settings = {"CPU_TIME"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildProfilingSettingsString(settings)));
 
-	tester.Query("SELECT 42");
+	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
 	auto profiling_info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(profiling_info != nullptr);
@@ -98,13 +100,19 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
 
+	// Retrieve profiling info without enabling profiling
+	auto profiling_info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(profiling_info == nullptr);
+
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
+
 	// test all profiling metrics
 	std::vector<string> settings = {"CPU_TIME", "EXTRA_INFO", "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildProfilingSettingsString(settings)));
 
-	tester.Query("SELECT 42");
+	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
-	auto profiling_info = duckdb_get_profiling_info(tester.connection);
+	profiling_info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(profiling_info != nullptr);
 
 	TraverseTree(profiling_info, settings);

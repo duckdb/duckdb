@@ -58,6 +58,9 @@ string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 }
 
 ProfilingNode *Connection::GetProfilingTree() {
+    if (!context->ProfilingIsEnabled()) {
+		throw Exception(ExceptionType::SETTINGS, "Profiling is not enabled for this connection");
+	}
 	auto &profiler = QueryProfiler::Get(*context);
 	return profiler.GetRoot();
 }

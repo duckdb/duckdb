@@ -91,6 +91,9 @@ public:
 
 	//! Interrupt execution of a query
 	DUCKDB_API void Interrupt();
+
+	//! Check if ProfilingIsEnabled
+	bool ProfilingIsEnabled();
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
 	//! Disable query profiling
