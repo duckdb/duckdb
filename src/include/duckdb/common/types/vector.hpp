@@ -204,6 +204,8 @@ public:
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
+	idx_t GetAllocationSize(idx_t cardinality) const;
+
 	// Getters
 	inline VectorType GetVectorType() const {
 		return vector_type;
