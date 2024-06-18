@@ -117,7 +117,7 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 
 		// We need to check all strings for this, otherwise we run in to trouble during compression if we miss ones
 		auto string_size = data[idx].GetSize();
-		if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
+		if (string_size >= StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize())) {
 			return false;
 		}
 
@@ -583,7 +583,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		if (scan_state.duckdb_fsst_decoder) {
 			D_ASSERT(result_offset == 0 || result.GetVectorType() == VectorType::FSST_VECTOR);
 			result.SetVectorType(VectorType::FSST_VECTOR);
-			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder);
+			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder,
+			                            segment.GetBlockManager().GetBlockSize());
 			result_data = FSSTVector::GetCompressedData<string_t>(result);
 		} else {
 			D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -626,8 +627,9 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 			    UnsafeNumericCast<int32_t>(delta_decode_buffer[i + offsets.unused_delta_decoded_values]));
 
 			if (str_len > 0) {
-				result_data[i + result_offset] =
-				    FSSTPrimitives::DecompressValue(scan_state.duckdb_fsst_decoder.get(), result, str_ptr, str_len);
+				auto block_size = segment.GetBlockManager().GetBlockSize();
+				result_data[i + result_offset] = FSSTPrimitives::DecompressValue(scan_state.duckdb_fsst_decoder.get(),
+				                                                                 result, str_ptr, str_len, block_size);
 			} else {
 				result_data[i + result_offset] = string_t(nullptr, 0);
 			}
@@ -660,30 +662,32 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 
-	if (have_symbol_table) {
-		// We basically just do a scan of 1 which is kinda expensive as we need to repeatedly delta decode until we
-		// reach the row we want, we could consider a more clever caching trick if this is slow
-		auto offsets = CalculateBpDeltaOffsets(-1, UnsafeNumericCast<idx_t>(row_id), 1);
-
-		auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
-		BitUnpackRange(base_data, data_ptr_cast(bitunpack_buffer.get()), offsets.total_bitunpack_count,
-		               offsets.bitunpack_start_row, width);
-		auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
-		DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
-		                   offsets.total_delta_decode_count, 0);
-
-		uint32_t string_length = bitunpack_buffer[offsets.scan_offset];
-
-		string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(
-		    segment, dict, result, base_ptr,
-		    UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]), string_length);
-
-		result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, result, compressed_string.GetData(),
-		                                                          compressed_string.GetSize());
-	} else {
-		// There's no fsst symtable, this only happens for empty strings or nulls, we can just emit an empty string
+	if (!have_symbol_table) {
+		// There is no FSST symtable. This is only the case for empty strings or NULLs. We emit an empty string.
 		result_data[result_idx] = string_t(nullptr, 0);
+		return;
 	}
+
+	// We basically just do a scan of 1 which is kinda expensive as we need to repeatedly delta decode until we
+	// reach the row we want, we could consider a more clever caching trick if this is slow
+	auto offsets = CalculateBpDeltaOffsets(-1, UnsafeNumericCast<idx_t>(row_id), 1);
+
+	auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
+	BitUnpackRange(base_data, data_ptr_cast(bitunpack_buffer.get()), offsets.total_bitunpack_count,
+	               offsets.bitunpack_start_row, width);
+	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
+	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
+	                   offsets.total_delta_decode_count, 0);
+
+	uint32_t string_length = bitunpack_buffer[offsets.scan_offset];
+
+	string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(
+	    segment, dict, result, base_ptr,
+	    UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]), string_length);
+
+	auto block_size = segment.GetBlockManager().GetBlockSize();
+	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, result, compressed_string.GetData(),
+	                                                          compressed_string.GetSize(), block_size);
 }
 
 //===--------------------------------------------------------------------===//

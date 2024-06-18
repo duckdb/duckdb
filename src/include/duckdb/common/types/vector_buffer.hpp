@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -202,8 +203,17 @@ public:
 	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p) {
 		duckdb_fsst_decoder = duckdb_fsst_decoder_p;
 	}
+	void AddBlockSize(const idx_t block_size_p) {
+		block_size = block_size_p;
+	}
 	void *GetDecoder() {
 		return duckdb_fsst_decoder.get();
+	}
+	idx_t GetBlockSize() {
+		if (block_size.IsValid()) {
+			return block_size.GetIndex();
+		}
+		throw InternalException("GetBlockSize called on FSST Vector without registered block size");
 	}
 	void SetCount(idx_t count) {
 		total_string_count = count;
@@ -215,6 +225,7 @@ public:
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
 	idx_t total_string_count = 0;
+	optional_idx block_size;
 };
 
 class VectorStructBuffer : public VectorBuffer {
