@@ -48,7 +48,6 @@ public:
 	ArrowMergeEvent(ArrowQueryResult &result, BatchedDataCollection &batches, Pipeline &pipeline_p);
 
 public:
-	vector<idx_t> ProduceRecordBatchIndices(idx_t index);
 	void Schedule() override;
 
 public:
@@ -56,7 +55,6 @@ public:
 	BatchedDataCollection &batches;
 
 private:
-	idx_t record_batch_index = 0;
 	//! The max size of a record batch to output
 	idx_t record_batch_size;
 };
