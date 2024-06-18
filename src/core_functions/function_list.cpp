@@ -109,6 +109,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION_SET(BitstringAggFun),
 	DUCKDB_AGGREGATE_FUNCTION(BoolAndFun),
 	DUCKDB_AGGREGATE_FUNCTION(BoolOrFun),
+	DUCKDB_SCALAR_FUNCTION(CanCastImplicitlyFun),
 	DUCKDB_SCALAR_FUNCTION(CardinalityFun),
 	DUCKDB_SCALAR_FUNCTION(CbrtFun),
 	DUCKDB_SCALAR_FUNCTION_SET(CeilFun),

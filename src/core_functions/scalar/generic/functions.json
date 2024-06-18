@@ -57,6 +57,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "can_cast_implicitly",
+        "parameters": "source_type,target_type",
+        "description": "Whether or not we can implicitly cast from the source type to the other type",
+        "example": "can_implicitly_cast(NULL::INTEGER, NULL::BIGINT)",
+        "type": "scalar_function"
+    },
+    {
         "name": "current_query",
         "parameters": "",
         "description": "Returns the current query as a string",
