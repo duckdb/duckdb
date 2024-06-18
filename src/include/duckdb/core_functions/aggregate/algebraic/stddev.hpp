@@ -40,7 +40,6 @@ struct STDDevBaseOperation {
 
 		state.mean = new_mean;
 		state.dsquared = new_dsquared;
-		
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -49,7 +48,8 @@ struct STDDevBaseOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
@@ -60,14 +60,17 @@ struct STDDevBaseOperation {
 		if (target.count == 0) {
 			target = source;
 		} else if (source.count > 0) {
+			const auto count = target.count + source.count;
+			D_ASSERT(count >= target.count); // This is a check that we are not overflowing
 			const double target_count = static_cast<double>(target.count);
 			const double source_count = static_cast<double>(source.count);
-			const auto count = target_count + source_count;
-			const auto mean = (source_count * source.mean + target_count * target.mean) / count;
+			const double total_count = static_cast<double>(count);
+			const auto mean = (source_count * source.mean + target_count * target.mean) / total_count;
 			const auto delta = source.mean - target.mean;
-			target.dsquared = source.dsquared + target.dsquared + delta * delta * static_cast<double>(source.count * target.count) / count;
+			target.dsquared =
+			    source.dsquared + target.dsquared + delta * delta * source_count * target_count / total_count;
 			target.mean = mean;
-			target.count = static_cast<decltype(target.count)>(count);
+			target.count = count;
 		}
 	}
 
