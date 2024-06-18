@@ -104,10 +104,10 @@ SELECT histogram([n], [[x] for x in [10, 20, 30, 40, 50]]) FROM obs
 {[10]=3, [20]=2, [30]=5, [40]=3, [50]=2}
 
 # duplicate bounds in bins
-statement error
+query I
 SELECT histogram(n, [10, 10, 10, 10]) FROM obs
 ----
-cannot contain duplicates
+{10=3}
 
 # null WITHIN bins
 statement error
