@@ -81,7 +81,7 @@ jobs:
       run: |
         python scripts/windows_ci.py
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release
+        cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
@@ -210,7 +210,7 @@ jobs:
       shell: bash
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release
+        cmake --build . --config Release --parallel
 
     - name: Test
       shell: bash
@@ -245,11 +245,6 @@ jobs:
          key: ${{ github.job }}
          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-
-     - name: Install MSVC ARM build tools
-       run: |
-         ls "C:/Program Files*/Microsoft Visual Studio/*/BuildTools/VC/Tools/MSVC/*/bin/Hostx64/*/cl.exe"
-
      - name: Install pytest
        run: |
          python -m pip install pytest
@@ -257,19 +252,29 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-         cmake --build . --config Release
+         cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_CUSTOM_PLATFORM=windows_arm64
+         cmake --build . --config Release --parallel
 
-     - name: Test
+     - name: Deploy
        shell: bash
-       run: test/Release/unittest.exe
-
-     - name: Tools Test
-       shell: bash
+       env:
+         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
-         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
+         python scripts/amalgamation.py
+         choco install zip -y --force
+         zip -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
+         zip -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+         zip -j duckdb_odbc-windows-arm64.zip tools/odbc/bin/Release/*
+         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip duckdb_odbc-windows-arm64.zip
 
+     - uses: actions/upload-artifact@v3
+       with:
+         name: duckdb-binaries-windows
+         path: |
+           libduckdb-windows-arm64.zip
+           duckdb_cli-windows-arm64.zip
+           duckdb_odbc-windows-arm64.zip
 
  mingw:
      name: MingW (64 Bit)
@@ -301,7 +306,7 @@ jobs:
          shell: msys2 {0}
          run: |
            cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS=parquet -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-           cmake --build . --config Release
+           cmake --build . --config Release 
 
        - name: Test
          shell: msys2 {0}
