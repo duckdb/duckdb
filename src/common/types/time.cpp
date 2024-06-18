@@ -285,6 +285,15 @@ dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 	return dtime_t(result);
 }
 
+int64_t Time::ToNanoTime(int32_t hour, int32_t minute, int32_t second, int32_t nanoseconds) {
+	int64_t result;
+	result = hour;                                           // hours
+	result = result * Interval::MINS_PER_HOUR + minute;      // hours -> minutes
+	result = result * Interval::SECS_PER_MINUTE + second;    // minutes -> seconds
+	result = result * Interval::NANOS_PER_SEC + nanoseconds; // seconds -> nanoseconds
+	return result;
+}
+
 bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
 	if (hour < 0 || hour >= 24) {
 		return (hour == 24) && (minute == 0) && (second == 0) && (microseconds == 0);
