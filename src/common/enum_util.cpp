@@ -5495,6 +5495,8 @@ const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value) {
 		return "JSON";
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
 		return "QUERY_TREE_OPTIMIZER";
+	case ProfilerPrintFormat::NO_OUTPUT:
+		return "NO_OUTPUT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5510,6 +5512,9 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	}
 	if (StringUtil::Equals(value, "QUERY_TREE_OPTIMIZER")) {
 		return ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	}
+	if (StringUtil::Equals(value, "NO_OUTPUT")) {
+		return ProfilerPrintFormat::NO_OUTPUT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
