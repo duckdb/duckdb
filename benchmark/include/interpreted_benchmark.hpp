@@ -54,6 +54,12 @@ public:
 	bool RequireReinit() override {
 		return require_reinit;
 	}
+	QueryResultType ResultMode() const {
+		return result_type;
+	}
+	idx_t ArrowBatchSize() const {
+		return arrow_batch_size;
+	}
 
 private:
 	string VerifyInternal(BenchmarkState *state_p, MaterializedQueryResult &result);
@@ -85,6 +91,7 @@ private:
 
 	bool in_memory = true;
 	QueryResultType result_type = QueryResultType::MATERIALIZED_RESULT;
+	idx_t arrow_batch_size = STANDARD_VECTOR_SIZE;
 	bool require_reinit = false;
 };
 

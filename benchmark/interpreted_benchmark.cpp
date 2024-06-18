@@ -129,6 +129,13 @@ void InterpretedBenchmark::ReadResultFromReader(BenchmarkFileReader &reader, con
 	}
 }
 
+static void ThrowResultModeError(BenchmarkFileReader &reader) {
+	vector<string> valid_options = {"streaming", "arrow", "materialized"};
+	auto error = StringUtil::Format("Invalid argument for resultmode, valid options are: %s",
+	                                StringUtil::Join(valid_options, ", "));
+	throw std::runtime_error(reader.FormatException(error));
+}
+
 void InterpretedBenchmark::LoadBenchmark() {
 	if (is_loaded) {
 		return;
@@ -181,21 +188,34 @@ void InterpretedBenchmark::LoadBenchmark() {
 			}
 			extensions.insert(splits[1]);
 		} else if (splits[0] == "resultmode") {
-			if (splits.size() != 2) {
-				throw std::runtime_error(reader.FormatException("resultmode requires a single parameter"));
+			if (splits.size() < 2) {
+				ThrowResultModeError(reader);
 			}
 			if (splits[1] == "streaming") {
+				if (splits.size() != 2) {
+					throw std::runtime_error(
+					    reader.FormatException("resultmode 'streaming' does not accept a parameter"));
+				}
 				result_type = QueryResultType::STREAM_RESULT;
 			} else if (splits[1] == "arrow") {
-				// FIXME: perhaps it makes sense to be able to set a 'batch_size' to use for the result collector
+				arrow_batch_size = STANDARD_VECTOR_SIZE;
+				if (splits.size() == 3) {
+					auto custom_batch_size = std::stoi(splits[2]);
+					arrow_batch_size = custom_batch_size;
+				}
+				if (splits.size() != 2 && splits.size() != 3) {
+					throw std::runtime_error(reader.FormatException(
+					    "resultmode 'arrow' only takes 1 optional extra parameter (batch_size)"));
+				}
 				result_type = QueryResultType::ARROW_RESULT;
 			} else if (splits[1] == "materialized") {
+				if (splits.size() != 2) {
+					throw std::runtime_error(
+					    reader.FormatException("resultmode 'materialized' does not accept a parameter"));
+				}
 				result_type = QueryResultType::MATERIALIZED_RESULT;
 			} else {
-				vector<string> valid_options = {"streaming", "arrow", "materialized"};
-				auto error = StringUtil::Format("Invalid argument for resultmode, valid options are: %s",
-				                                StringUtil::Join(valid_options, ", "));
-				throw std::runtime_error(reader.FormatException(error));
+				ThrowResultModeError(reader);
 			}
 		} else if (splits[0] == "cache") {
 			if (splits.size() == 2) {
@@ -439,13 +459,14 @@ string InterpretedBenchmark::GetQuery() {
 	return run_query;
 }
 
-ScopedConfigSetting PrepareResultCollector(ClientConfig &config, QueryResultType result_type) {
+ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenchmark &benchmark) {
+	auto result_type = benchmark.ResultMode();
 	if (result_type == QueryResultType::ARROW_RESULT) {
 		return ScopedConfigSetting(
 		    config,
-		    [](ClientConfig &config) {
-			    config.result_collector = [](ClientContext &context, PreparedStatementData &data) {
-				    return PhysicalArrowCollector::Create(context, data, STANDARD_VECTOR_SIZE);
+		    [&benchmark](ClientConfig &config) {
+			    config.result_collector = [&benchmark](ClientContext &context, PreparedStatementData &data) {
+				    return PhysicalArrowCollector::Create(context, data, benchmark.ArrowBatchSize());
 			    };
 		    },
 		    [](ClientConfig &config) { config.result_collector = nullptr; });
@@ -458,7 +479,7 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto &context = state.con.context;
 
 	auto &config = ClientConfig::GetConfig(*context);
-	auto result_collector_setting = PrepareResultCollector(config, result_type);
+	auto result_collector_setting = PrepareResultCollector(config, *this);
 	const bool use_streaming = result_type == QueryResultType::STREAM_RESULT;
 	auto temp_result = context->Query(run_query, use_streaming);
 	if (temp_result->type != result_type) {
