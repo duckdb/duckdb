@@ -100,6 +100,8 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
 
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
+
 	// test all profiling metrics
 	std::vector<string> settings = {"CPU_TIME", "EXTRA_INFO", "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildProfilingSettingsString(settings)));
@@ -116,16 +118,16 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 }
 
 TEST_CASE("Test Profiling without Enabling Profiling", "[capi]") {
-    CAPITester tester;
-    duckdb::unique_ptr<CAPIResult> result;
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
 
-    // open the database in in-memory mode
-    REQUIRE(tester.OpenDatabase(nullptr));
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
 
-    // Retrieve profiling info without enabling profiling
-    auto profiling_info = duckdb_get_profiling_info(tester.connection);
-    REQUIRE(profiling_info == nullptr);
+	// Retrieve profiling info without enabling profiling
+	auto profiling_info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(profiling_info == nullptr);
 
-    // Cleanup
-    tester.Cleanup();
+	// Cleanup
+	tester.Cleanup();
 }

@@ -14,7 +14,7 @@ duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection) {
 	try {
 		profiling_info = conn->GetProfilingTree();
 	} catch (std::exception &ex) {
-        return nullptr;
+		return nullptr;
 	}
 	return reinterpret_cast<duckdb_profiling_info>(profiling_info);
 }
