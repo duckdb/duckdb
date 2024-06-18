@@ -76,10 +76,12 @@ struct FunctionModifiedDatabasesInput {
 };
 
 struct FunctionBindExpressionInput {
-	FunctionBindExpressionInput(optional_ptr<FunctionData> bind_data_p, BoundFunctionExpression &function_p)
-	    : bind_data(bind_data_p), function(function_p) {
+	FunctionBindExpressionInput(ClientContext &context_p, optional_ptr<FunctionData> bind_data_p,
+	                            BoundFunctionExpression &function_p)
+	    : context(context_p), bind_data(bind_data_p), function(function_p) {
 	}
 
+	ClientContext &context;
 	optional_ptr<FunctionData> bind_data;
 	BoundFunctionExpression &function;
 };
