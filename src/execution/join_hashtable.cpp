@@ -1401,6 +1401,7 @@ void JoinHashTable::Repartition(JoinHashTable &global_ht) {
 
 void JoinHashTable::Reset() {
 	data_collection->Reset();
+	hash_map.Reset();
 	finalized = false;
 }
 

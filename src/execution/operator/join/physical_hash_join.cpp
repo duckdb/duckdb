@@ -7,10 +7,10 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -805,8 +805,12 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 
 	// Try to put the next partitions in the block collection of the HT
 	if (!sink.external || !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation())) {
-		global_stage = HashJoinSourceStage::DONE;
-		sink.temporary_memory_state->SetRemainingSize(sink.context, 0);
+		lock_guard<mutex> guard(lock);
+		if (global_stage != HashJoinSourceStage::DONE) {
+			global_stage = HashJoinSourceStage::DONE;
+			ht.Reset();
+			sink.temporary_memory_state->SetRemainingSize(sink.context, 0);
+		}
 		return;
 	}
 

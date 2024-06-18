@@ -36,6 +36,8 @@ public:
 	idx_t GetRemainingSize() const;
 	//! Set the minimum reservation for this state
 	void SetMinimumReservation(idx_t new_minimum_reservation);
+	//! Get the minimum reservation for this state
+	idx_t GetMinimumReservation() const;
 	//! Get the reservation of this state
 	idx_t GetReservation() const;
 
@@ -64,14 +66,14 @@ public:
 private:
 	//! TemporaryMemoryState is initialized with a minimum reservation guarantee, which is either
 	//! 512 blocks per state per thread, which is 0.125GB per thread for Storage::BLOCK_ALLOC_SIZE = 262144
-	static constexpr const idx_t MINIMUM_RESERVATION_PER_STATE_PER_THREAD = idx_t(512) * Storage::BLOCK_ALLOC_SIZE;
+	static constexpr idx_t MINIMUM_RESERVATION_PER_STATE_PER_THREAD = idx_t(512) * Storage::BLOCK_ALLOC_SIZE;
 	//! Or 1/16th of main memory, if that is lower
-	static constexpr const idx_t MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR = 16;
+	static constexpr idx_t MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR = 16;
 
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager
-	static constexpr const double MAXIMUM_MEMORY_LIMIT_RATIO = 0.8;
+	static constexpr double MAXIMUM_MEMORY_LIMIT_RATIO = 0.8;
 	//! The maximum ratio of the remaining memory that we reserve per TemporaryMemoryState
-	static constexpr const double MAXIMUM_FREE_MEMORY_RATIO = double(2) / double(3);
+	static constexpr double MAXIMUM_FREE_MEMORY_RATIO = static_cast<double>(2) / static_cast<double>(3);
 
 public:
 	//! Get the TemporaryMemoryManager
@@ -82,6 +84,8 @@ public:
 private:
 	//! Locks the TemporaryMemoryManager
 	unique_lock<mutex> Lock();
+	//! Unregister a TemporaryMemoryState (called by the destructor of TemporaryMemoryState)
+	void Unregister(TemporaryMemoryState &temporary_memory_state);
 	//! Update memory_limit, has_temporary_directory, and num_threads (must hold the lock)
 	void UpdateConfiguration(ClientContext &context);
 	//! Update the TemporaryMemoryState to the new remaining size, and updates the reservation (must hold the lock)
@@ -90,8 +94,9 @@ private:
 	void SetRemainingSize(TemporaryMemoryState &temporary_memory_state, idx_t new_remaining_size);
 	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
 	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation);
-	//! Unregister a TemporaryMemoryState (called by the destructor of TemporaryMemoryState)
-	void Unregister(TemporaryMemoryState &temporary_memory_state);
+	//! Computes optimal reservation of a TemporaryMemoryState based on a cost function
+	idx_t ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state, const idx_t &lower_bound,
+	                                const idx_t &upper_bound) const;
 	//! Verify internal counts (must hold the lock)
 	void Verify() const;
 

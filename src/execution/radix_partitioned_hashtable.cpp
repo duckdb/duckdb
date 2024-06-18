@@ -654,10 +654,8 @@ SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &si
                                                       InterruptState &interrupt_state) {
 	// First, try to get a partition index
 	lock_guard<mutex> gstate_guard(sink.lock);
-	if (finished) {
-		return SourceResultType::FINISHED;
-	}
-	if (task_idx == sink.partitions.size()) {
+	if (finished || task_idx == sink.partitions.size()) {
+		lstate.ht.reset();
 		return SourceResultType::FINISHED;
 	}
 	lstate.task_idx = task_idx++;
