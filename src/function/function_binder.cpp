@@ -359,10 +359,10 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 	unique_ptr<Expression> result;
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function),
 	                                                      std::move(children), std::move(bind_info), is_operator);
-	if (bound_function.bind_expression) {
+	if (result_func->function.bind_expression) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression
 		FunctionBindExpressionInput input(result_func->bind_info.get(), *result_func);
-		result = bound_function.bind_expression(input);
+		result = result_func->function.bind_expression(input);
 	}
 	if (!result) {
 		result = std::move(result_func);
