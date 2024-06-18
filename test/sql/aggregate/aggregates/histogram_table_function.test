@@ -41,7 +41,7 @@ SELECT * FROM histogram_values(integers, i, bin_count := 10, technique := 'equi-
 query II
 SELECT bin, count FROM histogram(integers, i, bin_count := 10, technique := 'equi-width')
 ----
-x < 12	13
+x <= 12	13
 12 < x <= 25	13
 25 < x <= 37	12
 37 < x <= 50	14
@@ -108,7 +108,7 @@ SELECT * FROM histogram_values(integers, i::VARCHAR, technique := 'equi-height')
 query II
 SELECT bin, count FROM histogram(integers, i::VARCHAR, technique := 'equi-height')
 ----
-x < 109	13
+x <= 109	13
 109 < x <= 120	13
 120 < x <= 19	13
 19 < x <= 30	13
@@ -118,3 +118,32 @@ x < 109	13
 65 < x <= 77	13
 77 < x <= 88	13
 88 < x <= 99999999	13
+
+
+# booleans
+statement ok
+create table booleans(b bool);
+
+statement ok
+insert into booleans select case when i%4=0 then true else false end from range(100) t(i)
+
+query II
+SELECT * FROM histogram_values(booleans, b::INTEGER)
+----
+0	75
+1	25
+
+mode skip
+
+# FIXME: booleans do not work yet because of quantile turning any unsupported type into VARCHAR
+query II
+SELECT * FROM histogram_values(booleans, b)
+----
+
+# lists
+# FIXME: lists do not work yet because of quantile turning any unsupported type into VARCHAR
+query II
+SELECT * FROM histogram_values(integers, [i%2])
+----
+
+mode unskip

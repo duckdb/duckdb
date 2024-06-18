@@ -120,7 +120,7 @@ struct EquiWidthBinsInteger {
 			const hugeint_t target_boundary = bin_boundary / FACTOR;
 			int64_t real_boundary = Hugeint::Cast<int64_t>(target_boundary);
 			if (!result.empty()) {
-				if (real_boundary <= input_min || result.size() >= bin_count) {
+				if (real_boundary < input_min || result.size() >= bin_count) {
 					// we can never generate input_min
 					break;
 				}
@@ -166,8 +166,8 @@ struct EquiWidthBinsDouble {
 			if (nice_rounding) {
 				bin_boundary = std::round(bin_boundary * round_multiplication) / round_multiplication;
 			}
-			if (bin_boundary <= min || result.size() >= bin_count) {
-				// we can never generate input_min
+			if (bin_boundary < min || result.size() >= bin_count) {
+				// we can never generate below input_min
 				break;
 			}
 			result.push_back(bin_boundary);
@@ -360,7 +360,7 @@ struct EquiWidthBinsTimestamp {
 		}
 
 		vector<PrimitiveType<timestamp_t>> result;
-		while (timestamp_val.value > input_min.value && result.size() < bin_count) {
+		while (timestamp_val.value >= input_min.value && result.size() < bin_count) {
 			result.push_back(timestamp_val);
 			timestamp_val = SubtractOperator::Operation<timestamp_t, interval_t, timestamp_t>(timestamp_val, step);
 		}
