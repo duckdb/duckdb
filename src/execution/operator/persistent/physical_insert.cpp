@@ -446,10 +446,18 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			gstate.initialized = true;
 		}
 
-		if (return_chunk) {
+		if (action_type != OnConflictAction::NOTHING && return_chunk) {
+			// If the action is UPDATE or REPLACE, we will always create either an APPEND or an INSERT
+			// for NOTHING we don't create either an APPEND or an INSERT for the tuple
+			// so it should not be added to the RETURNING chunk
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
 		idx_t updated_tuples = OnConflictHandling(table, context, lstate);
+		if (action_type == OnConflictAction::NOTHING && return_chunk) {
+			// Because we didn't add to the RETURNING chunk yet
+			// we add the tuples that did not get filtered out now
+			gstate.return_collection.Append(lstate.insert_chunk);
+		}
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
