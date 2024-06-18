@@ -248,7 +248,7 @@ jobs:
 
      - name: Install MSVC ARM build tools
        run: |
-         ls "C:/Program Files*/Microsoft Visual Studio/*/BuildTools/VC/Tools/MSVC/*/bin/Hostx64/arm64/cl.exe"
+         ls "C:/Program Files*/Microsoft Visual Studio/*/BuildTools/VC/Tools/MSVC/*/bin/Hostx64/*/cl.exe"
 
      - name: Install pytest
        run: |
