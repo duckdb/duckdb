@@ -4,24 +4,24 @@
 from duckdb import FunctionExpression
 
 
-def __internal_compress_integral_ubigint(col0, col1, /) -> FunctionExpression:
+def __internal_compress_integral_ubigint(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_compress_integral_ubigint", col0, col1)
+    return FunctionExpression("__internal_compress_integral_ubigint", col1, col0)
 
 
-def __internal_compress_integral_uinteger(col0, col1, /) -> FunctionExpression:
+def __internal_compress_integral_uinteger(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_compress_integral_uinteger", col0, col1)
+    return FunctionExpression("__internal_compress_integral_uinteger", col1, col0)
 
 
-def __internal_compress_integral_usmallint(col0, col1, /) -> FunctionExpression:
+def __internal_compress_integral_usmallint(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_compress_integral_usmallint", col0, col1)
+    return FunctionExpression("__internal_compress_integral_usmallint", col1, col0)
 
 
-def __internal_compress_integral_utinyint(col0, col1, /) -> FunctionExpression:
+def __internal_compress_integral_utinyint(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_compress_integral_utinyint", col0, col1)
+    return FunctionExpression("__internal_compress_integral_utinyint", col1, col0)
 
 
 def __internal_compress_string_hugeint(col0, /) -> FunctionExpression:
@@ -49,39 +49,39 @@ def __internal_compress_string_utinyint(col0, /) -> FunctionExpression:
     return FunctionExpression("__internal_compress_string_utinyint", col0)
 
 
-def __internal_decompress_integral_bigint(col0, col1, /) -> FunctionExpression:
+def __internal_decompress_integral_bigint(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_decompress_integral_bigint", col0, col1)
+    return FunctionExpression("__internal_decompress_integral_bigint", col1, col0)
 
 
-def __internal_decompress_integral_hugeint(col0, col1, /) -> FunctionExpression:
+def __internal_decompress_integral_hugeint(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_decompress_integral_hugeint", col0, col1)
+    return FunctionExpression("__internal_decompress_integral_hugeint", col1, col0)
 
 
-def __internal_decompress_integral_integer(col0, col1, /) -> FunctionExpression:
+def __internal_decompress_integral_integer(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_decompress_integral_integer", col0, col1)
+    return FunctionExpression("__internal_decompress_integral_integer", col1, col0)
 
 
-def __internal_decompress_integral_smallint(col0, col1, /) -> FunctionExpression:
+def __internal_decompress_integral_smallint(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_decompress_integral_smallint", col0, col1)
+    return FunctionExpression("__internal_decompress_integral_smallint", col1, col0)
 
 
-def __internal_decompress_integral_ubigint(col0, col1, /) -> FunctionExpression:
+def __internal_decompress_integral_ubigint(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_decompress_integral_ubigint", col0, col1)
+    return FunctionExpression("__internal_decompress_integral_ubigint", col1, col0)
 
 
-def __internal_decompress_integral_uinteger(col0, col1, /) -> FunctionExpression:
+def __internal_decompress_integral_uinteger(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_decompress_integral_uinteger", col0, col1)
+    return FunctionExpression("__internal_decompress_integral_uinteger", col1, col0)
 
 
-def __internal_decompress_integral_usmallint(col0, col1, /) -> FunctionExpression:
+def __internal_decompress_integral_usmallint(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("__internal_decompress_integral_usmallint", col0, col1)
+    return FunctionExpression("__internal_decompress_integral_usmallint", col1, col0)
 
 
 def __internal_decompress_string(col0, /) -> FunctionExpression:
@@ -101,20 +101,22 @@ def acos(x, /) -> FunctionExpression:
 
 def add(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None and col1 is not None:
+        return FunctionExpression("add", col0, col1)
+    elif col0 is not None:
         return FunctionExpression("add", col0)
-    return FunctionExpression("add", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def age(timestamp1=None, timestamp2=None, /) -> FunctionExpression:
+def age(timestamp1=None, timestamp2=None, timestamp=None, /) -> FunctionExpression:
     """Subtract arguments, resulting in the time difference between the two timestamps"""
-    if timestamp1 is None:
-        return FunctionExpression("age", timestamp2)
-    if timestamp2 is None:
-        return FunctionExpression("age", timestamp1)
-    if timestamp1 is None and timestamp2 is None:
-        return FunctionExpression("age")
-    return FunctionExpression("age", timestamp1, timestamp2)
+    if timestamp1 is not None and timestamp2 is not None:
+        return FunctionExpression("age", timestamp1, timestamp2)
+    elif timestamp is not None:
+        return FunctionExpression("age", timestamp)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def aggregate(*args) -> FunctionExpression:
@@ -137,9 +139,9 @@ def approx_count_distinct(x, /) -> FunctionExpression:
     return FunctionExpression("approx_count_distinct", x)
 
 
-def approx_quantile(x, pos, /) -> FunctionExpression:
+def approx_quantile(pos, x, /) -> FunctionExpression:
     """Computes the approximate quantile using T-Digest."""
-    return FunctionExpression("approx_quantile", x, pos)
+    return FunctionExpression("approx_quantile", pos, x)
 
 
 def arbitrary(col0, /) -> FunctionExpression:
@@ -147,24 +149,24 @@ def arbitrary(col0, /) -> FunctionExpression:
     return FunctionExpression("arbitrary", col0)
 
 
-def arg_max(arg, val, /) -> FunctionExpression:
+def arg_max(val, arg, /) -> FunctionExpression:
     """Finds the row with the maximum val. Calculates the arg expression at that row."""
-    return FunctionExpression("arg_max", arg, val)
+    return FunctionExpression("arg_max", val, arg)
 
 
-def arg_min(arg, val, /) -> FunctionExpression:
+def arg_min(val, arg, /) -> FunctionExpression:
     """Finds the row with the minimum val. Calculates the arg expression at that row."""
-    return FunctionExpression("arg_min", arg, val)
+    return FunctionExpression("arg_min", val, arg)
 
 
-def argmax(arg, val, /) -> FunctionExpression:
+def argmax(val, arg, /) -> FunctionExpression:
     """Finds the row with the maximum val. Calculates the arg expression at that row."""
-    return FunctionExpression("argmax", arg, val)
+    return FunctionExpression("argmax", val, arg)
 
 
-def argmin(arg, val, /) -> FunctionExpression:
+def argmin(val, arg, /) -> FunctionExpression:
     """Finds the row with the minimum val. Calculates the arg expression at that row."""
-    return FunctionExpression("argmin", arg, val)
+    return FunctionExpression("argmin", val, arg)
 
 
 def array_agg(arg, /) -> FunctionExpression:
@@ -182,24 +184,24 @@ def array_aggregate(*args) -> FunctionExpression:
     return FunctionExpression("array_aggregate", *args)
 
 
-def array_append(arr, el, /) -> FunctionExpression:
+def array_append(el, arr, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_append", arr, el)
+    return FunctionExpression("array_append", el, arr)
 
 
-def array_cat(col0, col1, /) -> FunctionExpression:
+def array_cat(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_cat", col0, col1)
+    return FunctionExpression("array_cat", col1, col0)
 
 
-def array_concat(col0, col1, /) -> FunctionExpression:
+def array_concat(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_concat", col0, col1)
+    return FunctionExpression("array_concat", col1, col0)
 
 
-def array_contains(col0, col1, /) -> FunctionExpression:
+def array_contains(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_contains", col0, col1)
+    return FunctionExpression("array_contains", col1, col0)
 
 
 def array_distinct(list, /) -> FunctionExpression:
@@ -208,41 +210,44 @@ def array_distinct(list, /) -> FunctionExpression:
     return FunctionExpression("array_distinct", list)
 
 
-def array_extract(col0, col1, /) -> FunctionExpression:
+def array_extract(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_extract", col0, col1)
+    return FunctionExpression("array_extract", col1, col0)
 
 
-def array_has(col0, col1, /) -> FunctionExpression:
+def array_has(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_has", col0, col1)
+    return FunctionExpression("array_has", col1, col0)
 
 
-def array_has_all(l1, l2, /) -> FunctionExpression:
+def array_has_all(l2, l1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_has_all", l1, l2)
+    return FunctionExpression("array_has_all", l2, l1)
 
 
-def array_has_any(l1, l2, /) -> FunctionExpression:
+def array_has_any(l2, l1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_has_any", l1, l2)
+    return FunctionExpression("array_has_any", l2, l1)
 
 
-def array_indexof(col0, col1, /) -> FunctionExpression:
+def array_indexof(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_indexof", col0, col1)
+    return FunctionExpression("array_indexof", col1, col0)
 
 
-def array_intersect(l1, l2, /) -> FunctionExpression:
+def array_intersect(l2, l1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_intersect", l1, l2)
+    return FunctionExpression("array_intersect", l2, l1)
 
 
 def array_length(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None:
         return FunctionExpression("array_length", col0)
-    return FunctionExpression("array_length", col0, col1)
+    elif col0 is not None and col1 is not None:
+        return FunctionExpression("array_length", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def array_pop_back(arr, /) -> FunctionExpression:
@@ -255,9 +260,9 @@ def array_pop_front(arr, /) -> FunctionExpression:
     return FunctionExpression("array_pop_front", arr)
 
 
-def array_position(col0, col1, /) -> FunctionExpression:
+def array_position(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_position", col0, col1)
+    return FunctionExpression("array_position", col1, col0)
 
 
 def array_prepend(el, arr, /) -> FunctionExpression:
@@ -265,21 +270,24 @@ def array_prepend(el, arr, /) -> FunctionExpression:
     return FunctionExpression("array_prepend", el, arr)
 
 
-def array_push_back(arr, e, /) -> FunctionExpression:
+def array_push_back(e, arr, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_push_back", arr, e)
+    return FunctionExpression("array_push_back", e, arr)
 
 
-def array_push_front(arr, e, /) -> FunctionExpression:
+def array_push_front(e, arr, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_push_front", arr, e)
+    return FunctionExpression("array_push_front", e, arr)
 
 
-def array_resize(col0, col1, col2=None, /) -> FunctionExpression:
+def array_resize(col1, col0, col2=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
+    if col0 is not None and col1 is not None:
         return FunctionExpression("array_resize", col0, col1)
-    return FunctionExpression("array_resize", col0, col1, col2)
+    elif col0 is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("array_resize", col0, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def array_reverse(l, /) -> FunctionExpression:
@@ -289,27 +297,34 @@ def array_reverse(l, /) -> FunctionExpression:
 
 def array_reverse_sort(list, col1=None, /) -> FunctionExpression:
     """Sorts the elements of the list in reverse order"""
-    if col1 is None:
+    if list is not None:
         return FunctionExpression("array_reverse_sort", list)
-    return FunctionExpression("array_reverse_sort", list, col1)
+    elif list is not None and col1 is not None:
+        return FunctionExpression("array_reverse_sort", list, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def array_slice(list, begin, end, step=None, /) -> FunctionExpression:
     """Extract a sublist using slice conventions. Negative values are accepted"""
-    if step is None:
+    if list is not None and begin is not None and end is not None and step is not None:
+        return FunctionExpression("array_slice", list, begin, end, step)
+    elif list is not None and begin is not None and end is not None:
         return FunctionExpression("array_slice", list, begin, end)
-    return FunctionExpression("array_slice", list, begin, end, step)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def array_sort(list, col2=None, col1=None, /) -> FunctionExpression:
     """Sorts the elements of the list"""
-    if col2 is None:
+    if list is not None and col1 is not None:
         return FunctionExpression("array_sort", list, col1)
-    if col1 is None:
-        return FunctionExpression("array_sort", list, col2)
-    if col2 is None and col1 is None:
+    elif list is not None:
         return FunctionExpression("array_sort", list)
-    return FunctionExpression("array_sort", list, col1, col2)
+    elif list is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("array_sort", list, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def array_to_json(*args) -> FunctionExpression:
@@ -317,9 +332,9 @@ def array_to_json(*args) -> FunctionExpression:
     return FunctionExpression("array_to_json", *args)
 
 
-def array_to_string(arr, sep, /) -> FunctionExpression:
+def array_to_string(sep, arr, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_to_string", arr, sep)
+    return FunctionExpression("array_to_string", sep, arr)
 
 
 def array_unique(list, /) -> FunctionExpression:
@@ -353,12 +368,15 @@ def avg(x, /) -> FunctionExpression:
     return FunctionExpression("avg", x)
 
 
-def bar(x, min, max, width=None, /) -> FunctionExpression:
+def bar(min, max, x, width=None, /) -> FunctionExpression:
     """Draws a band whose width is proportional to (x - min) and equal to width
     characters when x = max. width defaults to 80"""
-    if width is None:
+    if x is not None and min is not None and max is not None and width is not None:
+        return FunctionExpression("bar", x, min, max, width)
+    elif x is not None and min is not None and max is not None:
         return FunctionExpression("bar", x, min, max)
-    return FunctionExpression("bar", x, min, max, width)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def base64(blob, /) -> FunctionExpression:
@@ -402,20 +420,19 @@ def bit_xor(arg, /) -> FunctionExpression:
     return FunctionExpression("bit_xor", arg)
 
 
-def bitstring(bitstring, length, /) -> FunctionExpression:
+def bitstring(length, bitstring, /) -> FunctionExpression:
     """Pads the bitstring until the specified length"""
-    return FunctionExpression("bitstring", bitstring, length)
+    return FunctionExpression("bitstring", length, bitstring)
 
 
 def bitstring_agg(arg, col2=None, col1=None, /) -> FunctionExpression:
     """Returns a bitstring with bits set for each distinct value."""
-    if col2 is None:
-        return FunctionExpression("bitstring_agg", arg, col1)
-    if col1 is None:
-        return FunctionExpression("bitstring_agg", arg, col2)
-    if col2 is None and col1 is None:
+    if arg is not None:
         return FunctionExpression("bitstring_agg", arg)
-    return FunctionExpression("bitstring_agg", arg, col1, col2)
+    elif arg is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("bitstring_agg", arg, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def bool_and(arg, /) -> FunctionExpression:
@@ -464,9 +481,9 @@ def col_description(table_oid, column_number, /) -> FunctionExpression:
     return FunctionExpression("col_description", table_oid, column_number)
 
 
-def combine(col0, col1, /) -> FunctionExpression:
+def combine(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("combine", col0, col1)
+    return FunctionExpression("combine", col1, col0)
 
 
 def concat(*args) -> FunctionExpression:
@@ -484,9 +501,9 @@ def constant_or_null(*args) -> FunctionExpression:
     return FunctionExpression("constant_or_null", *args)
 
 
-def contains(col0, col1, /) -> FunctionExpression:
+def contains(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("contains", col0, col1)
+    return FunctionExpression("contains", col1, col0)
 
 
 def corr(y, x, /) -> FunctionExpression:
@@ -508,7 +525,10 @@ def count(col0=None, /) -> FunctionExpression:
     """"""
     if col0 is None:
         return FunctionExpression("count")
-    return FunctionExpression("count", col0)
+    elif col0 is not None:
+        return FunctionExpression("count", col0)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def count_if(l, /) -> FunctionExpression:
@@ -600,14 +620,14 @@ def damerau_levenshtein(str1, str2, /) -> FunctionExpression:
     return FunctionExpression("damerau_levenshtein", str1, str2)
 
 
-def date_add(date, interval, /) -> FunctionExpression:
+def date_add(interval, date, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("date_add", date, interval)
+    return FunctionExpression("date_add", interval, date)
 
 
-def date_diff(part, startdate, enddate, /) -> FunctionExpression:
+def date_diff(startdate, part, enddate, /) -> FunctionExpression:
     """The number of partition boundaries between the timestamps"""
-    return FunctionExpression("date_diff", part, startdate, enddate)
+    return FunctionExpression("date_diff", startdate, part, enddate)
 
 
 def date_part(ts, col1, /) -> FunctionExpression:
@@ -615,9 +635,9 @@ def date_part(ts, col1, /) -> FunctionExpression:
     return FunctionExpression("date_part", ts, col1)
 
 
-def date_sub(part, startdate, enddate, /) -> FunctionExpression:
+def date_sub(startdate, part, enddate, /) -> FunctionExpression:
     """The number of complete partitions between the timestamps"""
-    return FunctionExpression("date_sub", part, startdate, enddate)
+    return FunctionExpression("date_sub", startdate, part, enddate)
 
 
 def date_trunc(part, timestamp, /) -> FunctionExpression:
@@ -625,9 +645,9 @@ def date_trunc(part, timestamp, /) -> FunctionExpression:
     return FunctionExpression("date_trunc", part, timestamp)
 
 
-def datediff(part, startdate, enddate, /) -> FunctionExpression:
+def datediff(startdate, part, enddate, /) -> FunctionExpression:
     """The number of partition boundaries between the timestamps"""
-    return FunctionExpression("datediff", part, startdate, enddate)
+    return FunctionExpression("datediff", startdate, part, enddate)
 
 
 def datepart(ts, col1, /) -> FunctionExpression:
@@ -635,9 +655,9 @@ def datepart(ts, col1, /) -> FunctionExpression:
     return FunctionExpression("datepart", ts, col1)
 
 
-def datesub(part, startdate, enddate, /) -> FunctionExpression:
+def datesub(startdate, part, enddate, /) -> FunctionExpression:
     """The number of complete partitions between the timestamps"""
-    return FunctionExpression("datesub", part, startdate, enddate)
+    return FunctionExpression("datesub", startdate, part, enddate)
 
 
 def datetrunc(part, timestamp, /) -> FunctionExpression:
@@ -680,24 +700,24 @@ def decimal(col0, /) -> FunctionExpression:
     return FunctionExpression("decimal", col0)
 
 
-def decimal_add(col0, col1, /) -> FunctionExpression:
+def decimal_add(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("decimal_add", col0, col1)
+    return FunctionExpression("decimal_add", col1, col0)
 
 
-def decimal_cmp(col0, col1, /) -> FunctionExpression:
+def decimal_cmp(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("decimal_cmp", col0, col1)
+    return FunctionExpression("decimal_cmp", col1, col0)
 
 
-def decimal_mul(col0, col1, /) -> FunctionExpression:
+def decimal_mul(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("decimal_mul", col0, col1)
+    return FunctionExpression("decimal_mul", col1, col0)
 
 
-def decimal_sub(col0, col1, /) -> FunctionExpression:
+def decimal_sub(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("decimal_sub", col0, col1)
+    return FunctionExpression("decimal_sub", col1, col0)
 
 
 def decode(blob, /) -> FunctionExpression:
@@ -710,16 +730,19 @@ def degrees(x, /) -> FunctionExpression:
     return FunctionExpression("degrees", x)
 
 
-def divide(col0, col1, /) -> FunctionExpression:
+def divide(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("divide", col0, col1)
+    return FunctionExpression("divide", col1, col0)
 
 
 def edit(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None:
         return FunctionExpression("edit", col0)
-    return FunctionExpression("edit", col0, col1)
+    elif col0 is not None and col1 is not None:
+        return FunctionExpression("edit", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def editdist3(str1, str2, /) -> FunctionExpression:
@@ -741,9 +764,9 @@ def encode(string, /) -> FunctionExpression:
     return FunctionExpression("encode", string)
 
 
-def ends_with(col0, col1, /) -> FunctionExpression:
+def ends_with(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("ends_with", col0, col1)
+    return FunctionExpression("ends_with", col1, col0)
 
 
 def entropy(x, /) -> FunctionExpression:
@@ -771,12 +794,12 @@ def enum_range(enum, /) -> FunctionExpression:
     return FunctionExpression("enum_range", enum)
 
 
-def enum_range_boundary(start, end, /) -> FunctionExpression:
+def enum_range_boundary(end, start, /) -> FunctionExpression:
     """Returns the range between the two given enum values as an array. The values must
     be of the same enum type. When the first parameter is NULL, the result
     starts with the first value of the enum type. When the second parameter is
     NULL, the result ends with the last value of the enum type"""
-    return FunctionExpression("enum_range_boundary", start, end)
+    return FunctionExpression("enum_range_boundary", end, start)
 
 
 def epoch(temporal, /) -> FunctionExpression:
@@ -831,9 +854,9 @@ def favg(x, /) -> FunctionExpression:
     return FunctionExpression("favg", x)
 
 
-def fdiv(x, y, /) -> FunctionExpression:
+def fdiv(y, x, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("fdiv", x, y)
+    return FunctionExpression("fdiv", y, x)
 
 
 def finalize(col0, /) -> FunctionExpression:
@@ -856,9 +879,9 @@ def floor(x, /) -> FunctionExpression:
     return FunctionExpression("floor", x)
 
 
-def fmod(x, y, /) -> FunctionExpression:
+def fmod(y, x, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("fmod", x, y)
+    return FunctionExpression("fmod", y, x)
 
 
 def format(*args) -> FunctionExpression:
@@ -901,14 +924,14 @@ def from_hex(value, /) -> FunctionExpression:
     return FunctionExpression("from_hex", value)
 
 
-def from_json(col0, col1, /) -> FunctionExpression:
+def from_json(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("from_json", col0, col1)
+    return FunctionExpression("from_json", col1, col0)
 
 
-def from_json_strict(col0, col1, /) -> FunctionExpression:
+def from_json_strict(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("from_json_strict", col0, col1)
+    return FunctionExpression("from_json_strict", col1, col0)
 
 
 def fsum(arg, /) -> FunctionExpression:
@@ -921,9 +944,9 @@ def gamma(x, /) -> FunctionExpression:
     return FunctionExpression("gamma", x)
 
 
-def gcd(x, y, /) -> FunctionExpression:
+def gcd(y, x, /) -> FunctionExpression:
     """Computes the greatest common divisor of x and y"""
-    return FunctionExpression("gcd", x, y)
+    return FunctionExpression("gcd", y, x)
 
 
 def gen_random_uuid() -> FunctionExpression:
@@ -931,20 +954,21 @@ def gen_random_uuid() -> FunctionExpression:
     return FunctionExpression("gen_random_uuid")
 
 
-def generate_series(start, stop=None, step=None, /) -> FunctionExpression:
+def generate_series(start, step=None, stop=None, /) -> FunctionExpression:
     """Create a list of values between start and stop - the stop parameter is inclusive"""
-    if stop is None:
-        return FunctionExpression("generate_series", start, step)
-    if step is None:
-        return FunctionExpression("generate_series", start, stop)
-    if stop is None and step is None:
+    if start is not None:
         return FunctionExpression("generate_series", start)
-    return FunctionExpression("generate_series", start, stop, step)
+    elif start is not None and stop is not None:
+        return FunctionExpression("generate_series", start, stop)
+    elif start is not None and stop is not None and step is not None:
+        return FunctionExpression("generate_series", start, stop, step)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def generate_subscripts(arr, dim, /) -> FunctionExpression:
+def generate_subscripts(dim, arr, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("generate_subscripts", arr, dim)
+    return FunctionExpression("generate_subscripts", dim, arr)
 
 
 def geomean(x, /) -> FunctionExpression:
@@ -957,9 +981,9 @@ def geometric_mean(x, /) -> FunctionExpression:
     return FunctionExpression("geometric_mean", x)
 
 
-def get_bit(bitstring, index, /) -> FunctionExpression:
+def get_bit(index, bitstring, /) -> FunctionExpression:
     """Extracts the nth bit from bitstring; the first (leftmost) bit is indexed 0"""
-    return FunctionExpression("get_bit", bitstring, index)
+    return FunctionExpression("get_bit", index, bitstring)
 
 
 def get_current_time() -> FunctionExpression:
@@ -977,16 +1001,19 @@ def greatest(*args) -> FunctionExpression:
     return FunctionExpression("greatest", *args)
 
 
-def greatest_common_divisor(x, y, /) -> FunctionExpression:
+def greatest_common_divisor(y, x, /) -> FunctionExpression:
     """Computes the greatest common divisor of x and y"""
-    return FunctionExpression("greatest_common_divisor", x, y)
+    return FunctionExpression("greatest_common_divisor", y, x)
 
 
 def group_concat(str, arg=None, /) -> FunctionExpression:
     """Concatenates the column string values with an optional separator."""
-    if arg is None:
+    if str is not None:
         return FunctionExpression("group_concat", str)
-    return FunctionExpression("group_concat", str, arg)
+    elif str is not None and arg is not None:
+        return FunctionExpression("group_concat", str, arg)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def hamming(str1, str2, /) -> FunctionExpression:
@@ -995,34 +1022,34 @@ def hamming(str1, str2, /) -> FunctionExpression:
     return FunctionExpression("hamming", str1, str2)
 
 
-def has_any_column_privilege(table, privilege, /) -> FunctionExpression:
+def has_any_column_privilege(privilege, table, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_any_column_privilege", table, privilege)
+    return FunctionExpression("has_any_column_privilege", privilege, table)
 
 
-def has_column_privilege(table, column, privilege, /) -> FunctionExpression:
+def has_column_privilege(column, privilege, table, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_column_privilege", table, column, privilege)
+    return FunctionExpression("has_column_privilege", column, privilege, table)
 
 
-def has_database_privilege(database, privilege, /) -> FunctionExpression:
+def has_database_privilege(privilege, database, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_database_privilege", database, privilege)
+    return FunctionExpression("has_database_privilege", privilege, database)
 
 
-def has_foreign_data_wrapper_privilege(fdw, privilege, /) -> FunctionExpression:
+def has_foreign_data_wrapper_privilege(privilege, fdw, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_foreign_data_wrapper_privilege", fdw, privilege)
+    return FunctionExpression("has_foreign_data_wrapper_privilege", privilege, fdw)
 
 
-def has_function_privilege(function, privilege, /) -> FunctionExpression:
+def has_function_privilege(privilege, function, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_function_privilege", function, privilege)
+    return FunctionExpression("has_function_privilege", privilege, function)
 
 
-def has_language_privilege(language, privilege, /) -> FunctionExpression:
+def has_language_privilege(privilege, language, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_language_privilege", language, privilege)
+    return FunctionExpression("has_language_privilege", privilege, language)
 
 
 def has_schema_privilege(schema, privilege, /) -> FunctionExpression:
@@ -1030,9 +1057,9 @@ def has_schema_privilege(schema, privilege, /) -> FunctionExpression:
     return FunctionExpression("has_schema_privilege", schema, privilege)
 
 
-def has_sequence_privilege(sequence, privilege, /) -> FunctionExpression:
+def has_sequence_privilege(privilege, sequence, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_sequence_privilege", sequence, privilege)
+    return FunctionExpression("has_sequence_privilege", privilege, sequence)
 
 
 def has_server_privilege(server, privilege, /) -> FunctionExpression:
@@ -1040,14 +1067,14 @@ def has_server_privilege(server, privilege, /) -> FunctionExpression:
     return FunctionExpression("has_server_privilege", server, privilege)
 
 
-def has_table_privilege(table, privilege, /) -> FunctionExpression:
+def has_table_privilege(privilege, table, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_table_privilege", table, privilege)
+    return FunctionExpression("has_table_privilege", privilege, table)
 
 
-def has_tablespace_privilege(tablespace, privilege, /) -> FunctionExpression:
+def has_tablespace_privilege(privilege, tablespace, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_tablespace_privilege", tablespace, privilege)
+    return FunctionExpression("has_tablespace_privilege", privilege, tablespace)
 
 
 def hash(*args) -> FunctionExpression:
@@ -1071,16 +1098,19 @@ def hour(ts, /) -> FunctionExpression:
     return FunctionExpression("hour", ts)
 
 
-def icu_sort_key(col0, col1, /) -> FunctionExpression:
+def icu_sort_key(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("icu_sort_key", col0, col1)
+    return FunctionExpression("icu_sort_key", col1, col0)
 
 
 def ieee754(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None and col1 is not None:
+        return FunctionExpression("ieee754", col0, col1)
+    elif col0 is not None:
         return FunctionExpression("ieee754", col0)
-    return FunctionExpression("ieee754", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def ieee754_exponent(col0, /) -> FunctionExpression:
@@ -1103,9 +1133,9 @@ def ieee754_to_blob(col0, /) -> FunctionExpression:
     return FunctionExpression("ieee754_to_blob", col0)
 
 
-def ilike_escape(col0, col1, col2, /) -> FunctionExpression:
+def ilike_escape(col2, col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("ilike_escape", col0, col1, col2)
+    return FunctionExpression("ilike_escape", col2, col1, col0)
 
 
 def in_search_path(database_name, schema_name, /) -> FunctionExpression:
@@ -1194,14 +1224,17 @@ def json_array(*args) -> FunctionExpression:
 
 def json_array_length(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None:
         return FunctionExpression("json_array_length", col0)
-    return FunctionExpression("json_array_length", col0, col1)
+    elif col0 is not None and col1 is not None:
+        return FunctionExpression("json_array_length", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def json_contains(col0, col1, /) -> FunctionExpression:
+def json_contains(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_contains", col0, col1)
+    return FunctionExpression("json_contains", col1, col0)
 
 
 def json_deserialize_sql(col0, /) -> FunctionExpression:
@@ -1209,24 +1242,24 @@ def json_deserialize_sql(col0, /) -> FunctionExpression:
     return FunctionExpression("json_deserialize_sql", col0)
 
 
-def json_extract(col0, col1, /) -> FunctionExpression:
+def json_extract(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_extract", col0, col1)
+    return FunctionExpression("json_extract", col1, col0)
 
 
-def json_extract_path(col0, col1, /) -> FunctionExpression:
+def json_extract_path(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_extract_path", col0, col1)
+    return FunctionExpression("json_extract_path", col1, col0)
 
 
-def json_extract_path_text(col0, col1, /) -> FunctionExpression:
+def json_extract_path_text(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_extract_path_text", col0, col1)
+    return FunctionExpression("json_extract_path_text", col1, col0)
 
 
-def json_extract_string(col0, col1, /) -> FunctionExpression:
+def json_extract_string(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_extract_string", col0, col1)
+    return FunctionExpression("json_extract_string", col1, col0)
 
 
 def json_group_array(x, /) -> FunctionExpression:
@@ -1246,9 +1279,12 @@ def json_group_structure(x, /) -> FunctionExpression:
 
 def json_keys(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None:
         return FunctionExpression("json_keys", col0)
-    return FunctionExpression("json_keys", col0, col1)
+    elif col0 is not None and col1 is not None:
+        return FunctionExpression("json_keys", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def json_merge_patch(*args) -> FunctionExpression:
@@ -1268,21 +1304,16 @@ def json_quote(*args) -> FunctionExpression:
 
 def json_serialize_sql(col0, col2=None, col1=None, col3=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
-        return FunctionExpression("json_serialize_sql", col0, col1, col3)
-    if col1 is None:
-        return FunctionExpression("json_serialize_sql", col0, col2, col3)
-    if col3 is None:
-        return FunctionExpression("json_serialize_sql", col0, col1, col2)
-    if col2 is None and col1 is None:
-        return FunctionExpression("json_serialize_sql", col0, col3)
-    if col2 is None and col3 is None:
-        return FunctionExpression("json_serialize_sql", col0, col1)
-    if col1 is None and col3 is None:
-        return FunctionExpression("json_serialize_sql", col0, col2)
-    if col2 is None and col1 is None and col3 is None:
+    if col0 is not None:
         return FunctionExpression("json_serialize_sql", col0)
-    return FunctionExpression("json_serialize_sql", col0, col1, col2, col3)
+    elif col0 is not None and col1 is not None:
+        return FunctionExpression("json_serialize_sql", col0, col1)
+    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None:
+        return FunctionExpression("json_serialize_sql", col0, col1, col2, col3)
+    elif col0 is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("json_serialize_sql", col0, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def json_structure(col0, /) -> FunctionExpression:
@@ -1290,21 +1321,24 @@ def json_structure(col0, /) -> FunctionExpression:
     return FunctionExpression("json_structure", col0)
 
 
-def json_transform(col0, col1, /) -> FunctionExpression:
+def json_transform(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_transform", col0, col1)
+    return FunctionExpression("json_transform", col1, col0)
 
 
-def json_transform_strict(col0, col1, /) -> FunctionExpression:
+def json_transform_strict(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_transform_strict", col0, col1)
+    return FunctionExpression("json_transform_strict", col1, col0)
 
 
 def json_type(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None:
         return FunctionExpression("json_type", col0)
-    return FunctionExpression("json_type", col0, col1)
+    elif col0 is not None and col1 is not None:
+        return FunctionExpression("json_type", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def json_valid(col0, /) -> FunctionExpression:
@@ -1343,9 +1377,9 @@ def lcase(col0, /) -> FunctionExpression:
     return FunctionExpression("lcase", col0)
 
 
-def lcm(x, y, /) -> FunctionExpression:
+def lcm(y, x, /) -> FunctionExpression:
     """Computes the least common multiple of x and y"""
-    return FunctionExpression("lcm", x, y)
+    return FunctionExpression("lcm", y, x)
 
 
 def least(*args) -> FunctionExpression:
@@ -1353,9 +1387,9 @@ def least(*args) -> FunctionExpression:
     return FunctionExpression("least", *args)
 
 
-def least_common_multiple(x, y, /) -> FunctionExpression:
+def least_common_multiple(y, x, /) -> FunctionExpression:
     """Computes the least common multiple of x and y"""
-    return FunctionExpression("least_common_multiple", x, y)
+    return FunctionExpression("least_common_multiple", y, x)
 
 
 def left(string, count, /) -> FunctionExpression:
@@ -1395,9 +1429,9 @@ def lgamma(x, /) -> FunctionExpression:
     return FunctionExpression("lgamma", x)
 
 
-def like_escape(col0, col1, col2, /) -> FunctionExpression:
+def like_escape(col2, col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("like_escape", col0, col1, col2)
+    return FunctionExpression("like_escape", col2, col1, col0)
 
 
 def list(arg, /) -> FunctionExpression:
@@ -1420,9 +1454,9 @@ def list_any_value(l, /) -> FunctionExpression:
     return FunctionExpression("list_any_value", l)
 
 
-def list_append(l, e, /) -> FunctionExpression:
+def list_append(e, l, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_append", l, e)
+    return FunctionExpression("list_append", e, l)
 
 
 def list_approx_count_distinct(l, /) -> FunctionExpression:
@@ -1460,24 +1494,24 @@ def list_bool_or(l, /) -> FunctionExpression:
     return FunctionExpression("list_bool_or", l)
 
 
-def list_cat(col0, col1, /) -> FunctionExpression:
+def list_cat(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_cat", col0, col1)
+    return FunctionExpression("list_cat", col1, col0)
 
 
-def list_concat(col0, col1, /) -> FunctionExpression:
+def list_concat(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_concat", col0, col1)
+    return FunctionExpression("list_concat", col1, col0)
 
 
-def list_contains(col0, col1, /) -> FunctionExpression:
+def list_contains(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_contains", col0, col1)
+    return FunctionExpression("list_contains", col1, col0)
 
 
-def list_cosine_similarity(list1, list2, /) -> FunctionExpression:
+def list_cosine_similarity(list2, list1, /) -> FunctionExpression:
     """Compute the cosine similarity between two lists"""
-    return FunctionExpression("list_cosine_similarity", list1, list2)
+    return FunctionExpression("list_cosine_similarity", list2, list1)
 
 
 def list_count(l, /) -> FunctionExpression:
@@ -1485,9 +1519,9 @@ def list_count(l, /) -> FunctionExpression:
     return FunctionExpression("list_count", l)
 
 
-def list_distance(list1, list2, /) -> FunctionExpression:
+def list_distance(list2, list1, /) -> FunctionExpression:
     """Compute the distance between two lists"""
-    return FunctionExpression("list_distance", list1, list2)
+    return FunctionExpression("list_distance", list2, list1)
 
 
 def list_distinct(list, /) -> FunctionExpression:
@@ -1496,14 +1530,14 @@ def list_distinct(list, /) -> FunctionExpression:
     return FunctionExpression("list_distinct", list)
 
 
-def list_dot_product(list1, list2, /) -> FunctionExpression:
+def list_dot_product(list2, list1, /) -> FunctionExpression:
     """Compute the inner product between two lists"""
-    return FunctionExpression("list_dot_product", list1, list2)
+    return FunctionExpression("list_dot_product", list2, list1)
 
 
-def list_element(col0, col1, /) -> FunctionExpression:
+def list_element(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_element", col0, col1)
+    return FunctionExpression("list_element", col1, col0)
 
 
 def list_entropy(l, /) -> FunctionExpression:
@@ -1511,9 +1545,9 @@ def list_entropy(l, /) -> FunctionExpression:
     return FunctionExpression("list_entropy", l)
 
 
-def list_extract(col0, col1, /) -> FunctionExpression:
+def list_extract(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_extract", col0, col1)
+    return FunctionExpression("list_extract", col1, col0)
 
 
 def list_first(l, /) -> FunctionExpression:
@@ -1521,19 +1555,19 @@ def list_first(l, /) -> FunctionExpression:
     return FunctionExpression("list_first", l)
 
 
-def list_has(col0, col1, /) -> FunctionExpression:
+def list_has(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_has", col0, col1)
+    return FunctionExpression("list_has", col1, col0)
 
 
-def list_has_all(l1, l2, /) -> FunctionExpression:
+def list_has_all(l2, l1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_has_all", l1, l2)
+    return FunctionExpression("list_has_all", l2, l1)
 
 
-def list_has_any(l1, l2, /) -> FunctionExpression:
+def list_has_any(l2, l1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_has_any", l1, l2)
+    return FunctionExpression("list_has_any", l2, l1)
 
 
 def list_histogram(l, /) -> FunctionExpression:
@@ -1541,19 +1575,19 @@ def list_histogram(l, /) -> FunctionExpression:
     return FunctionExpression("list_histogram", l)
 
 
-def list_indexof(col0, col1, /) -> FunctionExpression:
+def list_indexof(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_indexof", col0, col1)
+    return FunctionExpression("list_indexof", col1, col0)
 
 
-def list_inner_product(list1, list2, /) -> FunctionExpression:
+def list_inner_product(list2, list1, /) -> FunctionExpression:
     """Compute the inner product between two lists"""
-    return FunctionExpression("list_inner_product", list1, list2)
+    return FunctionExpression("list_inner_product", list2, list1)
 
 
-def list_intersect(l1, l2, /) -> FunctionExpression:
+def list_intersect(l2, l1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_intersect", l1, l2)
+    return FunctionExpression("list_intersect", l2, l1)
 
 
 def list_kurtosis(l, /) -> FunctionExpression:
@@ -1596,9 +1630,9 @@ def list_pack(*args) -> FunctionExpression:
     return FunctionExpression("list_pack", *args)
 
 
-def list_position(col0, col1, /) -> FunctionExpression:
+def list_position(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_position", col0, col1)
+    return FunctionExpression("list_position", col1, col0)
 
 
 def list_prepend(e, l, /) -> FunctionExpression:
@@ -1611,11 +1645,14 @@ def list_product(l, /) -> FunctionExpression:
     return FunctionExpression("list_product", l)
 
 
-def list_resize(col0, col1, col2=None, /) -> FunctionExpression:
+def list_resize(col1, col0, col2=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
+    if col0 is not None and col1 is not None:
         return FunctionExpression("list_resize", col0, col1)
-    return FunctionExpression("list_resize", col0, col1, col2)
+    elif col0 is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("list_resize", col0, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def list_reverse(l, /) -> FunctionExpression:
@@ -1625,9 +1662,12 @@ def list_reverse(l, /) -> FunctionExpression:
 
 def list_reverse_sort(list, col1=None, /) -> FunctionExpression:
     """Sorts the elements of the list in reverse order"""
-    if col1 is None:
+    if list is not None and col1 is not None:
+        return FunctionExpression("list_reverse_sort", list, col1)
+    elif list is not None:
         return FunctionExpression("list_reverse_sort", list)
-    return FunctionExpression("list_reverse_sort", list, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def list_sem(l, /) -> FunctionExpression:
@@ -1642,20 +1682,24 @@ def list_skewness(l, /) -> FunctionExpression:
 
 def list_slice(list, begin, end, step=None, /) -> FunctionExpression:
     """Extract a sublist using slice conventions. Negative values are accepted"""
-    if step is None:
+    if list is not None and begin is not None and end is not None and step is not None:
+        return FunctionExpression("list_slice", list, begin, end, step)
+    elif list is not None and begin is not None and end is not None:
         return FunctionExpression("list_slice", list, begin, end)
-    return FunctionExpression("list_slice", list, begin, end, step)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def list_sort(list, col2=None, col1=None, /) -> FunctionExpression:
     """Sorts the elements of the list"""
-    if col2 is None:
+    if list is not None and col1 is not None:
         return FunctionExpression("list_sort", list, col1)
-    if col1 is None:
-        return FunctionExpression("list_sort", list, col2)
-    if col2 is None and col1 is None:
+    elif list is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("list_sort", list, col1, col2)
+    elif list is not None:
         return FunctionExpression("list_sort", list)
-    return FunctionExpression("list_sort", list, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def list_stddev_pop(l, /) -> FunctionExpression:
@@ -1723,9 +1767,9 @@ def lower(col0, /) -> FunctionExpression:
     return FunctionExpression("lower", col0)
 
 
-def lpad(string, count, character, /) -> FunctionExpression:
+def lpad(string, character, count, /) -> FunctionExpression:
     """Pads the string with the character from the left until it has count characters"""
-    return FunctionExpression("lpad", string, count, character)
+    return FunctionExpression("lpad", string, character, count)
 
 
 def lsmode(col0, /) -> FunctionExpression:
@@ -1736,9 +1780,12 @@ def lsmode(col0, /) -> FunctionExpression:
 def ltrim(string, characters=None, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from the left side of the
     string"""
-    if characters is None:
+    if string is not None and characters is not None:
+        return FunctionExpression("ltrim", string, characters)
+    elif string is not None:
         return FunctionExpression("ltrim", string)
-    return FunctionExpression("ltrim", string, characters)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def mad(x, /) -> FunctionExpression:
@@ -1749,216 +1796,39 @@ def mad(x, /) -> FunctionExpression:
 
 def make_date(year, month=None, day=None, /) -> FunctionExpression:
     """The date for the given parts"""
-    if month is None:
-        return FunctionExpression("make_date", year, day)
-    if day is None:
-        return FunctionExpression("make_date", year, month)
-    if month is None and day is None:
+    if year is not None and month is not None and day is not None:
+        return FunctionExpression("make_date", year, month, day)
+    elif year is not None:
         return FunctionExpression("make_date", year)
-    return FunctionExpression("make_date", year, month, day)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def make_time(hour, minute, seconds, /) -> FunctionExpression:
+def make_time(minute, seconds, hour, /) -> FunctionExpression:
     """The time for the given parts"""
-    return FunctionExpression("make_time", hour, minute, seconds)
+    return FunctionExpression("make_time", minute, seconds, hour)
 
 
-def make_timestamp(year, month=None, minute=None, seconds=None, day=None, hour=None, /) -> FunctionExpression:
+def make_timestamp(year, month=None, day=None, minute=None, seconds=None, hour=None, /) -> FunctionExpression:
     """The timestamp for the given parts"""
-    if month is None:
-        return FunctionExpression("make_timestamp", year, day, hour, minute, seconds)
-    if minute is None:
-        return FunctionExpression("make_timestamp", year, month, day, hour, seconds)
-    if seconds is None:
-        return FunctionExpression("make_timestamp", year, month, day, hour, minute)
-    if day is None:
-        return FunctionExpression("make_timestamp", year, month, hour, minute, seconds)
-    if hour is None:
-        return FunctionExpression("make_timestamp", year, month, day, minute, seconds)
-    if month is None and minute is None:
-        return FunctionExpression("make_timestamp", year, day, hour, seconds)
-    if month is None and seconds is None:
-        return FunctionExpression("make_timestamp", year, day, hour, minute)
-    if month is None and day is None:
-        return FunctionExpression("make_timestamp", year, hour, minute, seconds)
-    if month is None and hour is None:
-        return FunctionExpression("make_timestamp", year, day, minute, seconds)
-    if minute is None and seconds is None:
-        return FunctionExpression("make_timestamp", year, month, day, hour)
-    if minute is None and day is None:
-        return FunctionExpression("make_timestamp", year, month, hour, seconds)
-    if minute is None and hour is None:
-        return FunctionExpression("make_timestamp", year, month, day, seconds)
-    if seconds is None and day is None:
-        return FunctionExpression("make_timestamp", year, month, hour, minute)
-    if seconds is None and hour is None:
-        return FunctionExpression("make_timestamp", year, month, day, minute)
-    if day is None and hour is None:
-        return FunctionExpression("make_timestamp", year, month, minute, seconds)
-    if month is None and minute is None and seconds is None:
-        return FunctionExpression("make_timestamp", year, day, hour)
-    if month is None and minute is None and day is None:
-        return FunctionExpression("make_timestamp", year, hour, seconds)
-    if month is None and minute is None and hour is None:
-        return FunctionExpression("make_timestamp", year, day, seconds)
-    if month is None and seconds is None and day is None:
-        return FunctionExpression("make_timestamp", year, hour, minute)
-    if month is None and seconds is None and hour is None:
-        return FunctionExpression("make_timestamp", year, day, minute)
-    if month is None and day is None and hour is None:
-        return FunctionExpression("make_timestamp", year, minute, seconds)
-    if minute is None and seconds is None and day is None:
-        return FunctionExpression("make_timestamp", year, month, hour)
-    if minute is None and seconds is None and hour is None:
-        return FunctionExpression("make_timestamp", year, month, day)
-    if minute is None and day is None and hour is None:
-        return FunctionExpression("make_timestamp", year, month, seconds)
-    if seconds is None and day is None and hour is None:
-        return FunctionExpression("make_timestamp", year, month, minute)
-    if month is None and minute is None and seconds is None and day is None:
-        return FunctionExpression("make_timestamp", year, hour)
-    if month is None and minute is None and seconds is None and hour is None:
-        return FunctionExpression("make_timestamp", year, day)
-    if month is None and minute is None and day is None and hour is None:
-        return FunctionExpression("make_timestamp", year, seconds)
-    if month is None and seconds is None and day is None and hour is None:
-        return FunctionExpression("make_timestamp", year, minute)
-    if minute is None and seconds is None and day is None and hour is None:
-        return FunctionExpression("make_timestamp", year, month)
-    if month is None and minute is None and seconds is None and day is None and hour is None:
+    if year is not None:
         return FunctionExpression("make_timestamp", year)
-    return FunctionExpression("make_timestamp", year, month, day, hour, minute, seconds)
+    elif year is not None and month is not None and day is not None and hour is not None and minute is not None and seconds is not None:
+        return FunctionExpression("make_timestamp", year, month, day, hour, minute, seconds)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def make_timestamptz(col0, col3=None, col5=None, col4=None, col2=None, col6=None, col1=None, /) -> FunctionExpression:
+def make_timestamptz(col0, col6=None, col2=None, col1=None, col3=None, col5=None, col4=None, /) -> FunctionExpression:
     """"""
-    if col3 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col4, col5, col6)
-    if col5 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col6)
-    if col4 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col5, col6)
-    if col2 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col3, col4, col5, col6)
-    if col6 is None:
+    if col0 is not None and col1 is not None and col2 is not None and col3 is not None and col4 is not None and col5 is not None:
         return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5)
-    if col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col3, col4, col5, col6)
-    if col3 is None and col5 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col4, col6)
-    if col3 is None and col4 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col5, col6)
-    if col3 is None and col2 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col4, col5, col6)
-    if col3 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col4, col5)
-    if col3 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col4, col5, col6)
-    if col5 is None and col4 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col6)
-    if col5 is None and col2 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col3, col4, col6)
-    if col5 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4)
-    if col5 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col3, col4, col6)
-    if col4 is None and col2 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col3, col5, col6)
-    if col4 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col5)
-    if col4 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col3, col5, col6)
-    if col2 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col3, col4, col5)
-    if col2 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col3, col4, col5, col6)
-    if col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col3, col4, col5)
-    if col3 is None and col5 is None and col4 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col6)
-    if col3 is None and col5 is None and col2 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col4, col6)
-    if col3 is None and col5 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col4)
-    if col3 is None and col5 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col4, col6)
-    if col3 is None and col4 is None and col2 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col5, col6)
-    if col3 is None and col4 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col5)
-    if col3 is None and col4 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col5, col6)
-    if col3 is None and col2 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col4, col5)
-    if col3 is None and col2 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col4, col5, col6)
-    if col3 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col4, col5)
-    if col5 is None and col4 is None and col2 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col3, col6)
-    if col5 is None and col4 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3)
-    if col5 is None and col4 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col3, col6)
-    if col5 is None and col2 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col3, col4)
-    if col5 is None and col2 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col3, col4, col6)
-    if col5 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col3, col4)
-    if col4 is None and col2 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col3, col5)
-    if col4 is None and col2 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col3, col5, col6)
-    if col4 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col3, col5)
-    if col2 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col3, col4, col5)
-    if col3 is None and col5 is None and col4 is None and col2 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col6)
-    if col3 is None and col5 is None and col4 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2)
-    if col3 is None and col5 is None and col4 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col6)
-    if col3 is None and col5 is None and col2 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col4)
-    if col3 is None and col5 is None and col2 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col4, col6)
-    if col3 is None and col5 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col4)
-    if col3 is None and col4 is None and col2 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col5)
-    if col3 is None and col4 is None and col2 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col5, col6)
-    if col3 is None and col4 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col5)
-    if col3 is None and col2 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col4, col5)
-    if col5 is None and col4 is None and col2 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col3)
-    if col5 is None and col4 is None and col2 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col3, col6)
-    if col5 is None and col4 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2, col3)
-    if col5 is None and col2 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col3, col4)
-    if col4 is None and col2 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col3, col5)
-    if col3 is None and col5 is None and col4 is None and col2 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1)
-    if col3 is None and col5 is None and col4 is None and col2 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col6)
-    if col3 is None and col5 is None and col4 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col2)
-    if col3 is None and col5 is None and col2 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col4)
-    if col3 is None and col4 is None and col2 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col5)
-    if col5 is None and col4 is None and col2 is None and col6 is None and col1 is None:
-        return FunctionExpression("make_timestamptz", col0, col3)
-    if col3 is None and col5 is None and col4 is None and col2 is None and col6 is None and col1 is None:
+    elif col0 is not None:
         return FunctionExpression("make_timestamptz", col0)
-    return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5, col6)
+    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None and col4 is not None and col5 is not None and col6 is not None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5, col6)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def map(*args) -> FunctionExpression:
@@ -2004,9 +1874,9 @@ def max(arg, /) -> FunctionExpression:
     return FunctionExpression("max", arg)
 
 
-def max_by(arg, val, /) -> FunctionExpression:
+def max_by(val, arg, /) -> FunctionExpression:
     """Finds the row with the maximum val. Calculates the arg expression at that row."""
-    return FunctionExpression("max_by", arg, val)
+    return FunctionExpression("max_by", val, arg)
 
 
 def md5(value, /) -> FunctionExpression:
@@ -2061,9 +1931,9 @@ def min(arg, /) -> FunctionExpression:
     return FunctionExpression("min", arg)
 
 
-def min_by(arg, val, /) -> FunctionExpression:
+def min_by(val, arg, /) -> FunctionExpression:
     """Finds the row with the minimum val. Calculates the arg expression at that row."""
-    return FunctionExpression("min_by", arg, val)
+    return FunctionExpression("min_by", val, arg)
 
 
 def minute(ts, /) -> FunctionExpression:
@@ -2077,9 +1947,9 @@ def mismatches(str1, str2, /) -> FunctionExpression:
     return FunctionExpression("mismatches", str1, str2)
 
 
-def mod(col0, col1, /) -> FunctionExpression:
+def mod(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("mod", col0, col1)
+    return FunctionExpression("mod", col1, col0)
 
 
 def mode(x, /) -> FunctionExpression:
@@ -2098,14 +1968,14 @@ def monthname(ts, /) -> FunctionExpression:
     return FunctionExpression("monthname", ts)
 
 
-def multiply(col0, col1, /) -> FunctionExpression:
+def multiply(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("multiply", col0, col1)
+    return FunctionExpression("multiply", col1, col0)
 
 
-def nextafter(x, y, /) -> FunctionExpression:
+def nextafter(y, x, /) -> FunctionExpression:
     """Returns the next floating point value after x in the direction of y"""
-    return FunctionExpression("nextafter", x, y)
+    return FunctionExpression("nextafter", y, x)
 
 
 def nextval(col0, /) -> FunctionExpression:
@@ -2118,14 +1988,14 @@ def nfc_normalize(col0, /) -> FunctionExpression:
     return FunctionExpression("nfc_normalize", col0)
 
 
-def not_ilike_escape(col0, col1, col2, /) -> FunctionExpression:
+def not_ilike_escape(col2, col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("not_ilike_escape", col0, col1, col2)
+    return FunctionExpression("not_ilike_escape", col2, col1, col0)
 
 
-def not_like_escape(col0, col1, col2, /) -> FunctionExpression:
+def not_like_escape(col2, col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("not_like_escape", col0, col1, col2)
+    return FunctionExpression("not_like_escape", col2, col1, col0)
 
 
 def now() -> FunctionExpression:
@@ -2133,14 +2003,14 @@ def now() -> FunctionExpression:
     return FunctionExpression("now")
 
 
-def nullif(a, b, /) -> FunctionExpression:
+def nullif(b, a, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("nullif", a, b)
+    return FunctionExpression("nullif", b, a)
 
 
-def obj_description(object_oid, catalog_name, /) -> FunctionExpression:
+def obj_description(catalog_name, object_oid, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("obj_description", object_oid, catalog_name)
+    return FunctionExpression("obj_description", catalog_name, object_oid)
 
 
 def octet_length(col0, /) -> FunctionExpression:
@@ -2188,9 +2058,9 @@ def pg_get_viewdef(oid, /) -> FunctionExpression:
     return FunctionExpression("pg_get_viewdef", oid)
 
 
-def pg_has_role(user, role, privilege, /) -> FunctionExpression:
+def pg_has_role(privilege, role, user, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("pg_has_role", user, role, privilege)
+    return FunctionExpression("pg_has_role", privilege, role, user)
 
 
 def pg_is_other_temp_schema(schema_id, /) -> FunctionExpression:
@@ -2274,19 +2144,19 @@ def position(haystack, needle, /) -> FunctionExpression:
     return FunctionExpression("position", haystack, needle)
 
 
-def pow(x, y, /) -> FunctionExpression:
+def pow(y, x, /) -> FunctionExpression:
     """Computes x to the power of y"""
-    return FunctionExpression("pow", x, y)
+    return FunctionExpression("pow", y, x)
 
 
-def power(x, y, /) -> FunctionExpression:
+def power(y, x, /) -> FunctionExpression:
     """Computes x to the power of y"""
-    return FunctionExpression("power", x, y)
+    return FunctionExpression("power", y, x)
 
 
-def prefix(col0, col1, /) -> FunctionExpression:
+def prefix(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("prefix", col0, col1)
+    return FunctionExpression("prefix", col1, col0)
 
 
 def printf(*args) -> FunctionExpression:
@@ -2299,23 +2169,23 @@ def product(arg, /) -> FunctionExpression:
     return FunctionExpression("product", arg)
 
 
-def quantile(x, pos, /) -> FunctionExpression:
+def quantile(pos, x, /) -> FunctionExpression:
     """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
     then the result is a LIST of the corresponding exact quantiles."""
-    return FunctionExpression("quantile", x, pos)
+    return FunctionExpression("quantile", pos, x)
 
 
-def quantile_cont(x, pos, /) -> FunctionExpression:
+def quantile_cont(pos, x, /) -> FunctionExpression:
     """Returns the intepolated quantile number between 0 and 1 . If pos is a LIST of
     FLOATs, then the result is a LIST of the corresponding intepolated
     quantiles."""
-    return FunctionExpression("quantile_cont", x, pos)
+    return FunctionExpression("quantile_cont", pos, x)
 
 
-def quantile_disc(x, pos, /) -> FunctionExpression:
+def quantile_disc(pos, x, /) -> FunctionExpression:
     """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
     then the result is a LIST of the corresponding exact quantiles."""
-    return FunctionExpression("quantile_disc", x, pos)
+    return FunctionExpression("quantile_disc", pos, x)
 
 
 def quarter(ts, /) -> FunctionExpression:
@@ -2333,15 +2203,16 @@ def random() -> FunctionExpression:
     return FunctionExpression("random")
 
 
-def range(start, stop=None, step=None, /) -> FunctionExpression:
+def range(start, step=None, stop=None, /) -> FunctionExpression:
     """Create a list of values between start and stop - the stop parameter is exclusive"""
-    if stop is None:
-        return FunctionExpression("range", start, step)
-    if step is None:
-        return FunctionExpression("range", start, stop)
-    if stop is None and step is None:
+    if start is not None and stop is not None and step is not None:
+        return FunctionExpression("range", start, stop, step)
+    elif start is not None:
         return FunctionExpression("range", start)
-    return FunctionExpression("range", start, stop, step)
+    elif start is not None and stop is not None:
+        return FunctionExpression("range", start, stop)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def readfile(col0, /) -> FunctionExpression:
@@ -2349,54 +2220,68 @@ def readfile(col0, /) -> FunctionExpression:
     return FunctionExpression("readfile", col0)
 
 
-def regexp_extract(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
+def regexp_extract(col1, col0, col2=None, col3=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
-        return FunctionExpression("regexp_extract", col0, col1, col3)
-    if col3 is None:
+    if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("regexp_extract", col0, col1, col2)
-    if col2 is None and col3 is None:
+    elif col0 is not None and col1 is not None:
         return FunctionExpression("regexp_extract", col0, col1)
-    return FunctionExpression("regexp_extract", col0, col1, col2, col3)
+    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None:
+        return FunctionExpression("regexp_extract", col0, col1, col2, col3)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def regexp_extract_all(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
+def regexp_extract_all(col1, col0, col2=None, col3=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
-        return FunctionExpression("regexp_extract_all", col0, col1, col3)
-    if col3 is None:
+    if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("regexp_extract_all", col0, col1, col2)
-    if col2 is None and col3 is None:
+    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None:
+        return FunctionExpression("regexp_extract_all", col0, col1, col2, col3)
+    elif col0 is not None and col1 is not None:
         return FunctionExpression("regexp_extract_all", col0, col1)
-    return FunctionExpression("regexp_extract_all", col0, col1, col2, col3)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def regexp_full_match(col0, col1, col2=None, /) -> FunctionExpression:
+def regexp_full_match(col1, col0, col2=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
+    if col0 is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("regexp_full_match", col0, col1, col2)
+    elif col0 is not None and col1 is not None:
         return FunctionExpression("regexp_full_match", col0, col1)
-    return FunctionExpression("regexp_full_match", col0, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def regexp_matches(col0, col1, col2=None, /) -> FunctionExpression:
+def regexp_matches(col1, col0, col2=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
+    if col0 is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("regexp_matches", col0, col1, col2)
+    elif col0 is not None and col1 is not None:
         return FunctionExpression("regexp_matches", col0, col1)
-    return FunctionExpression("regexp_matches", col0, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def regexp_replace(col0, col1, col2, col3=None, /) -> FunctionExpression:
+def regexp_replace(col2, col1, col0, col3=None, /) -> FunctionExpression:
     """"""
-    if col3 is None:
+    if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
+        return FunctionExpression("regexp_replace", col0, col1, col2, col3)
+    elif col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("regexp_replace", col0, col1, col2)
-    return FunctionExpression("regexp_replace", col0, col1, col2, col3)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def regexp_split_to_array(string, separator, col2=None, /) -> FunctionExpression:
     """Splits the string along the regex"""
-    if col2 is None:
+    if string is not None and separator is not None:
         return FunctionExpression("regexp_split_to_array", string, separator)
-    return FunctionExpression("regexp_split_to_array", string, separator, col2)
+    elif string is not None and separator is not None and col2 is not None:
+        return FunctionExpression("regexp_split_to_array", string, separator, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def regr_avgx(y, x, /) -> FunctionExpression:
@@ -2452,17 +2337,20 @@ def repeat(string, count, /) -> FunctionExpression:
     return FunctionExpression("repeat", string, count)
 
 
-def replace(string, source, target, /) -> FunctionExpression:
+def replace(source, string, target, /) -> FunctionExpression:
     """Replaces any occurrences of the source with target in string"""
-    return FunctionExpression("replace", string, source, target)
+    return FunctionExpression("replace", source, string, target)
 
 
-def reservoir_quantile(x, quantile, sample_size=None, /) -> FunctionExpression:
+def reservoir_quantile(quantile, x, sample_size=None, /) -> FunctionExpression:
     """Gives the approximate quantile using reservoir sampling, the sample size is
     optional and uses 8192 as a default size."""
-    if sample_size is None:
+    if x is not None and quantile is not None and sample_size is not None:
+        return FunctionExpression("reservoir_quantile", x, quantile, sample_size)
+    elif x is not None and quantile is not None:
         return FunctionExpression("reservoir_quantile", x, quantile)
-    return FunctionExpression("reservoir_quantile", x, quantile, sample_size)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def reverse(string, /) -> FunctionExpression:
@@ -2482,19 +2370,22 @@ def right_grapheme(string, count, /) -> FunctionExpression:
 
 def round(x, precision=None, /) -> FunctionExpression:
     """Rounds x to s decimal places"""
-    if precision is None:
+    if x is not None:
         return FunctionExpression("round", x)
-    return FunctionExpression("round", x, precision)
+    elif x is not None and precision is not None:
+        return FunctionExpression("round", x, precision)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def round_even(x, n, /) -> FunctionExpression:
+def round_even(n, x, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("round_even", x, n)
+    return FunctionExpression("round_even", n, x)
 
 
-def roundbankers(x, n, /) -> FunctionExpression:
+def roundbankers(n, x, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("roundbankers", x, n)
+    return FunctionExpression("roundbankers", n, x)
 
 
 def row(*args) -> FunctionExpression:
@@ -2507,17 +2398,20 @@ def row_to_json(*args) -> FunctionExpression:
     return FunctionExpression("row_to_json", *args)
 
 
-def rpad(string, count, character, /) -> FunctionExpression:
+def rpad(string, character, count, /) -> FunctionExpression:
     """Pads the string with the character from the right until it has count characters"""
-    return FunctionExpression("rpad", string, count, character)
+    return FunctionExpression("rpad", string, character, count)
 
 
 def rtrim(string, characters=None, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from the right side of the
     string"""
-    if characters is None:
+    if string is not None:
         return FunctionExpression("rtrim", string)
-    return FunctionExpression("rtrim", string, characters)
+    elif string is not None and characters is not None:
+        return FunctionExpression("rtrim", string, characters)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def second(ts, /) -> FunctionExpression:
@@ -2535,10 +2429,10 @@ def session_user() -> FunctionExpression:
     return FunctionExpression("session_user")
 
 
-def set_bit(bitstring, index, new_value, /) -> FunctionExpression:
+def set_bit(index, new_value, bitstring, /) -> FunctionExpression:
     """Sets the nth bit in bitstring to newvalue; the first (leftmost) bit is indexed
     0. Returns a new bitstring"""
-    return FunctionExpression("set_bit", bitstring, index, new_value)
+    return FunctionExpression("set_bit", index, new_value, bitstring)
 
 
 def setseed() -> FunctionExpression:
@@ -2553,21 +2447,27 @@ def sha256(value, /) -> FunctionExpression:
 
 def sha3(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None and col1 is not None:
+        return FunctionExpression("sha3", col0, col1)
+    elif col0 is not None:
         return FunctionExpression("sha3", col0)
-    return FunctionExpression("sha3", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def sha3_query(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None:
         return FunctionExpression("sha3_query", col0)
-    return FunctionExpression("sha3_query", col0, col1)
+    elif col0 is not None and col1 is not None:
+        return FunctionExpression("sha3_query", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def shell_add_schema(col0, col1, col2, /) -> FunctionExpression:
+def shell_add_schema(col2, col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("shell_add_schema", col0, col1, col2)
+    return FunctionExpression("shell_add_schema", col2, col1, col0)
 
 
 def shell_escape_crnl(col0, /) -> FunctionExpression:
@@ -2580,9 +2480,9 @@ def shell_idquote(col0, /) -> FunctionExpression:
     return FunctionExpression("shell_idquote", col0)
 
 
-def shell_int32(col0, col1, /) -> FunctionExpression:
+def shell_int32(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("shell_int32", col0, col1)
+    return FunctionExpression("shell_int32", col1, col0)
 
 
 def shell_module_schema(col0, /) -> FunctionExpression:
@@ -2595,9 +2495,9 @@ def shell_putsnl(col0, /) -> FunctionExpression:
     return FunctionExpression("shell_putsnl", col0)
 
 
-def shobj_description(object_oid, catalog_name, /) -> FunctionExpression:
+def shobj_description(catalog_name, object_oid, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("shobj_description", object_oid, catalog_name)
+    return FunctionExpression("shobj_description", catalog_name, object_oid)
 
 
 def sign(x, /) -> FunctionExpression:
@@ -2625,9 +2525,9 @@ def split(string, separator, /) -> FunctionExpression:
     return FunctionExpression("split", string, separator)
 
 
-def split_part(string, delimiter, position, /) -> FunctionExpression:
+def split_part(delimiter, string, position, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("split_part", string, delimiter, position)
+    return FunctionExpression("split_part", delimiter, string, position)
 
 
 def sqrt(x, /) -> FunctionExpression:
@@ -2668,9 +2568,12 @@ def str_split(string, separator, /) -> FunctionExpression:
 
 def str_split_regex(string, separator, col2=None, /) -> FunctionExpression:
     """Splits the string along the regex"""
-    if col2 is None:
+    if string is not None and separator is not None:
         return FunctionExpression("str_split_regex", string, separator)
-    return FunctionExpression("str_split_regex", string, separator, col2)
+    elif string is not None and separator is not None and col2 is not None:
+        return FunctionExpression("str_split_regex", string, separator, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def strftime(text, format, /) -> FunctionExpression:
@@ -2680,9 +2583,12 @@ def strftime(text, format, /) -> FunctionExpression:
 
 def string_agg(str, arg=None, /) -> FunctionExpression:
     """Concatenates the column string values with an optional separator."""
-    if arg is None:
+    if str is not None:
         return FunctionExpression("string_agg", str)
-    return FunctionExpression("string_agg", str, arg)
+    elif str is not None and arg is not None:
+        return FunctionExpression("string_agg", str, arg)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def string_split(string, separator, /) -> FunctionExpression:
@@ -2692,9 +2598,12 @@ def string_split(string, separator, /) -> FunctionExpression:
 
 def string_split_regex(string, separator, col2=None, /) -> FunctionExpression:
     """Splits the string along the regex"""
-    if col2 is None:
+    if string is not None and separator is not None and col2 is not None:
+        return FunctionExpression("string_split_regex", string, separator, col2)
+    elif string is not None and separator is not None:
         return FunctionExpression("string_split_regex", string, separator)
-    return FunctionExpression("string_split_regex", string, separator, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def string_to_array(string, separator, /) -> FunctionExpression:
@@ -2724,9 +2633,9 @@ def strptime(text, format, /) -> FunctionExpression:
     return FunctionExpression("strptime", text, format)
 
 
-def struct_extract(col0, col1, /) -> FunctionExpression:
+def struct_extract(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("struct_extract", col0, col1)
+    return FunctionExpression("struct_extract", col1, col0)
 
 
 def struct_insert(*args) -> FunctionExpression:
@@ -2741,37 +2650,49 @@ def struct_pack(*args) -> FunctionExpression:
     return FunctionExpression("struct_pack", *args)
 
 
-def substr(col0, col1, col2=None, /) -> FunctionExpression:
+def substr(col1, col0, col2=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
+    if col0 is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("substr", col0, col1, col2)
+    elif col0 is not None and col1 is not None:
         return FunctionExpression("substr", col0, col1)
-    return FunctionExpression("substr", col0, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def substring(col0, col1, col2=None, /) -> FunctionExpression:
+def substring(col1, col0, col2=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
+    if col0 is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("substring", col0, col1, col2)
+    elif col0 is not None and col1 is not None:
         return FunctionExpression("substring", col0, col1)
-    return FunctionExpression("substring", col0, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def substring_grapheme(col0, col1, col2=None, /) -> FunctionExpression:
+def substring_grapheme(col1, col0, col2=None, /) -> FunctionExpression:
     """"""
-    if col2 is None:
+    if col0 is not None and col1 is not None and col2 is not None:
+        return FunctionExpression("substring_grapheme", col0, col1, col2)
+    elif col0 is not None and col1 is not None:
         return FunctionExpression("substring_grapheme", col0, col1)
-    return FunctionExpression("substring_grapheme", col0, col1, col2)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def subtract(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col1 is None:
+    if col0 is not None and col1 is not None:
+        return FunctionExpression("subtract", col0, col1)
+    elif col0 is not None:
         return FunctionExpression("subtract", col0)
-    return FunctionExpression("subtract", col0, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
-def suffix(col0, col1, /) -> FunctionExpression:
+def suffix(col1, col0, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("suffix", col0, col1)
+    return FunctionExpression("suffix", col1, col0)
 
 
 def sum(arg, /) -> FunctionExpression:
@@ -2799,16 +2720,22 @@ def time_bucket(bucket_width, timestamp, origin=None, /) -> FunctionExpression:
     relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03
     00:00:00+00 for buckets that do not include a month or year interval, and to
     2000-01-01 00:00:00+00 for month and year buckets"""
-    if origin is None:
+    if bucket_width is not None and timestamp is not None:
         return FunctionExpression("time_bucket", bucket_width, timestamp)
-    return FunctionExpression("time_bucket", bucket_width, timestamp, origin)
+    elif bucket_width is not None and timestamp is not None and origin is not None:
+        return FunctionExpression("time_bucket", bucket_width, timestamp, origin)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def timezone(ts, col1=None, /) -> FunctionExpression:
     """Extract the timezone component from a date or timestamp"""
-    if col1 is None:
+    if ts is not None and col1 is not None:
+        return FunctionExpression("timezone", ts, col1)
+    elif ts is not None:
         return FunctionExpression("timezone", ts)
-    return FunctionExpression("timezone", ts, col1)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def timezone_hour(ts, /) -> FunctionExpression:
@@ -2824,9 +2751,12 @@ def timezone_minute(ts, /) -> FunctionExpression:
 def to_base(number, radix, min_length=None, /) -> FunctionExpression:
     """Converts a value to a string in the given base radix, optionally padding with
     leading zeros to the minimum length"""
-    if min_length is None:
+    if number is not None and radix is not None and min_length is not None:
+        return FunctionExpression("to_base", number, radix, min_length)
+    elif number is not None and radix is not None:
         return FunctionExpression("to_base", number, radix)
-    return FunctionExpression("to_base", number, radix, min_length)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def to_base64(blob, /) -> FunctionExpression:
@@ -2904,18 +2834,21 @@ def transaction_timestamp() -> FunctionExpression:
     return FunctionExpression("transaction_timestamp")
 
 
-def translate(string, from_, to, /) -> FunctionExpression:
+def translate(from_, string, to, /) -> FunctionExpression:
     """Replaces each character in string that matches a character in the from set with
     the corresponding character in the to set. If from is longer than to,
     occurrences of the extra characters in from are deleted"""
-    return FunctionExpression("translate", string, from_, to)
+    return FunctionExpression("translate", from_, string, to)
 
 
 def trim(string, characters=None, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from either side of the string"""
-    if characters is None:
+    if string is not None:
         return FunctionExpression("trim", string)
-    return FunctionExpression("trim", string, characters)
+    elif string is not None and characters is not None:
+        return FunctionExpression("trim", string, characters)
+    else:
+        raise ValueError('Invalid combination of parameters')
 
 
 def trunc(x, /) -> FunctionExpression:
@@ -3037,9 +2970,9 @@ def writefile(*args) -> FunctionExpression:
     return FunctionExpression("writefile", *args)
 
 
-def xor(left, right, /) -> FunctionExpression:
+def xor(right, left, /) -> FunctionExpression:
     """Bitwise XOR"""
-    return FunctionExpression("xor", left, right)
+    return FunctionExpression("xor", right, left)
 
 
 def year(ts, /) -> FunctionExpression:

@@ -18,8 +18,7 @@ FUNC_FILE = Path("../duckdb/func.py")
 class FunctionMetaData:
     name: str
     description: str
-    all_parameters: List[str]
-    optional_parameters: List[str]
+    all_parameter_combinations: List[List[str]]
     has_variable_parameters: bool
 
 
@@ -36,52 +35,70 @@ def generate() -> None:
         function_def: List[str] = []
 
         name = f.name
-        if not name.isidentifier() or any("lambda" in p for p in f.all_parameters):
+        if not name.isidentifier() or any(
+            "lambda" in p for combo in f.all_parameter_combinations for p in combo
+        ):
             # Skip functions with invalid names such as "||", "&", etc.
             # Skip functions which accept lambda functions as there is currently
             # no way to pass a lambda function as an argument to FunctionExpression
             continue
 
-        # We make parameters positional-only to have more flexibility in the future
-        # to rename them. Maybe they are not stable across duckdb versions.
-        # That would not be an issue in SQL but would be in Python.
-        # We do this by placing "/" at the end.
         # Variable number of arguments are represented by a single "*args" parameter.
-        prepared_parameters: List[str]
+        def_parameters: List[str]
+        all_parameters: List[str]
         if f.has_variable_parameters:
-            prepared_parameters = ["*args"]
+            def_parameters = ["*args"]
+            all_parameters = def_parameters
         else:
-            prepared_parameters = [
-                p for p in f.all_parameters if p not in f.optional_parameters
+            # All parameters which do not appear in every parameter combination
+            # have to be made optional.
+            all_parameters = list(
+                set(p for combo in f.all_parameter_combinations for p in combo)
+            )
+            optional_parameters = [
+                p
+                for p in all_parameters
+                if not all(p in combo for combo in f.all_parameter_combinations)
             ]
-            prepared_parameters.extend([f"{p}=None" for p in f.optional_parameters])
-            if prepared_parameters:
-                prepared_parameters.append("/")
 
-        def_parameters_str = ", ".join(prepared_parameters)
+            def_parameters = [p for p in all_parameters if p not in optional_parameters]
+            def_parameters.extend([f"{p}=None" for p in optional_parameters])
+            if def_parameters:
+                # We make parameters positional-only to have more flexibility in the future
+                # to rename them. Maybe they are not stable across duckdb versions.
+                # That would not be an issue in SQL but would be in Python.
+                # We do this by placing "/" at the end.
+                def_parameters.append("/")
+
+        def_parameters_str = ", ".join(def_parameters)
         function_def.append(f"def {name}({def_parameters_str}) -> FunctionExpression:")
         function_def.append(f'{indent}"""{f.description}"""')
 
-        if f.optional_parameters:
-            # For all combinations of optional parameters, add a if statement
+        if not f.has_variable_parameters and len(f.all_parameter_combinations) > 1:
+            # For all combinations of parameters, add an if statement
             # with a return statement.
-            combinations = []
-            for r in range(1, len(f.optional_parameters) + 1):
-                combinations.extend(it.combinations(f.optional_parameters, r))
-
-            for combo in combinations:
-                expressions = [f"{p} is None" for p in combo]
-                function_def.append(f"{indent}if {' and '.join(expressions)}:")
-                return_statement = make_return_statement(
-                    name, [p for p in f.all_parameters if p not in combo]
+            for idx, combo in enumerate(f.all_parameter_combinations):
+                expressions = (
+                    [f"{p} is not None" for p in combo]
+                    if len(combo) > 0
+                    # This is the case if all parameters are optional and none are provided
+                    else [f"{p} is None" for p in all_parameters]
                 )
+                function_def.append(
+                    f"{indent}{'if' if idx == 0 else 'elif'} {' and '.join(expressions)}:"
+                )
+                return_statement = make_return_statement(name, combo)
                 function_def.append(f"{indent*2}{return_statement}")
-
-        # The return statement if all parameters are provided
-        return_statement = make_return_statement(
-            name, ["*args"] if f.has_variable_parameters else f.all_parameters
-        )
-        function_def.append(f"{indent}{return_statement}")
+            function_def.append(f"{indent}else:")
+            function_def.append(
+                f"{indent*2}raise ValueError('Invalid combination of parameters')"
+            )
+        else:
+            # The return statement if all parameters are provided
+            return_statement = make_return_statement(
+                name, ["*args"] if f.has_variable_parameters else all_parameters
+            )
+            function_def.append(f"{indent}{return_statement}")
 
         content.append("\n".join(function_def))
 
@@ -107,7 +124,7 @@ def get_functions_metadata() -> _FunctionsMetadata:
     later do not contain information on all functions.
     """
     # In this list, you can have multiple entries per function_name if the function
-    # accepts optional arguments. We handle this further below
+    # accepts different combinations of parameters. We handle this further below
     functions = get_duckdb_functions()
 
     keyfunc = lambda x: x["function_name"]
@@ -126,32 +143,19 @@ def get_functions_metadata() -> _FunctionsMetadata:
             # No need to record any parameter names as we can just use a single *args
             # statement in the Python function definition. That's the easiest for now
             # based on the metadata we get from duckdb_functions.
-            all_parameters = []
-            optional_parameters = []
+            all_parameter_combinations = []
         else:
             has_variable_parameters = False
+            all_parameter_combinations = [m["parameters"] for m in grouped_metadata]
 
-            if len(grouped_metadata) == 1:
-                all_parameters = grouped_metadata[0]["parameters"]
-                optional_parameters = []
-            else:
-                # Take the parameters from the function definition with the most
-                # parameters. Then, consider the ones optional which are not in the
-                # function definition with the least parameters.
-                all_parameters = max(
-                    [m["parameters"] for m in grouped_metadata], key=len
-                )
-
-                optional_parameters = set(all_parameters) - set(
-                    min([m["parameters"] for m in grouped_metadata], key=len)
-                )
-
+        assert (
+            len(set(m["description"] for m in grouped_metadata)) == 1
+        ), "Descriptions are expected to be all the same."
+        description = prepare_description(grouped_metadata[0]["description"])
         metadata = FunctionMetaData(
             name=function_name,
-            all_parameters=all_parameters,
-            optional_parameters=optional_parameters,
-            # Descriptions are expected to be all the same
-            description=prepare_description(grouped_metadata[0]["description"]),
+            all_parameter_combinations=all_parameter_combinations,
+            description=description,
             has_variable_parameters=has_variable_parameters,
         )
         functions_metadata.append(metadata)
