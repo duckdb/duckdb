@@ -30,7 +30,7 @@ select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_D
 SMALLINT	VARCHAR	DATE
 
 statement error
-select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={'season':date}) limit 1;
+select season,director,aired from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={'season':date}) limit 1;
 ----
 Invalid Input Error: Unable to cast 
 
