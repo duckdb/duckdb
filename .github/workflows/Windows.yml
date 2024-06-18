@@ -255,8 +255,7 @@ jobs:
          choco install zip -y --force
          zip -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
          zip -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-         zip -j duckdb_odbc-windows-arm64.zip tools/odbc/bin/Release/*
-         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip duckdb_odbc-windows-arm64.zip
+         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
 
      - uses: actions/upload-artifact@v3
        with:
@@ -264,7 +263,6 @@ jobs:
          path: |
            libduckdb-windows-arm64.zip
            duckdb_cli-windows-arm64.zip
-           duckdb_odbc-windows-arm64.zip
 
  mingw:
      name: MingW (64 Bit)
@@ -334,6 +332,41 @@ jobs:
        with:
          vcpkg_target_triplet: x64-windows-static-md
          deploy_as: windows_amd64
+         treat_warn_as_error: 0
+         s3_id: ${{ secrets.S3_ID }}
+         s3_key: ${{ secrets.S3_KEY }}
+         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+         run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+         run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+         unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+
+
+
+ win-extensions-arm64:
+   # Builds extensions for windows_amd64
+   name: Windows Extensions (ARM64)
+   runs-on: windows-latest
+#   needs: win-release-arm64
+   steps:
+     - name: Keep \n line endings
+       shell: bash
+       run: |
+         git config --global core.autocrlf false
+         git config --global core.eol lf
+
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+         ref: ${{ inputs.git_ref }}
+
+     - uses: actions/setup-python@v5
+       with:
+         python-version: '3.12'
+
+     - uses: ./.github/actions/build_extensions
+       with:
+         vcpkg_target_triplet: arm64-windows-static-md
+         deploy_as: windows_arm64
          treat_warn_as_error: 0
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
