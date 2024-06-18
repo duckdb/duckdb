@@ -22,7 +22,7 @@ unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressionInput 
 ScalarFunction TypeOfFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	// fun.bind_expression = BindTypeOfFunctionExpression;
+	fun.bind_expression = BindTypeOfFunctionExpression;
 	return fun;
 }
 
