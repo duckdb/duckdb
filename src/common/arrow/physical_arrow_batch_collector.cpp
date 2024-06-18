@@ -18,15 +18,14 @@ SinkFinalizeType PhysicalArrowBatchCollector::Finalize(Pipeline &pipeline, Event
 	auto total_tuple_count = gstate.data.Count();
 	if (total_tuple_count == 0) {
 		// Create the result containing a single empty result conversion
-		gstate.result =
-		    make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
-		                                total_tuple_count, record_batch_size);
+		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
+		                                            context.GetClientProperties(), record_batch_size);
 		return SinkFinalizeType::READY;
 	}
 
 	// Already create the final query result
 	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
-	                                            total_tuple_count, record_batch_size);
+	                                            record_batch_size);
 	// Spawn an event that will populate the conversion result
 	auto &arrow_result = (ArrowQueryResult &)*gstate.result;
 	auto new_event = make_shared_ptr<ArrowMergeEvent>(arrow_result, gstate.data, pipeline);

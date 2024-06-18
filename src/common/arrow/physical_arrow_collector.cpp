@@ -104,13 +104,13 @@ SinkFinalizeType PhysicalArrowCollector::Finalize(Pipeline &pipeline, Event &eve
 			    "PhysicalArrowCollector Finalize contains no chunks, but tuple_count is non-zero (%d)",
 			    gstate.tuple_count);
 		}
-		gstate.result =
-		    make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties());
+		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
+		                                            context.GetClientProperties(), record_batch_size);
 		return SinkFinalizeType::READY;
 	}
 
-	gstate.result =
-	    make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties());
+	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
+	                                            record_batch_size);
 	auto &arrow_result = gstate.result->Cast<ArrowQueryResult>();
 	arrow_result.SetArrowData(std::move(gstate.chunks));
 
