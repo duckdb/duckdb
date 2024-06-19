@@ -316,11 +316,15 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	// if this is a index or table with indexes, initialize any unknown index instances
 	LazyLoadIndexes(context, *existing_entry);
 
-	// if there is a foreign key constraint, get that information
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	if (existing_entry->type == CatalogType::TABLE_ENTRY) {
-		FindForeignKeyInformation(existing_entry->Cast<TableCatalogEntry>(), AlterForeignKeyType::AFT_DELETE,
-		                          fk_arrays);
+		// if we have transaction local insertions for this table - clear them
+		auto &table_entry = existing_entry->Cast<TableCatalogEntry>();
+		auto &local_storage = LocalStorage::Get(DuckTransaction::Get(context, catalog));
+		local_storage.DropTable(table_entry.GetStorage());
+
+		// if there is a foreign key constraint, get that information
+		FindForeignKeyInformation(table_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
 	}
 
 	if (!set.DropEntry(transaction, info.name, info.cascade, info.allow_drop_internal)) {

@@ -508,6 +508,11 @@ idx_t LocalStorage::AddedRows(DataTable &table) {
 	return storage->row_groups->GetTotalRows() - storage->deleted_rows;
 }
 
+void LocalStorage::DropTable(DataTable &table) {
+	auto table_storage = table_manager.MoveEntry(table);
+	table_storage.reset();
+}
+
 void LocalStorage::MoveStorage(DataTable &old_dt, DataTable &new_dt) {
 	// check if there are any pending appends for the old version of the table
 	auto new_storage = table_manager.MoveEntry(old_dt);

@@ -141,6 +141,7 @@ public:
 	bool ChangesMade() noexcept;
 	idx_t EstimatedSize();
 
+	void DropTable(DataTable &table);
 	bool Find(DataTable &table);
 
 	idx_t AddedRows(DataTable &table);
