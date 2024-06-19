@@ -11,7 +11,7 @@ namespace duckdb {
 
 PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions,
                                                    const Orders &orders, const Types &payload_types, bool external)
-    : count(0), batch_base(0) {
+    : count(0) {
 
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
@@ -401,11 +401,11 @@ void PartitionLocalSinkState::Combine() {
 
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data_p,
                                                      hash_t hash_bin)
-    : sink(sink), group_data(std::move(group_data_p)), memory_per_thread(sink.memory_per_thread),
+    : sink(sink), group_data(std::move(group_data_p)), group_idx(sink.hash_groups.size()),
+      memory_per_thread(sink.memory_per_thread),
       num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
       stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
-	const auto group_idx = sink.hash_groups.size();
 	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
 	                                                     sink.payload_types, sink.external);
 	sink.hash_groups.emplace_back(std::move(new_group));
@@ -423,12 +423,11 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 }
 
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink)
-    : sink(sink), memory_per_thread(sink.memory_per_thread),
+    : sink(sink), group_idx(0), memory_per_thread(sink.memory_per_thread),
       num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
       stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	const hash_t hash_bin = 0;
-	const size_t group_idx = 0;
 	hash_group = sink.hash_groups[group_idx].get();
 	global_sort = sink.hash_groups[group_idx]->global_sort.get();
 
@@ -448,6 +447,10 @@ void PartitionLocalMergeState::Merge() {
 	merge_sorter.PerformInMergeRound();
 }
 
+void PartitionLocalMergeState::Sorted() {
+	merge_state->sink.OnSortedPartition(merge_state->group_idx);
+}
+
 void PartitionLocalMergeState::ExecuteTask() {
 	switch (stage) {
 	case PartitionSortStage::SCAN:
@@ -458,6 +461,9 @@ void PartitionLocalMergeState::ExecuteTask() {
 		break;
 	case PartitionSortStage::MERGE:
 		Merge();
+		break;
+	case PartitionSortStage::SORTED:
+		Sorted();
 		break;
 	default:
 		throw InternalException("Unexpected PartitionSortStage in ExecuteTask!");
@@ -531,12 +537,18 @@ bool PartitionGlobalMergeState::TryPrepareNextStage() {
 		return true;
 
 	case PartitionSortStage::SORTED:
-		break;
+		stage = PartitionSortStage::FINISHED;
+		total_tasks = 0;
+		return false;
+
+	case PartitionSortStage::FINISHED:
+		return false;
 	}
 
 	stage = PartitionSortStage::SORTED;
+	total_tasks = 1;
 
-	return false;
+	return true;
 }
 
 PartitionGlobalMergeStates::PartitionGlobalMergeStates(PartitionGlobalSinkState &sink) {
@@ -559,6 +571,8 @@ PartitionGlobalMergeStates::PartitionGlobalMergeStates(PartitionGlobalSinkState 
 		auto state = make_uniq<PartitionGlobalMergeState>(sink);
 		states.emplace_back(std::move(state));
 	}
+
+	sink.OnBeginMerge();
 }
 
 class PartitionMergeTask : public ExecutorTask {
@@ -602,7 +616,7 @@ bool PartitionGlobalMergeStates::ExecuteTask(PartitionLocalMergeState &local_sta
 		// Thread is done with its assigned task, try to fetch new work
 		for (auto group = sorted; group < states.size(); ++group) {
 			auto &global_state = states[group];
-			if (global_state->IsSorted()) {
+			if (global_state->IsFinished()) {
 				// This hash group is done
 				// Update the high water mark of densely completed groups
 				if (sorted == group) {
