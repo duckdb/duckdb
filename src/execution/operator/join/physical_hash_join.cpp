@@ -85,26 +85,6 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-idx_t GetPartitioningSpaceRequirement(const vector<LogicalType> &types, const idx_t radix_bits,
-                                      const idx_t num_threads) {
-	idx_t tuple_width = 0;
-	bool all_constant = true;
-	for (auto &type : types) {
-		tuple_width += GetTypeIdSize(type.InternalType());
-		all_constant &= TypeIsConstantSize(type.InternalType());
-	}
-
-	auto tuples_per_block = Storage::BLOCK_SIZE / tuple_width;
-	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
-	if (!all_constant) {
-		blocks_per_chunk += 2;
-	}
-	auto size_per_partition = blocks_per_chunk * Storage::BLOCK_ALLOC_SIZE;
-	auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-
-	return num_threads * num_partitions * size_per_partition;
-}
-
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op, ClientContext &context_p)
@@ -123,13 +103,6 @@ public:
 		probe_types.insert(probe_types.end(), op.condition_types.begin(), op.condition_types.end());
 		probe_types.insert(probe_types.end(), payload_types.begin(), payload_types.end());
 		probe_types.emplace_back(LogicalType::HASH);
-
-		// Compute minimum reservation
-		const auto minimum_reservation =
-		    GetPartitioningSpaceRequirement(hash_table->layout.GetTypes(), hash_table->GetRadixBits(),
-		                                    TaskScheduler::GetScheduler(context).NumberOfThreads());
-		temporary_memory_state->SetMinimumReservation(minimum_reservation);
-		temporary_memory_state->SetRemainingSize(context, minimum_reservation);
 	}
 
 	void ScheduleFinalize(Pipeline &pipeline, Event &event);
@@ -301,6 +274,16 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 		lstate.hash_table->GetSinkCollection().FlushAppendState(lstate.append_state);
 		lock_guard<mutex> local_ht_lock(gstate.lock);
 		gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
+
+		idx_t total_size = 0;
+		idx_t total_count = 0;
+		for (auto &lht : gstate.local_hash_tables) {
+			auto &sink_collection = lht->GetSinkCollection();
+			total_size += sink_collection.SizeInBytes();
+			total_count += sink_collection.Count();
+		}
+		auto ht_size = total_size + JoinHashTable::PointerTableSize(total_count);
+		gstate.temporary_memory_state->SetRemainingSize(context.client, ht_size);
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.join_key_executor, "join_key_executor", 1);
@@ -395,6 +378,26 @@ void HashJoinGlobalSinkState::InitializeProbeSpill() {
 	if (!probe_spill) {
 		probe_spill = make_uniq<JoinHashTable::ProbeSpill>(*hash_table, context, probe_types);
 	}
+}
+
+static idx_t GetPartitioningSpaceRequirement(const vector<LogicalType> &types, const idx_t radix_bits,
+                                             const idx_t num_threads) {
+	idx_t tuple_width = 0;
+	bool all_constant = true;
+	for (auto &type : types) {
+		tuple_width += GetTypeIdSize(type.InternalType());
+		all_constant &= TypeIsConstantSize(type.InternalType());
+	}
+
+	auto tuples_per_block = Storage::BLOCK_SIZE / tuple_width;
+	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
+	if (!all_constant) {
+		blocks_per_chunk += 2;
+	}
+	auto size_per_partition = blocks_per_chunk * Storage::BLOCK_ALLOC_SIZE;
+	auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+
+	return num_threads * num_partitions * size_per_partition;
 }
 
 class HashJoinRepartitionTask : public ExecutorTask {

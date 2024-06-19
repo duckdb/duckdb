@@ -199,8 +199,13 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	}
 
 	// make pipeline_finish_event of each MetaPipeline depend on the pipeline_event of the base pipeline of its sublings
-	// this allows TemporaryMemoryManager to more fairly distribute memory
+	// this allows TemporaryMemoryManager to distribute memory after all child pipelines have materialized data
+	// this way, memory is distributed
 	for (auto &meta_pipeline : event_data.meta_pipelines) {
+		auto &meta_base = *meta_pipeline->GetBasePipeline();
+		auto meta_entry = event_map.find(meta_base);
+		D_ASSERT(meta_entry != event_map.end());
+
 		vector<shared_ptr<MetaPipeline>> children;
 		meta_pipeline->GetMetaPipelines(children, false, true);
 		for (auto &child1 : children) {
@@ -216,12 +221,11 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 				D_ASSERT(child2_entry != event_map.end());
 				child1_entry->second.pipeline_finish_event.AddDependency(child2_entry->second.pipeline_event);
 			}
-			// also make the finish event depend on the initialize even of the base pipeline
+			// make the finish event of the child depend on the initialize event of the base pipeline,
 			// so that the sink will be initialized before the child pipelines are finished
-			auto &meta_base = *meta_pipeline->GetBasePipeline();
-			auto meta_entry = event_map.find(meta_base);
-			D_ASSERT(meta_entry != event_map.end());
 			child1_entry->second.pipeline_finish_event.AddDependency(meta_entry->second.pipeline_initialize_event);
+			// this prevents the sink from being initialized too early - only after all child pipelines have started
+			meta_entry->second.pipeline_initialize_event.AddDependency(child1_entry->second.pipeline_event);
 		}
 	}
 

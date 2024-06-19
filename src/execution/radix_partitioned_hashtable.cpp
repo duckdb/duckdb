@@ -102,7 +102,6 @@ public:
 	void SetRadixBits(idx_t radix_bits_p);
 	bool SetRadixBitsToExternal();
 	idx_t GetRadixBits() const;
-	idx_t GetMaxRadixBits() const;
 
 private:
 	void SetRadixBitsInternal(const idx_t radix_bits_p, bool external);
@@ -205,7 +204,7 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	auto tuples_per_block = Storage::BLOCK_SIZE / radix_ht.GetLayout().GetRowWidth();
 	idx_t ht_count =
 	    NumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
-	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetMaxRadixBits());
+	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetRadixBits());
 	auto count_per_partition = ht_count / num_partitions;
 	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block + 1;
 	if (!radix_ht.GetLayout().AllConstant()) {
@@ -273,10 +272,6 @@ bool RadixHTConfig::SetRadixBitsToExternal() {
 
 idx_t RadixHTConfig::GetRadixBits() const {
 	return sink_radix_bits;
-}
-
-idx_t RadixHTConfig::GetMaxRadixBits() const {
-	return external_radix_bits;
 }
 
 void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external) {
