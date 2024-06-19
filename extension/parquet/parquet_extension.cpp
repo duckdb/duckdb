@@ -32,6 +32,7 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -1425,8 +1426,6 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 		const auto &type = expr->return_type;
 		const auto &name = expr->alias;
 
-		LogicalType resulting_type;
-
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
 		if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::BLOB && type.HasAlias() &&
@@ -1441,9 +1440,9 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			any_change = true;
 		}
 		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
-		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && type.Contains(IsTypeLossy)) {
+		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && TypeVisitor::Contains(type, IsTypeLossy)) {
 			// Replace all lossy types with VARCHAR
-			auto new_type = LogicalType::VisitReplace(
+			auto new_type = TypeVisitor::VisitReplace(
 			    type, [](const LogicalType &ty) -> LogicalType { return IsTypeLossy(ty) ? LogicalType::VARCHAR : ty; });
 
 			// Cast the column to the new type
@@ -1453,10 +1452,10 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			any_change = true;
 		}
 		// Else look if there is any unsupported type
-		else if (type.Contains(IsTypeNotSupported)) {
+		else if (TypeVisitor::Contains(type, IsTypeNotSupported)) {
 			// If there is at least one unsupported type, replace all unsupported types with varchar
 			// and perform a CAST
-			auto new_type = LogicalType::VisitReplace(type, [](const LogicalType &ty) -> LogicalType {
+			auto new_type = TypeVisitor::VisitReplace(type, [](const LogicalType &ty) -> LogicalType {
 				return IsTypeNotSupported(ty) ? LogicalType::VARCHAR : ty;
 			});
 

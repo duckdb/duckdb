@@ -344,12 +344,6 @@ struct LogicalType {
 
 	DUCKDB_API bool IsValid() const;
 
-	template<class F>
-	bool Contains(F &&predicate) const;
-	bool Contains(LogicalTypeId type_id) const;
-
-	template<class F>
-	static LogicalType VisitReplace(const LogicalType &type, F &&func);
 
 private:
 	LogicalTypeId id_; // NOLINT: allow this naming for legacy reasons
@@ -549,72 +543,6 @@ struct aggregate_state_t {
 	vector<LogicalType> bound_argument_types;
 };
 
-template<class F>
-bool LogicalType::Contains(F &&predicate) const {
-	if(predicate(*this)) {
-		return true;
-	}
-	switch(id()) {
-	case LogicalTypeId::STRUCT: {
-		for(const auto &child : StructType::GetChildTypes(*this)) {
-			if(child.second.Contains(predicate)) {
-				return true;
-			}
-		}
-		}
-		break;
-	case LogicalTypeId::LIST:
-		return ListType::GetChildType(*this).Contains(predicate);
-	case LogicalTypeId::MAP:
-		return MapType::KeyType(*this).Contains(predicate) || MapType::ValueType(*this).Contains(predicate);
-	case LogicalTypeId::UNION:
-		for(const auto &child : UnionType::CopyMemberTypes(*this)) {
-			if(child.second.Contains(predicate)) {
-				return true;
-			}
-		}
-		break;
-	case LogicalTypeId::ARRAY:
-		return ArrayType::GetChildType(*this).Contains(predicate);
-	default:
-		return false;
-	}
-	return false;
-}
 
-template <class F>
-LogicalType LogicalType::VisitReplace(const LogicalType &type, F &&func) {
-	switch(type.id()) {
-	case LogicalTypeId::STRUCT: {
-		auto children = StructType::GetChildTypes(type);
-		for(auto &child : children) {
-			child.second = VisitReplace(child.second, func);
-		}
-		return func(LogicalType::STRUCT(children));
-	}
-	case LogicalTypeId::UNION: {
-		auto children = UnionType::CopyMemberTypes(type);
-		for(auto &child : children) {
-			child.second = VisitReplace(child.second, func);
-		}
-		return func(LogicalType::UNION(children));
-	}
-	case LogicalTypeId::LIST: {
-		auto child = ListType::GetChildType(type);
-		return func(LogicalType::LIST(VisitReplace(child, func)));
-	}
-	case LogicalTypeId::ARRAY: {
-		auto child = ArrayType::GetChildType(type);
-		return func(LogicalType::ARRAY(VisitReplace(child, func), ArrayType::GetSize(type)));
-	}
-	case LogicalTypeId::MAP: {
-		auto key = MapType::KeyType(type);
-		auto value = MapType::ValueType(type);
-		return func(LogicalType::MAP(VisitReplace(key, func), VisitReplace(value, func)));
-	}
-	default:
-		return func(type);
-	}
-}
 
 } // namespace duckdb
