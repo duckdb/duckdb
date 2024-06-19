@@ -280,7 +280,7 @@ def clean_function_name(name: str) -> str:
     return name.replace("__postfix", "")
 
 
-def prepare_description(description: str | None) -> str:
+def prepare_description(description: Optional[str]) -> str:
     if not description:
         return ""
     description = "\n".join(textwrap.wrap(description.strip(), width=80, initial_indent="", subsequent_indent=" " * 4))
