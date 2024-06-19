@@ -37,6 +37,8 @@ public:
 	shared_ptr<ExternalDependency> external_dependency;
 	//! Aliases for the column names
 	vector<string> column_name_alias;
+	//! User set types for the columns
+	vector<LogicalType> column_type_hint;
 
 public:
 	//! Convert the object to a string

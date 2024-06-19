@@ -188,6 +188,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
                                                               vector<string> input_table_names) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
+	auto &column_type_hint = ref.column_type_hint;
 
 	auto bind_index = GenerateTableIndex();
 	// perform the binding

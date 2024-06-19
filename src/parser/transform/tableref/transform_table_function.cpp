@@ -28,6 +28,20 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 	case duckdb_libpgquery::T_PGFuncCall: {
 		auto func_call = PGPointerCast<duckdb_libpgquery::PGFuncCall>(call_tree.get());
 		result->function = TransformFuncCall(*func_call);
+		if (root.coldeflist) {
+			duckdb_libpgquery::PGListCell *cell;
+			for_each_cell(cell, root.coldeflist->head) {
+				auto def_elem = PGPointerCast<duckdb_libpgquery::PGColumnDef>(cell->data.ptr_value);
+				LogicalType target_type =
+				    (!def_elem->typeName) ? LogicalType::ANY : TransformTypeName(*def_elem->typeName);
+				string colname;
+				if (def_elem->colname) {
+					colname = def_elem->colname;
+				}
+				result->column_name_alias.push_back(colname);
+				result->column_type_hint.push_back(target_type);
+			}
+		}
 		SetQueryLocation(*result, func_call->location);
 		break;
 	}

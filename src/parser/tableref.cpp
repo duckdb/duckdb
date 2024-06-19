@@ -40,7 +40,29 @@ string TableRef::BaseToString(string result, const vector<string> &column_name_a
 }
 
 bool TableRef::Equals(const TableRef &other) const {
-	return type == other.type && alias == other.alias && SampleOptions::Equals(sample.get(), other.sample.get());
+	if (type != other.type) {
+		return false;
+	}
+	if (alias != other.alias) {
+		// FIXME: CIEquals?
+		return false;
+	}
+	if (!SampleOptions::Equals(sample.get(), other.sample.get())) {
+		return false;
+	}
+	if (column_name_alias.size() != other.column_name_alias.size()) {
+		return false;
+	}
+	D_ASSERT(column_name_alias.size() == column_type_hint.size());
+	for (idx_t i = 0; i < column_name_alias.size(); i++) {
+		if (!StringUtil::CIEquals(column_name_alias[i], other.column_name_alias[i])) {
+			return false;
+		}
+		if (column_type_hint[i] != other.column_type_hint[i]) {
+			return false;
+		}
+	}
+	return true;
 }
 
 void TableRef::CopyProperties(TableRef &target) const {
@@ -49,6 +71,8 @@ void TableRef::CopyProperties(TableRef &target) const {
 	target.query_location = query_location;
 	target.sample = sample ? sample->Copy() : nullptr;
 	target.external_dependency = external_dependency;
+	target.column_name_alias = column_name_alias;
+	target.column_type_hint = column_type_hint;
 }
 
 void TableRef::Print() {
