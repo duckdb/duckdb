@@ -1,4 +1,4 @@
-# name: test/sql/json/scalar/test_json_pretty_print.test
+# name: test/sql/json/scalar/test_json_pretty.test
 # description: Test JSON pretty printer
 # group: [scalar]
 
@@ -10,14 +10,14 @@ pragma enable_verification
 mode output_hash
 
 query T
-SELECT json_pretty_print('[1,2,{"a":43,    "g":[true, true]}]');
+SELECT json_pretty('[1,2,{"a":43,    "g":[true, true]}]');
 ----
 1 values hashing to d41d8cd98f00b204e9800998ecf8427e
 
 # The Hash corresponds to the output below.
 # It was needed as there was some problem with the escape characters.
 
-# json_pretty_print('[1,2,{"a":43,    "g":[true, true]}]')
+# json_pretty('[1,2,{"a":43,    "g":[true, true]}]')
 # VARCHAR
 # [ Rows: 1]
 # [
