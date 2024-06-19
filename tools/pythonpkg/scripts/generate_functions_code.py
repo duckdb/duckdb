@@ -80,7 +80,7 @@ def generate() -> None:
             # have to be made optional.
             # Use the approach below instead of a list to keep the order of
             # the parameters
-            all_parameters: list[str] = []
+            all_parameters: List[str] = []
             for combo in f.all_parameter_combinations:
                 for p in combo:
                     if p not in all_parameters:
@@ -252,7 +252,7 @@ def get_duckdb_functions() -> List[Dict[str, str]]:
     return functions
 
 
-def parse_parameters(parameters_raw: str) -> list[str]:
+def parse_parameters(parameters_raw: str) -> List[str]:
     parameters_raw = parameters_raw.strip()
     if not parameters_raw or parameters_raw == "[]":
         return []
