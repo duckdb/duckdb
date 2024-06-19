@@ -41,7 +41,7 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 // Traverse the tree and retrieve all metrics
 void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string> &settings, bool is_root = true) {
 	if (is_root) {
-        // At the root, only the query name is available
+		// At the root, only the query name is available
 		auto query = duckdb_profiling_info_get_query(profiling_info);
 		REQUIRE(query != nullptr);
 		duckdb_free((void *)query);
