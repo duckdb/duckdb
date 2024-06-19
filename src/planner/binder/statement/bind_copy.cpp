@@ -28,7 +28,7 @@ static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 }
 
-BoundStatement Binder::BindCopyTo(CopyStatement &stmt, bool is_export) {
+BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
@@ -153,7 +153,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, bool is_export) {
 	if (copy_function.function.copy_to_select) {
 		auto bindings = select_node.plan->GetColumnBindings();
 
-		CopyToSelectInput input = {context, stmt.info->options, {}, is_export};
+		CopyToSelectInput input = {context, stmt.info->options, {}, copy_to_type};
 		input.select_list.reserve(bindings.size());
 
 		// Create column references for the select list
@@ -278,7 +278,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	return result;
 }
 
-BoundStatement Binder::Bind(CopyStatement &stmt, bool is_export) {
+BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	if (!stmt.info->is_from && !stmt.info->select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
@@ -305,7 +305,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, bool is_export) {
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt);
 	} else {
-		return BindCopyTo(stmt, is_export);
+		return BindCopyTo(stmt, copy_to_type);
 	}
 }
 

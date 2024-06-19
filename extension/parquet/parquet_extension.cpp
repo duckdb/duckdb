@@ -1429,7 +1429,8 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
-		if (!input.is_export && type.id() == LogicalTypeId::BLOB && type.HasAlias() && type.GetAlias() == "GEOMETRY") {
+		if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::BLOB && type.HasAlias() &&
+		    type.GetAlias() == "GEOMETRY") {
 
 			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
 			wkb_blob_type.SetAlias("WKB_BLOB");
@@ -1440,7 +1441,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			any_change = true;
 		}
 		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
-		else if (input.is_export && type.Contains(IsTypeLossy)) {
+		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && type.Contains(IsTypeLossy)) {
 			// Replace all lossy types with VARCHAR
 			auto new_type = LogicalType::VisitReplace(
 			    type, [](const LogicalType &ty) -> LogicalType { return IsTypeLossy(ty) ? LogicalType::VARCHAR : ty; });

@@ -78,7 +78,7 @@ struct CopyToSelectInput {
 	ClientContext &context;
 	case_insensitive_map_t<vector<Value>> &options;
 	vector<unique_ptr<Expression>> select_list;
-	bool is_export;
+	CopyToType copy_to_type;
 };
 
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };

@@ -117,6 +117,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/simplified_token.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
@@ -1331,6 +1332,29 @@ CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_OVERWRITE_OR_IGNORE")) {
 		return CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CopyToType>(CopyToType value) {
+	switch(value) {
+	case CopyToType::COPY_TO_FILE:
+		return "COPY_TO_FILE";
+	case CopyToType::EXPORT_DATABASE:
+		return "EXPORT_DATABASE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+CopyToType EnumUtil::FromString<CopyToType>(const char *value) {
+	if (StringUtil::Equals(value, "COPY_TO_FILE")) {
+		return CopyToType::COPY_TO_FILE;
+	}
+	if (StringUtil::Equals(value, "EXPORT_DATABASE")) {
+		return CopyToType::EXPORT_DATABASE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

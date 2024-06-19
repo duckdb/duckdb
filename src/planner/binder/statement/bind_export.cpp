@@ -233,7 +233,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		copy_stmt.info->select_statement = CreateSelectStatement(copy_stmt, select_list);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
-		auto bound_statement = copy_binder->Bind(copy_stmt, true);
+		auto bound_statement = copy_binder->Bind(copy_stmt, CopyToType::EXPORT_DATABASE);
 
 		auto plan = std::move(bound_statement.plan);
 
