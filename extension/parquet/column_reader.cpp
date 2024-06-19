@@ -1,6 +1,7 @@
 #include "column_reader.hpp"
 
 #include "boolean_column_reader.hpp"
+#include "brotli/decode.h"
 #include "callback_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "duckdb.hpp"
@@ -373,12 +374,26 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		}
 		break;
 	}
+	case CompressionCodec::BROTLI: {
+		auto state = duckdb_brotli::BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
+		size_t total_out = 0;
+		auto src_size_size_t = NumericCast<size_t>(src_size);
+		auto dst_size_size_t = NumericCast<size_t>(dst_size);
+
+		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
+		                                                        &total_out);
+		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
+			throw std::runtime_error("Brotli Decompression failure");
+		}
+		duckdb_brotli::BrotliDecoderDestroyInstance(state);
+		break;
+	}
 
 	default: {
 		std::stringstream codec_name;
 		codec_name << codec;
 		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, gzip, lz4_raw, snappy or zstd");
+		                         "\". Supported options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd");
 	}
 	}
 }
