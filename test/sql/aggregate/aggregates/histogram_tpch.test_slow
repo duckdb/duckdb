@@ -49,3 +49,12 @@ FROM lineitem
 GROUP BY l_returnflag
 ORDER BY l_returnflag
 ----
+
+# string stress test
+query I nosort histstrings
+SELECT unnest(map_keys(histogram(l_comment))) FROM lineitem
+----
+
+query I nosort histstrings
+SELECT DISTINCT l_comment FROM lineitem ORDER BY l_comment
+----

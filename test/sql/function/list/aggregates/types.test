@@ -5,8 +5,6 @@
 # This file specifically tests the functionality for each type, 
 # it does not necessarily test the correctness (statement ok suffices for some tests)
 
-require strinline
-
 # BOOLEAN
 
 # result False

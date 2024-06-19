@@ -1,0 +1,22 @@
+# name: test/sql/aggregate/aggregates/mode_tpch.test_slow
+# description: Test mode function with large data sets
+# group: [aggregates]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+query II
+select l_returnflag, mode(l_comment) from lineitem group by l_returnflag;
+----
+A	 furiously
+N	 furiously
+R	 furiously
+
+# run a windowed mode
+query I
+SELECT avg(strlen(padded_mode)) FROM
+(SELECT mode(l_comment) OVER (ORDER BY rowid ROWS BETWEEN 5 PRECEDING AND 5 FOLLOWING) AS padded_mode FROM lineitem)
+----
+26.4927

@@ -3,6 +3,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/core_functions/aggregate/histogram_helpers.hpp"
+#include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {
 
@@ -13,7 +14,7 @@ struct HistogramFunction {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+	static void Destroy(STATE &state, AggregateInputData &) {
 		if (state.hist) {
 			delete state.hist;
 		}
@@ -21,6 +22,24 @@ struct HistogramFunction {
 
 	static bool IgnoreNull() {
 		return true;
+	}
+};
+
+template<class TYPE>
+struct DefaultMapType {
+	using MAP_TYPE = TYPE;
+
+	static TYPE *CreateEmpty(ArenaAllocator &) {
+		return new TYPE();
+	}
+};
+
+template<class TYPE>
+struct StringMapType {
+	using MAP_TYPE = TYPE;
+
+	static TYPE *CreateEmpty(ArenaAllocator &allocator) {
+		return new TYPE(allocator);
 	}
 };
 
@@ -38,7 +57,7 @@ static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_in
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
-	auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
+	auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>(sdata);
 	auto input_values = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -47,35 +66,22 @@ static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_in
 		}
 		auto &state = *states[sdata.sel->get_index(i)];
 		if (!state.hist) {
-			state.hist = new MAP_TYPE();
+			state.hist = MAP_TYPE::CreateEmpty(aggr_input.allocator);
 		}
 		auto &input_value = input_values[idx];
-		if (OP::RequiresExtract()) {
-			// for entries that require an extract - we first search, and only call extract if the entry does not exist
-			auto entry = state.hist->find(input_value);
-			if (entry != state.hist->end()) {
-				// entry already exists - increment
-				++entry->second;
-				continue;
-			}
-			// entry does not exist yet - we need to insert it
-			auto insert_value = OP::template ExtractValue<T>(input_data, i, aggr_input);
-			state.hist->insert(make_pair(insert_value, 1));
-		} else {
-			// for entries that do not need ExtractValue (i.e. all primitive types) we can simplify this operation
-			++(*state.hist)[input_value];
-		}
+		++(*state.hist)[input_value];
 	}
 }
 
 template <class T, class MAP_TYPE>
-static void HistogramCombineFunction(Vector &state_vector, Vector &combined, AggregateInputData &, idx_t count) {
+static void HistogramCombineFunction(Vector &state_vector, Vector &combined, AggregateInputData &aggr_input, idx_t count) {
+	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
-	auto states_ptr = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
+	auto states_ptr = UnifiedVectorFormat::GetData<HIST_STATE *>(sdata);
 
-	auto combined_ptr = FlatVector::GetData<HistogramAggState<T, MAP_TYPE> *>(combined);
+	auto combined_ptr = FlatVector::GetData<HIST_STATE *>(combined);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states_ptr[sdata.sel->get_index(i)];
@@ -83,7 +89,7 @@ static void HistogramCombineFunction(Vector &state_vector, Vector &combined, Agg
 			continue;
 		}
 		if (!combined_ptr[i]->hist) {
-			combined_ptr[i]->hist = new MAP_TYPE();
+			combined_ptr[i]->hist = MAP_TYPE::CreateEmpty(aggr_input.allocator);
 		}
 		D_ASSERT(combined_ptr[i]->hist);
 		D_ASSERT(state.hist);
@@ -96,9 +102,11 @@ static void HistogramCombineFunction(Vector &state_vector, Vector &combined, Agg
 template <class OP, class T, class MAP_TYPE>
 static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
                                       idx_t offset) {
+	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
+
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
-	auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
+	auto states = UnifiedVectorFormat::GetData<HIST_STATE *>(sdata);
 
 	auto &mask = FlatVector::Validity(result);
 	auto old_len = ListVector::GetListSize(result);
@@ -141,9 +149,9 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 	result.Verify(count);
 }
 
-template <class OP, class T, class MAP_TYPE = map<T, idx_t>>
+template <class OP, class T, class MAP_TYPE>
 static AggregateFunction GetHistogramFunction(const LogicalType &type) {
-	using STATE_TYPE = HistogramAggState<T, MAP_TYPE>;
+	using STATE_TYPE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
 	return AggregateFunction("histogram", {type}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
@@ -153,7 +161,7 @@ static AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	                         AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
 }
 
-template <class OP, class T, class MAP_TYPE = map<T, idx_t>>
+template <class OP, class T, class MAP_TYPE>
 AggregateFunction GetMapTypeInternal(const LogicalType &type) {
 	return GetHistogramFunction<OP, T, MAP_TYPE>(type);
 }
@@ -161,17 +169,17 @@ AggregateFunction GetMapTypeInternal(const LogicalType &type) {
 template <class OP, class T, bool IS_ORDERED>
 AggregateFunction GetMapType(const LogicalType &type) {
 	if (IS_ORDERED) {
-		return GetMapTypeInternal<OP, T, map<T, idx_t>>(type);
+		return GetMapTypeInternal<OP, T, DefaultMapType<map<T, idx_t>>>(type);
 	}
-	return GetMapTypeInternal<OP, T, unordered_map<T, idx_t>>(type);
+	return GetMapTypeInternal<OP, T, DefaultMapType<unordered_map<T, idx_t>>>(type);
 }
 
 template <class OP, bool IS_ORDERED>
 AggregateFunction GetStringMapType(const LogicalType &type) {
 	if (IS_ORDERED) {
-		return GetMapTypeInternal<OP, string_t, map<string_t, idx_t>>(type);
+		return GetMapTypeInternal<OP, string_t, StringMapType<OrderedOwningStringMap<idx_t>>>(type);
 	} else {
-		return GetMapTypeInternal<OP, string_t, string_map_t<idx_t>>(type);
+		return GetMapTypeInternal<OP, string_t, StringMapType<OwningStringMap<idx_t>>>(type);
 	}
 }
 
