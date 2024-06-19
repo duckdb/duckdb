@@ -80,10 +80,18 @@ def generate() -> None:
 
         if not f.has_variable_parameters and len(f.all_parameter_combinations) > 1:
             # For all combinations of parameters, add an if statement
-            # with a return statement.
-            for idx, combo in enumerate(f.all_parameter_combinations):
+            # with a return statement. Start with the longest combination as this
+            # is the most specific one. Else, a less specific combination would
+            # be matched first in the if-elif-else chain.
+            for idx, combo in enumerate(
+                sorted(f.all_parameter_combinations, key=len, reverse=True)
+            ):
                 expressions = (
                     [f"{p} is not None" for p in combo]
+                    # Also make sure that all other parameters are None
+                    # as they will not be passed to the FunctionExpression
+                    # in the generated code.
+                    + [f"{p} is None" for p in all_parameters if p not in combo]
                     if len(combo) > 0
                     # This is the case if all parameters are optional and none are provided
                     else [f"{p} is None" for p in all_parameters]

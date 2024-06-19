@@ -18,7 +18,7 @@ def add(col0, col1=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None:
         return FunctionExpression("add", col0, col1)
-    elif col0 is not None:
+    elif col0 is not None and col1 is None:
         return FunctionExpression("add", col0)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -26,9 +26,9 @@ def add(col0, col1=None, /) -> FunctionExpression:
 
 def age(timestamp1=None, timestamp2=None, timestamp=None, /) -> FunctionExpression:
     """Subtract arguments, resulting in the time difference between the two timestamps"""
-    if timestamp1 is not None and timestamp2 is not None:
+    if timestamp1 is not None and timestamp2 is not None and timestamp is None:
         return FunctionExpression("age", timestamp1, timestamp2)
-    elif timestamp is not None:
+    elif timestamp is not None and timestamp1 is None and timestamp2 is None:
         return FunctionExpression("age", timestamp)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -157,10 +157,10 @@ def array_intersect(l1, l2, /) -> FunctionExpression:
 
 def array_length(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None:
-        return FunctionExpression("array_length", col0)
-    elif col0 is not None and col1 is not None:
+    if col0 is not None and col1 is not None:
         return FunctionExpression("array_length", col0, col1)
+    elif col0 is not None and col1 is None:
+        return FunctionExpression("array_length", col0)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -197,10 +197,10 @@ def array_push_front(arr, e, /) -> FunctionExpression:
 
 def array_resize(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("array_resize", col0, col1)
-    elif col0 is not None and col1 is not None and col2 is not None:
+    if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("array_resize", col0, col1, col2)
+    elif col0 is not None and col1 is not None and col2 is None:
+        return FunctionExpression("array_resize", col0, col1)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -212,10 +212,10 @@ def array_reverse(l, /) -> FunctionExpression:
 
 def array_reverse_sort(list, col1=None, /) -> FunctionExpression:
     """Sorts the elements of the list in reverse order"""
-    if list is not None:
-        return FunctionExpression("array_reverse_sort", list)
-    elif list is not None and col1 is not None:
+    if list is not None and col1 is not None:
         return FunctionExpression("array_reverse_sort", list, col1)
+    elif list is not None and col1 is None:
+        return FunctionExpression("array_reverse_sort", list)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -224,7 +224,7 @@ def array_slice(list, begin, end, step=None, /) -> FunctionExpression:
     """Extract a sublist using slice conventions. Negative values are accepted"""
     if list is not None and begin is not None and end is not None and step is not None:
         return FunctionExpression("array_slice", list, begin, end, step)
-    elif list is not None and begin is not None and end is not None:
+    elif list is not None and begin is not None and end is not None and step is None:
         return FunctionExpression("array_slice", list, begin, end)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -232,12 +232,12 @@ def array_slice(list, begin, end, step=None, /) -> FunctionExpression:
 
 def array_sort(list, col1=None, col2=None, /) -> FunctionExpression:
     """Sorts the elements of the list"""
-    if list is not None and col1 is not None:
-        return FunctionExpression("array_sort", list, col1)
-    elif list is not None:
-        return FunctionExpression("array_sort", list)
-    elif list is not None and col1 is not None and col2 is not None:
+    if list is not None and col1 is not None and col2 is not None:
         return FunctionExpression("array_sort", list, col1, col2)
+    elif list is not None and col1 is not None and col2 is None:
+        return FunctionExpression("array_sort", list, col1)
+    elif list is not None and col1 is None and col2 is None:
+        return FunctionExpression("array_sort", list)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -288,7 +288,7 @@ def bar(x, min, max, width=None, /) -> FunctionExpression:
     characters when x = max. width defaults to 80"""
     if x is not None and min is not None and max is not None and width is not None:
         return FunctionExpression("bar", x, min, max, width)
-    elif x is not None and min is not None and max is not None:
+    elif x is not None and min is not None and max is not None and width is None:
         return FunctionExpression("bar", x, min, max)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -342,10 +342,10 @@ def bitstring(bitstring, length, /) -> FunctionExpression:
 
 def bitstring_agg(arg, col1=None, col2=None, /) -> FunctionExpression:
     """Returns a bitstring with bits set for each distinct value."""
-    if arg is not None:
-        return FunctionExpression("bitstring_agg", arg)
-    elif arg is not None and col1 is not None and col2 is not None:
+    if arg is not None and col1 is not None and col2 is not None:
         return FunctionExpression("bitstring_agg", arg, col1, col2)
+    elif arg is not None and col1 is None and col2 is None:
+        return FunctionExpression("bitstring_agg", arg)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -438,10 +438,10 @@ def cot(x, /) -> FunctionExpression:
 
 def count(col0=None, /) -> FunctionExpression:
     """"""
-    if col0 is None:
-        return FunctionExpression("count")
-    elif col0 is not None:
+    if col0 is not None:
         return FunctionExpression("count", col0)
+    elif col0 is None:
+        return FunctionExpression("count")
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -652,10 +652,10 @@ def divide(col0, col1, /) -> FunctionExpression:
 
 def edit(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None:
-        return FunctionExpression("edit", col0)
-    elif col0 is not None and col1 is not None:
+    if col0 is not None and col1 is not None:
         return FunctionExpression("edit", col0, col1)
+    elif col0 is not None and col1 is None:
+        return FunctionExpression("edit", col0)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -871,12 +871,12 @@ def gen_random_uuid() -> FunctionExpression:
 
 def generate_series(start, stop=None, step=None, /) -> FunctionExpression:
     """Create a list of values between start and stop - the stop parameter is inclusive"""
-    if start is not None:
-        return FunctionExpression("generate_series", start)
-    elif start is not None and stop is not None:
-        return FunctionExpression("generate_series", start, stop)
-    elif start is not None and stop is not None and step is not None:
+    if start is not None and stop is not None and step is not None:
         return FunctionExpression("generate_series", start, stop, step)
+    elif start is not None and stop is not None and step is None:
+        return FunctionExpression("generate_series", start, stop)
+    elif start is not None and stop is None and step is None:
+        return FunctionExpression("generate_series", start)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -923,10 +923,10 @@ def greatest_common_divisor(x, y, /) -> FunctionExpression:
 
 def group_concat(str, arg=None, /) -> FunctionExpression:
     """Concatenates the column string values with an optional separator."""
-    if str is not None:
-        return FunctionExpression("group_concat", str)
-    elif str is not None and arg is not None:
+    if str is not None and arg is not None:
         return FunctionExpression("group_concat", str, arg)
+    elif str is not None and arg is None:
+        return FunctionExpression("group_concat", str)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -1022,7 +1022,7 @@ def ieee754(col0, col1=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None:
         return FunctionExpression("ieee754", col0, col1)
-    elif col0 is not None:
+    elif col0 is not None and col1 is None:
         return FunctionExpression("ieee754", col0)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -1139,10 +1139,10 @@ def json_array(*args) -> FunctionExpression:
 
 def json_array_length(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None:
-        return FunctionExpression("json_array_length", col0)
-    elif col0 is not None and col1 is not None:
+    if col0 is not None and col1 is not None:
         return FunctionExpression("json_array_length", col0, col1)
+    elif col0 is not None and col1 is None:
+        return FunctionExpression("json_array_length", col0)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -1194,10 +1194,10 @@ def json_group_structure(x, /) -> FunctionExpression:
 
 def json_keys(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None:
-        return FunctionExpression("json_keys", col0)
-    elif col0 is not None and col1 is not None:
+    if col0 is not None and col1 is not None:
         return FunctionExpression("json_keys", col0, col1)
+    elif col0 is not None and col1 is None:
+        return FunctionExpression("json_keys", col0)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -1219,14 +1219,14 @@ def json_quote(*args) -> FunctionExpression:
 
 def json_serialize_sql(col0, col1=None, col2=None, col3=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None:
-        return FunctionExpression("json_serialize_sql", col0)
-    elif col0 is not None and col1 is not None:
-        return FunctionExpression("json_serialize_sql", col0, col1)
-    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None:
+    if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
         return FunctionExpression("json_serialize_sql", col0, col1, col2, col3)
-    elif col0 is not None and col1 is not None and col2 is not None:
+    elif col0 is not None and col1 is not None and col2 is not None and col3 is None:
         return FunctionExpression("json_serialize_sql", col0, col1, col2)
+    elif col0 is not None and col1 is not None and col2 is None and col3 is None:
+        return FunctionExpression("json_serialize_sql", col0, col1)
+    elif col0 is not None and col1 is None and col2 is None and col3 is None:
+        return FunctionExpression("json_serialize_sql", col0)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -1248,10 +1248,10 @@ def json_transform_strict(col0, col1, /) -> FunctionExpression:
 
 def json_type(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None:
-        return FunctionExpression("json_type", col0)
-    elif col0 is not None and col1 is not None:
+    if col0 is not None and col1 is not None:
         return FunctionExpression("json_type", col0, col1)
+    elif col0 is not None and col1 is None:
+        return FunctionExpression("json_type", col0)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -1562,10 +1562,10 @@ def list_product(l, /) -> FunctionExpression:
 
 def list_resize(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("list_resize", col0, col1)
-    elif col0 is not None and col1 is not None and col2 is not None:
+    if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("list_resize", col0, col1, col2)
+    elif col0 is not None and col1 is not None and col2 is None:
+        return FunctionExpression("list_resize", col0, col1)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -1579,7 +1579,7 @@ def list_reverse_sort(list, col1=None, /) -> FunctionExpression:
     """Sorts the elements of the list in reverse order"""
     if list is not None and col1 is not None:
         return FunctionExpression("list_reverse_sort", list, col1)
-    elif list is not None:
+    elif list is not None and col1 is None:
         return FunctionExpression("list_reverse_sort", list)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -1599,7 +1599,7 @@ def list_slice(list, begin, end, step=None, /) -> FunctionExpression:
     """Extract a sublist using slice conventions. Negative values are accepted"""
     if list is not None and begin is not None and end is not None and step is not None:
         return FunctionExpression("list_slice", list, begin, end, step)
-    elif list is not None and begin is not None and end is not None:
+    elif list is not None and begin is not None and end is not None and step is None:
         return FunctionExpression("list_slice", list, begin, end)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -1607,11 +1607,11 @@ def list_slice(list, begin, end, step=None, /) -> FunctionExpression:
 
 def list_sort(list, col1=None, col2=None, /) -> FunctionExpression:
     """Sorts the elements of the list"""
-    if list is not None and col1 is not None:
-        return FunctionExpression("list_sort", list, col1)
-    elif list is not None and col1 is not None and col2 is not None:
+    if list is not None and col1 is not None and col2 is not None:
         return FunctionExpression("list_sort", list, col1, col2)
-    elif list is not None:
+    elif list is not None and col1 is not None and col2 is None:
+        return FunctionExpression("list_sort", list, col1)
+    elif list is not None and col1 is None and col2 is None:
         return FunctionExpression("list_sort", list)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -1697,7 +1697,7 @@ def ltrim(string, characters=None, /) -> FunctionExpression:
     string"""
     if string is not None and characters is not None:
         return FunctionExpression("ltrim", string, characters)
-    elif string is not None:
+    elif string is not None and characters is None:
         return FunctionExpression("ltrim", string)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -1713,7 +1713,7 @@ def make_date(year, month=None, day=None, /) -> FunctionExpression:
     """The date for the given parts"""
     if year is not None and month is not None and day is not None:
         return FunctionExpression("make_date", year, month, day)
-    elif year is not None:
+    elif year is not None and month is None and day is None:
         return FunctionExpression("make_date", year)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -1726,22 +1726,22 @@ def make_time(hour, minute, seconds, /) -> FunctionExpression:
 
 def make_timestamp(year, month=None, day=None, hour=None, minute=None, seconds=None, /) -> FunctionExpression:
     """The timestamp for the given parts"""
-    if year is not None:
-        return FunctionExpression("make_timestamp", year)
-    elif year is not None and month is not None and day is not None and hour is not None and minute is not None and seconds is not None:
+    if year is not None and month is not None and day is not None and hour is not None and minute is not None and seconds is not None:
         return FunctionExpression("make_timestamp", year, month, day, hour, minute, seconds)
+    elif year is not None and month is None and day is None and hour is None and minute is None and seconds is None:
+        return FunctionExpression("make_timestamp", year)
     else:
         raise ValueError("Invalid combination of parameters")
 
 
 def make_timestamptz(col0, col1=None, col2=None, col3=None, col4=None, col5=None, col6=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None and col3 is not None and col4 is not None and col5 is not None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5)
-    elif col0 is not None:
-        return FunctionExpression("make_timestamptz", col0)
-    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None and col4 is not None and col5 is not None and col6 is not None:
+    if col0 is not None and col1 is not None and col2 is not None and col3 is not None and col4 is not None and col5 is not None and col6 is not None:
         return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5, col6)
+    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None and col4 is not None and col5 is not None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5)
+    elif col0 is not None and col1 is None and col2 is None and col3 is None and col4 is None and col5 is None and col6 is None:
+        return FunctionExpression("make_timestamptz", col0)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -2122,10 +2122,10 @@ def range(start, stop=None, step=None, /) -> FunctionExpression:
     """Create a list of values between start and stop - the stop parameter is exclusive"""
     if start is not None and stop is not None and step is not None:
         return FunctionExpression("range", start, stop, step)
-    elif start is not None:
-        return FunctionExpression("range", start)
-    elif start is not None and stop is not None:
+    elif start is not None and stop is not None and step is None:
         return FunctionExpression("range", start, stop)
+    elif start is not None and stop is None and step is None:
+        return FunctionExpression("range", start)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -2137,23 +2137,23 @@ def readfile(col0, /) -> FunctionExpression:
 
 def regexp_extract(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("regexp_extract", col0, col1, col2)
-    elif col0 is not None and col1 is not None:
-        return FunctionExpression("regexp_extract", col0, col1)
-    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None:
+    if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
         return FunctionExpression("regexp_extract", col0, col1, col2, col3)
+    elif col0 is not None and col1 is not None and col2 is not None and col3 is None:
+        return FunctionExpression("regexp_extract", col0, col1, col2)
+    elif col0 is not None and col1 is not None and col2 is None and col3 is None:
+        return FunctionExpression("regexp_extract", col0, col1)
     else:
         raise ValueError("Invalid combination of parameters")
 
 
 def regexp_extract_all(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("regexp_extract_all", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None:
+    if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
         return FunctionExpression("regexp_extract_all", col0, col1, col2, col3)
-    elif col0 is not None and col1 is not None:
+    elif col0 is not None and col1 is not None and col2 is not None and col3 is None:
+        return FunctionExpression("regexp_extract_all", col0, col1, col2)
+    elif col0 is not None and col1 is not None and col2 is None and col3 is None:
         return FunctionExpression("regexp_extract_all", col0, col1)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2163,7 +2163,7 @@ def regexp_full_match(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("regexp_full_match", col0, col1, col2)
-    elif col0 is not None and col1 is not None:
+    elif col0 is not None and col1 is not None and col2 is None:
         return FunctionExpression("regexp_full_match", col0, col1)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2173,7 +2173,7 @@ def regexp_matches(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("regexp_matches", col0, col1, col2)
-    elif col0 is not None and col1 is not None:
+    elif col0 is not None and col1 is not None and col2 is None:
         return FunctionExpression("regexp_matches", col0, col1)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2183,7 +2183,7 @@ def regexp_replace(col0, col1, col2, col3=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
         return FunctionExpression("regexp_replace", col0, col1, col2, col3)
-    elif col0 is not None and col1 is not None and col2 is not None:
+    elif col0 is not None and col1 is not None and col2 is not None and col3 is None:
         return FunctionExpression("regexp_replace", col0, col1, col2)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2191,10 +2191,10 @@ def regexp_replace(col0, col1, col2, col3=None, /) -> FunctionExpression:
 
 def regexp_split_to_array(string, separator, col2=None, /) -> FunctionExpression:
     """Splits the string along the regex"""
-    if string is not None and separator is not None:
-        return FunctionExpression("regexp_split_to_array", string, separator)
-    elif string is not None and separator is not None and col2 is not None:
+    if string is not None and separator is not None and col2 is not None:
         return FunctionExpression("regexp_split_to_array", string, separator, col2)
+    elif string is not None and separator is not None and col2 is None:
+        return FunctionExpression("regexp_split_to_array", string, separator)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -2262,7 +2262,7 @@ def reservoir_quantile(x, quantile, sample_size=None, /) -> FunctionExpression:
     optional and uses 8192 as a default size."""
     if x is not None and quantile is not None and sample_size is not None:
         return FunctionExpression("reservoir_quantile", x, quantile, sample_size)
-    elif x is not None and quantile is not None:
+    elif x is not None and quantile is not None and sample_size is None:
         return FunctionExpression("reservoir_quantile", x, quantile)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2285,10 +2285,10 @@ def right_grapheme(string, count, /) -> FunctionExpression:
 
 def round(x, precision=None, /) -> FunctionExpression:
     """Rounds x to s decimal places"""
-    if x is not None:
-        return FunctionExpression("round", x)
-    elif x is not None and precision is not None:
+    if x is not None and precision is not None:
         return FunctionExpression("round", x, precision)
+    elif x is not None and precision is None:
+        return FunctionExpression("round", x)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -2321,10 +2321,10 @@ def rpad(string, count, character, /) -> FunctionExpression:
 def rtrim(string, characters=None, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from the right side of the
     string"""
-    if string is not None:
-        return FunctionExpression("rtrim", string)
-    elif string is not None and characters is not None:
+    if string is not None and characters is not None:
         return FunctionExpression("rtrim", string, characters)
+    elif string is not None and characters is None:
+        return FunctionExpression("rtrim", string)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -2364,7 +2364,7 @@ def sha3(col0, col1=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None:
         return FunctionExpression("sha3", col0, col1)
-    elif col0 is not None:
+    elif col0 is not None and col1 is None:
         return FunctionExpression("sha3", col0)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2372,10 +2372,10 @@ def sha3(col0, col1=None, /) -> FunctionExpression:
 
 def sha3_query(col0, col1=None, /) -> FunctionExpression:
     """"""
-    if col0 is not None:
-        return FunctionExpression("sha3_query", col0)
-    elif col0 is not None and col1 is not None:
+    if col0 is not None and col1 is not None:
         return FunctionExpression("sha3_query", col0, col1)
+    elif col0 is not None and col1 is None:
+        return FunctionExpression("sha3_query", col0)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -2483,10 +2483,10 @@ def str_split(string, separator, /) -> FunctionExpression:
 
 def str_split_regex(string, separator, col2=None, /) -> FunctionExpression:
     """Splits the string along the regex"""
-    if string is not None and separator is not None:
-        return FunctionExpression("str_split_regex", string, separator)
-    elif string is not None and separator is not None and col2 is not None:
+    if string is not None and separator is not None and col2 is not None:
         return FunctionExpression("str_split_regex", string, separator, col2)
+    elif string is not None and separator is not None and col2 is None:
+        return FunctionExpression("str_split_regex", string, separator)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -2498,10 +2498,10 @@ def strftime(text, format, /) -> FunctionExpression:
 
 def string_agg(str, arg=None, /) -> FunctionExpression:
     """Concatenates the column string values with an optional separator."""
-    if str is not None:
-        return FunctionExpression("string_agg", str)
-    elif str is not None and arg is not None:
+    if str is not None and arg is not None:
         return FunctionExpression("string_agg", str, arg)
+    elif str is not None and arg is None:
+        return FunctionExpression("string_agg", str)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -2515,7 +2515,7 @@ def string_split_regex(string, separator, col2=None, /) -> FunctionExpression:
     """Splits the string along the regex"""
     if string is not None and separator is not None and col2 is not None:
         return FunctionExpression("string_split_regex", string, separator, col2)
-    elif string is not None and separator is not None:
+    elif string is not None and separator is not None and col2 is None:
         return FunctionExpression("string_split_regex", string, separator)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2569,7 +2569,7 @@ def substr(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("substr", col0, col1, col2)
-    elif col0 is not None and col1 is not None:
+    elif col0 is not None and col1 is not None and col2 is None:
         return FunctionExpression("substr", col0, col1)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2579,7 +2579,7 @@ def substring(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("substring", col0, col1, col2)
-    elif col0 is not None and col1 is not None:
+    elif col0 is not None and col1 is not None and col2 is None:
         return FunctionExpression("substring", col0, col1)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2589,7 +2589,7 @@ def substring_grapheme(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("substring_grapheme", col0, col1, col2)
-    elif col0 is not None and col1 is not None:
+    elif col0 is not None and col1 is not None and col2 is None:
         return FunctionExpression("substring_grapheme", col0, col1)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2599,7 +2599,7 @@ def subtract(col0, col1=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None:
         return FunctionExpression("subtract", col0, col1)
-    elif col0 is not None:
+    elif col0 is not None and col1 is None:
         return FunctionExpression("subtract", col0)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2635,10 +2635,10 @@ def time_bucket(bucket_width, timestamp, origin=None, /) -> FunctionExpression:
     relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03
     00:00:00+00 for buckets that do not include a month or year interval, and to
     2000-01-01 00:00:00+00 for month and year buckets"""
-    if bucket_width is not None and timestamp is not None:
-        return FunctionExpression("time_bucket", bucket_width, timestamp)
-    elif bucket_width is not None and timestamp is not None and origin is not None:
+    if bucket_width is not None and timestamp is not None and origin is not None:
         return FunctionExpression("time_bucket", bucket_width, timestamp, origin)
+    elif bucket_width is not None and timestamp is not None and origin is None:
+        return FunctionExpression("time_bucket", bucket_width, timestamp)
     else:
         raise ValueError("Invalid combination of parameters")
 
@@ -2647,7 +2647,7 @@ def timezone(ts, col1=None, /) -> FunctionExpression:
     """Extract the timezone component from a date or timestamp"""
     if ts is not None and col1 is not None:
         return FunctionExpression("timezone", ts, col1)
-    elif ts is not None:
+    elif ts is not None and col1 is None:
         return FunctionExpression("timezone", ts)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2668,7 +2668,7 @@ def to_base(number, radix, min_length=None, /) -> FunctionExpression:
     leading zeros to the minimum length"""
     if number is not None and radix is not None and min_length is not None:
         return FunctionExpression("to_base", number, radix, min_length)
-    elif number is not None and radix is not None:
+    elif number is not None and radix is not None and min_length is None:
         return FunctionExpression("to_base", number, radix)
     else:
         raise ValueError("Invalid combination of parameters")
@@ -2758,10 +2758,10 @@ def translate(string, from_, to, /) -> FunctionExpression:
 
 def trim(string, characters=None, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from either side of the string"""
-    if string is not None:
-        return FunctionExpression("trim", string)
-    elif string is not None and characters is not None:
+    if string is not None and characters is not None:
         return FunctionExpression("trim", string, characters)
+    elif string is not None and characters is None:
+        return FunctionExpression("trim", string)
     else:
         raise ValueError("Invalid combination of parameters")
 
