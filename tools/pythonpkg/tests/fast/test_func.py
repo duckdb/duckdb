@@ -30,8 +30,6 @@ def test_func():
 
 def test_aliases():
     """Test that aliases for SQL function names also have a Python representation."""
-    # We just test it for list_inner_product which is a function defined
-    # in src/core_functions/scalar/list/functions.json and which has an alias
-    # list_dot_product.
+    # We just test it for list_inner_product which has an alias list_dot_product.
     assert hasattr(duckdb.func, "list_inner_product")
     assert hasattr(duckdb.func, "list_dot_product")
