@@ -61,9 +61,7 @@ def generate() -> None:
         function_def: List[str] = []
 
         name = f.name
-        if not name.isidentifier() or any(
-            "lambda" in p for combo in f.all_parameter_combinations for p in combo
-        ):
+        if not name.isidentifier() or any("lambda" in p for combo in f.all_parameter_combinations for p in combo):
             # Skip functions with invalid names such as "||", "&", etc.
             # Skip functions which accept lambda functions as there is currently
             # no way to pass a lambda function as an argument to FunctionExpression
@@ -97,9 +95,7 @@ def generate() -> None:
                 ), f"Parameters in combination {combo} are not in the same order as in all the parameters: {all_parameters}"
 
             optional_parameters = [
-                p
-                for p in all_parameters
-                if not all(p in combo for combo in f.all_parameter_combinations)
+                p for p in all_parameters if not all(p in combo for combo in f.all_parameter_combinations)
             ]
 
             def_parameters = [p for p in all_parameters if p not in optional_parameters]
@@ -135,17 +131,11 @@ def generate() -> None:
         f.write("\n\n\n".join(content) + "\n")
 
 
-def make_return_statement(
-    function_name: str, expression_parameters: List[str], remove_undefined: bool
-) -> str:
+def make_return_statement(function_name: str, expression_parameters: List[str], remove_undefined: bool) -> str:
     statement = f'return FunctionExpression("{function_name}"'
     if expression_parameters:
         if remove_undefined:
-            statement += (
-                ", *_remove_undefined_parameters("
-                + ", ".join(expression_parameters)
-                + ")"
-            )
+            statement += ", *_remove_undefined_parameters(" + ", ".join(expression_parameters) + ")"
         else:
             statement += ", " + ", ".join(expression_parameters)
     return statement + ")"
@@ -172,9 +162,7 @@ def get_functions_metadata() -> _FunctionsMetadata:
     for function_name, grouped_metadata in it.groupby(functions, keyfunc):
         grouped_metadata = list(grouped_metadata)
         if any(g["varargs"] for g in grouped_metadata):
-            assert all(
-                g["varargs"] for g in grouped_metadata
-            ), "This case is not handled"
+            assert all(g["varargs"] for g in grouped_metadata), "This case is not handled"
             has_variable_parameters = True
 
             # No need to record any parameter names as we can just use a single *args
@@ -184,9 +172,7 @@ def get_functions_metadata() -> _FunctionsMetadata:
         else:
             has_variable_parameters = False
             all_parameter_combinations = [m["parameters"] for m in grouped_metadata]
-            all_parameter_combinations = deduplicate_parameter_names(
-                all_parameter_combinations
-            )
+            all_parameter_combinations = deduplicate_parameter_names(all_parameter_combinations)
 
         assert (
             len(set(m["description"] for m in grouped_metadata)) == 1
@@ -227,9 +213,7 @@ def deduplicate_parameter_names(
             deduplicated_parameters: List[str] = []
             for p in combo:
                 if p in duplicated_parameter_number:
-                    deduplicated_parameters.append(
-                        f"{p}{duplicated_parameter_number[p]}"
-                    )
+                    deduplicated_parameters.append(f"{p}{duplicated_parameter_number[p]}")
                     duplicated_parameter_number[p] += 1
                 else:
                     deduplicated_parameters.append(p)
@@ -254,16 +238,12 @@ def get_duckdb_functions() -> List[Dict[str, str]]:
     # Replace \t as it raises an error that it's an invalid control character. It only
     # appears in 1 description of a function so far.
     functions = []
-    for line in (
-        out.decode("utf-8").strip().removeprefix("[").removesuffix("]").splitlines()
-    ):
+    for line in out.decode("utf-8").strip().removeprefix("[").removesuffix("]").splitlines():
         r = json.loads(line.removesuffix(",").replace("\t", ""))
         r["parameters_raw"] = r["parameters"]
         r["parameters"] = parse_parameters(r["parameters_raw"])
         r["function_name"] = clean_function_name(r["function_name"])
-        r["vargs"] = (
-            r["varargs"].strip() if isinstance(r["varargs"], str) else r["varargs"]
-        )
+        r["vargs"] = r["varargs"].strip() if isinstance(r["varargs"], str) else r["varargs"]
         functions.append(r)
 
     assert (
@@ -278,9 +258,7 @@ def parse_parameters(parameters_raw: str) -> list[str]:
         return []
 
     assert (
-        parameters_raw.startswith("[")
-        and parameters_raw.endswith("]")
-        and len(parameters_raw) > 2
+        parameters_raw.startswith("[") and parameters_raw.endswith("]") and len(parameters_raw) > 2
     ), f"Invalid parameters: {parameters_raw}"
 
     # Should look like '[param1, param2]'.
@@ -290,9 +268,7 @@ def parse_parameters(parameters_raw: str) -> list[str]:
     # and as we don't need the square brackets (as we already have this
     # information due to the functions appearing multiple times), we remove
     # the square bracketes here.
-    parameters = [
-        p.strip() for p in parameters_raw.replace("[", "").replace("]", "").split(",")
-    ]
+    parameters = [p.strip() for p in parameters_raw.replace("[", "").replace("]", "").split(",")]
 
     # Some functions such as `translate` have parameter names which are keywords
     # in Python
@@ -307,11 +283,7 @@ def clean_function_name(name: str) -> str:
 def prepare_description(description: str | None) -> str:
     if not description:
         return ""
-    description = "\n".join(
-        textwrap.wrap(
-            description.strip(), width=80, initial_indent="", subsequent_indent=" " * 4
-        )
-    )
+    description = "\n".join(textwrap.wrap(description.strip(), width=80, initial_indent="", subsequent_indent=" " * 4))
     return description
 
 
