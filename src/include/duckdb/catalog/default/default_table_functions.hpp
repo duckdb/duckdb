@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/catalog/default/default_functions.hpp
+// duckdb/catalog/default/default_table_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,28 +14,34 @@
 namespace duckdb {
 class SchemaCatalogEntry;
 
-struct DefaultMacro {
+struct DefaultNamedParameter {
+	const char *name;
+	const char *default_value;
+};
+
+struct DefaultTableMacro {
 	const char *schema;
 	const char *name;
 	const char *parameters[8];
+	DefaultNamedParameter named_parameters[8];
 	const char *macro;
 };
 
-class DefaultFunctionGenerator : public DefaultGenerator {
+class DefaultTableFunctionGenerator : public DefaultGenerator {
 public:
-	DefaultFunctionGenerator(Catalog &catalog, SchemaCatalogEntry &schema);
+	DefaultTableFunctionGenerator(Catalog &catalog, SchemaCatalogEntry &schema);
 
 	SchemaCatalogEntry &schema;
-
-	DUCKDB_API static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro);
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
 	vector<string> GetDefaultEntries() override;
 
+	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro);
+
 private:
-	static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro,
-	                                                           unique_ptr<MacroFunction> function);
+	static unique_ptr<CreateMacroInfo> CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro,
+	                                                                unique_ptr<MacroFunction> function);
 };
 
 } // namespace duckdb
