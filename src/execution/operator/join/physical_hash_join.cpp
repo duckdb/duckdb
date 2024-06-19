@@ -89,7 +89,6 @@ class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op, ClientContext &context_p)
 	    : context(context_p), num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-	      temporary_memory_update_count(0),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
 	      scanned_data(false) {
 		hash_table = op.InitializeHashTable(context);
@@ -112,7 +111,6 @@ public:
 	ClientContext &context;
 
 	const idx_t num_threads;
-	atomic<idx_t> temporary_memory_update_count;
 	//! Temporary memory state for managing this operator's memory usage
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 
@@ -140,8 +138,7 @@ public:
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context)
-	    : join_key_executor(context), chunk_count(0) {
+	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : join_key_executor(context) {
 		auto &allocator = BufferAllocator::Get(context);
 
 		for (auto &cond : op.conditions) {
@@ -167,10 +164,6 @@ public:
 
 	//! Thread-local HT
 	unique_ptr<JoinHashTable> hash_table;
-
-	//! For updating the temporary memory state
-	idx_t chunk_count;
-	static constexpr const idx_t CHUNK_COUNT_UPDATE_INTERVAL = 60;
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
@@ -255,15 +248,6 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	}
 
-	if (++lstate.chunk_count % HashJoinLocalSinkState::CHUNK_COUNT_UPDATE_INTERVAL == 0) {
-		auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
-		if (++gstate.temporary_memory_update_count % gstate.num_threads == 0) {
-			auto &sink_collection = lstate.hash_table->GetSinkCollection();
-			auto ht_size = sink_collection.SizeInBytes() + JoinHashTable::PointerTableSize(sink_collection.Count());
-			gstate.temporary_memory_state->SetRemainingSize(context.client, gstate.num_threads * ht_size);
-		}
-	}
-
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -331,7 +315,7 @@ public:
 		vector<shared_ptr<Task>> finalize_tasks;
 		auto &ht = *sink.hash_table;
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
-		const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		const auto num_threads = NumericCast<idx_t>(sink.num_threads);
 		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && !context.config.verify_parallelism)) {
 			// Single-threaded finalize
 			finalize_tasks.push_back(
@@ -479,8 +463,8 @@ public:
 		idx_t max_partition_size;
 		idx_t max_partition_count;
 		sink.hash_table->GetTotalSize(partition_sizes, partition_counts, max_partition_size, max_partition_count);
-		const auto probe_side_requirement = GetPartitioningSpaceRequirement(
-		    op.types, sink.hash_table->GetRadixBits(), TaskScheduler::GetScheduler(executor.context).NumberOfThreads());
+		const auto probe_side_requirement =
+		    GetPartitioningSpaceRequirement(op.types, sink.hash_table->GetRadixBits(), sink.num_threads);
 		sink.temporary_memory_state->SetMinimumReservation(
 		    max_partition_size + JoinHashTable::PointerTableSize(max_partition_count) + probe_side_requirement);
 		sink.temporary_memory_state->SetRemainingSize(executor.context,
@@ -513,8 +497,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			event.InsertEvent(std::move(new_event));
 		} else {
 			// No repartitioning! We do need some space for partitioning the probe-side, though
-			const auto probe_side_requirement = GetPartitioningSpaceRequirement(
-			    children[0]->types, ht.GetRadixBits(), TaskScheduler::GetScheduler(context).NumberOfThreads());
+			const auto probe_side_requirement =
+			    GetPartitioningSpaceRequirement(children[0]->types, ht.GetRadixBits(), sink.num_threads);
 			sink.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + probe_side_requirement);
 			sink.temporary_memory_state->SetRemainingSize(context, total_size);
 			for (auto &local_ht : sink.local_hash_tables) {
@@ -858,8 +842,7 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	build_chunk_count = data_collection.ChunkCount();
 	build_chunk_done = 0;
 
-	auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads());
-	build_chunks_per_thread = MaxValue<idx_t>((build_chunk_count + num_threads - 1) / num_threads, 1);
+	build_chunks_per_thread = MaxValue<idx_t>((build_chunk_count + sink.num_threads - 1) / sink.num_threads, 1);
 
 	ht.InitializePointerTable();
 
@@ -889,8 +872,8 @@ void HashJoinGlobalSourceState::PrepareScanHT(HashJoinGlobalSinkState &sink) {
 	full_outer_chunk_count = data_collection.ChunkCount();
 	full_outer_chunk_done = 0;
 
-	auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads());
-	full_outer_chunks_per_thread = MaxValue<idx_t>((full_outer_chunk_count + num_threads - 1) / num_threads, 1);
+	full_outer_chunks_per_thread =
+	    MaxValue<idx_t>((full_outer_chunk_count + sink.num_threads - 1) / sink.num_threads, 1);
 
 	global_stage = HashJoinSourceStage::SCAN_HT;
 }

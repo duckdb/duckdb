@@ -198,9 +198,12 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		}
 	}
 
-	// make pipeline_finish_event of each MetaPipeline depend on the pipeline_event of the base pipeline of its sublings
-	// this allows TemporaryMemoryManager to distribute memory after all child pipelines have materialized data
-	// this way, memory is distributed
+	// these dependencies make it so that things happen in this order:
+	// 1. all child pipelines run until Combine
+	// 2. the parent base pipeline is initialized
+	// 3. all child pipelines Finalize
+	// the idea is that operators communicate their memory usage through the TemporaryMemoryManger (TMM) in Combine
+	// then, when the child pipelines Finalize, all required memory is known, and TMM can make an informed decision
 	for (auto &meta_pipeline : event_data.meta_pipelines) {
 		auto &meta_base = *meta_pipeline->GetBasePipeline();
 		auto meta_entry = event_map.find(meta_base);
@@ -208,24 +211,13 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 
 		vector<shared_ptr<MetaPipeline>> children;
 		meta_pipeline->GetMetaPipelines(children, false, true);
-		for (auto &child1 : children) {
-			auto &child1_base = *child1->GetBasePipeline();
-			auto child1_entry = event_map.find(child1_base);
-			D_ASSERT(child1_entry != event_map.end());
-			for (auto &child2 : children) {
-				if (RefersToSameObject(*child1, *child2)) {
-					continue;
-				}
-				auto &child2_base = *child2->GetBasePipeline();
-				auto child2_entry = event_map.find(child2_base);
-				D_ASSERT(child2_entry != event_map.end());
-				child1_entry->second.pipeline_finish_event.AddDependency(child2_entry->second.pipeline_event);
-			}
-			// make the finish event of the child depend on the initialize event of the base pipeline,
-			// so that the sink will be initialized before the child pipelines are finished
-			child1_entry->second.pipeline_finish_event.AddDependency(meta_entry->second.pipeline_initialize_event);
-			// this prevents the sink from being initialized too early - only after all child pipelines have started
-			meta_entry->second.pipeline_initialize_event.AddDependency(child1_entry->second.pipeline_event);
+		for (auto &child : children) {
+			auto &child_base = *child->GetBasePipeline();
+			auto child_entry = event_map.find(child_base);
+			D_ASSERT(child_entry != event_map.end());
+
+			child_entry->second.pipeline_finish_event.AddDependency(meta_entry->second.pipeline_initialize_event);
+			meta_entry->second.pipeline_initialize_event.AddDependency(child_entry->second.pipeline_event);
 		}
 	}
 
