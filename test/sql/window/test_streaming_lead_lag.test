@@ -1,0 +1,84 @@
+# name: test/sql/window/test_streaming_lead_lag.test
+# description: Streaming window functions
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+query TT
+EXPLAIN
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	NULL
+1	0
+2	1
+3	2
+4	3
+5	4
+6	5
+7	6
+8	7
+9	8
+
+query TT
+EXPLAIN
+SELECT i, LAG(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, LEAD(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	NULL
+1	0
+2	1
+3	2
+4	3
+5	4
+6	5
+7	6
+8	7
+9	8
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+# Test shift down
+query TT
+EXPLAIN
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(3000) tbl(i)
+WHERE i % 2 = 0
+QUALIFY i1 <> i - 2
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(3000) tbl(i)
+WHERE i % 2 = 0
+QUALIFY i1 <> i - 2
+----
