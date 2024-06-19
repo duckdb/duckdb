@@ -128,9 +128,7 @@ static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_li
 
 	vector<unique_ptr<ParsedExpression>> expressions;
 	for (auto &col : select_list) {
-		auto &name = col.first;
-		auto &type = col.second;
-		auto expression = make_uniq_base<ParsedExpression, ColumnRefExpression>(name);
+		auto expression = make_uniq_base<ParsedExpression, ColumnRefExpression>(col.first);
 		expressions.push_back(std::move(expression));
 	}
 
