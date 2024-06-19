@@ -25,7 +25,7 @@ struct HistogramFunction {
 	}
 };
 
-template<class TYPE>
+template <class TYPE>
 struct DefaultMapType {
 	using MAP_TYPE = TYPE;
 
@@ -34,7 +34,7 @@ struct DefaultMapType {
 	}
 };
 
-template<class TYPE>
+template <class TYPE>
 struct StringMapType {
 	using MAP_TYPE = TYPE;
 
@@ -74,7 +74,8 @@ static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_in
 }
 
 template <class T, class MAP_TYPE>
-static void HistogramCombineFunction(Vector &state_vector, Vector &combined, AggregateInputData &aggr_input, idx_t count) {
+static void HistogramCombineFunction(Vector &state_vector, Vector &combined, AggregateInputData &aggr_input,
+                                     idx_t count) {
 	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 
 	UnifiedVectorFormat sdata;

@@ -49,7 +49,7 @@ struct ModeAttr {
 	idx_t first_row;
 };
 
-template<class T>
+template <class T>
 struct ModeStandard {
 	using MAP_TYPE = unordered_map<T, ModeAttr>;
 
@@ -367,8 +367,7 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 	case PhysicalType::INTERVAL:
 		return GetTypedModeFunction<interval_t>(type);
 	case PhysicalType::VARCHAR:
-		return GetTypedModeFunction<string_t, ModeString>(
-		    LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150));
+		return GetTypedModeFunction<string_t, ModeString>(LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150));
 	default:
 		throw NotImplementedException("Unimplemented mode aggregate");
 	}

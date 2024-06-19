@@ -19,7 +19,7 @@ namespace duckdb {
 
 //! The owning string map is equivalent to string_map_t, except that it manages ownership of all data using the
 //! provided allocator
-template<class VALUE_TYPE, class STRING_MAP_TYPE = string_map_t<VALUE_TYPE>>
+template <class VALUE_TYPE, class STRING_MAP_TYPE = string_map_t<VALUE_TYPE>>
 class OwningStringMap {
 public:
 	using size_type = typename STRING_MAP_TYPE::size_type;
@@ -30,10 +30,11 @@ public:
 	using const_iterator = typename STRING_MAP_TYPE::const_iterator;
 
 public:
-	explicit OwningStringMap(Allocator &allocator) :
-		allocator(allocator), free_type(AllocatorFreeType::REQUIRES_FREE) {}
-	explicit OwningStringMap(ArenaAllocator &allocator) :
-		allocator(allocator.GetAllocator()), free_type(AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {}
+	explicit OwningStringMap(Allocator &allocator) : allocator(allocator), free_type(AllocatorFreeType::REQUIRES_FREE) {
+	}
+	explicit OwningStringMap(ArenaAllocator &allocator)
+	    : allocator(allocator.GetAllocator()), free_type(AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+	}
 	~OwningStringMap() {
 		Destroy();
 	}
@@ -43,10 +44,9 @@ public:
 			return map.insert(std::move(entry));
 		} else {
 			return map.insert(make_pair(CopyString(entry.first), std::move(entry.second)));
-
 		}
 	}
-	size_type erase(const key_type& k) { // NOLINT: match std style
+	size_type erase(const key_type &k) { // NOLINT: match std style
 		auto entry = map.find(k);
 		if (entry == map.end()) {
 			return 0;
@@ -80,18 +80,17 @@ public:
 	const_iterator end() const noexcept { // NOLINT: match std style
 		return map.end();
 	}
-	iterator find(const key_type& k) { // NOLINT: match std style
+	iterator find(const key_type &k) { // NOLINT: match std style
 		return map.find(k);
 	}
-	const_iterator find(const key_type& k) const { // NOLINT: match std style
+	const_iterator find(const key_type &k) const { // NOLINT: match std style
 		return map.find(k);
 	}
 
-
-	mapped_type& operator[](const key_type& k) {
+	mapped_type &operator[](const key_type &k) {
 		return GetOrCreate(k);
 	}
-	mapped_type& operator[](key_type&& k) {
+	mapped_type &operator[](key_type &&k) {
 		return GetOrCreate(std::move(k));
 	}
 
@@ -116,7 +115,7 @@ private:
 		return string_t(char_ptr_cast(string_memory), input_str_size);
 	}
 
-	mapped_type& GetOrCreate(key_type k) {
+	mapped_type &GetOrCreate(key_type k) {
 		auto entry = map.find(k);
 		if (entry != map.end()) {
 			return entry->second;
@@ -137,7 +136,7 @@ private:
 
 	void Destroy() {
 		if (free_type == AllocatorFreeType::REQUIRES_FREE) {
-			for(auto &str : map) {
+			for (auto &str : map) {
 				DestroyString(str.first);
 			}
 		}
@@ -150,8 +149,7 @@ private:
 	AllocatorFreeType free_type;
 };
 
-template<class T>
+template <class T>
 using OrderedOwningStringMap = OwningStringMap<T, map<string_t, T>>;
-
 
 } // namespace duckdb
