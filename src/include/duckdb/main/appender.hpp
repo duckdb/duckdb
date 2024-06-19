@@ -118,11 +118,16 @@ class Appender : public BaseAppender {
 	shared_ptr<ClientContext> context;
 	//! The table description (including column names)
 	unique_ptr<TableDescription> description;
+	//! The default expressions
+	unordered_map<idx_t, Value> default_values;
 
 public:
 	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
 	DUCKDB_API Appender(Connection &con, const string &table_name);
 	DUCKDB_API ~Appender() override;
+
+public:
+	void AppendDefault();
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;

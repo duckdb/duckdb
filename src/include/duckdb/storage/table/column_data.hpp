@@ -26,11 +26,11 @@ class RowGroup;
 class RowGroupWriter;
 class TableDataWriter;
 class TableStorageInfo;
-struct TransactionData;
-struct TableScanOptions;
-
 struct DataTableInfo;
+struct PrefetchState;
 struct RowGroupWriteInfo;
+struct TableScanOptions;
+struct TransactionData;
 
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
@@ -88,6 +88,8 @@ public:
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count);
 
+	//! Initialize prefetch state with required I/O data for the next N rows
+	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows);
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state);
 	//! Initialize a scan starting at the specified offset
@@ -102,6 +104,7 @@ public:
 
 	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
 	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count);
+
 	//! Select
 	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                    SelectionVector &sel, idx_t &count, const TableFilter &filter);

@@ -532,6 +532,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	return PendingPreparedStatementInternal(lock, prepared, parameters);
 }
 
+void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
+	active_query->executor->WaitForTask();
+}
+
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
                                                           bool dry_run) {
 	D_ASSERT(active_query);
@@ -752,13 +756,6 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &res
 		return false;
 	}
 	return active_query->IsOpenResult(result);
-}
-
-void ClientContext::SetActiveResult(ClientContextLock &lock, BaseQueryResult &result) {
-	if (!active_query) {
-		return;
-	}
-	return active_query->SetOpenResult(result);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
@@ -1113,7 +1110,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result->schema = schema_name;
 		result->table = table_name;
 		for (auto &column : table->GetColumns().Logical()) {
-			result->columns.emplace_back(column.Name(), column.Type());
+			result->columns.emplace_back(column.Copy());
 		}
 	});
 	return result;

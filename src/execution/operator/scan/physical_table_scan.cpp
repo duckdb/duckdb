@@ -13,11 +13,12 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
                                      vector<column_t> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
-                                     idx_t estimated_cardinality, ExtraOperatorInfo extra_info)
+                                     idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
+                                     vector<Value> parameters_p)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
-      table_filters(std::move(table_filters_p)), extra_info(extra_info) {
+      table_filters(std::move(table_filters_p)), extra_info(extra_info), parameters(std::move(parameters_p)) {
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {
@@ -32,10 +33,24 @@ public:
 		} else {
 			max_threads = 1;
 		}
+		if (op.function.in_out_function) {
+			// this is an in-out function, we need to setup the input chunk
+			vector<LogicalType> input_types;
+			for (auto &param : op.parameters) {
+				input_types.push_back(param.type());
+			}
+			input_chunk.Initialize(context, input_types);
+			for (idx_t c = 0; c < op.parameters.size(); c++) {
+				input_chunk.data[c].SetValue(0, op.parameters[c]);
+			}
+			input_chunk.SetCardinality(1);
+		}
 	}
 
 	idx_t max_threads = 0;
 	unique_ptr<GlobalTableFunctionState> global_state;
+	bool in_out_final = false;
+	DataChunk input_chunk;
 
 	idx_t MaxThreads() override {
 		return max_threads;
@@ -71,7 +86,18 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	auto &state = input.local_state.Cast<TableScanLocalSourceState>();
 
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
-	function.function(context.client, data, chunk);
+	if (function.function) {
+		function.function(context.client, data, chunk);
+	} else {
+		if (gstate.in_out_final) {
+			function.in_out_function_final(context, data, chunk);
+		}
+		function.in_out_function(context, data, gstate.input_chunk, chunk);
+		if (chunk.size() == 0 && function.in_out_function_final) {
+			function.in_out_function_final(context, data, chunk);
+			gstate.in_out_final = true;
+		}
+	}
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
@@ -143,7 +169,12 @@ string PhysicalTableScan::ParamsToString() const {
 	if (!extra_info.file_filters.empty()) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "File Filters: " + extra_info.file_filters;
+		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
+			result += StringUtil::Format("\nScanning: %llu/%llu files", extra_info.filtered_files.GetIndex(),
+			                             extra_info.total_files.GetIndex());
+		}
 	}
+
 	result += "\n[INFOSEPARATOR]\n";
 	result += StringUtil::Format("EC: %llu", estimated_cardinality);
 	return result;

@@ -65,6 +65,12 @@ void BufferedFileWriter::Flush() {
 	offset = 0;
 }
 
+void BufferedFileWriter::Close() {
+	Flush();
+	handle->Close();
+	handle.reset();
+}
+
 void BufferedFileWriter::Sync() {
 	Flush();
 	handle->Sync();

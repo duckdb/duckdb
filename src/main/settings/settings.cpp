@@ -741,10 +741,9 @@ Value CustomProfilingSettings::GetSetting(const ClientContext &context) {
 		if (!profiling_settings_str.empty()) {
 			profiling_settings_str += ", ";
 		}
-		profiling_settings_str += EnumUtil::ToString(entry);
+		profiling_settings_str += StringUtil::Format("\"%s\": \"true\"", EnumUtil::ToString(entry));
 	}
-
-	return Value(profiling_settings_str);
+	return Value(StringUtil::Format("{%s}", profiling_settings_str));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1140,6 +1139,24 @@ void MaximumMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value MaximumMemorySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.maximum_memory));
+}
+
+//===--------------------------------------------------------------------===//
+// Streaming Buffer Size
+//===--------------------------------------------------------------------===//
+void StreamingBufferSize::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
+}
+
+void StreamingBufferSize::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.SetDefaultStreamingBufferSize();
+}
+
+Value StreamingBufferSize::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.streaming_buffer_size));
 }
 
 //===--------------------------------------------------------------------===//
