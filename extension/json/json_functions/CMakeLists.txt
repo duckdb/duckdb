@@ -7,7 +7,7 @@ add_library_unity(
   json_extract.cpp
   json_keys.cpp
   json_merge_patch.cpp
-  json_pretty_print.cpp
+  json_pretty.cpp
   json_structure.cpp
   json_transform.cpp
   json_create.cpp
