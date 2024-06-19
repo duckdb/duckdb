@@ -76,6 +76,7 @@ struct CopyFunctionBindInput {
 
 struct CopyToSelectInput {
 	ClientContext &context;
+	case_insensitive_map_t<vector<Value>> &options;
 	vector<unique_ptr<Expression>> select_list;
 	bool is_export;
 };
