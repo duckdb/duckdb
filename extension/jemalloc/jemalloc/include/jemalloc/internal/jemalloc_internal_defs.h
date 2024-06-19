@@ -77,7 +77,9 @@
 /*
  * Defined if __builtin_clz() and __builtin_clzl() are available.
  */
-// #define JEMALLOC_HAVE_BUILTIN_CLZ
+#ifdef __GNUC__
+#define JEMALLOC_HAVE_BUILTIN_CLZ
+#endif
 
 /*
  * Defined if os_unfair_lock_*() functions are available, as provided by Darwin.
@@ -303,8 +305,10 @@
 /*
  * popcount*() functions to use for bitmapping.
  */
-// #define JEMALLOC_INTERNAL_POPCOUNTL __builtin_popcountl
-// #define JEMALLOC_INTERNAL_POPCOUNT __builtin_popcount
+#ifdef __GNUC__
+#define JEMALLOC_INTERNAL_POPCOUNTL __builtin_popcountl
+#define JEMALLOC_INTERNAL_POPCOUNT __builtin_popcount
+#endif
 
 /*
  * If defined, explicitly attempt to more uniformly distribute large allocation
