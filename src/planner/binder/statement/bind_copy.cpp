@@ -57,15 +57,24 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, bool is_export) {
 
 	// Allow the copy function to intercept the select list and types and push a new projection on top of the plan
 	if (copy_function.function.copy_to_select) {
-		auto &names = select_node.names;
-		auto &types = select_node.types;
 		auto bindings = select_node.plan->GetColumnBindings();
 
-		CopyToSelectInput input = {context, names, types, bindings, is_export};
+		CopyToSelectInput input = {context, {}, is_export};
+		input.select_list.reserve(bindings.size());
 
-		auto selection = copy_function.function.copy_to_select(input);
-		if (!selection.empty()) {
-			auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(selection));
+		// Create column references for the select list
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			auto &binding = bindings[i];
+			auto &name = select_node.names[i];
+			auto &type = select_node.types[i];
+			input.select_list.push_back(make_uniq<BoundColumnRefExpression>(name, type, binding));
+		}
+
+		auto new_select_list = copy_function.function.copy_to_select(input);
+		if (!new_select_list.empty()) {
+
+			// We have a new select list, create a projection on top of the current plan
+			auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(new_select_list));
 			projection->children.push_back(std::move(select_node.plan));
 			projection->ResolveOperatorTypes();
 

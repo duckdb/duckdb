@@ -46,7 +46,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #endif
 
@@ -1413,21 +1412,18 @@ static bool IsTypeLossy(const LogicalType &type) {
 	return type.id() == LogicalTypeId::HUGEINT || type.id() == LogicalTypeId::UHUGEINT;
 }
 
-static vector<unique_ptr<Expression>> ParquetWriteSelect(const CopyToSelectInput &input) {
+static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &input) {
 
 	auto &context = input.context;
-	auto &types = input.types;
-	auto &names = input.names;
-	auto &bindings = input.bindings;
 
 	vector<unique_ptr<Expression>> result;
-	for (idx_t i = 0; i < types.size(); i++) {
-		auto &type = types[i];
-		auto &name = names[i];
-		auto &binding = bindings[i];
 
-		// Create an expression that references the input column
-		auto column_ref = make_uniq<BoundColumnRefExpression>(name, type, binding);
+	bool any_change = false;
+
+	for (auto &expr : input.select_list) {
+
+		const auto &type = expr->return_type;
+		const auto &name = expr->alias;
 
 		LogicalType resulting_type;
 
@@ -1438,11 +1434,11 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(const CopyToSelectInput
 			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
 			wkb_blob_type.SetAlias("WKB_BLOB");
 
-			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(column_ref), wkb_blob_type, false);
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), wkb_blob_type, false);
 			cast_expr->alias = name;
 			result.push_back(std::move(cast_expr));
+			any_change = true;
 		}
-
 		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
 		else if (input.is_export && type.Contains(IsTypeLossy)) {
 			// Replace all lossy types with VARCHAR
@@ -1450,9 +1446,10 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(const CopyToSelectInput
 			    type, [](const LogicalType &ty) -> LogicalType { return IsTypeLossy(ty) ? LogicalType::VARCHAR : ty; });
 
 			// Cast the column to the new type
-			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(column_ref), new_type, false);
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
 			cast_expr->alias = name;
 			result.push_back(std::move(cast_expr));
+			any_change = true;
 		}
 		// Else look if there is any unsupported type
 		else if (type.Contains(IsTypeNotSupported)) {
@@ -1462,17 +1459,23 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(const CopyToSelectInput
 				return IsTypeNotSupported(ty) ? LogicalType::VARCHAR : ty;
 			});
 
-			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(column_ref), new_type, false);
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
 			cast_expr->alias = name;
 			result.push_back(std::move(cast_expr));
+			any_change = true;
 		}
 		// Otherwise, just reference the input column
 		else {
-			result.push_back(std::move(column_ref));
+			result.push_back(std::move(expr));
 		}
 	}
 
-	return result;
+	// If any change was made, return the new expressions
+	// otherwise, return an empty vector to indicate no change and avoid pushing another projection on to the plan
+	if (any_change) {
+		return result;
+	}
+	return {};
 }
 
 void ParquetExtension::Load(DuckDB &db) {

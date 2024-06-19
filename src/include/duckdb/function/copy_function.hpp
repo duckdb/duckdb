@@ -76,9 +76,7 @@ struct CopyFunctionBindInput {
 
 struct CopyToSelectInput {
 	ClientContext &context;
-	const vector<string> &names;
-	const vector<LogicalType> &types;
-	const vector<ColumnBinding> &bindings;
+	vector<unique_ptr<Expression>> select_list;
 	bool is_export;
 };
 
@@ -115,7 +113,7 @@ typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData 
 
 typedef idx_t (*copy_file_size_bytes_t)(GlobalFunctionData &gstate);
 
-typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(const CopyToSelectInput &input);
+typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &input);
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
