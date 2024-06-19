@@ -95,7 +95,7 @@ def generate() -> None:
                 function_def.append(f"{indent*2}{return_statement}")
             function_def.append(f"{indent}else:")
             function_def.append(
-                f"{indent*2}raise ValueError('Invalid combination of parameters')"
+                f'{indent*2}raise ValueError("Invalid combination of parameters")'
             )
         else:
             # The return statement if all parameters are provided
