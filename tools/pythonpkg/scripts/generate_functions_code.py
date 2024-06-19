@@ -192,16 +192,19 @@ def deduplicate_parameter_names(all_parameter_combinations: List[List[str]]) -> 
                 duplicated_parameters.add(p)
 
     deduplicated_parameter_combinations: List[List[str]] = []
-    for combo in all_parameter_combinations:
-        duplicated_parameter_number = {p: 1 for p in duplicated_parameters}
-        deduplicated_parameters: List[str] = []
-        for p in combo:
-            if p in duplicated_parameter_number:
-                deduplicated_parameters.append(f"{p}{duplicated_parameter_number[p]}")
-                duplicated_parameter_number[p] += 1
-            else:
-                deduplicated_parameters.append(p)
-        deduplicated_parameter_combinations.append(deduplicated_parameters)
+    if duplicated_parameters:
+        for combo in all_parameter_combinations:
+            duplicated_parameter_number = {p: 1 for p in duplicated_parameters}
+            deduplicated_parameters: List[str] = []
+            for p in combo:
+                if p in duplicated_parameter_number:
+                    deduplicated_parameters.append(f"{p}{duplicated_parameter_number[p]}")
+                    duplicated_parameter_number[p] += 1
+                else:
+                    deduplicated_parameters.append(p)
+            deduplicated_parameter_combinations.append(deduplicated_parameters)
+    else:
+        deduplicated_parameter_combinations = all_parameter_combinations
     return deduplicated_parameter_combinations
 
 def get_duckdb_functions() -> List[Dict[str, str]]:
