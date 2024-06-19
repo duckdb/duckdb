@@ -126,6 +126,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name,
 				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
 			}
+			OnDropEntry(transaction, *old_entry);
 			(void)set.DropEntry(transaction, entry_name, false, entry->internal);
 		}
 	}
@@ -319,15 +320,12 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	if (existing_entry->type == CatalogType::TABLE_ENTRY) {
-		// if we have transaction local insertions for this table - clear them
-		auto &table_entry = existing_entry->Cast<TableCatalogEntry>();
-		auto &local_storage = LocalStorage::Get(DuckTransaction::Get(context, catalog));
-		local_storage.DropTable(table_entry.GetStorage());
-
 		// if there is a foreign key constraint, get that information
+		auto &table_entry = existing_entry->Cast<TableCatalogEntry>();
 		FindForeignKeyInformation(table_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
 	}
 
+	OnDropEntry(transaction, *existing_entry);
 	if (!set.DropEntry(transaction, info.name, info.cascade, info.allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
@@ -337,6 +335,19 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		// alter primary key table
 		Alter(transaction, *fk_arrays[i]);
 	}
+}
+
+void DuckSchemaEntry::OnDropEntry(CatalogTransaction transaction, CatalogEntry &entry) {
+	if (!transaction.transaction) {
+		return;
+	}
+	if (entry.type != CatalogType::TABLE_ENTRY) {
+		return;
+	}
+	// if we have transaction local insertions for this table - clear them
+	auto &table_entry = entry.Cast<TableCatalogEntry>();
+	auto &local_storage = LocalStorage::Get(transaction.transaction->Cast<DuckTransaction>());
+	local_storage.DropTable(table_entry.GetStorage());
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
