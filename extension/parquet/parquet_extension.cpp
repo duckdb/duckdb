@@ -46,6 +46,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #endif
 
 namespace duckdb {
@@ -1396,56 +1398,81 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, ReplacementS
 	return std::move(table_function);
 }
 
-static BoundStatement WriteGeoParquetPlan(Binder &binder, CopyStatement &stmt) {
-
-	// First off, check if we even have the spatial extension installed
-	if (!GeoParquetFileMetadata::IsSpatialExtensionInstalled(binder.context)) {
-		// Just fall back to regular parquet if we don't have the spatial extension
-		stmt.info->format = "parquet";
-		return binder.Bind(*stmt.info->select_statement);
+//===--------------------------------------------------------------------===//
+// Select
+//===--------------------------------------------------------------------===//
+// Helper predicates for ParquetWriteSelect
+static bool IsTypeNotSupported(const LogicalType &type) {
+	if (type.IsNested()) {
+		return false;
 	}
+	return !ParquetWriter::TryGetParquetType(type);
+}
 
-	auto stmt_copy = stmt.Copy();
-	auto &copy = stmt_copy->Cast<CopyStatement>();
-	auto &copied_info = *copy.info;
+static bool IsTypeLossy(const LogicalType &type) {
+	return type.id() == LogicalTypeId::HUGEINT || type.id() == LogicalTypeId::UHUGEINT;
+}
 
-	auto dummy_binder = Binder::CreateBinder(binder.context, &binder);
-	auto bound_original = dummy_binder->Bind(*stmt.info->select_statement);
+static vector<unique_ptr<Expression>> ParquetWriteSelect(const CopyToSelectInput &input) {
 
-	// Create new SelectNode with the original SelectNode as a subquery in the FROM clause
-	// We need to use a subquery here because the original SelectNode might be a star expression, so we can't just
-	// replace the expressions in the original SelectNode. We need to use positional references instead that get
-	// resolved during the second binding.
+	auto &context = input.context;
+	auto &types = input.types;
+	auto &names = input.names;
+	auto &bindings = input.bindings;
 
-	auto select_stmt = make_uniq<SelectStatement>();
-	select_stmt->node = std::move(copied_info.select_statement);
-	auto subquery_ref = make_uniq<SubqueryRef>(std::move(select_stmt));
+	vector<unique_ptr<Expression>> result;
+	for (idx_t i = 0; i < types.size(); i++) {
+		auto &type = types[i];
+		auto &name = names[i];
+		auto &binding = bindings[i];
 
-	copied_info.select_statement = make_uniq_base<QueryNode, SelectNode>();
-	auto &select_node = copied_info.select_statement->Cast<SelectNode>();
-	select_node.from_table = std::move(subquery_ref);
+		// Create an expression that references the input column
+		auto column_ref = make_uniq<BoundColumnRefExpression>(name, type, binding);
 
-	auto &catalog = Catalog::GetSystemCatalog(binder.context);
-	auto geometry_type = LogicalType(LogicalTypeId::BLOB);
-	geometry_type.SetAlias("GEOMETRY");
+		LogicalType resulting_type;
 
-	for (idx_t col_idx = 0; col_idx < bound_original.types.size(); col_idx++) {
-		auto column = make_uniq_base<ParsedExpression, PositionalReferenceExpression>(col_idx + 1);
-		auto &type = bound_original.types[col_idx];
-		auto &name = bound_original.names[col_idx];
-		// Look for geometry columns and convert them to WKB
-		if (type == geometry_type) {
-			vector<unique_ptr<ParsedExpression>> args;
-			args.push_back(std::move(column));
-			column = make_uniq<FunctionExpression>(catalog.GetName(), DEFAULT_SCHEMA, "ST_AsWKB", std::move(args));
+		// Spatial types need to be encoded into WKB when writing GeoParquet.
+		// But dont perform this conversion if this is a EXPORT DATABASE statement
+		if (!input.is_export && type.id() == LogicalTypeId::BLOB && type.HasAlias() && type.GetAlias() == "GEOMETRY") {
+
+			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
+			wkb_blob_type.SetAlias("WKB_BLOB");
+
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(column_ref), wkb_blob_type, false);
+			cast_expr->alias = name;
+			result.push_back(std::move(cast_expr));
 		}
 
-		column->alias = name;
-		select_node.select_list.emplace_back(std::move(column));
+		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
+		else if (input.is_export && type.Contains(IsTypeLossy)) {
+			// Replace all lossy types with VARCHAR
+			auto new_type = LogicalType::VisitReplace(
+			    type, [](const LogicalType &ty) -> LogicalType { return IsTypeLossy(ty) ? LogicalType::VARCHAR : ty; });
+
+			// Cast the column to the new type
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(column_ref), new_type, false);
+			cast_expr->alias = name;
+			result.push_back(std::move(cast_expr));
+		}
+		// Else look if there is any unsupported type
+		else if (type.Contains(IsTypeNotSupported)) {
+			// If there is at least one unsupported type, replace all unsupported types with varchar
+			// and perform a CAST
+			auto new_type = LogicalType::VisitReplace(type, [](const LogicalType &ty) -> LogicalType {
+				return IsTypeNotSupported(ty) ? LogicalType::VARCHAR : ty;
+			});
+
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(column_ref), new_type, false);
+			cast_expr->alias = name;
+			result.push_back(std::move(cast_expr));
+		}
+		// Otherwise, just reference the input column
+		else {
+			result.push_back(std::move(column_ref));
+		}
 	}
 
-	copied_info.format = "parquet";
-	return binder.Bind(*stmt_copy);
+	return result;
 }
 
 void ParquetExtension::Load(DuckDB &db) {
@@ -1476,6 +1503,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(file_meta_fun));
 
 	CopyFunction function("parquet");
+	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;
@@ -1491,31 +1519,9 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.file_size_bytes = ParquetWriteFileSize;
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
-	function.supports_type = ParquetWriter::TypeIsSupported;
 
 	function.extension = "parquet";
 	ExtensionUtil::RegisterFunction(db_instance, function);
-
-	CopyFunction geo_function("geoparquet");
-	geo_function.plan = WriteGeoParquetPlan;
-	geo_function.copy_to_bind = ParquetWriteBind;
-	geo_function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
-	geo_function.copy_to_initialize_local = ParquetWriteInitializeLocal;
-	geo_function.copy_to_sink = ParquetWriteSink;
-	geo_function.copy_to_combine = ParquetWriteCombine;
-	geo_function.copy_to_finalize = ParquetWriteFinalize;
-	geo_function.execution_mode = ParquetWriteExecutionMode;
-	geo_function.copy_from_bind = ParquetScanFunction::ParquetReadBind;
-	geo_function.copy_from_function = scan_fun.functions[0];
-	geo_function.prepare_batch = ParquetWritePrepareBatch;
-	geo_function.flush_batch = ParquetWriteFlushBatch;
-	geo_function.desired_batch_size = ParquetWriteDesiredBatchSize;
-	geo_function.file_size_bytes = ParquetWriteFileSize;
-	geo_function.serialize = ParquetCopySerialize;
-	geo_function.deserialize = ParquetCopyDeserialize;
-	geo_function.supports_type = ParquetWriter::TypeIsSupported;
-	geo_function.extension = "parquet";
-	ExtensionUtil::RegisterFunction(db_instance, geo_function);
 
 	// parquet_key
 	auto parquet_key_fun = PragmaFunction::PragmaCall("add_parquet_key", ParquetCrypto::AddKey,

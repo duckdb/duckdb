@@ -100,16 +100,15 @@ public:
 		return compression_level;
 	}
 
-	static CopyTypeSupport TypeIsSupported(const LogicalType &type);
-
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
 
 	GeoParquetFileMetadata &GetGeoParquetData();
 
+	static bool TryGetParquetType(const LogicalType &duckdb_type,
+	                              optional_ptr<duckdb_parquet::format::Type::type> type = nullptr);
+
 private:
-	static CopyTypeSupport DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
-	                                                       duckdb_parquet::format::Type::type &type);
 	string file_name;
 	vector<LogicalType> sql_types;
 	vector<string> column_names;

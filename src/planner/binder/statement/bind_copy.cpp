@@ -20,6 +20,7 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 
 #include <algorithm>
+#include <duckdb/planner/operator/logical_projection.hpp>
 
 namespace duckdb {
 
@@ -27,7 +28,7 @@ static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 }
 
-BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
+BoundStatement Binder::BindCopyTo(CopyStatement &stmt, bool is_export) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
@@ -52,6 +53,31 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 	if (!copy_function.function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
+	}
+
+	// Allow the copy function to intercept the select list and types and push a new projection on top of the plan
+	if (copy_function.function.copy_to_select) {
+		auto &names = select_node.names;
+		auto &types = select_node.types;
+		auto bindings = select_node.plan->GetColumnBindings();
+
+		CopyToSelectInput input = {context, names, types, bindings, is_export};
+
+		auto selection = copy_function.function.copy_to_select(input);
+		if (!selection.empty()) {
+			auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(selection));
+			projection->children.push_back(std::move(select_node.plan));
+			projection->ResolveOperatorTypes();
+
+			// Update the names and types of the select node
+			select_node.names.clear();
+			select_node.types.clear();
+			for (auto &expr : projection->expressions) {
+				select_node.names.push_back(expr->GetName());
+				select_node.types.push_back(expr->return_type);
+			}
+			select_node.plan = std::move(projection);
+		}
 	}
 
 	bool use_tmp_file = true;
@@ -243,7 +269,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	return result;
 }
 
-BoundStatement Binder::Bind(CopyStatement &stmt) {
+BoundStatement Binder::Bind(CopyStatement &stmt, bool is_export) {
 	if (!stmt.info->is_from && !stmt.info->select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
@@ -270,7 +296,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt);
 	} else {
-		return BindCopyTo(stmt);
+		return BindCopyTo(stmt, is_export);
 	}
 }
 

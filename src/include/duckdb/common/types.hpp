@@ -348,6 +348,9 @@ struct LogicalType {
 	bool Contains(F &&predicate) const;
 	bool Contains(LogicalTypeId type_id) const;
 
+	template<class F>
+	static LogicalType VisitReplace(const LogicalType &type, F &&func);
+
 private:
 	LogicalTypeId id_; // NOLINT: allow this naming for legacy reasons
 	PhysicalType physical_type_; // NOLINT: allow this naming for legacy reasons
@@ -577,6 +580,41 @@ bool LogicalType::Contains(F &&predicate) const {
 		return false;
 	}
 	return false;
+}
+
+template <class F>
+LogicalType LogicalType::VisitReplace(const LogicalType &type, F &&func) {
+	switch(type.id()) {
+	case LogicalTypeId::STRUCT: {
+		auto children = StructType::GetChildTypes(type);
+		for(auto &child : children) {
+			child.second = VisitReplace(child.second, func);
+		}
+		return func(LogicalType::STRUCT(children));
+	}
+	case LogicalTypeId::UNION: {
+		auto children = UnionType::CopyMemberTypes(type);
+		for(auto &child : children) {
+			child.second = VisitReplace(child.second, func);
+		}
+		return func(LogicalType::UNION(children));
+	}
+	case LogicalTypeId::LIST: {
+		auto child = ListType::GetChildType(type);
+		return func(LogicalType::LIST(VisitReplace(child, func)));
+	}
+	case LogicalTypeId::ARRAY: {
+		auto child = ArrayType::GetChildType(type);
+		return func(LogicalType::ARRAY(VisitReplace(child, func), ArrayType::GetSize(type)));
+	}
+	case LogicalTypeId::MAP: {
+		auto key = MapType::KeyType(type);
+		auto value = MapType::ValueType(type);
+		return func(LogicalType::MAP(VisitReplace(key, func), VisitReplace(value, func)));
+	}
+	default:
+		return func(type);
+	}
 }
 
 } // namespace duckdb
