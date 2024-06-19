@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/owning_string_map.hpp"
+#include "duckdb/core_functions/create_sort_key.hpp"
 #include <functional>
 
 namespace std {
@@ -78,7 +79,7 @@ struct ModeString {
 
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
-		return StringVector::AddString(result, input);
+		return StringVector::AddStringOrBlob(result, input);
 	}
 };
 
@@ -185,9 +186,9 @@ struct ModeFunction {
 			state.frequency_map = TYPE_OP::CreateEmpty(aggr_input.input.allocator);
 		}
 		auto &i = (*state.frequency_map)[key];
-		i.count++;
+		++i.count;
 		i.first_row = MinValue<idx_t>(i.first_row, state.count);
-		state.count++;
+		++state.count;
 	}
 
 	template <class STATE, class OP>
@@ -328,14 +329,80 @@ struct ModeFunction {
 	}
 };
 
+static void ModeFallbackUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
+                               idx_t count) {
+	using STATE = ModeState<string_t, ModeString>;
+	using OP = ModeFunction<ModeString>;
+
+	auto &input = inputs[0];
+	UnifiedVectorFormat input_data;
+	input.ToUnifiedFormat(count, input_data);
+
+	Vector sort_keys(LogicalType::BLOB);
+	OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_keys);
+	UnifiedVectorFormat sort_key_data;
+	sort_keys.ToUnifiedFormat(count, sort_key_data);
+
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(count, sdata);
+
+	auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
+	auto sort_key_values = UnifiedVectorFormat::GetData<string_t>(sort_key_data);
+	AggregateUnaryInput unary_input(aggr_input, sort_key_data.validity);
+	for (idx_t i = 0; i < count; i++) {
+		auto input_idx = input_data.sel->get_index(i);
+		if (!input_data.validity.RowIsValid(input_idx)) {
+			continue;
+		}
+		auto &state = *states[sdata.sel->get_index(i)];
+		auto sort_key_idx = sort_key_data.sel->get_index(i);
+		auto &input_value = sort_key_values[sort_key_idx];
+		OP::Operation<string_t, STATE, OP>(state, input_value, unary_input);
+	}
+}
+
+static void ModeFallbackFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
+                                 idx_t offset) {
+	using STATE = ModeState<string_t, ModeString>;
+
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(count, sdata);
+	auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[sdata.sel->get_index(i)];
+		if (!state.frequency_map) {
+			FlatVector::SetNull(result, i, true);
+			continue;
+		}
+		auto highest_frequency = state.Scan();
+		if (highest_frequency != state.frequency_map->end()) {
+			CreateSortKeyHelpers::DecodeSortKey(highest_frequency->first, result, i,
+			                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
+		} else {
+			FlatVector::SetNull(result, i, true);
+		}
+	}
+}
+
 template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = ModeFunction<TYPE_OP>;
-	auto return_type = type.id() == LogicalTypeId::ANY ? LogicalType::VARCHAR : type;
-	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, return_type);
+	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	func.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	return func;
+}
+
+AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
+	using STATE = ModeState<string_t, ModeString>;
+	using OP = ModeFunction<ModeString>;
+	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
+	                       AggregateFunction::StateInitialize<STATE, OP>, ModeFallbackUpdate,
+	                       AggregateFunction::StateCombine<STATE, OP>, ModeFallbackFinalize, nullptr);
+	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+	return aggr;
 }
 
 AggregateFunction GetModeAggregate(const LogicalType &type) {
@@ -367,38 +434,23 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 	case PhysicalType::INTERVAL:
 		return GetTypedModeFunction<interval_t>(type);
 	case PhysicalType::VARCHAR:
-		return GetTypedModeFunction<string_t, ModeString>(LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150));
+		return GetTypedModeFunction<string_t, ModeString>(type);
 	default:
-		throw NotImplementedException("Unimplemented mode aggregate");
+		return GetFallbackModeFunction(type);
 	}
 }
 
-unique_ptr<FunctionData> BindModeDecimal(ClientContext &context, AggregateFunction &function,
-                                         vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindModeAggregate(ClientContext &context, AggregateFunction &function,
+                                           vector<unique_ptr<Expression>> &arguments) {
 	function = GetModeAggregate(arguments[0]->return_type);
 	function.name = "mode";
 	return nullptr;
 }
 
 AggregateFunctionSet ModeFun::GetFunctions() {
-	const vector<LogicalType> TEMPORAL = {LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::TIME,
-	                                      LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,   LogicalType::INTERVAL};
-
 	AggregateFunctionSet mode;
-	mode.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                   nullptr, nullptr, nullptr, BindModeDecimal));
-
-	for (const auto &type : LogicalType::Numeric()) {
-		if (type.id() != LogicalTypeId::DECIMAL) {
-			mode.AddFunction(GetModeAggregate(type));
-		}
-	}
-
-	for (const auto &type : TEMPORAL) {
-		mode.AddFunction(GetModeAggregate(type));
-	}
-
-	mode.AddFunction(GetModeAggregate(LogicalType::VARCHAR));
+	mode.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, nullptr, nullptr,
+	                                   nullptr, nullptr, BindModeAggregate));
 	return mode;
 }
 } // namespace duckdb

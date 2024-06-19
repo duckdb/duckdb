@@ -20,3 +20,16 @@ SELECT avg(strlen(padded_mode)) FROM
 (SELECT mode(l_comment) OVER (ORDER BY rowid ROWS BETWEEN 5 PRECEDING AND 5 FOLLOWING) AS padded_mode FROM lineitem)
 ----
 26.4927
+
+# mode on nested types
+query III
+SELECT mode(l_orderkey), mode([l_orderkey]), mode({'i': l_orderkey}) from lineitem
+----
+245475	[245475]	{'i': 245475}
+
+query IIII
+SELECT l_returnflag, mode(l_orderkey), mode([l_orderkey]), mode({'i': l_orderkey}) from lineitem group by l_returnflag order by l_returnflag
+----
+A	861223	[861223]	{'i': 861223}
+N	613734	[613734]	{'i': 613734}
+R	123910	[123910]	{'i': 123910}
