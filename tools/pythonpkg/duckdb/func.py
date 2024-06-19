@@ -4,6 +4,27 @@
 from duckdb import FunctionExpression
 
 
+class _UndefinedType:
+    """A singleton object for marking undefined parameters"""
+
+    __instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not isinstance(cls.__instance, cls):
+            cls.__instance = object.__new__(cls, *args, **kwargs)
+        return cls.__instance
+
+    def __repr__(self):
+        return "Undefined"
+
+
+_UNDEFINED = _UndefinedType()
+
+
+def _remove_undefined_parameters(*parameters) -> list:
+    return [p for p in parameters if p is not _UNDEFINED]
+
+
 def abs(x, /) -> FunctionExpression:
     """Absolute value"""
     return FunctionExpression("abs", x)
@@ -14,26 +35,14 @@ def acos(x, /) -> FunctionExpression:
     return FunctionExpression("acos", x)
 
 
-def add(col0, col1=None, /) -> FunctionExpression:
+def add(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("add", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("add", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("add", col0, col1)
+    return FunctionExpression("add", *_remove_undefined_parameters(col0, col1))
 
 
-def age(timestamp1, timestamp2=None, /) -> FunctionExpression:
+def age(timestamp1, timestamp2=_UNDEFINED, /) -> FunctionExpression:
     """Subtract arguments, resulting in the time difference between the two timestamps"""
-    if timestamp1 is not None and timestamp2 is not None:
-        return FunctionExpression("age", timestamp1, timestamp2)
-    elif timestamp1 is not None and timestamp2 is None:
-        return FunctionExpression("age", timestamp1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("age", timestamp1, timestamp2)
+    return FunctionExpression("age", *_remove_undefined_parameters(timestamp1, timestamp2))
 
 
 def aggregate(*args) -> FunctionExpression:
@@ -157,15 +166,9 @@ def array_intersect(l1, l2, /) -> FunctionExpression:
     return FunctionExpression("array_intersect", l1, l2)
 
 
-def array_length(col0, col1=None, /) -> FunctionExpression:
+def array_length(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("array_length", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("array_length", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("array_length", col0, col1)
+    return FunctionExpression("array_length", *_remove_undefined_parameters(col0, col1))
 
 
 def array_pop_back(arr, /) -> FunctionExpression:
@@ -198,15 +201,9 @@ def array_push_front(arr, e, /) -> FunctionExpression:
     return FunctionExpression("array_push_front", arr, e)
 
 
-def array_resize(col0, col1, col2=None, /) -> FunctionExpression:
+def array_resize(col0, col1, col2=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("array_resize", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None:
-        return FunctionExpression("array_resize", col0, col1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("array_resize", col0, col1, col2)
+    return FunctionExpression("array_resize", *_remove_undefined_parameters(col0, col1, col2))
 
 
 def array_reverse(l, /) -> FunctionExpression:
@@ -214,39 +211,19 @@ def array_reverse(l, /) -> FunctionExpression:
     return FunctionExpression("array_reverse", l)
 
 
-def array_reverse_sort(list, col1=None, /) -> FunctionExpression:
+def array_reverse_sort(list, col1=_UNDEFINED, /) -> FunctionExpression:
     """Sorts the elements of the list in reverse order"""
-    if list is not None and col1 is not None:
-        return FunctionExpression("array_reverse_sort", list, col1)
-    elif list is not None and col1 is None:
-        return FunctionExpression("array_reverse_sort", list)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("array_reverse_sort", list, col1)
+    return FunctionExpression("array_reverse_sort", *_remove_undefined_parameters(list, col1))
 
 
-def array_slice(list, begin, end, step=None, /) -> FunctionExpression:
+def array_slice(list, begin, end, step=_UNDEFINED, /) -> FunctionExpression:
     """Extract a sublist using slice conventions. Negative values are accepted"""
-    if list is not None and begin is not None and end is not None and step is not None:
-        return FunctionExpression("array_slice", list, begin, end, step)
-    elif list is not None and begin is not None and end is not None and step is None:
-        return FunctionExpression("array_slice", list, begin, end)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("array_slice", list, begin, end, step)
+    return FunctionExpression("array_slice", *_remove_undefined_parameters(list, begin, end, step))
 
 
-def array_sort(list, col1=None, col2=None, /) -> FunctionExpression:
+def array_sort(list, col1=_UNDEFINED, col2=_UNDEFINED, /) -> FunctionExpression:
     """Sorts the elements of the list"""
-    if list is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("array_sort", list, col1, col2)
-    elif list is not None and col1 is not None and col2 is None:
-        return FunctionExpression("array_sort", list, col1)
-    elif list is not None and col1 is None and col2 is None:
-        return FunctionExpression("array_sort", list)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("array_sort", list, col1, col2)
+    return FunctionExpression("array_sort", *_remove_undefined_parameters(list, col1, col2))
 
 
 def array_to_json(*args) -> FunctionExpression:
@@ -290,16 +267,10 @@ def avg(x, /) -> FunctionExpression:
     return FunctionExpression("avg", x)
 
 
-def bar(x, min, max, width=None, /) -> FunctionExpression:
+def bar(x, min, max, width=_UNDEFINED, /) -> FunctionExpression:
     """Draws a band whose width is proportional to (x - min) and equal to width
     characters when x = max. width defaults to 80"""
-    if x is not None and min is not None and max is not None and width is not None:
-        return FunctionExpression("bar", x, min, max, width)
-    elif x is not None and min is not None and max is not None and width is None:
-        return FunctionExpression("bar", x, min, max)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("bar", x, min, max, width)
+    return FunctionExpression("bar", *_remove_undefined_parameters(x, min, max, width))
 
 
 def base64(blob, /) -> FunctionExpression:
@@ -348,15 +319,9 @@ def bitstring(bitstring, length, /) -> FunctionExpression:
     return FunctionExpression("bitstring", bitstring, length)
 
 
-def bitstring_agg(arg, col1=None, col2=None, /) -> FunctionExpression:
+def bitstring_agg(arg, col1=_UNDEFINED, col2=_UNDEFINED, /) -> FunctionExpression:
     """Returns a bitstring with bits set for each distinct value."""
-    if arg is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("bitstring_agg", arg, col1, col2)
-    elif arg is not None and col1 is None and col2 is None:
-        return FunctionExpression("bitstring_agg", arg)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("bitstring_agg", arg, col1, col2)
+    return FunctionExpression("bitstring_agg", *_remove_undefined_parameters(arg, col1, col2))
 
 
 def bool_and(arg, /) -> FunctionExpression:
@@ -445,15 +410,9 @@ def cot(x, /) -> FunctionExpression:
     return FunctionExpression("cot", x)
 
 
-def count(col0=None, /) -> FunctionExpression:
+def count(col0=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None:
-        return FunctionExpression("count", col0)
-    elif col0 is None:
-        return FunctionExpression("count")
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("count", col0)
+    return FunctionExpression("count", *_remove_undefined_parameters(col0))
 
 
 def count_if(l, /) -> FunctionExpression:
@@ -660,15 +619,9 @@ def divide(col0, col1, /) -> FunctionExpression:
     return FunctionExpression("divide", col0, col1)
 
 
-def edit(col0, col1=None, /) -> FunctionExpression:
+def edit(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("edit", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("edit", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("edit", col0, col1)
+    return FunctionExpression("edit", *_remove_undefined_parameters(col0, col1))
 
 
 def editdist3(str1, str2, /) -> FunctionExpression:
@@ -880,17 +833,9 @@ def gen_random_uuid() -> FunctionExpression:
     return FunctionExpression("gen_random_uuid")
 
 
-def generate_series(start, stop=None, step=None, /) -> FunctionExpression:
+def generate_series(start, stop=_UNDEFINED, step=_UNDEFINED, /) -> FunctionExpression:
     """Create a list of values between start and stop - the stop parameter is inclusive"""
-    if start is not None and stop is not None and step is not None:
-        return FunctionExpression("generate_series", start, stop, step)
-    elif start is not None and stop is not None and step is None:
-        return FunctionExpression("generate_series", start, stop)
-    elif start is not None and stop is None and step is None:
-        return FunctionExpression("generate_series", start)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("generate_series", start, stop, step)
+    return FunctionExpression("generate_series", *_remove_undefined_parameters(start, stop, step))
 
 
 def generate_subscripts(arr, dim, /) -> FunctionExpression:
@@ -933,15 +878,9 @@ def greatest_common_divisor(x, y, /) -> FunctionExpression:
     return FunctionExpression("greatest_common_divisor", x, y)
 
 
-def group_concat(str, arg=None, /) -> FunctionExpression:
+def group_concat(str, arg=_UNDEFINED, /) -> FunctionExpression:
     """Concatenates the column string values with an optional separator."""
-    if str is not None and arg is not None:
-        return FunctionExpression("group_concat", str, arg)
-    elif str is not None and arg is None:
-        return FunctionExpression("group_concat", str)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("group_concat", str, arg)
+    return FunctionExpression("group_concat", *_remove_undefined_parameters(str, arg))
 
 
 def hamming(str1, str2, /) -> FunctionExpression:
@@ -1031,15 +970,9 @@ def icu_sort_key(col0, col1, /) -> FunctionExpression:
     return FunctionExpression("icu_sort_key", col0, col1)
 
 
-def ieee754(col0, col1=None, /) -> FunctionExpression:
+def ieee754(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("ieee754", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("ieee754", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("ieee754", col0, col1)
+    return FunctionExpression("ieee754", *_remove_undefined_parameters(col0, col1))
 
 
 def ieee754_exponent(col0, /) -> FunctionExpression:
@@ -1151,15 +1084,9 @@ def json_array(*args) -> FunctionExpression:
     return FunctionExpression("json_array", *args)
 
 
-def json_array_length(col0, col1=None, /) -> FunctionExpression:
+def json_array_length(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("json_array_length", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("json_array_length", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("json_array_length", col0, col1)
+    return FunctionExpression("json_array_length", *_remove_undefined_parameters(col0, col1))
 
 
 def json_contains(col0, col1, /) -> FunctionExpression:
@@ -1207,15 +1134,9 @@ def json_group_structure(x, /) -> FunctionExpression:
     return FunctionExpression("json_group_structure", x)
 
 
-def json_keys(col0, col1=None, /) -> FunctionExpression:
+def json_keys(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("json_keys", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("json_keys", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("json_keys", col0, col1)
+    return FunctionExpression("json_keys", *_remove_undefined_parameters(col0, col1))
 
 
 def json_merge_patch(*args) -> FunctionExpression:
@@ -1233,19 +1154,9 @@ def json_quote(*args) -> FunctionExpression:
     return FunctionExpression("json_quote", *args)
 
 
-def json_serialize_sql(col0, col1=None, col2=None, col3=None, /) -> FunctionExpression:
+def json_serialize_sql(col0, col1=_UNDEFINED, col2=_UNDEFINED, col3=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
-        return FunctionExpression("json_serialize_sql", col0, col1, col2, col3)
-    elif col0 is not None and col1 is not None and col2 is not None and col3 is None:
-        return FunctionExpression("json_serialize_sql", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None and col3 is None:
-        return FunctionExpression("json_serialize_sql", col0, col1)
-    elif col0 is not None and col1 is None and col2 is None and col3 is None:
-        return FunctionExpression("json_serialize_sql", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("json_serialize_sql", col0, col1, col2, col3)
+    return FunctionExpression("json_serialize_sql", *_remove_undefined_parameters(col0, col1, col2, col3))
 
 
 def json_structure(col0, /) -> FunctionExpression:
@@ -1263,15 +1174,9 @@ def json_transform_strict(col0, col1, /) -> FunctionExpression:
     return FunctionExpression("json_transform_strict", col0, col1)
 
 
-def json_type(col0, col1=None, /) -> FunctionExpression:
+def json_type(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("json_type", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("json_type", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("json_type", col0, col1)
+    return FunctionExpression("json_type", *_remove_undefined_parameters(col0, col1))
 
 
 def json_valid(col0, /) -> FunctionExpression:
@@ -1578,15 +1483,9 @@ def list_product(l, /) -> FunctionExpression:
     return FunctionExpression("list_product", l)
 
 
-def list_resize(col0, col1, col2=None, /) -> FunctionExpression:
+def list_resize(col0, col1, col2=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("list_resize", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None:
-        return FunctionExpression("list_resize", col0, col1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("list_resize", col0, col1, col2)
+    return FunctionExpression("list_resize", *_remove_undefined_parameters(col0, col1, col2))
 
 
 def list_reverse(l, /) -> FunctionExpression:
@@ -1594,15 +1493,9 @@ def list_reverse(l, /) -> FunctionExpression:
     return FunctionExpression("list_reverse", l)
 
 
-def list_reverse_sort(list, col1=None, /) -> FunctionExpression:
+def list_reverse_sort(list, col1=_UNDEFINED, /) -> FunctionExpression:
     """Sorts the elements of the list in reverse order"""
-    if list is not None and col1 is not None:
-        return FunctionExpression("list_reverse_sort", list, col1)
-    elif list is not None and col1 is None:
-        return FunctionExpression("list_reverse_sort", list)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("list_reverse_sort", list, col1)
+    return FunctionExpression("list_reverse_sort", *_remove_undefined_parameters(list, col1))
 
 
 def list_sem(l, /) -> FunctionExpression:
@@ -1615,28 +1508,14 @@ def list_skewness(l, /) -> FunctionExpression:
     return FunctionExpression("list_skewness", l)
 
 
-def list_slice(list, begin, end, step=None, /) -> FunctionExpression:
+def list_slice(list, begin, end, step=_UNDEFINED, /) -> FunctionExpression:
     """Extract a sublist using slice conventions. Negative values are accepted"""
-    if list is not None and begin is not None and end is not None and step is not None:
-        return FunctionExpression("list_slice", list, begin, end, step)
-    elif list is not None and begin is not None and end is not None and step is None:
-        return FunctionExpression("list_slice", list, begin, end)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("list_slice", list, begin, end, step)
+    return FunctionExpression("list_slice", *_remove_undefined_parameters(list, begin, end, step))
 
 
-def list_sort(list, col1=None, col2=None, /) -> FunctionExpression:
+def list_sort(list, col1=_UNDEFINED, col2=_UNDEFINED, /) -> FunctionExpression:
     """Sorts the elements of the list"""
-    if list is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("list_sort", list, col1, col2)
-    elif list is not None and col1 is not None and col2 is None:
-        return FunctionExpression("list_sort", list, col1)
-    elif list is not None and col1 is None and col2 is None:
-        return FunctionExpression("list_sort", list)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("list_sort", list, col1, col2)
+    return FunctionExpression("list_sort", *_remove_undefined_parameters(list, col1, col2))
 
 
 def list_stddev_pop(l, /) -> FunctionExpression:
@@ -1714,16 +1593,10 @@ def lsmode(col0, /) -> FunctionExpression:
     return FunctionExpression("lsmode", col0)
 
 
-def ltrim(string, characters=None, /) -> FunctionExpression:
+def ltrim(string, characters=_UNDEFINED, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from the left side of the
     string"""
-    if string is not None and characters is not None:
-        return FunctionExpression("ltrim", string, characters)
-    elif string is not None and characters is None:
-        return FunctionExpression("ltrim", string)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("ltrim", string, characters)
+    return FunctionExpression("ltrim", *_remove_undefined_parameters(string, characters))
 
 
 def mad(x, /) -> FunctionExpression:
@@ -1732,15 +1605,9 @@ def mad(x, /) -> FunctionExpression:
     return FunctionExpression("mad", x)
 
 
-def make_date(year, month=None, day=None, /) -> FunctionExpression:
+def make_date(year, month=_UNDEFINED, day=_UNDEFINED, /) -> FunctionExpression:
     """The date for the given parts"""
-    if year is not None and month is not None and day is not None:
-        return FunctionExpression("make_date", year, month, day)
-    elif year is not None and month is None and day is None:
-        return FunctionExpression("make_date", year)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("make_date", year, month, day)
+    return FunctionExpression("make_date", *_remove_undefined_parameters(year, month, day))
 
 
 def make_time(hour, minute, seconds, /) -> FunctionExpression:
@@ -1748,28 +1615,14 @@ def make_time(hour, minute, seconds, /) -> FunctionExpression:
     return FunctionExpression("make_time", hour, minute, seconds)
 
 
-def make_timestamp(year, month=None, day=None, hour=None, minute=None, seconds=None, /) -> FunctionExpression:
+def make_timestamp(year, month=_UNDEFINED, day=_UNDEFINED, hour=_UNDEFINED, minute=_UNDEFINED, seconds=_UNDEFINED, /) -> FunctionExpression:
     """The timestamp for the given parts"""
-    if year is not None and month is not None and day is not None and hour is not None and minute is not None and seconds is not None:
-        return FunctionExpression("make_timestamp", year, month, day, hour, minute, seconds)
-    elif year is not None and month is None and day is None and hour is None and minute is None and seconds is None:
-        return FunctionExpression("make_timestamp", year)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("make_timestamp", year, month, day, hour, minute, seconds)
+    return FunctionExpression("make_timestamp", *_remove_undefined_parameters(year, month, day, hour, minute, seconds))
 
 
-def make_timestamptz(col0, col1=None, col2=None, col3=None, col4=None, col5=None, col6=None, /) -> FunctionExpression:
+def make_timestamptz(col0, col1=_UNDEFINED, col2=_UNDEFINED, col3=_UNDEFINED, col4=_UNDEFINED, col5=_UNDEFINED, col6=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None and col3 is not None and col4 is not None and col5 is not None and col6 is not None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5, col6)
-    elif col0 is not None and col1 is not None and col2 is not None and col3 is not None and col4 is not None and col5 is not None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5)
-    elif col0 is not None and col1 is None and col2 is None and col3 is None and col4 is None and col5 is None and col6 is None:
-        return FunctionExpression("make_timestamptz", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5, col6)
+    return FunctionExpression("make_timestamptz", *_remove_undefined_parameters(col0, col1, col2, col3, col4, col5, col6))
 
 
 def map(*args) -> FunctionExpression:
@@ -2144,17 +1997,9 @@ def random() -> FunctionExpression:
     return FunctionExpression("random")
 
 
-def range(start, stop=None, step=None, /) -> FunctionExpression:
+def range(start, stop=_UNDEFINED, step=_UNDEFINED, /) -> FunctionExpression:
     """Create a list of values between start and stop - the stop parameter is exclusive"""
-    if start is not None and stop is not None and step is not None:
-        return FunctionExpression("range", start, stop, step)
-    elif start is not None and stop is not None and step is None:
-        return FunctionExpression("range", start, stop)
-    elif start is not None and stop is None and step is None:
-        return FunctionExpression("range", start)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("range", start, stop, step)
+    return FunctionExpression("range", *_remove_undefined_parameters(start, stop, step))
 
 
 def readfile(col0, /) -> FunctionExpression:
@@ -2162,74 +2007,34 @@ def readfile(col0, /) -> FunctionExpression:
     return FunctionExpression("readfile", col0)
 
 
-def regexp_extract(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
+def regexp_extract(col0, col1, col2=_UNDEFINED, col3=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
-        return FunctionExpression("regexp_extract", col0, col1, col2, col3)
-    elif col0 is not None and col1 is not None and col2 is not None and col3 is None:
-        return FunctionExpression("regexp_extract", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None and col3 is None:
-        return FunctionExpression("regexp_extract", col0, col1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("regexp_extract", col0, col1, col2, col3)
+    return FunctionExpression("regexp_extract", *_remove_undefined_parameters(col0, col1, col2, col3))
 
 
-def regexp_extract_all(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
+def regexp_extract_all(col0, col1, col2=_UNDEFINED, col3=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
-        return FunctionExpression("regexp_extract_all", col0, col1, col2, col3)
-    elif col0 is not None and col1 is not None and col2 is not None and col3 is None:
-        return FunctionExpression("regexp_extract_all", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None and col3 is None:
-        return FunctionExpression("regexp_extract_all", col0, col1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("regexp_extract_all", col0, col1, col2, col3)
+    return FunctionExpression("regexp_extract_all", *_remove_undefined_parameters(col0, col1, col2, col3))
 
 
-def regexp_full_match(col0, col1, col2=None, /) -> FunctionExpression:
+def regexp_full_match(col0, col1, col2=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("regexp_full_match", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None:
-        return FunctionExpression("regexp_full_match", col0, col1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("regexp_full_match", col0, col1, col2)
+    return FunctionExpression("regexp_full_match", *_remove_undefined_parameters(col0, col1, col2))
 
 
-def regexp_matches(col0, col1, col2=None, /) -> FunctionExpression:
+def regexp_matches(col0, col1, col2=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("regexp_matches", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None:
-        return FunctionExpression("regexp_matches", col0, col1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("regexp_matches", col0, col1, col2)
+    return FunctionExpression("regexp_matches", *_remove_undefined_parameters(col0, col1, col2))
 
 
-def regexp_replace(col0, col1, col2, col3=None, /) -> FunctionExpression:
+def regexp_replace(col0, col1, col2, col3=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
-        return FunctionExpression("regexp_replace", col0, col1, col2, col3)
-    elif col0 is not None and col1 is not None and col2 is not None and col3 is None:
-        return FunctionExpression("regexp_replace", col0, col1, col2)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("regexp_replace", col0, col1, col2, col3)
+    return FunctionExpression("regexp_replace", *_remove_undefined_parameters(col0, col1, col2, col3))
 
 
-def regexp_split_to_array(string, separator, col2=None, /) -> FunctionExpression:
+def regexp_split_to_array(string, separator, col2=_UNDEFINED, /) -> FunctionExpression:
     """Splits the string along the regex"""
-    if string is not None and separator is not None and col2 is not None:
-        return FunctionExpression("regexp_split_to_array", string, separator, col2)
-    elif string is not None and separator is not None and col2 is None:
-        return FunctionExpression("regexp_split_to_array", string, separator)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("regexp_split_to_array", string, separator, col2)
+    return FunctionExpression("regexp_split_to_array", *_remove_undefined_parameters(string, separator, col2))
 
 
 def regr_avgx(y, x, /) -> FunctionExpression:
@@ -2290,16 +2095,10 @@ def replace(string, source, target, /) -> FunctionExpression:
     return FunctionExpression("replace", string, source, target)
 
 
-def reservoir_quantile(x, quantile, sample_size=None, /) -> FunctionExpression:
+def reservoir_quantile(x, quantile, sample_size=_UNDEFINED, /) -> FunctionExpression:
     """Gives the approximate quantile using reservoir sampling, the sample size is
     optional and uses 8192 as a default size."""
-    if x is not None and quantile is not None and sample_size is not None:
-        return FunctionExpression("reservoir_quantile", x, quantile, sample_size)
-    elif x is not None and quantile is not None and sample_size is None:
-        return FunctionExpression("reservoir_quantile", x, quantile)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("reservoir_quantile", x, quantile, sample_size)
+    return FunctionExpression("reservoir_quantile", *_remove_undefined_parameters(x, quantile, sample_size))
 
 
 def reverse(string, /) -> FunctionExpression:
@@ -2317,15 +2116,9 @@ def right_grapheme(string, count, /) -> FunctionExpression:
     return FunctionExpression("right_grapheme", string, count)
 
 
-def round(x, precision=None, /) -> FunctionExpression:
+def round(x, precision=_UNDEFINED, /) -> FunctionExpression:
     """Rounds x to s decimal places"""
-    if x is not None and precision is not None:
-        return FunctionExpression("round", x, precision)
-    elif x is not None and precision is None:
-        return FunctionExpression("round", x)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("round", x, precision)
+    return FunctionExpression("round", *_remove_undefined_parameters(x, precision))
 
 
 def round_even(x, n, /) -> FunctionExpression:
@@ -2353,16 +2146,10 @@ def rpad(string, count, character, /) -> FunctionExpression:
     return FunctionExpression("rpad", string, count, character)
 
 
-def rtrim(string, characters=None, /) -> FunctionExpression:
+def rtrim(string, characters=_UNDEFINED, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from the right side of the
     string"""
-    if string is not None and characters is not None:
-        return FunctionExpression("rtrim", string, characters)
-    elif string is not None and characters is None:
-        return FunctionExpression("rtrim", string)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("rtrim", string, characters)
+    return FunctionExpression("rtrim", *_remove_undefined_parameters(string, characters))
 
 
 def second(ts, /) -> FunctionExpression:
@@ -2396,26 +2183,14 @@ def sha256(value, /) -> FunctionExpression:
     return FunctionExpression("sha256", value)
 
 
-def sha3(col0, col1=None, /) -> FunctionExpression:
+def sha3(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("sha3", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("sha3", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("sha3", col0, col1)
+    return FunctionExpression("sha3", *_remove_undefined_parameters(col0, col1))
 
 
-def sha3_query(col0, col1=None, /) -> FunctionExpression:
+def sha3_query(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("sha3_query", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("sha3_query", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("sha3_query", col0, col1)
+    return FunctionExpression("sha3_query", *_remove_undefined_parameters(col0, col1))
 
 
 def shell_add_schema(col0, col1, col2, /) -> FunctionExpression:
@@ -2519,15 +2294,9 @@ def str_split(string, separator, /) -> FunctionExpression:
     return FunctionExpression("str_split", string, separator)
 
 
-def str_split_regex(string, separator, col2=None, /) -> FunctionExpression:
+def str_split_regex(string, separator, col2=_UNDEFINED, /) -> FunctionExpression:
     """Splits the string along the regex"""
-    if string is not None and separator is not None and col2 is not None:
-        return FunctionExpression("str_split_regex", string, separator, col2)
-    elif string is not None and separator is not None and col2 is None:
-        return FunctionExpression("str_split_regex", string, separator)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("str_split_regex", string, separator, col2)
+    return FunctionExpression("str_split_regex", *_remove_undefined_parameters(string, separator, col2))
 
 
 def strftime(text, format, /) -> FunctionExpression:
@@ -2535,15 +2304,9 @@ def strftime(text, format, /) -> FunctionExpression:
     return FunctionExpression("strftime", text, format)
 
 
-def string_agg(str, arg=None, /) -> FunctionExpression:
+def string_agg(str, arg=_UNDEFINED, /) -> FunctionExpression:
     """Concatenates the column string values with an optional separator."""
-    if str is not None and arg is not None:
-        return FunctionExpression("string_agg", str, arg)
-    elif str is not None and arg is None:
-        return FunctionExpression("string_agg", str)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("string_agg", str, arg)
+    return FunctionExpression("string_agg", *_remove_undefined_parameters(str, arg))
 
 
 def string_split(string, separator, /) -> FunctionExpression:
@@ -2551,15 +2314,9 @@ def string_split(string, separator, /) -> FunctionExpression:
     return FunctionExpression("string_split", string, separator)
 
 
-def string_split_regex(string, separator, col2=None, /) -> FunctionExpression:
+def string_split_regex(string, separator, col2=_UNDEFINED, /) -> FunctionExpression:
     """Splits the string along the regex"""
-    if string is not None and separator is not None and col2 is not None:
-        return FunctionExpression("string_split_regex", string, separator, col2)
-    elif string is not None and separator is not None and col2 is None:
-        return FunctionExpression("string_split_regex", string, separator)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("string_split_regex", string, separator, col2)
+    return FunctionExpression("string_split_regex", *_remove_undefined_parameters(string, separator, col2))
 
 
 def string_to_array(string, separator, /) -> FunctionExpression:
@@ -2606,48 +2363,24 @@ def struct_pack(*args) -> FunctionExpression:
     return FunctionExpression("struct_pack", *args)
 
 
-def substr(col0, col1, col2=None, /) -> FunctionExpression:
+def substr(col0, col1, col2=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("substr", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None:
-        return FunctionExpression("substr", col0, col1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("substr", col0, col1, col2)
+    return FunctionExpression("substr", *_remove_undefined_parameters(col0, col1, col2))
 
 
-def substring(col0, col1, col2=None, /) -> FunctionExpression:
+def substring(col0, col1, col2=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("substring", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None:
-        return FunctionExpression("substring", col0, col1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("substring", col0, col1, col2)
+    return FunctionExpression("substring", *_remove_undefined_parameters(col0, col1, col2))
 
 
-def substring_grapheme(col0, col1, col2=None, /) -> FunctionExpression:
+def substring_grapheme(col0, col1, col2=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None and col2 is not None:
-        return FunctionExpression("substring_grapheme", col0, col1, col2)
-    elif col0 is not None and col1 is not None and col2 is None:
-        return FunctionExpression("substring_grapheme", col0, col1)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("substring_grapheme", col0, col1, col2)
+    return FunctionExpression("substring_grapheme", *_remove_undefined_parameters(col0, col1, col2))
 
 
-def subtract(col0, col1=None, /) -> FunctionExpression:
+def subtract(col0, col1=_UNDEFINED, /) -> FunctionExpression:
     """"""
-    if col0 is not None and col1 is not None:
-        return FunctionExpression("subtract", col0, col1)
-    elif col0 is not None and col1 is None:
-        return FunctionExpression("subtract", col0)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("subtract", col0, col1)
+    return FunctionExpression("subtract", *_remove_undefined_parameters(col0, col1))
 
 
 def suffix(col0, col1, /) -> FunctionExpression:
@@ -2675,29 +2408,17 @@ def tan(x, /) -> FunctionExpression:
     return FunctionExpression("tan", x)
 
 
-def time_bucket(bucket_width, timestamp, origin=None, /) -> FunctionExpression:
+def time_bucket(bucket_width, timestamp, origin=_UNDEFINED, /) -> FunctionExpression:
     """Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned
     relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03
     00:00:00+00 for buckets that do not include a month or year interval, and to
     2000-01-01 00:00:00+00 for month and year buckets"""
-    if bucket_width is not None and timestamp is not None and origin is not None:
-        return FunctionExpression("time_bucket", bucket_width, timestamp, origin)
-    elif bucket_width is not None and timestamp is not None and origin is None:
-        return FunctionExpression("time_bucket", bucket_width, timestamp)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("time_bucket", bucket_width, timestamp, origin)
+    return FunctionExpression("time_bucket", *_remove_undefined_parameters(bucket_width, timestamp, origin))
 
 
-def timezone(ts, col1=None, /) -> FunctionExpression:
+def timezone(ts, col1=_UNDEFINED, /) -> FunctionExpression:
     """Extract the timezone component from a date or timestamp"""
-    if ts is not None and col1 is not None:
-        return FunctionExpression("timezone", ts, col1)
-    elif ts is not None and col1 is None:
-        return FunctionExpression("timezone", ts)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("timezone", ts, col1)
+    return FunctionExpression("timezone", *_remove_undefined_parameters(ts, col1))
 
 
 def timezone_hour(ts, /) -> FunctionExpression:
@@ -2710,16 +2431,10 @@ def timezone_minute(ts, /) -> FunctionExpression:
     return FunctionExpression("timezone_minute", ts)
 
 
-def to_base(number, radix, min_length=None, /) -> FunctionExpression:
+def to_base(number, radix, min_length=_UNDEFINED, /) -> FunctionExpression:
     """Converts a value to a string in the given base radix, optionally padding with
     leading zeros to the minimum length"""
-    if number is not None and radix is not None and min_length is not None:
-        return FunctionExpression("to_base", number, radix, min_length)
-    elif number is not None and radix is not None and min_length is None:
-        return FunctionExpression("to_base", number, radix)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("to_base", number, radix, min_length)
+    return FunctionExpression("to_base", *_remove_undefined_parameters(number, radix, min_length))
 
 
 def to_base64(blob, /) -> FunctionExpression:
@@ -2804,15 +2519,9 @@ def translate(string, from_, to, /) -> FunctionExpression:
     return FunctionExpression("translate", string, from_, to)
 
 
-def trim(string, characters=None, /) -> FunctionExpression:
+def trim(string, characters=_UNDEFINED, /) -> FunctionExpression:
     """Removes any occurrences of any of the characters from either side of the string"""
-    if string is not None and characters is not None:
-        return FunctionExpression("trim", string, characters)
-    elif string is not None and characters is None:
-        return FunctionExpression("trim", string)
-    else:
-        # This combination of parameters might not be valid or can be the same as one of the combinations above
-        return FunctionExpression("trim", string, characters)
+    return FunctionExpression("trim", *_remove_undefined_parameters(string, characters))
 
 
 def trunc(x, /) -> FunctionExpression:
