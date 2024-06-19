@@ -35,6 +35,7 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
