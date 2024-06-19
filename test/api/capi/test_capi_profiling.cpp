@@ -39,15 +39,16 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 }
 
 // Traverse the tree and retrieve all metrics
-void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string> &settings) {
-	static idx_t DEPTH = 0;
-	if (DEPTH == 0) {
+void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string> &settings, bool is_root = true) {
+	if (is_root) {
+        // At the root, only the query name is available
 		auto query = duckdb_profiling_info_get_query(profiling_info);
 		REQUIRE(query != nullptr);
 		duckdb_free((void *)query);
 
 		REQUIRE(duckdb_profiling_info_get_name(profiling_info) == nullptr);
 	} else {
+		// At the child level, only the operator name is available
 		auto name = duckdb_profiling_info_get_name(profiling_info);
 		REQUIRE(name != nullptr);
 		duckdb_free((void *)name);
@@ -55,14 +56,12 @@ void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string
 		REQUIRE(duckdb_profiling_info_get_query(profiling_info) == nullptr);
 	}
 
-	DEPTH++;
-
 	RetrieveAllMetrics(profiling_info, settings);
 
 	auto child_count = duckdb_profiling_info_get_child_count(profiling_info);
 	for (idx_t i = 0; i < child_count; i++) {
 		auto child = duckdb_profiling_info_get_child(profiling_info, i);
-		TraverseTree(child, settings);
+		TraverseTree(child, settings, false);
 	}
 }
 
