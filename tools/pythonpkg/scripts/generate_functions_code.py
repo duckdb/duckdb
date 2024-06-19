@@ -57,6 +57,13 @@ def generate() -> None:
                 for p in combo:
                     if p not in all_parameters:
                         all_parameters.append(p)
+
+            # Make sure that parameters in combinations appear always in the exact same order
+            # and that no parameters are skipped. This is important
+            # as we pass the parameters as positional arguments to FunctionExpression.
+            for combo in f.all_parameter_combinations:
+                assert all_parameters[:len(combo)] == combo, f"Parameters in combination {combo} are not in the same order as in all the parameters: {all_parameters}"
+
             optional_parameters = [
                 p for p in all_parameters if not all(p in combo for combo in f.all_parameter_combinations)
             ]
@@ -93,8 +100,15 @@ def generate() -> None:
                 function_def.append(f"{indent}{'if' if idx == 0 else 'elif'} {' and '.join(expressions)}:")
                 return_statement = make_return_statement(name, combo)
                 function_def.append(f"{indent*2}{return_statement}")
+            # We add an else statement to catch the case where none of the above
+            # if-elif statements matched. This very likely means that the combination
+            # of parameters is not valid but we still pass it to FunctionExpression
+            # to let duckdb show an error message as that message is more informative than what
+            # we could provide here.
+            return_statement = make_return_statement(name, all_parameters)
             function_def.append(f"{indent}else:")
-            function_def.append(f'{indent*2}raise ValueError("Invalid combination of parameters")')
+            function_def.append(f"{indent*2}# This combination of parameters might not be valid or can be the same as one of the combinations above")
+            function_def.append(f'{indent*2}{return_statement}')
         else:
             # The return statement if all parameters are provided
             return_statement = make_return_statement(name, ["*args"] if f.has_variable_parameters else all_parameters)
@@ -145,6 +159,7 @@ def get_functions_metadata() -> _FunctionsMetadata:
         else:
             has_variable_parameters = False
             all_parameter_combinations = [m["parameters"] for m in grouped_metadata]
+            all_parameter_combinations = deduplicate_parameter_names(all_parameter_combinations)
 
         assert (
             len(set(m["description"] for m in grouped_metadata)) == 1
@@ -159,6 +174,35 @@ def get_functions_metadata() -> _FunctionsMetadata:
         functions_metadata.append(metadata)
     return functions_metadata
 
+
+def deduplicate_parameter_names(all_parameter_combinations: List[List[str]]) -> List[List[str]]:
+    # Functions such as `array_cross_product` have parameters with the same name.
+    # We need to enumerate them so they are unique. We start enumerating with 1
+    # as this is also used for other functions where parameters are already
+    # deduplicated such as for array_cosine_similarity.
+    # We do this across all parameters for the function so that e.g. the function `age`
+    # which has combinations [["timestamp"], ["timestamp", "timestamp"]]
+    # will have the parameters [["timestamp1"], ["timestamp1", "timestamp2"]]
+    # and not [["timestamp"], ["timestamp1", "timestamp2"]]
+
+    duplicated_parameters = set()
+    for combo in all_parameter_combinations:
+        for p, count in Counter(combo).items():
+            if count > 1:
+                duplicated_parameters.add(p)
+
+    deduplicated_parameter_combinations: List[List[str]] = []
+    for combo in all_parameter_combinations:
+        duplicated_parameter_number = {p: 1 for p in duplicated_parameters}
+        deduplicated_parameters: List[str] = []
+        for p in combo:
+            if p in duplicated_parameter_number:
+                deduplicated_parameters.append(f"{p}{duplicated_parameter_number[p]}")
+                duplicated_parameter_number[p] += 1
+            else:
+                deduplicated_parameters.append(p)
+        deduplicated_parameter_combinations.append(deduplicated_parameters)
+    return deduplicated_parameter_combinations
 
 def get_duckdb_functions() -> List[Dict[str, str]]:
     out = check_output(
@@ -210,21 +254,7 @@ def parse_parameters(parameters_raw: str) -> list[str]:
     # Some functions such as `translate` have parameter names which are keywords
     # in Python
     parameters = [p + "_" if keyword.iskeyword(p) else p for p in parameters]
-
-    # Functions such as array_cross_product have parameters with the same name.
-    # We need to enumerate them so they are unique. We start enumerating with 1
-    # as this is also used for other functions where parameters are already
-    # deduplicated such as for array_cosine_similarity.
-    duplicated_parameter_number = {p: 1 for p, count in Counter(parameters).items() if count > 1}
-
-    deduplicated_parameters: List[str] = []
-    for p in parameters:
-        if p in duplicated_parameter_number:
-            deduplicated_parameters.append(f"{p}{duplicated_parameter_number[p]}")
-            duplicated_parameter_number[p] += 1
-        else:
-            deduplicated_parameters.append(p)
-    return deduplicated_parameters
+    return parameters
 
 
 def clean_function_name(name: str) -> str:
