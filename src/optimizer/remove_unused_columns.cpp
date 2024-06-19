@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -158,30 +159,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
 		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
 		for (auto &child : op.children) {
 			RemoveUnusedColumns remove(binder, context, true);
 			remove.VisitOperator(*child);
 		}
 		return;
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		if (!everything_referenced) {
-			auto &order = op.Cast<LogicalOrder>();
-			D_ASSERT(order.projections.empty()); // should not yet be set
-			const auto all_bindings = order.GetColumnBindings();
-
-			for (idx_t col_idx = 0; col_idx < all_bindings.size(); col_idx++) {
-				if (column_references.find(all_bindings[col_idx]) != column_references.end()) {
-					order.projections.push_back(col_idx);
-				}
-			}
-		}
-		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
-		}
-		return;
+	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
 			auto &proj = op.Cast<LogicalProjection>();
@@ -293,6 +278,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		auto &distinct = op.Cast<LogicalDistinct>();
+		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
+			// distinct type references columns that need to be distinct on, so no
+			// need to implicity reference everything.
+			break;
+		}
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
 		// FIXME: DISTINCT with expression list does not implicitly reference everything

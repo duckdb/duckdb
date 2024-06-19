@@ -107,6 +107,14 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	date_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue();
 	timestamp_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP).GetValue();
 	decimal_separator = state_machine.options.decimal_separator[0];
+
+	if (iterator.first_one) {
+		lines_read +=
+		    state_machine.dialect_options.skip_rows.GetValue() + state_machine.dialect_options.header.GetValue();
+		if (lines_read == 0) {
+			SkipBOM();
+		}
+	}
 }
 
 StringValueResult::~StringValueResult() {
@@ -782,21 +790,24 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
 
 StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       const shared_ptr<CSVErrorHandler> &error_handler)
-    : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, {}), scanner_idx(0),
+                                       const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary)
+    : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, boundary), scanner_idx(0),
       result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), false, iterator.pos.buffer_pos,
              *error_handler, iterator, buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan,
              lines_read, sniffing) {
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
+	// Its possible we might have to do some skipping first
 	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                      CSVStateMachineCache::Get(context));
 
 	state_machine->dialect_options.num_cols = options.dialect_options.num_cols;
 	state_machine->dialect_options.header = options.dialect_options.header;
 	auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
-	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>());
+	idx_t rows_to_skip = state_machine->options.GetSkipRows() + state_machine->options.GetHeader();
+	auto it = BaseScanner::SkipCSVRows(buffer_manager, state_machine, rows_to_skip);
+	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(), it);
 	scanner->csv_file_scan = make_shared_ptr<CSVFileScan>(context, options.file_path, options);
 	scanner->csv_file_scan->InitializeProjection();
 	return scanner;
@@ -940,7 +951,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 void StringValueScanner::Initialize() {
 	states.Initialize();
-
 	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding &&
 	                                 !state_machine->options.dialect_options.skip_rows.IsSetByUser())) {
 		SetStart();
@@ -1224,9 +1234,9 @@ bool StringValueScanner::MoveToNextBuffer() {
 	return false;
 }
 
-void StringValueScanner::SkipBOM() {
-	if (cur_buffer_handle->actual_size >= 3 && result.buffer_ptr[0] == '\xEF' && result.buffer_ptr[1] == '\xBB' &&
-	    result.buffer_ptr[2] == '\xBF') {
+void StringValueResult::SkipBOM() {
+	if (buffer_size >= 3 && buffer_ptr[0] == '\xEF' && buffer_ptr[1] == '\xBB' && buffer_ptr[2] == '\xBF' &&
+	    iterator.pos.buffer_pos == 0) {
 		iterator.pos.buffer_pos = 3;
 	}
 }
@@ -1286,13 +1296,7 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
 }
 
 void StringValueScanner::SetStart() {
-	if (iterator.pos.buffer_idx == 0 && iterator.pos.buffer_pos == 0) {
-		// This means this is the very first buffer
-		// This CSV is not from auto-detect, so we don't know where exactly it starts
-		// Hence we potentially have to skip empty lines and headers.
-		SkipBOM();
-		SkipCSVRows(state_machine->dialect_options.skip_rows.GetValue() +
-		            state_machine->dialect_options.header.GetValue());
+	if (iterator.first_one) {
 		if (result.store_line_size) {
 			result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
 		}

@@ -148,20 +148,7 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 		return true;
 	}
 	case LogicalTypeId::ARRAY: {
-		if (right.id() != left.id()) {
-			// Not both sides are ARRAY, not compatible
-			// FIXME: maybe compatible with LIST type??
-			return false;
-		}
-		LogicalType child_type = LogicalType::SQLNULL;
-		if (!UpgradeType(child_type, ArrayType::GetChildType(left))) {
-			return false;
-		}
-		if (!UpgradeType(child_type, ArrayType::GetChildType(right))) {
-			return false;
-		}
-		left = LogicalType::ARRAY(child_type);
-		return true;
+		throw InternalException("ARRAY types are not being detected yet, this should never happen");
 	}
 	case LogicalTypeId::STRUCT: {
 		if (right.id() == LogicalTypeId::STRUCT) {
@@ -205,7 +192,7 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 		return true;
 	}
 	case LogicalTypeId::UNION: {
-		throw NotImplementedException("Converting to UNION type is not supported yet");
+		throw InternalException("UNION types are not being detected yet, this should never happen");
 	}
 	case LogicalTypeId::MAP: {
 		if (right.id() == LogicalTypeId::MAP) {

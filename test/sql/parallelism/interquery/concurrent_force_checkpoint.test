@@ -42,7 +42,15 @@ loop i 0 100
 
 onlyif threadid>=16&&threadid<20
 statement ok
+BEGIN TRANSACTION READ ONLY
+
+onlyif threadid>=16&&threadid<20
+statement ok
 SELECT COUNT(*), SUM(i) FROM integers;
+
+onlyif threadid>=16&&threadid<20
+statement ok
+COMMIT
 
 endloop
 

@@ -213,6 +213,35 @@ struct StructTypeQuaternary {
 	}
 };
 
+template <class CHILD_TYPE>
+struct GenericListType {
+	vector<CHILD_TYPE> values;
+
+	using STRUCT_STATE = PrimitiveTypeState;
+
+	static bool ConstructType(STRUCT_STATE &state, idx_t i, GenericListType<CHILD_TYPE> &result) {
+		throw InternalException("FIXME: implement ConstructType for lists");
+	}
+
+	static void AssignResult(Vector &result, idx_t i, GenericListType<CHILD_TYPE> value) {
+		auto &child = ListVector::GetEntry(result);
+		auto current_size = ListVector::GetListSize(result);
+
+		// reserve space in the child element
+		auto list_size = value.values.size();
+		ListVector::Reserve(result, current_size + list_size);
+
+		auto list_entries = FlatVector::GetData<list_entry_t>(result);
+		list_entries[i].offset = current_size;
+		list_entries[i].length = list_size;
+
+		for (idx_t child_idx = 0; child_idx < list_size; child_idx++) {
+			CHILD_TYPE::AssignResult(child, current_size + child_idx, value.values[child_idx]);
+		}
+		ListVector::SetListSize(result, current_size + list_size);
+	}
+};
+
 //! The GenericExecutor can handle struct types in addition to primitive types
 struct GenericExecutor {
 private:

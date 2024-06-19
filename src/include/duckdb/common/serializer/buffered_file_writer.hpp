@@ -32,7 +32,9 @@ public:
 
 public:
 	DUCKDB_API void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
-	//! Flush the buffer to disk and sync the file to ensure writing is completed
+	//! Flush all changes to the file and then close the file
+	DUCKDB_API void Close();
+	//! Flush all changes and fsync the file to disk
 	DUCKDB_API void Sync();
 	//! Flush the buffer to the file (without sync)
 	DUCKDB_API void Flush();

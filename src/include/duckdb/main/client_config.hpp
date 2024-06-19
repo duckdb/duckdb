@@ -12,8 +12,9 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/main/profiling_info.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,9 @@ struct ClientConfig {
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
+	//! The custom settings for the profiler
+	//! (empty = use the default settings)
+	profiler_settings_t profiler_settings = ProfilingInfo::DefaultSettings();
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
@@ -92,6 +96,9 @@ struct ClientConfig {
 	//! The number of rows to accumulate before flushing during a partitioned write
 	idx_t partitioned_write_flush_threshold = idx_t(1) << idx_t(19);
 
+	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
+	idx_t streaming_buffer_size = 1000000;
+
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
 
@@ -130,6 +137,9 @@ public:
 	bool AnyVerification() {
 		return query_verification_enabled || verify_external || verify_serializer || verify_fetch_row;
 	}
+
+public:
+	void SetDefaultStreamingBufferSize();
 };
 
 } // namespace duckdb
