@@ -501,11 +501,13 @@ void FSSTStorage::FinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 struct FSSTScanState : public StringScanState {
-	FSSTScanState() {
+	explicit FSSTScanState(const idx_t string_block_limit) {
 		ResetStoredDelta();
+		decompress_buffer.resize(string_block_limit);
 	}
 
 	buffer_ptr<void> duckdb_fsst_decoder;
+	vector<unsigned char> decompress_buffer;
 	bitpacking_width_t current_width;
 
 	// To speed up delta decoding we store the last index
@@ -523,7 +525,8 @@ struct FSSTScanState : public StringScanState {
 };
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
-	auto state = make_uniq<FSSTScanState>();
+	auto state =
+	    make_uniq<FSSTScanState>(StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()) + 1);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
@@ -627,9 +630,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 			    UnsafeNumericCast<int32_t>(delta_decode_buffer[i + offsets.unused_delta_decoded_values]));
 
 			if (str_len > 0) {
-				auto block_size = segment.GetBlockManager().GetBlockSize();
-				result_data[i + result_offset] = FSSTPrimitives::DecompressValue(scan_state.duckdb_fsst_decoder.get(),
-				                                                                 result, str_ptr, str_len, block_size);
+				result_data[i + result_offset] = FSSTPrimitives::DecompressValue(
+				    scan_state.duckdb_fsst_decoder.get(), result, str_ptr, str_len, scan_state.decompress_buffer);
 			} else {
 				result_data[i + result_offset] = string_t(nullptr, 0);
 			}
@@ -661,7 +663,6 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width);
 
 	auto result_data = FlatVector::GetData<string_t>(result);
-
 	if (!have_symbol_table) {
 		// There is no FSST symtable. This is only the case for empty strings or NULLs. We emit an empty string.
 		result_data[result_idx] = string_t(nullptr, 0);
@@ -685,9 +686,10 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	    segment, dict, result, base_ptr,
 	    UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]), string_length);
 
-	auto block_size = segment.GetBlockManager().GetBlockSize();
+	vector<unsigned char> uncompress_buffer;
+	uncompress_buffer.resize(StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()) + 1);
 	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, result, compressed_string.GetData(),
-	                                                          compressed_string.GetSize(), block_size);
+	                                                          compressed_string.GetSize(), uncompress_buffer);
 }
 
 //===--------------------------------------------------------------------===//
