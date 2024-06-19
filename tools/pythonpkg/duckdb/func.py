@@ -4,91 +4,6 @@
 from duckdb import FunctionExpression
 
 
-def __internal_compress_integral_ubigint(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_compress_integral_ubigint", col1, col0)
-
-
-def __internal_compress_integral_uinteger(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_compress_integral_uinteger", col1, col0)
-
-
-def __internal_compress_integral_usmallint(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_compress_integral_usmallint", col1, col0)
-
-
-def __internal_compress_integral_utinyint(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_compress_integral_utinyint", col1, col0)
-
-
-def __internal_compress_string_hugeint(col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_compress_string_hugeint", col0)
-
-
-def __internal_compress_string_ubigint(col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_compress_string_ubigint", col0)
-
-
-def __internal_compress_string_uinteger(col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_compress_string_uinteger", col0)
-
-
-def __internal_compress_string_usmallint(col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_compress_string_usmallint", col0)
-
-
-def __internal_compress_string_utinyint(col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_compress_string_utinyint", col0)
-
-
-def __internal_decompress_integral_bigint(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_decompress_integral_bigint", col1, col0)
-
-
-def __internal_decompress_integral_hugeint(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_decompress_integral_hugeint", col1, col0)
-
-
-def __internal_decompress_integral_integer(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_decompress_integral_integer", col1, col0)
-
-
-def __internal_decompress_integral_smallint(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_decompress_integral_smallint", col1, col0)
-
-
-def __internal_decompress_integral_ubigint(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_decompress_integral_ubigint", col1, col0)
-
-
-def __internal_decompress_integral_uinteger(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_decompress_integral_uinteger", col1, col0)
-
-
-def __internal_decompress_integral_usmallint(col1, col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_decompress_integral_usmallint", col1, col0)
-
-
-def __internal_decompress_string(col0, /) -> FunctionExpression:
-    """"""
-    return FunctionExpression("__internal_decompress_string", col0)
-
-
 def abs(x, /) -> FunctionExpression:
     """Absolute value"""
     return FunctionExpression("abs", x)
@@ -139,9 +54,9 @@ def approx_count_distinct(x, /) -> FunctionExpression:
     return FunctionExpression("approx_count_distinct", x)
 
 
-def approx_quantile(pos, x, /) -> FunctionExpression:
+def approx_quantile(x, pos, /) -> FunctionExpression:
     """Computes the approximate quantile using T-Digest."""
-    return FunctionExpression("approx_quantile", pos, x)
+    return FunctionExpression("approx_quantile", x, pos)
 
 
 def arbitrary(col0, /) -> FunctionExpression:
@@ -149,24 +64,24 @@ def arbitrary(col0, /) -> FunctionExpression:
     return FunctionExpression("arbitrary", col0)
 
 
-def arg_max(val, arg, /) -> FunctionExpression:
+def arg_max(arg, val, /) -> FunctionExpression:
     """Finds the row with the maximum val. Calculates the arg expression at that row."""
-    return FunctionExpression("arg_max", val, arg)
+    return FunctionExpression("arg_max", arg, val)
 
 
-def arg_min(val, arg, /) -> FunctionExpression:
+def arg_min(arg, val, /) -> FunctionExpression:
     """Finds the row with the minimum val. Calculates the arg expression at that row."""
-    return FunctionExpression("arg_min", val, arg)
+    return FunctionExpression("arg_min", arg, val)
 
 
-def argmax(val, arg, /) -> FunctionExpression:
+def argmax(arg, val, /) -> FunctionExpression:
     """Finds the row with the maximum val. Calculates the arg expression at that row."""
-    return FunctionExpression("argmax", val, arg)
+    return FunctionExpression("argmax", arg, val)
 
 
-def argmin(val, arg, /) -> FunctionExpression:
+def argmin(arg, val, /) -> FunctionExpression:
     """Finds the row with the minimum val. Calculates the arg expression at that row."""
-    return FunctionExpression("argmin", val, arg)
+    return FunctionExpression("argmin", arg, val)
 
 
 def array_agg(arg, /) -> FunctionExpression:
@@ -184,24 +99,24 @@ def array_aggregate(*args) -> FunctionExpression:
     return FunctionExpression("array_aggregate", *args)
 
 
-def array_append(el, arr, /) -> FunctionExpression:
+def array_append(arr, el, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_append", el, arr)
+    return FunctionExpression("array_append", arr, el)
 
 
-def array_cat(col1, col0, /) -> FunctionExpression:
+def array_cat(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_cat", col1, col0)
+    return FunctionExpression("array_cat", col0, col1)
 
 
-def array_concat(col1, col0, /) -> FunctionExpression:
+def array_concat(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_concat", col1, col0)
+    return FunctionExpression("array_concat", col0, col1)
 
 
-def array_contains(col1, col0, /) -> FunctionExpression:
+def array_contains(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_contains", col1, col0)
+    return FunctionExpression("array_contains", col0, col1)
 
 
 def array_distinct(list, /) -> FunctionExpression:
@@ -210,34 +125,34 @@ def array_distinct(list, /) -> FunctionExpression:
     return FunctionExpression("array_distinct", list)
 
 
-def array_extract(col1, col0, /) -> FunctionExpression:
+def array_extract(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_extract", col1, col0)
+    return FunctionExpression("array_extract", col0, col1)
 
 
-def array_has(col1, col0, /) -> FunctionExpression:
+def array_has(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_has", col1, col0)
+    return FunctionExpression("array_has", col0, col1)
 
 
-def array_has_all(l2, l1, /) -> FunctionExpression:
+def array_has_all(l1, l2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_has_all", l2, l1)
+    return FunctionExpression("array_has_all", l1, l2)
 
 
-def array_has_any(l2, l1, /) -> FunctionExpression:
+def array_has_any(l1, l2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_has_any", l2, l1)
+    return FunctionExpression("array_has_any", l1, l2)
 
 
-def array_indexof(col1, col0, /) -> FunctionExpression:
+def array_indexof(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_indexof", col1, col0)
+    return FunctionExpression("array_indexof", col0, col1)
 
 
-def array_intersect(l2, l1, /) -> FunctionExpression:
+def array_intersect(l1, l2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_intersect", l2, l1)
+    return FunctionExpression("array_intersect", l1, l2)
 
 
 def array_length(col0, col1=None, /) -> FunctionExpression:
@@ -260,9 +175,9 @@ def array_pop_front(arr, /) -> FunctionExpression:
     return FunctionExpression("array_pop_front", arr)
 
 
-def array_position(col1, col0, /) -> FunctionExpression:
+def array_position(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_position", col1, col0)
+    return FunctionExpression("array_position", col0, col1)
 
 
 def array_prepend(el, arr, /) -> FunctionExpression:
@@ -270,17 +185,17 @@ def array_prepend(el, arr, /) -> FunctionExpression:
     return FunctionExpression("array_prepend", el, arr)
 
 
-def array_push_back(e, arr, /) -> FunctionExpression:
+def array_push_back(arr, e, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_push_back", e, arr)
+    return FunctionExpression("array_push_back", arr, e)
 
 
-def array_push_front(e, arr, /) -> FunctionExpression:
+def array_push_front(arr, e, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_push_front", e, arr)
+    return FunctionExpression("array_push_front", arr, e)
 
 
-def array_resize(col1, col0, col2=None, /) -> FunctionExpression:
+def array_resize(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None:
         return FunctionExpression("array_resize", col0, col1)
@@ -315,7 +230,7 @@ def array_slice(list, begin, end, step=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def array_sort(list, col2=None, col1=None, /) -> FunctionExpression:
+def array_sort(list, col1=None, col2=None, /) -> FunctionExpression:
     """Sorts the elements of the list"""
     if list is not None and col1 is not None:
         return FunctionExpression("array_sort", list, col1)
@@ -332,9 +247,9 @@ def array_to_json(*args) -> FunctionExpression:
     return FunctionExpression("array_to_json", *args)
 
 
-def array_to_string(sep, arr, /) -> FunctionExpression:
+def array_to_string(arr, sep, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("array_to_string", sep, arr)
+    return FunctionExpression("array_to_string", arr, sep)
 
 
 def array_unique(list, /) -> FunctionExpression:
@@ -368,7 +283,7 @@ def avg(x, /) -> FunctionExpression:
     return FunctionExpression("avg", x)
 
 
-def bar(min, max, x, width=None, /) -> FunctionExpression:
+def bar(x, min, max, width=None, /) -> FunctionExpression:
     """Draws a band whose width is proportional to (x - min) and equal to width
     characters when x = max. width defaults to 80"""
     if x is not None and min is not None and max is not None and width is not None:
@@ -420,12 +335,12 @@ def bit_xor(arg, /) -> FunctionExpression:
     return FunctionExpression("bit_xor", arg)
 
 
-def bitstring(length, bitstring, /) -> FunctionExpression:
+def bitstring(bitstring, length, /) -> FunctionExpression:
     """Pads the bitstring until the specified length"""
-    return FunctionExpression("bitstring", length, bitstring)
+    return FunctionExpression("bitstring", bitstring, length)
 
 
-def bitstring_agg(arg, col2=None, col1=None, /) -> FunctionExpression:
+def bitstring_agg(arg, col1=None, col2=None, /) -> FunctionExpression:
     """Returns a bitstring with bits set for each distinct value."""
     if arg is not None:
         return FunctionExpression("bitstring_agg", arg)
@@ -481,9 +396,9 @@ def col_description(table_oid, column_number, /) -> FunctionExpression:
     return FunctionExpression("col_description", table_oid, column_number)
 
 
-def combine(col1, col0, /) -> FunctionExpression:
+def combine(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("combine", col1, col0)
+    return FunctionExpression("combine", col0, col1)
 
 
 def concat(*args) -> FunctionExpression:
@@ -501,9 +416,9 @@ def constant_or_null(*args) -> FunctionExpression:
     return FunctionExpression("constant_or_null", *args)
 
 
-def contains(col1, col0, /) -> FunctionExpression:
+def contains(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("contains", col1, col0)
+    return FunctionExpression("contains", col0, col1)
 
 
 def corr(y, x, /) -> FunctionExpression:
@@ -620,14 +535,14 @@ def damerau_levenshtein(str1, str2, /) -> FunctionExpression:
     return FunctionExpression("damerau_levenshtein", str1, str2)
 
 
-def date_add(interval, date, /) -> FunctionExpression:
+def date_add(date, interval, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("date_add", interval, date)
+    return FunctionExpression("date_add", date, interval)
 
 
-def date_diff(startdate, part, enddate, /) -> FunctionExpression:
+def date_diff(part, startdate, enddate, /) -> FunctionExpression:
     """The number of partition boundaries between the timestamps"""
-    return FunctionExpression("date_diff", startdate, part, enddate)
+    return FunctionExpression("date_diff", part, startdate, enddate)
 
 
 def date_part(ts, col1, /) -> FunctionExpression:
@@ -635,9 +550,9 @@ def date_part(ts, col1, /) -> FunctionExpression:
     return FunctionExpression("date_part", ts, col1)
 
 
-def date_sub(startdate, part, enddate, /) -> FunctionExpression:
+def date_sub(part, startdate, enddate, /) -> FunctionExpression:
     """The number of complete partitions between the timestamps"""
-    return FunctionExpression("date_sub", startdate, part, enddate)
+    return FunctionExpression("date_sub", part, startdate, enddate)
 
 
 def date_trunc(part, timestamp, /) -> FunctionExpression:
@@ -645,9 +560,9 @@ def date_trunc(part, timestamp, /) -> FunctionExpression:
     return FunctionExpression("date_trunc", part, timestamp)
 
 
-def datediff(startdate, part, enddate, /) -> FunctionExpression:
+def datediff(part, startdate, enddate, /) -> FunctionExpression:
     """The number of partition boundaries between the timestamps"""
-    return FunctionExpression("datediff", startdate, part, enddate)
+    return FunctionExpression("datediff", part, startdate, enddate)
 
 
 def datepart(ts, col1, /) -> FunctionExpression:
@@ -655,9 +570,9 @@ def datepart(ts, col1, /) -> FunctionExpression:
     return FunctionExpression("datepart", ts, col1)
 
 
-def datesub(startdate, part, enddate, /) -> FunctionExpression:
+def datesub(part, startdate, enddate, /) -> FunctionExpression:
     """The number of complete partitions between the timestamps"""
-    return FunctionExpression("datesub", startdate, part, enddate)
+    return FunctionExpression("datesub", part, startdate, enddate)
 
 
 def datetrunc(part, timestamp, /) -> FunctionExpression:
@@ -700,24 +615,24 @@ def decimal(col0, /) -> FunctionExpression:
     return FunctionExpression("decimal", col0)
 
 
-def decimal_add(col1, col0, /) -> FunctionExpression:
+def decimal_add(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("decimal_add", col1, col0)
+    return FunctionExpression("decimal_add", col0, col1)
 
 
-def decimal_cmp(col1, col0, /) -> FunctionExpression:
+def decimal_cmp(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("decimal_cmp", col1, col0)
+    return FunctionExpression("decimal_cmp", col0, col1)
 
 
-def decimal_mul(col1, col0, /) -> FunctionExpression:
+def decimal_mul(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("decimal_mul", col1, col0)
+    return FunctionExpression("decimal_mul", col0, col1)
 
 
-def decimal_sub(col1, col0, /) -> FunctionExpression:
+def decimal_sub(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("decimal_sub", col1, col0)
+    return FunctionExpression("decimal_sub", col0, col1)
 
 
 def decode(blob, /) -> FunctionExpression:
@@ -730,9 +645,9 @@ def degrees(x, /) -> FunctionExpression:
     return FunctionExpression("degrees", x)
 
 
-def divide(col1, col0, /) -> FunctionExpression:
+def divide(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("divide", col1, col0)
+    return FunctionExpression("divide", col0, col1)
 
 
 def edit(col0, col1=None, /) -> FunctionExpression:
@@ -764,9 +679,9 @@ def encode(string, /) -> FunctionExpression:
     return FunctionExpression("encode", string)
 
 
-def ends_with(col1, col0, /) -> FunctionExpression:
+def ends_with(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("ends_with", col1, col0)
+    return FunctionExpression("ends_with", col0, col1)
 
 
 def entropy(x, /) -> FunctionExpression:
@@ -794,12 +709,12 @@ def enum_range(enum, /) -> FunctionExpression:
     return FunctionExpression("enum_range", enum)
 
 
-def enum_range_boundary(end, start, /) -> FunctionExpression:
+def enum_range_boundary(start, end, /) -> FunctionExpression:
     """Returns the range between the two given enum values as an array. The values must
     be of the same enum type. When the first parameter is NULL, the result
     starts with the first value of the enum type. When the second parameter is
     NULL, the result ends with the last value of the enum type"""
-    return FunctionExpression("enum_range_boundary", end, start)
+    return FunctionExpression("enum_range_boundary", start, end)
 
 
 def epoch(temporal, /) -> FunctionExpression:
@@ -854,9 +769,9 @@ def favg(x, /) -> FunctionExpression:
     return FunctionExpression("favg", x)
 
 
-def fdiv(y, x, /) -> FunctionExpression:
+def fdiv(x, y, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("fdiv", y, x)
+    return FunctionExpression("fdiv", x, y)
 
 
 def finalize(col0, /) -> FunctionExpression:
@@ -879,9 +794,9 @@ def floor(x, /) -> FunctionExpression:
     return FunctionExpression("floor", x)
 
 
-def fmod(y, x, /) -> FunctionExpression:
+def fmod(x, y, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("fmod", y, x)
+    return FunctionExpression("fmod", x, y)
 
 
 def format(*args) -> FunctionExpression:
@@ -924,14 +839,14 @@ def from_hex(value, /) -> FunctionExpression:
     return FunctionExpression("from_hex", value)
 
 
-def from_json(col1, col0, /) -> FunctionExpression:
+def from_json(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("from_json", col1, col0)
+    return FunctionExpression("from_json", col0, col1)
 
 
-def from_json_strict(col1, col0, /) -> FunctionExpression:
+def from_json_strict(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("from_json_strict", col1, col0)
+    return FunctionExpression("from_json_strict", col0, col1)
 
 
 def fsum(arg, /) -> FunctionExpression:
@@ -944,9 +859,9 @@ def gamma(x, /) -> FunctionExpression:
     return FunctionExpression("gamma", x)
 
 
-def gcd(y, x, /) -> FunctionExpression:
+def gcd(x, y, /) -> FunctionExpression:
     """Computes the greatest common divisor of x and y"""
-    return FunctionExpression("gcd", y, x)
+    return FunctionExpression("gcd", x, y)
 
 
 def gen_random_uuid() -> FunctionExpression:
@@ -954,7 +869,7 @@ def gen_random_uuid() -> FunctionExpression:
     return FunctionExpression("gen_random_uuid")
 
 
-def generate_series(start, step=None, stop=None, /) -> FunctionExpression:
+def generate_series(start, stop=None, step=None, /) -> FunctionExpression:
     """Create a list of values between start and stop - the stop parameter is inclusive"""
     if start is not None:
         return FunctionExpression("generate_series", start)
@@ -966,9 +881,9 @@ def generate_series(start, step=None, stop=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def generate_subscripts(dim, arr, /) -> FunctionExpression:
+def generate_subscripts(arr, dim, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("generate_subscripts", dim, arr)
+    return FunctionExpression("generate_subscripts", arr, dim)
 
 
 def geomean(x, /) -> FunctionExpression:
@@ -981,9 +896,9 @@ def geometric_mean(x, /) -> FunctionExpression:
     return FunctionExpression("geometric_mean", x)
 
 
-def get_bit(index, bitstring, /) -> FunctionExpression:
+def get_bit(bitstring, index, /) -> FunctionExpression:
     """Extracts the nth bit from bitstring; the first (leftmost) bit is indexed 0"""
-    return FunctionExpression("get_bit", index, bitstring)
+    return FunctionExpression("get_bit", bitstring, index)
 
 
 def get_current_time() -> FunctionExpression:
@@ -1001,9 +916,9 @@ def greatest(*args) -> FunctionExpression:
     return FunctionExpression("greatest", *args)
 
 
-def greatest_common_divisor(y, x, /) -> FunctionExpression:
+def greatest_common_divisor(x, y, /) -> FunctionExpression:
     """Computes the greatest common divisor of x and y"""
-    return FunctionExpression("greatest_common_divisor", y, x)
+    return FunctionExpression("greatest_common_divisor", x, y)
 
 
 def group_concat(str, arg=None, /) -> FunctionExpression:
@@ -1022,34 +937,34 @@ def hamming(str1, str2, /) -> FunctionExpression:
     return FunctionExpression("hamming", str1, str2)
 
 
-def has_any_column_privilege(privilege, table, /) -> FunctionExpression:
+def has_any_column_privilege(table, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_any_column_privilege", privilege, table)
+    return FunctionExpression("has_any_column_privilege", table, privilege)
 
 
-def has_column_privilege(column, privilege, table, /) -> FunctionExpression:
+def has_column_privilege(table, column, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_column_privilege", column, privilege, table)
+    return FunctionExpression("has_column_privilege", table, column, privilege)
 
 
-def has_database_privilege(privilege, database, /) -> FunctionExpression:
+def has_database_privilege(database, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_database_privilege", privilege, database)
+    return FunctionExpression("has_database_privilege", database, privilege)
 
 
-def has_foreign_data_wrapper_privilege(privilege, fdw, /) -> FunctionExpression:
+def has_foreign_data_wrapper_privilege(fdw, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_foreign_data_wrapper_privilege", privilege, fdw)
+    return FunctionExpression("has_foreign_data_wrapper_privilege", fdw, privilege)
 
 
-def has_function_privilege(privilege, function, /) -> FunctionExpression:
+def has_function_privilege(function, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_function_privilege", privilege, function)
+    return FunctionExpression("has_function_privilege", function, privilege)
 
 
-def has_language_privilege(privilege, language, /) -> FunctionExpression:
+def has_language_privilege(language, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_language_privilege", privilege, language)
+    return FunctionExpression("has_language_privilege", language, privilege)
 
 
 def has_schema_privilege(schema, privilege, /) -> FunctionExpression:
@@ -1057,9 +972,9 @@ def has_schema_privilege(schema, privilege, /) -> FunctionExpression:
     return FunctionExpression("has_schema_privilege", schema, privilege)
 
 
-def has_sequence_privilege(privilege, sequence, /) -> FunctionExpression:
+def has_sequence_privilege(sequence, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_sequence_privilege", privilege, sequence)
+    return FunctionExpression("has_sequence_privilege", sequence, privilege)
 
 
 def has_server_privilege(server, privilege, /) -> FunctionExpression:
@@ -1067,14 +982,14 @@ def has_server_privilege(server, privilege, /) -> FunctionExpression:
     return FunctionExpression("has_server_privilege", server, privilege)
 
 
-def has_table_privilege(privilege, table, /) -> FunctionExpression:
+def has_table_privilege(table, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_table_privilege", privilege, table)
+    return FunctionExpression("has_table_privilege", table, privilege)
 
 
-def has_tablespace_privilege(privilege, tablespace, /) -> FunctionExpression:
+def has_tablespace_privilege(tablespace, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("has_tablespace_privilege", privilege, tablespace)
+    return FunctionExpression("has_tablespace_privilege", tablespace, privilege)
 
 
 def hash(*args) -> FunctionExpression:
@@ -1098,9 +1013,9 @@ def hour(ts, /) -> FunctionExpression:
     return FunctionExpression("hour", ts)
 
 
-def icu_sort_key(col1, col0, /) -> FunctionExpression:
+def icu_sort_key(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("icu_sort_key", col1, col0)
+    return FunctionExpression("icu_sort_key", col0, col1)
 
 
 def ieee754(col0, col1=None, /) -> FunctionExpression:
@@ -1133,9 +1048,9 @@ def ieee754_to_blob(col0, /) -> FunctionExpression:
     return FunctionExpression("ieee754_to_blob", col0)
 
 
-def ilike_escape(col2, col1, col0, /) -> FunctionExpression:
+def ilike_escape(col0, col1, col2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("ilike_escape", col2, col1, col0)
+    return FunctionExpression("ilike_escape", col0, col1, col2)
 
 
 def in_search_path(database_name, schema_name, /) -> FunctionExpression:
@@ -1232,9 +1147,9 @@ def json_array_length(col0, col1=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def json_contains(col1, col0, /) -> FunctionExpression:
+def json_contains(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_contains", col1, col0)
+    return FunctionExpression("json_contains", col0, col1)
 
 
 def json_deserialize_sql(col0, /) -> FunctionExpression:
@@ -1242,24 +1157,24 @@ def json_deserialize_sql(col0, /) -> FunctionExpression:
     return FunctionExpression("json_deserialize_sql", col0)
 
 
-def json_extract(col1, col0, /) -> FunctionExpression:
+def json_extract(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_extract", col1, col0)
+    return FunctionExpression("json_extract", col0, col1)
 
 
-def json_extract_path(col1, col0, /) -> FunctionExpression:
+def json_extract_path(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_extract_path", col1, col0)
+    return FunctionExpression("json_extract_path", col0, col1)
 
 
-def json_extract_path_text(col1, col0, /) -> FunctionExpression:
+def json_extract_path_text(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_extract_path_text", col1, col0)
+    return FunctionExpression("json_extract_path_text", col0, col1)
 
 
-def json_extract_string(col1, col0, /) -> FunctionExpression:
+def json_extract_string(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_extract_string", col1, col0)
+    return FunctionExpression("json_extract_string", col0, col1)
 
 
 def json_group_array(x, /) -> FunctionExpression:
@@ -1302,7 +1217,7 @@ def json_quote(*args) -> FunctionExpression:
     return FunctionExpression("json_quote", *args)
 
 
-def json_serialize_sql(col0, col2=None, col1=None, col3=None, /) -> FunctionExpression:
+def json_serialize_sql(col0, col1=None, col2=None, col3=None, /) -> FunctionExpression:
     """"""
     if col0 is not None:
         return FunctionExpression("json_serialize_sql", col0)
@@ -1321,14 +1236,14 @@ def json_structure(col0, /) -> FunctionExpression:
     return FunctionExpression("json_structure", col0)
 
 
-def json_transform(col1, col0, /) -> FunctionExpression:
+def json_transform(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_transform", col1, col0)
+    return FunctionExpression("json_transform", col0, col1)
 
 
-def json_transform_strict(col1, col0, /) -> FunctionExpression:
+def json_transform_strict(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("json_transform_strict", col1, col0)
+    return FunctionExpression("json_transform_strict", col0, col1)
 
 
 def json_type(col0, col1=None, /) -> FunctionExpression:
@@ -1377,9 +1292,9 @@ def lcase(col0, /) -> FunctionExpression:
     return FunctionExpression("lcase", col0)
 
 
-def lcm(y, x, /) -> FunctionExpression:
+def lcm(x, y, /) -> FunctionExpression:
     """Computes the least common multiple of x and y"""
-    return FunctionExpression("lcm", y, x)
+    return FunctionExpression("lcm", x, y)
 
 
 def least(*args) -> FunctionExpression:
@@ -1387,9 +1302,9 @@ def least(*args) -> FunctionExpression:
     return FunctionExpression("least", *args)
 
 
-def least_common_multiple(y, x, /) -> FunctionExpression:
+def least_common_multiple(x, y, /) -> FunctionExpression:
     """Computes the least common multiple of x and y"""
-    return FunctionExpression("least_common_multiple", y, x)
+    return FunctionExpression("least_common_multiple", x, y)
 
 
 def left(string, count, /) -> FunctionExpression:
@@ -1429,9 +1344,9 @@ def lgamma(x, /) -> FunctionExpression:
     return FunctionExpression("lgamma", x)
 
 
-def like_escape(col2, col1, col0, /) -> FunctionExpression:
+def like_escape(col0, col1, col2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("like_escape", col2, col1, col0)
+    return FunctionExpression("like_escape", col0, col1, col2)
 
 
 def list(arg, /) -> FunctionExpression:
@@ -1454,9 +1369,9 @@ def list_any_value(l, /) -> FunctionExpression:
     return FunctionExpression("list_any_value", l)
 
 
-def list_append(e, l, /) -> FunctionExpression:
+def list_append(l, e, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_append", e, l)
+    return FunctionExpression("list_append", l, e)
 
 
 def list_approx_count_distinct(l, /) -> FunctionExpression:
@@ -1494,24 +1409,24 @@ def list_bool_or(l, /) -> FunctionExpression:
     return FunctionExpression("list_bool_or", l)
 
 
-def list_cat(col1, col0, /) -> FunctionExpression:
+def list_cat(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_cat", col1, col0)
+    return FunctionExpression("list_cat", col0, col1)
 
 
-def list_concat(col1, col0, /) -> FunctionExpression:
+def list_concat(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_concat", col1, col0)
+    return FunctionExpression("list_concat", col0, col1)
 
 
-def list_contains(col1, col0, /) -> FunctionExpression:
+def list_contains(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_contains", col1, col0)
+    return FunctionExpression("list_contains", col0, col1)
 
 
-def list_cosine_similarity(list2, list1, /) -> FunctionExpression:
+def list_cosine_similarity(list1, list2, /) -> FunctionExpression:
     """Compute the cosine similarity between two lists"""
-    return FunctionExpression("list_cosine_similarity", list2, list1)
+    return FunctionExpression("list_cosine_similarity", list1, list2)
 
 
 def list_count(l, /) -> FunctionExpression:
@@ -1519,9 +1434,9 @@ def list_count(l, /) -> FunctionExpression:
     return FunctionExpression("list_count", l)
 
 
-def list_distance(list2, list1, /) -> FunctionExpression:
+def list_distance(list1, list2, /) -> FunctionExpression:
     """Compute the distance between two lists"""
-    return FunctionExpression("list_distance", list2, list1)
+    return FunctionExpression("list_distance", list1, list2)
 
 
 def list_distinct(list, /) -> FunctionExpression:
@@ -1530,14 +1445,14 @@ def list_distinct(list, /) -> FunctionExpression:
     return FunctionExpression("list_distinct", list)
 
 
-def list_dot_product(list2, list1, /) -> FunctionExpression:
+def list_dot_product(list1, list2, /) -> FunctionExpression:
     """Compute the inner product between two lists"""
-    return FunctionExpression("list_dot_product", list2, list1)
+    return FunctionExpression("list_dot_product", list1, list2)
 
 
-def list_element(col1, col0, /) -> FunctionExpression:
+def list_element(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_element", col1, col0)
+    return FunctionExpression("list_element", col0, col1)
 
 
 def list_entropy(l, /) -> FunctionExpression:
@@ -1545,9 +1460,9 @@ def list_entropy(l, /) -> FunctionExpression:
     return FunctionExpression("list_entropy", l)
 
 
-def list_extract(col1, col0, /) -> FunctionExpression:
+def list_extract(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_extract", col1, col0)
+    return FunctionExpression("list_extract", col0, col1)
 
 
 def list_first(l, /) -> FunctionExpression:
@@ -1555,19 +1470,19 @@ def list_first(l, /) -> FunctionExpression:
     return FunctionExpression("list_first", l)
 
 
-def list_has(col1, col0, /) -> FunctionExpression:
+def list_has(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_has", col1, col0)
+    return FunctionExpression("list_has", col0, col1)
 
 
-def list_has_all(l2, l1, /) -> FunctionExpression:
+def list_has_all(l1, l2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_has_all", l2, l1)
+    return FunctionExpression("list_has_all", l1, l2)
 
 
-def list_has_any(l2, l1, /) -> FunctionExpression:
+def list_has_any(l1, l2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_has_any", l2, l1)
+    return FunctionExpression("list_has_any", l1, l2)
 
 
 def list_histogram(l, /) -> FunctionExpression:
@@ -1575,19 +1490,19 @@ def list_histogram(l, /) -> FunctionExpression:
     return FunctionExpression("list_histogram", l)
 
 
-def list_indexof(col1, col0, /) -> FunctionExpression:
+def list_indexof(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_indexof", col1, col0)
+    return FunctionExpression("list_indexof", col0, col1)
 
 
-def list_inner_product(list2, list1, /) -> FunctionExpression:
+def list_inner_product(list1, list2, /) -> FunctionExpression:
     """Compute the inner product between two lists"""
-    return FunctionExpression("list_inner_product", list2, list1)
+    return FunctionExpression("list_inner_product", list1, list2)
 
 
-def list_intersect(l2, l1, /) -> FunctionExpression:
+def list_intersect(l1, l2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_intersect", l2, l1)
+    return FunctionExpression("list_intersect", l1, l2)
 
 
 def list_kurtosis(l, /) -> FunctionExpression:
@@ -1630,9 +1545,9 @@ def list_pack(*args) -> FunctionExpression:
     return FunctionExpression("list_pack", *args)
 
 
-def list_position(col1, col0, /) -> FunctionExpression:
+def list_position(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("list_position", col1, col0)
+    return FunctionExpression("list_position", col0, col1)
 
 
 def list_prepend(e, l, /) -> FunctionExpression:
@@ -1645,7 +1560,7 @@ def list_product(l, /) -> FunctionExpression:
     return FunctionExpression("list_product", l)
 
 
-def list_resize(col1, col0, col2=None, /) -> FunctionExpression:
+def list_resize(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None:
         return FunctionExpression("list_resize", col0, col1)
@@ -1690,7 +1605,7 @@ def list_slice(list, begin, end, step=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def list_sort(list, col2=None, col1=None, /) -> FunctionExpression:
+def list_sort(list, col1=None, col2=None, /) -> FunctionExpression:
     """Sorts the elements of the list"""
     if list is not None and col1 is not None:
         return FunctionExpression("list_sort", list, col1)
@@ -1767,9 +1682,9 @@ def lower(col0, /) -> FunctionExpression:
     return FunctionExpression("lower", col0)
 
 
-def lpad(string, character, count, /) -> FunctionExpression:
+def lpad(string, count, character, /) -> FunctionExpression:
     """Pads the string with the character from the left until it has count characters"""
-    return FunctionExpression("lpad", string, character, count)
+    return FunctionExpression("lpad", string, count, character)
 
 
 def lsmode(col0, /) -> FunctionExpression:
@@ -1804,12 +1719,12 @@ def make_date(year, month=None, day=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def make_time(minute, seconds, hour, /) -> FunctionExpression:
+def make_time(hour, minute, seconds, /) -> FunctionExpression:
     """The time for the given parts"""
-    return FunctionExpression("make_time", minute, seconds, hour)
+    return FunctionExpression("make_time", hour, minute, seconds)
 
 
-def make_timestamp(year, month=None, day=None, minute=None, seconds=None, hour=None, /) -> FunctionExpression:
+def make_timestamp(year, month=None, day=None, hour=None, minute=None, seconds=None, /) -> FunctionExpression:
     """The timestamp for the given parts"""
     if year is not None:
         return FunctionExpression("make_timestamp", year)
@@ -1819,7 +1734,7 @@ def make_timestamp(year, month=None, day=None, minute=None, seconds=None, hour=N
         raise ValueError('Invalid combination of parameters')
 
 
-def make_timestamptz(col0, col6=None, col2=None, col1=None, col3=None, col5=None, col4=None, /) -> FunctionExpression:
+def make_timestamptz(col0, col1=None, col2=None, col3=None, col4=None, col5=None, col6=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None and col3 is not None and col4 is not None and col5 is not None:
         return FunctionExpression("make_timestamptz", col0, col1, col2, col3, col4, col5)
@@ -1874,9 +1789,9 @@ def max(arg, /) -> FunctionExpression:
     return FunctionExpression("max", arg)
 
 
-def max_by(val, arg, /) -> FunctionExpression:
+def max_by(arg, val, /) -> FunctionExpression:
     """Finds the row with the maximum val. Calculates the arg expression at that row."""
-    return FunctionExpression("max_by", val, arg)
+    return FunctionExpression("max_by", arg, val)
 
 
 def md5(value, /) -> FunctionExpression:
@@ -1931,9 +1846,9 @@ def min(arg, /) -> FunctionExpression:
     return FunctionExpression("min", arg)
 
 
-def min_by(val, arg, /) -> FunctionExpression:
+def min_by(arg, val, /) -> FunctionExpression:
     """Finds the row with the minimum val. Calculates the arg expression at that row."""
-    return FunctionExpression("min_by", val, arg)
+    return FunctionExpression("min_by", arg, val)
 
 
 def minute(ts, /) -> FunctionExpression:
@@ -1947,9 +1862,9 @@ def mismatches(str1, str2, /) -> FunctionExpression:
     return FunctionExpression("mismatches", str1, str2)
 
 
-def mod(col1, col0, /) -> FunctionExpression:
+def mod(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("mod", col1, col0)
+    return FunctionExpression("mod", col0, col1)
 
 
 def mode(x, /) -> FunctionExpression:
@@ -1968,14 +1883,14 @@ def monthname(ts, /) -> FunctionExpression:
     return FunctionExpression("monthname", ts)
 
 
-def multiply(col1, col0, /) -> FunctionExpression:
+def multiply(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("multiply", col1, col0)
+    return FunctionExpression("multiply", col0, col1)
 
 
-def nextafter(y, x, /) -> FunctionExpression:
+def nextafter(x, y, /) -> FunctionExpression:
     """Returns the next floating point value after x in the direction of y"""
-    return FunctionExpression("nextafter", y, x)
+    return FunctionExpression("nextafter", x, y)
 
 
 def nextval(col0, /) -> FunctionExpression:
@@ -1988,14 +1903,14 @@ def nfc_normalize(col0, /) -> FunctionExpression:
     return FunctionExpression("nfc_normalize", col0)
 
 
-def not_ilike_escape(col2, col1, col0, /) -> FunctionExpression:
+def not_ilike_escape(col0, col1, col2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("not_ilike_escape", col2, col1, col0)
+    return FunctionExpression("not_ilike_escape", col0, col1, col2)
 
 
-def not_like_escape(col2, col1, col0, /) -> FunctionExpression:
+def not_like_escape(col0, col1, col2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("not_like_escape", col2, col1, col0)
+    return FunctionExpression("not_like_escape", col0, col1, col2)
 
 
 def now() -> FunctionExpression:
@@ -2003,14 +1918,14 @@ def now() -> FunctionExpression:
     return FunctionExpression("now")
 
 
-def nullif(b, a, /) -> FunctionExpression:
+def nullif(a, b, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("nullif", b, a)
+    return FunctionExpression("nullif", a, b)
 
 
-def obj_description(catalog_name, object_oid, /) -> FunctionExpression:
+def obj_description(object_oid, catalog_name, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("obj_description", catalog_name, object_oid)
+    return FunctionExpression("obj_description", object_oid, catalog_name)
 
 
 def octet_length(col0, /) -> FunctionExpression:
@@ -2058,9 +1973,9 @@ def pg_get_viewdef(oid, /) -> FunctionExpression:
     return FunctionExpression("pg_get_viewdef", oid)
 
 
-def pg_has_role(privilege, role, user, /) -> FunctionExpression:
+def pg_has_role(user, role, privilege, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("pg_has_role", privilege, role, user)
+    return FunctionExpression("pg_has_role", user, role, privilege)
 
 
 def pg_is_other_temp_schema(schema_id, /) -> FunctionExpression:
@@ -2144,19 +2059,19 @@ def position(haystack, needle, /) -> FunctionExpression:
     return FunctionExpression("position", haystack, needle)
 
 
-def pow(y, x, /) -> FunctionExpression:
+def pow(x, y, /) -> FunctionExpression:
     """Computes x to the power of y"""
-    return FunctionExpression("pow", y, x)
+    return FunctionExpression("pow", x, y)
 
 
-def power(y, x, /) -> FunctionExpression:
+def power(x, y, /) -> FunctionExpression:
     """Computes x to the power of y"""
-    return FunctionExpression("power", y, x)
+    return FunctionExpression("power", x, y)
 
 
-def prefix(col1, col0, /) -> FunctionExpression:
+def prefix(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("prefix", col1, col0)
+    return FunctionExpression("prefix", col0, col1)
 
 
 def printf(*args) -> FunctionExpression:
@@ -2169,23 +2084,23 @@ def product(arg, /) -> FunctionExpression:
     return FunctionExpression("product", arg)
 
 
-def quantile(pos, x, /) -> FunctionExpression:
+def quantile(x, pos, /) -> FunctionExpression:
     """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
     then the result is a LIST of the corresponding exact quantiles."""
-    return FunctionExpression("quantile", pos, x)
+    return FunctionExpression("quantile", x, pos)
 
 
-def quantile_cont(pos, x, /) -> FunctionExpression:
+def quantile_cont(x, pos, /) -> FunctionExpression:
     """Returns the intepolated quantile number between 0 and 1 . If pos is a LIST of
     FLOATs, then the result is a LIST of the corresponding intepolated
     quantiles."""
-    return FunctionExpression("quantile_cont", pos, x)
+    return FunctionExpression("quantile_cont", x, pos)
 
 
-def quantile_disc(pos, x, /) -> FunctionExpression:
+def quantile_disc(x, pos, /) -> FunctionExpression:
     """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
     then the result is a LIST of the corresponding exact quantiles."""
-    return FunctionExpression("quantile_disc", pos, x)
+    return FunctionExpression("quantile_disc", x, pos)
 
 
 def quarter(ts, /) -> FunctionExpression:
@@ -2203,7 +2118,7 @@ def random() -> FunctionExpression:
     return FunctionExpression("random")
 
 
-def range(start, step=None, stop=None, /) -> FunctionExpression:
+def range(start, stop=None, step=None, /) -> FunctionExpression:
     """Create a list of values between start and stop - the stop parameter is exclusive"""
     if start is not None and stop is not None and step is not None:
         return FunctionExpression("range", start, stop, step)
@@ -2220,7 +2135,7 @@ def readfile(col0, /) -> FunctionExpression:
     return FunctionExpression("readfile", col0)
 
 
-def regexp_extract(col1, col0, col2=None, col3=None, /) -> FunctionExpression:
+def regexp_extract(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("regexp_extract", col0, col1, col2)
@@ -2232,7 +2147,7 @@ def regexp_extract(col1, col0, col2=None, col3=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def regexp_extract_all(col1, col0, col2=None, col3=None, /) -> FunctionExpression:
+def regexp_extract_all(col0, col1, col2=None, col3=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("regexp_extract_all", col0, col1, col2)
@@ -2244,7 +2159,7 @@ def regexp_extract_all(col1, col0, col2=None, col3=None, /) -> FunctionExpressio
         raise ValueError('Invalid combination of parameters')
 
 
-def regexp_full_match(col1, col0, col2=None, /) -> FunctionExpression:
+def regexp_full_match(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("regexp_full_match", col0, col1, col2)
@@ -2254,7 +2169,7 @@ def regexp_full_match(col1, col0, col2=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def regexp_matches(col1, col0, col2=None, /) -> FunctionExpression:
+def regexp_matches(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("regexp_matches", col0, col1, col2)
@@ -2264,7 +2179,7 @@ def regexp_matches(col1, col0, col2=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def regexp_replace(col2, col1, col0, col3=None, /) -> FunctionExpression:
+def regexp_replace(col0, col1, col2, col3=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None and col3 is not None:
         return FunctionExpression("regexp_replace", col0, col1, col2, col3)
@@ -2337,12 +2252,12 @@ def repeat(string, count, /) -> FunctionExpression:
     return FunctionExpression("repeat", string, count)
 
 
-def replace(source, string, target, /) -> FunctionExpression:
+def replace(string, source, target, /) -> FunctionExpression:
     """Replaces any occurrences of the source with target in string"""
-    return FunctionExpression("replace", source, string, target)
+    return FunctionExpression("replace", string, source, target)
 
 
-def reservoir_quantile(quantile, x, sample_size=None, /) -> FunctionExpression:
+def reservoir_quantile(x, quantile, sample_size=None, /) -> FunctionExpression:
     """Gives the approximate quantile using reservoir sampling, the sample size is
     optional and uses 8192 as a default size."""
     if x is not None and quantile is not None and sample_size is not None:
@@ -2378,14 +2293,14 @@ def round(x, precision=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def round_even(n, x, /) -> FunctionExpression:
+def round_even(x, n, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("round_even", n, x)
+    return FunctionExpression("round_even", x, n)
 
 
-def roundbankers(n, x, /) -> FunctionExpression:
+def roundbankers(x, n, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("roundbankers", n, x)
+    return FunctionExpression("roundbankers", x, n)
 
 
 def row(*args) -> FunctionExpression:
@@ -2398,9 +2313,9 @@ def row_to_json(*args) -> FunctionExpression:
     return FunctionExpression("row_to_json", *args)
 
 
-def rpad(string, character, count, /) -> FunctionExpression:
+def rpad(string, count, character, /) -> FunctionExpression:
     """Pads the string with the character from the right until it has count characters"""
-    return FunctionExpression("rpad", string, character, count)
+    return FunctionExpression("rpad", string, count, character)
 
 
 def rtrim(string, characters=None, /) -> FunctionExpression:
@@ -2429,10 +2344,10 @@ def session_user() -> FunctionExpression:
     return FunctionExpression("session_user")
 
 
-def set_bit(index, new_value, bitstring, /) -> FunctionExpression:
+def set_bit(bitstring, index, new_value, /) -> FunctionExpression:
     """Sets the nth bit in bitstring to newvalue; the first (leftmost) bit is indexed
     0. Returns a new bitstring"""
-    return FunctionExpression("set_bit", index, new_value, bitstring)
+    return FunctionExpression("set_bit", bitstring, index, new_value)
 
 
 def setseed() -> FunctionExpression:
@@ -2465,9 +2380,9 @@ def sha3_query(col0, col1=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def shell_add_schema(col2, col1, col0, /) -> FunctionExpression:
+def shell_add_schema(col0, col1, col2, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("shell_add_schema", col2, col1, col0)
+    return FunctionExpression("shell_add_schema", col0, col1, col2)
 
 
 def shell_escape_crnl(col0, /) -> FunctionExpression:
@@ -2480,9 +2395,9 @@ def shell_idquote(col0, /) -> FunctionExpression:
     return FunctionExpression("shell_idquote", col0)
 
 
-def shell_int32(col1, col0, /) -> FunctionExpression:
+def shell_int32(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("shell_int32", col1, col0)
+    return FunctionExpression("shell_int32", col0, col1)
 
 
 def shell_module_schema(col0, /) -> FunctionExpression:
@@ -2495,9 +2410,9 @@ def shell_putsnl(col0, /) -> FunctionExpression:
     return FunctionExpression("shell_putsnl", col0)
 
 
-def shobj_description(catalog_name, object_oid, /) -> FunctionExpression:
+def shobj_description(object_oid, catalog_name, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("shobj_description", catalog_name, object_oid)
+    return FunctionExpression("shobj_description", object_oid, catalog_name)
 
 
 def sign(x, /) -> FunctionExpression:
@@ -2525,9 +2440,9 @@ def split(string, separator, /) -> FunctionExpression:
     return FunctionExpression("split", string, separator)
 
 
-def split_part(delimiter, string, position, /) -> FunctionExpression:
+def split_part(string, delimiter, position, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("split_part", delimiter, string, position)
+    return FunctionExpression("split_part", string, delimiter, position)
 
 
 def sqrt(x, /) -> FunctionExpression:
@@ -2633,9 +2548,9 @@ def strptime(text, format, /) -> FunctionExpression:
     return FunctionExpression("strptime", text, format)
 
 
-def struct_extract(col1, col0, /) -> FunctionExpression:
+def struct_extract(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("struct_extract", col1, col0)
+    return FunctionExpression("struct_extract", col0, col1)
 
 
 def struct_insert(*args) -> FunctionExpression:
@@ -2650,7 +2565,7 @@ def struct_pack(*args) -> FunctionExpression:
     return FunctionExpression("struct_pack", *args)
 
 
-def substr(col1, col0, col2=None, /) -> FunctionExpression:
+def substr(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("substr", col0, col1, col2)
@@ -2660,7 +2575,7 @@ def substr(col1, col0, col2=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def substring(col1, col0, col2=None, /) -> FunctionExpression:
+def substring(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("substring", col0, col1, col2)
@@ -2670,7 +2585,7 @@ def substring(col1, col0, col2=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def substring_grapheme(col1, col0, col2=None, /) -> FunctionExpression:
+def substring_grapheme(col0, col1, col2=None, /) -> FunctionExpression:
     """"""
     if col0 is not None and col1 is not None and col2 is not None:
         return FunctionExpression("substring_grapheme", col0, col1, col2)
@@ -2690,9 +2605,9 @@ def subtract(col0, col1=None, /) -> FunctionExpression:
         raise ValueError('Invalid combination of parameters')
 
 
-def suffix(col1, col0, /) -> FunctionExpression:
+def suffix(col0, col1, /) -> FunctionExpression:
     """"""
-    return FunctionExpression("suffix", col1, col0)
+    return FunctionExpression("suffix", col0, col1)
 
 
 def sum(arg, /) -> FunctionExpression:
@@ -2834,11 +2749,11 @@ def transaction_timestamp() -> FunctionExpression:
     return FunctionExpression("transaction_timestamp")
 
 
-def translate(from_, string, to, /) -> FunctionExpression:
+def translate(string, from_, to, /) -> FunctionExpression:
     """Replaces each character in string that matches a character in the from set with
     the corresponding character in the to set. If from is longer than to,
     occurrences of the extra characters in from are deleted"""
-    return FunctionExpression("translate", from_, string, to)
+    return FunctionExpression("translate", string, from_, to)
 
 
 def trim(string, characters=None, /) -> FunctionExpression:
@@ -2970,9 +2885,9 @@ def writefile(*args) -> FunctionExpression:
     return FunctionExpression("writefile", *args)
 
 
-def xor(right, left, /) -> FunctionExpression:
+def xor(left, right, /) -> FunctionExpression:
     """Bitwise XOR"""
-    return FunctionExpression("xor", right, left)
+    return FunctionExpression("xor", left, right)
 
 
 def year(ts, /) -> FunctionExpression:

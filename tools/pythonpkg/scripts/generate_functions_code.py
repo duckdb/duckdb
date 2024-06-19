@@ -52,9 +52,13 @@ def generate() -> None:
         else:
             # All parameters which do not appear in every parameter combination
             # have to be made optional.
-            all_parameters = list(
-                set(p for combo in f.all_parameter_combinations for p in combo)
-            )
+            # Use the approach below instead of a list to keep the order of
+            # the parameters
+            all_parameters: list[str] = []
+            for combo in f.all_parameter_combinations:
+                for p in combo:
+                    if p not in all_parameters:
+                        all_parameters.append(p)
             optional_parameters = [
                 p
                 for p in all_parameters
@@ -168,7 +172,10 @@ def get_duckdb_functions() -> List[Dict[str, str]]:
             "duckdb",
             "-json",
             "-c",
-            "select distinct function_name, description, parameters, varargs from duckdb_functions() where function_type in ('scalar', 'aggregate', 'macro')",
+            "select distinct function_name, description, parameters, varargs"
+            + " from duckdb_functions() where function_type in ('scalar', 'aggregate', 'macro')"
+            # Exclude functions which are internal
+            + " and function_name not like '$_%' escape '$'",
         ]
     )
     # Replace \t as it raises an error that it's an invalid control character. It only
