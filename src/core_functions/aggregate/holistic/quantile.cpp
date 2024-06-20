@@ -647,6 +647,7 @@ static bool CanInterpolate(const LogicalType &type) {
 		return false;
 	}
 	switch (type.id()) {
+	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
@@ -777,7 +778,7 @@ struct ContinuousQuantileFunction {
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                    vector<unique_ptr<Expression>> &arguments) {
-		function = GetAggregate(function.arguments[0]);
+		function = GetAggregate(function.arguments[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->return_type : function.arguments[0]);
 		return BindQuantile(context, function, arguments);
 	}
 };
@@ -806,7 +807,7 @@ struct ContinuousQuantileListFunction {
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                    vector<unique_ptr<Expression>> &arguments) {
-		function = GetAggregate(function.arguments[0]);
+		function = GetAggregate(function.arguments[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->return_type : function.arguments[0]);
 		return BindQuantile(context, function, arguments);
 	}
 };
