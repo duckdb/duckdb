@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/test_bug_9952.test_slow
+# description: Test bug from issue 9952
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# This will fail because by default we will use " as quote if none is found.
+statement error
+FROM 'data/csv/num.tsv.gz'
+----
+Value with unterminated quote found.
+
+# This works because we are sampling the whole thing
+statement ok
+FROM read_csv('data/csv/num.tsv.gz', sample_size=-1)

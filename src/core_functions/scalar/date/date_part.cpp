@@ -12,6 +12,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/types/date_lookup_cache.hpp"
 
 namespace duckdb {
 
@@ -97,6 +98,20 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<BaseS
 	NumericStats::SetMin(result, Value::BIGINT(MIN));
 	NumericStats::SetMax(result, Value::BIGINT(MAX));
 	return result.ToUnique();
+}
+
+template <class OP>
+struct DateCacheLocalState : public FunctionLocalState {
+	explicit DateCacheLocalState() {
+	}
+
+	DateLookupCache<OP> cache;
+};
+
+template <class OP>
+unique_ptr<FunctionLocalState> InitDateCacheLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                       FunctionData *bind_data) {
+	return make_uniq<DateCacheLocalState<OP>>();
 }
 
 struct DatePart {
@@ -752,18 +767,12 @@ struct DatePart {
 	};
 };
 
-template <class T>
-static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	int32_t last_year = 0;
-	UnaryExecutor::ExecuteWithNulls<T, int64_t>(args.data[0], result, args.size(),
-	                                            [&](T input, ValidityMask &mask, idx_t idx) {
-		                                            if (Value::IsFinite(input)) {
-			                                            return Date::ExtractYear(input, &last_year);
-		                                            } else {
-			                                            mask.SetInvalid(idx);
-			                                            return 0;
-		                                            }
-	                                            });
+template <class OP, class T>
+static void DatePartCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState<OP>>();
+	UnaryExecutor::ExecuteWithNulls<T, int64_t>(
+	    args.data[0], result, args.size(),
+	    [&](T input, ValidityMask &mask, idx_t idx) { return lstate.cache.ExtractElement(input, mask, idx); });
 }
 
 template <>
@@ -1685,14 +1694,15 @@ static unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunct
 	return nullptr;
 }
 
+template <init_local_state_t DATE_CACHE = nullptr>
 ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
                                              scalar_function_t interval_func, function_statistics_t date_stats,
                                              function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set;
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr,
+	                                        nullptr, date_stats, DATE_CACHE));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr,
+	                                        nullptr, ts_stats, DATE_CACHE));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
 	return operator_set;
 }
@@ -1971,20 +1981,24 @@ struct StructDatePart {
 		return result;
 	}
 };
+template <class OP>
+ScalarFunctionSet GetCachedDatepartFunction() {
+	return GetGenericDatePartFunction<InitDateCacheLocalState<OP>>(
+	    DatePartCachedFunction<OP, date_t>, DatePartCachedFunction<OP, timestamp_t>,
+	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
+	    OP::template PropagateStatistics<timestamp_t>);
+}
 
 ScalarFunctionSet YearFun::GetFunctions() {
-	return GetGenericDatePartFunction(LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
-	                                  ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::YearOperator>,
-	                                  DatePart::YearOperator::PropagateStatistics<date_t>,
-	                                  DatePart::YearOperator::PropagateStatistics<timestamp_t>);
+	return GetCachedDatepartFunction<DatePart::YearOperator>();
 }
 
 ScalarFunctionSet MonthFun::GetFunctions() {
-	return GetDatePartFunction<DatePart::MonthOperator>();
+	return GetCachedDatepartFunction<DatePart::MonthOperator>();
 }
 
 ScalarFunctionSet DayFun::GetFunctions() {
-	return GetDatePartFunction<DatePart::DayOperator>();
+	return GetCachedDatepartFunction<DatePart::DayOperator>();
 }
 
 ScalarFunctionSet DecadeFun::GetFunctions() {

@@ -1,9 +1,11 @@
 #include "column_reader.hpp"
 
 #include "boolean_column_reader.hpp"
+#include "brotli/decode.h"
 #include "callback_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "duckdb.hpp"
+#include "expression_column_reader.hpp"
 #include "list_column_reader.hpp"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
@@ -373,12 +375,26 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		}
 		break;
 	}
+	case CompressionCodec::BROTLI: {
+		auto state = duckdb_brotli::BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
+		size_t total_out = 0;
+		auto src_size_size_t = NumericCast<size_t>(src_size);
+		auto dst_size_size_t = NumericCast<size_t>(dst_size);
+
+		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
+		                                                        &total_out);
+		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
+			throw std::runtime_error("Brotli Decompression failure");
+		}
+		duckdb_brotli::BrotliDecoderDestroyInstance(state);
+		break;
+	}
 
 	default: {
 		std::stringstream codec_name;
 		codec_name << codec;
 		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, gzip, lz4_raw, snappy or zstd");
+		                         "\". Supported options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd");
 	}
 	}
 }
@@ -1051,6 +1067,59 @@ void CastColumnReader::Skip(idx_t num_values) {
 }
 
 idx_t CastColumnReader::GroupRowsAvailable() {
+	return child_reader->GroupRowsAvailable();
+}
+
+//===--------------------------------------------------------------------===//
+// Expression Column Reader
+//===--------------------------------------------------------------------===//
+ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader_p,
+                                               unique_ptr<Expression> expr_p)
+    : ColumnReader(child_reader_p->Reader(), expr_p->return_type, child_reader_p->Schema(), child_reader_p->FileIdx(),
+                   child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
+      child_reader(std::move(child_reader_p)), expr(std::move(expr_p)), executor(context, expr.get()) {
+	vector<LogicalType> intermediate_types {child_reader->Type()};
+	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
+}
+
+unique_ptr<BaseStatistics> ExpressionColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+	// expression stats is not supported (yet)
+	return nullptr;
+}
+
+void ExpressionColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
+                                            TProtocol &protocol_p) {
+	child_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
+}
+
+idx_t ExpressionColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out,
+                                   data_ptr_t repeat_out, Vector &result) {
+	intermediate_chunk.Reset();
+	auto &intermediate_vector = intermediate_chunk.data[0];
+
+	auto amount = child_reader->Read(num_values, filter, define_out, repeat_out, intermediate_vector);
+	if (!filter.all()) {
+		// work-around for filters: set all values that are filtered to NULL to prevent the cast from failing on
+		// uninitialized data
+		intermediate_vector.Flatten(amount);
+		auto &validity = FlatVector::Validity(intermediate_vector);
+		for (idx_t i = 0; i < amount; i++) {
+			if (!filter[i]) {
+				validity.SetInvalid(i);
+			}
+		}
+	}
+	// Execute the expression
+	intermediate_chunk.SetCardinality(amount);
+	executor.ExecuteExpression(intermediate_chunk, result);
+	return amount;
+}
+
+void ExpressionColumnReader::Skip(idx_t num_values) {
+	child_reader->Skip(num_values);
+}
+
+idx_t ExpressionColumnReader::GroupRowsAvailable() {
 	return child_reader->GroupRowsAvailable();
 }
 

@@ -116,8 +116,7 @@ public:
 	//! Entry point for qualifying the column references of the expression
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
 
-	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
-	                          bool equality_only = false);
+	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type);
 	static void TestCollation(ClientContext &context, const string &collation);
 
 	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message);

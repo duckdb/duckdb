@@ -28,8 +28,8 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 

@@ -14,7 +14,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
       can_destroy(false), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
 	eviction_seq_num = 0;
 	state = BlockState::BLOCK_UNLOADED;
-	memory_usage = Storage::BLOCK_ALLOC_SIZE;
+	memory_usage = block_manager.GetBlockAllocSize();
 }
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag,

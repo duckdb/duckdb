@@ -40,8 +40,8 @@ function _close_result(result::QueryResult)
     return
 end
 
-mutable struct ColumnConversionData
-    chunks::Vector{DataChunk}
+mutable struct ColumnConversionData{ChunksT <: Union{Vector{DataChunk}, Tuple{DataChunk}}}
+    chunks::ChunksT
     col_idx::Int64
     logical_type::LogicalType
     conversion_data::Any
@@ -803,6 +803,65 @@ DBInterface.close!(q::QueryResult) = _close_result(q)
 
 Base.iterate(q::QueryResult) = iterate(Tables.rows(Tables.columns(q)))
 Base.iterate(q::QueryResult, state) = iterate(Tables.rows(Tables.columns(q)), state)
+
+struct QueryResultChunk
+    tbl::NamedTuple
+end
+
+function Tables.columns(chunk::QueryResultChunk)
+    return Tables.CopiedColumns(chunk.tbl)
+end
+
+Tables.istable(::Type{QueryResultChunk}) = true
+Tables.isrowtable(::Type{QueryResultChunk}) = true
+Tables.columnaccess(::Type{QueryResultChunk}) = true
+Tables.schema(chunk::QueryResultChunk) = Tables.Schema(chunk.q.names, chunk.q.types)
+
+struct QueryResultChunkIterator
+    q::QueryResult
+    column_count::UInt64
+end
+
+function next_chunk(iter::QueryResultChunkIterator)
+    chunk = DuckDB.nextDataChunk(iter.q)
+    if chunk === missing
+        return nothing
+    end
+
+    return QueryResultChunk(
+        NamedTuple{Tuple(iter.q.names)}(ntuple(iter.column_count) do i
+            logical_type = LogicalType(duckdb_column_logical_type(iter.q.handle, i))
+            column_data = ColumnConversionData((chunk,), i, logical_type, nothing)
+            return convert_column(column_data)
+        end)
+    )
+end
+
+Base.iterate(iter::QueryResultChunkIterator) = iterate(iter, 0x0000000000000001)
+
+function Base.iterate(iter::QueryResultChunkIterator, state)
+    if iter.q.chunk_index != state
+        throw(
+            NotImplementedException(
+                "Iterating chunks more than once is not supported. " *
+                "(Did you iterate the result of Tables.partitions() once already, call nextDataChunk or materialise QueryResult?)"
+            )
+        )
+    end
+    chunk = next_chunk(iter)
+    if chunk === nothing
+        return nothing
+    end
+    return (chunk, state + 1)
+end
+
+Base.IteratorSize(::Type{QueryResultChunkIterator}) = Base.SizeUnknown()
+Base.eltype(iter::QueryResultChunkIterator) = Any
+
+function Tables.partitions(q::QueryResult)
+    column_count = duckdb_column_count(q.handle)
+    return QueryResultChunkIterator(q, column_count)
+end
 
 function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
     if duckdb_result_is_streaming(q.handle[])

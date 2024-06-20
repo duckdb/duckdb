@@ -1,0 +1,31 @@
+# name: test/sql/upsert/insert_or_replace/returning_nothing.test
+# group: [insert_or_replace]
+
+statement ok
+CREATE SEQUENCE seq START 1;
+
+statement ok
+CREATE TABLE bug (
+	id INTEGER PRIMARY KEY DEFAULT NEXTVAL('seq'),
+	name VARCHAR
+);
+
+statement ok
+CREATE UNIQUE INDEX idx ON bug (name);
+
+query I
+INSERT OR IGNORE INTO bug VALUES
+	(DEFAULT, 'toto') RETURNING(id);
+----
+1
+
+query I
+INSERT OR IGNORE INTO bug VALUES
+	(DEFAULT, 'toto') RETURNING(id);
+----
+
+query I
+INSERT OR IGNORE INTO bug VALUES
+	(DEFAULT, 'toto'), (DEFAULT, 'yoyo') RETURNING(id);
+----
+4

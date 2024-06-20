@@ -37,6 +37,7 @@ namespace duckdb {
 class BufferManager;
 class BufferPool;
 class CastFunctionSet;
+class CollationBinding;
 class ClientContext;
 class ErrorManager;
 class CompressionFunction;
@@ -337,6 +338,7 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	void SetDefaultMaxMemory();
@@ -349,6 +351,7 @@ public:
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<CastFunctionSet> cast_functions;
+	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
 };
 

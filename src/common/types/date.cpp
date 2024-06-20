@@ -450,22 +450,6 @@ int64_t Date::EpochMilliseconds(date_t date) {
 	return result;
 }
 
-int32_t Date::ExtractYear(date_t d, int32_t *last_year) {
-	auto n = d.days;
-	// cached look up: check if year of this date is the same as the last one we looked up
-	// note that this only works for years in the range [1970, 2370]
-	if (n >= Date::CUMULATIVE_YEAR_DAYS[*last_year] && n < Date::CUMULATIVE_YEAR_DAYS[*last_year + 1]) {
-		return Date::EPOCH_YEAR + *last_year;
-	}
-	int32_t year;
-	Date::ExtractYearOffset(n, year, *last_year);
-	return year;
-}
-
-int32_t Date::ExtractYear(timestamp_t ts, int32_t *last_year) {
-	return Date::ExtractYear(Timestamp::GetDate(ts), last_year);
-}
-
 int32_t Date::ExtractYear(date_t d) {
 	int32_t year, year_offset;
 	Date::ExtractYearOffset(d.days, year, year_offset);
