@@ -36,7 +36,7 @@ string ParseInfo::TypeToString(CatalogType type) {
 }
 
 static string QualifierToStringInternal(const string &catalog, const string &schema, const string &name,
-                                        std::function<string(const string &)> conversion) {
+                                        const std::function<string(const string &)> &conversion) {
 	string result;
 	if (!catalog.empty()) {
 		result += conversion(catalog) + ".";
