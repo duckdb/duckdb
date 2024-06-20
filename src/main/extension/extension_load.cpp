@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb.h"
 
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
@@ -16,11 +17,35 @@
 
 namespace duckdb {
 
+// NOTE: ofcourse this would live elsewhere
+duckdb_ext_api_v1 CreateApi() {
+	return {
+		duckdb_data_chunk_get_size,
+		duckdb_data_chunk_get_vector,
+		duckdb_vector_get_data,
+		duckdb_vector_get_validity,
+		duckdb_vector_ensure_validity_writable,
+		duckdb_validity_row_is_valid,
+		duckdb_validity_set_row_invalid,
+		duckdb_create_scalar_function,
+		duckdb_scalar_function_set_name,
+		duckdb_create_logical_type,
+		duckdb_scalar_function_add_parameter,
+		duckdb_scalar_function_set_return_type,
+		duckdb_destroy_logical_type,
+		duckdb_scalar_function_set_function,
+		duckdb_register_scalar_function,
+		duckdb_destroy_scalar_function
+	};
+}
+
 //===--------------------------------------------------------------------===//
 // Load External Extension
 //===--------------------------------------------------------------------===//
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+typedef void (*ext_init_capi_fun_t)(duckdb_connection con, duckdb_ext_api_v1);
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
+typedef const char *(*ext_version_capi_fun_t)(void);
 typedef const char *(*ext_version_fun_t)(void);
 typedef bool (*ext_is_storage_t)(void);
 
@@ -29,6 +54,15 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	auto function = dlsym(dll, function_name.c_str());
 	if (!function) {
 		throw IOException("File \"%s\" did not contain function \"%s\": %s", filename, function_name, GetDLError());
+	}
+	return (T)function;
+}
+
+template <class T>
+static T TryLoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
+	auto function = dlsym(dll, function_name.c_str());
+	if (!function) {
+		return nullptr;
 	}
 	return (T)function;
 }
@@ -367,15 +401,40 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension);
 	auto init_fun_name = res.filebase + "_init";
 
-	ext_init_fun_t init_fun;
-	init_fun = LoadFunctionFromDLL<ext_init_fun_t>(res.lib_hdl, init_fun_name, res.filename);
+	// "OLD WAY" of loading extensions. If the <ext_name>_init exists, we choose that
+	ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(res.lib_hdl, init_fun_name, res.filename);
+	if (init_fun) {
+		try {
+			(*init_fun)(db);
+		} catch (std::exception &e) {
+			ErrorData error(e);
+			throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
+										init_fun_name, res.filename, error.RawMessage());
+		}
+
+		D_ASSERT(res.install_info);
+
+		db.SetExtensionLoaded(extension, *res.install_info);
+		return;
+	}
+
+	// "NEW WAY" of loading extensions enabling C API only
+	init_fun_name = res.filebase + "_init_capi";
+	ext_init_capi_fun_t init_fun_capi = TryLoadFunctionFromDLL<ext_init_capi_fun_t>(res.lib_hdl, init_fun_name, res.filename);
+
+	if (!init_fun_capi) {
+		throw IOException("File \"%s\" did not contain function \"%s\": %s", res.filename, init_fun_name, GetDLError());
+	}
 
 	try {
-		(*init_fun)(db);
+		// Create a connection for the extension to load over
+		Connection conn(db);
+		duckdb_connection capi_con = (duckdb_connection)&conn;
+		(*init_fun_capi)(capi_con, CreateApi());
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-		                            init_fun_name, res.filename, error.RawMessage());
+									init_fun_name, res.filename, error.RawMessage());
 	}
 
 	D_ASSERT(res.install_info);

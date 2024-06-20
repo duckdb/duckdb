@@ -801,6 +801,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
   # parse parameters
   string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
 
+  string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+
   if(EMSCRIPTEN)
      add_library(${TARGET_NAME} STATIC ${FILES})
   else()
@@ -829,7 +831,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
       if (APPLE)
         set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
         # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_storage_ini*")
+        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_init_capi -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_storage_ini*")
         target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
       elseif (ZOS)
         target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
@@ -1036,7 +1038,7 @@ endfunction()
 
 function(duckdb_extension_load NAME)
   # Parameter parsing
-  set(options DONT_LINK DONT_BUILD LOAD_TESTS APPLY_PATCHES)
+  set(options DONT_LINK DONT_BUILD LOAD_TESTS APPLY_PATCHES CAPI)
   set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG SUBMODULES EXTENSION_VERSION LINKED_LIBS)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
 
@@ -1117,6 +1119,7 @@ function(duckdb_extension_load NAME)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_CAPI "${duckdb_extension_load_CAPI}" PARENT_SCOPE)
 endfunction()
 
 if(${EXPORT_DLL_SYMBOLS})
