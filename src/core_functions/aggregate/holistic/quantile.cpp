@@ -1,12 +1,12 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
-#include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
-
+#include "duckdb/core_functions/aggregate/quantile_helpers.hpp"
+#include "duckdb/core_functions/aggregate/quantile_sort_tree.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -14,26 +14,7 @@
 
 #include "SkipList.h"
 
-#include <algorithm>
-#include <numeric>
-#include <stdlib.h>
-#include <utility>
-
 namespace duckdb {
-
-// Interval arithmetic
-static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
-	D_ASSERT(d >= 0 && d <= 1);
-	return Interval::FromMicro(std::llround(Interval::GetMicro(i) * d));
-}
-
-inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {
-	return Interval::FromMicro(Interval::GetMicro(lhs) + Interval::GetMicro(rhs));
-}
-
-inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
-	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
-}
 
 struct FrameSet {
 	inline explicit FrameSet(const SubFrames &frames_p) : frames(frames_p) {
@@ -58,23 +39,6 @@ struct FrameSet {
 		return false;
 	}
 	const SubFrames &frames;
-};
-
-struct QuantileIncluded {
-	inline explicit QuantileIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p)
-	    : fmask(fmask_p), dmask(dmask_p) {
-	}
-
-	inline bool operator()(const idx_t &idx) const {
-		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx);
-	}
-
-	inline bool AllValid() const {
-		return fmask.AllValid() && dmask.AllValid();
-	}
-
-	const ValidityMask &fmask;
-	const ValidityMask &dmask;
 };
 
 struct QuantileReuseUpdater {
@@ -148,262 +112,6 @@ struct IndirectLess {
 	const INPUT_TYPE *inputs;
 };
 
-struct CastInterpolation {
-
-	template <class INPUT_TYPE, class TARGET_TYPE>
-	static inline TARGET_TYPE Cast(const INPUT_TYPE &src, Vector &result) {
-		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(src);
-	}
-	template <typename TARGET_TYPE>
-	static inline TARGET_TYPE Interpolate(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
-		const auto delta = hi - lo;
-		return UnsafeNumericCast<TARGET_TYPE>(lo + delta * d);
-	}
-};
-
-template <>
-interval_t CastInterpolation::Cast(const dtime_t &src, Vector &result) {
-	return {0, 0, src.micros};
-}
-
-template <>
-double CastInterpolation::Interpolate(const double &lo, const double d, const double &hi) {
-	return lo * (1.0 - d) + hi * d;
-}
-
-template <>
-dtime_t CastInterpolation::Interpolate(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(lo.micros * (1.0 - d) + hi.micros * d));
-}
-
-template <>
-timestamp_t CastInterpolation::Interpolate(const timestamp_t &lo, const double d, const timestamp_t &hi) {
-	return timestamp_t(std::llround(lo.value * (1.0 - d) + hi.value * d));
-}
-
-template <>
-hugeint_t CastInterpolation::Interpolate(const hugeint_t &lo, const double d, const hugeint_t &hi) {
-	return Hugeint::Convert(Interpolate(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
-}
-
-template <>
-interval_t CastInterpolation::Interpolate(const interval_t &lo, const double d, const interval_t &hi) {
-	const interval_t delta = hi - lo;
-	return lo + MultiplyByDouble(delta, d);
-}
-
-template <>
-string_t CastInterpolation::Cast(const std::string &src, Vector &result) {
-	return StringVector::AddString(result, src);
-}
-
-template <>
-string_t CastInterpolation::Cast(const string_t &src, Vector &result) {
-	return StringVector::AddString(result, src);
-}
-
-// Direct access
-template <typename T>
-struct QuantileDirect {
-	using INPUT_TYPE = T;
-	using RESULT_TYPE = T;
-
-	inline const INPUT_TYPE &operator()(const INPUT_TYPE &x) const {
-		return x;
-	}
-};
-
-// Indirect access
-template <typename T>
-struct QuantileIndirect {
-	using INPUT_TYPE = idx_t;
-	using RESULT_TYPE = T;
-	const RESULT_TYPE *data;
-
-	explicit QuantileIndirect(const RESULT_TYPE *data_p) : data(data_p) {
-	}
-
-	inline RESULT_TYPE operator()(const idx_t &input) const {
-		return data[input];
-	}
-};
-
-// Composed access
-template <typename OUTER, typename INNER>
-struct QuantileComposed {
-	using INPUT_TYPE = typename INNER::INPUT_TYPE;
-	using RESULT_TYPE = typename OUTER::RESULT_TYPE;
-
-	const OUTER &outer;
-	const INNER &inner;
-
-	explicit QuantileComposed(const OUTER &outer_p, const INNER &inner_p) : outer(outer_p), inner(inner_p) {
-	}
-
-	inline RESULT_TYPE operator()(const idx_t &input) const {
-		return outer(inner(input));
-	}
-};
-
-// Accessed comparison
-template <typename ACCESSOR>
-struct QuantileCompare {
-	using INPUT_TYPE = typename ACCESSOR::INPUT_TYPE;
-	const ACCESSOR &accessor;
-	const bool desc;
-	explicit QuantileCompare(const ACCESSOR &accessor_p, bool desc_p) : accessor(accessor_p), desc(desc_p) {
-	}
-
-	inline bool operator()(const INPUT_TYPE &lhs, const INPUT_TYPE &rhs) const {
-		const auto lval = accessor(lhs);
-		const auto rval = accessor(rhs);
-
-		return desc ? (rval < lval) : (lval < rval);
-	}
-};
-
-//	Avoid using naked Values in inner loops...
-struct QuantileValue {
-	explicit QuantileValue(const Value &v) : val(v), dbl(v.GetValue<double>()) {
-		const auto &type = val.type();
-		switch (type.id()) {
-		case LogicalTypeId::DECIMAL: {
-			integral = IntegralValue::Get(v);
-			scaling = Hugeint::POWERS_OF_TEN[DecimalType::GetScale(type)];
-			break;
-		}
-		default:
-			break;
-		}
-	}
-
-	Value val;
-
-	//	DOUBLE
-	double dbl;
-
-	//	DECIMAL
-	hugeint_t integral;
-	hugeint_t scaling;
-};
-
-bool operator==(const QuantileValue &x, const QuantileValue &y) {
-	return x.val == y.val;
-}
-
-// Continuous interpolation
-template <bool DISCRETE>
-struct Interpolator {
-	Interpolator(const QuantileValue &q, const idx_t n_p, const bool desc_p)
-	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(UnsafeNumericCast<idx_t>(floor(RN))),
-	      CRN(UnsafeNumericCast<idx_t>(ceil(RN))), begin(0), end(n_p) {
-	}
-
-	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
-	TARGET_TYPE Interpolate(INPUT_TYPE lidx, INPUT_TYPE hidx, Vector &result, const ACCESSOR &accessor) const {
-		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
-		if (lidx == hidx) {
-			return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(lidx), result);
-		} else {
-			auto lo = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(lidx), result);
-			auto hi = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(hidx), result);
-			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
-		}
-	}
-
-	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
-	TARGET_TYPE Operation(INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
-		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
-		QuantileCompare<ACCESSOR> comp(accessor, desc);
-		if (CRN == FRN) {
-			std::nth_element(v_t + begin, v_t + FRN, v_t + end, comp);
-			return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
-		} else {
-			std::nth_element(v_t + begin, v_t + FRN, v_t + end, comp);
-			std::nth_element(v_t + FRN, v_t + CRN, v_t + end, comp);
-			auto lo = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
-			auto hi = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[CRN]), result);
-			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
-		}
-	}
-
-	template <class INPUT_TYPE, class TARGET_TYPE>
-	inline TARGET_TYPE Extract(const INPUT_TYPE **dest, Vector &result) const {
-		if (CRN == FRN) {
-			return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[0], result);
-		} else {
-			auto lo = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[0], result);
-			auto hi = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[1], result);
-			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
-		}
-	}
-
-	const bool desc;
-	const double RN;
-	const idx_t FRN;
-	const idx_t CRN;
-
-	idx_t begin;
-	idx_t end;
-};
-
-// Discrete "interpolation"
-template <>
-struct Interpolator<true> {
-	static inline idx_t Index(const QuantileValue &q, const idx_t n) {
-		idx_t floored;
-		switch (q.val.type().id()) {
-		case LogicalTypeId::DECIMAL: {
-			//	Integer arithmetic for accuracy
-			const auto integral = q.integral;
-			const auto scaling = q.scaling;
-			const auto scaled_q =
-			    DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(Hugeint::Convert(n), integral);
-			const auto scaled_n =
-			    DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(Hugeint::Convert(n), scaling);
-			floored = Cast::Operation<hugeint_t, idx_t>((scaled_n - scaled_q) / scaling);
-			break;
-		}
-		default:
-			const auto scaled_q = (double)(n * q.dbl);
-			floored = UnsafeNumericCast<idx_t>(floor(n - scaled_q));
-			break;
-		}
-
-		return MaxValue<idx_t>(1, n - floored) - 1;
-	}
-
-	Interpolator(const QuantileValue &q, const idx_t n_p, bool desc_p)
-	    : desc(desc_p), FRN(Index(q, n_p)), CRN(FRN), begin(0), end(n_p) {
-	}
-
-	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
-	TARGET_TYPE Interpolate(INPUT_TYPE lidx, INPUT_TYPE hidx, Vector &result, const ACCESSOR &accessor) const {
-		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
-		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(lidx), result);
-	}
-
-	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
-	TARGET_TYPE Operation(INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
-		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
-		QuantileCompare<ACCESSOR> comp(accessor, desc);
-		std::nth_element(v_t + begin, v_t + FRN, v_t + end, comp);
-		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
-	}
-
-	template <class INPUT_TYPE, class TARGET_TYPE>
-	TARGET_TYPE Extract(const INPUT_TYPE **dest, Vector &result) const {
-		return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[0], result);
-	}
-
-	const bool desc;
-	const idx_t FRN;
-	const idx_t CRN;
-
-	idx_t begin;
-	idx_t end;
-};
-
 template <typename T>
 static inline T QuantileAbs(const T &t) {
 	return AbsOperator::Operation<T, T>(t);
@@ -437,228 +145,189 @@ inline Value QuantileAbs(const Value &v) {
 
 void BindQuantileInner(AggregateFunction &function, const LogicalType &type, QuantileSerializationType quantile_type);
 
-struct QuantileBindData : public FunctionData {
-	QuantileBindData() {
+
+//===--------------------------------------------------------------------===//
+// Quantile Bind Data
+//===--------------------------------------------------------------------===//
+QuantileBindData::QuantileBindData() {
+}
+
+QuantileBindData::QuantileBindData(const Value &quantile_p)
+    : quantiles(1, QuantileValue(QuantileAbs(quantile_p))), order(1, 0), desc(quantile_p < 0) {
+}
+
+QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
+	vector<Value> normalised;
+	size_t pos = 0;
+	size_t neg = 0;
+	for (idx_t i = 0; i < quantiles_p.size(); ++i) {
+		const auto &q = quantiles_p[i];
+		pos += (q > 0);
+		neg += (q < 0);
+		normalised.emplace_back(QuantileAbs(q));
+		order.push_back(i);
+	}
+	if (pos && neg) {
+		throw BinderException("QUANTILE parameters must have consistent signs");
+	}
+	desc = (neg > 0);
+
+	IndirectLess<Value> lt(normalised.data());
+	std::sort(order.begin(), order.end(), lt);
+
+	for (const auto &q : normalised) {
+		quantiles.emplace_back(QuantileValue(q));
+	}
+}
+
+QuantileBindData::QuantileBindData(const QuantileBindData &other) : order(other.order), desc(other.desc) {
+	for (const auto &q : other.quantiles) {
+		quantiles.emplace_back(q);
+	}
+}
+
+unique_ptr<FunctionData> QuantileBindData::Copy() const {
+	return make_uniq<QuantileBindData>(*this);
+}
+
+bool QuantileBindData::Equals(const FunctionData &other_p) const {
+	auto &other = other_p.Cast<QuantileBindData>();
+	return desc == other.desc && quantiles == other.quantiles && order == other.order;
+}
+
+void QuantileBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                      const AggregateFunction &function) {
+	auto &bind_data = bind_data_p->Cast<QuantileBindData>();
+	vector<Value> raw;
+	for (const auto &q : bind_data.quantiles) {
+		raw.emplace_back(q.val);
+	}
+	serializer.WriteProperty(100, "quantiles", raw);
+	serializer.WriteProperty(101, "order", bind_data.order);
+	serializer.WriteProperty(102, "desc", bind_data.desc);
+}
+
+unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+	auto result = make_uniq<QuantileBindData>();
+	vector<Value> raw;
+	deserializer.ReadProperty(100, "quantiles", raw);
+	deserializer.ReadProperty(101, "order", result->order);
+	deserializer.ReadProperty(102, "desc", result->desc);
+	QuantileSerializationType deserialization_type;
+	deserializer.ReadPropertyWithDefault(103, "quantile_type", deserialization_type,
+	                                     QuantileSerializationType::NON_DECIMAL);
+
+	if (deserialization_type != QuantileSerializationType::NON_DECIMAL) {
+		LogicalType arg_type;
+		deserializer.ReadProperty(104, "logical_type", arg_type);
+
+		BindQuantileInner(function, arg_type, deserialization_type);
 	}
 
-	explicit QuantileBindData(const Value &quantile_p)
-	    : quantiles(1, QuantileValue(QuantileAbs(quantile_p))), order(1, 0), desc(quantile_p < 0) {
+	for (const auto &r : raw) {
+		result->quantiles.emplace_back(QuantileValue(r));
 	}
+	return std::move(result);
+}
 
-	explicit QuantileBindData(const vector<Value> &quantiles_p) {
-		vector<Value> normalised;
-		size_t pos = 0;
-		size_t neg = 0;
-		for (idx_t i = 0; i < quantiles_p.size(); ++i) {
-			const auto &q = quantiles_p[i];
-			pos += (q > 0);
-			neg += (q < 0);
-			normalised.emplace_back(QuantileAbs(q));
-			order.push_back(i);
-		}
-		if (pos && neg) {
-			throw BinderException("QUANTILE parameters must have consistent signs");
-		}
-		desc = (neg > 0);
+void QuantileBindData::SerializeDecimalDiscrete(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                     const AggregateFunction &function) {
+	Serialize(serializer, bind_data_p, function);
 
-		IndirectLess<Value> lt(normalised.data());
-		std::sort(order.begin(), order.end(), lt);
+	serializer.WritePropertyWithDefault<QuantileSerializationType>(
+	    103, "quantile_type", QuantileSerializationType::DECIMAL_DISCRETE, QuantileSerializationType::NON_DECIMAL);
+	serializer.WriteProperty(104, "logical_type", function.arguments[0]);
+}
+void QuantileBindData::SerializeDecimalDiscreteList(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                         const AggregateFunction &function) {
 
-		for (const auto &q : normalised) {
-			quantiles.emplace_back(QuantileValue(q));
-		}
-	}
+	Serialize(serializer, bind_data_p, function);
 
-	QuantileBindData(const QuantileBindData &other) : order(other.order), desc(other.desc) {
-		for (const auto &q : other.quantiles) {
-			quantiles.emplace_back(q);
-		}
-	}
+	serializer.WritePropertyWithDefault<QuantileSerializationType>(103, "quantile_type",
+	                                                               QuantileSerializationType::DECIMAL_DISCRETE_LIST,
+	                                                               QuantileSerializationType::NON_DECIMAL);
+	serializer.WriteProperty(104, "logical_type", function.arguments[0]);
+}
+void QuantileBindData::SerializeDecimalContinuous(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                       const AggregateFunction &function) {
+	Serialize(serializer, bind_data_p, function);
 
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<QuantileBindData>(*this);
-	}
+	serializer.WritePropertyWithDefault<QuantileSerializationType>(103, "quantile_type",
+	                                                               QuantileSerializationType::DECIMAL_CONTINUOUS,
+	                                                               QuantileSerializationType::NON_DECIMAL);
+	serializer.WriteProperty(104, "logical_type", function.arguments[0]);
+}
+void QuantileBindData::SerializeDecimalContinuousList(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                           const AggregateFunction &function) {
 
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<QuantileBindData>();
-		return desc == other.desc && quantiles == other.quantiles && order == other.order;
-	}
+	Serialize(serializer, bind_data_p, function);
 
-	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const AggregateFunction &function) {
-		auto &bind_data = bind_data_p->Cast<QuantileBindData>();
-		vector<Value> raw;
-		for (const auto &q : bind_data.quantiles) {
-			raw.emplace_back(q.val);
-		}
-		serializer.WriteProperty(100, "quantiles", raw);
-		serializer.WriteProperty(101, "order", bind_data.order);
-		serializer.WriteProperty(102, "desc", bind_data.desc);
-	}
+	serializer.WritePropertyWithDefault<QuantileSerializationType>(
+	    103, "quantile_type", QuantileSerializationType::DECIMAL_CONTINUOUS_LIST,
+	    QuantileSerializationType::NON_DECIMAL);
+	serializer.WriteProperty(104, "logical_type", function.arguments[0]);
+}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
-		auto result = make_uniq<QuantileBindData>();
-		vector<Value> raw;
-		deserializer.ReadProperty(100, "quantiles", raw);
-		deserializer.ReadProperty(101, "order", result->order);
-		deserializer.ReadProperty(102, "desc", result->desc);
-		QuantileSerializationType deserialization_type;
-		deserializer.ReadPropertyWithDefault(103, "quantile_type", deserialization_type,
-		                                     QuantileSerializationType::NON_DECIMAL);
+//===--------------------------------------------------------------------===//
+// Cast Interpolation
+//===--------------------------------------------------------------------===//
+template <>
+interval_t CastInterpolation::Cast(const dtime_t &src, Vector &result) {
+	return {0, 0, src.micros};
+}
 
-		if (deserialization_type != QuantileSerializationType::NON_DECIMAL) {
-			LogicalType arg_type;
-			deserializer.ReadProperty(104, "logical_type", arg_type);
+template <>
+double CastInterpolation::Interpolate(const double &lo, const double d, const double &hi) {
+	return lo * (1.0 - d) + hi * d;
+}
 
-			BindQuantileInner(function, arg_type, deserialization_type);
-		}
+template <>
+dtime_t CastInterpolation::Interpolate(const dtime_t &lo, const double d, const dtime_t &hi) {
+	return dtime_t(std::llround(lo.micros * (1.0 - d) + hi.micros * d));
+}
 
-		for (const auto &r : raw) {
-			result->quantiles.emplace_back(QuantileValue(r));
-		}
-		return std::move(result);
-	}
+template <>
+timestamp_t CastInterpolation::Interpolate(const timestamp_t &lo, const double d, const timestamp_t &hi) {
+	return timestamp_t(std::llround(lo.value * (1.0 - d) + hi.value * d));
+}
 
-	static void SerializeDecimalDiscrete(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                     const AggregateFunction &function) {
-		Serialize(serializer, bind_data_p, function);
+template <>
+hugeint_t CastInterpolation::Interpolate(const hugeint_t &lo, const double d, const hugeint_t &hi) {
+	return Hugeint::Convert(Interpolate(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
+}
 
-		serializer.WritePropertyWithDefault<QuantileSerializationType>(
-		    103, "quantile_type", QuantileSerializationType::DECIMAL_DISCRETE, QuantileSerializationType::NON_DECIMAL);
-		serializer.WriteProperty(104, "logical_type", function.arguments[0]);
-	}
-	static void SerializeDecimalDiscreteList(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                         const AggregateFunction &function) {
+static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
+	D_ASSERT(d >= 0 && d <= 1);
+	return Interval::FromMicro(std::llround(Interval::GetMicro(i) * d));
+}
 
-		Serialize(serializer, bind_data_p, function);
+inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {
+	return Interval::FromMicro(Interval::GetMicro(lhs) + Interval::GetMicro(rhs));
+}
 
-		serializer.WritePropertyWithDefault<QuantileSerializationType>(103, "quantile_type",
-		                                                               QuantileSerializationType::DECIMAL_DISCRETE_LIST,
-		                                                               QuantileSerializationType::NON_DECIMAL);
-		serializer.WriteProperty(104, "logical_type", function.arguments[0]);
-	}
-	static void SerializeDecimalContinuous(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                       const AggregateFunction &function) {
-		Serialize(serializer, bind_data_p, function);
+inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
+	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
+}
 
-		serializer.WritePropertyWithDefault<QuantileSerializationType>(103, "quantile_type",
-		                                                               QuantileSerializationType::DECIMAL_CONTINUOUS,
-		                                                               QuantileSerializationType::NON_DECIMAL);
-		serializer.WriteProperty(104, "logical_type", function.arguments[0]);
-	}
-	static void SerializeDecimalContinuousList(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                           const AggregateFunction &function) {
+template <>
+interval_t CastInterpolation::Interpolate(const interval_t &lo, const double d, const interval_t &hi) {
+	const interval_t delta = hi - lo;
+	return lo + MultiplyByDouble(delta, d);
+}
 
-		Serialize(serializer, bind_data_p, function);
+template <>
+string_t CastInterpolation::Cast(const std::string &src, Vector &result) {
+	return StringVector::AddString(result, src);
+}
 
-		serializer.WritePropertyWithDefault<QuantileSerializationType>(
-		    103, "quantile_type", QuantileSerializationType::DECIMAL_CONTINUOUS_LIST,
-		    QuantileSerializationType::NON_DECIMAL);
-		serializer.WriteProperty(104, "logical_type", function.arguments[0]);
-	}
+template <>
+string_t CastInterpolation::Cast(const string_t &src, Vector &result) {
+	return StringVector::AddString(result, src);
+}
 
-	vector<QuantileValue> quantiles;
-	vector<idx_t> order;
-	bool desc;
-};
-
-template <typename IDX>
-struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
-
-	using BaseTree = MergeSortTree<IDX, IDX>;
-	using Elements = typename BaseTree::Elements;
-
-	explicit QuantileSortTree(Elements &&lowest_level) : BaseTree(std::move(lowest_level)) {
-	}
-
-	template <class INPUT_TYPE>
-	static unique_ptr<QuantileSortTree> WindowInit(const INPUT_TYPE *data, AggregateInputData &aggr_input_data,
-	                                               const ValidityMask &data_mask, const ValidityMask &filter_mask,
-	                                               idx_t count) {
-		//	Build the indirection array
-		using ElementType = typename QuantileSortTree::ElementType;
-		vector<ElementType> sorted(count);
-		if (filter_mask.AllValid() && data_mask.AllValid()) {
-			std::iota(sorted.begin(), sorted.end(), 0);
-		} else {
-			size_t valid = 0;
-			QuantileIncluded included(filter_mask, data_mask);
-			for (ElementType i = 0; i < count; ++i) {
-				if (included(i)) {
-					sorted[valid++] = i;
-				}
-			}
-			sorted.resize(valid);
-		}
-
-		//	Sort it
-		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
-		using Accessor = QuantileIndirect<INPUT_TYPE>;
-		Accessor indirect(data);
-		QuantileCompare<Accessor> cmp(indirect, bind_data.desc);
-		std::sort(sorted.begin(), sorted.end(), cmp);
-
-		return make_uniq<QuantileSortTree>(std::move(sorted));
-	}
-
-	inline IDX SelectNth(const SubFrames &frames, size_t n) const {
-		return BaseTree::NthElement(BaseTree::SelectNth(frames, n));
-	}
-
-	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
-	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &result,
-	                         const QuantileValue &q) const {
-		D_ASSERT(n > 0);
-
-		//	Find the interpolated indicies within the frame
-		Interpolator<DISCRETE> interp(q, n, false);
-		const auto lo_data = SelectNth(frames, interp.FRN);
-		auto hi_data = lo_data;
-		if (interp.CRN != interp.FRN) {
-			hi_data = SelectNth(frames, interp.CRN);
-		}
-
-		//	Interpolate indirectly
-		using ID = QuantileIndirect<INPUT_TYPE>;
-		ID indirect(data);
-		return interp.template Interpolate<idx_t, RESULT_TYPE, ID>(lo_data, hi_data, result, indirect);
-	}
-
-	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
-	void WindowList(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
-	                const QuantileBindData &bind_data) const {
-		D_ASSERT(n > 0);
-
-		// Result is a constant LIST<CHILD_TYPE> with a fixed length
-		auto ldata = FlatVector::GetData<list_entry_t>(list);
-		auto &lentry = ldata[lidx];
-		lentry.offset = ListVector::GetListSize(list);
-		lentry.length = bind_data.quantiles.size();
-
-		ListVector::Reserve(list, lentry.offset + lentry.length);
-		ListVector::SetListSize(list, lentry.offset + lentry.length);
-		auto &result = ListVector::GetEntry(list);
-		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
-
-		using ID = QuantileIndirect<INPUT_TYPE>;
-		ID indirect(data);
-		for (const auto &q : bind_data.order) {
-			const auto &quantile = bind_data.quantiles[q];
-			Interpolator<DISCRETE> interp(quantile, n, false);
-
-			const auto lo_data = SelectNth(frames, interp.FRN);
-			auto hi_data = lo_data;
-			if (interp.CRN != interp.FRN) {
-				hi_data = SelectNth(frames, interp.CRN);
-			}
-
-			//	Interpolate indirectly
-			rdata[lentry.offset + q] =
-			    interp.template Interpolate<idx_t, CHILD_TYPE, ID>(lo_data, hi_data, result, indirect);
-		}
-	}
-};
-
+//===--------------------------------------------------------------------===//
+// Quantile State
+//===--------------------------------------------------------------------===//
 template <class T>
 struct PointerLess {
 	inline bool operator()(const T &lhi, const T &rhi) const {
@@ -1250,6 +919,9 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Median Absolute Deviation
+//===--------------------------------------------------------------------===//
 template <typename T, typename R, typename MEDIAN_TYPE>
 struct MadAccessor {
 	using INPUT_TYPE = T;
