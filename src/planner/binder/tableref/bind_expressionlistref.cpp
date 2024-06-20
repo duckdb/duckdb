@@ -9,8 +9,8 @@ namespace duckdb {
 
 unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	auto result = make_uniq<BoundExpressionListRef>();
-	result->types = expr.expected_types;
-	result->names = expr.expected_names;
+	result->types = expr.column_type_hint;
+	result->names = expr.column_name_alias;
 	auto prev_can_contain_nulls = this->can_contain_nulls;
 	// bind value list
 	InsertBinder binder(*this, context);

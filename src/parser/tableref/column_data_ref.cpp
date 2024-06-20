@@ -8,7 +8,7 @@ namespace duckdb {
 
 string ColumnDataRef::ToString() const {
 	auto result = collection->ToString();
-	return BaseToString(result, expected_names);
+	return BaseToString(result);
 }
 
 bool ColumnDataRef::Equals(const TableRef &other_p) const {

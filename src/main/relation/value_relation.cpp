@@ -45,12 +45,12 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	if (columns.empty()) {
 		// no columns yet: only set up names
 		for (idx_t i = 0; i < names.size(); i++) {
-			table_ref->expected_names.push_back(names[i]);
+			table_ref->column_name_alias.push_back(names[i]);
 		}
 	} else {
 		for (idx_t i = 0; i < columns.size(); i++) {
-			table_ref->expected_names.push_back(columns[i].Name());
-			table_ref->expected_types.push_back(columns[i].Type());
+			table_ref->column_name_alias.push_back(columns[i].Name());
+			table_ref->column_type_hint.push_back(columns[i].Type());
 			D_ASSERT(names.size() == 0 || columns[i].Name() == names[i]);
 		}
 	}

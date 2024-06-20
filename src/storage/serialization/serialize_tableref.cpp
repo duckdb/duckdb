@@ -14,6 +14,7 @@ void TableRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(101, "alias", alias);
 	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample", sample);
 	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(104, "column_type_hint", column_type_hint);
 }
 
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
@@ -21,6 +22,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	auto alias = deserializer.ReadPropertyWithDefault<string>(101, "alias");
 	auto sample = deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample");
 	auto query_location = deserializer.ReadPropertyWithDefault<optional_idx>(103, "query_location", optional_idx());
+	auto column_type_hint = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(104, "column_type_hint");
 	unique_ptr<TableRef> result;
 	switch (type) {
 	case TableReferenceType::BASE_TABLE:
@@ -56,6 +58,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	result->alias = std::move(alias);
 	result->sample = std::move(sample);
 	result->query_location = query_location;
+	result->column_type_hint = std::move(column_type_hint);
 	return result;
 }
 
@@ -100,15 +103,15 @@ unique_ptr<TableRef> EmptyTableRef::Deserialize(Deserializer &deserializer) {
 
 void ExpressionListRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "expected_types", expected_types);
+	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", column_name_alias);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "expected_types", column_type_hint);
 	serializer.WritePropertyWithDefault<vector<vector<unique_ptr<ParsedExpression>>>>(202, "values", values);
 }
 
 unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ExpressionListRef>(new ExpressionListRef());
-	deserializer.ReadPropertyWithDefault<vector<string>>(200, "expected_names", result->expected_names);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "expected_types", result->expected_types);
+	deserializer.ReadPropertyWithDefault<vector<string>>(200, "expected_names", result->column_name_alias);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "expected_types", result->column_type_hint);
 	deserializer.ReadPropertyWithDefault<vector<vector<unique_ptr<ParsedExpression>>>>(202, "values", result->values);
 	return std::move(result);
 }

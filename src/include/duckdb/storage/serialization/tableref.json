@@ -26,6 +26,11 @@
         "name": "query_location",
         "type": "optional_idx",
         "default": "optional_idx()"
+      },
+      {
+        "id": 104,
+        "name": "column_type_hint",
+        "type": "vector<LogicalType>"
       }
     ]
   },

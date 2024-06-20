@@ -1,0 +1,21 @@
+# name: test/sql/table_function/table_function_schema.test
+# group: [table_function]
+
+statement ok
+pragma enable_verification;
+
+# No schema provided
+query III
+select * from repeat_row(5, true, 'test', num_rows = 5)
+----
+5	true	test
+5	true	test
+5	true	test
+5	true	test
+5	true	test
+
+query II
+select * from repeat_row(5, true, num_rows=2) as (a integer, b varchar);
+----
+5	true
+5	true

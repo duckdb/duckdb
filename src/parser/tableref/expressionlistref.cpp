@@ -23,7 +23,7 @@ string ExpressionListRef::ToString() const {
 		result += ")";
 	}
 	result += ")";
-	return BaseToString(result, expected_names);
+	return BaseToString(result);
 }
 
 bool ExpressionListRef::Equals(const TableRef &other_p) const {
@@ -58,8 +58,8 @@ unique_ptr<TableRef> ExpressionListRef::Copy() {
 		}
 		result->values.push_back(std::move(new_val_list));
 	}
-	result->expected_names = expected_names;
-	result->expected_types = expected_types;
+	result->column_name_alias = column_name_alias;
+	result->column_type_hint = column_type_hint;
 	CopyProperties(*result);
 	return std::move(result);
 }

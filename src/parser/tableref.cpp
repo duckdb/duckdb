@@ -9,22 +9,27 @@
 namespace duckdb {
 
 string TableRef::BaseToString(string result) const {
-	vector<string> column_name_alias;
-	return BaseToString(std::move(result), column_name_alias);
-}
-
-string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
+	if (!alias.empty() || !column_name_alias.empty()) {
+		result += " AS ";
+	}
 	if (!alias.empty()) {
-		result += StringUtil::Format(" AS %s", SQLIdentifier(alias));
+		result += StringUtil::Format("%s", SQLIdentifier(alias));
 	}
 	if (!column_name_alias.empty()) {
-		D_ASSERT(!alias.empty());
+		D_ASSERT(column_type_hint.empty() || column_name_alias.size() == column_type_hint.size());
 		result += "(";
 		for (idx_t i = 0; i < column_name_alias.size(); i++) {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(column_name_alias[i]);
+			string column_definition;
+			column_definition += KeywordHelper::WriteOptionallyQuoted(column_name_alias[i]);
+			if (!column_type_hint.empty()) {
+				auto &type_hint = column_type_hint[i];
+				column_definition += " ";
+				column_definition += type_hint.ToString();
+			}
+			result += column_definition;
 		}
 		result += ")";
 	}
@@ -51,6 +56,9 @@ bool TableRef::Equals(const TableRef &other) const {
 		return false;
 	}
 	if (column_name_alias.size() != other.column_name_alias.size()) {
+		return false;
+	}
+	if (column_type_hint.size() != other.column_type_hint.size()) {
 		return false;
 	}
 	D_ASSERT(column_name_alias.size() == column_type_hint.size());

@@ -25,10 +25,6 @@ public:
 
 	//! Value list, only used for VALUES statement
 	vector<vector<unique_ptr<ParsedExpression>>> values;
-	//! Expected SQL types
-	vector<LogicalType> expected_types;
-	//! The set of expected names
-	vector<string> expected_names;
 
 public:
 	string ToString() const override;

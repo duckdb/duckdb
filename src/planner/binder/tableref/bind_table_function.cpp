@@ -189,6 +189,8 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
 	auto &column_type_hint = ref.column_type_hint;
+	// TODO: we can allow the table function to be used as a table-in-out if a schema is provided
+	(void)column_type_hint;
 
 	auto bind_index = GenerateTableIndex();
 	// perform the binding
