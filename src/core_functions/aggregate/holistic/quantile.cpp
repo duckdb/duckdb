@@ -128,52 +128,13 @@ unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserialize
 	                                     QuantileSerializationType::NON_DECIMAL);
 
 	if (deserialization_type != QuantileSerializationType::NON_DECIMAL) {
-		LogicalType arg_type;
-		deserializer.ReadProperty(104, "logical_type", arg_type);
+		deserializer.ReadDeletedProperty<LogicalType>(104, "logical_type");
 	}
 
 	for (const auto &r : raw) {
 		result->quantiles.emplace_back(QuantileValue(r));
 	}
 	return std::move(result);
-}
-
-void QuantileBindData::SerializeDecimalDiscrete(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                                const AggregateFunction &function) {
-	Serialize(serializer, bind_data_p, function);
-
-	serializer.WritePropertyWithDefault<QuantileSerializationType>(
-	    103, "quantile_type", QuantileSerializationType::DECIMAL_DISCRETE, QuantileSerializationType::NON_DECIMAL);
-	serializer.WriteProperty(104, "logical_type", function.arguments[0]);
-}
-void QuantileBindData::SerializeDecimalDiscreteList(Serializer &serializer,
-                                                    const optional_ptr<FunctionData> bind_data_p,
-                                                    const AggregateFunction &function) {
-
-	Serialize(serializer, bind_data_p, function);
-
-	serializer.WritePropertyWithDefault<QuantileSerializationType>(
-	    103, "quantile_type", QuantileSerializationType::DECIMAL_DISCRETE_LIST, QuantileSerializationType::NON_DECIMAL);
-	serializer.WriteProperty(104, "logical_type", function.arguments[0]);
-}
-void QuantileBindData::SerializeDecimalContinuous(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                                  const AggregateFunction &function) {
-	Serialize(serializer, bind_data_p, function);
-
-	serializer.WritePropertyWithDefault<QuantileSerializationType>(
-	    103, "quantile_type", QuantileSerializationType::DECIMAL_CONTINUOUS, QuantileSerializationType::NON_DECIMAL);
-	serializer.WriteProperty(104, "logical_type", function.arguments[0]);
-}
-void QuantileBindData::SerializeDecimalContinuousList(Serializer &serializer,
-                                                      const optional_ptr<FunctionData> bind_data_p,
-                                                      const AggregateFunction &function) {
-
-	Serialize(serializer, bind_data_p, function);
-
-	serializer.WritePropertyWithDefault<QuantileSerializationType>(103, "quantile_type",
-	                                                               QuantileSerializationType::DECIMAL_CONTINUOUS_LIST,
-	                                                               QuantileSerializationType::NON_DECIMAL);
-	serializer.WriteProperty(104, "logical_type", function.arguments[0]);
 }
 
 //===--------------------------------------------------------------------===//
