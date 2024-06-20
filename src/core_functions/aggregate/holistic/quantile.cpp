@@ -9,7 +9,7 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "SkipList.h"
+#include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
 
 namespace duckdb {
 
@@ -302,6 +302,29 @@ struct QuantileScalarOperation : public QuantileOperation {
 	}
 };
 
+
+struct QuantileScalarFallback : QuantileOperation {
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Execute(STATE &state, const INPUT_TYPE &key, AggregateInputData &input_data) {
+		state.AddElement(key, input_data);
+	}
+
+	template <class STATE>
+	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
+		if (state.v.empty()) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		D_ASSERT(finalize_data.input.bind_data);
+		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
+		D_ASSERT(bind_data.quantiles.size() == 1);
+		Interpolator<true> interp(bind_data.quantiles[0], state.v.size(), bind_data.desc);
+		auto interpolation_result = interp.InterpolateInternal<string_t>(state.v.data());
+		CreateSortKeyHelpers::DecodeSortKey(interpolation_result, finalize_data.result, finalize_data.result_idx,
+		                                     OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
+	}
+};
+
 template <typename INPUT_TYPE, class TYPE_OP=QuantileStandardType>
 AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &type) {
 	using STATE = QuantileState<INPUT_TYPE, TYPE_OP>;
@@ -309,6 +332,17 @@ AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &t
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	fun.window_init = OP::WindowInit<STATE, INPUT_TYPE>;
+	return fun;
+}
+
+AggregateFunction GetDiscreteQuantileFallbackFunction(const LogicalType &type) {
+	using STATE = QuantileState<string_t, QuantileStringType>;
+using OP = QuantileScalarFallback;
+
+	AggregateFunction fun({type}, type, AggregateFunction::StateSize<STATE>,
+		    AggregateFunction::StateInitialize<STATE, OP>, AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
+		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
+		    nullptr);
 	return fun;
 }
 
@@ -333,8 +367,7 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 	case PhysicalType::VARCHAR:
 		return GetTypedDiscreteQuantileAggregateFunction<string_t, QuantileStringType>(type);
 	default:
-		// FIXME: add sort key here
-		return GetTypedDiscreteQuantileAggregateFunction<string_t, QuantileStringType>(type);
+		return GetDiscreteQuantileFallbackFunction(type);
 	}
 }
 

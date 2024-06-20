@@ -199,12 +199,17 @@ struct Interpolator<true> {
 		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(lidx), result);
 	}
 
+	template <class INPUT_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
+	typename ACCESSOR::RESULT_TYPE InterpolateInternal(INPUT_TYPE *v_t, const ACCESSOR &accessor = ACCESSOR()) const {
+		QuantileCompare<ACCESSOR> comp(accessor, desc);
+		std::nth_element(v_t + begin, v_t + FRN, v_t + end, comp);
+		return accessor(v_t[FRN]);
+	}
+
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
 	TARGET_TYPE Operation(INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
 		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
-		QuantileCompare<ACCESSOR> comp(accessor, desc);
-		std::nth_element(v_t + begin, v_t + FRN, v_t + end, comp);
-		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
+		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(InterpolateInternal(v_t, accessor), result);
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE>

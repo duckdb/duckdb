@@ -26,6 +26,7 @@ AlwaysBreakTemplateDeclarations: Yes
 IncludeBlocks: Regroup
 Language: Cpp
 AccessModifierOffset: -4
+SortIncludes: Never
 ---
 Language: Java
 SpaceAfterCStyleCast: true
