@@ -323,7 +323,7 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 		if (tasks_remaining) {
 			// We need to construct the single WindowHashGroup here because the sort tasks will not be run.
 			built.resize(1);
-			window_hash_groups.emplace_back(make_uniq<WindowHashGroup>(gsink, 0));
+			window_hash_groups.emplace_back(make_uniq<WindowHashGroup>(gsink, idx_t(0)));
 		}
 	} else {
 		built.resize(window_hash_groups.size());
