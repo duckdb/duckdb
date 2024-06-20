@@ -468,7 +468,8 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
 		int64_t computed_start;
-		if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx), computed_start)) {
+		if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
+		                               computed_start)) {
 			throw OutOfRangeException("Overflow computing ROWS FOLLOWING start");
 		}
 		window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
@@ -519,7 +520,8 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
 		int64_t computed_start;
-		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx), computed_start)) {
+		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
+		                               computed_start)) {
 			throw OutOfRangeException("Overflow computing ROWS FOLLOWING end");
 		}
 		window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
