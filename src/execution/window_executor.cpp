@@ -811,7 +811,7 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &cont
 
 	auto types = payload_chunk.GetTypes();
 	if (!types.empty()) {
-		payload_collection.Initialize(Allocator::Get(context), types);
+		payload_collection.Initialize(Allocator::Get(context), types, payload_count);
 	}
 }
 
