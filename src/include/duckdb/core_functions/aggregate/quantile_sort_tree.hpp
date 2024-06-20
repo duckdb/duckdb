@@ -10,6 +10,7 @@
 
 #include "duckdb/core_functions/aggregate/quantile_helpers.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include <algorithm>
 #include <numeric>
 #include <stdlib.h>
@@ -332,5 +333,6 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 		}
 	}
 };
+
 
 } // namespace duckdb

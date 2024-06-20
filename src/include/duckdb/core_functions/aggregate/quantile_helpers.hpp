@@ -71,5 +71,4 @@ struct QuantileBindData : public FunctionData {
 	bool desc;
 };
 
-
 } // namespace duckdb
