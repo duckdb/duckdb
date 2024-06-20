@@ -9,6 +9,8 @@ namespace duckdb {
 
 template <class T>
 struct HistogramBinState {
+	using TYPE = T;
+
 	unsafe_vector<T> *bin_boundaries;
 	unsafe_vector<idx_t> *counts;
 
@@ -86,6 +88,35 @@ struct HistogramBinFunction {
 	static bool IgnoreNull() {
 		return true;
 	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
+		if (!source.bin_boundaries) {
+			// nothing to combine
+			return;
+		}
+		if (!target.bin_boundaries) {
+			// target does not have bin boundaries - copy everything over
+			target.bin_boundaries = new unsafe_vector<typename STATE::TYPE>();
+			target.counts = new unsafe_vector<idx_t>();
+			*target.bin_boundaries = *source.bin_boundaries;
+			*target.counts = *source.counts;
+		} else {
+			// both source and target have bin boundaries
+			if (*target.bin_boundaries != *source.bin_boundaries) {
+				throw NotImplementedException(
+				    "Histogram - cannot combine histograms with different bin boundaries. "
+				    "Bin boundaries must be the same for all histograms within the same group");
+			}
+			if (target.counts->size() != source.counts->size()) {
+				throw InternalException("Histogram combine - bin boundaries are the same but counts are different");
+			}
+			D_ASSERT(target.counts->size() == source.counts->size());
+			for (idx_t bin_idx = 0; bin_idx < target.counts->size(); bin_idx++) {
+				(*target.counts)[bin_idx] += (*source.counts)[bin_idx];
+			}
+		}
+	}
 };
 
 template <class OP, class T>
@@ -115,45 +146,6 @@ static void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr
 		auto entry = std::lower_bound(state.bin_boundaries->begin(), state.bin_boundaries->end(), data[idx]);
 		auto bin_entry = UnsafeNumericCast<idx_t>(entry - state.bin_boundaries->begin());
 		++(*state.counts)[bin_entry];
-	}
-}
-
-template <class T>
-static void HistogramBinCombineFunction(Vector &state_vector, Vector &combined, AggregateInputData &, idx_t count) {
-
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
-	auto states_ptr = UnifiedVectorFormat::GetData<HistogramBinState<T> *>(sdata);
-
-	auto combined_ptr = FlatVector::GetData<HistogramBinState<T> *>(combined);
-	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states_ptr[sdata.sel->get_index(i)];
-		if (!state.bin_boundaries) {
-			// nothing to combine
-			continue;
-		}
-		auto &target = *combined_ptr[i];
-		if (!target.bin_boundaries) {
-			// target does not have bin boundaries - copy everything over
-			target.bin_boundaries = new unsafe_vector<T>();
-			target.counts = new unsafe_vector<idx_t>();
-			*target.bin_boundaries = *state.bin_boundaries;
-			*target.counts = *state.counts;
-		} else {
-			// both source and target have bin boundaries
-			if (*target.bin_boundaries != *state.bin_boundaries) {
-				throw NotImplementedException(
-				    "Histogram - cannot combine histograms with different bin boundaries. "
-				    "Bin boundaries must be the same for all histograms within the same group");
-			}
-			if (target.counts->size() != state.counts->size()) {
-				throw InternalException("Histogram combine - bin boundaries are the same but counts are different");
-			}
-			D_ASSERT(target.counts->size() == state.counts->size());
-			for (idx_t bin_idx = 0; bin_idx < target.counts->size(); bin_idx++) {
-				(*target.counts)[bin_idx] += (*state.counts)[bin_idx];
-			}
-		}
 	}
 }
 
@@ -213,7 +205,7 @@ static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	return AggregateFunction(
 	    "histogram", {type, LogicalType::LIST(type)}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
 	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T>,
-	    HistogramBinCombineFunction<T>, HistogramBinFinalizeFunction<OP, T>, nullptr, nullptr,
+	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr, nullptr,
 	    AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
 }
 

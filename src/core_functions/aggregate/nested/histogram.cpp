@@ -37,7 +37,6 @@ struct HistogramFunction {
 			(*target.hist)[entry.first] += entry.second;
 		}
 	}
-
 };
 
 template <class TYPE>
