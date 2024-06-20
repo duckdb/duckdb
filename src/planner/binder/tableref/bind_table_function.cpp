@@ -189,8 +189,6 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
 	auto &column_type_hint = ref.column_type_hint;
-	// TODO: we can allow the table function to be used as a table-in-out if a schema is provided
-	(void)column_type_hint;
 
 	auto bind_index = GenerateTableIndex();
 	// perform the binding
@@ -228,6 +226,20 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	for (idx_t i = 0; i < return_names.size(); i++) {
 		if (return_names[i].empty()) {
 			return_names[i] = "C" + to_string(i);
+		}
+	}
+	if (column_name_alias.size() > return_names.size()) {
+		throw BinderException("Function produces only %d columns, but aliases for %d columns were provided!",
+		                      return_names.size(), column_name_alias.size());
+	}
+	if (!column_type_hint.empty() && column_type_hint[0].id() != LogicalTypeId::ANY) {
+		// Schema was provided, e.g: (a varchar, b boolean)
+		// Only output bindings for these columns
+		auto unfiltered_names = std::move(return_names);
+		auto unfiltered_types = std::move(return_types);
+		for (idx_t i = 0; i < column_type_hint.size(); i++) {
+			return_names.emplace_back(std::move(unfiltered_names[i]));
+			return_types.emplace_back(std::move(unfiltered_types[i]));
 		}
 	}
 

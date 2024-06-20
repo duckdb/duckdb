@@ -14,8 +14,33 @@ select * from repeat_row(5, true, 'test', num_rows = 5)
 5	true	test
 5	true	test
 
+# Full schema
 query II
 select * from repeat_row(5, true, num_rows=2) as (a integer, b varchar);
 ----
 5	true
 5	true
+
+# Partial schema
+statement error
+select * from repeat_row(5, true, num_rows=2) as (a, b varchar);
+----
+syntax error at or near ","
+
+# Partial schema
+statement error
+select * from repeat_row(5, true, num_rows=2) as (a integer, b);
+----
+syntax error at or near ")"
+
+# Additional columns in the schema
+statement error
+select * from repeat_row(5, true, num_rows=2) as (a integer, b varchar, c boolean);
+----
+Function produces only 2 columns, but aliases for 3 columns were provided!
+
+# Only a subset of columns are provided: only emit those columns
+query I
+select * from repeat_row(5, true, num_rows=2) as (a integer);
+----
+5

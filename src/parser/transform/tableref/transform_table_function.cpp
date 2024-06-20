@@ -4,23 +4,6 @@
 
 namespace duckdb {
 
-static void VerifyColumnDefinitionList(vector<string> &names, vector<LogicalType> &types) {
-	D_ASSERT(names.size() != types.size());
-	bool has_type_hint = false;
-	for (idx_t i = 0; i < names.size(); i++) {
-		auto &hint = types[i];
-		if (hint.id() != LogicalTypeId::ANY) {
-			if (!has_type_hint && i != 0) {
-				ParserException("Type hints should be omitted or be provided for all columns");
-			}
-			has_type_hint = true;
-		}
-		if (has_type_hint && hint.id() == LogicalTypeId::ANY) {
-			throw ParserException("Type hints should be omitted or be provided for all columns");
-		}
-	}
-}
-
 unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRangeFunction &root) {
 	if (root.ordinality) {
 		throw NotImplementedException("WITH ORDINALITY not implemented");
