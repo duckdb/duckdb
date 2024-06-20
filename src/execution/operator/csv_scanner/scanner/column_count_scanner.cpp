@@ -41,17 +41,19 @@ void ColumnCountResult::QuotedNewLine(ColumnCountResult &result) {
 	// nop
 }
 
-ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
+ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager_p,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       shared_ptr<CSVErrorHandler> error_handler)
-    : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler)), result(states, *state_machine),
-      column_count(1) {
-	sniffing = true;
+                                       shared_ptr<CSVErrorHandler> error_handler, CSVIterator iterator)
+    : BaseScanner(std::move(buffer_manager_p), state_machine, std::move(error_handler), true, nullptr, iterator),
+      result(states, *state_machine), column_count(1) {
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
-	auto scanner = make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
-	return scanner;
+	auto iterator = SkipCSVRows(buffer_manager, state_machine, state_machine->dialect_options.skip_rows.GetValue());
+	if (iterator.done) {
+		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
+	}
+	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator);
 }
 
 ColumnCountResult &ColumnCountScanner::ParseChunk() {

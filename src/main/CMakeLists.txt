@@ -17,6 +17,7 @@ add_library_unity(
   OBJECT
   appender.cpp
   attached_database.cpp
+  client_config.cpp
   client_context_file_opener.cpp
   client_context.cpp
   client_context_wrapper.cpp
@@ -41,6 +42,7 @@ add_library_unity(
   query_profiler.cpp
   query_result.cpp
   stream_query_result.cpp
+  profiling_info.cpp
   valid_checker.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main>

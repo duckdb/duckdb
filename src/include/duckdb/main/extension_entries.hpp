@@ -138,6 +138,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"icu_collate_ne", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_nl", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_nn", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"icu_collate_noaccent", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_om", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_or", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_pa", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},

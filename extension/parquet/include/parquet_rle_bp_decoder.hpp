@@ -7,10 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "parquet_types.h"
-#include "thrift_tools.hpp"
-#include "resizable_buffer.hpp"
 #include "decode_utils.hpp"
+#include "parquet_types.h"
+#include "resizable_buffer.hpp"
+#include "thrift_tools.hpp"
 
 namespace duckdb {
 
@@ -35,7 +35,7 @@ public:
 		while (values_read < batch_size) {
 			if (repeat_count_ > 0) {
 				int repeat_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(repeat_count_));
-				std::fill(values + values_read, values + values_read + repeat_batch, static_cast<T>(current_value_));
+				std::fill_n(values + values_read, repeat_batch, static_cast<T>(current_value_));
 				repeat_count_ -= repeat_batch;
 				values_read += repeat_batch;
 			} else if (literal_count_ > 0) {

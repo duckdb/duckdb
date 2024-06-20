@@ -87,9 +87,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
-		// scalar function
-		if (IsLambdaFunction(function)) {
-			// special case
+		if (function.IsLambdaFunction()) {
 			return TryBindLambdaOrJson(function, depth, *func);
 		}
 		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);

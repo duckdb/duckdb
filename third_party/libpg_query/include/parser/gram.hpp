@@ -614,8 +614,9 @@ union YYSTYPE
 	PGViewCheckOption viewcheckoption;
 	PGInsertColumnOrder bynameorposition;
 	PGLoadInstallType loadinstalltype;
+	PGTransactionStmtType transactiontype;
 
-#line 619 "third_party/libpg_query/grammar/grammar_out.hpp"
+#line 620 "third_party/libpg_query/grammar/grammar_out.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -1,0 +1,34 @@
+# name: test/optimizer/prefer_final_projected_columns_on_probe_side.test
+# description: Test Limit Pushdown optimization
+# group: [optimizer]
+
+statement ok
+create table t(ts_start timestamptz, ts_stop timestamptz, id text);
+
+statement ok
+with dates as (
+  select '2023-01-01'::timestamp + i * interval '1 DAY' as x
+    from generate_series(0, 999) as t(i)
+),
+ids as (
+  select 'id_' || lpad(i::text, 4, '0') as y
+  from generate_series(0, 999) as t(i)
+)
+insert into t(ts_start, ts_stop, id)
+  select d.x, null, i.y from dates d, ids i;
+
+
+# this is hard to test but basically you need to make sure that the left child of the hash
+# join is a projection, and the right is a sequential scan.
+# the child of the projection is then the window and sequential scan
+query II
+explain update t as this
+set ts_stop = next.ts_start_next
+from (
+select id, ts_start, LEAD(ts_start) over (partition by id order by ts_start)
+	as ts_start_next
+from t
+) as next
+where this.id=next.id and this.ts_start=next.ts_start;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*SEQ_SCAN.*PROJECTION.*WINDOW.*SEQ_SCAN.*

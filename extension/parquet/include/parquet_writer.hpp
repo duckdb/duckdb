@@ -86,6 +86,9 @@ public:
 	duckdb_parquet::format::Type::type GetType(idx_t schema_idx) {
 		return file_meta_data.schema[schema_idx].type;
 	}
+	LogicalType GetSQLType(idx_t schema_idx) const {
+		return sql_types[schema_idx];
+	}
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}
@@ -98,6 +101,10 @@ public:
 	}
 	optional_idx CompressionLevel() const {
 		return compression_level;
+	}
+	idx_t NumberOfRowGroups() {
+		lock_guard<mutex> glock(lock);
+		return file_meta_data.row_groups.size();
 	}
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);

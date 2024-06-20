@@ -783,6 +783,44 @@ void Vector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
 }
 
+// TODO: add the size of validity masks to this
+idx_t Vector::GetAllocationSize(idx_t cardinality) const {
+	if (!type.IsNested()) {
+		auto physical_size = GetTypeIdSize(type.InternalType());
+		return cardinality * physical_size;
+	}
+	auto internal_type = type.InternalType();
+	switch (internal_type) {
+	case PhysicalType::LIST: {
+		auto physical_size = GetTypeIdSize(type.InternalType());
+		auto total_size = physical_size * cardinality;
+
+		auto child_cardinality = ListVector::GetListCapacity(*this);
+		auto &child_entry = ListVector::GetEntry(*this);
+		total_size += (child_entry.GetAllocationSize(child_cardinality));
+		return total_size;
+	}
+	case PhysicalType::ARRAY: {
+		auto child_cardinality = ArrayVector::GetTotalSize(*this);
+
+		auto &child_entry = ArrayVector::GetEntry(*this);
+		auto total_size = (child_entry.GetAllocationSize(child_cardinality));
+		return total_size;
+	}
+	case PhysicalType::STRUCT: {
+		idx_t total_size = 0;
+		auto &children = StructVector::GetEntries(*this);
+		for (auto &child : children) {
+			total_size += child->GetAllocationSize(cardinality);
+		}
+		return total_size;
+	}
+	default:
+		throw NotImplementedException("Vector::GetAllocationSize not implemented for type: %s", type.ToString());
+		break;
+	}
+}
+
 string Vector::ToString() const {
 	string retval = VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": (UNKNOWN COUNT) [ ";
 	switch (GetVectorType()) {
@@ -1158,8 +1196,13 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
-				entries[i].offset = source.offset;
-				entries[i].length = source.length;
+				if (vdata.validity.RowIsValid(idx)) {
+					entries[i].offset = source.offset;
+					entries[i].length = source.length;
+				} else {
+					entries[i].offset = 0;
+					entries[i].length = 0;
+				}
 			}
 			serializer.WriteProperty(104, "list_size", list_size);
 			serializer.WriteList(105, "entries", count, [&](Serializer::List &list, idx_t i) {

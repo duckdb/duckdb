@@ -16,6 +16,9 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
 	context = buffered_data->GetContext();
 }
 
+StreamQueryResult::StreamQueryResult(ErrorData error) : QueryResult(QueryResultType::STREAM_RESULT, std::move(error)) {
+}
+
 StreamQueryResult::~StreamQueryResult() {
 }
 

@@ -6,10 +6,12 @@ require block_size 262144
 
 require vector_size 2048
 
+# FIXME: once we support custom block sizes, this test should work, as we detect the block
+# FIXME: size in the database header
 statement error
 ATTACH 'data/storage/block_size_16kb.db' (TYPE DUCKDB, READONLY)
 ----
-Cannot read database file
+Not implemented
 
 statement error
 ATTACH 'data/storage/vector_size_512.db' (TYPE DUCKDB, READONLY)

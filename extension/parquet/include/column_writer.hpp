@@ -22,8 +22,8 @@ class ColumnWriterState {
 public:
 	virtual ~ColumnWriterState();
 
-	vector<uint16_t> definition_levels;
-	vector<uint16_t> repetition_levels;
+	unsafe_vector<uint16_t> definition_levels;
+	unsafe_vector<uint16_t> repetition_levels;
 	vector<bool> is_empty;
 	idx_t null_count = 0;
 
@@ -108,9 +108,9 @@ public:
 	virtual void FinalizeWrite(ColumnWriterState &state) = 0;
 
 protected:
-	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, ValidityMask &validity, idx_t count,
-	                        uint16_t define_value, uint16_t null_value);
-	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat);
+	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
+	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;
+	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat) const;
 
 	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  unique_ptr<data_t[]> &compressed_buf);

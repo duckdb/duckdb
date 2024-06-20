@@ -17,6 +17,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 
 #include <algorithm>
+#include <chrono>
 
 namespace duckdb {
 
@@ -426,6 +427,23 @@ void Executor::WorkOnTasks() {
 	}
 }
 
+void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
+	task_reschedule.notify_one();
+}
+
+void Executor::WaitForTask() {
+	static constexpr std::chrono::milliseconds WAIT_TIME = std::chrono::milliseconds(20);
+	std::unique_lock<mutex> l(executor_lock);
+	if (to_be_rescheduled_tasks.empty()) {
+		return;
+	}
+	if (ResultCollectorIsBlocked()) {
+		return;
+	}
+
+	task_reschedule.wait_for(l, WAIT_TIME);
+}
+
 void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 	// This function will spin lock until the task provided is added to the to_be_rescheduled_tasks
 	while (true) {
@@ -438,6 +456,7 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 			auto &scheduler = TaskScheduler::GetScheduler(context);
 			to_be_rescheduled_tasks.erase(task_p.get());
 			scheduler.ScheduleTask(GetToken(), task_p);
+			SignalTaskRescheduled(l);
 			break;
 		}
 	}
@@ -448,7 +467,6 @@ bool Executor::ResultCollectorIsBlocked() {
 		// The result collector is always in the last pipeline
 		return false;
 	}
-	lock_guard<mutex> l(executor_lock);
 	if (to_be_rescheduled_tasks.empty()) {
 		return false;
 	}
@@ -503,6 +521,7 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 
 		if (!current_task && !HasError()) {
 			// there are no tasks to be scheduled and there are tasks blocked
+			lock_guard<mutex> l(executor_lock);
 			if (ResultCollectorIsBlocked()) {
 				// The blocked tasks are processing the Sink of a BufferedResultCollector
 				// We return here so the query result can be made and fetched from

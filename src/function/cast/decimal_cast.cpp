@@ -100,8 +100,17 @@ bool TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count, CastPa
 struct DecimalScaleDownOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		//	We need to round here, not truncate.
 		auto data = (DecimalScaleInput<INPUT_TYPE> *)dataptr;
-		return Cast::Operation<INPUT_TYPE, RESULT_TYPE>(input / data->factor);
+		//	Scale first so we don't overflow when rounding.
+		const auto scaling = data->factor / 2;
+		input /= scaling;
+		if (input < 0) {
+			input -= 1;
+		} else {
+			input += 1;
+		}
+		return Cast::Operation<INPUT_TYPE, RESULT_TYPE>(input / 2);
 	}
 };
 

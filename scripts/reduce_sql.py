@@ -19,6 +19,28 @@ SELECT * FROM reduce_sql_statement('${QUERY}');
 '''
 
 
+class MultiStatementManager:
+    delimiter = ';'
+
+    def __init__(self, multi_statement):
+        # strip whitespace, then the final ';', and split on all ';' inbetween.
+        statements = list(
+            map(lambda x: x.strip(), multi_statement.strip().strip(';').split(MultiStatementManager.delimiter))
+        )
+        self.statements = []
+        for stmt in statements:
+            if len(stmt) > 0:
+                self.statements.append(stmt.strip() + ";")
+
+    def is_multi_statement(sql_statement):
+        if len(sql_statement.split(';')) > 1:
+            return True
+        return False
+
+    def get_last_statement(self):
+        return self.statements[-1]
+
+
 def sanitize_error(err):
     err = re.sub(r'Error: near line \d+: ', '', err)
     err = err.replace(os.getcwd() + '/', '')
@@ -192,7 +214,20 @@ def reduce_query_log_query(start, shell, queries, query_index, max_time_seconds)
     return sql_query
 
 
-def reduce_query_log(queries, shell, max_time_seconds=300):
+def reduce_multi_statement(sql_queries, local_shell, local_data_load):
+    reducer = MultiStatementManager(sql_queries)
+    last_statement = reducer.get_last_statement()
+    print(f"testing if just last statement of multi statement creates the error")
+    (stdout, stderr, returncode) = run_shell_command(local_shell, local_data_load + last_statement)
+    expected_error = sanitize_error(stderr).strip()
+    if len(expected_error) > 0:
+        # reduce just the last statement
+        return reduce(last_statement, local_data_load, local_shell, expected_error, int(args.max_time))
+    queries = reduce_query_log(reducer.statements, local_shell, [local_data_load])
+    return "\n".join(queries)
+
+
+def reduce_query_log(queries, shell, data_load=[], max_time_seconds=300):
     start = time.time()
     current_index = 0
     # first try to remove as many queries as possible
@@ -203,8 +238,9 @@ def reduce_query_log(queries, shell, max_time_seconds=300):
             break
         # remove the query at "current_index"
         new_queries = queries[:current_index] + queries[current_index + 1 :]
+        new_queries_with_data = data_load + new_queries
         # try to run the queries and check if we still get the same error
-        (new_queries_x, current_error) = run_queries_until_crash(new_queries)
+        (new_queries_x, current_error) = run_queries_until_crash(new_queries_with_data)
         if current_error is None:
             # cannot remove this query without invalidating the test case
             current_index += 1
@@ -258,7 +294,11 @@ if __name__ == "__main__":
     print(expected_error)
     print("===================================================")
 
-    final_query = reduce(sql_query, data_load, shell, expected_error, int(args.max_time))
+    if MultiStatementManager.is_multi_statement(sql_query):
+        final_query = reduce_multi_statement(sql_query, shell, data_load)
+    else:
+        final_query = reduce(sql_query, data_load, shell, expected_error, int(args.max_time))
+
     print("Found final reduced query")
     print("===================================================")
     print(final_query)

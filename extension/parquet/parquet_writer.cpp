@@ -8,6 +8,8 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -15,8 +17,6 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 #endif
 
 namespace duckdb {
@@ -169,6 +169,11 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
                                         duckdb_parquet::format::SchemaElement &schema_ele) {
+	if (duckdb_type.IsJSONType()) {
+		schema_ele.converted_type = ConvertedType::JSON;
+		schema_ele.__isset.converted_type = true;
+		return;
+	}
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::TINYINT:
 		schema_ele.converted_type = ConvertedType::INT_8;
@@ -217,7 +222,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MICROS;
 		schema_ele.__isset.converted_type = true;
@@ -225,6 +229,13 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
 		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIMESTAMP_TZ);
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		schema_ele.__isset.converted_type = false;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIMESTAMP = true;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MILLIS;
@@ -413,6 +424,11 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 			}
 		}
 
+		// Reserving these once at the start really pays off
+		for (auto &write_state : write_states) {
+			write_state->definition_levels.reserve(buffer.Count());
+		}
+
 		for (auto &chunk : buffer.Chunks({column_ids})) {
 			for (idx_t i = 0; i < next; i++) {
 				col_writers[i].get().Prepare(*write_states[i], nullptr, chunk.data[i], chunk.size());
@@ -537,7 +553,7 @@ void ParquetWriter::Finalize() {
 	}
 
 	// flush to disk
-	writer->Sync();
+	writer->Close();
 	writer.reset();
 }
 

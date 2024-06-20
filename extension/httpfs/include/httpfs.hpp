@@ -10,7 +10,7 @@
 
 namespace duckdb_httplib_openssl {
 struct Response;
-struct Result;
+class Result;
 class Client;
 } // namespace duckdb_httplib_openssl
 

@@ -114,6 +114,7 @@ void PartialBlockForCheckpoint::Clear() {
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
 	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
+
 	auto tuple_count = segment->count.load();
 	if (tuple_count == 0) { // LCOV_EXCL_START
 		return;
@@ -167,8 +168,8 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		// constant block: no need to write anything to disk besides the stats
 		// set up the compression function to constant
 		auto &config = DBConfig::GetConfig(db);
-		segment->function =
-		    *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
+		CompressionInfo compression_info(Storage::BLOCK_SIZE, segment->type.InternalType());
+		segment->function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, compression_info);
 		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
 	}
 
