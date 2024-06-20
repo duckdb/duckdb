@@ -337,7 +337,7 @@ AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &t
 
 AggregateFunction GetDiscreteQuantileFallbackFunction(const LogicalType &type) {
 	using STATE = QuantileState<string_t, QuantileStringType>;
-using OP = QuantileScalarFallback;
+	using OP = QuantileScalarFallback;
 
 	AggregateFunction fun({type}, type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
@@ -434,6 +434,48 @@ struct QuantileListOperation : QuantileOperation {
 	}
 };
 
+struct QuantileListFallback : QuantileOperation {
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Execute(STATE &state, const INPUT_TYPE &key, AggregateInputData &input_data) {
+		state.AddElement(key, input_data);
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.v.empty()) {
+			finalize_data.ReturnNull();
+			return;
+		}
+
+		D_ASSERT(finalize_data.input.bind_data);
+		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
+
+		auto &result = ListVector::GetEntry(finalize_data.result);
+		auto ridx = ListVector::GetListSize(finalize_data.result);
+		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
+
+		auto v_t = state.v.data();
+		D_ASSERT(v_t);
+
+		auto &entry = target;
+		entry.offset = ridx;
+		idx_t lower = 0;
+		for (const auto &q : bind_data.order) {
+			const auto &quantile = bind_data.quantiles[q];
+			Interpolator<true> interp(quantile, state.v.size(), bind_data.desc);
+			interp.begin = lower;
+			auto interpolation_result = interp.InterpolateInternal<string_t>(state.v.data());
+			CreateSortKeyHelpers::DecodeSortKey(interpolation_result, result, ridx + q,
+			                                     OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
+			lower = interp.FRN;
+		}
+		entry.length = bind_data.quantiles.size();
+
+		ListVector::SetListSize(finalize_data.result, entry.offset + entry.length);
+	}
+
+};
+
 template <typename INPUT_TYPE, class TYPE_OP=QuantileStandardType>
 AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {
 	using STATE = QuantileState<INPUT_TYPE, TYPE_OP>;
@@ -442,6 +484,17 @@ AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalTyp
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
 	fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
+	return fun;
+}
+
+AggregateFunction GetDiscreteQuantileListFallbackFunction(const LogicalType &type) {
+	using STATE = QuantileState<string_t, QuantileStringType>;
+	using OP = QuantileListFallback;
+
+	AggregateFunction fun({type}, LogicalType::LIST(type), AggregateFunction::StateSize<STATE>,
+		    AggregateFunction::StateInitialize<STATE, OP>, AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
+		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, list_entry_t, OP>,
+		    nullptr);
 	return fun;
 }
 
@@ -466,8 +519,7 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 	case PhysicalType::VARCHAR:
 		return GetTypedDiscreteQuantileListAggregateFunction<string_t, QuantileStringType>(type);
 	default:
-		// FIXME: add sort key here
-		return GetTypedDiscreteQuantileAggregateFunction<string_t, QuantileStringType>(type);
+		return GetDiscreteQuantileListFallbackFunction(type);
 	}
 }
 
@@ -658,20 +710,6 @@ void BindQuantileInner(AggregateFunction &function, const LogicalType &type, Qua
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 }
 
-unique_ptr<FunctionData> BindDiscreteQuantileDecimal(ClientContext &context, AggregateFunction &function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindQuantile(context, function, arguments);
-	BindQuantileInner(function, arguments[0]->return_type, QuantileSerializationType::DECIMAL_DISCRETE);
-	return bind_data;
-}
-
-unique_ptr<FunctionData> BindDiscreteQuantileDecimalList(ClientContext &context, AggregateFunction &function,
-                                                         vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindQuantile(context, function, arguments);
-	BindQuantileInner(function, arguments[0]->return_type, QuantileSerializationType::DECIMAL_DISCRETE_LIST);
-	return bind_data;
-}
-
 unique_ptr<FunctionData> BindContinuousQuantileDecimal(ClientContext &context, AggregateFunction &function,
                                                        vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindQuantile(context, function, arguments);
@@ -685,6 +723,7 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &contex
 	BindQuantileInner(function, arguments[0]->return_type, QuantileSerializationType::DECIMAL_CONTINUOUS_LIST);
 	return bind_data;
 }
+
 static bool CanInterpolate(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
@@ -705,53 +744,86 @@ static bool CanInterpolate(const LogicalType &type) {
 	}
 }
 
-unique_ptr<FunctionData> DeserializeMedian(Deserializer &deserializer, AggregateFunction &function);
+struct MedianFunction {
+	static AggregateFunction GetAggregate(const LogicalType &type) {
+		auto fun = CanInterpolate(type) ? GetContinuousQuantileAggregateFunction(type)
+		                                : GetDiscreteQuantileAggregateFunction(type);
+		fun.name = "median";
+		fun.serialize = QuantileBindData::Serialize;
+		fun.deserialize = Deserialize;
+		return fun;
+	}
 
-AggregateFunction GetMedianAggregate(const LogicalType &type) {
-	auto fun = CanInterpolate(type) ? GetContinuousQuantileAggregateFunction(type)
-	                                : GetDiscreteQuantileAggregateFunction(type);
-	fun.name = "median";
-	fun.serialize = QuantileBindData::Serialize;
-	fun.deserialize = DeserializeMedian;
-	return fun;
-}
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+		auto bind_data = QuantileBindData::Deserialize(deserializer, function);
 
-unique_ptr<FunctionData> DeserializeMedian(Deserializer &deserializer, AggregateFunction &function) {
-	auto bind_data = QuantileBindData::Deserialize(deserializer, function);
+		auto &input_type = function.arguments[0];
+		function = GetAggregate(input_type);
+		return bind_data;
+	}
 
-	auto &input_type = function.arguments[0];
-	function = GetMedianAggregate(input_type);
-	return bind_data;
-}
+	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
+	                                    vector<unique_ptr<Expression>> &arguments) {
+		function = GetAggregate(arguments[0]->return_type);
+		return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
+	}
+};
 
-unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
-                                    vector<unique_ptr<Expression>> &arguments) {
-	function = GetMedianAggregate(arguments[0]->return_type);
-	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
-}
+struct DiscreteQuantileFunction {
+	static AggregateFunction GetAggregate(const LogicalType &type) {
+		auto fun = GetDiscreteQuantileAggregateFunction(type);
+		fun.name = "quantile_disc";
+		fun.bind = Bind;
+		fun.serialize = QuantileBindData::Serialize;
+		fun.deserialize = Deserialize;
+		// temporarily push an argument so we can bind the actual quantile
+		fun.arguments.emplace_back(LogicalType::DOUBLE);
+		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return fun;
+	}
 
-AggregateFunction GetDiscreteQuantileAggregate(const LogicalType &type) {
-	auto fun = GetDiscreteQuantileAggregateFunction(type);
-	fun.bind = BindQuantile;
-	fun.serialize = QuantileBindData::Serialize;
-	fun.deserialize = QuantileBindData::Deserialize;
-	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.emplace_back(LogicalType::DOUBLE);
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	return fun;
-}
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+		auto bind_data = QuantileBindData::Deserialize(deserializer, function);
 
-AggregateFunction GetDiscreteQuantileListAggregate(const LogicalType &type) {
-	auto fun = GetDiscreteQuantileListAggregateFunction(type);
-	fun.bind = BindQuantile;
-	fun.serialize = QuantileBindData::Serialize;
-	fun.deserialize = QuantileBindData::Deserialize;
-	// temporarily push an argument so we can bind the actual quantile
-	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
-	fun.arguments.push_back(list_of_double);
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	return fun;
-}
+		auto &input_type = function.arguments[0];
+		function = GetAggregate(input_type);
+		return bind_data;
+	}
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
+	                                    vector<unique_ptr<Expression>> &arguments) {
+		function = GetAggregate(arguments[0]->return_type);
+		return BindQuantile(context, function, arguments);
+	}
+};
+
+struct DiscreteQuantileListFunction {
+	static AggregateFunction GetAggregate(const LogicalType &type) {
+		auto fun = GetDiscreteQuantileListAggregateFunction(type);
+		fun.name = "quantile_disc";
+		fun.bind = Bind;
+		fun.serialize = QuantileBindData::Serialize;
+		fun.deserialize = Deserialize;
+		// temporarily push an argument so we can bind the actual quantile
+		fun.arguments.emplace_back(LogicalType::LIST(LogicalType::DOUBLE));
+		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return fun;
+	}
+
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+		auto bind_data = QuantileBindData::Deserialize(deserializer, function);
+
+		auto &input_type = function.arguments[0];
+		function = GetAggregate(input_type);
+		return bind_data;
+	}
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
+	                                    vector<unique_ptr<Expression>> &arguments) {
+		function = GetAggregate(arguments[0]->return_type);
+		return BindQuantile(context, function, arguments);
+	}
+};
 
 AggregateFunction GetContinuousQuantileAggregate(const LogicalType &type) {
 	auto fun = GetContinuousQuantileAggregateFunction(type);
@@ -797,28 +869,29 @@ vector<LogicalType> GetQuantileTypes() {
 }
 
 AggregateFunctionSet MedianFun::GetFunctions() {
-	AggregateFunctionSet median("median");
-	AggregateFunction fun({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, BindMedian);
+	AggregateFunctionSet set("median");
+	AggregateFunction fun({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, MedianFunction::Bind);
 	fun.serialize = QuantileBindData::Serialize;
-	fun.deserialize = DeserializeMedian;
+	fun.deserialize = MedianFunction::Deserialize;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	median.AddFunction(fun);
-	return median;
+	set.AddFunction(fun);
+	return set;
 }
 
 AggregateFunctionSet QuantileDiscFun::GetFunctions() {
-	AggregateFunctionSet quantile_disc("quantile_disc");
-	quantile_disc.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::DOUBLE},
-	                                                      LogicalTypeId::DECIMAL, BindDiscreteQuantileDecimal));
-	quantile_disc.AddFunction(
-	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
-	                                LogicalType::LIST(LogicalTypeId::DECIMAL), BindDiscreteQuantileDecimalList));
-	for (const auto &type : GetQuantileTypes()) {
-		quantile_disc.AddFunction(GetDiscreteQuantileAggregate(type));
-		quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(type));
-	}
-	return quantile_disc;
-	// quantile
+	AggregateFunctionSet set("quantile_disc");
+	AggregateFunction fun({LogicalType::ANY, LogicalType::DOUBLE}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, DiscreteQuantileFunction::Bind);
+	fun.serialize = QuantileBindData::Serialize;
+	fun.deserialize = DiscreteQuantileFunction::Deserialize;
+	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	set.AddFunction(fun);
+
+	fun.bind = DiscreteQuantileListFunction::Bind;
+	fun.deserialize = DiscreteQuantileListFunction::Deserialize;
+	fun.arguments[1] = LogicalType::LIST(LogicalType::DOUBLE);
+	set.AddFunction(fun);
+
+	return set;
 }
 
 AggregateFunctionSet QuantileContFun::GetFunctions() {
