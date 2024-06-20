@@ -366,8 +366,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 			message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
 		}
 		if (res.error() == duckdb_httplib::Error::Success) {
-			throw HTTPException(res.value(), "Failed to download extension \"%s\" at URL \"%s%s\"\n%s", extension_name,
-			                    url_base, url_local_part, message);
+			throw HTTPException(res.value(), "Failed to download extension \"%s\" at URL \"%s%s\" (HTTP %n)\n%s",
+			                    extension_name, url_base, url_local_part, res->status, message);
 		} else {
 			throw IOException("Failed to download extension \"%s\" at URL \"%s%s\"\n%s (ERROR %s)", extension_name,
 			                  url_base, url_local_part, message, to_string(res.error()));
