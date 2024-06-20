@@ -28,8 +28,8 @@ struct QuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
-		state.v.emplace_back(input);
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &aggr_input) {
+		state.AddElement(input, aggr_input.input);
 	}
 
 	template <class STATE, class OP>
@@ -246,16 +246,38 @@ struct WindowQuantileState {
 	}
 };
 
-template <typename INPUT_TYPE, typename SAVE_TYPE>
+struct QuantileStandardType {
+	template<class T>
+	static T Operation(T input, AggregateInputData &) {
+		return input;
+	}
+};
+
+struct QuantileStringType {
+	template<class T>
+	static T Operation(T input, AggregateInputData &input_data) {
+		if (input.IsInlined()) {
+			return input;
+		}
+		auto string_data = input_data.allocator.Allocate(input.GetSize());
+		memcpy(string_data, input.GetData(), input.GetSize());
+		return string_t(char_ptr_cast(string_data), UnsafeNumericCast<uint32_t>(input.GetSize()));
+	}
+};
+
+template <typename INPUT_TYPE, class TYPE_OP>
 struct QuantileState {
-	using SaveType = SAVE_TYPE;
 	using InputType = INPUT_TYPE;
 
 	// Regular aggregation
-	vector<SaveType> v;
+	vector<INPUT_TYPE> v;
 
 	// Window Quantile State
 	unique_ptr<WindowQuantileState<INPUT_TYPE>> window_state;
+
+	void AddElement(INPUT_TYPE element, AggregateInputData &aggr_input) {
+		v.emplace_back(TYPE_OP::Operation(element, aggr_input));
+	}
 
 	bool HasTrees() const {
 		return window_state && window_state->HasTrees();

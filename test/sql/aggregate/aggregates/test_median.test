@@ -72,6 +72,19 @@ SELECT median(r::decimal(10,2)) FROM quantile
 ----
 4999.50
 
+# sorting order is different for varchars and numbers
+# so a different result here is expected
+query I
+SELECT median(r::varchar) FROM quantile
+----
+5498
+
+# adding a prefix
+query I
+SELECT median(concat('thishasalongprefix_', r::varchar)) filter(r is not null) FROM quantile
+----
+thishasalongprefix_5498
+
 query I
 SELECT median(NULL) FROM quantile
 ----

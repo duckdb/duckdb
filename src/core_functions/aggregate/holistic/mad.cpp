@@ -177,16 +177,16 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 			finalize_data.ReturnNull();
 			return;
 		}
-		using SAVE_TYPE = typename STATE::SaveType;
+		using INPUT_TYPE = typename STATE::InputType;
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &q = bind_data.quantiles[0];
 		Interpolator<false> interp(q, state.v.size(), false);
-		const auto med = interp.template Operation<SAVE_TYPE, MEDIAN_TYPE>(state.v.data(), finalize_data.result);
+		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(state.v.data(), finalize_data.result);
 
-		MadAccessor<SAVE_TYPE, T, MEDIAN_TYPE> accessor(med);
-		target = interp.template Operation<SAVE_TYPE, T>(state.v.data(), finalize_data.result, accessor);
+		MadAccessor<INPUT_TYPE, T, MEDIAN_TYPE> accessor(med);
+		target = interp.template Operation<INPUT_TYPE, T>(state.v.data(), finalize_data.result, accessor);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -257,7 +257,7 @@ unique_ptr<FunctionData> BindMAD(ClientContext &context, AggregateFunction &func
 template <typename INPUT_TYPE, typename MEDIAN_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const LogicalType &input_type,
                                                                    const LogicalType &target_type) {
-	using STATE = QuantileState<INPUT_TYPE, INPUT_TYPE>;
+	using STATE = QuantileState<INPUT_TYPE, QuantileStandardType>;
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.bind = BindMAD;
