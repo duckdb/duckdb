@@ -47,7 +47,7 @@ struct AggregateSortKeyHelpers {
 			}
 			const auto key_idx = kdata.sel->get_index(i);
 			auto &state = *states[sidx];
-			OP::template Execute<string_t, STATE>(state, key_data[key_idx], input_data);
+			OP::template Execute<string_t, STATE, OP>(state, key_data[key_idx], input_data);
 		}
 	}
 

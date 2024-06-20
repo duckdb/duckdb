@@ -256,7 +256,7 @@ struct VectorMinMaxBase {
 		state.Assign(input);
 	}
 
-	template <class INPUT_TYPE, class STATE>
+	template <class INPUT_TYPE, class STATE, class OP>
 	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
 		if (!state.isset) {
 			Assign(state, input, input_data);
@@ -274,7 +274,7 @@ struct VectorMinMaxBase {
 			// source is NULL, nothing to do
 			return;
 		}
-		OP::template Execute<string_t, STATE>(target, source.value, input_data);
+		OP::template Execute<string_t, STATE, OP>(target, source.value, input_data);
 	}
 
 	template <class STATE>

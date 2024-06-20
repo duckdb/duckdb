@@ -175,21 +175,26 @@ struct ModeIncluded {
 };
 
 template <typename TYPE_OP>
-struct ModeFunction {
+struct BaseModeFunction {
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		new (&state) STATE();
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &key, AggregateUnaryInput &aggr_input) {
+	static void Execute(STATE &state, const INPUT_TYPE &key, AggregateInputData &input_data) {
 		if (!state.frequency_map) {
-			state.frequency_map = TYPE_OP::CreateEmpty(aggr_input.input.allocator);
+			state.frequency_map = TYPE_OP::CreateEmpty(input_data.allocator);
 		}
 		auto &i = (*state.frequency_map)[key];
 		++i.count;
 		i.first_row = MinValue<idx_t>(i.first_row, state.count);
 		++state.count;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &key, AggregateUnaryInput &aggr_input) {
+		Execute<INPUT_TYPE, STATE, OP>(state, key, aggr_input.input);
 	}
 
 	template <class STATE, class OP>
@@ -210,6 +215,18 @@ struct ModeFunction {
 		target.count += source.count;
 	}
 
+	static bool IgnoreNull() {
+		return true;
+	}
+
+	template <class STATE>
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		state.~STATE();
+	}
+};
+
+template <typename TYPE_OP>
+struct ModeFunction : BaseModeFunction<TYPE_OP> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.frequency_map) {
@@ -223,6 +240,7 @@ struct ModeFunction {
 			finalize_data.ReturnNull();
 		}
 	}
+
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &key, AggregateUnaryInput &aggr_input, idx_t count) {
 		if (!state.frequency_map) {
@@ -319,73 +337,25 @@ struct ModeFunction {
 
 		prevs = frames;
 	}
-
-	static bool IgnoreNull() {
-		return true;
-	}
-
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		state.~STATE();
-	}
 };
 
-static void ModeFallbackUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
-                               idx_t count) {
-	using STATE = ModeState<string_t, ModeString>;
-	using OP = ModeFunction<ModeString>;
-
-	auto &input = inputs[0];
-	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
-
-	Vector sort_keys(LogicalType::BLOB);
-	OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-	CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_keys);
-	UnifiedVectorFormat sort_key_data;
-	sort_keys.ToUnifiedFormat(count, sort_key_data);
-
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
-
-	auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
-	auto sort_key_values = UnifiedVectorFormat::GetData<string_t>(sort_key_data);
-	AggregateUnaryInput unary_input(aggr_input, sort_key_data.validity);
-	for (idx_t i = 0; i < count; i++) {
-		auto input_idx = input_data.sel->get_index(i);
-		if (!input_data.validity.RowIsValid(input_idx)) {
-			continue;
-		}
-		auto &state = *states[sdata.sel->get_index(i)];
-		auto sort_key_idx = sort_key_data.sel->get_index(i);
-		auto &input_value = sort_key_values[sort_key_idx];
-		OP::Operation<string_t, STATE, OP>(state, input_value, unary_input);
-	}
-}
-
-static void ModeFallbackFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
-                                 idx_t offset) {
-	using STATE = ModeState<string_t, ModeString>;
-
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
-	auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
-
-	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[sdata.sel->get_index(i)];
+template <typename TYPE_OP>
+struct ModeFallbackFunction : BaseModeFunction<TYPE_OP> {
+	template <class STATE>
+	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
 		if (!state.frequency_map) {
-			FlatVector::SetNull(result, i, true);
-			continue;
+			finalize_data.ReturnNull();
+			return;
 		}
 		auto highest_frequency = state.Scan();
 		if (highest_frequency != state.frequency_map->end()) {
-			CreateSortKeyHelpers::DecodeSortKey(highest_frequency->first, result, i,
-			                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
+			CreateSortKeyHelpers::DecodeSortKey(highest_frequency->first, finalize_data.result, finalize_data.result_idx,
+		                                        OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
 		} else {
-			FlatVector::SetNull(result, i, true);
+			finalize_data.ReturnNull();
 		}
 	}
-}
+};
 
 template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
@@ -398,10 +368,10 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 
 AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	using STATE = ModeState<string_t, ModeString>;
-	using OP = ModeFunction<ModeString>;
+	using OP = ModeFallbackFunction<ModeString>;
 	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
-	                       AggregateFunction::StateInitialize<STATE, OP>, ModeFallbackUpdate,
-	                       AggregateFunction::StateCombine<STATE, OP>, ModeFallbackFinalize, nullptr);
+	                       AggregateFunction::StateInitialize<STATE, OP>, AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
+	                       AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
 	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 	return aggr;
 }
