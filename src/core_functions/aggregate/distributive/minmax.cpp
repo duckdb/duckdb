@@ -300,32 +300,6 @@ struct MinOperationVector : VectorMinMaxBase<OrderType::ASCENDING> {
 
 struct MaxOperationVector : VectorMinMaxBase<OrderType::DESCENDING> {};
 
-template <class OP>
-unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunction &function,
-                                           vector<unique_ptr<Expression>> &arguments) {
-	auto decimal_type = arguments[0]->return_type;
-	auto name = function.name;
-	switch (decimal_type.InternalType()) {
-	case PhysicalType::INT16:
-		function = GetUnaryAggregate<OP>(LogicalType::SMALLINT);
-		break;
-	case PhysicalType::INT32:
-		function = GetUnaryAggregate<OP>(LogicalType::INTEGER);
-		break;
-	case PhysicalType::INT64:
-		function = GetUnaryAggregate<OP>(LogicalType::BIGINT);
-		break;
-	default:
-		function = GetUnaryAggregate<OP>(LogicalType::HUGEINT);
-		break;
-	}
-	function.name = std::move(name);
-	function.arguments[0] = decimal_type;
-	function.return_type = decimal_type;
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	return nullptr;
-}
-
 template <typename OP, typename STATE>
 static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 	return AggregateFunction(
@@ -401,8 +375,6 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 static void AddMinMaxOperator(AggregateFunctionSet &set) {
-	set.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, nullptr, BindDecimalMinMax<OP>));
 	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                  nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>));
 }
