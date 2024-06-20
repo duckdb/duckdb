@@ -2636,7 +2636,14 @@ bool TryCastFromDecimal::Operation(hugeint_t input, uhugeint_t &result, CastPara
 //===--------------------------------------------------------------------===//
 template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
-	result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+	SRC power_of_ten = 1;
+	while (scale && input >= power_of_ten * 10) {
+		power_of_ten *= 10;
+		scale--;
+	}
+	result = (Cast::Operation<SRC, DST>(input / power_of_ten) +
+	          Cast::Operation<SRC, DST>(input % power_of_ten) / Cast::Operation<SRC, DST>(power_of_ten)) /
+	         DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 	return true;
 }
 
