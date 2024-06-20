@@ -21,19 +21,36 @@ namespace duckdb {
 const uint64_t WAL_VERSION_NUMBER = 2;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path)
-    : skip_writing(false), database(database), wal_path(wal_path) {
+    : database(database), wal_path(wal_path), wal_size(0), initialized(false) {
 }
 
 WriteAheadLog::~WriteAheadLog() {
 }
 
 BufferedFileWriter &WriteAheadLog::Initialize() {
+	if (initialized) {
+		return *writer;
+	}
 	if (!writer) {
 		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
 		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 		                                           FileFlags::FILE_FLAGS_APPEND);
+		wal_size = writer->GetFileSize();
+		initialized = true;
 	}
-	return GetWriter();
+	return *writer;
+}
+
+//! Gets the total bytes written to the WAL since startup
+idx_t WriteAheadLog::GetWALSize() {
+	if (!Initialized()) {
+		auto &fs = FileSystem::Get(database);
+		if (!fs.FileExists(wal_path)) {
+			return 0;
+		}
+		Initialize();
+	}
+	return wal_size;
 }
 
 idx_t WriteAheadLog::GetTotalWritten() {
@@ -43,11 +60,12 @@ idx_t WriteAheadLog::GetTotalWritten() {
 	return writer->GetTotalWritten();
 }
 
-void WriteAheadLog::Truncate(int64_t size) {
+void WriteAheadLog::Truncate(idx_t size) {
 	if (!writer) {
 		return;
 	}
 	writer->Truncate(size);
+	wal_size = writer->GetFileSize();
 }
 
 void WriteAheadLog::Delete() {
@@ -57,6 +75,7 @@ void WriteAheadLog::Delete() {
 	writer.reset();
 	auto &fs = FileSystem::Get(database);
 	fs.RemoveFile(wal_path);
+	wal_size = 0;
 }
 
 //===--------------------------------------------------------------------===//
@@ -68,17 +87,11 @@ public:
 	}
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
-		if (wal.skip_writing) {
-			return;
-		}
 		// buffer data into the memory stream
 		memory_stream.WriteData(buffer, write_size);
 	}
 
 	void Flush() {
-		if (wal.skip_writing) {
-			return;
-		}
 		if (!stream) {
 			stream = wal.Initialize();
 		}
@@ -103,11 +116,7 @@ private:
 
 class WriteAheadLogSerializer {
 public:
-	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type)
-	    : wal(wal), checksum_writer(wal), serializer(checksum_writer) {
-		if (wal.skip_writing) {
-			return;
-		}
+	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type) : checksum_writer(wal), serializer(checksum_writer) {
 		if (!wal.Initialized()) {
 			wal.Initialize();
 		}
@@ -118,34 +127,21 @@ public:
 	}
 
 	void End() {
-		if (wal.skip_writing) {
-			return;
-		}
-		D_ASSERT(wal.Initialized());
 		serializer.End();
 		checksum_writer.Flush();
 	}
 
 	template <class T>
 	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
-		if (wal.skip_writing) {
-			return;
-		}
-		D_ASSERT(wal.Initialized());
 		serializer.WriteProperty(field_id, tag, value);
 	}
 
 	template <class FUNC>
 	void WriteList(const field_id_t field_id, const char *tag, idx_t count, FUNC func) {
-		if (wal.skip_writing) {
-			return;
-		}
-		D_ASSERT(wal.Initialized());
 		serializer.WriteList(field_id, tag, count, func);
 	}
 
 private:
-	WriteAheadLog &wal;
 	ChecksumWriter checksum_writer;
 	BinarySerializer serializer;
 };
@@ -277,10 +273,6 @@ void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<I
 }
 
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
-	if (skip_writing) {
-		return;
-	}
-
 	WriteAheadLogSerializer serializer(*this, WALType::CREATE_INDEX);
 	serializer.WriteProperty(101, "index_catalog_entry", &entry);
 
@@ -401,10 +393,9 @@ void WriteAheadLog::WriteAlter(const AlterInfo &info) {
 // FLUSH
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::Flush() {
-	if (skip_writing) {
+	if (!writer) {
 		return;
 	}
-	D_ASSERT(writer);
 
 	// write an empty entry
 	WriteAheadLogSerializer serializer(*this, WALType::WAL_FLUSH);
@@ -412,6 +403,7 @@ void WriteAheadLog::Flush() {
 
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
+	wal_size = writer->GetFileSize();
 }
 
 } // namespace duckdb

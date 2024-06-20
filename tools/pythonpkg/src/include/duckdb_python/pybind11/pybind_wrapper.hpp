@@ -29,6 +29,8 @@ struct type_caster<duckdb::vector<Type, SAFE>> : list_caster<duckdb::vector<Type
 
 bool gil_check();
 void gil_assert();
+bool is_list_like(handle obj);
+bool is_dict_like(handle obj);
 
 } // namespace pybind11
 
