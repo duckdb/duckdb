@@ -103,8 +103,6 @@ hugeint_t CastInterpolation::Interpolate(const hugeint_t &lo, const double d, co
 template <>
 interval_t CastInterpolation::Interpolate(const interval_t &lo, const double d, const interval_t &hi);
 template <>
-string_t CastInterpolation::Cast(const std::string &src, Vector &result);
-template <>
 string_t CastInterpolation::Cast(const string_t &src, Vector &result);
 
 // Continuous interpolation
