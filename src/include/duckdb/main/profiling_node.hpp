@@ -24,7 +24,7 @@
 
 namespace duckdb {
 
-enum class ProfilingNodeType : uint8_t { QUERY, OPERATOR };
+enum class ProfilingNodeType : uint8_t { QUERY_ROOT, OPERATOR };
 
 class QueryProfilingNode;
 
@@ -67,7 +67,7 @@ public:
 	~QueryProfilingNode() override {};
 
 public:
-	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::QUERY;
+	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::QUERY_ROOT;
 
 	string query;
 };

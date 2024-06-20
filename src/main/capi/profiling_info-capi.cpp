@@ -68,7 +68,7 @@ const char *duckdb_profiling_info_get_query(duckdb_profiling_info info) {
 		return nullptr;
 	}
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	if (node.node_type != duckdb::ProfilingNodeType::QUERY) {
+	if (node.node_type != duckdb::ProfilingNodeType::QUERY_ROOT) {
 		return nullptr;
 	}
 	auto &query_node = node.Cast<duckdb::QueryProfilingNode>();

@@ -578,7 +578,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 
 	if (depth == 0) {
 		auto query_node = make_uniq<QueryProfilingNode>();
-		query_node->node_type = ProfilingNodeType::QUERY;
+		query_node->node_type = ProfilingNodeType::QUERY_ROOT;
 		node = std::move(query_node);
 	} else {
 		auto op_node = make_uniq<OperatorProfilingNode>();

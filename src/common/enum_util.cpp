@@ -5551,8 +5551,8 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 template<>
 const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value) {
 	switch(value) {
-	case ProfilingNodeType::QUERY:
-		return "QUERY";
+	case ProfilingNodeType::QUERY_ROOT:
+		return "QUERY_ROOT";
 	case ProfilingNodeType::OPERATOR:
 		return "OPERATOR";
 	default:
@@ -5562,8 +5562,8 @@ const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value) {
 
 template<>
 ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value) {
-	if (StringUtil::Equals(value, "QUERY")) {
-		return ProfilingNodeType::QUERY;
+	if (StringUtil::Equals(value, "QUERY_ROOT")) {
+		return ProfilingNodeType::QUERY_ROOT;
 	}
 	if (StringUtil::Equals(value, "OPERATOR")) {
 		return ProfilingNodeType::OPERATOR;
