@@ -817,7 +817,7 @@ WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &execu
 
 	auto types = payload_chunk.GetTypes();
 	if (!types.empty()) {
-		payload_collection.Initialize(Allocator::Get(executor.context), types, payload_count);
+		payload_collection.Initialize(Allocator::Get(executor.context), types);
 	}
 }
 
