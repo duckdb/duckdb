@@ -87,6 +87,15 @@ struct TypeOfFun {
 	static ScalarFunction GetFunction();
 };
 
+struct CanCastImplicitlyFun {
+	static constexpr const char *Name = "can_cast_implicitly";
+	static constexpr const char *Parameters = "source_type,target_type";
+	static constexpr const char *Description = "Whether or not we can implicitly cast from the source type to the other type";
+	static constexpr const char *Example = "can_implicitly_cast(NULL::INTEGER, NULL::BIGINT)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CurrentQueryFun {
 	static constexpr const char *Name = "current_query";
 	static constexpr const char *Parameters = "";

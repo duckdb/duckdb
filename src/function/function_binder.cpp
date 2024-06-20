@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
 
@@ -355,9 +356,9 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	return BindScalarFunction(bound_function, std::move(children), is_operator, binder);
 }
 
-unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
-                                                                       vector<unique_ptr<Expression>> children,
-                                                                       bool is_operator, optional_ptr<Binder> binder) {
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
+                                                          vector<unique_ptr<Expression>> children, bool is_operator,
+                                                          optional_ptr<Binder> binder) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
@@ -372,8 +373,18 @@ unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFun
 
 	// now create the function
 	auto return_type = bound_function.return_type;
-	return make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function), std::move(children),
-	                                          std::move(bind_info), is_operator);
+	unique_ptr<Expression> result;
+	auto result_func = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function),
+	                                                      std::move(children), std::move(bind_info), is_operator);
+	if (result_func->function.bind_expression) {
+		// if a bind_expression callback is registered - call it and emit the resulting expression
+		FunctionBindExpressionInput input(context, result_func->bind_info.get(), *result_func);
+		result = result_func->function.bind_expression(input);
+	}
+	if (!result) {
+		result = std::move(result_func);
+	}
+	return result;
 }
 
 unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(AggregateFunction bound_function,
