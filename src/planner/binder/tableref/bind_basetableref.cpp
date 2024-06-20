@@ -184,11 +184,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 	}
 	if (!table_or_view) {
-		string table_name = ref.catalog_name;
-		if (!ref.schema_name.empty()) {
-			table_name += (!table_name.empty() ? "." : "") + ref.schema_name;
-		}
-		table_name += (!table_name.empty() ? "." : "") + ref.table_name;
+		string table_name = ParseInfo::QualifierToStringNoQuotes(ref.catalog_name, ref.schema_name, ref.table_name);
 		// table could not be found: try to bind a replacement scan
 		// Try replacement scan bind
 		auto replacement_scan_bind_result = BindWithReplacementScan(context, table_name, ref);

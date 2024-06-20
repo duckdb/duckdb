@@ -45,7 +45,7 @@ public:
 	unique_ptr<Connection> connection;
 	unique_ptr<DuckDBPyRelation> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
-	unordered_map<string, shared_ptr<Relation>> temporary_views;
+
 	std::mutex py_connection_lock;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
 	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
