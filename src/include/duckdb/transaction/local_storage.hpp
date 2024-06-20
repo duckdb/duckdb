@@ -52,6 +52,8 @@ public:
 	vector<unique_ptr<OptimisticDataWriter>> optimistic_writers;
 	//! Whether or not storage was merged
 	bool merged_storage = false;
+	//! Whether or not the storage was dropped
+	bool is_dropped = false;
 
 public:
 	void InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters = nullptr);
@@ -141,6 +143,7 @@ public:
 	bool ChangesMade() noexcept;
 	idx_t EstimatedSize();
 
+	void DropTable(DataTable &table);
 	bool Find(DataTable &table);
 
 	idx_t AddedRows(DataTable &table);
