@@ -337,5 +337,4 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	}
 };
 
-
 } // namespace duckdb

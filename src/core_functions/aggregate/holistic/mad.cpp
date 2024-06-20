@@ -250,7 +250,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 };
 
 unique_ptr<FunctionData> BindMAD(ClientContext &context, AggregateFunction &function,
-                                    vector<unique_ptr<Expression>> &arguments) {
+                                 vector<unique_ptr<Expression>> &arguments) {
 	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
 

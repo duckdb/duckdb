@@ -349,8 +349,9 @@ struct ModeFallbackFunction : BaseModeFunction<TYPE_OP> {
 		}
 		auto highest_frequency = state.Scan();
 		if (highest_frequency != state.frequency_map->end()) {
-			CreateSortKeyHelpers::DecodeSortKey(highest_frequency->first, finalize_data.result, finalize_data.result_idx,
-		                                        OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
+			CreateSortKeyHelpers::DecodeSortKey(highest_frequency->first, finalize_data.result,
+			                                    finalize_data.result_idx,
+			                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
 		} else {
 			finalize_data.ReturnNull();
 		}
@@ -370,8 +371,9 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	using STATE = ModeState<string_t, ModeString>;
 	using OP = ModeFallbackFunction<ModeString>;
 	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
-	                       AggregateFunction::StateInitialize<STATE, OP>, AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
-	                       AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
+	                       AggregateFunction::StateInitialize<STATE, OP>,
+	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
+	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
 	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 	return aggr;
 }

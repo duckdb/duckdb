@@ -205,8 +205,8 @@ static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	return AggregateFunction(
 	    "histogram", {type, LogicalType::LIST(type)}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
 	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T>,
-	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr, nullptr,
-	    AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
+	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr,
+	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
 }
 
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {

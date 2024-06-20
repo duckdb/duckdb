@@ -78,10 +78,10 @@ struct QuantileOperation {
 		auto &window_state = state.GetOrCreateWindowState();
 		if (count < std::numeric_limits<uint32_t>::max()) {
 			window_state.qst32 = QuantileSortTree<uint32_t>::WindowInit<INPUT_TYPE>(data, aggr_input_data, data_mask,
-			                                                                 filter_mask, count);
+			                                                                        filter_mask, count);
 		} else {
 			window_state.qst64 = QuantileSortTree<uint64_t>::WindowInit<INPUT_TYPE>(data, aggr_input_data, data_mask,
-			                                                                 filter_mask, count);
+			                                                                        filter_mask, count);
 		}
 	}
 
@@ -112,7 +112,7 @@ struct PointerLess {
 	}
 };
 
-template<typename INPUT_TYPE>
+template <typename INPUT_TYPE>
 struct WindowQuantileState {
 	// Windowed Quantile merge sort trees
 	using QuantileSortTree32 = QuantileSortTree<uint32_t>;
@@ -131,7 +131,8 @@ struct WindowQuantileState {
 	idx_t count;
 	vector<idx_t> m;
 
-	WindowQuantileState() : count(0) {}
+	WindowQuantileState() : count(0) {
+	}
 
 	inline void SetCount(size_t count_p) {
 		count = count_p;
@@ -247,14 +248,14 @@ struct WindowQuantileState {
 };
 
 struct QuantileStandardType {
-	template<class T>
+	template <class T>
 	static T Operation(T input, AggregateInputData &) {
 		return input;
 	}
 };
 
 struct QuantileStringType {
-	template<class T>
+	template <class T>
 	static T Operation(T input, AggregateInputData &input_data) {
 		if (input.IsInlined()) {
 			return input;

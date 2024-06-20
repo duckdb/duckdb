@@ -16,7 +16,7 @@ namespace duckdb {
 struct AggregateSortKeyHelpers {
 	template <class STATE, class OP, OrderType ORDER_TYPE = OrderType::ASCENDING, bool IGNORE_NULLS = true>
 	static void UnaryUpdate(Vector inputs[], AggregateInputData &input_data, idx_t input_count, Vector &state_vector,
-	                   idx_t count) {
+	                        idx_t count) {
 		D_ASSERT(input_count == 1);
 		auto &input = inputs[0];
 
@@ -50,7 +50,6 @@ struct AggregateSortKeyHelpers {
 			OP::template Execute<string_t, STATE, OP>(state, key_data[key_idx], input_data);
 		}
 	}
-
 };
 
 } // namespace duckdb

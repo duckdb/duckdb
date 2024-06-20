@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-template<class MAP_TYPE>
+template <class MAP_TYPE>
 struct HistogramFunction {
 	template <class STATE>
 	static void Initialize(STATE &state) {
@@ -143,11 +143,11 @@ static AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	using HIST_FUNC = HistogramFunction<MAP_TYPE>;
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
-	return AggregateFunction("histogram", {type}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
-	                         AggregateFunction::StateInitialize<STATE_TYPE, HIST_FUNC>,
-	                         HistogramUpdateFunction<OP, T, MAP_TYPE>, AggregateFunction::StateCombine<STATE_TYPE, HIST_FUNC>,
-	                         HistogramFinalizeFunction<OP, T, MAP_TYPE>, nullptr, nullptr,
-	                         AggregateFunction::StateDestroy<STATE_TYPE, HIST_FUNC>);
+	return AggregateFunction(
+	    "histogram", {type}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
+	    AggregateFunction::StateInitialize<STATE_TYPE, HIST_FUNC>, HistogramUpdateFunction<OP, T, MAP_TYPE>,
+	    AggregateFunction::StateCombine<STATE_TYPE, HIST_FUNC>, HistogramFinalizeFunction<OP, T, MAP_TYPE>, nullptr,
+	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HIST_FUNC>);
 }
 
 template <class OP, class T, class MAP_TYPE>

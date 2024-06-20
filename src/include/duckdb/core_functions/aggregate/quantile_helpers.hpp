@@ -41,7 +41,6 @@ struct QuantileValue {
 	inline bool operator==(const QuantileValue &other) const {
 		return val == other.val;
 	}
-
 };
 
 struct QuantileBindData : public FunctionData {
