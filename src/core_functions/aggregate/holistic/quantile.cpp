@@ -335,14 +335,8 @@ struct PointerLess {
 	}
 };
 
-template <typename INPUT_TYPE, typename SAVE_TYPE>
-struct QuantileState {
-	using SaveType = SAVE_TYPE;
-	using InputType = INPUT_TYPE;
-
-	// Regular aggregation
-	vector<SaveType> v;
-
+template<typename INPUT_TYPE>
+struct WindowQuantileState {
 	// Windowed Quantile merge sort trees
 	using QuantileSortTree32 = QuantileSortTree<uint32_t>;
 	using QuantileSortTree64 = QuantileSortTree<uint64_t>;
@@ -350,7 +344,7 @@ struct QuantileState {
 	unique_ptr<QuantileSortTree64> qst64;
 
 	// Windowed Quantile skip lists
-	using PointerType = const InputType *;
+	using PointerType = const INPUT_TYPE *;
 	using SkipListType = duckdb_skiplistlib::skip_list::HeadNode<PointerType, PointerLess<PointerType>>;
 	SubFrames prevs;
 	unique_ptr<SkipListType> s;
@@ -360,11 +354,7 @@ struct QuantileState {
 	idx_t count;
 	vector<idx_t> m;
 
-	QuantileState() : count(0) {
-	}
-
-	~QuantileState() {
-	}
+	WindowQuantileState() : count(0) {}
 
 	inline void SetCount(size_t count_p) {
 		count = count_p;
@@ -479,6 +469,34 @@ struct QuantileState {
 	}
 };
 
+template <typename INPUT_TYPE, typename SAVE_TYPE>
+struct QuantileState {
+	using SaveType = SAVE_TYPE;
+	using InputType = INPUT_TYPE;
+
+	// Regular aggregation
+	vector<SaveType> v;
+
+	// Window Quantile State
+	unique_ptr<WindowQuantileState<INPUT_TYPE>> window_state;
+
+	bool HasTrees() const {
+		return window_state && window_state->HasTrees();
+	}
+	WindowQuantileState<INPUT_TYPE> &GetOrCreateWindowState() {
+		if (!window_state) {
+			window_state = make_uniq<WindowQuantileState<INPUT_TYPE>>();
+		}
+		return *window_state;
+	}
+	WindowQuantileState<INPUT_TYPE> &GetWindowState() {
+		return *window_state;
+	}
+	const WindowQuantileState<INPUT_TYPE> &GetWindowState() const {
+		return *window_state;
+	}
+};
+
 struct QuantileOperation {
 	template <class STATE>
 	static void Initialize(STATE &state) {
@@ -507,7 +525,7 @@ struct QuantileOperation {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+	static void Destroy(STATE &state, AggregateInputData &) {
 		state.~STATE();
 	}
 
@@ -541,11 +559,12 @@ struct QuantileOperation {
 
 		//	Build the tree
 		auto &state = *reinterpret_cast<STATE *>(g_state);
+		auto &window_state = state.GetOrCreateWindowState();
 		if (count < std::numeric_limits<uint32_t>::max()) {
-			state.qst32 = QuantileSortTree<uint32_t>::WindowInit<INPUT_TYPE>(data, aggr_input_data, data_mask,
+			window_state.qst32 = QuantileSortTree<uint32_t>::WindowInit<INPUT_TYPE>(data, aggr_input_data, data_mask,
 			                                                                 filter_mask, count);
 		} else {
-			state.qst64 = QuantileSortTree<uint64_t>::WindowInit<INPUT_TYPE>(data, aggr_input_data, data_mask,
+			window_state.qst64 = QuantileSortTree<uint64_t>::WindowInit<INPUT_TYPE>(data, aggr_input_data, data_mask,
 			                                                                 filter_mask, count);
 		}
 	}
@@ -582,7 +601,7 @@ static AggregateFunction QuantileListAggregate(const LogicalType &input_type, co
 }
 
 template <bool DISCRETE>
-struct QuantileScalarOperation : public QuantileOperation {
+struct QuantileScalarOperation : QuantileOperation {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
@@ -617,16 +636,18 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 		const auto &quantile = bind_data.quantiles[0];
 		if (gstate && gstate->HasTrees()) {
-			rdata[ridx] = gstate->template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
+			rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
 		} else {
+			auto &window_state = state.GetOrCreateWindowState();
+
 			//	Update the skip list
-			state.UpdateSkip(data, frames, included);
+			window_state.UpdateSkip(data, frames, included);
 
 			// Find the position(s) needed
-			rdata[ridx] = state.template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
+			rdata[ridx] = window_state.template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
 
 			//	Save the previous state for next time
-			state.prevs = frames;
+			window_state.prevs = frames;
 		}
 	}
 };
@@ -743,12 +764,12 @@ struct QuantileListOperation : public QuantileOperation {
 		}
 
 		if (gstate && gstate->HasTrees()) {
-			gstate->template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
+			gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
 		} else {
-			//
-			state.UpdateSkip(data, frames, included);
-			state.template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
-			state.prevs = frames;
+			auto &window_state = state.GetOrCreateWindowState();
+			window_state.UpdateSkip(data, frames, included);
+			window_state.template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
+			window_state.prevs = frames;
 		}
 	}
 };
@@ -998,8 +1019,7 @@ struct MadAccessor<dtime_t, interval_t, dtime_t> {
 };
 
 template <typename MEDIAN_TYPE>
-struct MedianAbsoluteDeviationOperation : public QuantileOperation {
-
+struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.v.empty()) {
@@ -1039,25 +1059,26 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &quantile = bind_data.quantiles[0];
+		auto &window_state = state.GetOrCreateWindowState();
 		MEDIAN_TYPE med;
 		if (gstate && gstate->HasTrees()) {
-			med = gstate->template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
+			med = gstate->GetWindowState().template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
 		} else {
-			state.UpdateSkip(data, frames, included);
-			med = state.template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
+			window_state.UpdateSkip(data, frames, included);
+			med = window_state.template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
 		}
 
 		//  Lazily initialise frame state
-		state.SetCount(frames.back().end - frames.front().start);
-		auto index2 = state.m.data();
+		window_state.SetCount(frames.back().end - frames.front().start);
+		auto index2 = window_state.m.data();
 		D_ASSERT(index2);
 
 		// The replacement trick does not work on the second index because if
 		// the median has changed, the previous order is not correct.
 		// It is probably close, however, and so reuse is helpful.
-		auto &prevs = state.prevs;
+		auto &prevs = window_state.prevs;
 		ReuseIndexes(index2, frames, prevs);
-		std::partition(index2, index2 + state.count, included);
+		std::partition(index2, index2 + window_state.count, included);
 
 		Interpolator<false> interp(quantile, n, false);
 
