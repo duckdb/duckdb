@@ -70,7 +70,7 @@ SELECT median(r::hugeint) FROM quantile
 query I
 SELECT median(r::decimal(10,2)) FROM quantile
 ----
-4999
+4999.50
 
 query I
 SELECT median(NULL) FROM quantile

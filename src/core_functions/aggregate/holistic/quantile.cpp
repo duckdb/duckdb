@@ -501,6 +501,7 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 		return GetTypedContinuousQuantileAggregateFunction<int8_t, double>(type, LogicalType::DOUBLE);
 	case LogicalTypeId::SMALLINT:
 		return GetTypedContinuousQuantileAggregateFunction<int16_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::INTEGER:
 		return GetTypedContinuousQuantileAggregateFunction<int32_t, double>(type, LogicalType::DOUBLE);
 	case LogicalTypeId::BIGINT:
@@ -590,23 +591,6 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile list aggregate");
 	}
-}
-
-unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
-                                    vector<unique_ptr<Expression>> &arguments) {
-	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
-}
-
-unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunction &function,
-                                           vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindMedian(context, function, arguments);
-
-	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type);
-	function.name = "median";
-	function.serialize = QuantileBindData::SerializeDecimalDiscrete;
-	function.deserialize = QuantileBindData::Deserialize;
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	return bind_data;
 }
 
 static const Value &CheckQuantile(const Value &quantile_val) {
@@ -714,23 +698,48 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &contex
 	return bind_data;
 }
 static bool CanInterpolate(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::INTERVAL:
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::ANY:
-		return false;
-	default:
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+	case PhysicalType::UINT8:
+	case PhysicalType::INT16:
+	case PhysicalType::UINT16:
+	case PhysicalType::INT32:
+	case PhysicalType::UINT32:
+	case PhysicalType::INT64:
+	case PhysicalType::UINT64:
+	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
 		return true;
+	default:
+		return false;
 	}
 }
+
+unique_ptr<FunctionData> DeserializeMedian(Deserializer &deserializer, AggregateFunction &function);
 
 AggregateFunction GetMedianAggregate(const LogicalType &type) {
 	auto fun = CanInterpolate(type) ? GetContinuousQuantileAggregateFunction(type)
 	                                : GetDiscreteQuantileAggregateFunction(type);
-	fun.bind = BindMedian;
+	fun.name = "median";
 	fun.serialize = QuantileBindData::Serialize;
-	fun.deserialize = QuantileBindData::Deserialize;
+	fun.deserialize = DeserializeMedian;
 	return fun;
+}
+
+unique_ptr<FunctionData> DeserializeMedian(Deserializer &deserializer, AggregateFunction &function) {
+	auto bind_data = QuantileBindData::Deserialize(deserializer, function);
+
+	auto &input_type = function.arguments[0];
+	function = GetMedianAggregate(input_type);
+	return bind_data;
+}
+
+unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
+                                    vector<unique_ptr<Expression>> &arguments) {
+	function = GetMedianAggregate(arguments[0]->return_type);
+	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
 
 AggregateFunction GetDiscreteQuantileAggregate(const LogicalType &type) {
@@ -801,11 +810,11 @@ vector<LogicalType> GetQuantileTypes() {
 
 AggregateFunctionSet MedianFun::GetFunctions() {
 	AggregateFunctionSet median("median");
-	median.AddFunction(
-	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, BindMedianDecimal));
-	for (const auto &type : GetQuantileTypes()) {
-		median.AddFunction(GetMedianAggregate(type));
-	}
+	AggregateFunction fun({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, BindMedian);
+	fun.serialize = QuantileBindData::Serialize;
+	fun.deserialize = DeserializeMedian;
+	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	median.AddFunction(fun);
 	return median;
 }
 
