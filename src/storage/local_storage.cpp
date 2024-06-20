@@ -436,6 +436,9 @@ void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<Physic
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
+	if (storage.is_dropped) {
+		return;
+	}
 	if (storage.row_groups->GetTotalRows() <= storage.deleted_rows) {
 		return;
 	}
@@ -509,8 +512,11 @@ idx_t LocalStorage::AddedRows(DataTable &table) {
 }
 
 void LocalStorage::DropTable(DataTable &table) {
-	auto table_storage = table_manager.MoveEntry(table);
-	table_storage.reset();
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		return;
+	}
+	storage->is_dropped = true;
 }
 
 void LocalStorage::MoveStorage(DataTable &old_dt, DataTable &new_dt) {
