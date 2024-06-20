@@ -23,7 +23,7 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 	}
 }
 
-static const ValidityMask &CopyValidityMask(const Vector &v) {
+static const ValidityMask &ExtractValidityMask(const Vector &v) {
 	switch (v.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		return FlatVector::Validity(v);
@@ -101,25 +101,8 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			tmask.Set(target_offset + i, valid);
 		}
 	} else {
-		auto &smask = CopyValidityMask(*source);
-		if (smask.IsMaskSet() || tmask.IsMaskSet()) {
-			for (idx_t i = 0; i < copy_count; i++) {
-				auto idx = sel->get_index(source_offset + i);
-
-				if (smask.RowIsValid(idx)) {
-					// set valid
-					if (!tmask.AllValid()) {
-						tmask.SetValidUnsafe(target_offset + i);
-					}
-				} else {
-					// set invalid
-					if (tmask.AllValid()) {
-						tmask.Initialize();
-					}
-					tmask.SetInvalidUnsafe(target_offset + i);
-				}
-			}
-		}
+		auto &smask = ExtractValidityMask(*source);
+		tmask.CopySel(smask, *sel, source_offset, target_offset, copy_count);
 	}
 
 	D_ASSERT(sel);
