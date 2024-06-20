@@ -1,18 +1,10 @@
 import os
+import sys
 import json
 
-# Requires `python3 -m pip install libclang==16.0.6`
-from get_cpp_methods import test_clang, get_methods, FunctionParam, ConnectionMethod
+# Requires `python3 -m pip install cxxheaderparser pcpp`
+from get_cpp_methods import get_methods, FunctionParam, ConnectionMethod
 from typing import List, Tuple
-
-if not test_clang():
-    print(
-        """'generate_connection_wrapper_methods.py' skipped because of a Clang error.
-This is likely caused by not having, or not having the right version of 'libclang' installed.
-You can ignore this warning if you made no changes to Python code, it should not be ignored in CI.
-"""
-    )
-    exit(0)
 
 os.chdir(os.path.dirname(__file__))
 

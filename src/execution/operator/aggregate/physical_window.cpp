@@ -89,33 +89,31 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 }
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,
-                                                        const ValidityMask &partition_mask,
-                                                        const ValidityMask &order_mask, const idx_t payload_count,
                                                         WindowAggregationMode mode) {
 	switch (wexpr.type) {
 	case ExpressionType::WINDOW_AGGREGATE:
-		return make_uniq<WindowAggregateExecutor>(wexpr, context, payload_count, partition_mask, order_mask, mode);
+		return make_uniq<WindowAggregateExecutor>(wexpr, context, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		return make_uniq<WindowRowNumberExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowRowNumberExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_RANK_DENSE:
-		return make_uniq<WindowDenseRankExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowDenseRankExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_RANK:
-		return make_uniq<WindowRankExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowRankExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_PERCENT_RANK:
-		return make_uniq<WindowPercentRankExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowPercentRankExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_CUME_DIST:
-		return make_uniq<WindowCumeDistExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowCumeDistExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_NTILE:
-		return make_uniq<WindowNtileExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowNtileExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		return make_uniq<WindowLeadLagExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowLeadLagExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_FIRST_VALUE:
-		return make_uniq<WindowFirstValueExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowFirstValueExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_LAST_VALUE:
-		return make_uniq<WindowLastValueExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowLastValueExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_NTH_VALUE:
-		return make_uniq<WindowNthValueExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowNthValueExecutor>(wexpr, context);
 		break;
 	default:
 		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
@@ -187,6 +185,8 @@ public:
 	using HashGroupSourcePtr = unique_ptr<WindowPartitionSourceState>;
 	using ScannerPtr = unique_ptr<RowDataCollectionScanner>;
 	using Task = std::pair<WindowPartitionSourceState *, ScannerPtr>;
+	using ExecutorPtr = unique_ptr<WindowExecutor>;
+	using Executors = vector<ExecutorPtr>;
 
 	WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p);
 
@@ -197,6 +197,8 @@ public:
 	ClientContext &context;
 	//! All the sunk data
 	WindowGlobalSinkState &gsink;
+	//! The current execution functions
+	Executors executors;
 	//! The next group to build.
 	atomic<idx_t> next_build;
 	//! The built groups
@@ -220,6 +222,14 @@ private:
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
     : context(context_p), gsink(gsink_p), next_build(0), tasks_remaining(0), returned(0) {
+	const auto &op = gsink.op;
+	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
+		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+		auto wexec = WindowExecutorFactory(wexpr, context, gsink.mode);
+		executors.emplace_back(std::move(wexec));
+	}
+
 	auto &hash_groups = gsink.global_partition->hash_groups;
 
 	auto &gpart = gsink.global_partition;
@@ -256,9 +266,9 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 class WindowPartitionSourceState {
 public:
 	using HashGroupPtr = unique_ptr<PartitionGlobalHashGroup>;
-	using ExecutorPtr = unique_ptr<WindowExecutor>;
-	using Executors = vector<ExecutorPtr>;
 	using OrderMasks = PartitionGlobalHashGroup::OrderMasks;
+	using ExecutorGlobalStatePtr = unique_ptr<WindowExecutorGlobalState>;
+	using ExecutorGlobalStates = vector<ExecutorGlobalStatePtr>;
 
 	WindowPartitionSourceState(ClientContext &context, WindowGlobalSourceState &gsource)
 	    : context(context), op(gsource.gsink.op), gsource(gsource), read_block_idx(0), unscanned(0) {
@@ -284,8 +294,8 @@ public:
 	OrderMasks order_masks;
 	//! External paging
 	bool external;
-	//! The current execution functions
-	Executors executors;
+	//! The function global states for this hash group
+	ExecutorGlobalStates gestates;
 
 	//! The bin number
 	idx_t hash_bin;
@@ -373,9 +383,9 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 	partition_mask.Initialize(count);
 	partition_mask.SetAllInvalid(count);
 
-	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
-		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+	const auto &executors = gsource.executors;
+	for (auto &wexec : executors) {
+		auto &wexpr = wexec->wexpr;
 		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
 		if (order_mask.IsMaskSet()) {
 			continue;
@@ -409,13 +419,10 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 	}
 
 	// Create the executors for each function
-	executors.clear();
-	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
-		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+	for (auto &wexec : executors) {
+		auto &wexpr = wexec->wexpr;
 		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
-		auto wexec = WindowExecutorFactory(wexpr, context, partition_mask, order_mask, count, gstate.mode);
-		executors.emplace_back(std::move(wexec));
+		gestates.emplace_back(wexec->GetGlobalState(count, partition_mask, order_mask));
 	}
 
 	//	First pass over the input without flushing
@@ -431,15 +438,15 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 		}
 
 		//	TODO: Parallelization opportunity
-		for (auto &wexec : executors) {
-			wexec->Sink(input_chunk, input_idx, scanner->Count());
+		for (idx_t w = 0; w < executors.size(); ++w) {
+			executors[w]->Sink(input_chunk, input_idx, scanner->Count(), *gestates[w]);
 		}
 		input_idx += input_chunk.size();
 	}
 
 	//	TODO: Parallelization opportunity
-	for (auto &wexec : executors) {
-		wexec->Finalize();
+	for (idx_t w = 0; w < executors.size(); ++w) {
+		executors[w]->Finalize(*gestates[w]);
 	}
 
 	// External scanning assumes all blocks are swizzled.
@@ -452,7 +459,7 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 // Per-thread scan state
 class WindowLocalSourceState : public LocalSourceState {
 public:
-	using ReadStatePtr = unique_ptr<WindowExecutorState>;
+	using ReadStatePtr = unique_ptr<WindowExecutorLocalState>;
 	using ReadStates = vector<ReadStatePtr>;
 
 	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
@@ -481,14 +488,12 @@ public:
 WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
     : gsource(gsource), hash_bin(gsource.built.size()), batch_index(0) {
 	auto &gsink = *gsource.gsink.global_partition;
-	auto &op = gsource.gsink.op;
 
 	input_chunk.Initialize(gsink.allocator, gsink.payload_types);
 
 	vector<LogicalType> output_types;
-	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
-		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+	for (auto &wexec : gsource.executors) {
+		auto &wexpr = wexec->wexpr;
 		output_types.emplace_back(wexpr.return_type);
 	}
 	output_chunk.Initialize(Allocator::Get(gsource.context), output_types);
@@ -612,8 +617,10 @@ bool WindowLocalSourceState::NextPartition() {
 		UpdateBatchIndex();
 	}
 
-	for (auto &wexec : partition_source->executors) {
-		read_states.emplace_back(wexec->GetExecutorState());
+	const auto &executors = gsource.executors;
+	auto &gestates = partition_source->gestates;
+	for (idx_t w = 0; w < executors.size(); ++w) {
+		read_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
 	}
 
 	return true;
@@ -639,13 +646,15 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 	input_chunk.Reset();
 	scanner->Scan(input_chunk);
 
-	auto &executors = partition_source->executors;
+	const auto &executors = gsource.executors;
+	auto &gestates = partition_source->gestates;
 	output_chunk.Reset();
 	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
 		auto &executor = *executors[expr_idx];
+		auto &gstate = *gestates[expr_idx];
 		auto &lstate = *read_states[expr_idx];
 		auto &result = output_chunk.data[expr_idx];
-		executor.Evaluate(position, input_chunk, result, lstate);
+		executor.Evaluate(position, input_chunk, result, lstate, gstate);
 	}
 	output_chunk.SetCardinality(input_chunk);
 	output_chunk.Verify();
@@ -689,7 +698,7 @@ double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gs
 
 	auto &gsink = gsource.gsink;
 	const auto count = gsink.global_partition->count.load();
-	return count ? (returned / double(count)) : -1;
+	return count ? (double(returned) / double(count)) : -1;
 }
 
 idx_t PhysicalWindow::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

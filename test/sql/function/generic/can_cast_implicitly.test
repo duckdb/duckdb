@@ -1,5 +1,5 @@
 # name: test/sql/function/generic/can_cast_implicitly.test
-# description: Test CASE in a conditional statement
+# description: Test the can cast implicitly function
 # group: [generic]
 
 statement ok

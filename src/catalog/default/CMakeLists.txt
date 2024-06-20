@@ -4,6 +4,7 @@ add_library_unity(
   default_functions.cpp
   default_generator.cpp
   default_schemas.cpp
+  default_table_functions.cpp
   default_types.cpp
   default_views.cpp)
 set(ALL_OBJECT_FILES
