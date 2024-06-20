@@ -27,7 +27,7 @@ class StreamingWindowState : public OperatorState {
 public:
 	struct AggregateState {
 		AggregateState(ClientContext &client, BoundWindowExpression &wexpr, Allocator &allocator)
-		    : wexpr(wexpr), arena_allocator(Allocator::DefaultAllocator()),
+		    : wexpr(wexpr), arena_allocator(Allocator::DefaultAllocator()), executor(client), filter_executor(client),
 		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)), hashes(LogicalType::HASH),
 		      addresses(LogicalType::POINTER) {
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
@@ -39,12 +39,14 @@ public:
 			aggregate.initialize(state.data());
 			for (auto &child : wexpr.children) {
 				arg_types.push_back(child->return_type);
+				executor.AddExpression(*child);
 			}
 			if (!arg_types.empty()) {
 				arg_chunk.Initialize(allocator, arg_types);
 				arg_cursor.Initialize(allocator, arg_types);
 			}
 			if (wexpr.filter_expr) {
+				filter_executor.AddExpression(*wexpr.filter_expr);
 				filter_sel.Initialize();
 			}
 			if (wexpr.distinct) {
@@ -68,6 +70,10 @@ public:
 		BoundWindowExpression &wexpr;
 		//! The allocator to use for aggregate data structures
 		ArenaAllocator arena_allocator;
+		//! Reusable executor for the children
+		ExpressionExecutor executor;
+		//! Shared executor for FILTER clauses
+		ExpressionExecutor filter_executor;
 		//! The single aggregate state we update row-by-row
 		vector<data_t> state;
 		//! The pointer to the state stored in the state vector
@@ -142,47 +148,55 @@ public:
 		}
 
 		LeadLagState(ClientContext &context, BoundWindowExpression &wexpr)
-		    : wexpr(wexpr), curr(wexpr.return_type), prev(wexpr.return_type, MAX_BUFFER),
-		      temp(wexpr.return_type, MAX_BUFFER) {
+		    : wexpr(wexpr), executor(context, *wexpr.children[0]), curr(wexpr.return_type), prev(wexpr.return_type),
+		      temp(wexpr.return_type) {
 			ComputeOffset(context, wexpr, offset);
 			ComputeDefault(context, wexpr, dflt);
+
+			buffered = idx_t(offset);
 			prev.Reference(dflt);
-			prev.Flatten(MAX_BUFFER);
+			prev.Flatten(buffered);
+			temp.Initialize(false, buffered);
 		}
 
 		void Execute(ExecutionContext &context, DataChunk &input, Vector &result) {
-			ExpressionExecutor executor(context.client, *wexpr.children[0]);
 			executor.ExecuteExpression(input, curr);
-
-			//	Copy prev[MAX_BUFFER-offset, MAX_BUFFER] => result[0, offset]
-			idx_t source_count = MAX_BUFFER;
-			idx_t source_offset = source_count - idx_t(offset);
-			idx_t target_offset = 0;
-			VectorOperations::Copy(prev, result, source_count, source_offset, target_offset);
-			//	Copy curr[0, count-offset] => result[offset, count]
-			target_offset = idx_t(offset);
-			source_count = input.size() - target_offset;
-			source_offset = 0;
-			VectorOperations::Copy(curr, result, source_count, source_offset, target_offset);
-			// 	Copy curr[0, count] => prev[prev.count - count, prev.count]
-			source_count = input.size();
-			source_offset = 0;
-			target_offset = MAX_BUFFER - source_count;
-			if (target_offset) {
+			const idx_t count = input.size();
+			//	Copy prev[0, buffered] => result[0, buffered]
+			idx_t source_count = MinValue<idx_t>(buffered, count);
+			VectorOperations::Copy(prev, result, source_count, 0, 0);
+			// Special case when we have buffered enough values for the output
+			if (count < buffered) {
 				//	Shift down incomplete buffers
-				VectorOperations::Copy(prev, temp, MAX_BUFFER, source_count, 0);
-				VectorOperations::Copy(temp, prev, target_offset, 0, 0);
-				VectorOperations::Copy(curr, prev, source_count, source_offset, target_offset);
+				// 	Copy prev[buffered-count, buffered] => temp[0, count]
+				source_count = buffered - count;
+				FlatVector::Validity(temp).Reset();
+				VectorOperations::Copy(prev, temp, buffered, source_count, 0);
+
+				// 	Copy temp[0, count] => prev[0, count]
+				FlatVector::Validity(prev).Reset();
+				VectorOperations::Copy(temp, prev, count, 0, 0);
+				// 	Copy curr[0, buffered-count] => prev[count, buffered]
+				VectorOperations::Copy(curr, prev, source_count, 0, count);
 			} else {
-				//	Overwrite
-				VectorOperations::Copy(curr, prev, source_count, source_offset, target_offset);
+				//	Copy input values beyond what we have buffered
+				source_count = count - buffered;
+				//	Copy curr[0, count-buffered] => result[buffered, count]
+				VectorOperations::Copy(curr, result, source_count, 0, buffered);
+				// 	Copy curr[count-buffered, count] => prev[0, buffered]
+				FlatVector::Validity(prev).Reset();
+				VectorOperations::Copy(curr, prev, count, source_count, 0);
 			}
 		}
 
 		//! The aggregate expression
 		BoundWindowExpression &wexpr;
+		//! Cache the executor to cut down on memory allocation
+		ExpressionExecutor executor;
 		//! The constant offset
 		int64_t offset;
+		//! The number of rows we have buffered
+		idx_t buffered;
 		//! The constant default value
 		Value dflt;
 		//! The current set of values
@@ -304,7 +318,6 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	auto filtered = count;
 	auto &filter_sel = aggr_state.filter_sel;
 	if (wexpr.filter_expr) {
-		ExpressionExecutor filter_executor(context.client, *wexpr.filter_expr);
 		filtered = filter_executor.SelectExpression(input, filter_sel);
 		if (filtered < count) {
 			filter_mask.Initialize(count);
@@ -328,10 +341,6 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	}
 
 	// Compute the arguments
-	ExpressionExecutor executor(context.client);
-	for (auto &child : wexpr.children) {
-		executor.AddExpression(*child);
-	}
 	auto &arg_chunk = aggr_state.arg_chunk;
 	executor.Execute(input, arg_chunk);
 	arg_chunk.Flatten();
