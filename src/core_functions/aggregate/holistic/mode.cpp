@@ -1,7 +1,3 @@
-// MODE( <expr1> )
-// Returns the most frequent value for the values within expr1.
-// NULL values are ignored. If all the values are NULL, or there are 0 rows, then the function returns NULL.
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -11,7 +7,12 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/core_functions/create_sort_key.hpp"
+#include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
 #include <functional>
+
+// MODE( <expr1> )
+// Returns the most frequent value for the values within expr1.
+// NULL values are ignored. If all the values are NULL, or there are 0 rows, then the function returns NULL.
 
 namespace std {
 

@@ -256,14 +256,14 @@ struct VectorMinMaxBase {
 		state.Assign(input);
 	}
 
-	template <class STATE>
-	static void Execute(STATE &state, string_t input, AggregateInputData &input_data) {
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
 		if (!state.isset) {
 			Assign(state, input, input_data);
 			state.isset = true;
 			return;
 		}
-		if (LessThan::Operation<string_t>(input, state.value)) {
+		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
 			Assign(state, input, input_data);
 		}
 	}
@@ -274,7 +274,7 @@ struct VectorMinMaxBase {
 			// source is NULL, nothing to do
 			return;
 		}
-		OP::template Execute<STATE>(target, source.value, input_data);
+		OP::template Execute<string_t, STATE>(target, source.value, input_data);
 	}
 
 	template <class STATE>
