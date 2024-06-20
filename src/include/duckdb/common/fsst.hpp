@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class Value;
