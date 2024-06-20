@@ -30,9 +30,7 @@ class TestRuntimeError(object):
     def test_register_error(self):
         con = duckdb.connect()
         py_obj = "this is a string"
-        with pytest.raises(
-            duckdb.InvalidInputException, match='Python Object str not suitable to be registered as a view'
-        ):
+        with pytest.raises(duckdb.InvalidInputException, match='Python Object "this is a string" of type "str"'):
             con.register(py_obj, "v")
 
     def test_arrow_fetch_table_error(self):

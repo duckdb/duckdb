@@ -32,6 +32,30 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 	table_function.external_dependency = std::move(dependency);
 }
 
+static void ThrowScanFailureError(const py::object &entry, const string &name, const string &location = "") {
+	string error;
+	auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
+	error += StringUtil::Format("Python Object \"%s\" of type \"%s\"", name, py_object_type);
+	if (!location.empty()) {
+		error += StringUtil::Format(" found on line \"%s\"", location);
+	}
+	error +=
+	    StringUtil::Format(" not suitable for replacement scans.\nMake sure "
+	                       "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
+	                       "RecordBatchReader, Scanner, or NumPy ndarrays with supported format",
+	                       name);
+	throw InvalidInputException(error);
+}
+
+unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const py::object &entry, const string &name,
+                                                              ClientContext &context) {
+	auto replacement = TryReplacementObject(entry, name, context);
+	if (!replacement) {
+		ThrowScanFailureError(entry, name);
+	}
+	return replacement;
+}
+
 unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::object &entry, const string &name,
                                                                  ClientContext &context) {
 	auto client_properties = context.GetClientProperties();
@@ -142,14 +166,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, const string &name, C
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
 		location += py::cast<py::str>(current_frame.attr("f_lineno"));
-		std::string cpp_table_name = table_name;
-		auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
-
-		throw InvalidInputException(
-		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
-		    "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
-		    "RecordBatchReader, Scanner, or NumPy ndarrays with supported format",
-		    cpp_table_name, py_object_type, location, cpp_table_name);
+		ThrowScanFailureError(entry, name, location);
 	}
 	return result;
 }

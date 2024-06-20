@@ -39,6 +39,13 @@ TableFunctionRelation::TableFunctionRelation(const shared_ptr<ClientContext> &co
 	InitializeColumns();
 }
 
+TableFunctionRelation::TableFunctionRelation(const shared_ptr<ClientContext> &context, string name_p,
+                                             unique_ptr<TableRef> tableref)
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)), auto_initialize(true),
+      premade_tableref(std::move(tableref)) {
+	InitializeColumns();
+}
+
 void TableFunctionRelation::InitializeColumns() {
 	if (!auto_initialize) {
 		return;
@@ -54,6 +61,9 @@ unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
 }
 
 unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
+	if (premade_tableref) {
+		return premade_tableref->Copy();
+	}
 	vector<unique_ptr<ParsedExpression>> children;
 	if (input_relation) { // input relation becomes first parameter if present, always
 		auto subquery = make_uniq<SubqueryExpression>();

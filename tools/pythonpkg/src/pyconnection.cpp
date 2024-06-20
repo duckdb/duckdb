@@ -664,7 +664,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		throw ConnectionException("Connection has already been closed");
 	}
 	auto &client = *connection->context;
-	auto object = PythonReplacementScan::TryReplacementObject(python_object, name, client);
+	auto object = PythonReplacementScan::ReplacementObject(python_object, name, client);
+	D_ASSERT(object);
 	auto &state = PythonContextState::Get(client);
 	state.RegisterObject(name, std::move(object));
 
@@ -1113,14 +1114,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 		auto table = PandasDataFrame::ToArrowTable(value);
 		return DuckDBPyConnection::FromArrow(table);
 	}
-	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
-	vector<Value> params;
-	params.emplace_back(Value::POINTER(CastPointerToValue(new_df.ptr())));
-	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
-	auto dependency = make_shared_ptr<ExternalDependency>();
-	dependency->AddDependency("original", PythonDependencyItem::Create(value));
-	dependency->AddDependency("copy", PythonDependencyItem::Create(new_df));
-	rel->AddExternalDependency(std::move(dependency));
+	auto tableref = PythonReplacementScan::TryReplacementObject(value, name, *connection->context);
+	if (!tableref) {
+		throw InvalidInputException("Failed to scan the provided object");
+	}
+	auto rel = make_shared_ptr<TableFunctionRelation>(connection->context, name, std::move(tableref))->Alias(name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
@@ -1185,28 +1183,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	py::gil_scoped_acquire acquire;
 	string name = "arrow_object_" + StringUtil::GenerateRandomName();
 	if (!IsAcceptedArrowObject(arrow_object)) {
 		auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
 	}
-	auto stream_factory =
-	    make_uniq<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->GetClientProperties());
-
-	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
-
-	auto rel = connection
-	               ->TableFunction("arrow_scan", {Value::POINTER(CastPointerToValue(stream_factory.get())),
-	                                              Value::POINTER(CastPointerToValue(stream_factory_produce)),
-	                                              Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
-	               ->Alias(name);
-	auto dependency = make_shared_ptr<ExternalDependency>();
-	auto dependency_item =
-	    PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
-	dependency->AddDependency("object", std::move(dependency_item));
-	rel->AddExternalDependency(std::move(dependency));
+	auto tableref = PythonReplacementScan::TryReplacementObject(arrow_object, name, *connection->context);
+	if (!tableref) {
+		throw InvalidInputException("Failed to scan the provided object");
+	}
+	auto rel = make_shared_ptr<TableFunctionRelation>(connection->context, name, std::move(tableref))->Alias(name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 

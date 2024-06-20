@@ -20,6 +20,7 @@ public:
 
 	TableFunctionRelation(const shared_ptr<ClientContext> &context, string name, vector<Value> parameters,
 	                      shared_ptr<Relation> input_relation_p = nullptr, bool auto_init = true);
+	TableFunctionRelation(const shared_ptr<ClientContext> &context, string name, unique_ptr<TableRef> tableref);
 	~TableFunctionRelation() override {
 	}
 
@@ -28,6 +29,7 @@ public:
 	named_parameter_map_t named_parameters;
 	vector<ColumnDefinition> columns;
 	shared_ptr<Relation> input_relation;
+	unique_ptr<TableRef> premade_tableref;
 
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;

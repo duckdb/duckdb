@@ -18,14 +18,16 @@ class TestArrowCaseSensitive(object):
 
         con = duckdb.connect()
         con.register('arrow_tbl', arrow_table)
-        print(con.execute("DESCRIBE arrow_tbl;").fetchall())
-        assert con.execute("DESCRIBE arrow_tbl;").fetchall() == [
-            ('A1', 'INTEGER', 'YES', None, None, None),
-            ('a1_1', 'INTEGER', 'YES', None, None, None),
-        ]
-        assert con.execute("select A1 from arrow_tbl;").fetchall() == [(1,)]
-        assert con.execute("select a1_1 from arrow_tbl;").fetchall() == [(1000,)]
-        assert arrow_table.column_names == ['A1', 'a1']
+        with pytest.raises(duckdb.CatalogException, match='Table with name arrow_tbl does not exist'):
+            # DESCRIBE only works on VIEW and TABLE, registered objects are no longer VIEWs
+            print(con.execute("DESCRIBE arrow_tbl;").fetchall())
+            assert con.execute("DESCRIBE arrow_tbl;").fetchall() == [
+                ('A1', 'INTEGER', 'YES', None, None, None),
+                ('a1_1', 'INTEGER', 'YES', None, None, None),
+            ]
+            assert con.execute("select A1 from arrow_tbl;").fetchall() == [(1,)]
+            assert con.execute("select a1_1 from arrow_tbl;").fetchall() == [(1000,)]
+            assert arrow_table.column_names == ['A1', 'a1']
 
     def test_arrow_case_sensitive_repeated(self, duckdb_cursor):
         if not can_run:
@@ -35,10 +37,12 @@ class TestArrowCaseSensitive(object):
 
         con = duckdb.connect()
         con.register('arrow_tbl', arrow_table)
-        print(con.execute("DESCRIBE arrow_tbl;").fetchall())
-        assert con.execute("DESCRIBE arrow_tbl;").fetchall() == [
-            ('A1', 'INTEGER', 'YES', None, None, None),
-            ('a1_1', 'INTEGER', 'YES', None, None, None),
-            ('a1_2', 'INTEGER', 'YES', None, None, None),
-        ]
-        assert arrow_table.column_names == ['A1', 'a1_1', 'a1']
+        with pytest.raises(duckdb.CatalogException, match='Table with name arrow_tbl does not exist'):
+            # DESCRIBE only works on VIEW and TABLE, registered objects are no longer VIEWs
+            print(con.execute("DESCRIBE arrow_tbl;").fetchall())
+            assert con.execute("DESCRIBE arrow_tbl;").fetchall() == [
+                ('A1', 'INTEGER', 'YES', None, None, None),
+                ('a1_1', 'INTEGER', 'YES', None, None, None),
+                ('a1_2', 'INTEGER', 'YES', None, None, None),
+            ]
+            assert arrow_table.column_names == ['A1', 'a1_1', 'a1']

@@ -10,15 +10,17 @@ class TestMultipleColumnsSameName(object):
         con = duckdb.connect()
         con.register('df_view', df)
 
-        assert con.execute("DESCRIBE df_view;").fetchall() == [
-            ('a', 'BIGINT', 'YES', None, None, None),
-            ('a_1', 'BIGINT', 'YES', None, None, None),
-            ('d', 'BIGINT', 'YES', None, None, None),
-        ]
-        assert con.execute("select a_1 from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
-        assert con.execute("select a from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
-        # Verify we are not changing original dataframe
-        assert all(df.columns == ['a', 'a', 'd']), df.columns
+        with pytest.raises(duckdb.CatalogException, match='Table with name df_view does not exist'):
+            # DESCRIBE only works on VIEW and TABLE, registered objects are no longer VIEWs
+            assert con.execute("DESCRIBE df_view;").fetchall() == [
+                ('a', 'BIGINT', 'YES', None, None, None),
+                ('a_1', 'BIGINT', 'YES', None, None, None),
+                ('d', 'BIGINT', 'YES', None, None, None),
+            ]
+            assert con.execute("select a_1 from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
+            assert con.execute("select a from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
+            # Verify we are not changing original dataframe
+            assert all(df.columns == ['a', 'a', 'd']), df.columns
 
     def test_multiple_columns_with_same_name_relation(self, duckdb_cursor):
         df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 6, 7, 8], 'd': [9, 10, 11, 12]})
@@ -50,15 +52,17 @@ class TestMultipleColumnsSameName(object):
         df = pd.DataFrame([(1, 5, 9), (2, 6, 10), (3, 7, 11), (4, 8, 12)], columns=['a_1', 'a', 'a'])
         con = duckdb.connect()
         con.register('df_view', df)
-        assert con.execute("DESCRIBE df_view;").fetchall() == [
-            ('a_1', 'BIGINT', 'YES', None, None, None),
-            ('a', 'BIGINT', 'YES', None, None, None),
-            ('a_2', 'BIGINT', 'YES', None, None, None),
-        ]
-        assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
-        assert con.execute("select a from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
-        # Verify we are not changing original dataframe
-        assert all(df.columns == ['a_1', 'a', 'a']), df.columns
+        with pytest.raises(duckdb.CatalogException, match='Table with name df_view does not exist'):
+            # DESCRIBE only works on VIEW and TABLE, registered objects are no longer VIEWs
+            assert con.execute("DESCRIBE df_view;").fetchall() == [
+                ('a_1', 'BIGINT', 'YES', None, None, None),
+                ('a', 'BIGINT', 'YES', None, None, None),
+                ('a_2', 'BIGINT', 'YES', None, None, None),
+            ]
+            assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
+            assert con.execute("select a from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
+            # Verify we are not changing original dataframe
+            assert all(df.columns == ['a_1', 'a', 'a']), df.columns
 
     def test_minimally_rename(self, duckdb_cursor):
         df = pd.DataFrame(
@@ -66,43 +70,48 @@ class TestMultipleColumnsSameName(object):
         )
         con = duckdb.connect()
         con.register('df_view', df)
-        rel = con.sql("DESCRIBE df_view;")
-        res = rel.fetchall()
-        assert res == [
-            ('a_1', 'BIGINT', 'YES', None, None, None),
-            ('a', 'BIGINT', 'YES', None, None, None),
-            ('a_2', 'BIGINT', 'YES', None, None, None),
-            ('a_2_1', 'BIGINT', 'YES', None, None, None),
-        ]
-        assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
-        assert con.execute("select a from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
-        assert con.execute("select a_2 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
-        assert con.execute("select a_2_1 from df_view;").fetchall() == [(13,), (14,), (15,), (16,)]
-        # Verify we are not changing original dataframe
-        assert all(df.columns == ['a_1', 'a', 'a', 'a_2']), df.columns
+        with pytest.raises(duckdb.CatalogException, match='Table with name df_view does not exist'):
+            # DESCRIBE only works on VIEW and TABLE, registered objects are no longer VIEWs
+            rel = con.sql("DESCRIBE df_view;")
+            res = rel.fetchall()
+            assert res == [
+                ('a_1', 'BIGINT', 'YES', None, None, None),
+                ('a', 'BIGINT', 'YES', None, None, None),
+                ('a_2', 'BIGINT', 'YES', None, None, None),
+                ('a_2_1', 'BIGINT', 'YES', None, None, None),
+            ]
+            assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
+            assert con.execute("select a from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
+            assert con.execute("select a_2 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
+            assert con.execute("select a_2_1 from df_view;").fetchall() == [(13,), (14,), (15,), (16,)]
+            # Verify we are not changing original dataframe
+            assert all(df.columns == ['a_1', 'a', 'a', 'a_2']), df.columns
 
     def test_multiple_columns_with_same_name_2(self, duckdb_cursor):
         df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 6, 7, 8], 'a_1': [9, 10, 11, 12]})
         df = df.rename(columns={df.columns[1]: "a_1"})
         con = duckdb.connect()
         con.register('df_view', df)
-        assert con.execute("DESCRIBE df_view;").fetchall() == [
-            ('a', 'BIGINT', 'YES', None, None, None),
-            ('a_1', 'BIGINT', 'YES', None, None, None),
-            ('a_1_1', 'BIGINT', 'YES', None, None, None),
-        ]
-        assert con.execute("select a_1 from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
-        assert con.execute("select a from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
-
-        assert con.execute("select a_1_1 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
+        with pytest.raises(duckdb.CatalogException, match='Table with name df_view does not exist'):
+            # DESCRIBE only works on VIEW and TABLE, registered objects are no longer VIEWs
+            assert con.execute("DESCRIBE df_view;").fetchall() == [
+                ('a', 'BIGINT', 'YES', None, None, None),
+                ('a_1', 'BIGINT', 'YES', None, None, None),
+                ('a_1_1', 'BIGINT', 'YES', None, None, None),
+            ]
+            assert con.execute("select a_1 from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
+            assert con.execute("select a from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
+            assert con.execute("select a_1_1 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
 
     def test_case_insensitive(self, duckdb_cursor):
         df = pd.DataFrame({'A_1': [1, 2, 3, 4], 'a_1': [9, 10, 11, 12]})
         con = duckdb.connect()
         con.register('df_view', df)
-        assert con.execute("DESCRIBE df_view;").fetchall() == [
-            ('A_1', 'BIGINT', 'YES', None, None, None),
-            ('a_1_1', 'BIGINT', 'YES', None, None, None),
-        ]
-        assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
-        assert con.execute("select a_1_1 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
+        with pytest.raises(duckdb.CatalogException, match='Table with name df_view does not exist'):
+            # DESCRIBE only works on VIEW and TABLE, registered objects are no longer VIEWs
+            assert con.execute("DESCRIBE df_view;").fetchall() == [
+                ('A_1', 'BIGINT', 'YES', None, None, None),
+                ('a_1_1', 'BIGINT', 'YES', None, None, None),
+            ]
+            assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
+            assert con.execute("select a_1_1 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
