@@ -3,6 +3,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/serializer/read_stream.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
 
