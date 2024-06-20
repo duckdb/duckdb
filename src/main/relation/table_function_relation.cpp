@@ -40,9 +40,9 @@ TableFunctionRelation::TableFunctionRelation(const shared_ptr<ClientContext> &co
 }
 
 TableFunctionRelation::TableFunctionRelation(const shared_ptr<ClientContext> &context, string name_p,
-                                             unique_ptr<TableRef> tableref)
-    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)), auto_initialize(true),
-      premade_tableref(std::move(tableref)) {
+                                             unique_ptr<TableFunctionRef> tableref)
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(std::move(name_p)),
+      premade_tableref(std::move(tableref)), auto_initialize(true) {
 	InitializeColumns();
 }
 

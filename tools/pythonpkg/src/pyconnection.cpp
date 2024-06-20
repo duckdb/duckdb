@@ -1114,11 +1114,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 		auto table = PandasDataFrame::ToArrowTable(value);
 		return DuckDBPyConnection::FromArrow(table);
 	}
-	auto tableref = PythonReplacementScan::TryReplacementObject(value, name, *connection->context);
-	if (!tableref) {
-		throw InvalidInputException("Failed to scan the provided object");
-	}
-	auto rel = make_shared_ptr<TableFunctionRelation>(connection->context, name, std::move(tableref))->Alias(name);
+	auto tableref = PythonReplacementScan::ReplacementObject(value, name, *connection->context);
+	D_ASSERT(tableref && tableref->type == TableReferenceType::TABLE_FUNCTION);
+	auto table_function = unique_ptr_cast<TableRef, TableFunctionRef>(std::move(tableref));
+	auto rel =
+	    make_shared_ptr<TableFunctionRelation>(connection->context, name, std::move(table_function))->Alias(name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
@@ -1188,11 +1188,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 		auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
 	}
-	auto tableref = PythonReplacementScan::TryReplacementObject(arrow_object, name, *connection->context);
-	if (!tableref) {
-		throw InvalidInputException("Failed to scan the provided object");
-	}
-	auto rel = make_shared_ptr<TableFunctionRelation>(connection->context, name, std::move(tableref))->Alias(name);
+	auto tableref = PythonReplacementScan::ReplacementObject(arrow_object, name, *connection->context);
+	D_ASSERT(tableref && tableref->type == TableReferenceType::TABLE_FUNCTION);
+	auto table_function = unique_ptr_cast<TableRef, TableFunctionRef>(std::move(tableref));
+	auto rel =
+	    make_shared_ptr<TableFunctionRelation>(connection->context, name, std::move(table_function))->Alias(name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 

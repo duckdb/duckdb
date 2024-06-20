@@ -3,6 +3,8 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 string ParseInfo::TypeToString(CatalogType type) {
