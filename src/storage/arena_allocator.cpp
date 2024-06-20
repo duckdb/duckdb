@@ -26,6 +26,7 @@ ArenaChunk::~ArenaChunk() {
 //===--------------------------------------------------------------------===//
 struct ArenaAllocatorData : public PrivateAllocatorData {
 	explicit ArenaAllocatorData(ArenaAllocator &allocator) : allocator(allocator) {
+		free_type = AllocatorFreeType::DOES_NOT_REQUIRE_FREE;
 	}
 
 	ArenaAllocator &allocator;

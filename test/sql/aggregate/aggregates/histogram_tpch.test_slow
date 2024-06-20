@@ -88,3 +88,12 @@ SELECT bin, count FROM histogram(lineitem, l_returnflag)
 A	1478493
 N	3043852
 R	1478870
+
+# string stress test
+query I nosort histstrings
+SELECT unnest(map_keys(histogram(l_comment))) FROM lineitem
+----
+
+query I nosort histstrings
+SELECT DISTINCT l_comment FROM lineitem ORDER BY l_comment
+----

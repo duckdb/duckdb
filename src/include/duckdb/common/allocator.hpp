@@ -23,10 +23,13 @@ class ThreadContext;
 
 struct AllocatorDebugInfo;
 
+enum class AllocatorFreeType { REQUIRES_FREE, DOES_NOT_REQUIRE_FREE };
+
 struct PrivateAllocatorData {
 	PrivateAllocatorData();
 	virtual ~PrivateAllocatorData();
 
+	AllocatorFreeType free_type = AllocatorFreeType::REQUIRES_FREE;
 	unique_ptr<AllocatorDebugInfo> debug_info;
 
 	template <class TARGET>
