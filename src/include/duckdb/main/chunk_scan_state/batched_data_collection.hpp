@@ -10,7 +10,7 @@ class BatchCollectionChunkScanState : public ChunkScanState {
 public:
 	BatchCollectionChunkScanState(BatchedDataCollection &collection, BatchedChunkIteratorRange &range,
 	                              ClientContext &context);
-	~BatchCollectionChunkScanState();
+	~BatchCollectionChunkScanState() override;
 
 public:
 	BatchCollectionChunkScanState(const BatchCollectionChunkScanState &other) = delete;

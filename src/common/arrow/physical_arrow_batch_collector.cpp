@@ -27,7 +27,7 @@ SinkFinalizeType PhysicalArrowBatchCollector::Finalize(Pipeline &pipeline, Event
 	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
 	                                            record_batch_size);
 	// Spawn an event that will populate the conversion result
-	auto &arrow_result = (ArrowQueryResult &)*gstate.result;
+	auto &arrow_result = gstate.result->Cast<ArrowQueryResult>();
 	auto new_event = make_shared_ptr<ArrowMergeEvent>(arrow_result, gstate.data, pipeline);
 	event.InsertEvent(std::move(new_event));
 
