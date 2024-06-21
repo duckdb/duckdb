@@ -1,0 +1,27 @@
+# name: benchmark/micro/window/streaming_lag.benchmark
+# description: Verify performance of streaming LAG
+# group: [window]
+
+load
+SELECT SETSEED(0.8675309);
+CREATE OR REPLACE TABLE df AS
+	SELECT 
+		RANDOM() AS a,
+		RANDOM() AS b,
+		RANDOM() AS c,
+	FROM range(10_000_000);
+
+run
+SELECT sum(a_1 + a_2 + b_1 + b_2)
+FROM (
+	SELECT
+	  LAG(a, 1) OVER () AS a_1,
+	  LAG(a, 2) OVER () AS a_2,
+	  LAG(b, 1) OVER () AS b_1,
+	  LAG(b, 2) OVER () AS b_2
+	FROM df
+) t
+;
+
+result I
+20000902.549240764
