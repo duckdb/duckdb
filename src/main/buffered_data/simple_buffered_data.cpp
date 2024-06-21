@@ -63,7 +63,8 @@ bool SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContex
 		if (buffered_count >= BufferSize()) {
 			break;
 		}
-		if (execution_result == PendingExecutionResult::BLOCKED) {
+		if (execution_result == PendingExecutionResult::BLOCKED ||
+		    execution_result == PendingExecutionResult::RESULT_READY) {
 			// Check if we need to unblock more sinks to reach the buffer size
 			UnblockSinks();
 			cc->WaitForTask(context_lock, result);
