@@ -52,22 +52,27 @@ PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &re
 		// The buffer isn't empty yet, just return
 		return PendingExecutionResult::RESULT_READY;
 	}
-	UnblockSinks();
 	auto cc = context.lock();
+	if (!cc) {
+		return PendingExecutionResult::EXECUTION_ERROR;
+	}
+	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
-	auto res = cc->ExecuteTaskInternal(context_lock, result);
-	while (!PendingQueryResult::IsFinished(res)) {
+	PendingExecutionResult execution_result;
+	while (!PendingQueryResult::IsFinished(execution_result = cc->ExecuteTaskInternal(context_lock, result))) {
 		if (buffered_count >= BufferSize()) {
 			break;
 		}
-		// Check if we need to unblock more sinks to reach the buffer size
-		UnblockSinks();
-		res = cc->ExecuteTaskInternal(context_lock, result);
+		if (execution_result == PendingExecutionResult::BLOCKED) {
+			// Check if we need to unblock more sinks to reach the buffer size
+			UnblockSinks();
+			cc->WaitForTask(context_lock, result);
+		}
 	}
 	if (result.HasError()) {
 		Close();
 	}
-	return res;
+	return execution_result;
 }
 
 unique_ptr<DataChunk> SimpleBufferedData::Scan() {
