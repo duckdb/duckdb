@@ -5,6 +5,9 @@
 # This file specifically tests the functionality for each type, 
 # it does not necessarily test the correctness (statement ok suffices for some tests)
 
+statement ok
+PRAGMA enable_verification
+
 # BOOLEAN
 
 # result False
