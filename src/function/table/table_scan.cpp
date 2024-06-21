@@ -347,7 +347,6 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index_state != nullptr) {
 
 				auto &db_config = DBConfig::GetConfig(context);
-				DBConfig &GetConfig(ClientContext & context);
 				auto index_scan_percentage = db_config.options.index_scan_percentage;
 				auto index_scan_max_count = db_config.options.index_scan_max_count;
 
