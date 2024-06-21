@@ -113,7 +113,7 @@ public:
 	DUCKDB_API void Append(TableDescription &description, DataChunk &chunk);
 	//! Appends a ColumnDataCollection to the specified table
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
-
+        DUCKDB_API void Merge(TableDescription &description, DataChunk &chunk);
 	//! Returns a relation that produces a table from this connection
 	DUCKDB_API shared_ptr<Relation> Table(const string &tname);
 	DUCKDB_API shared_ptr<Relation> Table(const string &schema_name, const string &table_name);

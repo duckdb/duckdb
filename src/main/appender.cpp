@@ -387,4 +387,20 @@ void BaseAppender::Close() {
 	}
 }
 
+Merger::Merger(Connection &con, const string &schema_name, const string &table_name)
+  : Appender(con, schema_name, table_name) {
+
+}
+
+Merger::Merger(Connection &con, const string &table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
+}
+
+Merger::~Merger() {
+	Destructor();
+}
+
+void Merger::FlushInternal(ColumnDataCollection &collection) {
+	context->Merge(*description, collection);
+}
+
 } // namespace duckdb

@@ -2629,7 +2629,7 @@ Note that the object must be destroyed with `duckdb_appender_destroy`.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
-                                               duckdb_appender *out_appender);
+                                               duckdb_appender *out_appender, bool merge = false);
 
 /*!
 Returns the number of columns in the table that belongs to the appender.
@@ -3133,7 +3133,7 @@ DUCKDB_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
 
 DUCKDB_API uint64_t duckdb_get_hlc_timestamp();
 DUCKDB_API void duckdb_set_hlc_timestamp(uint64_t ts);
-
+DUCKDB_API duckdb_state duckdb_merge_data_chunk(duckdb_connection connection, const char *schema, const char *table, duckdb_data_chunk chunk);
 #ifdef __cplusplus
 }
 #endif

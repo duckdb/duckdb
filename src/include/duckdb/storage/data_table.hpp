@@ -102,8 +102,14 @@ public:
 	//! Append a DataChunk to the transaction-local storage of the table.
 	void LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                 bool unsafe = false);
+  
 	//! Finalizes a transaction-local append
 	void FinalizeLocalAppend(LocalAppendState &state);
+
+  void LocalMerge(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk, const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+  void LocalMerge(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection, const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+        void LocalMerge(ClientContext &context, DataChunk &chunk);
+  
 	//! Append a chunk to the transaction-local storage of this table
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -112,6 +118,7 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
+
 	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends
 	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
 	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);

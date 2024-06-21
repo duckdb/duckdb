@@ -178,6 +178,10 @@ void Connection::Append(TableDescription &description, ColumnDataCollection &col
 	context->Append(description, collection);
 }
 
+void Connection::Merge(TableDescription &description, DataChunk &chunk) {
+        context->Merge(description, chunk);
+}
+
 shared_ptr<Relation> Connection::Table(const string &table_name) {
 	return Table(DEFAULT_SCHEMA, table_name);
 }
