@@ -12,6 +12,7 @@ add_library_unity(
   enum_comparison.cpp
   equal_or_null_simplification.cpp
   in_clause_simplification_rule.cpp
+  join_dependent_filter.cpp
   like_optimizations.cpp
   move_constants.cpp
   ordered_aggregate_optimizer.cpp

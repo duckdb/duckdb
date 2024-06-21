@@ -8,6 +8,12 @@
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
+#include "geo_parquet.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 
@@ -17,15 +23,16 @@
 #include <string>
 #include <vector>
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/helper.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -40,6 +47,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #endif
 
 namespace duckdb {
@@ -158,6 +166,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 	//! Dictionary compression is applied only if the compression ratio exceeds this threshold
 	double dictionary_compression_ratio_threshold = 1.0;
+
+	//! After how many row groups to rotate to a new file
+	optional_idx row_groups_per_file;
 
 	ChildFieldIDs field_ids;
 	//! The compression level, higher value is more
@@ -794,7 +805,7 @@ public:
 					// The current reader has rowgroups left to be scanned
 					scan_data.reader = current_reader_data.reader;
 					vector<idx_t> group_indexes {parallel_state.row_group_index};
-					scan_data.reader->InitializeScan(scan_data.scan_state, group_indexes);
+					scan_data.reader->InitializeScan(context, scan_data.scan_state, group_indexes);
 					scan_data.batch_index = parallel_state.batch_index++;
 					scan_data.file_index = parallel_state.file_index;
 					parallel_state.row_group_index++;
@@ -1078,6 +1089,8 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				bind_data->row_group_size_bytes = option.second[0].GetValue<uint64_t>();
 			}
 			row_group_size_bytes_set = true;
+		} else if (loption == "row_groups_per_file") {
+			bind_data->row_groups_per_file = option.second[0].GetValue<uint64_t>();
 		} else if (loption == "compression" || loption == "codec") {
 			const auto roption = StringUtil::Lower(option.second[0].ToString());
 			if (roption == "uncompressed") {
@@ -1088,12 +1101,14 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
 			} else if (roption == "zstd") {
 				bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
+			} else if (roption == "brotli") {
+				bind_data->codec = duckdb_parquet::format::CompressionCodec::BROTLI;
 			} else if (roption == "lz4" || roption == "lz4_raw") {
 				/* LZ4 is technically another compression scheme, but deprecated and arrow also uses them
 				 * interchangeably */
 				bind_data->codec = duckdb_parquet::format::CompressionCodec::LZ4_RAW;
 			} else {
-				throw BinderException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]",
+				throw BinderException("Expected %s argument to be either [uncompressed, brotli, gzip, snappy, or zstd]",
 				                      loption);
 			}
 		} else if (loption == "field_ids") {
@@ -1170,7 +1185,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer = make_uniq<ParquetWriter>(
-	    fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
+	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
 	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
 	    parquet_bind.dictionary_compression_ratio_threshold, parquet_bind.compression_level);
 	return std::move(global_state);
@@ -1185,8 +1200,8 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(local_state.append_state, input);
 
-	if (local_state.buffer.Count() > bind_data.row_group_size ||
-	    local_state.buffer.SizeInBytes() > bind_data.row_group_size_bytes) {
+	if (local_state.buffer.Count() >= bind_data.row_group_size ||
+	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes) {
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer);
@@ -1294,6 +1309,7 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(108, "dictionary_compression_ratio_threshold",
 	                         bind_data.dictionary_compression_ratio_threshold);
 	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", bind_data.compression_level);
+	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1310,6 +1326,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<double>(108, "dictionary_compression_ratio_threshold",
 	                                             data->dictionary_compression_ratio_threshold, 1.0);
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", data->compression_level);
+	data->row_groups_per_file =
+	    deserializer.ReadPropertyWithDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
 	return std::move(data);
 }
 // LCOV_EXCL_STOP
@@ -1361,11 +1379,25 @@ idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_da
 }
 
 //===--------------------------------------------------------------------===//
-// Current File Size
+// File rotation
 //===--------------------------------------------------------------------===//
-idx_t ParquetWriteFileSize(GlobalFunctionData &gstate) {
+bool ParquetWriteRotateFiles(FunctionData &bind_data_p, const optional_idx &file_size_bytes) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	return file_size_bytes.IsValid() || bind_data.row_groups_per_file.IsValid();
+}
+
+bool ParquetWriteRotateNextFile(GlobalFunctionData &gstate, FunctionData &bind_data_p,
+                                const optional_idx &file_size_bytes) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	return global_state.writer->FileSize();
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	if (file_size_bytes.IsValid() && global_state.writer->FileSize() > file_size_bytes.GetIndex()) {
+		return true;
+	}
+	if (bind_data.row_groups_per_file.IsValid() &&
+	    global_state.writer->NumberOfRowGroups() >= bind_data.row_groups_per_file.GetIndex()) {
+		return true;
+	}
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1388,6 +1420,86 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, ReplacementS
 	}
 
 	return std::move(table_function);
+}
+
+//===--------------------------------------------------------------------===//
+// Select
+//===--------------------------------------------------------------------===//
+// Helper predicates for ParquetWriteSelect
+static bool IsTypeNotSupported(const LogicalType &type) {
+	if (type.IsNested()) {
+		return false;
+	}
+	return !ParquetWriter::TryGetParquetType(type);
+}
+
+static bool IsTypeLossy(const LogicalType &type) {
+	return type.id() == LogicalTypeId::HUGEINT || type.id() == LogicalTypeId::UHUGEINT;
+}
+
+static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &input) {
+
+	auto &context = input.context;
+
+	vector<unique_ptr<Expression>> result;
+
+	bool any_change = false;
+
+	for (auto &expr : input.select_list) {
+
+		const auto &type = expr->return_type;
+		const auto &name = expr->alias;
+
+		// Spatial types need to be encoded into WKB when writing GeoParquet.
+		// But dont perform this conversion if this is a EXPORT DATABASE statement
+		if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::BLOB && type.HasAlias() &&
+		    type.GetAlias() == "GEOMETRY") {
+
+			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
+			wkb_blob_type.SetAlias("WKB_BLOB");
+
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), wkb_blob_type, false);
+			cast_expr->alias = name;
+			result.push_back(std::move(cast_expr));
+			any_change = true;
+		}
+		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
+		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && TypeVisitor::Contains(type, IsTypeLossy)) {
+			// Replace all lossy types with VARCHAR
+			auto new_type = TypeVisitor::VisitReplace(
+			    type, [](const LogicalType &ty) -> LogicalType { return IsTypeLossy(ty) ? LogicalType::VARCHAR : ty; });
+
+			// Cast the column to the new type
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
+			cast_expr->alias = name;
+			result.push_back(std::move(cast_expr));
+			any_change = true;
+		}
+		// Else look if there is any unsupported type
+		else if (TypeVisitor::Contains(type, IsTypeNotSupported)) {
+			// If there is at least one unsupported type, replace all unsupported types with varchar
+			// and perform a CAST
+			auto new_type = TypeVisitor::VisitReplace(type, [](const LogicalType &ty) -> LogicalType {
+				return IsTypeNotSupported(ty) ? LogicalType::VARCHAR : ty;
+			});
+
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
+			cast_expr->alias = name;
+			result.push_back(std::move(cast_expr));
+			any_change = true;
+		}
+		// Otherwise, just reference the input column
+		else {
+			result.push_back(std::move(expr));
+		}
+	}
+
+	// If any change was made, return the new expressions
+	// otherwise, return an empty vector to indicate no change and avoid pushing another projection on to the plan
+	if (any_change) {
+		return result;
+	}
+	return {};
 }
 
 void ParquetExtension::Load(DuckDB &db) {
@@ -1418,6 +1530,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(file_meta_fun));
 
 	CopyFunction function("parquet");
+	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;
@@ -1430,10 +1543,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
-	function.file_size_bytes = ParquetWriteFileSize;
+	function.rotate_files = ParquetWriteRotateFiles;
+	function.rotate_next_file = ParquetWriteRotateNextFile;
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
-	function.supports_type = ParquetWriter::TypeIsSupported;
 
 	function.extension = "parquet";
 	ExtensionUtil::RegisterFunction(db_instance, function);

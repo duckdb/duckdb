@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
+#include "duckdb/catalog/default/default_table_functions.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
@@ -79,7 +80,8 @@ static void LazyLoadIndexes(ClientContext &context, CatalogEntry &entry) {
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
     : SchemaCatalogEntry(catalog, info), tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)),
-      indexes(catalog), table_functions(catalog), copy_functions(catalog), pragma_functions(catalog),
+      indexes(catalog), table_functions(catalog, make_uniq<DefaultTableFunctionGenerator>(catalog, *this)),
+      copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
       types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
 }

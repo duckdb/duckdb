@@ -193,7 +193,15 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
 		} else {
 			// we have filters, create a join node
-			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+			auto chosen_filter = node->info->filters.at(0);
+			for (idx_t i = 0; i < node->info->filters.size(); i++) {
+				if (node->info->filters.at(i)->join_type == JoinType::INNER) {
+					chosen_filter = node->info->filters.at(i);
+					break;
+				}
+			}
+
+			auto join = make_uniq<LogicalComparisonJoin>(chosen_filter->join_type);
 			// Here we optimize build side probe side. Our build side is the right side
 			// So the right plans should have lower cardinalities.
 			join->children.push_back(std::move(left.op));
@@ -216,7 +224,14 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				auto &comparison = condition->Cast<BoundComparisonExpression>();
 
 				// we need to figure out which side is which by looking at the relations available to us
+				// left/right (build side/probe side) optimizations happen later.
 				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
+				// If the left and right set are inverted AND it is a semi or anti join
+				// swap left and right children back.
+				if (invert && (f->join_type == JoinType::SEMI || f->join_type == JoinType::ANTI)) {
+					std::swap(left, right);
+					invert = false;
+				}
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
 				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
 				cond.comparison = condition->type;
@@ -340,108 +355,6 @@ const QueryGraphEdges &QueryGraphManager::GetQueryGraphEdges() const {
 void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right) {
 	query_graph.CreateEdge(left, right, nullptr);
 	query_graph.CreateEdge(right, left, nullptr);
-}
-
-static void FlipChildren(LogicalOperator &op) {
-	std::swap(op.children[0], op.children[1]);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		join.join_type = InverseJoinType(join.join_type);
-		for (auto &cond : join.conditions) {
-			std::swap(cond.left, cond.right);
-			cond.comparison = FlipComparisonExpression(cond.comparison);
-		}
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-		auto &join = op.Cast<LogicalAnyJoin>();
-		join.join_type = InverseJoinType(join.join_type);
-	}
-}
-
-void QueryGraphManager::TryFlipChildren(LogicalOperator &op, idx_t cardinality_ratio) {
-	auto &left_child = op.children[0];
-	auto &right_child = op.children[1];
-	auto lhs_cardinality = left_child->has_estimated_cardinality ? left_child->estimated_cardinality
-	                                                             : left_child->EstimateCardinality(context);
-	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
-	                                                              : right_child->EstimateCardinality(context);
-	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
-		return;
-	}
-	FlipChildren(op);
-}
-
-unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr<LogicalOperator> input_op) {
-	auto op = input_op.get();
-	// pass through single child operators
-	while (!op->children.empty()) {
-		if (op->children.size() == 2) {
-			switch (op->type) {
-			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-				auto &join = op->Cast<LogicalComparisonJoin>();
-
-				switch (join.join_type) {
-				case JoinType::INNER:
-				case JoinType::OUTER:
-					TryFlipChildren(join);
-					break;
-				case JoinType::LEFT:
-				case JoinType::RIGHT:
-					if (join.right_projection_map.empty()) {
-						TryFlipChildren(join, 2);
-					}
-					break;
-				case JoinType::SEMI:
-				case JoinType::ANTI: {
-					idx_t has_range = 0;
-					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
-						// if the conditions have no equality, do not flip the children.
-						// There is no physical join operator (yet) that can do a right_semi/anti join.
-						break;
-					}
-					TryFlipChildren(join, 2);
-					break;
-				}
-				default:
-					break;
-				}
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-				// cross product not a comparison join so JoinType::INNER will get ignored
-				TryFlipChildren(*op, 1);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-				auto &join = op->Cast<LogicalAnyJoin>();
-				if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-					TryFlipChildren(join, 2);
-				} else if (join.join_type == JoinType::INNER) {
-					TryFlipChildren(join, 1);
-				}
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-				auto &join = op->Cast<LogicalComparisonJoin>();
-				if (HasInverseJoinType(join.join_type) && join.right_projection_map.empty()) {
-					FlipChildren(join);
-					join.delim_flipped = true;
-				}
-				break;
-			}
-			default:
-				break;
-			}
-			op->children[0] = LeftRightOptimizations(std::move(op->children[0]));
-			op->children[1] = LeftRightOptimizations(std::move(op->children[1]));
-			// break from while loop
-			break;
-		}
-		if (op->children.size() == 1) {
-			op = op->children[0].get();
-		}
-	}
-	return input_op;
 }
 
 } // namespace duckdb

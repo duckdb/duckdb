@@ -60,3 +60,15 @@ class TestDuckDBExecute(object):
             """,
                 (99,),
             )
+
+    def test_execute_many_generator(self, duckdb_cursor):
+        to_insert = [[1], [2], [3]]
+
+        def to_insert_from_generator(what):
+            for x in what:
+                yield x
+
+        gen = to_insert_from_generator(to_insert)
+        duckdb_cursor.execute("CREATE TABLE unittest_generator (a INTEGER);")
+        duckdb_cursor.executemany("INSERT into unittest_generator (a) VALUES (?)", gen)
+        assert duckdb_cursor.table('unittest_generator').fetchall() == [(1,), (2,), (3,)]

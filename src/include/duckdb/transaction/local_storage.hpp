@@ -136,7 +136,7 @@ public:
 	void Update(DataTable &table, Vector &row_ids, const vector<PhysicalIndex> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction);
+	void Commit();
 	//! Rollback the local storage
 	void Rollback();
 

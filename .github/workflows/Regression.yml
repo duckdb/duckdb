@@ -130,7 +130,7 @@ jobs:
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/csv.csv --verbose --threads=2
 
     - name: Regression Test new micro benchmark
-      if: github.event_name == 'pull_request'
+      if: always()
       shell: bash
       run: |
         target_branch="${{ github.event.pull_request.base.ref }}"

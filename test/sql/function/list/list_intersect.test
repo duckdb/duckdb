@@ -48,10 +48,11 @@ insert into list_of_list values (NULL, NULL);
 statement ok
 insert into list_of_list values ([[1 , 2, 3], NULL, [3, 2, 1]], [[ 2, 3, 4], NULL, [1, 2, 3]]);
 
-statement error
+query I
 select ${f}(l1, l2) from list_of_list;
 ----
-Not implemented
+NULL
+[[1, 2, 3]]
 
 statement ok
 drop table list_of_list;

@@ -64,6 +64,10 @@ void TransactionContext::SetAutoCommit(bool value) {
 	}
 }
 
+void TransactionContext::SetReadOnly() {
+	current_transaction->SetReadOnly();
+}
+
 void TransactionContext::Rollback() {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");

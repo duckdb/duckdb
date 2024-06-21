@@ -204,7 +204,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// finally write the updated header
 	DatabaseHeader header;
 	header.meta_block = meta_block.block_pointer;
-	header.block_size = Storage::BLOCK_ALLOC_SIZE;
+	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(header);
 
@@ -241,6 +241,12 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 	if (!meta_block.IsValid()) {
 		// storage is empty
 		return;
+	}
+
+	if (block_manager.IsRemote()) {
+		auto metadata_blocks = metadata_manager.GetBlocks();
+		auto &buffer_manager = BufferManager::GetBufferManager(storage.GetDatabase());
+		buffer_manager.Prefetch(metadata_blocks);
 	}
 
 	// create the MetadataReader to read from the storage

@@ -21,7 +21,8 @@ static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
 // microseconds and Z are optional
 // ISO 8601
 
-bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
+bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
+                              optional_ptr<int32_t> nanos) {
 	int32_t hour = -1, min = -1, sec = -1, micros = -1;
 	pos = 0;
 
@@ -92,10 +93,18 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		pos++;
 		// we expect some microseconds
 		int32_t mult = 100000;
+		if (nanos) {
+			// do we expect nanoseconds?
+			mult *= Interval::NANOS_PER_MICRO;
+		}
 		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
 			if (mult > 0) {
 				micros += (buf[pos] - '0') * mult;
 			}
+		}
+		if (nanos) {
+			*nanos = micros % Interval::NANOS_PER_MICRO;
+			micros /= Interval::NANOS_PER_MICRO;
 		}
 	}
 
@@ -115,16 +124,18 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 	return true;
 }
 
-bool Time::TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
-	return Time::TryConvertInternal(buf, len, pos, result, strict);
+bool Time::TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
+                              optional_ptr<int32_t> nanos) {
+	return Time::TryConvertInternal(buf, len, pos, result, strict, nanos);
 }
 
-bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
-	if (!Time::TryConvertInternal(buf, len, pos, result, strict)) {
+bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
+                          optional_ptr<int32_t> nanos) {
+	if (!Time::TryConvertInternal(buf, len, pos, result, strict, nanos)) {
 		if (!strict) {
 			// last chance, check if we can parse as timestamp
 			timestamp_t timestamp;
-			if (Timestamp::TryConvertTimestamp(buf, len, timestamp) == TimestampCastResult::SUCCESS) {
+			if (Timestamp::TryConvertTimestamp(buf, len, timestamp, nanos) == TimestampCastResult::SUCCESS) {
 				if (!Timestamp::IsFinite(timestamp)) {
 					return false;
 				}
@@ -137,14 +148,15 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	return result.micros <= Interval::MICROS_PER_DAY;
 }
 
-bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool &has_offset, bool strict) {
+bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool &has_offset, bool strict,
+                            optional_ptr<int32_t> nanos) {
 	dtime_t time_part;
 	has_offset = false;
-	if (!Time::TryConvertInternal(buf, len, pos, time_part, false)) {
+	if (!Time::TryConvertInternal(buf, len, pos, time_part, false, nanos)) {
 		if (!strict) {
 			// last chance, check if we can parse as timestamp
 			timestamp_t timestamp;
-			if (Timestamp::TryConvertTimestamp(buf, len, timestamp) == TimestampCastResult::SUCCESS) {
+			if (Timestamp::TryConvertTimestamp(buf, len, timestamp, nanos) == TimestampCastResult::SUCCESS) {
 				if (!Timestamp::IsFinite(timestamp)) {
 					return false;
 				}
@@ -218,17 +230,17 @@ string Time::ConversionError(string_t str) {
 	return Time::ConversionError(str.GetString());
 }
 
-dtime_t Time::FromCString(const char *buf, idx_t len, bool strict) {
+dtime_t Time::FromCString(const char *buf, idx_t len, bool strict, optional_ptr<int32_t> nanos) {
 	dtime_t result;
 	idx_t pos;
-	if (!Time::TryConvertTime(buf, len, pos, result, strict)) {
+	if (!Time::TryConvertTime(buf, len, pos, result, strict, nanos)) {
 		throw ConversionException(ConversionError(string(buf, len)));
 	}
 	return result;
 }
 
-dtime_t Time::FromString(const string &str, bool strict) {
-	return Time::FromCString(str.c_str(), str.size(), strict);
+dtime_t Time::FromString(const string &str, bool strict, optional_ptr<int32_t> nanos) {
+	return Time::FromCString(str.c_str(), str.size(), strict, nanos);
 }
 
 string Time::ToString(dtime_t time) {
@@ -271,6 +283,15 @@ dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 	result = result * Interval::SECS_PER_MINUTE + second;      // minutes -> seconds
 	result = result * Interval::MICROS_PER_SEC + microseconds; // seconds -> microseconds
 	return dtime_t(result);
+}
+
+int64_t Time::ToNanoTime(int32_t hour, int32_t minute, int32_t second, int32_t nanoseconds) {
+	int64_t result;
+	result = hour;                                           // hours
+	result = result * Interval::MINS_PER_HOUR + minute;      // hours -> minutes
+	result = result * Interval::SECS_PER_MINUTE + second;    // minutes -> seconds
+	result = result * Interval::NANOS_PER_SEC + nanoseconds; // seconds -> nanoseconds
+	return result;
 }
 
 bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {

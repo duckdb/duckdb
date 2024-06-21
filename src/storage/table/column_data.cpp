@@ -107,6 +107,31 @@ ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_
 	return ScanVectorType::SCAN_ENTIRE_VECTOR;
 }
 
+void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t remaining) {
+	auto current_segment = scan_state.current;
+	if (!current_segment) {
+		return;
+	}
+	if (!scan_state.initialized) {
+		// need to prefetch for the current segment if we have not yet initialized the scan for this segment
+		scan_state.current->InitializePrefetch(prefetch_state, scan_state);
+	}
+	idx_t row_index = scan_state.row_index;
+	while (remaining > 0) {
+		idx_t scan_count = MinValue<idx_t>(remaining, current_segment->start + current_segment->count - row_index);
+		remaining -= scan_count;
+		row_index += scan_count;
+		if (remaining > 0) {
+			auto next = data.GetNextSegment(current_segment);
+			if (!next) {
+				break;
+			}
+			next->InitializePrefetch(prefetch_state, scan_state);
+			current_segment = next;
+		}
+	}
+}
+
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
@@ -394,9 +419,9 @@ void ColumnData::RevertAppend(row_t start_row) {
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
 	auto last_segment = data.GetLastSegment(l);
-	if (idx_t(start_row) >= last_segment->start + last_segment->count) {
+	if (NumericCast<idx_t>(start_row) >= last_segment->start + last_segment->count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(idx_t(start_row) == last_segment->start + last_segment->count);
+		D_ASSERT(NumericCast<idx_t>(start_row) == last_segment->start + last_segment->count);
 		return;
 	}
 	// find the segment index that the current row belongs to
@@ -415,7 +440,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	D_ASSERT(row_id >= 0);
-	D_ASSERT(idx_t(row_id) >= start);
+	D_ASSERT(NumericCast<idx_t>(row_id) >= start);
 	// perform the fetch within the segment
 	state.row_index =
 	    start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
@@ -454,16 +479,18 @@ void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 
-	idx_t vector_segment_size = Storage::BLOCK_SIZE;
-	if (start_row == idx_t(MAX_ROW_ID)) {
+	auto vector_segment_size = Storage::BLOCK_SIZE;
+	const auto type_size = GetTypeIdSize(type.InternalType());
+
+	if (start_row == NumericCast<idx_t>(MAX_ROW_ID)) {
 #if STANDARD_VECTOR_SIZE < 1024
-		vector_segment_size = 1024 * GetTypeIdSize(type.InternalType());
+		vector_segment_size = 1024 * type_size;
 #else
-		vector_segment_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
+		vector_segment_size = STANDARD_VECTOR_SIZE * type_size;
 #endif
 	}
 
-	// the segment size is bound by the block size, but can be smaller
+	// The segment size is bound by the block size, but can be smaller.
 	idx_t segment_size = Storage::BLOCK_SIZE < vector_segment_size ? Storage::BLOCK_SIZE : vector_segment_size;
 	allocation_size += segment_size;
 	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
@@ -523,15 +550,18 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 }
 
 void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	// load the data pointers for the column
+	// Set the stack of the deserializer to load the data pointers.
 	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
 	deserializer.Set<LogicalType &>(type);
+	CompressionInfo compression_info(Storage::BLOCK_SIZE, type.InternalType());
+	deserializer.Set<const CompressionInfo &>(compression_info);
 
 	vector<DataPointer> data_pointers;
 	deserializer.ReadProperty(100, "data_pointers", data_pointers);
 
 	deserializer.Unset<DatabaseInstance>();
 	deserializer.Unset<LogicalType>();
+	deserializer.Unset<const CompressionInfo>();
 
 	// construct the segments based on the data pointers
 	this->count = 0;

@@ -50,7 +50,7 @@ LogicalType ExpressionBinder::ResolveInType(OperatorExpression &op, vector<uniqu
 		child = BoundCastExpression::AddCastToType(context, std::move(child), max_type);
 		if (is_in_operator) {
 			// If it's IN/NOT_IN operator, push collation functions.
-			ExpressionBinder::PushCollation(context, child, max_type, true);
+			ExpressionBinder::PushCollation(context, child, max_type);
 		}
 	}
 	// (NOT) IN always returns a boolean

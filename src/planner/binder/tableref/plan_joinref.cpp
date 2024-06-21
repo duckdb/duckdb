@@ -344,12 +344,15 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(context, ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));
-
 	optional_ptr<LogicalOperator> join;
 	if (result->type == LogicalOperatorType::LOGICAL_FILTER) {
 		join = result->children[0].get();
 	} else {
 		join = result.get();
+	}
+
+	if (ref.type == JoinType::MARK) {
+		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
 	}
 	for (auto &child : join->children) {
 		if (child->type == LogicalOperatorType::LOGICAL_FILTER) {

@@ -20,6 +20,7 @@
 
 #include "column_writer.hpp"
 #include "parquet_types.h"
+#include "geo_parquet.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
 
 namespace duckdb {
@@ -61,8 +62,8 @@ struct FieldID {
 
 class ParquetWriter {
 public:
-	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
-	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
+	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
+	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, double dictionary_compression_ratio_threshold,
 	              optional_idx compression_level);
@@ -85,6 +86,9 @@ public:
 	duckdb_parquet::format::Type::type GetType(idx_t schema_idx) {
 		return file_meta_data.schema[schema_idx].type;
 	}
+	LogicalType GetSQLType(idx_t schema_idx) const {
+		return sql_types[schema_idx];
+	}
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}
@@ -98,15 +102,20 @@ public:
 	optional_idx CompressionLevel() const {
 		return compression_level;
 	}
-
-	static CopyTypeSupport TypeIsSupported(const LogicalType &type);
+	idx_t NumberOfRowGroups() {
+		lock_guard<mutex> glock(lock);
+		return file_meta_data.row_groups.size();
+	}
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
 
+	GeoParquetFileMetadata &GetGeoParquetData();
+
+	static bool TryGetParquetType(const LogicalType &duckdb_type,
+	                              optional_ptr<duckdb_parquet::format::Type::type> type = nullptr);
+
 private:
-	static CopyTypeSupport DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
-	                                                       duckdb_parquet::format::Type::type &type);
 	string file_name;
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
@@ -122,6 +131,8 @@ private:
 	std::mutex lock;
 
 	vector<unique_ptr<ColumnWriter>> column_writers;
+
+	unique_ptr<GeoParquetFileMetadata> geoparquet_data;
 };
 
 } // namespace duckdb

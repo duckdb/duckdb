@@ -475,7 +475,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	table.VacuumIndexes();
 }
 
-void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction) {
+void LocalStorage::Commit() {
 	// commit local storage
 	// iterate over all entries in the table storage map and commit them
 	// after this, the local storage is no longer required and can be cleared

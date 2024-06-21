@@ -1,7 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_BUF_WRITER_H
 #define JEMALLOC_INTERNAL_BUF_WRITER_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/jemalloc_internal_types.h"
+#include "jemalloc/internal/tsd_types.h"
 
 /*
  * Note: when using the buffered writer, cbopaque is passed to write_cb only
@@ -30,7 +32,5 @@ void buf_writer_terminate(tsdn_t *tsdn, buf_writer_t *buf_writer);
 typedef ssize_t (read_cb_t)(void *read_cbopaque, void *buf, size_t limit);
 void buf_writer_pipe(buf_writer_t *buf_writer, read_cb_t *read_cb,
     void *read_cbopaque);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BUF_WRITER_H */

@@ -20,7 +20,7 @@ AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
                       aggr->filter.get()) {
 }
 
-AggregateObject::AggregateObject(BoundWindowExpression &window)
+AggregateObject::AggregateObject(const BoundWindowExpression &window)
     : AggregateObject(*window.aggregate, window.bind_info.get(), window.children.size(),
                       AlignValue(window.aggregate->state_size()),
                       window.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,

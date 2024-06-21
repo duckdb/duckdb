@@ -1,9 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_THREAD_EVENT_H
 #define JEMALLOC_INTERNAL_THREAD_EVENT_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/tsd.h"
-
-namespace duckdb_jemalloc {
 
 /* "te" is short for "thread_event" */
 
@@ -299,7 +298,5 @@ JEMALLOC_ALWAYS_INLINE void
 thread_alloc_event(tsd_t *tsd, size_t usize) {
 	te_event_advance(tsd, usize, true);
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_THREAD_EVENT_H */
