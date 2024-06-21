@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/encryption_state.hpp"
 #include "parquet_types.h"
 
 #ifndef DUCKDB_AMALGAMATION
@@ -68,20 +69,26 @@ public:
 
 	//! Block size we encrypt/decrypt
 	static constexpr uint32_t CRYPTO_BLOCK_SIZE = 4096;
+	static constexpr uint32_t BLOCK_SIZE = 16;
 
 public:
 	//! Decrypt and read a Thrift object from the transport protocol
-	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key);
+	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const shared_ptr<EncryptionState> &aes_p);
 	//! Encrypt and write a Thrift object to the transport protocol
-	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key);
+	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
+	                      const shared_ptr<EncryptionState> &aes_p);
 	//! Decrypt and read a buffer
-	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key);
+	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key,
+	                         const shared_ptr<EncryptionState> &aes_p);
 	//! Encrypt and write a buffer to a file
 	static uint32_t WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
-	                          const string &key);
+	                          const string &key, const shared_ptr<EncryptionState> &aes_p);
+	// Returns AES state
+	static shared_ptr<EncryptionUtil> EncryptionUtilWrapper(bool debug_use_openssl);
 
 public:
 	static void AddKey(ClientContext &context, const FunctionParameters &parameters);
+	static bool ValidKey(const std::string &key);
 };
 
 } // namespace duckdb

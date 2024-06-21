@@ -19,6 +19,7 @@
 #endif
 
 #include "column_writer.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "parquet_types.h"
 #include "geo_parquet.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
@@ -66,7 +67,7 @@ public:
 	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, double dictionary_compression_ratio_threshold,
-	              optional_idx compression_level);
+	              optional_idx compression_level, bool debug_use_openssl);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -124,6 +125,8 @@ private:
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 	double dictionary_compression_ratio_threshold;
 	optional_idx compression_level;
+	bool debug_use_openssl;
+	shared_ptr<EncryptionUtil> encryption_util;
 
 	unique_ptr<BufferedFileWriter> writer;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;

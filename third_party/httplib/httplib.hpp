@@ -252,6 +252,7 @@ using socket_t = int;
 
 #include <openssl/err.h>
 #include <openssl/md5.h>
+#include <openssl/rand.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 
