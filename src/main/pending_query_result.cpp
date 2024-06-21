@@ -72,7 +72,7 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 	CheckExecutableInternal(lock);
 
 	PendingExecutionResult execution_result;
-	while (!IsFinished(execution_result = ExecuteTaskInternal(lock))) {
+	while (!IsResultReady(execution_result = ExecuteTaskInternal(lock))) {
 		if (execution_result == PendingExecutionResult::BLOCKED) {
 			CheckExecutableInternal(lock);
 			context->WaitForTask(lock, *this);
@@ -99,8 +99,12 @@ void PendingQueryResult::Close() {
 	context.reset();
 }
 
-bool PendingQueryResult::IsFinished(PendingExecutionResult result) {
-	return (result == PendingExecutionResult::RESULT_READY || result == PendingExecutionResult::EXECUTION_ERROR);
+bool PendingQueryResult::IsResultReady(PendingExecutionResult result) {
+	return (IsExecutionFinished(result) || result == PendingExecutionResult::RESULT_READY);
+}
+
+bool PendingQueryResult::IsExecutionFinished(PendingExecutionResult result) {
+	return (result == PendingExecutionResult::EXECUTION_FINISHED || result == PendingExecutionResult::EXECUTION_ERROR);
 }
 
 } // namespace duckdb

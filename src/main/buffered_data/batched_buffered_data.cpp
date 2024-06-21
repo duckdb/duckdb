@@ -141,7 +141,7 @@ bool BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientConte
 	}
 	// Let the executor run until the buffer is no longer empty
 	PendingExecutionResult execution_result;
-	while (!PendingQueryResult::IsFinished(execution_result = cc->ExecuteTaskInternal(context_lock, result))) {
+	while (!PendingQueryResult::IsExecutionFinished(execution_result = cc->ExecuteTaskInternal(context_lock, result))) {
 		if (!BufferIsEmpty()) {
 			break;
 		}

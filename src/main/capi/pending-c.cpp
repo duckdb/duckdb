@@ -131,15 +131,15 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 bool duckdb_pending_execution_is_finished(duckdb_pending_state pending_state) {
 	switch (pending_state) {
 	case DUCKDB_PENDING_RESULT_READY:
-		return PendingQueryResult::IsFinished(PendingExecutionResult::RESULT_READY);
+		return PendingQueryResult::IsResultReady(PendingExecutionResult::RESULT_READY);
 	case DUCKDB_PENDING_NO_TASKS_AVAILABLE:
-		return PendingQueryResult::IsFinished(PendingExecutionResult::NO_TASKS_AVAILABLE);
+		return PendingQueryResult::IsResultReady(PendingExecutionResult::NO_TASKS_AVAILABLE);
 	case DUCKDB_PENDING_RESULT_NOT_READY:
-		return PendingQueryResult::IsFinished(PendingExecutionResult::RESULT_NOT_READY);
+		return PendingQueryResult::IsResultReady(PendingExecutionResult::RESULT_NOT_READY);
 	case DUCKDB_PENDING_ERROR:
-		return PendingQueryResult::IsFinished(PendingExecutionResult::EXECUTION_ERROR);
+		return PendingQueryResult::IsResultReady(PendingExecutionResult::EXECUTION_ERROR);
 	default:
-		return PendingQueryResult::IsFinished(PendingExecutionResult::EXECUTION_ERROR);
+		return PendingQueryResult::IsResultReady(PendingExecutionResult::EXECUTION_ERROR);
 	}
 }
 

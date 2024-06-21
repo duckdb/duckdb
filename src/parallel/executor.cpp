@@ -566,7 +566,7 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		execution_result = PendingExecutionResult::EXECUTION_ERROR;
 		ThrowException();
 	} // LCOV_EXCL_STOP
-	execution_result = PendingExecutionResult::RESULT_READY;
+	execution_result = PendingExecutionResult::EXECUTION_FINISHED;
 	return execution_result;
 }
 
