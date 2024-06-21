@@ -2631,16 +2631,21 @@ bool TryCastFromDecimal::Operation(hugeint_t input, uhugeint_t &result, CastPara
 //===--------------------------------------------------------------------===//
 // Decimal -> Float/Double Cast
 //===--------------------------------------------------------------------===//
+template <class SRC>
+static SRC GetPowerOfTen(SRC input, uint8_t scale) {
+	return static_cast<SRC>(NumericHelper::POWERS_OF_TEN[scale]);
+}
+
+template <>
+hugeint_t GetPowerOfTen(hugeint_t input, uint8_t scale) {
+	return Hugeint::POWERS_OF_TEN[scale];
+}
+
 template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
-	SRC power_of_ten = 1;
-	while (scale && input >= power_of_ten * 10) {
-		power_of_ten *= 10;
-		scale--;
-	}
-	result = (Cast::Operation<SRC, DST>(input / power_of_ten) +
-	          Cast::Operation<SRC, DST>(input % power_of_ten) / Cast::Operation<SRC, DST>(power_of_ten)) /
-	         DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+	auto power_of_ten = GetPowerOfTen(input, scale);
+	result = Cast::Operation<SRC, DST>(input / power_of_ten) +
+	         Cast::Operation<SRC, DST>(input % power_of_ten) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 	return true;
 }
 
