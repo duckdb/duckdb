@@ -129,6 +129,8 @@ bool BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientConte
 	if (Closed()) {
 		return false;
 	}
+	// Unblock any pending sinks if the buffer isnt full
+	UnblockSinks();
 	if (!BufferIsEmpty()) {
 		// The buffer isn't empty yet, just return
 		return true;
@@ -137,8 +139,6 @@ bool BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientConte
 	if (!cc) {
 		return false;
 	}
-	// Unblock any pending sinks if the buffer isnt full
-	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
 	PendingExecutionResult execution_result;
 	while (!PendingQueryResult::IsFinished(execution_result = cc->ExecuteTaskInternal(context_lock, result))) {

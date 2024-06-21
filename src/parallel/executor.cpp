@@ -502,7 +502,7 @@ bool Executor::ExecutionIsFinished() {
 PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 	// Only executor should return NO_TASKS_AVAILABLE
 	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
-	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
+	if (execution_result != PendingExecutionResult::RESULT_NOT_READY && ExecutionIsFinished()) {
 		return execution_result;
 	}
 	// check if there are any incomplete pipelines
