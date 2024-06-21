@@ -2631,6 +2631,52 @@ bool TryCastFromDecimal::Operation(hugeint_t input, uhugeint_t &result, CastPara
 //===--------------------------------------------------------------------===//
 // Decimal -> Float/Double Cast
 //===--------------------------------------------------------------------===//
+template <class SRC, class DST>
+static bool IsRepresentableExactly(SRC input, DST);
+
+template <>
+bool IsRepresentableExactly(int16_t input, float dst) {
+	return true;
+}
+
+const int64_t MAX_INT_REPRESENTABLE_IN_FLOAT = 0x001000000LL;
+const int64_t MAX_INT_REPRESENTABLE_IN_DOUBLE = 0x0020000000000000LL;
+
+template <>
+bool IsRepresentableExactly(int32_t input, float dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_FLOAT && input >= -MAX_INT_REPRESENTABLE_IN_FLOAT);
+}
+
+template <>
+bool IsRepresentableExactly(int64_t input, float dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_FLOAT && input >= -MAX_INT_REPRESENTABLE_IN_FLOAT);
+}
+
+template <>
+bool IsRepresentableExactly(hugeint_t input, float dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_FLOAT && input >= -MAX_INT_REPRESENTABLE_IN_FLOAT);
+}
+
+template <>
+bool IsRepresentableExactly(int16_t input, double dst) {
+	return true;
+}
+
+template <>
+bool IsRepresentableExactly(int32_t input, double dst) {
+	return true;
+}
+
+template <>
+bool IsRepresentableExactly(int64_t input, double dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_DOUBLE && input >= -MAX_INT_REPRESENTABLE_IN_DOUBLE);
+}
+
+template <>
+bool IsRepresentableExactly(hugeint_t input, double dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_DOUBLE && input >= -MAX_INT_REPRESENTABLE_IN_DOUBLE);
+}
+
 template <class SRC>
 static SRC GetPowerOfTen(SRC input, uint8_t scale) {
 	return static_cast<SRC>(NumericHelper::POWERS_OF_TEN[scale]);
@@ -2643,6 +2689,11 @@ hugeint_t GetPowerOfTen(hugeint_t input, uint8_t scale) {
 
 template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
+	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0))) {
+		// Fast path, integer is representable exaclty as a float/double
+		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+		return true;
+	}
 	auto power_of_ten = GetPowerOfTen(input, scale);
 	result = Cast::Operation<SRC, DST>(input / power_of_ten) +
 	         Cast::Operation<SRC, DST>(input % power_of_ten) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
