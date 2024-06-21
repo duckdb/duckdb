@@ -503,7 +503,7 @@ void FSSTStorage::FinalizeCompress(CompressionState &state_p) {
 struct FSSTScanState : public StringScanState {
 	explicit FSSTScanState(const idx_t string_block_limit) {
 		ResetStoredDelta();
-		decompress_buffer.resize(string_block_limit);
+		decompress_buffer.resize(string_block_limit + 1);
 	}
 
 	buffer_ptr<void> duckdb_fsst_decoder;
@@ -525,8 +525,8 @@ struct FSSTScanState : public StringScanState {
 };
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
-	auto state =
-	    make_uniq<FSSTScanState>(StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()) + 1);
+	auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
+	auto state = make_uniq<FSSTScanState>(string_block_limit);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
@@ -586,8 +586,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		if (scan_state.duckdb_fsst_decoder) {
 			D_ASSERT(result_offset == 0 || result.GetVectorType() == VectorType::FSST_VECTOR);
 			result.SetVectorType(VectorType::FSST_VECTOR);
-			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder,
-			                            segment.GetBlockManager().GetBlockSize());
+			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
+			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder, string_block_limit);
 			result_data = FSSTVector::GetCompressedData<string_t>(result);
 		} else {
 			D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -687,7 +687,8 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	    UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]), string_length);
 
 	vector<unsigned char> uncompress_buffer;
-	uncompress_buffer.resize(StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()) + 1);
+	auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
+	uncompress_buffer.resize(string_block_limit + 1);
 	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, result, compressed_string.GetData(),
 	                                                          compressed_string.GetSize(), uncompress_buffer);
 }

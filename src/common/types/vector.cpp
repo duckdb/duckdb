@@ -1985,7 +1985,7 @@ void *FSSTVector::GetDecoder(const Vector &vector) {
 vector<unsigned char> &FSSTVector::GetDecompressBuffer(const Vector &vector) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (!vector.auxiliary) {
-		throw InternalException("GetBlockSize called on FSST Vector without registered buffer");
+		throw InternalException("GetDecompressBuffer called on FSST Vector without registered buffer");
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
 	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();

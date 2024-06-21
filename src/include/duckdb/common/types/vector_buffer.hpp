@@ -201,7 +201,7 @@ public:
 public:
 	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p, const idx_t string_block_limit) {
 		duckdb_fsst_decoder = duckdb_fsst_decoder_p;
-		decompress_buffer.resize(string_block_limit);
+		decompress_buffer.resize(string_block_limit + 1);
 	}
 	void *GetDecoder() {
 		return duckdb_fsst_decoder.get();
