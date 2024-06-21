@@ -119,7 +119,27 @@ struct HistogramBinFunction {
 	}
 };
 
-template <class OP, class T>
+struct HistogramRange {
+	template<class T>
+	static idx_t GetBin(T value, const unsafe_vector<T> &bin_boundaries) {
+		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
+		return UnsafeNumericCast<idx_t>(entry - bin_boundaries.begin());
+	}
+};
+
+struct HistogramExact {
+	template<class T>
+	static idx_t GetBin(T value, const unsafe_vector<T> &bin_boundaries) {
+		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
+		if (entry == bin_boundaries.end() || !(*entry == value)) {
+			// entry not found - return last bucket
+			return bin_boundaries.size();
+		}
+		return UnsafeNumericCast<idx_t>(entry - bin_boundaries.begin());
+	}
+};
+
+template <class OP, class T, class HIST>
 static void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count,
                                        Vector &state_vector, idx_t count) {
 	auto &input = inputs[0];
@@ -143,8 +163,7 @@ static void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr
 		if (!state.IsSet()) {
 			state.template InitializeBins<OP>(bin_vector, count, i, aggr_input);
 		}
-		auto entry = std::lower_bound(state.bin_boundaries->begin(), state.bin_boundaries->end(), data[idx]);
-		auto bin_entry = UnsafeNumericCast<idx_t>(entry - state.bin_boundaries->begin());
+		auto bin_entry = HIST::template GetBin<T>(data[idx], *state.bin_boundaries);
 		++(*state.counts)[bin_entry];
 	}
 }
@@ -197,49 +216,51 @@ static void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputDat
 	result.Verify(count);
 }
 
-template <class OP, class T>
+template <class OP, class T, class HIST>
 static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	using STATE_TYPE = HistogramBinState<T>;
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
 	return AggregateFunction(
 	    "histogram", {type, LogicalType::LIST(type)}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
-	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T>,
+	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T, HIST>,
 	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
 }
 
+template<class HIST>
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		return GetHistogramBinFunction<HistogramFunctor, bool>(type);
+		return GetHistogramBinFunction<HistogramFunctor, bool, HIST>(type);
 	case PhysicalType::UINT8:
-		return GetHistogramBinFunction<HistogramFunctor, uint8_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint8_t, HIST>(type);
 	case PhysicalType::UINT16:
-		return GetHistogramBinFunction<HistogramFunctor, uint16_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint16_t, HIST>(type);
 	case PhysicalType::UINT32:
-		return GetHistogramBinFunction<HistogramFunctor, uint32_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint32_t, HIST>(type);
 	case PhysicalType::UINT64:
-		return GetHistogramBinFunction<HistogramFunctor, uint64_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint64_t, HIST>(type);
 	case PhysicalType::INT8:
-		return GetHistogramBinFunction<HistogramFunctor, int8_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int8_t, HIST>(type);
 	case PhysicalType::INT16:
-		return GetHistogramBinFunction<HistogramFunctor, int16_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int16_t, HIST>(type);
 	case PhysicalType::INT32:
-		return GetHistogramBinFunction<HistogramFunctor, int32_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int32_t, HIST>(type);
 	case PhysicalType::INT64:
-		return GetHistogramBinFunction<HistogramFunctor, int64_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int64_t, HIST>(type);
 	case PhysicalType::FLOAT:
-		return GetHistogramBinFunction<HistogramFunctor, float>(type);
+		return GetHistogramBinFunction<HistogramFunctor, float, HIST>(type);
 	case PhysicalType::DOUBLE:
-		return GetHistogramBinFunction<HistogramFunctor, double>(type);
+		return GetHistogramBinFunction<HistogramFunctor, double, HIST>(type);
 	case PhysicalType::VARCHAR:
-		return GetHistogramBinFunction<HistogramStringFunctor, string_t>(type);
+		return GetHistogramBinFunction<HistogramStringFunctor, string_t, HIST>(type);
 	default:
-		return GetHistogramBinFunction<HistogramGenericFunctor, string_t>(type);
+		return GetHistogramBinFunction<HistogramGenericFunctor, string_t, HIST>(type);
 	}
 }
 
+template<class HIST>
 unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, AggregateFunction &function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	for (auto &arg : arguments) {
@@ -248,13 +269,18 @@ unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, Aggreg
 		}
 	}
 
-	function = GetHistogramBinFunction(arguments[0]->return_type);
+	function = GetHistogramBinFunction<HIST>(arguments[0]->return_type);
 	return nullptr;
 }
 
 AggregateFunction HistogramFun::BinnedHistogramFunction() {
 	return AggregateFunction("histogram", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)}, LogicalTypeId::MAP,
-	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, HistogramBinBindFunction, nullptr);
+	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, HistogramBinBindFunction<HistogramRange>, nullptr);
+}
+
+AggregateFunction HistogramExactFun::GetFunction() {
+	return AggregateFunction("histogram_exact", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)}, LogicalTypeId::MAP,
+	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, HistogramBinBindFunction<HistogramExact>, nullptr);
 }
 
 } // namespace duckdb

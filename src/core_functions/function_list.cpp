@@ -191,6 +191,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(HashFun),
 	DUCKDB_SCALAR_FUNCTION_SET(HexFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(HistogramFun),
+	DUCKDB_AGGREGATE_FUNCTION(HistogramExactFun),
 	DUCKDB_SCALAR_FUNCTION_SET(HoursFun),
 	DUCKDB_SCALAR_FUNCTION(InSearchPathFun),
 	DUCKDB_SCALAR_FUNCTION(InstrFun),
