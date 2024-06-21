@@ -51,7 +51,7 @@ struct BatchesForTask {
 
 struct BatchesToTaskTransformer {
 public:
-	BatchesToTaskTransformer(BatchedDataCollection &batches) : batches(batches), batch_index(0) {
+	explicit BatchesToTaskTransformer(BatchedDataCollection &batches) : batches(batches), batch_index(0) {
 		batch_count = batches.BatchCount();
 	}
 	idx_t GetIndex() const {
