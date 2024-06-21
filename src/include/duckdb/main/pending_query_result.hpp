@@ -51,7 +51,6 @@ public:
 
 	//! Function to determine whether execution is considered finished
 	DUCKDB_API static bool IsFinished(PendingExecutionResult result);
-	DUCKDB_API static bool IsFinishedOrBlocked(PendingExecutionResult result);
 
 private:
 	shared_ptr<ClientContext> context;

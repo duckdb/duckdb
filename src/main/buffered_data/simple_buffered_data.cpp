@@ -44,17 +44,17 @@ void SimpleBufferedData::UnblockSinks() {
 	}
 }
 
-PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
+bool SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
 	if (Closed()) {
-		return PendingExecutionResult::EXECUTION_ERROR;
+		return false;
 	}
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
-		return PendingExecutionResult::RESULT_READY;
+		return true;
 	}
 	auto cc = context.lock();
 	if (!cc) {
-		return PendingExecutionResult::EXECUTION_ERROR;
+		return false;
 	}
 	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
@@ -72,7 +72,7 @@ PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &re
 	if (result.HasError()) {
 		Close();
 	}
-	return execution_result;
+	return execution_result != PendingExecutionResult::EXECUTION_ERROR;
 }
 
 unique_ptr<DataChunk> SimpleBufferedData::Scan() {

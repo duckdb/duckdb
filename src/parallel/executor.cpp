@@ -438,6 +438,7 @@ void Executor::WaitForTask() {
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
+		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
 		return;
 	}
 
@@ -522,13 +523,14 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		if (!current_task && !HasError()) {
 			// there are no tasks to be scheduled and there are tasks blocked
 			lock_guard<mutex> l(executor_lock);
-			if (ResultCollectorIsBlocked()) {
-				// The blocked tasks are processing the Sink of a BufferedResultCollector
-				// We return here so the query result can be made and fetched from
-				// which will in turn unblock the Sink tasks.
-				return PendingExecutionResult::BLOCKED;
+			if (to_be_rescheduled_tasks.empty()) {
+				return PendingExecutionResult::NO_TASKS_AVAILABLE;
 			}
-			return PendingExecutionResult::NO_TASKS_AVAILABLE;
+			// At least one task is blocked
+			if (ResultCollectorIsBlocked()) {
+				return PendingExecutionResult::RESULT_READY;
+			}
+			return PendingExecutionResult::BLOCKED;
 		}
 
 		if (current_task) {

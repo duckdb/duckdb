@@ -125,18 +125,17 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 	MoveCompletedBatches(lock);
 }
 
-PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result,
-                                                            ClientContextLock &context_lock) {
+bool BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
 	if (Closed()) {
-		return PendingExecutionResult::EXECUTION_ERROR;
+		return false;
 	}
 	if (!BufferIsEmpty()) {
 		// The buffer isn't empty yet, just return
-		return PendingExecutionResult::RESULT_READY;
+		return true;
 	}
 	auto cc = context.lock();
 	if (!cc) {
-		return PendingExecutionResult::EXECUTION_ERROR;
+		return false;
 	}
 	// Unblock any pending sinks if the buffer isnt full
 	UnblockSinks();
@@ -155,7 +154,7 @@ PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &r
 	if (result.HasError()) {
 		Close();
 	}
-	return execution_result;
+	return execution_result != PendingExecutionResult::EXECUTION_ERROR;
 }
 
 void BatchedBufferedData::CompleteBatch(idx_t batch) {
