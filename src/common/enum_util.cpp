@@ -4829,6 +4829,8 @@ const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value) {
 		return "MERGE";
 	case PartitionSortStage::SORTED:
 		return "SORTED";
+	case PartitionSortStage::FINISHED:
+		return "FINISHED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4850,6 +4852,9 @@ PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SORTED")) {
 		return PartitionSortStage::SORTED;
+	}
+	if (StringUtil::Equals(value, "FINISHED")) {
+		return PartitionSortStage::FINISHED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

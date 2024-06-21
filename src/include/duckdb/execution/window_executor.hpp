@@ -149,8 +149,7 @@ public:
 	const ValidityMask &partition_mask;
 	const ValidityMask &order_mask;
 
-	// Expression collections
-	DataChunk payload_collection;
+	// Argument evaluation
 	ExpressionExecutor payload_executor;
 	DataChunk payload_chunk;
 
