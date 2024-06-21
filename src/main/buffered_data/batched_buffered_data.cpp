@@ -130,24 +130,32 @@ PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &r
 	if (Closed()) {
 		return PendingExecutionResult::EXECUTION_ERROR;
 	}
-	// Unblock any pending sinks if the buffer isnt full
-	UnblockSinks();
 	if (!BufferIsEmpty()) {
 		// The buffer isn't empty yet, just return
 		return PendingExecutionResult::RESULT_READY;
 	}
-	// Let the executor run until the buffer is no longer empty
 	auto cc = context.lock();
-	auto res = cc->ExecuteTaskInternal(context_lock, result);
-	while (!PendingQueryResult::IsFinished(res)) {
+	if (!cc) {
+		return PendingExecutionResult::EXECUTION_ERROR;
+	}
+	// Unblock any pending sinks if the buffer isnt full
+	UnblockSinks();
+	// Let the executor run until the buffer is no longer empty
+	PendingExecutionResult execution_result;
+	while (!PendingQueryResult::IsFinished(execution_result = cc->ExecuteTaskInternal(context_lock, result))) {
 		if (!BufferIsEmpty()) {
 			break;
 		}
-		// Check if we need to unblock more sinks to reach the buffer size
-		UnblockSinks();
-		res = cc->ExecuteTaskInternal(context_lock, result);
+		if (execution_result == PendingExecutionResult::BLOCKED) {
+			// Check if we need to unblock more sinks to reach the buffer size
+			UnblockSinks();
+			cc->WaitForTask(context_lock, result);
+		}
 	}
-	return res;
+	if (result.HasError()) {
+		Close();
+	}
+	return execution_result;
 }
 
 void BatchedBufferedData::CompleteBatch(idx_t batch) {
