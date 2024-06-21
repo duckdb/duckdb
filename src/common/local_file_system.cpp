@@ -1367,9 +1367,11 @@ void LocalFileSystem::CopyFile(const string &source, const string &target, uniqu
     ioctl(dst_fd, FICLONE, src_fd);
 }
 #else
+#ifndef _WIN32
 void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
     throw NotImplementedException("CopyFile Unsupported");
-} 
+}
+#endif
 #endif
 
 } // namespace duckdb
