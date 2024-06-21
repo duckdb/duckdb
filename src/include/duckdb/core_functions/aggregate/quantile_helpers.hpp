@@ -56,14 +56,6 @@ struct QuantileBindData : public FunctionData {
 	                      const AggregateFunction &function);
 
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function);
-	static void SerializeDecimalDiscrete(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                     const AggregateFunction &function);
-	static void SerializeDecimalDiscreteList(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                         const AggregateFunction &function);
-	static void SerializeDecimalContinuous(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                       const AggregateFunction &function);
-	static void SerializeDecimalContinuousList(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                           const AggregateFunction &function);
 
 	vector<QuantileValue> quantiles;
 	vector<idx_t> order;

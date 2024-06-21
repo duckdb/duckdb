@@ -420,7 +420,8 @@ struct ScalarDiscreteQuantile {
 		AggregateFunction fun(
 		    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 		    AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-		    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
+		    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, nullptr,
+		    AggregateFunction::StateDestroy<STATE, OP>);
 		return fun;
 	}
 };
@@ -451,11 +452,11 @@ struct ListDiscreteQuantile {
 		using STATE = QuantileState<string_t, QuantileStringType>;
 		using OP = QuantileListFallback;
 
-		AggregateFunction fun({type}, LogicalType::LIST(type), AggregateFunction::StateSize<STATE>,
-		                      AggregateFunction::StateInitialize<STATE, OP>,
-		                      AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
-		                      AggregateFunction::StateCombine<STATE, OP>,
-		                      AggregateFunction::StateFinalize<STATE, list_entry_t, OP>, nullptr);
+		AggregateFunction fun(
+		    {type}, LogicalType::LIST(type), AggregateFunction::StateSize<STATE>,
+		    AggregateFunction::StateInitialize<STATE, OP>, AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
+		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, list_entry_t, OP>,
+		    nullptr, nullptr, AggregateFunction::StateDestroy<STATE, OP>);
 		return fun;
 	}
 };
@@ -777,16 +778,6 @@ struct ContinuousQuantileListFunction {
 		return BindQuantile(context, function, arguments);
 	}
 };
-
-AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &arguments, const LogicalType &return_type,
-                                              bind_aggregate_function_t bind) {
-	AggregateFunction fun(arguments, return_type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, bind);
-	fun.bind = bind;
-	fun.serialize = QuantileBindData::Serialize;
-	fun.deserialize = QuantileBindData::Deserialize;
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	return fun;
-}
 
 template <class OP>
 AggregateFunction EmptyQuantileFunction(LogicalType input, LogicalType result, LogicalType extra_arg) {
