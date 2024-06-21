@@ -364,8 +364,8 @@ struct WindowBoundariesState {
 	idx_t peer_end = 0;
 	idx_t valid_start = 0;
 	idx_t valid_end = 0;
-	int64_t window_start = -1;
-	int64_t window_end = -1;
+	idx_t window_start = NumericLimits<idx_t>::Maximum();
+	idx_t window_end = NumericLimits<idx_t>::Maximum();
 	FrameBounds prev;
 };
 
@@ -447,49 +447,51 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 	next_pos = row_idx + 1;
 
 	// determine window boundaries depending on the type of expression
-	window_start = -1;
-	window_end = -1;
-
 	switch (start_boundary) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
-		window_start = NumericCast<int64_t>(partition_start);
+		window_start = partition_start;
 		break;
 	case WindowBoundary::CURRENT_ROW_ROWS:
-		window_start = NumericCast<int64_t>(row_idx);
+		window_start = row_idx;
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		window_start = NumericCast<int64_t>(peer_start);
+		window_start = peer_start;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
-		if (!TrySubtractOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
-		                                    window_start)) {
+		int64_t computed_start;
+		if (!TrySubtractOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
+		                                    computed_start)) {
 			throw OutOfRangeException("Overflow computing ROWS PRECEDING start");
 		}
+		window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
-		if (!TryAddOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(chunk_idx), window_start)) {
+		int64_t computed_start;
+		if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
+		                               computed_start)) {
 			throw OutOfRangeException("Overflow computing ROWS FOLLOWING start");
 		}
+		window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		break;
 	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
 		if (boundary_start.CellIsNull(chunk_idx)) {
-			window_start = NumericCast<int64_t>(peer_start);
+			window_start = peer_start;
 		} else {
 			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx,
 			                                         start_boundary, boundary_start, chunk_idx, prev);
-			window_start = NumericCast<int64_t>(prev.start);
+			window_start = prev.start;
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
 		if (boundary_start.CellIsNull(chunk_idx)) {
-			window_start = NumericCast<int64_t>(peer_start);
+			window_start = peer_start;
 		} else {
 			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, row_idx, valid_end, start_boundary,
 			                                         boundary_start, chunk_idx, prev);
-			window_start = NumericCast<int64_t>(prev.start);
+			window_start = prev.start;
 		}
 		break;
 	}
@@ -499,42 +501,49 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 
 	switch (end_boundary) {
 	case WindowBoundary::CURRENT_ROW_ROWS:
-		window_end = NumericCast<int64_t>(row_idx + 1);
+		window_end = row_idx + 1;
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		window_end = NumericCast<int64_t>(peer_end);
+		window_end = peer_end;
 		break;
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		window_end = NumericCast<int64_t>(partition_end);
+		window_end = partition_end;
 		break;
-	case WindowBoundary::EXPR_PRECEDING_ROWS:
+	case WindowBoundary::EXPR_PRECEDING_ROWS: {
+		int64_t computed_start;
 		if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
-		                                    window_end)) {
+		                                    computed_start)) {
 			throw OutOfRangeException("Overflow computing ROWS PRECEDING end");
 		}
+		window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		break;
-	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx), window_end)) {
+	}
+	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
+		int64_t computed_start;
+		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
+		                               computed_start)) {
 			throw OutOfRangeException("Overflow computing ROWS FOLLOWING end");
 		}
+		window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		break;
+	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
 		if (boundary_end.CellIsNull(chunk_idx)) {
-			window_end = NumericCast<int64_t>(peer_end);
+			window_end = peer_end;
 		} else {
 			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx, end_boundary,
 			                                        boundary_end, chunk_idx, prev);
-			window_end = NumericCast<int64_t>(prev.end);
+			window_end = prev.end;
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
 		if (boundary_end.CellIsNull(chunk_idx)) {
-			window_end = NumericCast<int64_t>(peer_end);
+			window_end = peer_end;
 		} else {
 			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, row_idx, valid_end, end_boundary,
 			                                        boundary_end, chunk_idx, prev);
-			window_end = NumericCast<int64_t>(prev.end);
+			window_end = prev.end;
 		}
 		break;
 	}
@@ -543,21 +552,17 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 	}
 
 	// clamp windows to partitions if they should exceed
-	if (window_start < NumericCast<int64_t>(partition_start)) {
-		window_start = NumericCast<int64_t>(partition_start);
+	if (window_start < partition_start) {
+		window_start = partition_start;
 	}
-	if (window_start > NumericCast<int64_t>(partition_end)) {
-		window_start = NumericCast<int64_t>(partition_end);
+	if (window_start > partition_end) {
+		window_start = partition_end;
 	}
-	if (window_end < NumericCast<int64_t>(partition_start)) {
-		window_end = NumericCast<int64_t>(partition_start);
+	if (window_end < partition_start) {
+		window_end = partition_start;
 	}
-	if (window_end > NumericCast<int64_t>(partition_end)) {
-		window_end = NumericCast<int64_t>(partition_end);
-	}
-
-	if (window_start < 0 || window_end < 0) {
-		throw InternalException("Failed to compute window boundaries");
+	if (window_end > partition_end) {
+		window_end = partition_end;
 	}
 }
 
@@ -598,8 +603,8 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, const Windo
 			*peer_begin_data++ = peer_start;
 			*peer_end_data++ = peer_end;
 		}
-		*window_begin_data++ = window_start;
-		*window_end_data++ = window_end;
+		*window_begin_data++ = UnsafeNumericCast<int64_t>(window_start);
+		*window_end_data++ = UnsafeNumericCast<int64_t>(window_end);
 	}
 	bounds.SetCardinality(count);
 }
