@@ -8,7 +8,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/core_functions/create_sort_key.hpp"
+#include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
 
 namespace duckdb {
 
@@ -233,8 +233,10 @@ struct MaxOperationString : public StringMinMaxBase {
 	}
 };
 
-template <OrderType ORDER_TYPE>
+template <OrderType ORDER_TYPE_TEMPLATED>
 struct VectorMinMaxBase {
+	static constexpr OrderType ORDER_TYPE = ORDER_TYPE_TEMPLATED;
+
 	static bool IgnoreNull() {
 		return true;
 	}
@@ -254,39 +256,14 @@ struct VectorMinMaxBase {
 		state.Assign(input);
 	}
 
-	template <class STATE, class OP>
-	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t input_count, Vector &state_vector,
-	                   idx_t count) {
-		auto &input = inputs[0];
-
-		Vector sort_key(LogicalType::BLOB);
-		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_key);
-
-		UnifiedVectorFormat idata;
-		sort_key.ToUnifiedFormat(count, idata);
-
-		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
-
-		auto key_data = UnifiedVectorFormat::GetData<string_t>(idata);
-		auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
-		for (idx_t i = 0; i < count; i++) {
-			const auto idx = idata.sel->get_index(i);
-			const auto sidx = sdata.sel->get_index(i);
-			auto &state = *states[sidx];
-			if (!state.isset) {
-				Assign(state, key_data[idx], input_data);
-				state.isset = true;
-			} else {
-				OP::template Execute<STATE>(state, key_data[idx], input_data);
-			}
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
+		if (!state.isset) {
+			Assign(state, input, input_data);
+			state.isset = true;
+			return;
 		}
-	}
-
-	template <class STATE>
-	static void Execute(STATE &state, string_t input, AggregateInputData &input_data) {
-		if (LessThan::Operation<string_t>(input, state.value)) {
+		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
 			Assign(state, input, input_data);
 		}
 	}
@@ -297,13 +274,7 @@ struct VectorMinMaxBase {
 			// source is NULL, nothing to do
 			return;
 		}
-		if (!target.isset) {
-			// target is NULL, use source value directly
-			Assign(target, source.value, input_data);
-			target.isset = true;
-		} else {
-			OP::template Execute<STATE>(target, source.value, input_data);
-		}
+		OP::template Execute<string_t, STATE, OP>(target, source.value, input_data);
 	}
 
 	template <class STATE>
@@ -328,38 +299,13 @@ struct MinOperationVector : VectorMinMaxBase<OrderType::ASCENDING> {};
 
 struct MaxOperationVector : VectorMinMaxBase<OrderType::DESCENDING> {};
 
-template <class OP>
-unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunction &function,
-                                           vector<unique_ptr<Expression>> &arguments) {
-	auto decimal_type = arguments[0]->return_type;
-	auto name = function.name;
-	switch (decimal_type.InternalType()) {
-	case PhysicalType::INT16:
-		function = GetUnaryAggregate<OP>(LogicalType::SMALLINT);
-		break;
-	case PhysicalType::INT32:
-		function = GetUnaryAggregate<OP>(LogicalType::INTEGER);
-		break;
-	case PhysicalType::INT64:
-		function = GetUnaryAggregate<OP>(LogicalType::BIGINT);
-		break;
-	default:
-		function = GetUnaryAggregate<OP>(LogicalType::HUGEINT);
-		break;
-	}
-	function.name = std::move(name);
-	function.arguments[0] = decimal_type;
-	function.return_type = decimal_type;
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	return nullptr;
-}
-
 template <typename OP, typename STATE>
 static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 	return AggregateFunction(
 	    {type}, LogicalType::BLOB, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
-	    OP::template Update<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateSortKeyHelpers::UnaryUpdate<STATE, OP, OP::ORDER_TYPE, false>,
+	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind,
+	    AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
@@ -381,7 +327,6 @@ static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
 template <class OP, class OP_STRING, class OP_VECTOR>
 unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &function,
                                     vector<unique_ptr<Expression>> &arguments) {
-
 	if (arguments[0]->return_type.id() == LogicalTypeId::VARCHAR) {
 		auto str_collation = StringType::GetCollation(arguments[0]->return_type);
 		if (!str_collation.empty()) {
@@ -416,6 +361,9 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 	}
 
 	auto input_type = arguments[0]->return_type;
+	if (input_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
 	auto name = std::move(function.name);
 	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 	function.name = std::move(name);
@@ -429,8 +377,6 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 static void AddMinMaxOperator(AggregateFunctionSet &set) {
-	set.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, nullptr, BindDecimalMinMax<OP>));
 	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                  nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>));
 }
