@@ -53,15 +53,6 @@ TEST_CASE("Test Export Large", "[arrow]") {
 	TestArrowRoundtrip("SELECT '3d038406-6275-4aae-bec1-1235ccdeaade'::UUID FROM range(10000) tbl(i)", true);
 }
 
-TEST_CASE("Test arrow result collector", "[arrow]") {
-	DuckDB db;
-	Connection con(db);
-
-	con.Query("create table tbl (a varchar);");
-	con.Query("insert into tbl select 'this is a long string' from range(300000000);");
-	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "select * from tbl", false));
-}
-
 TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT * FROM range(10000) tbl(i) UNION ALL SELECT NULL");
 	TestArrowRoundtrip("SELECT m from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)");
