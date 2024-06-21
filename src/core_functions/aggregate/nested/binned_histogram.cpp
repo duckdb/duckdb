@@ -124,7 +124,7 @@ struct HistogramBinFunction {
 struct HistogramRange {
 	static constexpr bool EXACT = false;
 
-	template<class T>
+	template <class T>
 	static idx_t GetBin(T value, const unsafe_vector<T> &bin_boundaries) {
 		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
 		return UnsafeNumericCast<idx_t>(entry - bin_boundaries.begin());
@@ -134,7 +134,7 @@ struct HistogramRange {
 struct HistogramExact {
 	static constexpr bool EXACT = true;
 
-	template<class T>
+	template <class T>
 	static idx_t GetBin(T value, const unsafe_vector<T> &bin_boundaries) {
 		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
 		if (entry == bin_boundaries.end() || !(*entry == value)) {
@@ -242,7 +242,7 @@ static Value OtherBucketValue(const LogicalType &type) {
 		// for structs we can set all child members to NULL
 		auto &child_types = StructType::GetChildTypes(type);
 		child_list_t<Value> child_list;
-		for(auto &child_type : child_types) {
+		for (auto &child_type : child_types) {
 			child_list.push_back(make_pair(child_type.first, Value(child_type.second)));
 		}
 		return Value::STRUCT(std::move(child_list));
@@ -339,7 +339,7 @@ static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
 }
 
-template<class HIST>
+template <class HIST>
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
@@ -371,7 +371,7 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	}
 }
 
-template<class HIST>
+template <class HIST>
 unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, AggregateFunction &function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	for (auto &arg : arguments) {
@@ -386,17 +386,19 @@ unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, Aggreg
 
 AggregateFunction HistogramFun::BinnedHistogramFunction() {
 	return AggregateFunction("histogram", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)}, LogicalTypeId::MAP,
-	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, HistogramBinBindFunction<HistogramRange>, nullptr);
+	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                         HistogramBinBindFunction<HistogramRange>, nullptr);
 }
 
 AggregateFunction HistogramExactFun::GetFunction() {
-	return AggregateFunction("histogram_exact", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)}, LogicalTypeId::MAP,
-	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, HistogramBinBindFunction<HistogramExact>, nullptr);
+	return AggregateFunction("histogram_exact", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)},
+	                         LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                         HistogramBinBindFunction<HistogramExact>, nullptr);
 }
 
 ScalarFunction IsHistogramOtherBinFun::GetFunction() {
-	return ScalarFunction("is_histogram_other_bin", {LogicalType::ANY}, LogicalType::BOOLEAN, IsHistogramOtherBinFunction);
-
+	return ScalarFunction("is_histogram_other_bin", {LogicalType::ANY}, LogicalType::BOOLEAN,
+	                      IsHistogramOtherBinFunction);
 }
 
 } // namespace duckdb
