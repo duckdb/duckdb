@@ -258,16 +258,6 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 		lstate.hash_table->GetSinkCollection().FlushAppendState(lstate.append_state);
 		lock_guard<mutex> local_ht_lock(gstate.lock);
 		gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
-
-		idx_t total_size = 0;
-		idx_t total_count = 0;
-		for (auto &lht : gstate.local_hash_tables) {
-			auto &sink_collection = lht->GetSinkCollection();
-			total_size += sink_collection.SizeInBytes();
-			total_count += sink_collection.Count();
-		}
-		auto ht_size = total_size + JoinHashTable::PointerTableSize(total_count);
-		gstate.temporary_memory_state->SetRemainingSize(context.client, ht_size);
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.join_key_executor, "join_key_executor", 1);
@@ -279,6 +269,19 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
+void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
+	auto &gstate = sink_state.Cast<HashJoinGlobalSinkState>();
+	idx_t total_size = 0;
+	idx_t total_count = 0;
+	for (auto &lht : gstate.local_hash_tables) {
+		auto &sink_collection = lht->GetSinkCollection();
+		total_size += sink_collection.SizeInBytes();
+		total_count += sink_collection.Count();
+	}
+	auto ht_size = total_size + JoinHashTable::PointerTableSize(total_count);
+	gstate.temporary_memory_state->SetRemainingSize(context, ht_size);
+}
+
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,

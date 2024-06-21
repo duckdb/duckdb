@@ -139,7 +139,7 @@ void TemporaryMemoryManager::SetReservation(TemporaryMemoryState &temporary_memo
 
 idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state,
                                                         const idx_t &lower_bound, const idx_t &upper_bound) const {
-	static constexpr idx_t OPTIMIZATION_ITERATIONS = 10;
+	static constexpr idx_t OPTIMIZATION_ITERATIONS_BASE = 10;
 	const idx_t n = active_states.size();
 
 	// Collect sizes and reservations in vectors for ease
@@ -166,7 +166,8 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 
 	// Distribute memory in OPTIMIZATION_ITERATIONS
 	idx_t remaining_memory = upper_bound - lower_bound; // the memory that is currently available for redistribution
-	for (idx_t opt_idx = 0; opt_idx < OPTIMIZATION_ITERATIONS; opt_idx++) {
+	const idx_t optimization_iterations = OPTIMIZATION_ITERATIONS_BASE + n;
+	for (idx_t opt_idx = 0; opt_idx < optimization_iterations; opt_idx++) {
 		// Cost function takes "throughput" (reservation / size) of each operator as its principal input
 		double prod_siz = 1;
 		double prod_res = 1;
@@ -200,13 +201,15 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 		const auto avg_of_nonmaxed = sum_of_nonmaxed / nonmax_count;
 
 		// This is how much memory we will distribute in this round
-		const idx_t iter_memory = remaining_memory / (static_cast<double>(OPTIMIZATION_ITERATIONS) - opt_idx);
+		const auto iter_memory =
+		    NumericCast<idx_t>(static_cast<double>(remaining_memory) / (optimization_iterations - opt_idx));
 
 		for (i = 0; i < n; i++) {
 			if (res[i] == siz[i] || der[i] > avg_of_nonmaxed) {
 				continue;
 			}
-			const idx_t delta = MinValue(siz[i] - res[i], (der[i] / sum_of_nonmaxed) * iter_memory);
+			const auto delta =
+			    NumericCast<idx_t>(MinValue<double>(siz[i] - res[i], (der[i] / sum_of_nonmaxed) * iter_memory));
 			D_ASSERT(delta > 0 && delta <= remaining_memory);
 			res[i] += delta;
 			remaining_memory -= delta;
@@ -215,7 +218,7 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 	D_ASSERT(remaining_memory == 0);
 
 	// Return computed reservation of this state
-	return res[state_index.GetIndex()];
+	return NumericCast<idx_t>(res[state_index.GetIndex()]);
 }
 
 void TemporaryMemoryManager::Verify() const {
