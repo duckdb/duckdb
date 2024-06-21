@@ -10,25 +10,19 @@ namespace duckdb {
 // arxiv link -  https://arxiv.org/pdf/1401.0702
 struct ApproxTopKValue {
 	idx_t count = 0;
-	string_t value = string_t(UINT32_C(0));
+	string_t value;
+	char *dataptr = nullptr;
+	uint32_t size = 0;
+	uint32_t capacity = 0;
 };
 
 struct ApproxTopKState {
 	// the top-k data structure has two components
 	// a list of k values sorted on "count" (i.e. values[0] has the lowest count)
 	// a lookup map: string_t -> idx in "values" array
-	vector<ApproxTopKValue> values;
+	unsafe_vector<ApproxTopKValue> values;
 	string_map_t<idx_t> lookup_map;
 	idx_t k = 0;
-
-	~ApproxTopKState() {
-		for(auto &entry : values) {
-			if (entry.count == 0) {
-				continue;
-			}
-			DestroyString(entry.value);
-		}
-	}
 
 	void Initialize(idx_t kval) {
 		D_ASSERT(values.empty());
@@ -37,57 +31,25 @@ struct ApproxTopKState {
 		values.resize(k);
 	}
 
-	static void DestroyString(string_t input) {
-		if (input.IsInlined()) {
-			return;
+	static void CopyValue(ApproxTopKValue &value, const string_t &input, AggregateInputData &input_data) {
+		value.size = input.GetSize();
+		if (value.size > value.capacity) {
+			// need to re-allocate for this value
+			value.capacity = NextPowerOfTwo(value.size);
+			value.dataptr = char_ptr_cast(input_data.allocator.Allocate(value.capacity));
 		}
-		delete [] input.GetDataWriteable();
+		// copy over the data
+		memcpy(value.dataptr, input.GetData(), value.size);
+		value.value = string_t(value.dataptr, value.size);
 	}
 
-	static string_t CopyValue(string_t input) {
-		if (input.IsInlined()) {
-			// inlined - no copy required
-			return input;
-		}
-		// have to make a copy of the string data prior to inserting
-		auto data = new char[input.GetSize()];
-		memcpy(data, input.GetData(), input.GetSize());
-		return string_t(data, UnsafeNumericCast<uint32_t>(input.GetSize()));
-	}
-
-	static string_t ReplaceValue(string_t input, string_t old_value) {
-		if (input.IsInlined()) {
-			// inlined - no copy required
-			DestroyString(old_value);
-			return input;
-		}
-		// have to make a copy
-		// check if we can re-use the space of the other string
-		char *data;
-		if (old_value.GetSize() >= input.GetSize()) {
-			// we can!
-			data = old_value.GetDataWriteable();
-		} else {
-			// we cannot! destroy the old string and allocate new memory
-			DestroyString(old_value);
-			data = new char[input.GetSize()];
-		}
-		memcpy(data, input.GetData(), input.GetSize());
-		return string_t(data, UnsafeNumericCast<uint32_t>(input.GetSize()));
-	}
-
-	void InsertOrReplaceEntry(string_t input, idx_t increment = 1) {
+	void InsertOrReplaceEntry(const string_t &input, AggregateInputData &aggr_input, idx_t increment = 1) {
 		Verify();
-		if (values[0].count == 0) {
-			// no entry yet at the first position - insert a new one
-			// this happens if we have found < K elements so far
-			values[0].value = CopyValue(input);
-		} else {
+		if (values[0].count > 0) {
 			// there is an existing entry - we need to erase it from the map
 			lookup_map.erase(values[0].value);
-			// replace the string
-			values[0].value = ReplaceValue(input, values[0].value);
 		}
+		CopyValue(values[0], input, aggr_input);
 		auto entry = lookup_map.insert(make_pair(values[0].value, 0));
 		D_ASSERT(entry.second);
 		IncrementCount(entry.first, increment);
@@ -147,7 +109,7 @@ struct ApproxTopKOperation {
 	}
 
 	template <class TYPE, class STATE>
-	static void Operation(STATE &state, const TYPE &input, Vector &top_k_vector, idx_t offset, idx_t count) {
+	static void Operation(STATE &state, const TYPE &input, AggregateInputData &aggr_input, Vector &top_k_vector, idx_t offset, idx_t count) {
 		if (state.values.empty()) {
 			// not initialized yet - initialize the K value and set all counters to 0
 			UnifiedVectorFormat kdata;
@@ -171,12 +133,12 @@ struct ApproxTopKOperation {
 			state.IncrementCount(entry);
 		} else {
 			// the input is not monitored - replace the first entry with the current entry and increment
-			state.InsertOrReplaceEntry(input);
+			state.InsertOrReplaceEntry(input, aggr_input);
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
 		if (source.lookup_map.empty()) {
 			// source is empty
 			return;
@@ -230,7 +192,7 @@ struct ApproxTopKOperation {
 			}
 			// otherwise we should add it to the target
 			idx_t diff =  new_count - target.values[0].count;
-			target.InsertOrReplaceEntry(source_val.value, diff);
+			target.InsertOrReplaceEntry(source_val.value, aggr_input, diff);
 		}
 		target.Verify();
 	}
@@ -267,7 +229,7 @@ static void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 			continue;
 		}
 		auto &state = *states[sdata.sel->get_index(i)];
-		ApproxTopKOperation::Operation<T, STATE>(state, data[idx], top_k_vector, i, count);
+		ApproxTopKOperation::Operation<T, STATE>(state, data[idx], aggr_input, top_k_vector, i, count);
 	}
 }
 

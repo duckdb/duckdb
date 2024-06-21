@@ -18,7 +18,7 @@ WITH bins AS (
             can_cast_implicitly(MIN(col_name), NULL::TIMESTAMP)) AND technique='auto')
             OR technique='sample'
       THEN
-         list(distinct col_name)[:bin_count]
+         approx_top_k(col_name, bin_count)
       WHEN technique='equi-height'
       THEN
          quantile(col_name, [x / bin_count::DOUBLE for x in generate_series(1, bin_count)])
