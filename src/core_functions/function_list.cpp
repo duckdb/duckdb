@@ -195,6 +195,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(HoursFun),
 	DUCKDB_SCALAR_FUNCTION(InSearchPathFun),
 	DUCKDB_SCALAR_FUNCTION(InstrFun),
+	DUCKDB_SCALAR_FUNCTION(IsHistogramOtherBinFun),
 	DUCKDB_SCALAR_FUNCTION_SET(IsFiniteFun),
 	DUCKDB_SCALAR_FUNCTION_SET(IsInfiniteFun),
 	DUCKDB_SCALAR_FUNCTION_SET(IsNanFun),
