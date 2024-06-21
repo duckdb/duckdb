@@ -804,21 +804,15 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &cont
 WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &executor, const idx_t payload_count,
                                                      const ValidityMask &partition_mask, const ValidityMask &order_mask)
     : executor(executor), payload_count(payload_count), partition_mask(partition_mask), order_mask(order_mask),
-      payload_collection(), payload_executor(executor.context),
-      range((HasPrecedingRange(executor.wexpr) || HasFollowingRange(executor.wexpr))
-                ? executor.wexpr.orders[0].expression.get()
-                : nullptr,
-            executor.context, payload_count) {
+      payload_executor(executor.context), range((HasPrecedingRange(executor.wexpr) || HasFollowingRange(executor.wexpr))
+                                                    ? executor.wexpr.orders[0].expression.get()
+                                                    : nullptr,
+                                                executor.context, payload_count) {
 
 	// TODO: child may be a scalar, don't need to materialize the whole collection then
 
 	// evaluate inner expressions of window functions, could be more complex
 	PrepareInputExpressions(executor.wexpr.children, payload_executor, payload_chunk);
-
-	auto types = payload_chunk.GetTypes();
-	if (!types.empty()) {
-		payload_collection.Initialize(Allocator::Get(executor.context), types);
-	}
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowExecutor::GetGlobalState(const idx_t payload_count,
@@ -1342,8 +1336,14 @@ public:
 	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask)
 
 	{
+		auto types = payload_chunk.GetTypes();
+		if (!types.empty()) {
+			payload_collection.Initialize(Allocator::Get(executor.context), types, payload_count);
+		}
 	}
 
+	// The partition values
+	DataChunk payload_collection;
 	// IGNORE NULLS
 	ValidityMask ignore_nulls;
 };
@@ -1367,10 +1367,11 @@ unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const 
 
 void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
                                WindowExecutorGlobalState &gstate) const {
-	auto &payload_chunk = gstate.payload_chunk;
-	auto &payload_executor = gstate.payload_executor;
-	auto &payload_collection = gstate.payload_collection;
-	auto &ignore_nulls = gstate.Cast<WindowValueGlobalState>().ignore_nulls;
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_chunk = gvstate.payload_chunk;
+	auto &payload_executor = gvstate.payload_executor;
+	auto &payload_collection = gvstate.payload_collection;
+	auto &ignore_nulls = gvstate.ignore_nulls;
 
 	// Single pass over the input to produce the global data.
 	// Vectorisation for the win...
@@ -1442,7 +1443,8 @@ unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const Wi
 
 void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                            Vector &result, idx_t count, idx_t row_idx) const {
-	auto &payload_collection = gstate.payload_collection;
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection;
 	D_ASSERT(payload_collection.ColumnCount() == 1);
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PARTITION_BEGIN]);
@@ -1524,9 +1526,9 @@ WindowLeadLagExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) co
 
 void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                              Vector &result, idx_t count, idx_t row_idx) const {
-	auto &glstate = gstate.Cast<WindowValueGlobalState>();
-	auto &payload_collection = gstate.payload_collection;
-	auto &ignore_nulls = glstate.ignore_nulls;
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection;
+	auto &ignore_nulls = gvstate.ignore_nulls;
 	auto &llstate = lstate.Cast<WindowLeadLagLocalState>();
 
 	auto partition_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_BEGIN]);
@@ -1570,7 +1572,8 @@ WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr,
 
 void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                                 Vector &result, idx_t count, idx_t row_idx) const {
-	auto &payload_collection = gstate.payload_collection;
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection;
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
@@ -1605,7 +1608,8 @@ WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, C
 
 void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                                Vector &result, idx_t count, idx_t row_idx) const {
-	auto &payload_collection = gstate.payload_collection;
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection;
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
 	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[WINDOW_END]);
@@ -1639,7 +1643,8 @@ WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, Cli
 
 void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                               Vector &result, idx_t count, idx_t row_idx) const {
-	auto &payload_collection = gstate.payload_collection;
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	auto &payload_collection = gvstate.payload_collection;
 	D_ASSERT(payload_collection.ColumnCount() == 2);
 
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
