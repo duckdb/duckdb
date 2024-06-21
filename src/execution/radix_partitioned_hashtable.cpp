@@ -217,7 +217,8 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	auto minimum_reservation = num_threads * ht_size;
 
 	temporary_memory_state->SetMinimumReservation(minimum_reservation);
-	temporary_memory_state->SetRemainingSize(context, minimum_reservation);
+	temporary_memory_state->SetRemainingSize(minimum_reservation);
+	temporary_memory_state->UpdateReservation(context);
 }
 
 RadixHTGlobalSinkState::~RadixHTGlobalSinkState() {
@@ -386,7 +387,8 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 				// Out-of-core would be triggered below, try to increase the reservation
 				auto remaining_size =
 				    MaxValue<idx_t>(gstate.number_of_threads * total_size, temporary_memory_state.GetRemainingSize());
-				temporary_memory_state.SetRemainingSize(context, 2 * remaining_size);
+				temporary_memory_state.SetRemainingSize(2 * remaining_size);
+				temporary_memory_state.UpdateReservation(context);
 				thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
 			}
 		}
@@ -548,7 +550,8 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 	// Maximum of combining all partitions
 	auto max_threads = MinValue<idx_t>(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()),
 	                                   gstate.partitions.size());
-	gstate.temporary_memory_state->SetRemainingSize(context, max_threads * gstate.max_partition_size);
+	gstate.temporary_memory_state->SetRemainingSize(max_threads * gstate.max_partition_size);
+	gstate.temporary_memory_state->UpdateReservation(context);
 	gstate.finalized = true;
 }
 
@@ -760,7 +763,8 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	D_ASSERT(finalizes_done <= sink.partitions.size());
 	if (finalizes_done == sink.partitions.size()) {
 		// All finalizes are done, set remaining size to 0
-		sink.temporary_memory_state->SetRemainingSize(sink.context, 0);
+		sink.temporary_memory_state->SetRemainingSize(0);
+		sink.temporary_memory_state->UpdateReservation(sink.context);
 	}
 
 	// Update partition state

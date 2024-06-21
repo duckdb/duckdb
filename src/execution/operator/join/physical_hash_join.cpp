@@ -90,7 +90,7 @@ public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op, ClientContext &context_p)
 	    : context(context_p), num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
-	      scanned_data(false) {
+	      total_size(0), max_partition_size(0), max_partition_count(0), scanned_data(false) {
 		hash_table = op.InitializeHashTable(context);
 
 		// For perfect hash join
@@ -119,10 +119,13 @@ public:
 	//! The perfect hash join executor (if any)
 	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor;
 	//! Whether or not the hash table has been finalized
-	bool finalized = false;
+	bool finalized;
 
-	//! Whether we are doing an external join
+	//! Whether we are doing an external + some sizes
 	bool external;
+	idx_t total_size;
+	idx_t max_partition_size;
+	idx_t max_partition_count;
 
 	//! Hash tables built by each thread
 	mutex lock;
@@ -269,17 +272,31 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
-	auto &gstate = sink_state.Cast<HashJoinGlobalSinkState>();
-	idx_t total_size = 0;
-	idx_t total_count = 0;
-	for (auto &lht : gstate.local_hash_tables) {
-		auto &sink_collection = lht->GetSinkCollection();
-		total_size += sink_collection.SizeInBytes();
-		total_count += sink_collection.Count();
+static idx_t GetPartitioningSpaceRequirement(const vector<LogicalType> &types, const idx_t radix_bits,
+                                             const idx_t num_threads) {
+	idx_t tuple_width = 0;
+	bool all_constant = true;
+	for (auto &type : types) {
+		tuple_width += GetTypeIdSize(type.InternalType());
+		all_constant &= TypeIsConstantSize(type.InternalType());
 	}
-	auto ht_size = total_size + JoinHashTable::PointerTableSize(total_count);
-	gstate.temporary_memory_state->SetRemainingSize(context, ht_size);
+
+	auto tuples_per_block = Storage::BLOCK_SIZE / tuple_width;
+	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
+	if (!all_constant) {
+		blocks_per_chunk += 2;
+	}
+	auto size_per_partition = blocks_per_chunk * Storage::BLOCK_ALLOC_SIZE;
+	auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+
+	return num_threads * num_partitions * size_per_partition;
+}
+
+void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
+	auto &sink = sink_state.Cast<HashJoinGlobalSinkState>();
+	auto &ht = *sink.hash_table;
+	sink.total_size = ht.GetTotalSize(sink.local_hash_tables, sink.max_partition_size, sink.max_partition_count);
+	sink.temporary_memory_state->SetRemainingSize(sink.total_size);
 }
 
 class HashJoinFinalizeTask : public ExecutorTask {
@@ -367,26 +384,6 @@ void HashJoinGlobalSinkState::InitializeProbeSpill() {
 	}
 }
 
-static idx_t GetPartitioningSpaceRequirement(const vector<LogicalType> &types, const idx_t radix_bits,
-                                             const idx_t num_threads) {
-	idx_t tuple_width = 0;
-	bool all_constant = true;
-	for (auto &type : types) {
-		tuple_width += GetTypeIdSize(type.InternalType());
-		all_constant &= TypeIsConstantSize(type.InternalType());
-	}
-
-	auto tuples_per_block = Storage::BLOCK_SIZE / tuple_width;
-	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
-	if (!all_constant) {
-		blocks_per_chunk += 2;
-	}
-	auto size_per_partition = blocks_per_chunk * Storage::BLOCK_ALLOC_SIZE;
-	auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-
-	return num_threads * num_partitions * size_per_partition;
-}
-
 class HashJoinRepartitionTask : public ExecutorTask {
 public:
 	HashJoinRepartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
@@ -463,15 +460,16 @@ public:
 		const auto num_partitions = RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits());
 		vector<idx_t> partition_sizes(num_partitions, 0);
 		vector<idx_t> partition_counts(num_partitions, 0);
-		idx_t max_partition_size;
-		idx_t max_partition_count;
-		sink.hash_table->GetTotalSize(partition_sizes, partition_counts, max_partition_size, max_partition_count);
+		sink.total_size = sink.hash_table->GetTotalSize(partition_sizes, partition_counts, sink.max_partition_size,
+		                                                sink.max_partition_count);
 		const auto probe_side_requirement =
 		    GetPartitioningSpaceRequirement(op.types, sink.hash_table->GetRadixBits(), sink.num_threads);
-		sink.temporary_memory_state->SetMinimumReservation(
-		    max_partition_size + JoinHashTable::PointerTableSize(max_partition_count) + probe_side_requirement);
-		sink.temporary_memory_state->SetRemainingSize(executor.context,
-		                                              sink.temporary_memory_state->GetRemainingSize());
+
+		sink.temporary_memory_state->SetMinimumReservation(sink.max_partition_size +
+		                                                   JoinHashTable::PointerTableSize(sink.max_partition_count) +
+		                                                   probe_side_requirement);
+		sink.temporary_memory_state->UpdateReservation(executor.context);
+
 		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation());
 		sink.ScheduleFinalize(*pipeline, *this);
 	}
@@ -482,20 +480,18 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	auto &sink = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &ht = *sink.hash_table;
 
-	idx_t max_partition_size;
-	idx_t max_partition_count;
-	auto const total_size = ht.GetTotalSize(sink.local_hash_tables, max_partition_size, max_partition_count);
-	sink.temporary_memory_state->SetRemainingSize(context, total_size);
-
-	sink.external = sink.temporary_memory_state->GetReservation() < total_size;
+	sink.temporary_memory_state->UpdateReservation(context);
+	sink.external = sink.temporary_memory_state->GetReservation() < sink.total_size;
 	if (sink.external) {
-		const auto max_partition_ht_size = max_partition_size + JoinHashTable::PointerTableSize(max_partition_count);
 		// External Hash Join
 		sink.perfect_join_executor.reset();
+
+		const auto max_partition_ht_size =
+		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
 		if (max_partition_ht_size > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
 			ht.SetRepartitionRadixBits(sink.local_hash_tables, sink.temporary_memory_state->GetReservation(),
-			                           max_partition_size, max_partition_count);
+			                           sink.max_partition_size, sink.max_partition_count);
 			auto new_event = make_shared_ptr<HashJoinRepartitionEvent>(pipeline, *this, sink, sink.local_hash_tables);
 			event.InsertEvent(std::move(new_event));
 		} else {
@@ -503,7 +499,6 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			const auto probe_side_requirement =
 			    GetPartitioningSpaceRequirement(children[0]->types, ht.GetRadixBits(), sink.num_threads);
 			sink.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + probe_side_requirement);
-			sink.temporary_memory_state->SetRemainingSize(context, total_size);
 			for (auto &local_ht : sink.local_hash_tables) {
 				ht.Merge(*local_ht);
 			}
@@ -513,14 +508,14 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		}
 		sink.finalized = true;
 		return SinkFinalizeType::READY;
-	} else {
-		// In-memory Hash Join
-		for (auto &local_ht : sink.local_hash_tables) {
-			ht.Merge(*local_ht);
-		}
-		sink.local_hash_tables.clear();
-		ht.Unpartition();
 	}
+
+	// In-memory Hash Join
+	for (auto &local_ht : sink.local_hash_tables) {
+		ht.Merge(*local_ht);
+	}
+	sink.local_hash_tables.clear();
+	ht.Unpartition();
 
 	// check for possible perfect hash table
 	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
@@ -826,12 +821,14 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	auto &ht = *sink.hash_table;
 
 	// Update remaining size
-	sink.temporary_memory_state->SetRemainingSize(sink.context, ht.GetRemainingSize());
+	sink.temporary_memory_state->SetRemainingSize(ht.GetRemainingSize());
+	sink.temporary_memory_state->UpdateReservation(sink.context);
 
 	// Try to put the next partitions in the block collection of the HT
 	if (!sink.external || !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation())) {
 		global_stage = HashJoinSourceStage::DONE;
-		sink.temporary_memory_state->SetRemainingSize(sink.context, 0);
+		sink.temporary_memory_state->SetRemainingSize(0);
+		sink.temporary_memory_state->UpdateReservation(sink.context);
 		return;
 	}
 
@@ -1052,7 +1049,8 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 		if (gstate.global_stage != HashJoinSourceStage::DONE) {
 			gstate.global_stage = HashJoinSourceStage::DONE;
 			sink.hash_table->Reset();
-			sink.temporary_memory_state->SetRemainingSize(context.client, 0);
+			sink.temporary_memory_state->SetRemainingSize(0);
+			sink.temporary_memory_state->UpdateReservation(context.client);
 		}
 		return SourceResultType::FINISHED;
 	}

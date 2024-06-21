@@ -31,13 +31,15 @@ public:
 
 public:
 	//! Set the remaining size needed for this state, and updates the reservation
-	void SetRemainingSize(ClientContext &context, idx_t new_remaining_size);
+	void SetRemainingSize(idx_t new_remaining_size);
 	//! Get the remaining size that was set for this state
 	idx_t GetRemainingSize() const;
 	//! Set the minimum reservation for this state
 	void SetMinimumReservation(idx_t new_minimum_reservation);
 	//! Get the minimum reservation for this state
 	idx_t GetMinimumReservation() const;
+	//! Updates the reservation based on current remaining size
+	void UpdateReservation(ClientContext &context);
 	//! Get the reservation of this state
 	idx_t GetReservation() const;
 

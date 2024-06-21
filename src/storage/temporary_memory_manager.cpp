@@ -18,10 +18,9 @@ TemporaryMemoryState::~TemporaryMemoryState() {
 	temporary_memory_manager.Unregister(*this);
 }
 
-void TemporaryMemoryState::SetRemainingSize(ClientContext &context, idx_t new_remaining_size) {
+void TemporaryMemoryState::SetRemainingSize(idx_t new_remaining_size) {
 	auto guard = temporary_memory_manager.Lock();
 	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
-	temporary_memory_manager.UpdateState(context, *this);
 }
 
 idx_t TemporaryMemoryState::GetRemainingSize() const {
@@ -34,6 +33,10 @@ void TemporaryMemoryState::SetMinimumReservation(idx_t new_minimum_reservation) 
 
 idx_t TemporaryMemoryState::GetMinimumReservation() const {
 	return minimum_reservation;
+}
+
+void TemporaryMemoryState::UpdateReservation(ClientContext &context) {
+	temporary_memory_manager.UpdateState(context, *this);
 }
 
 idx_t TemporaryMemoryState::GetReservation() const {
@@ -95,7 +98,7 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 
 	if (context.config.force_external) {
 		// We're forcing external processing. Give it the minimum
-		SetReservation(temporary_memory_state, temporary_memory_state.GetMinimumReservation());
+		SetReservation(temporary_memory_state, lower_bound);
 	} else if (!has_temporary_directory) {
 		// We cannot offload, so we cannot limit memory usage. Set reservation equal to the remaining size
 		SetReservation(temporary_memory_state, temporary_memory_state.GetRemainingSize());
