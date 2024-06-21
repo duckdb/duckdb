@@ -14,3 +14,8 @@ query I
 select 100000000000000000000 > 99999999999999999999.99999;
 ----
 true
+
+query I
+select cast(999999999999999.9999 as double) <= cast(999999999999999.99999999 as double);
+----
+true
