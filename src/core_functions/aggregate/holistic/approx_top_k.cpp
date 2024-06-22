@@ -3,8 +3,33 @@
 #include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
+
+struct ApproxTopKString {
+	ApproxTopKString() : str(UINT32_C(0)), hash(0) {}
+	ApproxTopKString(string_t str_p, hash_t hash_p) :
+		str(str_p), hash(hash_p) {}
+
+	string_t str;
+	hash_t hash;
+};
+
+struct ApproxTopKHash {
+	std::size_t operator()(const ApproxTopKString &k) const {
+		return k.hash;
+	}
+};
+
+struct ApproxTopKEquality {
+	bool operator()(const ApproxTopKString &a, const ApproxTopKString &b) const {
+		return Equals::Operation(a.str, b.str);
+	}
+};
+
+template <typename T>
+using approx_topk_map_t = unordered_map<ApproxTopKString, T, ApproxTopKHash, ApproxTopKEquality>;
 
 // approx top k algorithm based on "A parallel space saving algorithm for frequent items and the Hurwitz zeta
 // distribution" arxiv link -  https://arxiv.org/pdf/1401.0702
@@ -14,7 +39,7 @@ struct ApproxTopKValue {
 	//! Index in the values array
 	idx_t index = 0;
 	//! The string value
-	string_t str_value;
+	ApproxTopKString str_val;
 	//! Allocated data
 	char *dataptr = nullptr;
 	uint32_t size = 0;
@@ -27,7 +52,7 @@ struct ApproxTopKState {
 	// a lookup map: string_t -> idx in "values" array
 	unsafe_unique_array<ApproxTopKValue> stored_values;
 	unsafe_vector<reference<ApproxTopKValue>> values;
-	string_map_t<reference<ApproxTopKValue>> lookup_map;
+	approx_topk_map_t<reference<ApproxTopKValue>> lookup_map;
 	idx_t k = 0;
 	idx_t capacity = 0;
 
@@ -40,24 +65,25 @@ struct ApproxTopKState {
 		values.reserve(capacity);
 	}
 
-	static void CopyValue(ApproxTopKValue &value, const string_t &input, AggregateInputData &input_data) {
-		if (input.IsInlined()) {
+	static void CopyValue(ApproxTopKValue &value, const ApproxTopKString &input, AggregateInputData &input_data) {
+		value.str_val.hash = input.hash;
+		if (input.str.IsInlined()) {
 			// no need to copy
-			value.str_value = input;
+			value.str_val = input;
 			return;
 		}
-		value.size = UnsafeNumericCast<uint32_t>(input.GetSize());
+		value.size = UnsafeNumericCast<uint32_t>(input.str.GetSize());
 		if (value.size > value.capacity) {
 			// need to re-allocate for this value
 			value.capacity = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(value.size));
 			value.dataptr = char_ptr_cast(input_data.allocator.Allocate(value.capacity));
 		}
 		// copy over the data
-		memcpy(value.dataptr, input.GetData(), value.size);
-		value.str_value = string_t(value.dataptr, value.size);
+		memcpy(value.dataptr, input.str.GetData(), value.size);
+		value.str_val.str = string_t(value.dataptr, value.size);
 	}
 
-	void InsertOrReplaceEntry(const string_t &input, AggregateInputData &aggr_input, idx_t increment = 1) {
+	void InsertOrReplaceEntry(const ApproxTopKString &input, AggregateInputData &aggr_input, idx_t increment = 1) {
 		if (values.size() < capacity) {
 			D_ASSERT(increment > 0);
 			// no existing entry yet
@@ -68,10 +94,10 @@ struct ApproxTopKState {
 		auto &value = values.back().get();
 		if (value.count > 0) {
 			// there is an existing entry - we need to erase it from the map
-			lookup_map.erase(value.str_value);
+			lookup_map.erase(value.str_val);
 		}
 		CopyValue(value, input, aggr_input);
-		lookup_map.insert(make_pair(value.str_value, reference<ApproxTopKValue>(value)));
+		lookup_map.insert(make_pair(value.str_val, reference<ApproxTopKValue>(value)));
 		IncrementCount(value, increment);
 	}
 
@@ -100,7 +126,7 @@ struct ApproxTopKState {
 			auto &val = values[k].get();
 			D_ASSERT(val.count > 0);
 			// verify map exists
-			auto entry = lookup_map.find(val.str_value);
+			auto entry = lookup_map.find(val.str_val);
 			D_ASSERT(entry != lookup_map.end());
 			// verify the index is correct
 			D_ASSERT(val.index == k);
@@ -143,13 +169,14 @@ struct ApproxTopKOperation {
 			}
 			state.Initialize(UnsafeNumericCast<idx_t>(kval));
 		}
-		auto entry = state.lookup_map.find(input);
+		ApproxTopKString topk_string(input, Hash(input));
+		auto entry = state.lookup_map.find(topk_string);
 		if (entry != state.lookup_map.end()) {
 			// the input is monitored - increment the count
 			state.IncrementCount(entry->second.get());
 		} else {
 			// the input is not monitored - replace the first entry with the current entry and increment
-			state.InsertOrReplaceEntry(input, aggr_input);
+			state.InsertOrReplaceEntry(topk_string, aggr_input);
 		}
 	}
 
@@ -178,7 +205,7 @@ struct ApproxTopKOperation {
 		//     if they do not - add the minimum count
 		for (idx_t target_idx = 0; target_idx < target.values.size(); target_idx++) {
 			auto &val = target.values[target_idx].get();
-			auto source_entry = source.lookup_map.find(val.str_value);
+			auto source_entry = source.lookup_map.find(val.str_val);
 			idx_t increment = min_source;
 			if (source_entry != source.lookup_map.end()) {
 				increment = source_entry->second.get().count;
@@ -191,7 +218,7 @@ struct ApproxTopKOperation {
 		// now for each entry in source, if it is not tracked by the target, at the target minimum
 		for (auto &source_entry : source.values) {
 			auto &source_val = source_entry.get();
-			auto target_entry = target.lookup_map.find(source_val.str_value);
+			auto target_entry = target.lookup_map.find(source_val.str_val);
 			if (target_entry != target.lookup_map.end()) {
 				// already tracked - no need to add anything
 				continue;
@@ -213,7 +240,7 @@ struct ApproxTopKOperation {
 				// just add this entry with the full count
 				increment = new_count;
 			}
-			target.InsertOrReplaceEntry(source_val.str_value, aggr_input, increment);
+			target.InsertOrReplaceEntry(source_val.str_val, aggr_input, increment);
 		}
 		target.Verify();
 	}
@@ -291,7 +318,7 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 		for (idx_t val_idx = 0; val_idx < MinValue<idx_t>(state.values.size(), state.k); val_idx++) {
 			auto &val = state.values[val_idx].get();
 			D_ASSERT(val.count > 0);
-			OP::template HistogramFinalize<string_t>(val.str_value, child_data, current_offset);
+			OP::template HistogramFinalize<string_t>(val.str_val.str, child_data, current_offset);
 			current_offset++;
 		}
 		list_entry.length = current_offset - list_entry.offset;
