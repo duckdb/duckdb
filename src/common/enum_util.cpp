@@ -5964,6 +5964,34 @@ SampleType EnumUtil::FromString<SampleType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<SampleType>(SampleType value) {
+	switch(value) {
+	case SampleType::BLOCKING_SAMPLE:
+		return "BLOCKING_SAMPLE";
+	case SampleType::RESERVOIR_SAMPLE:
+		return "RESERVOIR_SAMPLE";
+	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
+		return "RESERVOIR_PERCENTAGE_SAMPLE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+SampleType EnumUtil::FromString<SampleType>(const char *value) {
+	if (StringUtil::Equals(value, "BLOCKING_SAMPLE")) {
+		return SampleType::BLOCKING_SAMPLE;
+	}
+	if (StringUtil::Equals(value, "RESERVOIR_SAMPLE")) {
+		return SampleType::RESERVOIR_SAMPLE;
+	}
+	if (StringUtil::Equals(value, "RESERVOIR_PERCENTAGE_SAMPLE")) {
+		return SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value) {
 	switch(value) {
 	case ScanType::TABLE:
