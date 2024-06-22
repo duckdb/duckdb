@@ -914,7 +914,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ClientContext &cont
   }
 
   auto &local_storage = LocalStorage::Get(context, data_table.db);
-  insert_chunk.Print();
+
   // We either want to do nothing, or perform an update when conflicts arise
   ConflictInfo conflict_info(conflict_target);
   ConflictManager conflict_manager(VerifyExistenceType::APPEND, insert_chunk.size(), &conflict_info);
