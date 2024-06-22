@@ -2,8 +2,6 @@
 # description: Test approx top K operator
 # group: [aggregates]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -34,3 +32,29 @@ query I
 SELECT approx_top_k([skewed_groups], 5) FROM integers
 ----
 [[8], [7], [6], [5], [4]]
+
+# structs
+query I
+SELECT approx_top_k({'i': skewed_groups}, 5) FROM integers
+----
+[{'i': 8}, {'i': 7}, {'i': 6}, {'i': 5}, {'i': 4}]
+
+statement error
+select approx_top_k(i, 0) from range(5) t(i)
+----
+k value must be > 0
+
+statement error
+select approx_top_k(i, -1) from range(5) t(i)
+----
+k value must be > 0
+
+statement error
+select approx_top_k(i, 999999999999999) from range(5) t(i)
+----
+k value must be < 100000
+
+statement error
+select approx_top_k(i, NULL) from range(5) t(i)
+----
+NULL

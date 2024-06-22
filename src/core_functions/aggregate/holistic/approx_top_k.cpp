@@ -29,19 +29,15 @@ struct ApproxTopKState {
 	unsafe_vector<reference<ApproxTopKValue>> values;
 	string_map_t<reference<ApproxTopKValue>> lookup_map;
 	idx_t k = 0;
+	idx_t capacity = 0;
 
 	void Initialize(idx_t kval) {
 		D_ASSERT(values.empty());
 		D_ASSERT(lookup_map.empty());
 		k = kval;
-		idx_t capacity = kval * 3;
+		capacity = kval * 3;
 		stored_values = make_unsafe_uniq_array<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
-		for (idx_t i = 0; i < capacity; i++) {
-			auto &val = stored_values[i];
-			val.index = i;
-			values.push_back(val);
-		}
 	}
 
 	static void CopyValue(ApproxTopKValue &value, const string_t &input, AggregateInputData &input_data) {
@@ -62,8 +58,14 @@ struct ApproxTopKState {
 	}
 
 	void InsertOrReplaceEntry(const string_t &input, AggregateInputData &aggr_input, idx_t increment = 1) {
-		Verify();
-		auto &value = values[0].get();
+		if (values.size() < capacity) {
+			D_ASSERT(increment > 0);
+			// no existing entry yet
+			auto &val = stored_values[values.size()];
+			val.index = values.size();
+			values.push_back(val);
+		}
+		auto &value = values.back().get();
 		if (value.count > 0) {
 			// there is an existing entry - we need to erase it from the map
 			lookup_map.erase(value.str_value);
@@ -71,48 +73,44 @@ struct ApproxTopKState {
 		CopyValue(value, input, aggr_input);
 		lookup_map.insert(make_pair(value.str_value, reference<ApproxTopKValue>(value)));
 		IncrementCount(value, increment);
-		Verify();
 	}
 
 	void IncrementCount(ApproxTopKValue &value, idx_t increment = 1) {
 		value.count += increment;
 		// maintain sortedness of "values"
 		// swap while we have a higher count than the next entry
-		while (value.index + 1 < values.size() &&
-		       values[value.index].get().count > values[value.index + 1].get().count) {
+		while (value.index > 0 &&
+		       values[value.index].get().count > values[value.index - 1].get().count) {
 			// swap the elements around
 			auto &left = values[value.index];
-			auto &right = values[value.index + 1];
+			auto &right = values[value.index - 1];
 			std::swap(left.get().index, right.get().index);
 			std::swap(left, right);
 		}
 	}
 
-	void Verify() {
+	void Verify() const {
 #ifdef DEBUG
 		if (values.empty()) {
 			D_ASSERT(lookup_map.empty());
 			return;
 		}
-		D_ASSERT(values.size() >= k);
-		idx_t non_zero_entries = 0;
+		D_ASSERT(values.size() <= capacity);
 		for (idx_t k = 0; k < values.size(); k++) {
 			auto &val = values[k].get();
-			if (val.count > 0) {
-				non_zero_entries++;
-				// verify map exists
-				auto entry = lookup_map.find(val.str_value);
-				D_ASSERT(entry != lookup_map.end());
-				// verify the index is correct
-				D_ASSERT(val.index == k);
-			}
+			D_ASSERT(val.count > 0);
+			// verify map exists
+			auto entry = lookup_map.find(val.str_value);
+			D_ASSERT(entry != lookup_map.end());
+			// verify the index is correct
+			D_ASSERT(val.index == k);
 			if (k > 0) {
 				// sortedness
-				D_ASSERT(val.count >= values[k - 1].get().count);
+				D_ASSERT(val.count <= values[k - 1].get().count);
 			}
 		}
 		// verify lookup map does not contain extra entries
-		D_ASSERT(lookup_map.size() == non_zero_entries);
+		D_ASSERT(lookup_map.size() == values.size());
 #endif
 	}
 };
@@ -127,6 +125,7 @@ struct ApproxTopKOperation {
 	static void Operation(STATE &state, const TYPE &input, AggregateInputData &aggr_input, Vector &top_k_vector,
 	                      idx_t offset, idx_t count) {
 		if (state.values.empty()) {
+			static constexpr int64_t MAX_APPROX_K = 100000;
 			// not initialized yet - initialize the K value and set all counters to 0
 			UnifiedVectorFormat kdata;
 			top_k_vector.ToUnifiedFormat(count, kdata);
@@ -136,11 +135,11 @@ struct ApproxTopKOperation {
 			}
 			auto kval = UnifiedVectorFormat::GetData<int64_t>(kdata)[kidx];
 			if (kval <= 0) {
-				throw InvalidInputException("Invalid input for approx_top_k: k value must be >= 0");
+				throw InvalidInputException("Invalid input for approx_top_k: k value must be > 0");
 			}
-			if (kval >= NumericLimits<uint32_t>::Maximum()) {
+			if (kval >= MAX_APPROX_K) {
 				throw InvalidInputException("Invalid input for approx_top_k: k value must be < %d",
-				                            NumericLimits<uint32_t>::Maximum());
+				                            MAX_APPROX_K);
 			}
 			state.Initialize(UnsafeNumericCast<idx_t>(kval));
 		}
@@ -156,11 +155,12 @@ struct ApproxTopKOperation {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
-		if (source.lookup_map.empty()) {
+		if (source.values.empty()) {
 			// source is empty
 			return;
 		}
-		auto min_source = source.values[0].get().count;
+		source.Verify();
+		auto min_source = source.values.back().get().count;
 		idx_t min_target;
 		if (target.values.empty()) {
 			min_target = 0;
@@ -170,17 +170,14 @@ struct ApproxTopKOperation {
 				throw NotImplementedException("Approx Top K - cannot combine approx_top_K with different k values. "
 				                              "K values must be the same for all entries within the same group");
 			}
-			min_target = target.values[0].get().count;
+			min_target = target.values.back().get().count;
 		}
 		// for all entries in target
 		// check if they are tracked in source
 		//     if they do - add the tracked count
 		//     if they do not - add the minimum count
-		for (idx_t target_idx = target.values.size(); target_idx > 0; --target_idx) {
-			auto &val = target.values[target_idx - 1].get();
-			if (val.count == 0) {
-				continue;
-			}
+		for (idx_t target_idx = 0; target_idx < target.values.size(); target_idx++) {
+			auto &val = target.values[target_idx].get();
 			auto source_entry = source.lookup_map.find(val.str_value);
 			idx_t increment = min_source;
 			if (source_entry != source.lookup_map.end()) {
@@ -189,7 +186,7 @@ struct ApproxTopKOperation {
 			if (increment == 0) {
 				continue;
 			}
-			target.IncrementCount(val, min_source);
+			target.IncrementCount(val, increment);
 		}
 		// now for each entry in source, if it is not tracked by the target, at the target minimum
 		for (auto &source_entry : source.values) {
@@ -200,14 +197,23 @@ struct ApproxTopKOperation {
 				continue;
 			}
 			auto new_count = source_val.count + min_target;
-			// check if we exceed the current minimum of the target
-			if (new_count <= target.values[0].get().count) {
-				// if we do not we can skip this entry
-				continue;
+			idx_t increment;
+			if (target.values.size() >= target.capacity) {
+				idx_t current_min = target.values.empty() ? 0 : target.values.back().get().count;
+				D_ASSERT(target.values.size() == target.capacity);
+				// target already has capacity values
+				// check if we should insert this entry
+				if (new_count <= current_min) {
+					// if we do not we can skip this entry
+					continue;
+				}
+				increment = new_count - current_min;
+			} else {
+				// target does not have capacity entries yet
+				// just add this entry with the full count
+				increment = new_count;
 			}
-			// otherwise we should add it to the target
-			idx_t diff = new_count - target.values[0].get().count;
-			target.InsertOrReplaceEntry(source_val.str_value, aggr_input, diff);
+			target.InsertOrReplaceEntry(source_val.str_value, aggr_input, increment);
 		}
 		target.Verify();
 	}
@@ -265,15 +271,7 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 		}
 		// get up to k values for each state
 		// this can be less of fewer unique values were found
-		for (auto &val : state.values) {
-			if (val.get().count == 0) {
-				continue;
-			}
-			new_entries++;
-			if (new_entries >= state.k) {
-				break;
-			}
-		}
+		new_entries += MinValue<idx_t>(state.values.size(), state.k);
 	}
 	// reserve space in the list vector
 	ListVector::Reserve(result, old_len + new_entries);
@@ -290,11 +288,9 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 		}
 		auto &list_entry = list_entries[rid];
 		list_entry.offset = current_offset;
-		for (idx_t val_idx = state.values.size(); val_idx > state.values.size() - state.k; val_idx--) {
-			auto &val = state.values[val_idx - 1].get();
-			if (val.count == 0) {
-				break;
-			}
+		for (idx_t val_idx = 0; val_idx < MinValue<idx_t>(state.values.size(), state.k); val_idx++) {
+			auto &val = state.values[val_idx].get();
+			D_ASSERT(val.count > 0);
 			OP::template HistogramFinalize<string_t>(val.str_value, child_data, current_offset);
 			current_offset++;
 		}
