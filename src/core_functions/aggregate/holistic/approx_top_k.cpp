@@ -9,8 +9,13 @@ namespace duckdb {
 // approx top k algorithm based on "A parallel space saving algorithm for frequent items and the Hurwitz zeta distribution"
 // arxiv link -  https://arxiv.org/pdf/1401.0702
 struct ApproxTopKValue {
+	//! The counter
 	idx_t count = 0;
-	string_t value;
+	//! Index in the values array
+	idx_t index = 0;
+	//! The string value
+	string_t str_value;
+	//! Allocated data
 	char *dataptr = nullptr;
 	uint32_t size = 0;
 	uint32_t capacity = 0;
@@ -20,58 +25,65 @@ struct ApproxTopKState {
 	// the top-k data structure has two components
 	// a list of k values sorted on "count" (i.e. values[0] has the lowest count)
 	// a lookup map: string_t -> idx in "values" array
-	unsafe_vector<ApproxTopKValue> values;
-	string_map_t<idx_t> lookup_map;
+	unsafe_unique_array<ApproxTopKValue> stored_values;
+	unsafe_vector<reference<ApproxTopKValue>> values;
+	string_map_t<reference<ApproxTopKValue>> lookup_map;
 	idx_t k = 0;
 
 	void Initialize(idx_t kval) {
 		D_ASSERT(values.empty());
 		D_ASSERT(lookup_map.empty());
 		k = kval;
-		values.resize(k);
+		idx_t capacity = kval * 3;
+		stored_values = make_unsafe_uniq_array<ApproxTopKValue>(capacity);
+		values.reserve(capacity);
+		for(idx_t i = 0; i < capacity; i++) {
+			auto &val = stored_values[i];
+			val.index = i;
+			values.push_back(val);
+		}
 	}
 
 	static void CopyValue(ApproxTopKValue &value, const string_t &input, AggregateInputData &input_data) {
-		value.size = input.GetSize();
+		if (input.IsInlined()) {
+			// no need to copy
+			value.str_value = input;
+			return;
+		}
+		value.size = UnsafeNumericCast<uint32_t>(input.GetSize());
 		if (value.size > value.capacity) {
 			// need to re-allocate for this value
-			value.capacity = NextPowerOfTwo(value.size);
+			value.capacity = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(value.size));
 			value.dataptr = char_ptr_cast(input_data.allocator.Allocate(value.capacity));
 		}
 		// copy over the data
 		memcpy(value.dataptr, input.GetData(), value.size);
-		value.value = string_t(value.dataptr, value.size);
+		value.str_value = string_t(value.dataptr, value.size);
 	}
 
 	void InsertOrReplaceEntry(const string_t &input, AggregateInputData &aggr_input, idx_t increment = 1) {
 		Verify();
-		if (values[0].count > 0) {
+		auto &value = values[0].get();
+		if (value.count > 0) {
 			// there is an existing entry - we need to erase it from the map
-			lookup_map.erase(values[0].value);
+			lookup_map.erase(value.str_value);
 		}
-		CopyValue(values[0], input, aggr_input);
-		auto entry = lookup_map.insert(make_pair(values[0].value, 0));
-		D_ASSERT(entry.second);
-		IncrementCount(entry.first, increment);
+		CopyValue(value, input, aggr_input);
+		lookup_map.insert(make_pair(value.str_value, reference<ApproxTopKValue>(value)));
+		IncrementCount(value, increment);
 		Verify();
 	}
 
-	void IncrementCount(unordered_map<string_t, idx_t>::iterator &it, idx_t increment = 1) {
-		auto &index = it->second;
-		values[index].count += increment;
+	void IncrementCount(ApproxTopKValue &value, idx_t increment = 1) {
+		value.count += increment;
 		// maintain sortedness of "values"
 		// swap while we have a higher count than the next entry
-		while(index + 1 < values.size() && values[index].count > values[index + 1].count) {
-			// decrement the position of the other value, if it is not empty
-			if (values[index + 1].count > 0) {
-				auto other_entry = lookup_map.find(values[index + 1].value);
-				D_ASSERT(other_entry != lookup_map.end());
-				D_ASSERT(other_entry->second == index + 1);
-				other_entry->second--;
-			}
-			std::swap(values[index], values[index + 1]);
-			// increment the position of the current value
-			index++;
+		while(value.index + 1 < values.size() && values[value.index].get().count > values[value.index + 1].get().count) {
+			// swap the elements around
+			auto &left = values[value.index];
+			auto &right = values[value.index + 1];
+			std::swap(left.get().index, right.get().index);
+			std::swap(left, right);
 		}
 	}
 
@@ -84,16 +96,18 @@ struct ApproxTopKState {
 		D_ASSERT(values.size() == k);
 		idx_t non_zero_entries = 0;
 		for(idx_t k = 0; k < values.size(); k++) {
-			if (values[k].count > 0) {
+			auto &val = values[k].get();
+			if (val.count > 0) {
 				non_zero_entries++;
-				// verify map exists and points to correct index
-				auto entry = lookup_map.find(values[k].value) ;
+				// verify map exists
+				auto entry = lookup_map.find(val.str_value);
 				D_ASSERT(entry != lookup_map.end());
-				D_ASSERT(entry->second == k);
+				// verify the index is correct
+				D_ASSERT(val.index == k);
 			}
 			if (k > 0) {
 				// sortedness
-				D_ASSERT(values[k].count >= values[k - 1].count);
+				D_ASSERT(val.count >= values[k - 1].get().count);
 			}
 		}
 		// verify lookup map does not contain extra entries
@@ -130,7 +144,7 @@ struct ApproxTopKOperation {
 		auto entry = state.lookup_map.find(input);
 		if (entry != state.lookup_map.end()) {
 			// the input is monitored - increment the count
-			state.IncrementCount(entry);
+			state.IncrementCount(entry->second.get());
 		} else {
 			// the input is not monitored - replace the first entry with the current entry and increment
 			state.InsertOrReplaceEntry(input, aggr_input);
@@ -143,7 +157,7 @@ struct ApproxTopKOperation {
 			// source is empty
 			return;
 		}
-		auto min_source = source.values[0].count;
+		auto min_source = source.values[0].get().count;
 		idx_t min_target;
 		if (target.values.empty()) {
 			min_target = 0;
@@ -154,45 +168,44 @@ struct ApproxTopKOperation {
 				    "Approx Top K - cannot combine approx_top_K with different k values. "
 				    "K values must be the same for all entries within the same group");
 			}
-			min_target = target.values[0].count;
+			min_target = target.values[0].get().count;
 		}
 		// for all entries in target
 		// check if they are tracked in source
 		//     if they do - add the tracked count
 		//     if they do not - add the minimum count
 		for(idx_t target_idx = target.values.size(); target_idx > 0; --target_idx) {
-			auto &val = target.values[target_idx - 1];
+			auto &val = target.values[target_idx - 1].get();
 			if (val.count == 0) {
 				continue;
 			}
-			auto source_entry = source.lookup_map.find(val.value);
+			auto source_entry = source.lookup_map.find(val.str_value);
 			idx_t increment = min_source;
 			if (source_entry != source.lookup_map.end()) {
-				increment = source.values[source_entry->second].count;
+				increment = source_entry->second.get().count;
 			}
 			if (increment == 0) {
 				continue;
 			}
-			auto entry = target.lookup_map.find(val.value);
-			D_ASSERT(entry != target.lookup_map.end());
-			target.IncrementCount(entry, min_source);
+			target.IncrementCount(val, min_source);
 		}
 		// now for each entry in source, if it is not tracked by the target, at the target minimum
-		for(auto &source_val : source.values) {
-			auto target_entry = target.lookup_map.find(source_val.value);
+		for(auto &source_entry : source.values) {
+			auto &source_val = source_entry.get();
+			auto target_entry = target.lookup_map.find(source_val.str_value);
 			if (target_entry != target.lookup_map.end()) {
 				// already tracked - no need to add anything
 				continue;
 			}
 			auto new_count = source_val.count + min_target;
 			// check if we exceed the current minimum of the target
-			if (new_count <= target.values[0].count) {
+			if (new_count <= target.values[0].get().count) {
 				// if we do not we can skip this entry
 				continue;
 			}
 			// otherwise we should add it to the target
-			idx_t diff =  new_count - target.values[0].count;
-			target.InsertOrReplaceEntry(source_val.value, aggr_input, diff);
+			idx_t diff =  new_count - target.values[0].get().count;
+			target.InsertOrReplaceEntry(source_val.str_value, aggr_input, diff);
 		}
 		target.Verify();
 	}
@@ -251,8 +264,12 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 		// get up to k values for each state
 		// this can be less of fewer unique values were found
 		for(auto &val : state.values) {
-			if (val.count > 0) {
-				new_entries++;
+			if (val.get().count == 0) {
+				continue;
+			}
+			new_entries++;
+			if (new_entries >= state.k) {
+				break;
 			}
 		}
 	}
@@ -271,12 +288,12 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 		}
 		auto &list_entry = list_entries[rid];
 		list_entry.offset = current_offset;
-		for(idx_t val_idx = state.values.size(); val_idx > 0; val_idx--) {
-			auto &val = state.values[val_idx - 1];
+		for(idx_t val_idx = state.values.size(); val_idx > state.values.size() - state.k; val_idx--) {
+			auto &val = state.values[val_idx - 1].get();
 			if (val.count == 0) {
 				break;
 			}
-			HistogramGenericFunctor::template HistogramFinalize<string_t>(val.value, child_data, current_offset);
+			HistogramGenericFunctor::template HistogramFinalize<string_t>(val.str_value, child_data, current_offset);
 			current_offset++;
 		}
 		list_entry.length = current_offset - list_entry.offset;
