@@ -6,8 +6,8 @@
 
 namespace duckdb {
 
-// approx top k algorithm based on "A parallel space saving algorithm for frequent items and the Hurwitz zeta distribution"
-// arxiv link -  https://arxiv.org/pdf/1401.0702
+// approx top k algorithm based on "A parallel space saving algorithm for frequent items and the Hurwitz zeta
+// distribution" arxiv link -  https://arxiv.org/pdf/1401.0702
 struct ApproxTopKValue {
 	//! The counter
 	idx_t count = 0;
@@ -37,7 +37,7 @@ struct ApproxTopKState {
 		idx_t capacity = kval * 3;
 		stored_values = make_unsafe_uniq_array<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
-		for(idx_t i = 0; i < capacity; i++) {
+		for (idx_t i = 0; i < capacity; i++) {
 			auto &val = stored_values[i];
 			val.index = i;
 			values.push_back(val);
@@ -78,7 +78,8 @@ struct ApproxTopKState {
 		value.count += increment;
 		// maintain sortedness of "values"
 		// swap while we have a higher count than the next entry
-		while(value.index + 1 < values.size() && values[value.index].get().count > values[value.index + 1].get().count) {
+		while (value.index + 1 < values.size() &&
+		       values[value.index].get().count > values[value.index + 1].get().count) {
 			// swap the elements around
 			auto &left = values[value.index];
 			auto &right = values[value.index + 1];
@@ -95,7 +96,7 @@ struct ApproxTopKState {
 		}
 		D_ASSERT(values.size() >= k);
 		idx_t non_zero_entries = 0;
-		for(idx_t k = 0; k < values.size(); k++) {
+		for (idx_t k = 0; k < values.size(); k++) {
 			auto &val = values[k].get();
 			if (val.count > 0) {
 				non_zero_entries++;
@@ -123,7 +124,8 @@ struct ApproxTopKOperation {
 	}
 
 	template <class TYPE, class STATE>
-	static void Operation(STATE &state, const TYPE &input, AggregateInputData &aggr_input, Vector &top_k_vector, idx_t offset, idx_t count) {
+	static void Operation(STATE &state, const TYPE &input, AggregateInputData &aggr_input, Vector &top_k_vector,
+	                      idx_t offset, idx_t count) {
 		if (state.values.empty()) {
 			// not initialized yet - initialize the K value and set all counters to 0
 			UnifiedVectorFormat kdata;
@@ -137,7 +139,8 @@ struct ApproxTopKOperation {
 				throw InvalidInputException("Invalid input for approx_top_k: k value must be >= 0");
 			}
 			if (kval >= NumericLimits<uint32_t>::Maximum()) {
-				throw InvalidInputException("Invalid input for approx_top_k: k value must be < %d", NumericLimits<uint32_t>::Maximum());
+				throw InvalidInputException("Invalid input for approx_top_k: k value must be < %d",
+				                            NumericLimits<uint32_t>::Maximum());
 			}
 			state.Initialize(UnsafeNumericCast<idx_t>(kval));
 		}
@@ -164,9 +167,8 @@ struct ApproxTopKOperation {
 			target.Initialize(source.k);
 		} else {
 			if (source.k != target.k) {
-				throw NotImplementedException(
-				    "Approx Top K - cannot combine approx_top_K with different k values. "
-				    "K values must be the same for all entries within the same group");
+				throw NotImplementedException("Approx Top K - cannot combine approx_top_K with different k values. "
+				                              "K values must be the same for all entries within the same group");
 			}
 			min_target = target.values[0].get().count;
 		}
@@ -174,7 +176,7 @@ struct ApproxTopKOperation {
 		// check if they are tracked in source
 		//     if they do - add the tracked count
 		//     if they do not - add the minimum count
-		for(idx_t target_idx = target.values.size(); target_idx > 0; --target_idx) {
+		for (idx_t target_idx = target.values.size(); target_idx > 0; --target_idx) {
 			auto &val = target.values[target_idx - 1].get();
 			if (val.count == 0) {
 				continue;
@@ -190,7 +192,7 @@ struct ApproxTopKOperation {
 			target.IncrementCount(val, min_source);
 		}
 		// now for each entry in source, if it is not tracked by the target, at the target minimum
-		for(auto &source_entry : source.values) {
+		for (auto &source_entry : source.values) {
 			auto &source_val = source_entry.get();
 			auto target_entry = target.lookup_map.find(source_val.str_value);
 			if (target_entry != target.lookup_map.end()) {
@@ -204,7 +206,7 @@ struct ApproxTopKOperation {
 				continue;
 			}
 			// otherwise we should add it to the target
-			idx_t diff =  new_count - target.values[0].get().count;
+			idx_t diff = new_count - target.values[0].get().count;
 			target.InsertOrReplaceEntry(source_val.str_value, aggr_input, diff);
 		}
 		target.Verify();
@@ -220,9 +222,9 @@ struct ApproxTopKOperation {
 	}
 };
 
-template<class T = string_t, class OP = HistogramGenericFunctor>
-static void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count,
-                                       Vector &state_vector, idx_t count) {
+template <class T = string_t, class OP = HistogramGenericFunctor>
+static void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
+                             idx_t count) {
 	using STATE = ApproxTopKState;
 	auto &input = inputs[0];
 	UnifiedVectorFormat sdata;
@@ -246,8 +248,8 @@ static void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 	}
 }
 
-static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
-                                         idx_t offset) {
+template <class OP = HistogramGenericFunctor>
+static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = UnifiedVectorFormat::GetData<ApproxTopKState *>(sdata);
@@ -263,7 +265,7 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 		}
 		// get up to k values for each state
 		// this can be less of fewer unique values were found
-		for(auto &val : state.values) {
+		for (auto &val : state.values) {
 			if (val.get().count == 0) {
 				continue;
 			}
@@ -288,12 +290,12 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 		}
 		auto &list_entry = list_entries[rid];
 		list_entry.offset = current_offset;
-		for(idx_t val_idx = state.values.size(); val_idx > state.values.size() - state.k; val_idx--) {
+		for (idx_t val_idx = state.values.size(); val_idx > state.values.size() - state.k; val_idx--) {
 			auto &val = state.values[val_idx - 1].get();
 			if (val.count == 0) {
 				break;
 			}
-			HistogramGenericFunctor::template HistogramFinalize<string_t>(val.str_value, child_data, current_offset);
+			OP::template HistogramFinalize<string_t>(val.str_value, child_data, current_offset);
 			current_offset++;
 		}
 		list_entry.length = current_offset - list_entry.offset;
@@ -304,11 +306,15 @@ static void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vecto
 }
 
 unique_ptr<FunctionData> ApproxTopKBind(ClientContext &context, AggregateFunction &function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+                                        vector<unique_ptr<Expression>> &arguments) {
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
+	}
+	if (arguments[0]->return_type.id() == LogicalTypeId::VARCHAR) {
+		function.update = ApproxTopKUpdate<string_t, HistogramStringFunctor>;
+		function.finalize = ApproxTopKFinalize<HistogramStringFunctor>;
 	}
 	function.return_type = LogicalType::LIST(arguments[0]->return_type);
 	return nullptr;
@@ -317,9 +323,10 @@ unique_ptr<FunctionData> ApproxTopKBind(ClientContext &context, AggregateFunctio
 AggregateFunction ApproxTopKFun::GetFunction() {
 	using STATE = ApproxTopKState;
 	using OP = ApproxTopKOperation;
-	return AggregateFunction("approx_top_k", {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::ANY),
-	                                              AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>, ApproxTopKUpdate, AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize, nullptr,
-	                                              ApproxTopKBind);
+	return AggregateFunction("approx_top_k", {LogicalTypeId::ANY, LogicalType::BIGINT},
+	                         LogicalType::LIST(LogicalType::ANY), AggregateFunction::StateSize<STATE>,
+	                         AggregateFunction::StateInitialize<STATE, OP>, ApproxTopKUpdate,
+	                         AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize, nullptr, ApproxTopKBind);
 }
 
 } // namespace duckdb
