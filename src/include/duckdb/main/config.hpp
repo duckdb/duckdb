@@ -243,6 +243,14 @@ struct DBConfigOptions {
 	idx_t default_block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
+	//! The index_scan_percentage sets a threshold for index scans.
+	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
+	// rows match, we perform an index scan instead of a table scan.
+	double index_scan_percentage = 0.001;
+	//! The index_scan_max_count sets a threshold for index scans.
+	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
+	// rows match, we perform an index scan instead of a table scan.
+	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

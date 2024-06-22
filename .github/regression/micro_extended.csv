@@ -120,6 +120,7 @@ benchmark/micro/index/create/create_art_varchar_short.benchmark
 benchmark/micro/index/delete/delete_art.benchmark
 benchmark/micro/index/insert/insert_art.benchmark
 benchmark/micro/index/point/point_query_with_art.benchmark
+benchmark/micro/index/point/point_query_with_art_and_many_keys.benchmark
 benchmark/micro/index/point/point_query_without_index.benchmark
 benchmark/micro/index/point/point_query_without_index_sequential.benchmark
 benchmark/micro/index/range/range_query_with_art.benchmark

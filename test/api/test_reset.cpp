@@ -149,7 +149,9 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "custom_user_agent",
 	    "custom_profiling_settings",
 	    "custom_user_agent",
-	    "default_block_size"};
+	    "default_block_size",
+	    "index_scan_percentage",
+	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }
 
