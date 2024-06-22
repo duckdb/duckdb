@@ -33,6 +33,7 @@ using approx_topk_map_t = unordered_map<ApproxTopKString, T, ApproxTopKHash, App
 
 // approx top k algorithm based on "A parallel space saving algorithm for frequent items and the Hurwitz zeta
 // distribution" arxiv link -  https://arxiv.org/pdf/1401.0702
+// together with the filter extension (Filtered Space-Saving) from "Estimating Top-k Destinations in Data Streams"
 struct ApproxTopKValue {
 	//! The counter
 	idx_t count = 0;
@@ -53,8 +54,10 @@ struct ApproxTopKState {
 	unsafe_unique_array<ApproxTopKValue> stored_values;
 	unsafe_vector<reference<ApproxTopKValue>> values;
 	approx_topk_map_t<reference<ApproxTopKValue>> lookup_map;
+	unsafe_vector<idx_t> filter;
 	idx_t k = 0;
 	idx_t capacity = 0;
+	idx_t filter_mask;
 
 	void Initialize(idx_t kval) {
 		D_ASSERT(values.empty());
@@ -63,6 +66,11 @@ struct ApproxTopKState {
 		capacity = kval * 3;
 		stored_values = make_unsafe_uniq_array<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
+
+		// we scale the filter based on the amount of values we are monitoring
+		idx_t filter_size = NextPowerOfTwo(capacity * 8);
+		filter_mask = filter_size - 1;
+		filter.resize(filter_size);
 	}
 
 	static void CopyValue(ApproxTopKValue &value, const ApproxTopKString &input, AggregateInputData &input_data) {
@@ -86,14 +94,31 @@ struct ApproxTopKState {
 	void InsertOrReplaceEntry(const ApproxTopKString &input, AggregateInputData &aggr_input, idx_t increment = 1) {
 		if (values.size() < capacity) {
 			D_ASSERT(increment > 0);
-			// no existing entry yet
+			// we can always add this entry
 			auto &val = stored_values[values.size()];
 			val.index = values.size();
 			values.push_back(val);
 		}
 		auto &value = values.back().get();
 		if (value.count > 0) {
-			// there is an existing entry - we need to erase it from the map
+			// the capacity is reached - we need to replace an entry
+
+			// we use the filter as an early out
+			// based on the hash - we find a slot in the filter
+			// instead of monitoring the value immediately, we add to the slot in the filter
+			// ONLY when the value in the filter exceeds the current min value, we start monitoring the value
+			// this speeds up the algorithm as switching monitor values means we need to erase/insert in the hash table
+			auto &filter_value = filter[input.hash & filter_mask];
+			if (filter_value + increment < value.count) {
+				// if the filter has a lower count than the current min count
+				// we can skip adding this entry (for now)
+				filter_value += increment;
+				return;
+			}
+			// the filter exceeds the min value - start monitoring this value
+			// erase the existing entry from the map
+			// and set the filter for the minimum value back to the current minimum value
+			filter[value.str_val.hash & filter_mask] = value.count;
 			lookup_map.erase(value.str_val);
 		}
 		CopyValue(value, input, aggr_input);
@@ -151,7 +176,7 @@ struct ApproxTopKOperation {
 	static void Operation(STATE &state, const TYPE &input, AggregateInputData &aggr_input, Vector &top_k_vector,
 	                      idx_t offset, idx_t count) {
 		if (state.values.empty()) {
-			static constexpr int64_t MAX_APPROX_K = 100000;
+			static constexpr int64_t MAX_APPROX_K = 1000000;
 			// not initialized yet - initialize the K value and set all counters to 0
 			UnifiedVectorFormat kdata;
 			top_k_vector.ToUnifiedFormat(count, kdata);

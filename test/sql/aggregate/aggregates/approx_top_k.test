@@ -52,7 +52,7 @@ k value must be > 0
 statement error
 select approx_top_k(i, 999999999999999) from range(5) t(i)
 ----
-k value must be < 100000
+k value must be < 1000000
 
 statement error
 select approx_top_k(i, NULL) from range(5) t(i)
