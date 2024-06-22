@@ -93,7 +93,7 @@ struct ApproxTopKState {
 			D_ASSERT(lookup_map.empty());
 			return;
 		}
-		D_ASSERT(values.size() == k);
+		D_ASSERT(values.size() >= k);
 		idx_t non_zero_entries = 0;
 		for(idx_t k = 0; k < values.size(); k++) {
 			auto &val = values[k].get();
