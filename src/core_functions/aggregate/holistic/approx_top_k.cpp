@@ -8,9 +8,10 @@
 namespace duckdb {
 
 struct ApproxTopKString {
-	ApproxTopKString() : str(UINT32_C(0)), hash(0) {}
-	ApproxTopKString(string_t str_p, hash_t hash_p) :
-		str(str_p), hash(hash_p) {}
+	ApproxTopKString() : str(UINT32_C(0)), hash(0) {
+	}
+	ApproxTopKString(string_t str_p, hash_t hash_p) : str(str_p), hash(hash_p) {
+	}
 
 	string_t str;
 	hash_t hash;
@@ -130,8 +131,7 @@ struct ApproxTopKState {
 		value.count += increment;
 		// maintain sortedness of "values"
 		// swap while we have a higher count than the next entry
-		while (value.index > 0 &&
-		       values[value.index].get().count > values[value.index - 1].get().count) {
+		while (value.index > 0 && values[value.index].get().count > values[value.index - 1].get().count) {
 			// swap the elements around
 			auto &left = values[value.index];
 			auto &right = values[value.index - 1];
@@ -189,8 +189,7 @@ struct ApproxTopKOperation {
 				throw InvalidInputException("Invalid input for approx_top_k: k value must be > 0");
 			}
 			if (kval >= MAX_APPROX_K) {
-				throw InvalidInputException("Invalid input for approx_top_k: k value must be < %d",
-				                            MAX_APPROX_K);
+				throw InvalidInputException("Invalid input for approx_top_k: k value must be < %d", MAX_APPROX_K);
 			}
 			state.Initialize(UnsafeNumericCast<idx_t>(kval));
 		}
