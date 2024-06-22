@@ -471,7 +471,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		int64_t computed_start;
 		if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
 		                               computed_start)) {
-			window_start = partition_end;
+			window_start = partition_start;
 		} else {
 			window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		}
