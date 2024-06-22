@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-ConnectionManager::ConnectionManager() : is_locking(false) {
+ConnectionManager::ConnectionManager() {
 }
 
 void ConnectionManager::AddConnection(ClientContext &context) {
@@ -13,7 +13,7 @@ void ConnectionManager::AddConnection(ClientContext &context) {
 	for (auto &callback : DBConfig::GetConfig(context).extension_callbacks) {
 		callback->OnConnectionOpened(context);
 	}
-	connections.insert(make_pair(&context, weak_ptr<ClientContext>(context.shared_from_this())));
+	connections[context] = weak_ptr<ClientContext>(context.shared_from_this());
 }
 
 void ConnectionManager::RemoveConnection(ClientContext &context) {
@@ -21,10 +21,16 @@ void ConnectionManager::RemoveConnection(ClientContext &context) {
 	for (auto &callback : DBConfig::GetConfig(context).extension_callbacks) {
 		callback->OnConnectionClosed(context);
 	}
-	connections.erase(&context);
+	connections.erase(context);
+}
+
+idx_t ConnectionManager::GetConnectionCount() const {
+	lock_guard<mutex> lock(connections_lock);
+	return connections.size();
 }
 
 vector<shared_ptr<ClientContext>> ConnectionManager::GetConnectionList() {
+	lock_guard<mutex> lock(connections_lock);
 	vector<shared_ptr<ClientContext>> result;
 	for (auto &it : connections) {
 		auto connection = it.second.lock();
@@ -37,26 +43,6 @@ vector<shared_ptr<ClientContext>> ConnectionManager::GetConnectionList() {
 	}
 
 	return result;
-}
-
-void ConnectionManager::LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context) {
-	{
-		lock_guard<mutex> l(lock_clients_lock);
-		if (is_locking) {
-			throw TransactionException("Failed to lock clients - another thread is running FORCE CHECKPOINT");
-		}
-		is_locking = true;
-	}
-	client_locks.emplace_back(connections_lock, nullptr);
-	auto connection_list = GetConnectionList();
-	for (auto &con : connection_list) {
-		if (con.get() == &context) {
-			continue;
-		}
-		auto &context_lock = con->context_lock;
-		client_locks.emplace_back(context_lock, std::move(con));
-	}
-	is_locking = false;
 }
 
 } // namespace duckdb

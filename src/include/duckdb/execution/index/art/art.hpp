@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/storage/index.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/array.hpp"
 
@@ -31,7 +31,7 @@ struct ARTFlags {
 	vector<idx_t> merge_buffer_counts;
 };
 
-class ART : public Index {
+class ART : public BoundIndex {
 public:
 	// Index type name for the ART
 	static constexpr const char *TYPE_NAME = "ART";
@@ -64,7 +64,7 @@ public:
 
 public:
 	//! Create a index instance of this type
-	static unique_ptr<Index> Create(CreateIndexInput &input) {
+	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
 		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
 		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
 		return std::move(art);
@@ -81,22 +81,20 @@ public:
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert a chunk of entries into the index
-	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_identifiers) override;
 
 	//! Construct an ART from a vector of sorted keys
 	bool ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_identifiers);
 
 	//! Search equal values and fetches the row IDs
 	bool SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &result_ids);
-	//! Search equal values used for joins that do not need to fetch data
-	void SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size);
 
 	//! Returns all ART storage information for serialization
 	IndexStorageInfo GetStorageInfo(const bool get_buffers) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
-	bool MergeIndexes(IndexLock &state, Index &other_index) override;
+	bool MergeIndexes(IndexLock &state, BoundIndex &other_index) override;
 
 	//! Traverses an ART and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
 	void Vacuum(IndexLock &state) override;
@@ -105,6 +103,7 @@ public:
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
 
 	//! Generate ART keys for an input chunk
+	template <bool IS_NOT_NULL = false>
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
 
 	//! Generate a string containing all the expressions and their respective values that violate a constraint
@@ -162,5 +161,11 @@ private:
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 };
+
+template <>
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
+
+template <>
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
 
 } // namespace duckdb

@@ -553,13 +553,13 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 		connections.push_back(std::move(conn));
 	}
 
-	REQUIRE(connection_manager.connections.size() == createdConnections);
+	REQUIRE(connection_manager.GetConnectionCount() == createdConnections);
 
 	for (size_t i = 0; i < toRemove; i++) {
 		connections.erase(connections.begin());
 	}
 
-	REQUIRE(connection_manager.connections.size() == remainingConnections);
+	REQUIRE(connection_manager.GetConnectionCount() == remainingConnections);
 }
 
 TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
@@ -663,4 +663,14 @@ TEST_CASE("Test insert returning in CPP API", "[api]") {
 	auto result = con.Query("SELECT * from test;");
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"query_1", "query_2", "query_arg_1", "query_arg_2", "prepared_arg_1", "prepared_arg_2"}));
+}
+
+TEST_CASE("Test a logical execute still has types after an optimization pass", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.Query("PREPARE test AS SELECT 42::INTEGER;");
+	const auto query_plan = con.ExtractPlan("EXECUTE test");
+	REQUIRE((query_plan->type == LogicalOperatorType::LOGICAL_EXECUTE));
+	REQUIRE((query_plan->types.size() == 1));
+	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
 }

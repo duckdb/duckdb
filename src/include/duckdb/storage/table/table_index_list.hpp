@@ -10,6 +10,7 @@
 
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,29 @@ public:
 			}
 		}
 	}
+
+	//! Scan the indexes, invoking the callback method for every bound entry of a specific type
+	template <class T, class FUNC>
+	void ScanBound(FUNC &&callback) {
+		lock_guard<mutex> lock(indexes_lock);
+		for (auto &index : indexes) {
+			if (index->IsBound() && T::TYPE_NAME == index->GetIndexType()) {
+				if (callback(index->Cast<T>())) {
+					break;
+				}
+			}
+		}
+	}
+
+	// Bind any unbound indexes of the specified type and invoke the callback method for every bound entry of the
+	// specified type, regardless if it was bound before or not
+	template <class T, class FUNC>
+	void BindAndScan(ClientContext &context, DataTableInfo &table_info, FUNC &&callback) {
+		// FIXME: optimize this by only looping through the indexes once without re-acquiring the lock
+		InitializeIndexes(context, table_info, T::TYPE_NAME);
+		ScanBound<T>(callback);
+	}
+
 	//! Returns a reference to the indexes of this table
 	const vector<unique_ptr<Index>> &Indexes() const {
 		return indexes;
@@ -43,7 +67,7 @@ public:
 	bool NameIsUnique(const string &name);
 	//! Initializes unknown indexes that might now be present after an extension load, optionally throwing an exception
 	//! if a index cant be initialized
-	void InitializeIndexes(ClientContext &context, DataTableInfo &table_info, bool throw_on_failure = false);
+	void InitializeIndexes(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
 	bool Empty();
 	idx_t Count();
 	void Move(TableIndexList &other);

@@ -63,16 +63,18 @@ public:
 	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
 	explicit DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint);
 
-	//! The table info
-	shared_ptr<DataTableInfo> info;
-	//! The set of physical columns stored by this DataTable
-	vector<ColumnDefinition> column_definitions;
 	//! A reference to the database instance
 	AttachedDatabase &db;
 
 public:
+	AttachedDatabase &GetAttached();
+	TableIOManager &GetTableIOManager();
+
+	bool IsTemporary() const;
+
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();
+	const vector<ColumnDefinition> &Columns() const;
 
 	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
 	                    TableFilterSet *table_filter = nullptr);
@@ -181,12 +183,17 @@ public:
 	//! Sets statistics of a physical column within the table
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
+	//! Obtains a shared lock to prevent checkpointing while operations are running
+	unique_ptr<StorageLockKey> GetSharedCheckpointLock();
+	//! Obtains a lock during a checkpoint operation that prevents other threads from reading this table
+	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 
-	idx_t GetTotalRows();
+	idx_t ColumnCount() const;
+	idx_t GetTotalRows() const;
 
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	static bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type);
@@ -204,13 +211,27 @@ public:
 	void VerifyAppendConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
 	                             optional_ptr<ConflictManager> conflict_manager = nullptr);
 
+	shared_ptr<DataTableInfo> &GetDataTableInfo();
+
+	void InitializeIndexes(ClientContext &context);
+	bool HasIndexes() const;
+	void AddIndex(unique_ptr<Index> index);
+	bool HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type);
+	void SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info);
+	void VacuumIndexes();
+
+	string GetTableName() const;
+	void SetTableName(string new_name);
+
+	TableStorageInfo GetStorageInfo();
+
 public:
 	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
 	                                optional_ptr<ConflictManager> conflict_manager);
 
 private:
 	//! Verify the new added constraints against current persistent&local data
-	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint);
+	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
 	                             const vector<PhysicalIndex> &column_ids);
@@ -228,6 +249,10 @@ private:
 	                                      DataChunk &chunk);
 
 private:
+	//! The table info
+	shared_ptr<DataTableInfo> info;
+	//! The set of physical columns stored by this DataTable
+	vector<ColumnDefinition> column_definitions;
 	//! Lock for appending entries to the table
 	mutex append_lock;
 	//! The row groups of the table

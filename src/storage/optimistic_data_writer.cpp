@@ -19,14 +19,14 @@ OptimisticDataWriter::~OptimisticDataWriter() {
 
 bool OptimisticDataWriter::PrepareWrite() {
 	// check if we should pre-emptively write the table to disk
-	if (table.info->IsTemporary() || StorageManager::Get(table.info->db).InMemory()) {
+	if (table.IsTemporary() || StorageManager::Get(table.GetAttached()).InMemory()) {
 		return false;
 	}
 	// we should! write the second-to-last row group to disk
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
-		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
-		partial_manager = make_uniq<PartialBlockManager>(block_manager, CheckpointType::APPEND_TO_TABLE);
+		auto &block_manager = table.GetTableIOManager().GetBlockManagerForRowData();
+		partial_manager = make_uniq<PartialBlockManager>(block_manager, PartialBlockType::APPEND_TO_TABLE);
 	}
 	return true;
 }
@@ -38,7 +38,7 @@ void OptimisticDataWriter::WriteNewRowGroup(RowGroupCollection &row_groups) {
 	}
 	// flush second-to-last row group
 	auto row_group = row_groups.GetRowGroup(-2);
-	FlushToDisk(row_group);
+	FlushToDisk(*row_group);
 }
 
 void OptimisticDataWriter::WriteLastRowGroup(RowGroupCollection &row_groups) {
@@ -51,20 +51,18 @@ void OptimisticDataWriter::WriteLastRowGroup(RowGroupCollection &row_groups) {
 	if (!row_group) {
 		return;
 	}
-	FlushToDisk(row_group);
+	FlushToDisk(*row_group);
 }
 
-void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
-	if (!row_group) {
-		throw InternalException("FlushToDisk called without a RowGroup");
-	}
+void OptimisticDataWriter::FlushToDisk(RowGroup &row_group) {
 	//! The set of column compression types (if any)
 	vector<CompressionType> compression_types;
 	D_ASSERT(compression_types.empty());
-	for (auto &column : table.column_definitions) {
+	for (auto &column : table.Columns()) {
 		compression_types.push_back(column.CompressionType());
 	}
-	row_group->WriteToDisk(*partial_manager, compression_types);
+	RowGroupWriteInfo info(*partial_manager, compression_types);
+	row_group.WriteToDisk(info);
 }
 
 void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {

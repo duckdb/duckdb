@@ -6,6 +6,8 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -16,6 +18,18 @@
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
+
+static bool ExtractFunctionalDependencies(column_binding_set_t &deps, const unique_ptr<Expression> &expr) {
+	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = expr->Cast<BoundColumnRefExpression>();
+		deps.insert(colref.binding);
+	}
+
+	bool is_volatile = expr->IsVolatile();
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { is_volatile |= ExtractFunctionalDependencies(deps, child); });
+	return is_volatile;
+}
 
 static Value NegatePercentileValue(const Value &v, const bool desc) {
 	if (v.IsNull()) {
@@ -233,19 +247,32 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		}
 	}
 
-	// If the aggregate is DISTINCT then the ORDER BYs need to be arguments.
+	// If the aggregate is DISTINCT then the ORDER BYs need to be functional dependencies of the arguments.
 	if (aggr.distinct && order_bys) {
+		column_binding_set_t child_dependencies;
+		bool children_volatile = false;
+		for (const auto &child : children) {
+			children_volatile |= ExtractFunctionalDependencies(child_dependencies, child);
+		}
+
+		column_binding_set_t order_dependencies;
+		bool order_volatile = false;
 		for (const auto &order_by : order_bys->orders) {
-			bool is_arg = false;
-			for (const auto &child : children) {
-				if (order_by.expression->Equals(*child)) {
-					is_arg = true;
+			order_volatile |= ExtractFunctionalDependencies(order_dependencies, order_by.expression);
+		}
+
+		bool in_args = !children_volatile && !order_volatile;
+		if (in_args) {
+			for (const auto &binding : order_dependencies) {
+				if (!child_dependencies.count(binding)) {
+					in_args = false;
 					break;
 				}
 			}
-			if (!is_arg) {
-				throw BinderException("In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list");
-			}
+		}
+
+		if (!in_args) {
+			throw BinderException("In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list");
 		}
 	}
 

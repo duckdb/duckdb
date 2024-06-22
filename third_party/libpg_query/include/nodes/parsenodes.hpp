@@ -318,6 +318,7 @@ typedef struct PGAStar {
 	PGList *except_list;  /* optional: EXCLUDE list */
 	PGList *replace_list; /* optional: REPLACE list */
 	bool columns;         /* whether or not this is a columns list */
+	bool unpacked;        /* whether or not the columns list is unpacked */
 	int location;
 } PGAStar;
 
@@ -1857,11 +1858,18 @@ typedef enum PGTransactionStmtKind {
 	TRANS_STMT_ROLLBACK_PREPARED
 } PGTransactionStmtKind;
 
+typedef enum PGTransactionStmtType {
+	PG_TRANS_TYPE_DEFAULT,
+	PG_TRANS_TYPE_READ_ONLY, // explicit READ ONLY
+	PG_TRANS_TYPE_READ_WRITE // explicit READ WRITE
+} PGTransactionStmtType;
+
 typedef struct PGTransactionStmt {
 	PGNodeTag type;
-	PGTransactionStmtKind kind; /* see above */
-	PGList *options;            /* for BEGIN/START and savepoint commands */
-	char *gid;                  /* for two-phase-commit related commands */
+	PGTransactionStmtKind kind;             /* see above */
+	PGList *options;                        /* for BEGIN/START and savepoint commands */
+	char *gid;                              /* for two-phase-commit related commands */
+	PGTransactionStmtType transaction_type; /* read only or read write */
 } PGTransactionStmt;
 
 /* ----------------------
@@ -1892,8 +1900,20 @@ typedef struct PGLoadStmt {
 	PGNodeTag type;
 	const char *filename; /* file to load */
 	const char *repository; /* optionally, the repository to load from */
+	bool repo_is_alias; /* whether the repository was passed as an alias or a raw path */
+	const char *version; /* optionally, the version of the extension to be loaded */
 	PGLoadInstallType load_type;
 } PGLoadStmt;
+
+/* ----------------------
+ *		Update Extensions Statement
+ * ----------------------
+ */
+
+typedef struct PGUpdateExtensionsStmt {
+	PGNodeTag type;
+	PGList * extensions;
+} PGUpdateExtensionsStmt;
 
 /* ----------------------
  *		Vacuum and Analyze Statements

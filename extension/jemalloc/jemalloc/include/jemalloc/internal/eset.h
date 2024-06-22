@@ -1,12 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_ESET_H
 #define JEMALLOC_INTERNAL_ESET_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/atomic.h"
-#include "jemalloc/internal/fb.h"
 #include "jemalloc/internal/edata.h"
+#include "jemalloc/internal/fb.h"
 #include "jemalloc/internal/mutex.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * An eset ("extent set") is a quantized collection of extents, with built-in
@@ -75,7 +74,5 @@ void eset_remove(eset_t *eset, edata_t *edata);
  */
 edata_t *eset_fit(eset_t *eset, size_t esize, size_t alignment, bool exact_only,
     unsigned lg_max_fit);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ESET_H */

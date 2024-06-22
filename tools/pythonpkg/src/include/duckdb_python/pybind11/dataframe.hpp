@@ -22,6 +22,7 @@ public:
 public:
 	static bool check_(const py::handle &object); // NOLINT
 	static bool IsPyArrowBacked(const py::handle &df);
+	static py::object ToArrowTable(const py::object &df);
 };
 
 class PolarsDataFrame : public py::object {

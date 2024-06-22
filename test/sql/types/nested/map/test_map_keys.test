@@ -138,3 +138,28 @@ select map_keys(col) from filtered where idx % 2 != 0;
 ----
 [6, 3, 87, 2]
 [9, 2, 7, 5, 8, 1]
+
+query I
+select MAP_KEYS(MAP([],[]))
+----
+[]
+
+query I
+select MAP_KEYS(MAP(NULL, NULL))
+----
+NULL
+
+query I
+select MAP_KEYS(NULL)
+----
+NULL
+
+query I
+select MAP_KEYS(NULL::MAP("NULL", "NULL"))
+----
+NULL
+
+query I
+select MAP_KEYS(NULL::MAP(INT, BIGINT))
+----
+NULL

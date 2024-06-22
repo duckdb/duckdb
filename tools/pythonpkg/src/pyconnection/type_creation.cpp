@@ -101,7 +101,7 @@ shared_ptr<DuckDBPyType> DuckDBPyConnection::Type(const string &type_str) {
 	context.RunFunctionInTransaction([&result, &type_str, &context]() {
 		result = make_shared_ptr<DuckDBPyType>(TransformStringToLogicalType(type_str, context));
 	});
-	return std::move(result);
+	return result;
 }
 
 } // namespace duckdb

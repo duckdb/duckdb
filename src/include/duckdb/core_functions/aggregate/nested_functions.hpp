@@ -23,6 +23,7 @@ struct HistogramFun {
 
 	static AggregateFunctionSet GetFunctions();
 	static AggregateFunction GetHistogramUnorderedMap(LogicalType &type);
+	static AggregateFunction BinnedHistogramFunction();
 };
 
 struct ListFun {

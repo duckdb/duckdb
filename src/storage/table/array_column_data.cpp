@@ -30,6 +30,13 @@ bool ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) 
 	return false;
 }
 
+void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	auto array_size = ArrayType::GetSize(type);
+	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * array_size);
+}
+
 void ArrayColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);
@@ -67,12 +74,14 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	}
 }
 
-idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                            idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
-idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                     idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
 idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
@@ -203,12 +212,11 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(RowGrou
 }
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_group,
-                                                              PartialBlockManager &partial_block_manager,
                                                               ColumnCheckpointInfo &checkpoint_info) {
 
-	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
-	checkpoint_state->child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
+	checkpoint_state->child_state = child_column->Checkpoint(row_group, checkpoint_info);
 	return std::move(checkpoint_state);
 }
 
@@ -219,7 +227,7 @@ void ArrayColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatisti
 	auto &child_stats = ArrayStats::GetChildStats(target_stats);
 	deserializer.ReadObject(102, "child_column",
 	                        [&](Deserializer &source) { child_column->DeserializeColumn(source, child_stats); });
-	this->count = validity.count;
+	this->count = validity.count.load();
 }
 
 void ArrayColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,

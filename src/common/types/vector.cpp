@@ -30,7 +30,7 @@ namespace duckdb {
 UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr) {
 }
 
-UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept {
+UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept : sel(nullptr), data(nullptr) {
 	bool refers_to_self = other.sel == &other.owned_sel;
 	std::swap(sel, other.sel);
 	std::swap(data, other.data);
@@ -306,103 +306,82 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 	}
 }
 
-struct DataArrays {
-	Vector &vec;
-	data_ptr_t data;
-	optional_ptr<VectorBuffer> buffer;
-	idx_t type_size;
-	bool is_nested;
-	idx_t nested_multiplier;
-	DataArrays(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, idx_t type_size, bool is_nested,
-	           idx_t nested_multiplier = 1)
-	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested),
-	      nested_multiplier(nested_multiplier) {
+void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier) {
+
+	ResizeInfo resize_info(*this, data, buffer.get(), multiplier);
+	resize_infos.emplace_back(resize_info);
+
+	// Base case.
+	if (data) {
+		return;
 	}
-};
 
-void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary, idx_t current_multiplier) {
-	if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER) {
-		auto &buffer = auxiliary.Cast<VectorListBuffer>();
-		auto &child = buffer.GetChild();
-		auto data = child.GetData();
-		if (!data) {
-			//! Nested type
-			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
-			                  true);
-			to_resize.emplace_back(arrays);
-			FindChildren(to_resize, *child.GetAuxiliary(), current_multiplier);
-		} else {
-			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
-			                  false);
-			to_resize.emplace_back(arrays);
-		}
-	} else if (auxiliary.GetBufferType() == VectorBufferType::STRUCT_BUFFER) {
-		auto &buffer = auxiliary.Cast<VectorStructBuffer>();
-		auto &children = buffer.GetChildren();
+	D_ASSERT(auxiliary);
+	switch (GetAuxiliary()->GetBufferType()) {
+	case VectorBufferType::LIST_BUFFER: {
+		auto &vector_list_buffer = auxiliary->Cast<VectorListBuffer>();
+		auto &child = vector_list_buffer.GetChild();
+		child.FindResizeInfos(resize_infos, multiplier);
+		break;
+	}
+	case VectorBufferType::STRUCT_BUFFER: {
+		auto &vector_struct_buffer = auxiliary->Cast<VectorStructBuffer>();
+		auto &children = vector_struct_buffer.GetChildren();
 		for (auto &child : children) {
-			auto data = child->GetData();
-			if (!data) {
-				//! Nested type
-				DataArrays arrays(*child, data, child->GetBuffer().get(),
-				                  GetTypeIdSize(child->GetType().InternalType()), true);
-				to_resize.emplace_back(arrays);
-				FindChildren(to_resize, *child->GetAuxiliary(), current_multiplier);
-			} else {
-				DataArrays arrays(*child, data, child->GetBuffer().get(),
-				                  GetTypeIdSize(child->GetType().InternalType()), false);
-				to_resize.emplace_back(arrays);
-			}
+			child->FindResizeInfos(resize_infos, multiplier);
 		}
-	} else if (auxiliary.GetBufferType() == VectorBufferType::ARRAY_BUFFER) {
-		auto &buffer = auxiliary.Cast<VectorArrayBuffer>();
-		auto array_size = buffer.GetArraySize();
-		auto &child = buffer.GetChild();
-		auto data = child.GetData();
-		if (!data) {
-			//! Nested type
-			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()), true,
-			                  current_multiplier);
-			to_resize.emplace_back(arrays);
-
-			// The child vectors of ArrayTypes always have to be (size * array_size), so we need to multiply the
-			// multiplier by the array size
-			auto new_multiplier = current_multiplier * array_size;
-			FindChildren(to_resize, *child.GetAuxiliary(), new_multiplier);
-		} else {
-			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
-			                  false, current_multiplier);
-			to_resize.emplace_back(arrays);
-		}
+		break;
+	}
+	case VectorBufferType::ARRAY_BUFFER: {
+		// We need to multiply the multiplier by the array size because
+		// the child vectors of ARRAY types are always child_count * array_size.
+		auto &vector_array_buffer = auxiliary->Cast<VectorArrayBuffer>();
+		auto new_multiplier = vector_array_buffer.GetArraySize() * multiplier;
+		auto &child = vector_array_buffer.GetChild();
+		child.FindResizeInfos(resize_infos, new_multiplier);
+		break;
+	}
+	default:
+		break;
 	}
 }
-void Vector::Resize(idx_t cur_size, idx_t new_size) {
-	vector<DataArrays> to_resize;
+
+void Vector::Resize(idx_t current_size, idx_t new_size) {
+	// The vector does not contain any data.
 	if (!buffer) {
 		buffer = make_buffer<VectorBuffer>(0);
 	}
-	if (!data) {
-		//! this is a nested structure
-		DataArrays arrays(*this, data, buffer.get(), GetTypeIdSize(GetType().InternalType()), true);
-		to_resize.emplace_back(arrays);
 
-		// The child vectors of ArrayTypes always have to be (size * array_size), so we need to multiply the
-		// resize amount by the array size recursively for every nested array.
-		auto start_multiplier = GetType().id() == LogicalTypeId::ARRAY ? ArrayType::GetSize(GetType()) : 1;
-		FindChildren(to_resize, *auxiliary, start_multiplier);
-	} else {
-		DataArrays arrays(*this, data, buffer.get(), GetTypeIdSize(GetType().InternalType()), false);
-		to_resize.emplace_back(arrays);
-	}
-	for (auto &data_to_resize : to_resize) {
-		if (!data_to_resize.is_nested) {
-			auto new_data =
-			    make_unsafe_uniq_array<data_t>(new_size * data_to_resize.type_size * data_to_resize.nested_multiplier);
-			memcpy(new_data.get(), data_to_resize.data,
-			       cur_size * data_to_resize.type_size * data_to_resize.nested_multiplier * sizeof(data_t));
-			data_to_resize.buffer->SetData(std::move(new_data));
-			data_to_resize.vec.data = data_to_resize.buffer->GetData();
+	// Obtain the resize information for each (nested) vector.
+	vector<ResizeInfo> resize_infos;
+	FindResizeInfos(resize_infos, 1);
+
+	for (auto &resize_info_entry : resize_infos) {
+		// Resize the validity mask.
+		auto new_validity_size = new_size * resize_info_entry.multiplier;
+		resize_info_entry.vec.validity.Resize(current_size, new_validity_size);
+
+		// For nested data types, we only need to resize the validity mask.
+		if (!resize_info_entry.data) {
+			continue;
 		}
-		data_to_resize.vec.validity.Resize(cur_size, new_size * data_to_resize.nested_multiplier);
+
+		auto type_size = GetTypeIdSize(resize_info_entry.vec.GetType().InternalType());
+		auto old_size = current_size * type_size * resize_info_entry.multiplier * sizeof(data_t);
+		auto target_size = new_size * type_size * resize_info_entry.multiplier * sizeof(data_t);
+
+		// We have an upper limit of 128GB for a single vector.
+		if (target_size > DConstants::MAX_VECTOR_SIZE) {
+			throw OutOfRangeException("Cannot resize vector to %s: maximum allowed vector size is %s",
+			                          StringUtil::BytesToHumanReadableString(target_size),
+			                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
+		}
+
+		// Copy the data buffer to a resized buffer.
+		auto new_data = make_unsafe_uniq_array<data_t>(target_size);
+		memcpy(new_data.get(), resize_info_entry.data, old_size);
+		resize_info_entry.buffer->SetData(std::move(new_data));
+		resize_info_entry.vec.data = resize_info_entry.buffer->GetData();
 	}
 }
 
@@ -804,6 +783,44 @@ void Vector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
 }
 
+// TODO: add the size of validity masks to this
+idx_t Vector::GetAllocationSize(idx_t cardinality) const {
+	if (!type.IsNested()) {
+		auto physical_size = GetTypeIdSize(type.InternalType());
+		return cardinality * physical_size;
+	}
+	auto internal_type = type.InternalType();
+	switch (internal_type) {
+	case PhysicalType::LIST: {
+		auto physical_size = GetTypeIdSize(type.InternalType());
+		auto total_size = physical_size * cardinality;
+
+		auto child_cardinality = ListVector::GetListCapacity(*this);
+		auto &child_entry = ListVector::GetEntry(*this);
+		total_size += (child_entry.GetAllocationSize(child_cardinality));
+		return total_size;
+	}
+	case PhysicalType::ARRAY: {
+		auto child_cardinality = ArrayVector::GetTotalSize(*this);
+
+		auto &child_entry = ArrayVector::GetEntry(*this);
+		auto total_size = (child_entry.GetAllocationSize(child_cardinality));
+		return total_size;
+	}
+	case PhysicalType::STRUCT: {
+		idx_t total_size = 0;
+		auto &children = StructVector::GetEntries(*this);
+		for (auto &child : children) {
+			total_size += child->GetAllocationSize(cardinality);
+		}
+		return total_size;
+	}
+	default:
+		throw NotImplementedException("Vector::GetAllocationSize not implemented for type: %s", type.ToString());
+		break;
+	}
+}
+
 string Vector::ToString() const {
 	string retval = VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": (UNKNOWN COUNT) [ ";
 	switch (GetVectorType()) {
@@ -881,7 +898,10 @@ void Vector::Flatten(idx_t count) {
 			// constant NULL, set nullmask
 			validity.EnsureWritable();
 			validity.SetAllInvalid(count);
-			return;
+			if (GetType().InternalType() != PhysicalType::STRUCT) {
+				// for structs we still need to flatten the child vectors as well
+				return;
+			}
 		}
 		// non-null constant: have to repeat the constant
 		switch (GetType().InternalType()) {
@@ -1176,8 +1196,13 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
-				entries[i].offset = source.offset;
-				entries[i].length = source.length;
+				if (vdata.validity.RowIsValid(idx)) {
+					entries[i].offset = source.offset;
+					entries[i].length = source.length;
+				} else {
+					entries[i].offset = 0;
+					entries[i].length = 0;
+				}
 			}
 			serializer.WriteProperty(104, "list_size", list_size);
 			serializer.WriteList(105, "entries", count, [&](Serializer::List &list, idx_t i) {
@@ -1213,7 +1238,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	validity.Reset();
 	const auto has_validity = deserializer.ReadProperty<bool>(100, "all_valid");
 	if (has_validity) {
-		validity.Initialize(count);
+		validity.Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
 		deserializer.ReadProperty(101, "validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 

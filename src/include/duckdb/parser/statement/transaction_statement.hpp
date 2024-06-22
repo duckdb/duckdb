@@ -18,7 +18,7 @@ public:
 	static constexpr const StatementType TYPE = StatementType::TRANSACTION_STATEMENT;
 
 public:
-	explicit TransactionStatement(TransactionType type);
+	explicit TransactionStatement(unique_ptr<TransactionInfo> info);
 
 	unique_ptr<TransactionInfo> info;
 
@@ -27,5 +27,6 @@ protected:
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;
+	string ToString() const override;
 };
 } // namespace duckdb

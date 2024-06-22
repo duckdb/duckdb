@@ -1,11 +1,7 @@
-deadlock:LockClients
-deadlock:RollbackTransaction
-deadlock:Checkpoint
-deadlock:MetaTransaction::GetTransaction
+deadlock:InitializeIndexes
 race:NextInnerJoin
-race:~ColumnSegment
+race:NextRightSemiOrAntiJoin
 race:duckdb_moodycamel
 race:duckdb_jemalloc
 race:AddToEvictionQueue
-race:CanHaveNull
-race:CanHaveNoNull
+race:ValidityAppend

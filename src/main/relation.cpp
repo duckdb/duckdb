@@ -387,12 +387,16 @@ string Relation::RenderWhitespace(idx_t depth) {
 	return string(depth * 2, ' ');
 }
 
+void Relation::AddExternalDependency(shared_ptr<ExternalDependency> dependency) {
+	external_dependencies.push_back(std::move(dependency));
+}
+
 vector<shared_ptr<ExternalDependency>> Relation::GetAllDependencies() {
 	vector<shared_ptr<ExternalDependency>> all_dependencies;
 	Relation *cur = this;
 	while (cur) {
-		if (cur->extra_dependencies) {
-			all_dependencies.push_back(cur->extra_dependencies);
+		for (auto &dep : cur->external_dependencies) {
+			all_dependencies.push_back(dep);
 		}
 		cur = cur->ChildRelation();
 	}

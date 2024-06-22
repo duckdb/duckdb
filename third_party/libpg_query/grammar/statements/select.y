@@ -2040,6 +2040,9 @@ microsecond_keyword:
 week_keyword:
 	WEEK_P | WEEKS_P
 
+quarter_keyword:
+	QUARTER_P | QUARTERS_P
+
 decade_keyword:
 	DECADE_P | DECADES_P
 
@@ -2068,6 +2071,8 @@ opt_interval:
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MICROSECOND), @1)); }
 			| week_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(WEEK), @1)); }
+			| quarter_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(QUARTER), @1)); }
 			| decade_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(DECADE), @1)); }
 			| century_keyword
@@ -2553,6 +2558,15 @@ a_expr:		c_expr									{ $$ = $1; }
 					/* parse analysis will fill in the rest */
 					n->location = @1;
 					$$ = (PGNode *)n;
+				}
+			| '*' COLUMNS '(' a_expr ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->expr = $4;
+					star->columns = true;
+					star->unpacked = true;
+					star->location = @1;
+					$$ = (PGNode *) star;
 				}
 			| COLUMNS '(' a_expr ')'
 				{
@@ -3567,6 +3581,7 @@ extract_arg:
 			| millisecond_keyword							{ $$ = (char*) "millisecond"; }
 			| microsecond_keyword							{ $$ = (char*) "microsecond"; }
 			| week_keyword									{ $$ = (char*) "week"; }
+			| quarter_keyword								{ $$ = (char*) "quarter"; }
 			| decade_keyword								{ $$ = (char*) "decade"; }
 			| century_keyword								{ $$ = (char*) "century"; }
 			| millennium_keyword							{ $$ = (char*) "millennium"; }

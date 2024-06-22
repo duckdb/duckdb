@@ -59,6 +59,7 @@ class BlockHandle {
 	friend class BufferManager;
 	friend class StandardBufferManager;
 	friend class BufferPool;
+	friend struct EvictionQueue;
 
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag);
@@ -106,6 +107,8 @@ public:
 
 private:
 	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
+	static BufferHandle LoadFromBuffer(shared_ptr<BlockHandle> &handle, data_ptr_t data,
+	                                   unique_ptr<FileBuffer> reusable_buffer);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
 	void Unload();
 	bool CanUnload();
@@ -122,8 +125,10 @@ private:
 	MemoryTag tag;
 	//! Pointer to loaded data (if any)
 	unique_ptr<FileBuffer> buffer;
-	//! Internal eviction timestamp
-	atomic<idx_t> eviction_timestamp;
+	//! Internal eviction sequence number
+	atomic<idx_t> eviction_seq_num;
+	//! LRU timestamp (for age-based eviction)
+	atomic<int64_t> lru_timestamp_msec;
 	//! Whether or not the buffer can be destroyed (only used for temporary buffers)
 	bool can_destroy;
 	//! The memory usage of the block (when loaded). If we are pinning/loading

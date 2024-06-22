@@ -703,3 +703,35 @@ TEST_CASE("Test custom_user_agent config", "[capi]") {
 		duckdb_close(&db);
 	}
 }
+
+TEST_CASE("Test unsupported types in the deprecated C API", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	string query_1 = R"EOF(
+		CREATE TABLE test(
+			id BIGINT,
+			one DECIMAL(18,3)[]
+		);
+	)EOF";
+	string query_2 = "INSERT INTO test VALUES (410, '[]');";
+	string query_3 = "INSERT INTO test VALUES (412, '[]');";
+	string query_4 = "SELECT id, one FROM test;";
+	REQUIRE_NO_FAIL(tester.Query(query_1));
+	REQUIRE_NO_FAIL(tester.Query(query_2));
+	REQUIRE_NO_FAIL(tester.Query(query_3));
+
+	// Passes, but does return invalid data for unsupported types.
+	auto result = tester.Query(query_4);
+	auto &result_c = result->InternalResult();
+
+	auto first_bigint_row = duckdb_value_string(&result_c, 0, 0).data;
+	REQUIRE(!string(first_bigint_row).compare("410"));
+	duckdb_free(first_bigint_row);
+	REQUIRE(duckdb_value_string(&result_c, 1, 0).data == nullptr);
+
+	auto second_bigint_row = duckdb_value_string(&result_c, 0, 1).data;
+	REQUIRE(!string(second_bigint_row).compare("412"));
+	duckdb_free(second_bigint_row);
+	REQUIRE(duckdb_value_string(&result_c, 1, 1).data == nullptr);
+}

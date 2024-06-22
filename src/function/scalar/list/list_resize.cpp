@@ -28,7 +28,7 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 	UnifiedVectorFormat new_size_data;
 	new_sizes.ToUnifiedFormat(count, new_size_data);
-	auto new_size_entries = UnifiedVectorFormat::GetData<int64_t>(new_size_data);
+	auto new_size_entries = UnifiedVectorFormat::GetData<uint64_t>(new_size_data);
 
 	UnifiedVectorFormat child_data;
 	child.ToUnifiedFormat(count, child_data);
@@ -38,7 +38,7 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	for (idx_t i = 0; i < count; i++) {
 		auto index = new_size_data.sel->get_index(i);
 		if (new_size_data.validity.RowIsValid(index)) {
-			new_child_size += UnsafeNumericCast<uint64_t>(new_size_entries[index]);
+			new_child_size += new_size_entries[index];
 		}
 	}
 
@@ -72,7 +72,7 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 		idx_t new_size_entry = 0;
 		if (new_size_data.validity.RowIsValid(new_index)) {
-			new_size_entry = UnsafeNumericCast<uint64_t>(new_size_entries[new_index]);
+			new_size_entry = new_size_entries[new_index];
 		}
 
 		// find the smallest size between lists and new_sizes

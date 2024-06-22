@@ -7,6 +7,7 @@
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
 #include "duckdb/planner/query_node/bound_cte_node.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -238,6 +239,21 @@ void BoundNodeVisitor::VisitBoundQueryNode(BoundQueryNode &node) {
 	}
 }
 
+class LogicalBoundNodeVisitor : public LogicalOperatorVisitor {
+public:
+	explicit LogicalBoundNodeVisitor(BoundNodeVisitor &parent) : parent(parent) {
+	}
+
+	void VisitExpression(unique_ptr<Expression> *expression) override {
+		auto &expr = **expression;
+		parent.VisitExpression(*expression);
+		VisitExpressionChildren(expr);
+	}
+
+protected:
+	BoundNodeVisitor &parent;
+};
+
 void BoundNodeVisitor::VisitBoundTableRef(BoundTableRef &ref) {
 	switch (ref.type) {
 	case TableReferenceType::EXPRESSION_LIST: {
@@ -263,13 +279,24 @@ void BoundNodeVisitor::VisitBoundTableRef(BoundTableRef &ref) {
 		VisitBoundQueryNode(*bound_subquery.subquery);
 		break;
 	}
-	case TableReferenceType::TABLE_FUNCTION:
+	case TableReferenceType::TABLE_FUNCTION: {
+		auto &bound_table_function = ref.Cast<BoundTableFunction>();
+		LogicalBoundNodeVisitor node_visitor(*this);
+		if (bound_table_function.get) {
+			node_visitor.VisitOperator(*bound_table_function.get);
+		}
+		if (bound_table_function.subquery) {
+			VisitBoundTableRef(*bound_table_function.subquery);
+		}
+		break;
+	}
 	case TableReferenceType::EMPTY_FROM:
 	case TableReferenceType::BASE_TABLE:
 	case TableReferenceType::CTE:
 		break;
 	default:
-		throw NotImplementedException("Unimplemented table reference type in ExpressionIterator");
+		throw NotImplementedException("Unimplemented table reference type (%s) in ExpressionIterator",
+		                              EnumUtil::ToString(ref.type));
 	}
 }
 

@@ -15,13 +15,10 @@
 
 namespace duckdb {
 class DuckTransaction;
+class SequenceCatalogEntry;
 
 struct SequenceValue {
-	SequenceValue() : usage_count(0), counter(-1) {
-	}
-	SequenceValue(uint64_t usage_count, int64_t counter) : usage_count(usage_count), counter(counter) {
-	}
-
+	SequenceCatalogEntry *entry;
 	uint64_t usage_count;
 	int64_t counter;
 };

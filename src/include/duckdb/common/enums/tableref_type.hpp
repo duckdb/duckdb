@@ -25,7 +25,8 @@ enum class TableReferenceType : uint8_t {
 	CTE = 7,             // Recursive CTE
 	EMPTY_FROM = 8,      // placeholder for empty FROM
 	PIVOT = 9,           // pivot statement
-	SHOW_REF = 10        // SHOW statement
+	SHOW_REF = 10,       // SHOW statement
+	COLUMN_DATA = 11     // column data collection
 };
 
 } // namespace duckdb

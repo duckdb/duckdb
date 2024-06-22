@@ -27,6 +27,7 @@ class Serializer;
 class Deserializer;
 class Value;
 
+struct CatalogTransaction;
 struct CreateInfo;
 
 //! Abstract base class of an entry in the catalog
@@ -54,6 +55,8 @@ public:
 	atomic<transaction_t> timestamp;
 	//! (optional) comment on this entry
 	Value comment;
+	//! (optional) extra data associated with this entry
+	unordered_map<string, string> tags;
 
 private:
 	//! Child entry
@@ -63,6 +66,7 @@ private:
 
 public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info);
+	virtual unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info);
 	virtual void UndoAlter(ClientContext &context, AlterInfo &info);
 
 	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const;

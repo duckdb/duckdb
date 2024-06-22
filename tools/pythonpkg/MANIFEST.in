@@ -4,4 +4,6 @@ include duckdb_python.cpp
 recursive-include src *.h *.hpp *.cpp
 recursive-include duckdb-stubs *.pyi
 recursive-include duckdb
+include scripts/optional_requirements.py
+include requirements-dev.txt
 include pyproject.toml

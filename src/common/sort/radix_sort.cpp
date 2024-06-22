@@ -244,7 +244,7 @@ void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const i
 		duckdb_pdqsort::PDQConstants constants(sort_layout.entry_size, col_offset, sorting_size, *end);
 		duckdb_pdqsort::pdqsort_branchless(begin, begin + count, constants);
 	} else if (count <= SortConstants::INSERTION_SORT_THRESHOLD) {
-		InsertionSort(dataptr, nullptr, count, 0, sort_layout.entry_size, sort_layout.comparison_size, 0, false);
+		InsertionSort(dataptr, nullptr, count, col_offset, sort_layout.entry_size, sorting_size, 0, false);
 	} else if (sorting_size <= SortConstants::MSD_RADIX_SORT_SIZE_THRESHOLD) {
 		RadixSortLSD(buffer_manager, dataptr, count, col_offset, sort_layout.entry_size, sorting_size);
 	} else {

@@ -58,7 +58,7 @@ class TestRuntimeError(object):
             res.fetch_arrow_reader(1)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_relation_fetchall_error(self, pandas):
+    def test_relation_cache_fetchall(self, pandas):
         conn = duckdb.connect()
         df_in = pandas.DataFrame(
             {
@@ -69,10 +69,13 @@ class TestRuntimeError(object):
         rel = conn.query("select * from x")
         del df_in
         with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
+            # Even when we preserve ExternalDependency objects correctly, this is not supported
+            # Relations only save dependencies for their immediate TableRefs,
+            # so the dependency of 'x' on 'df_in' is not registered in 'rel'
             rel.fetchall()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_relation_fetchall_execute(self, pandas):
+    def test_relation_cache_execute(self, pandas):
         conn = duckdb.connect()
         df_in = pandas.DataFrame(
             {

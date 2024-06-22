@@ -10,10 +10,13 @@
 
 namespace duckdb_httplib_openssl {
 struct Response;
+class Result;
 class Client;
 } // namespace duckdb_httplib_openssl
 
 namespace duckdb {
+
+class HTTPLogger;
 
 using HeaderMap = case_insensitive_map_t<string>;
 
@@ -37,6 +40,7 @@ struct HTTPParams {
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
 	static constexpr bool DEFAULT_KEEP_ALIVE = true;
 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
+	static constexpr uint64_t DEFAULT_HF_MAX_PER_PAGE = 0;
 
 	uint64_t timeout;
 	uint64_t retries;
@@ -46,6 +50,10 @@ struct HTTPParams {
 	bool keep_alive;
 	bool enable_server_cert_verification;
 	std::string ca_cert_file;
+
+	string bearer_token;
+
+	idx_t hf_max_per_page;
 
 	static HTTPParams ReadFrom(optional_ptr<FileOpener> opener);
 };
@@ -59,6 +67,7 @@ public:
 
 	// We keep an http client stored for connection reuse with keep-alive headers
 	duckdb::unique_ptr<duckdb_httplib_openssl::Client> http_client;
+	optional_ptr<HTTPLogger> http_logger;
 
 	const HTTPParams http_params;
 
@@ -83,18 +92,20 @@ public:
 
 	shared_ptr<HTTPState> state;
 
+	void AddHeaders(HeaderMap &map);
+
 public:
 	void Close() override {
 	}
 
 protected:
-	virtual void InitializeClient();
+	virtual void InitializeClient(optional_ptr<ClientContext> client_context);
 };
 
 class HTTPFileSystem : public FileSystem {
 public:
-	static duckdb::unique_ptr<duckdb_httplib_openssl::Client> GetClient(const HTTPParams &http_params,
-	                                                                    const char *proto_host_port);
+	static duckdb::unique_ptr<duckdb_httplib_openssl::Client>
+	GetClient(const HTTPParams &http_params, const char *proto_host_port, optional_ptr<HTTPFileHandle> hfs);
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
 	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                        optional_ptr<FileOpener> opener = nullptr) final;
@@ -153,6 +164,10 @@ public:
 protected:
 	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
 	                                                        optional_ptr<FileOpener> opener);
+
+	static duckdb::unique_ptr<ResponseWrapper>
+	RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
+	                    const HTTPParams &params, const std::function<void(void)> &retry_cb = {});
 
 private:
 	// Global cache

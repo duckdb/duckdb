@@ -26,7 +26,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-EXTENSIONS_PATH = os.path.join("..", "build", "extension_configuration", "extensions.txt")
+EXTENSIONS_PATH = os.path.join("..", "build", "extension_configuration", "extensions.csv")
 DUCKDB_PATH = os.path.join("..", 'build', 'release', 'duckdb')
 HEADER_PATH = os.path.join("..", "src", "include", "duckdb", "main", "extension_entries.hpp")
 
@@ -194,8 +194,10 @@ def check_prerequisites():
 def get_extension_names() -> List[str]:
     extension_names = []
     with open(EXTENSIONS_PATH) as f:
+        # Skip the csv header
+        next(f)
         for line in f:
-            extension_name = line.rstrip()
+            extension_name = line.split(',')[0].rstrip()
             if "jemalloc" in extension_name:
                 # We skip jemalloc as it doesn't produce a loadable extension but is in the config
                 continue
@@ -474,7 +476,7 @@ def write_header(data: ExtensionData):
     static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
          {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"}, {"s3n://", "httpfs"},
          {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}, {"azure://", "azure"}, {"az://", "azure"},
-         {"abfss://", "azure"}
+         {"abfss://", "azure"}, {"hf://", "httpfs"}
     }; // END_OF_EXTENSION_FILE_PREFIXES
 
     // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -503,7 +505,10 @@ def write_header(data: ExtensionData):
     static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {{"s3", "httpfs"},
                                                                 {"r2", "httpfs"},
                                                                 {"gcs", "httpfs"},
-                                                                {"azure", "azure"}}; // EXTENSION_SECRET_TYPES
+                                                                {"azure", "azure"},
+                                                                {"huggingface", "httpfs"},
+                                                                {"bearer", "httpfs"}
+    }; // EXTENSION_SECRET_TYPES
                                                                 
                                                                 
     // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -515,12 +520,17 @@ def write_header(data: ExtensionData):
                                                                     {"gcs/credential_chain", "aws"},
                                                                     {"r2/credential_chain", "aws"},
                                                                     {"azure/config", "azure"},
-                                                                    {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
+                                                                    {"azure/credential_chain", "azure"}, 
+                                                                    {"huggingface/config", "httfps"},
+                                                                    {"huggingface/credential_chain", "httpfs"}, 
+                                                                    {"bearer/config", "httpfs"}
+}; // EXTENSION_SECRET_PROVIDERS
 
     static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "aws",
     "azure",
     "autocomplete",
+    "delta",
     "excel",
     "fts",
     "httpfs",
@@ -551,6 +561,14 @@ def write_header(data: ExtensionData):
     file.close()
 
 
+# Extensions that can be autoloaded, but are not buildable by DuckDB CI
+HARDCODED_EXTENSION_FUNCTIONS = ExtensionFunction.create_map(
+    [
+        ("delta_scan", "delta", "CatalogType::TABLE_FUNCTION_ENTRY"),
+    ]
+)
+
+
 def main():
     check_prerequisites()
 
@@ -571,6 +589,10 @@ def main():
 
     # Add the entries we initially parsed from the HEADER_PATH
     extension_data.add_entries(parsed_entries)
+
+    # Add hardcoded extension entries (
+    for key, value in HARDCODED_EXTENSION_FUNCTIONS.items():
+        extension_data.function_map[key] = value
 
     if args.validate:
         extension_data.validate()

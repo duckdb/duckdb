@@ -140,7 +140,6 @@ template class unique_ptr<LogicalFilter>;
 template class unique_ptr<LogicalJoin>;
 template class unique_ptr<LogicalComparisonJoin>;
 template class unique_ptr<FilterInfo>;
-template class unique_ptr<JoinNode>;
 template class unique_ptr<SingleJoinRelation>;
 template class unique_ptr<CatalogSet>;
 template class unique_ptr<Binder>;
@@ -180,7 +179,6 @@ INSTANTIATE_VECTOR(vector<unique_ptr<SQLStatement>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<PhysicalOperator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<LogicalOperator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Transaction>>)
-INSTANTIATE_VECTOR(vector<unique_ptr<JoinNode>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Rule>>)
 INSTANTIATE_VECTOR(vector<shared_ptr<Event>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Pipeline>>)

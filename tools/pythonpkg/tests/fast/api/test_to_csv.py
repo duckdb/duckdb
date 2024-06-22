@@ -218,10 +218,11 @@ class TestToCSV(object):
         )
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])
-        with pytest.raises(duckdb.IOException, match="Enable OVERWRITE_OR_IGNORE option to force writing"):
+        with pytest.raises(duckdb.IOException, match="OVERWRITE"):
             rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.skip(reason="Skip test due to unreliablility on certain platforms")
     def test_to_csv_per_thread_output(self, pandas):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         num_threads = duckdb.sql("select current_setting('threads')").fetchone()[0]

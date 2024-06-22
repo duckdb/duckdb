@@ -5,6 +5,9 @@ namespace duckdb {
 FunctionLocalState::~FunctionLocalState() {
 }
 
+ScalarFunctionInfo::~ScalarFunctionInfo() {
+}
+
 ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
                                scalar_function_t function, bind_scalar_function_t bind,
                                dependency_function_t dependency, function_statistics_t statistics,
@@ -13,7 +16,8 @@ ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, Logic
     : BaseScalarFunction(std::move(name), std::move(arguments), std::move(return_type), side_effects,
                          std::move(varargs), null_handling),
       function(std::move(function)), bind(bind), init_local_state(init_local_state), dependency(dependency),
-      statistics(statistics), bind_lambda(bind_lambda), serialize(nullptr), deserialize(nullptr) {
+      statistics(statistics), bind_lambda(bind_lambda), bind_expression(nullptr), get_modified_databases(nullptr),
+      serialize(nullptr), deserialize(nullptr) {
 }
 
 ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,

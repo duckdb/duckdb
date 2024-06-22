@@ -18,6 +18,8 @@ class PhysicalStreamingWindow : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::STREAMING_WINDOW;
 
+	static bool IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr);
+
 public:
 	PhysicalStreamingWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
 	                        idx_t estimated_cardinality,
@@ -38,6 +40,9 @@ public:
 	}
 
 	string ParamsToString() const override;
+
+private:
+	void ExecuteAggregate();
 };
 
 } // namespace duckdb

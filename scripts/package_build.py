@@ -22,6 +22,10 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'libpg_query')]
     includes += [os.path.join('third_party', 'libpg_query', 'include')]
     includes += [os.path.join('third_party', 'lz4')]
+    includes += [os.path.join('third_party', 'brotli', 'include')]
+    includes += [os.path.join('third_party', 'brotli', 'common')]
+    includes += [os.path.join('third_party', 'brotli', 'dec')]
+    includes += [os.path.join('third_party', 'brotli', 'enc')]
     includes += [os.path.join('third_party', 'mbedtls')]
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
@@ -32,6 +36,7 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'tdigest')]
     includes += [os.path.join('third_party', 'utf8proc')]
     includes += [os.path.join('third_party', 'utf8proc', 'include')]
+    includes += [os.path.join('third_party', 'yyjson', 'include')]
     return includes
 
 
@@ -47,6 +52,7 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'utf8proc')]
     sources += [os.path.join('third_party', 'libpg_query')]
     sources += [os.path.join('third_party', 'mbedtls')]
+    sources += [os.path.join('third_party', 'yyjson')]
     return sources
 
 

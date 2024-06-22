@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
@@ -128,6 +129,8 @@ public:
 	idx_t max_row;
 	//! The current batch index
 	idx_t batch_index;
+	//! The valid selection
+	SelectionVector valid_sel;
 
 	RandomEngine random;
 
@@ -160,6 +163,8 @@ public:
 	CollectionScanState local_state;
 	//! Options for scanning
 	TableScanOptions options;
+	//! Shared lock over the checkpoint to prevent checkpoints while reading
+	unique_ptr<StorageLockKey> checkpoint_lock;
 
 public:
 	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
@@ -195,6 +200,16 @@ struct ParallelTableScanState {
 	ParallelCollectionScanState scan_state;
 	//! Parallel scan state for the transaction-local state
 	ParallelCollectionScanState local_state;
+	//! Shared lock over the checkpoint to prevent checkpoints while reading
+	unique_ptr<StorageLockKey> checkpoint_lock;
+};
+
+struct PrefetchState {
+	~PrefetchState();
+
+	void AddBlock(shared_ptr<BlockHandle> block);
+
+	vector<shared_ptr<BlockHandle>> blocks;
 };
 
 class CreateIndexScanState : public TableScanState {

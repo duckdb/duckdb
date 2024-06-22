@@ -5,9 +5,6 @@
  * name mangling that matches the API prefixing that happened as a result of
  * --with-mangling and/or --with-jemalloc-prefix configuration settings.
  */
-
-namespace duckdb_jemalloc {
-
 #ifdef JEMALLOC_MANGLE
 #  ifndef JEMALLOC_NO_DEMANGLE
 #    define JEMALLOC_NO_DEMANGLE
@@ -26,7 +23,7 @@ namespace duckdb_jemalloc {
 #  define malloc_stats_print jet_malloc_stats_print
 #  define malloc_usable_size jet_malloc_usable_size
 #  define mallocx jet_mallocx
-#  define smallocx_54eaed1d8b56b1aa528be3bdd1877e59c56fa90c jet_smallocx_54eaed1d8b56b1aa528be3bdd1877e59c56fa90c
+#  define smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9 jet_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9
 #  define nallocx jet_nallocx
 #  define posix_memalign jet_posix_memalign
 #  define rallocx jet_rallocx
@@ -60,7 +57,7 @@ namespace duckdb_jemalloc {
 #  undef jet_malloc_stats_print
 #  undef jet_malloc_usable_size
 #  undef jet_mallocx
-#  undef jet_smallocx_54eaed1d8b56b1aa528be3bdd1877e59c56fa90c
+#  undef jet_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9
 #  undef jet_nallocx
 #  undef jet_posix_memalign
 #  undef jet_rallocx
@@ -71,5 +68,3 @@ namespace duckdb_jemalloc {
 #  undef jet_valloc
 #  undef jet_malloc_size
 #endif
-
-} // namespace duckdb_jemalloc

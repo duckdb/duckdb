@@ -133,7 +133,7 @@ statement ok
 create table hits as select * from hits_og limit 0;
 
 statement ok
-copy hits from '__TEST_DIR__/hits.csv' (nullstr 'null');
+insert into hits from read_csv('__TEST_DIR__/hits.csv', compression = 'none', nullstr = 'null');
 
 #Q 01
 query I

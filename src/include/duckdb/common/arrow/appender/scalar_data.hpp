@@ -42,6 +42,21 @@ struct ArrowIntervalConverter {
 	}
 };
 
+struct ArrowTimeTzConverter {
+	template <class TGT, class SRC>
+	static TGT Operation(SRC input) {
+		return input.time().micros;
+	}
+
+	static bool SkipNulls() {
+		return true;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+	}
+};
+
 template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
 struct ArrowScalarBaseData {
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
@@ -55,9 +70,10 @@ struct ArrowScalarBaseData {
 		AppendValidity(append_data, format, from, to);
 
 		// append the main data
-		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(TGT) * size);
+		auto &main_buffer = append_data.GetMainBuffer();
+		main_buffer.resize(main_buffer.size() + sizeof(TGT) * size);
 		auto data = UnifiedVectorFormat::GetData<SRC>(format);
-		auto result_data = append_data.main_buffer.GetData<TGT>();
+		auto result_data = main_buffer.GetData<TGT>();
 
 		for (idx_t i = from; i < to; i++) {
 			auto source_idx = format.sel->get_index(i);
@@ -76,12 +92,12 @@ struct ArrowScalarBaseData {
 template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
 struct ArrowScalarData : public ArrowScalarBaseData<TGT, SRC, OP> {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
-		result.main_buffer.reserve(capacity * sizeof(TGT));
+		result.GetMainBuffer().reserve(capacity * sizeof(TGT));
 	}
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
 		result->n_buffers = 2;
-		result->buffers[1] = append_data.main_buffer.data();
+		result->buffers[1] = append_data.GetMainBuffer().data();
 	}
 };
 

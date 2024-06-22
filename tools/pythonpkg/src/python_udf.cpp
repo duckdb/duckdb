@@ -15,6 +15,7 @@
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -65,7 +66,11 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	vector<LogicalType> input_types;
 	vector<string> input_names;
 
-	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr);
+	TableFunctionRef empty;
+	TableFunction dummy_table_function;
+	dummy_table_function.name = "ConvertPyArrowToDataChunk";
+	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
+	                                  dummy_table_function, empty);
 	vector<LogicalType> return_types;
 	vector<string> return_names;
 

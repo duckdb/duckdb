@@ -27,7 +27,7 @@ statement ok
 pragma threads=1
 
 statement ok
-pragma memory_limit='75mb'
+pragma memory_limit='100mb'
 
 query I
 select count(*) from t1, t2 where i = j

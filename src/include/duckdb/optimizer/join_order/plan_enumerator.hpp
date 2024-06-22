@@ -34,16 +34,17 @@ public:
 	}
 
 	//! Perform the join order solving
-	unique_ptr<JoinNode> SolveJoinOrder();
+	void SolveJoinOrder();
 	void InitLeafPlans();
 
-	static unique_ptr<LogicalOperator> BuildSideProbeSideSwaps(unique_ptr<LogicalOperator> plan);
+	const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &GetPlans() const;
 
 private:
+	//! The set of edges used in the join optimizer
 	QueryGraphEdges const &query_graph;
 	//! The total amount of join pairs that have been considered
 	idx_t pairs = 0;
-	//! The set of edges used in the join optimizer
+	//! Grant access to the set manager and the relation manager
 	QueryGraphManager &query_graph_manager;
 	//! Cost model to evaluate cost of joins
 	CostModel &cost_model;
@@ -58,13 +59,11 @@ private:
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	unique_ptr<JoinNode> EmitPair(JoinRelationSet &left, JoinRelationSet &right,
-	                              const vector<reference<NeighborInfo>> &info);
+	DPJoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 
-	unique_ptr<JoinNode> CreateJoinNodeFromDPJoinNode(DPJoinNode dp_node);
 	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> &exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(JoinRelationSet &node);

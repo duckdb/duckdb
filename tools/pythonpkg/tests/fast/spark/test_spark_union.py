@@ -1,21 +1,10 @@
+import platform
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.experimental.spark.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
-    Row,
-    ArrayType,
-    MapType,
-)
-from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
-from duckdb.experimental.spark.sql.functions import sum, avg, max, min, mean, count
+from duckdb.experimental.spark.sql.types import Row
+from duckdb.experimental.spark.sql.functions import col
 
 
 @pytest.fixture
@@ -65,6 +54,7 @@ class TestDataFrameUnion(object):
         res2 = unionDF.collect()
         assert res == res2
 
+    @pytest.mark.xfail(condition=platform.system() == "Emscripten", reason="Broken on Pyodide")
     def test_merge_without_duplicates(self, df, df2):
         # 'sort' has been added to make the result deterministic
         disDF = df.union(df2).distinct().sort(col("employee_name"))

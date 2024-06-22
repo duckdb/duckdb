@@ -1,0 +1,249 @@
+# name: test/sql/types/time/test_time_tz_collate.test
+# description: Test Time With Time Zone
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timetzs (ttz TIMETZ);
+
+statement ok
+INSERT INTO timetzs VALUES
+	(NULL),
+	('00:00:00+1559'),
+	('00:00:00+1558'),
+	('02:30:00'),
+	('02:30:00+04'),
+	('02:30:00+04:30'),
+	('02:30:00+04:30:45'),
+	('16:15:03.123456'),
+	('02:30:00+1200'),
+	('02:30:00-1200'),
+	('24:00:00-1558'),
+	('24:00:00-1559'),
+;
+
+# Comparison order is unintuitive: Positive offsets are before negative ones.
+# This is similar to how a clock time east of Greenwich is earlier
+# than the same clock time further west.
+# Moreover, the time portions are compared by applying the offsets
+# before comparing them as times
+
+foreach comparison_type timetz_byte_comparable( (
+
+query I
+SELECT ${comparison_type}'09:00:00+00:00'::TIMETZ) >${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+True
+
+query I
+SELECT ${comparison_type}'08:00:00+01:00'::TIMETZ) >${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT ${comparison_type}'08:00:00+01:00'::TIMETZ) = ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT ${comparison_type}'08:01:00+00:00'::TIMETZ) = ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT ${comparison_type}'08:01:00+00:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+True
+
+query I
+SELECT ${comparison_type}'08:02:00+00:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+True
+
+query I
+SELECT ${comparison_type}'08:00:00+00:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT ${comparison_type}'10:01:00+02:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT * FROM timetzs ORDER BY ${comparison_type}ttz)
+----
+00:00:00+15:59
+00:00:00+15:58
+02:30:00+12
+02:30:00+04:30:45
+02:30:00+04:30
+02:30:00+04
+02:30:00+00
+02:30:00-12
+16:15:03.123456+00
+24:00:00-15:58
+24:00:00-15:59
+NULL
+
+query IIIIIIII
+SELECT 
+	lhs.ttz, 
+	rhs.ttz, 
+	${comparison_type}lhs.ttz) < ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) <= ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) = ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) >= ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) > ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) <> ${comparison_type}rhs.ttz),
+FROM timetzs lhs, timetzs rhs
+ORDER BY ${comparison_type}lhs.ttz), ${comparison_type}rhs.ttz)
+----
+00:00:00+15:59	00:00:00+15:59	false	true	true	true	false	false
+00:00:00+15:59	00:00:00+15:58	true	true	false	false	false	true
+00:00:00+15:59	02:30:00+12	true	true	false	false	false	true
+00:00:00+15:59	02:30:00+04:30:45	true	true	false	false	false	true
+00:00:00+15:59	02:30:00+04:30	true	true	false	false	false	true
+00:00:00+15:59	02:30:00+04	true	true	false	false	false	true
+00:00:00+15:59	02:30:00+00	true	true	false	false	false	true
+00:00:00+15:59	02:30:00-12	true	true	false	false	false	true
+00:00:00+15:59	16:15:03.123456+00	true	true	false	false	false	true
+00:00:00+15:59	24:00:00-15:58	true	true	false	false	false	true
+00:00:00+15:59	24:00:00-15:59	true	true	false	false	false	true
+00:00:00+15:59	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+00:00:00+15:58	00:00:00+15:59	false	false	false	true	true	true
+00:00:00+15:58	00:00:00+15:58	false	true	true	true	false	false
+00:00:00+15:58	02:30:00+12	true	true	false	false	false	true
+00:00:00+15:58	02:30:00+04:30:45	true	true	false	false	false	true
+00:00:00+15:58	02:30:00+04:30	true	true	false	false	false	true
+00:00:00+15:58	02:30:00+04	true	true	false	false	false	true
+00:00:00+15:58	02:30:00+00	true	true	false	false	false	true
+00:00:00+15:58	02:30:00-12	true	true	false	false	false	true
+00:00:00+15:58	16:15:03.123456+00	true	true	false	false	false	true
+00:00:00+15:58	24:00:00-15:58	true	true	false	false	false	true
+00:00:00+15:58	24:00:00-15:59	true	true	false	false	false	true
+00:00:00+15:58	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+02:30:00+12	00:00:00+15:59	false	false	false	true	true	true
+02:30:00+12	00:00:00+15:58	false	false	false	true	true	true
+02:30:00+12	02:30:00+12	false	true	true	true	false	false
+02:30:00+12	02:30:00+04:30:45	true	true	false	false	false	true
+02:30:00+12	02:30:00+04:30	true	true	false	false	false	true
+02:30:00+12	02:30:00+04	true	true	false	false	false	true
+02:30:00+12	02:30:00+00	true	true	false	false	false	true
+02:30:00+12	02:30:00-12	true	true	false	false	false	true
+02:30:00+12	16:15:03.123456+00	true	true	false	false	false	true
+02:30:00+12	24:00:00-15:58	true	true	false	false	false	true
+02:30:00+12	24:00:00-15:59	true	true	false	false	false	true
+02:30:00+12	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+02:30:00+04:30:45	00:00:00+15:59	false	false	false	true	true	true
+02:30:00+04:30:45	00:00:00+15:58	false	false	false	true	true	true
+02:30:00+04:30:45	02:30:00+12	false	false	false	true	true	true
+02:30:00+04:30:45	02:30:00+04:30:45	false	true	true	true	false	false
+02:30:00+04:30:45	02:30:00+04:30	true	true	false	false	false	true
+02:30:00+04:30:45	02:30:00+04	true	true	false	false	false	true
+02:30:00+04:30:45	02:30:00+00	true	true	false	false	false	true
+02:30:00+04:30:45	02:30:00-12	true	true	false	false	false	true
+02:30:00+04:30:45	16:15:03.123456+00	true	true	false	false	false	true
+02:30:00+04:30:45	24:00:00-15:58	true	true	false	false	false	true
+02:30:00+04:30:45	24:00:00-15:59	true	true	false	false	false	true
+02:30:00+04:30:45	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+02:30:00+04:30	00:00:00+15:59	false	false	false	true	true	true
+02:30:00+04:30	00:00:00+15:58	false	false	false	true	true	true
+02:30:00+04:30	02:30:00+12	false	false	false	true	true	true
+02:30:00+04:30	02:30:00+04:30:45	false	false	false	true	true	true
+02:30:00+04:30	02:30:00+04:30	false	true	true	true	false	false
+02:30:00+04:30	02:30:00+04	true	true	false	false	false	true
+02:30:00+04:30	02:30:00+00	true	true	false	false	false	true
+02:30:00+04:30	02:30:00-12	true	true	false	false	false	true
+02:30:00+04:30	16:15:03.123456+00	true	true	false	false	false	true
+02:30:00+04:30	24:00:00-15:58	true	true	false	false	false	true
+02:30:00+04:30	24:00:00-15:59	true	true	false	false	false	true
+02:30:00+04:30	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+02:30:00+04	00:00:00+15:59	false	false	false	true	true	true
+02:30:00+04	00:00:00+15:58	false	false	false	true	true	true
+02:30:00+04	02:30:00+12	false	false	false	true	true	true
+02:30:00+04	02:30:00+04:30:45	false	false	false	true	true	true
+02:30:00+04	02:30:00+04:30	false	false	false	true	true	true
+02:30:00+04	02:30:00+04	false	true	true	true	false	false
+02:30:00+04	02:30:00+00	true	true	false	false	false	true
+02:30:00+04	02:30:00-12	true	true	false	false	false	true
+02:30:00+04	16:15:03.123456+00	true	true	false	false	false	true
+02:30:00+04	24:00:00-15:58	true	true	false	false	false	true
+02:30:00+04	24:00:00-15:59	true	true	false	false	false	true
+02:30:00+04	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+02:30:00+00	00:00:00+15:59	false	false	false	true	true	true
+02:30:00+00	00:00:00+15:58	false	false	false	true	true	true
+02:30:00+00	02:30:00+12	false	false	false	true	true	true
+02:30:00+00	02:30:00+04:30:45	false	false	false	true	true	true
+02:30:00+00	02:30:00+04:30	false	false	false	true	true	true
+02:30:00+00	02:30:00+04	false	false	false	true	true	true
+02:30:00+00	02:30:00+00	false	true	true	true	false	false
+02:30:00+00	02:30:00-12	true	true	false	false	false	true
+02:30:00+00	16:15:03.123456+00	true	true	false	false	false	true
+02:30:00+00	24:00:00-15:58	true	true	false	false	false	true
+02:30:00+00	24:00:00-15:59	true	true	false	false	false	true
+02:30:00+00	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+02:30:00-12	00:00:00+15:59	false	false	false	true	true	true
+02:30:00-12	00:00:00+15:58	false	false	false	true	true	true
+02:30:00-12	02:30:00+12	false	false	false	true	true	true
+02:30:00-12	02:30:00+04:30:45	false	false	false	true	true	true
+02:30:00-12	02:30:00+04:30	false	false	false	true	true	true
+02:30:00-12	02:30:00+04	false	false	false	true	true	true
+02:30:00-12	02:30:00+00	false	false	false	true	true	true
+02:30:00-12	02:30:00-12	false	true	true	true	false	false
+02:30:00-12	16:15:03.123456+00	true	true	false	false	false	true
+02:30:00-12	24:00:00-15:58	true	true	false	false	false	true
+02:30:00-12	24:00:00-15:59	true	true	false	false	false	true
+02:30:00-12	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+16:15:03.123456+00	00:00:00+15:59	false	false	false	true	true	true
+16:15:03.123456+00	00:00:00+15:58	false	false	false	true	true	true
+16:15:03.123456+00	02:30:00+12	false	false	false	true	true	true
+16:15:03.123456+00	02:30:00+04:30:45	false	false	false	true	true	true
+16:15:03.123456+00	02:30:00+04:30	false	false	false	true	true	true
+16:15:03.123456+00	02:30:00+04	false	false	false	true	true	true
+16:15:03.123456+00	02:30:00+00	false	false	false	true	true	true
+16:15:03.123456+00	02:30:00-12	false	false	false	true	true	true
+16:15:03.123456+00	16:15:03.123456+00	false	true	true	true	false	false
+16:15:03.123456+00	24:00:00-15:58	true	true	false	false	false	true
+16:15:03.123456+00	24:00:00-15:59	true	true	false	false	false	true
+16:15:03.123456+00	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+24:00:00-15:58	00:00:00+15:59	false	false	false	true	true	true
+24:00:00-15:58	00:00:00+15:58	false	false	false	true	true	true
+24:00:00-15:58	02:30:00+12	false	false	false	true	true	true
+24:00:00-15:58	02:30:00+04:30:45	false	false	false	true	true	true
+24:00:00-15:58	02:30:00+04:30	false	false	false	true	true	true
+24:00:00-15:58	02:30:00+04	false	false	false	true	true	true
+24:00:00-15:58	02:30:00+00	false	false	false	true	true	true
+24:00:00-15:58	02:30:00-12	false	false	false	true	true	true
+24:00:00-15:58	16:15:03.123456+00	false	false	false	true	true	true
+24:00:00-15:58	24:00:00-15:58	false	true	true	true	false	false
+24:00:00-15:58	24:00:00-15:59	true	true	false	false	false	true
+24:00:00-15:58	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+24:00:00-15:59	00:00:00+15:59	false	false	false	true	true	true
+24:00:00-15:59	00:00:00+15:58	false	false	false	true	true	true
+24:00:00-15:59	02:30:00+12	false	false	false	true	true	true
+24:00:00-15:59	02:30:00+04:30:45	false	false	false	true	true	true
+24:00:00-15:59	02:30:00+04:30	false	false	false	true	true	true
+24:00:00-15:59	02:30:00+04	false	false	false	true	true	true
+24:00:00-15:59	02:30:00+00	false	false	false	true	true	true
+24:00:00-15:59	02:30:00-12	false	false	false	true	true	true
+24:00:00-15:59	16:15:03.123456+00	false	false	false	true	true	true
+24:00:00-15:59	24:00:00-15:58	false	false	false	true	true	true
+24:00:00-15:59	24:00:00-15:59	false	true	true	true	false	false
+24:00:00-15:59	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	00:00:00+15:59	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	00:00:00+15:58	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	02:30:00+12	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	02:30:00+04:30:45	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	02:30:00+04:30	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	02:30:00+04	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	02:30:00+00	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	02:30:00-12	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	16:15:03.123456+00	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	24:00:00-15:58	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	24:00:00-15:59	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+
+endloop

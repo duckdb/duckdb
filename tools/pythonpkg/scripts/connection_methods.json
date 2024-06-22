@@ -260,11 +260,6 @@
 				"name": "parameters",
 				"default": "None",
 				"type": "object"
-			},
-			{
-				"name": "multiple_parameter_sets",
-				"default": "False",
-				"type": "bool"
 			}
 		],
 		"return": "DuckDBPyConnection"
@@ -429,6 +424,12 @@
 		"name": "rollback",
 		"function": "Rollback",
 		"docs": "Roll back changes performed within a transaction",
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "checkpoint",
+		"function": "Checkpoint",
+		"docs": "Synchronizes data in the write-ahead log (WAL) to the database data file (no-op for in-memory connections)",
 		"return": "DuckDBPyConnection"
 	},
 	{

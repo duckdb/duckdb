@@ -40,6 +40,7 @@ struct AddScalarFunctionOverloadInfo : public AlterScalarFunctionInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
 };
 
 } // namespace duckdb
