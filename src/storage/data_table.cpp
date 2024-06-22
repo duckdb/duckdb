@@ -870,8 +870,6 @@ static void RegisterUpdatedRows(const Vector &row_ids, idx_t count) {
 static void CreateUpdateChunk(ClientContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids, DataChunk &update_chunk) {
 	chunk.Split(update_chunk, 1);
 	update_chunk.SetCardinality(chunk);
-	Printer::Print("createupdatechunk");
-	update_chunk.Print();
 }
   
 template <bool GLOBAL>
