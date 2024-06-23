@@ -30,9 +30,9 @@ void hex256(hash_bytes &in, hash_str &out) {
 	}
 }
 
-// Wrapper function to avoid mangled function name for dlopen()
+// Call the member function through the factory object
 extern "C" DUCKDB_API AESGCMStateSSLFactory *CreateSSLFactory() {
-	return new AESGCMStateSSLFactory(); // Call the member function through the factory object
+	return new AESGCMStateSSLFactory();
 }
 
 const EVP_CIPHER *GetCipher(const string &key) {

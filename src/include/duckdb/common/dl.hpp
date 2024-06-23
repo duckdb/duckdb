@@ -26,7 +26,7 @@ namespace duckdb {
 
 inline void *dlopen(const char *file, int mode) {
 	if (!file) {
-		// If nullptr, return handle of main executable
+		// return handle of main executable
 		return (void *)GetModuleHandle(nullptr);
 	}
 	auto fpath = WindowsUtil::UTF8ToUnicode(file);
