@@ -36,7 +36,7 @@ jobs:
       DUCKDB_PLATFORM: "${{ matrix.duckdb_wasm_arch }}"
 
     steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   ref: ${{ inputs.duckdb_wasm_ref }}
                   fetch-depth: 0
@@ -100,7 +100,7 @@ jobs:
       matrix:
         duckdb_arch: ${{ fromJSON(github.event.inputs.platforms) }}
     steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
 
             - uses: actions/download-artifact@v3
               with:
