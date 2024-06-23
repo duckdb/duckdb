@@ -61,15 +61,18 @@ struct ApproxTopKState {
 	idx_t filter_mask;
 
 	void Initialize(idx_t kval) {
+		static constexpr idx_t MONITORED_VALUES_RATIO = 3;
+		static constexpr idx_t FILTER_RATIO = 8;
+
 		D_ASSERT(values.empty());
 		D_ASSERT(lookup_map.empty());
 		k = kval;
-		capacity = kval * 3;
+		capacity = kval * MONITORED_VALUES_RATIO;
 		stored_values = make_unsafe_uniq_array<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
 
 		// we scale the filter based on the amount of values we are monitoring
-		idx_t filter_size = NextPowerOfTwo(capacity * 8);
+		idx_t filter_size = NextPowerOfTwo(capacity * FILTER_RATIO);
 		filter_mask = filter_size - 1;
 		filter.resize(filter_size);
 	}
@@ -266,6 +269,11 @@ struct ApproxTopKOperation {
 			}
 			target.InsertOrReplaceEntry(source_val.str_val, aggr_input, increment);
 		}
+		// copy over the filter
+		D_ASSERT(source.filter.size() == target.filter.size());
+		for (idx_t filter_idx = 0; filter_idx < source.filter.size(); filter_idx++) {
+			target.filter[filter_idx] += source.filter[filter_idx];
+		}
 		target.Verify();
 	}
 
@@ -373,7 +381,8 @@ AggregateFunction ApproxTopKFun::GetFunction() {
 	return AggregateFunction("approx_top_k", {LogicalTypeId::ANY, LogicalType::BIGINT},
 	                         LogicalType::LIST(LogicalType::ANY), AggregateFunction::StateSize<STATE>,
 	                         AggregateFunction::StateInitialize<STATE, OP>, ApproxTopKUpdate,
-	                         AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize, nullptr, ApproxTopKBind);
+	                         AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize, nullptr, ApproxTopKBind,
+	                         AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 } // namespace duckdb
