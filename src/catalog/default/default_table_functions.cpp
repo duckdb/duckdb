@@ -33,15 +33,26 @@ WITH bins AS (
       END AS bins
    FROM query_table(source::VARCHAR)
    )
-SELECT UNNEST(bins) AS bin, UNNEST([histogram[bin] for bin in bins])[1] AS count
+SELECT UNNEST(map_keys(histogram)) AS bin, UNNEST(map_values(histogram)) AS count
 FROM (
-   SELECT list_sort(list_distinct(FIRST(bins))) AS bins, histogram(col_name, bins) AS histogram
+   SELECT CASE
+      WHEN (NOT (can_cast_implicitly(MIN(col_name), NULL::BIGINT) OR
+            can_cast_implicitly(MIN(col_name), NULL::DOUBLE) OR
+            can_cast_implicitly(MIN(col_name), NULL::TIMESTAMP)) AND technique='auto')
+            OR technique='sample'
+      THEN
+            histogram_exact(col_name, bins)
+      ELSE
+            histogram(col_name, bins)
+      END AS histogram
    FROM query_table(source::VARCHAR), bins
 );
 )"},
 	{DEFAULT_SCHEMA, "histogram", {"source", "col_name", nullptr}, {{"bin_count", "10"}, {"technique", "'auto'"}, {nullptr, nullptr}},  R"(
 SELECT
    CASE
+   WHEN is_histogram_other_bin(bin)
+   THEN '(other values)'
    WHEN (NOT (can_cast_implicitly(bin, NULL::BIGINT) OR
               can_cast_implicitly(bin, NULL::DOUBLE) OR
               can_cast_implicitly(bin, NULL::TIMESTAMP)) AND technique='auto')
