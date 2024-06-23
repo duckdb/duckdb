@@ -17,6 +17,7 @@
 #else
 #define RTLD_NOW   0
 #define RTLD_LOCAL 0
+#define RTLD_LAZY  0
 #endif
 
 namespace duckdb {
