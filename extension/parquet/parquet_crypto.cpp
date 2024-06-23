@@ -82,8 +82,8 @@ const string &ParquetEncryptionConfig::GetFooterKey() const {
 	return keys.GetKey(footer_key);
 }
 
-using duckdb_apache::thrift::transport::TTransport;
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
+using duckdb_apache::thrift::transport::TTransport;
 
 //! Encryption wrapper for a transport protocol
 class EncryptionTransport : public TTransport {
