@@ -23,6 +23,8 @@ DUCKDB_EXT_H_HEADER = '''//===--------------------------------------------------
 //===----------------------------------------------------------------------===//
 '''
 
+ALLOW_UNCOMMENTED_PARAMS = True
+
 # Read the base header
 with open("src/include/duckdb/main/capi/header_generation/header_base.hpp", 'r') as f:
     HEADER_TEMPLATE = f.read()
@@ -76,19 +78,27 @@ with open(extension_api_v0_file, 'r') as f:
 def create_function_comment(function_obj):
     result = ''
     # Construct comment
-    print(function['comment'])
-    print('\n\n')
     if 'comment' in function_obj:
         comment = function_obj['comment']
         result += '/*!\n'
         result += comment['description']
-        result += '\n\n'
+        # result += '\n\n'
         if 'params' in function_obj:
             for param in function_obj['params']:
-                result += f' * {param['name']}: {comment['param_comments'][param['name']]}\n'
+                if not 'param_comments' in comment:
+                    if not ALLOW_UNCOMMENTED_PARAMS:
+                        print(comment)
+                        print(f'Missing param comments for function {function_obj['name']}')
+                        exit(1)
+                    continue
+                if param['name'] in comment['param_comments']:
+                    result += f'* {param['name']}: {comment['param_comments'][param['name']]}\n'
+                elif not ALLOW_UNCOMMENTED_PARAMS:
+                    print(f'Uncommented parameter found: {param['name']} of function {function['name']}')
+                    exit(1)
         if 'return_value' in comment:
-            result += f' * returns: {comment['return_value']}\n'
-        result += ' */\n'
+            result += f'* returns: {comment['return_value']}\n'
+        result += '*/\n'
     return result
 
 # Creates the function declaration for the regular C header file
@@ -119,7 +129,7 @@ def create_struct_member(function_obj):
     return result
 
 def to_camel_case(snake_str):
-    return "".join(x.capitalize() for x in snake_str.lower().split("_"))
+    return " ".join(x.capitalize() for x in snake_str.lower().split("_"))
 
 # Create duckdb.h
 def create_duckdb_h():
@@ -133,16 +143,30 @@ def create_duckdb_h():
     for order_group in original_order:
         # Lookup the
         curr_group = next(group for group in function_groups_copy if group['group'] == order_group)
-        print(curr_group)
         function_groups_copy.remove(curr_group)
 
         function_declarations_finished += f'''//===--------------------------------------------------------------------===//
 // {to_camel_case(curr_group['group'])}
 //===--------------------------------------------------------------------===//\n\n'''
+
+        if 'deprecated' in curr_group and curr_group['deprecated']:
+            function_declarations_finished += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
+
         for function in curr_group['entries']:
+            if 'deprecated' in function and function['deprecated']:
+                function_declarations_finished += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
+
             function_declarations_finished += create_function_comment(function)
             function_declarations_finished += create_function_declaration(function)
+
+            if 'deprecated' in function and function['deprecated']:
+                function_declarations_finished += '#endif\n'
+
             function_declarations_finished += '\n'
+
+
+        if 'deprecated' in curr_group and curr_group['deprecated']:
+            function_declarations_finished += '#endif\n'
 
     duckdb_h = DUCKDB_H_HEADER + HEADER_TEMPLATE.replace(functions_mark, function_declarations_finished)
     with open('./test_capi.h', 'w+') as f:
