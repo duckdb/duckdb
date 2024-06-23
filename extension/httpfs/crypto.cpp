@@ -1,6 +1,7 @@
 #include "crypto.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/winapi.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -30,7 +31,7 @@ void hex256(hash_bytes &in, hash_str &out) {
 }
 
 // Wrapper function to avoid mangled function name for dlopen()
-extern "C" AESGCMStateSSLFactory *CreateSSLFactory() {
+extern "C" DUCKDB_API AESGCMStateSSLFactory *CreateSSLFactory() {
 	return new AESGCMStateSSLFactory(); // Call the member function through the factory object
 }
 
