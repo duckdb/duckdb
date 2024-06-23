@@ -42,11 +42,11 @@ public:
 	DUCKDB_API explicit EncryptionUtil() {};
 
 public:
-	virtual shared_ptr<EncryptionState> CreateEncryptionState() const {
+	DUCKDB_API virtual shared_ptr<EncryptionState> CreateEncryptionState() const {
 		return make_shared_ptr<EncryptionState>();
 	}
 
-	virtual ~EncryptionUtil() {
+	DUCKDB_API virtual ~EncryptionUtil() {
 	}
 };
 

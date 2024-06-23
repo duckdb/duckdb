@@ -46,11 +46,11 @@ public:
 	DUCKDB_API explicit AESGCMStateSSLFactory() {
 	}
 
-	shared_ptr<EncryptionState> CreateEncryptionState() const override {
+	DUCKDB_API shared_ptr<EncryptionState> CreateEncryptionState() const override {
 		return make_shared_ptr<AESGCMStateSSL>();
 	}
 
-	~AESGCMStateSSLFactory() override {
+	DUCKDB_API ~AESGCMStateSSLFactory() override {
 	} //
 };
 
