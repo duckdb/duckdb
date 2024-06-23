@@ -105,12 +105,19 @@ def create_function_comment(function_obj):
 def create_function_declaration(function_obj):
     result = ''
     # Construct function declaration
-    result += f'DUCKDB_API {function_obj['return_type']} {function_obj['name']}('
+    result += f'DUCKDB_API {function_obj['return_type']}'
+    if result[-1] != '*':
+        result += ' '
+    result += f'{function_obj['name']}('
+
     if 'params' in function_obj:
         if len(function_obj['params']) > 0:
             for param in function_obj['params']:
-                result += f'{param['type']} {param['name']},'
-            result = result[:-1] # Trailing comma
+                result += f'{param['type']}'
+                if result[-1] != '*':
+                    result += ' '
+                result += f'{param['name']}, '
+            result = result[:-2] # Trailing comma
     result += ');\n'
 
     return result
