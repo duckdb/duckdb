@@ -36,7 +36,7 @@ inline void *dlsym(void *handle, const char *name) {
 
 inline void dlclose(void *handle) {
 	D_ASSERT(handle);
-	FreeLibraryW((HINSTANCE)handle);
+	FreeLibrary((HINSTANCE)handle);
 }
 
 inline std::string GetDLError(void) {
