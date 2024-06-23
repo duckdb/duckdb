@@ -34,6 +34,11 @@ inline void *dlsym(void *handle, const char *name) {
 	return (void *)GetProcAddress((HINSTANCE)handle, name);
 }
 
+inline void dlclose(void *handle) {
+	D_ASSERT(handle);
+	FreeLibraryW((HINSTANCE)handle);
+}
+
 inline std::string GetDLError(void) {
 	return LocalFileSystem::GetLastErrorAsString();
 }
