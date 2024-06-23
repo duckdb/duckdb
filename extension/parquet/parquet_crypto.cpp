@@ -414,18 +414,18 @@ void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &par
 
 shared_ptr<EncryptionUtil> ParquetCrypto::EncryptionUtilWrapper(bool debug_use_openssl) {
 
-	void *handle = debug_use_openssl ? dlopen(NULL, RTLD_LAZY | RTLD_LOCAL) : NULL;
-	void *create_factory = NULL;
+	void *handle = debug_use_openssl ? dlopen(nullptr, RTLD_LAZY | RTLD_LOCAL) : nullptr;
+	void *create_factory = nullptr;
 	if (handle) {
 		create_factory = dlsym(handle, "CreateSSLFactory");
 		dlclose(handle);
 	}
 	// define return type for CreateSSLFactory
-	typedef EncryptionUtil *(*CreateSSLFactoryFunc)();
+	typedef EncryptionUtil *(*create_ssl_factory_func_t)();
 	if (create_factory) {
-		CreateSSLFactoryFunc CreateSSLFactory = reinterpret_cast<CreateSSLFactoryFunc>(create_factory);
-		auto factoryPtr = CreateSSLFactory();
-		return static_cast<const shared_ptr<EncryptionUtil>>(factoryPtr);
+		create_ssl_factory_func_t create_ssl_factory = reinterpret_cast<create_ssl_factory_func_t>(create_factory);
+		auto factory_ptr = create_ssl_factory();
+		return static_cast<const shared_ptr<EncryptionUtil>>(factory_ptr);
 	}
 	return make_shared_ptr<duckdb_mbedtls::AESGCMStateMBEDTLSFactory>();
 }
