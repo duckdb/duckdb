@@ -71,6 +71,10 @@ static void capi_register_table_function(duckdb_connection connection, const cha
 	duckdb_table_function_add_named_parameter(function, "my_parameter", itype);
 	duckdb_destroy_logical_type(&itype);
 
+	duckdb_logical_type dtype = duckdb_create_logical_type(DUCKDB_TYPE_TIMESTAMP);
+	duckdb_table_function_add_named_parameter(function, "start_timestamp_parameter", dtype);
+	duckdb_destroy_logical_type(&dtype);
+
 	// set up the function pointers
 	duckdb_table_function_set_bind(function, bind);
 	duckdb_table_function_set_init(function, init);
@@ -99,6 +103,10 @@ TEST_CASE("Test Table Functions C API", "[capi]") {
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
 
 	result = tester.Query("SELECT * FROM my_function(1, my_parameter=3)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
+
+	result = tester.Query("SELECT * FROM my_function(1, my_parameter=3, start_timestamp_parameter=DATE '2020-08-20')");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
 
@@ -187,6 +195,14 @@ void my_named_bind(duckdb_bind_info info) {
 		my_bind_data->multiplier = 1;
 	}
 	duckdb_destroy_value(&nparam);
+
+	auto ts_param = duckdb_bind_get_named_parameter(info, "start_time_parameter");
+	if (ts_param) {
+		my_bind_data->multiplier = duckdb_get_timestamp(ts_param);
+	} else {
+		my_bind_data->multiplier = my_bind_data->multiplier;
+	}
+	duckdb_destroy_value(&ts_param);
 
 	duckdb_bind_set_bind_data(info, my_bind_data, free);
 }

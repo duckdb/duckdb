@@ -53,6 +53,14 @@ int64_t duckdb_get_int64(duckdb_value value) {
 	return duckdb::BigIntValue::Get(*val);
 }
 
+int64_t duckdb_get_timestamp(duckdb_value value) {
+	auto val = reinterpret_cast<duckdb::Value *>(value);
+	if (!val->DefaultTryCastAs(duckdb::LogicalType::TIMESTAMP)) {
+		return 0;
+	}
+	return duckdb::TimestampValue::Get(*val).value;
+}
+
 duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *values) {
 	if (!type || !values) {
 		return nullptr;
