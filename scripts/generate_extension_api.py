@@ -169,7 +169,7 @@ def create_duckdb_h():
             function_declarations_finished += '#endif\n'
 
     duckdb_h = DUCKDB_H_HEADER + HEADER_TEMPLATE.replace(functions_mark, function_declarations_finished)
-    with open('./test_capi.h', 'w+') as f:
+    with open('src/include/duckdb.h', 'w+') as f:
         f.write(duckdb_h)
 
 # Create duckdb_extension_api.h
@@ -191,7 +191,7 @@ def create_duckdb_ext_h():
 
 
     duckdb_ext_h = DUCKDB_EXT_H_HEADER + HEADER_TEMPLATE.replace(functions_mark, extension_struct_finished)
-    with open('./test_ext_capi.h', 'w+') as f:
+    with open('src/include/duckdb_extension.h', 'w+') as f:
         f.write(duckdb_ext_h)
 
 create_duckdb_h()
