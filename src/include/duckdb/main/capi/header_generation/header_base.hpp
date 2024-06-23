@@ -1,6 +1,6 @@
 //===----------------------------------------------------------------------===//
 // WARNING
-#error "This header should not be included directly, it's used to generated duckdb.h and duckdb.hpp"
+#error "This header should not be included directly, it's used to generate duckdb.h
 //===----------------------------------------------------------------------===//
 
 // Note: to modify DuckDB's CAPI, the codegen mechanism should be used
@@ -520,6 +520,10 @@ typedef struct _duckdb_arrow_schema {
 typedef struct _duckdb_arrow_array {
 	void *__arra;
 } * duckdb_arrow_array;
+
+//===--------------------------------------------------------------------===//
+// Functions
+//===--------------------------------------------------------------------===//
 
 // DUCKDB_FUNCTIONS_ARE_GENERATED_HERE
 

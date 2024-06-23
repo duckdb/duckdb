@@ -439,7 +439,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nNo support for nested types, and for other complex types.\n * The resulting field \"string.data\" must be freed with `duckdb_free.`\n",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nNo support for nested types, and for other complex types.\nThe resulting field \"string.data\" must be freed with `duckdb_free.`\n\n",
                 "return_value": "The string value at the specified location. Attempts to cast the result value to string."
             }
         },
@@ -462,7 +462,7 @@
             ],
             "comment": {
                 "description": "**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n\n",
-                "return_value": "* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
+                "return_value": "The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
             }
         },
         {

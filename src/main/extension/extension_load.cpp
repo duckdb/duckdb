@@ -17,33 +17,11 @@
 
 namespace duckdb {
 
-// NOTE: ofcourse this would live elsewhere
-duckdb_ext_api_v1 CreateApi() {
-	return {
-		duckdb_data_chunk_get_size,
-		duckdb_data_chunk_get_vector,
-		duckdb_vector_get_data,
-		duckdb_vector_get_validity,
-		duckdb_vector_ensure_validity_writable,
-		duckdb_validity_row_is_valid,
-		duckdb_validity_set_row_invalid,
-		duckdb_create_scalar_function,
-		duckdb_scalar_function_set_name,
-		duckdb_create_logical_type,
-		duckdb_scalar_function_add_parameter,
-		duckdb_scalar_function_set_return_type,
-		duckdb_destroy_logical_type,
-		duckdb_scalar_function_set_function,
-		duckdb_register_scalar_function,
-		duckdb_destroy_scalar_function
-	};
-}
-
 //===--------------------------------------------------------------------===//
 // Load External Extension
 //===--------------------------------------------------------------------===//
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-typedef void (*ext_init_capi_fun_t)(duckdb_connection con, duckdb_ext_api_v1);
+typedef void (*ext_init_capi_fun_t)(duckdb_connection con, duckdb_ext_api_v0*);
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 typedef const char *(*ext_version_capi_fun_t)(void);
 typedef const char *(*ext_version_fun_t)(void);
@@ -430,7 +408,13 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		// Create a connection for the extension to load over
 		Connection conn(db);
 		duckdb_connection capi_con = (duckdb_connection)&conn;
-		(*init_fun_capi)(capi_con, CreateApi());
+
+		// This obviously leaks memory, but technically that is okay because the extension will never be unloaded
+		// Perhaps it is nice to reuse this across all extensions though
+		auto api = new duckdb_ext_api_v0();
+		*api = CreateApi();
+
+		(*init_fun_capi)(capi_con, api);
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
