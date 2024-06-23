@@ -1,5 +1,6 @@
 {
     "group": "appender",
+    "description": "// Appenders are the most efficient way of loading data into DuckDB from within the C interface, and are recommended for\n// fast data loading. The appender is much faster than using prepared statements or individual `INSERT INTO` statements.\n\n// Appends are made in row-wise format. For every column, a `duckdb_append_[type]` call should be made, after which\n// the row should be finished by calling `duckdb_appender_end_row`. After all rows have been appended,\n// `duckdb_appender_destroy` should be used to finalize the appender and clean up the resulting memory.\n\n// Instead of appending rows with `duckdb_appender_end_row`, it is also possible to fill and append\n// chunks-at-a-time.\n\n// Note that `duckdb_appender_destroy` should always be called on the resulting appender, even if the function returns\n// `DuckDBError`.",
     "deprecated": false,
     "entries": [
         {

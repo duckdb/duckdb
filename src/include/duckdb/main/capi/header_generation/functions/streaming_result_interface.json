@@ -4,6 +4,7 @@
     "entries": [
         {
             "name": "duckdb_stream_fetch_chunk",
+            "deprecated": true,
             "return_type": "duckdb_data_chunk",
             "params": [
                 {

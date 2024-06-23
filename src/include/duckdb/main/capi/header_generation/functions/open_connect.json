@@ -18,7 +18,7 @@
             "comment": {
                 "description": "Creates a new database or opens an existing database file stored at the given path.\nIf no path is given a new in-memory database is created instead.\nThe instantiated database should be closed with 'duckdb_close'.\n\n",
                 "param_comments": {
-                    "path": "Path to the database file on disk, or `nullptr` or `",
+                    "path": "Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.",
                     "out_database": "The result database object."
                 },
                 "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
@@ -48,7 +48,7 @@
             "comment": {
                 "description": "Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.\nThe instantiated database should be closed with 'duckdb_close'.\n\n",
                 "param_comments": {
-                    "path": "Path to the database file on disk, or `nullptr` or `",
+                    "path": "Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.",
                     "out_database": "The result database object.",
                     "config": "(Optional) configuration used to start up the database system.",
                     "out_error": "If set and the function returns DuckDBError, this will contain the reason why the start-up failed.\nNote that the error must be freed using `duckdb_free`."

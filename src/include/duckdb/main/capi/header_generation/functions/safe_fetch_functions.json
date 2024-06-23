@@ -1,6 +1,7 @@
 {
     "group": "safe_fetch_functions",
     "deprecated": true,
+    "description": "// These functions will perform conversions if necessary.\n// On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.\n// Note that these functions are slow since they perform bounds checking and conversion\n// For fast access of values prefer using `duckdb_result_get_chunk`",
     "entries": [
         {
             "name": "duckdb_value_boolean",
@@ -20,7 +21,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The boolean value at the specified location, or false if the value cannot be converted."
             }
         },
@@ -42,7 +43,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The int8_t value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -64,7 +65,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The int16_t value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -86,7 +87,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The int32_t value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -108,7 +109,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The int64_t value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -130,7 +131,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The duckdb_hugeint value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -152,7 +153,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -174,7 +175,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The duckdb_decimal value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -196,7 +197,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The uint8_t value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -218,7 +219,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The uint16_t value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -240,7 +241,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The uint32_t value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -262,7 +263,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The uint64_t value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -284,7 +285,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The float value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -306,7 +307,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The double value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -328,7 +329,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The duckdb_date value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -350,7 +351,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The duckdb_time value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -372,7 +373,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The duckdb_timestamp value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -394,7 +395,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "The duckdb_interval value at the specified location, or 0 if the value cannot be converted."
             }
         },
@@ -438,7 +439,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nNo support for nested types, and for other complex types.\n * The resulting field \"string.data\" must be freed with `duckdb_free.`\n",
                 "return_value": "The string value at the specified location. Attempts to cast the result value to string."
             }
         },
@@ -461,7 +462,7 @@
             ],
             "comment": {
                 "description": "**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n\n",
-                "return_value": "The char"
+                "return_value": "* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
             }
         },
         {
@@ -483,7 +484,7 @@
             ],
             "comment": {
                 "description": "**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string contains\nnull bytes.\n",
-                "return_value": "The char"
+                "return_value": "The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.\nIf the column is NOT a VARCHAR column this function will return NULL.\n\nThe result must NOT be freed."
             }
         },
         {
@@ -526,7 +527,7 @@
                 }
             ],
             "comment": {
-                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n ",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\n",
                 "return_value": "Returns true if the value at the specified index is NULL, and false otherwise."
             }
         }
