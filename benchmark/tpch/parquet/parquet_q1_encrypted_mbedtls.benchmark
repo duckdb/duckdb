@@ -1,4 +1,4 @@
-# name: benchmark/tpch/parquet/parquet_q1_encrypted.benchmark
+# name: benchmark/tpch/parquet/parquet_q1_encrypted_mbedtls.benchmark
 # description: Execute Q1 over lineitem stored in a parquet file
 # group: [parquet]
 
@@ -7,14 +7,13 @@ group parquet
 subgroup tpch
 
 require parquet
-require httpfs
 require tpch
 
 load
 CALL dbgen(sf=1, suffix='_normal');
 PRAGMA add_parquet_key('key256', '01234567891123450123456789112345');
 COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem_encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'key256'});
-CREATE VIEW lineitem AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/lineitem_encrypted.parquet', encryption_config={footer_key: 'key256'});
+CREATE VIEW lineitem AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/lineitem_encrypted.parquet', encryption_config={footer_key: 'key256'}, debug_use_openssl=false);
 
 run
 PRAGMA tpch(1)
