@@ -1,0 +1,163 @@
+{
+    "group": "scalar_functions",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_create_scalar_function",
+            "return_type": "duckdb_scalar_function",
+            "params": [],
+            "comment": {
+                "description": "Creates a new empty scalar function.\n\nThe return value should be destroyed with `duckdb_destroy_scalar_function`.\n\n",
+                "return_value": "The scalar function object."
+            }
+        },
+        {
+            "name": "duckdb_destroy_scalar_function",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function *",
+                    "name": "scalar_function"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the given table function object.\n\n",
+                "param_comments": {
+                    "scalar_function": "The table function to destroy"
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_name",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Sets the name of the given scalar function.\n\n",
+                "param_comments": {
+                    "scalar_function": "The scalar function",
+                    "name": "The name of the scalar function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_add_parameter",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Adds a parameter to the scalar function.\n\n",
+                "param_comments": {
+                    "scalar_function": "The scalar function",
+                    "type": "The type of the parameter to add."
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_return_type",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Sets the return type of the scalar function.\n\n",
+                "param_comments": {
+                    "scalar_function": "The scalar function",
+                    "type": "The return type to set"
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_extra_info",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                },
+                {
+                    "type": "void *",
+                    "name": "extra_info"
+                },
+                {
+                    "type": "duckdb_delete_callback_t",
+                    "name": "destroy"
+                }
+            ],
+            "comment": {
+                "description": "Assigns extra information to the scalar function that can be fetched during binding, etc.\n\n",
+                "param_comments": {
+                    "scalar_function": "The table function",
+                    "extra_info": "The extra information",
+                    "destroy": "The callback that will be called to destroy the bind data (if any)"
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_function",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                },
+                {
+                    "type": "duckdb_scalar_function_t",
+                    "name": "function"
+                }
+            ],
+            "comment": {
+                "description": "Sets the main function of the table function.\n\n",
+                "param_comments": {
+                    "scalar_function": "The scalar function",
+                    "function": "The function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_register_scalar_function",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                }
+            ],
+            "comment": {
+                "description": "Register the scalar function object within the given connection.\n\nThe function requires at least a name, a function and a return type.\n\nIf the function is incomplete or a function with this name already exists DuckDBError is returned.\n\n",
+                "param_comments": {
+                    "con": "The connection to register it in.",
+                    "scalar_function": "The function pointer"
+                },
+                "return_value": "Whether or not the registration was successful."
+            }
+        }
+    ]
+}

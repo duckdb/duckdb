@@ -1,0 +1,188 @@
+{
+    "group": "value_interface",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_destroy_value",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_value *",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the value and de-allocates all memory allocated for that type.\n\n",
+                "param_comments": {
+                    "value": "The value to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_create_varchar",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "text"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a null-terminated string\n\n",
+                "param_comments": {
+                    "text": "The null-terminated string"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_varchar_length",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "text"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "length"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a string\n\n",
+                "param_comments": {
+                    "text": "The text to create a string from",
+                    "length": "The length of the text"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_int64",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "int64_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from an int64\n\n",
+                "param_comments": {
+                    "val": "The bigint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_struct_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "duckdb_value *",
+                    "name": "values"
+                }
+            ],
+            "comment": {
+                "description": "Creates a struct value from a type and an array of values\n\n",
+                "param_comments": {
+                    "type": "The type of the struct",
+                    "values": "The values for the struct fields"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_list_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "duckdb_value *",
+                    "name": "values"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "value_count"
+                }
+            ],
+            "comment": {
+                "description": "Creates a list value from a type and an array of values of length `value_count`\n\n",
+                "param_comments": {
+                    "type": "The type of the list",
+                    "values": "The values for the list",
+                    "value_count": "The number of values in the list"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_array_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "duckdb_value *",
+                    "name": "values"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "value_count"
+                }
+            ],
+            "comment": {
+                "description": "Creates an array value from a type and an array of values of length `value_count`\n\n",
+                "param_comments": {
+                    "type": "The type of the array",
+                    "values": "The values for the array",
+                    "value_count": "The number of values in the array"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_get_varchar",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Obtains a string representation of the given value.\nThe result must be destroyed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "value": "The value"
+                },
+                "return_value": "The string value. This must be destroyed with `duckdb_free`."
+            }
+        },
+        {
+            "name": "duckdb_get_int64",
+            "return_type": "int64_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Obtains an int64 of the given value.\n\n",
+                "param_comments": {
+                    "value": "The value"
+                },
+                "return_value": "The int64 value, or 0 if no conversion is possible"
+            }
+        }
+    ]
+}
