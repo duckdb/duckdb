@@ -655,7 +655,7 @@ In the source code, configuration options are defined in `config.cpp`.
 
 This can fail if either the name is invalid, or if the value provided for the option is invalid.
 
-* duckdb_config: The configuration object to set the option on.
+* config: The configuration object to set the option on.
 * name: The name of the configuration flag to set.
 * option: The value to set the configuration flag to.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
@@ -1015,7 +1015,8 @@ DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t 
 DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-* DEPRECATED: use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.
+**DEPRECATION NOTICE**: use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.
+
 * returns: The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
 converted. The result must be freed with `duckdb_free`.
 */
@@ -1031,8 +1032,9 @@ DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t ro
 DUCKDB_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-* DEPRECATED: use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string contains
 null bytes.
+
 * returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
 
@@ -1041,7 +1043,7 @@ The result must NOT be freed.
 DUCKDB_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-* DEPRECATED: use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+**DEPRECATION NOTICE**: use duckdb_value_string_internal instead. This function does not work correctly if the string contains
 null bytes.
 * returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
@@ -1153,8 +1155,6 @@ Decompose a TIME_TZ objects into micros and a timezone offset.
 Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
 
 * micros: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
-* out_micros: The microsecond component of the time.
-* out_offset: The timezone offset component of the time.
 */
 DUCKDB_API duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz micros);
 
@@ -1568,7 +1568,7 @@ DUCKDB_API duckdb_state duckdb_prepare_extracted_statement(duckdb_connection con
 Returns the error message contained within the extracted statements.
 The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_extracted` is called.
 
-* result: The extracted statements to fetch the error from.
+* extracted_statements: The extracted statements to fetch the error from.
 * returns: The error of the extracted statements.
 */
 DUCKDB_API const char *duckdb_extract_statements_error(duckdb_extracted_statements extracted_statements);
@@ -1628,7 +1628,7 @@ Returns the error message contained within the pending result.
 
 The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_pending` is called.
 
-* result: The pending result to fetch the error from.
+* pending_result: The pending result to fetch the error from.
 * returns: The error of the pending result.
 */
 DUCKDB_API const char *duckdb_pending_error(duckdb_pending_result pending_result);
@@ -1696,7 +1696,7 @@ DUCKDB_API void duckdb_destroy_value(duckdb_value *value);
 /*!
 Creates a value from a null-terminated string
 
-* value: The null-terminated string
+* text: The null-terminated string
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_varchar(const char *text);
@@ -1704,7 +1704,7 @@ DUCKDB_API duckdb_value duckdb_create_varchar(const char *text);
 /*!
 Creates a value from a string
 
-* value: The text
+* text: The text to create a string from
 * length: The length of the text
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
 */
@@ -1713,7 +1713,7 @@ DUCKDB_API duckdb_value duckdb_create_varchar_length(const char *text, idx_t len
 /*!
 Creates a value from an int64
 
-* value: The bigint value
+* val: The bigint value
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_int64(int64_t val);
@@ -1811,7 +1811,8 @@ DUCKDB_API duckdb_logical_type duckdb_create_array_type(duckdb_logical_type type
 Creates a map type from its key type and value type.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* type: The key type and value type of map type to create.
+* key_type: The key type of map type to create.
+* value_type: The value type of map type to create.
 * returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type);
@@ -1820,8 +1821,8 @@ DUCKDB_API duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_ty
 Creates a UNION type from the passed types array.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* types: The array of types that the union should consist of.
-* type_amount: The size of the types array.
+* member_types: The array of types that the union should consist of.
+* member_count: The size of the types array.
 * returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_union_type(duckdb_logical_type *member_types, const char **member_names,
@@ -1843,7 +1844,6 @@ DUCKDB_API duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *me
 Creates an ENUM type from the passed member name array.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* enum_name: The name of the enum.
 * member_names: The array of names that the enum should consist of.
 * member_count: The number of elements that were specified in the array.
 * returns: The logical type.
@@ -2207,7 +2207,7 @@ Sets the total capacity of the underlying child-vector of a list.
 
 * vector: The list vector.
 * required_capacity: the total capacity to reserve.
-* return: The duckdb state. Returns DuckDBError if the vector is nullptr.
+* returns: The duckdb state. Returns DuckDBError if the vector is nullptr.
 */
 DUCKDB_API duckdb_state duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity);
 
@@ -2294,14 +2294,14 @@ DUCKDB_API duckdb_scalar_function duckdb_create_scalar_function();
 /*!
 Destroys the given table function object.
 
-* table_function: The table function to destroy
+* scalar_function: The table function to destroy
 */
 DUCKDB_API void duckdb_destroy_scalar_function(duckdb_scalar_function *scalar_function);
 
 /*!
 Sets the name of the given scalar function.
 
-* table_function: The scalar function
+* scalar_function: The scalar function
 * name: The name of the scalar function
 */
 DUCKDB_API void duckdb_scalar_function_set_name(duckdb_scalar_function scalar_function, const char *name);
@@ -2336,7 +2336,7 @@ DUCKDB_API void duckdb_scalar_function_set_extra_info(duckdb_scalar_function sca
 /*!
 Sets the main function of the table function.
 
-* table_function: The table function
+* scalar_function: The scalar function
 * function: The function
 */
 DUCKDB_API void duckdb_scalar_function_set_function(duckdb_scalar_function scalar_function,
@@ -2350,7 +2350,7 @@ The function requires at least a name, a function and a return type.
 If the function is incomplete or a function with this name already exists DuckDBError is returned.
 
 * con: The connection to register it in.
-* function: The function pointer
+* scalar_function: The function pointer
 * returns: Whether or not the registration was successful.
 */
 DUCKDB_API duckdb_state duckdb_register_scalar_function(duckdb_connection con, duckdb_scalar_function scalar_function);
@@ -2524,7 +2524,7 @@ DUCKDB_API duckdb_value duckdb_bind_get_named_parameter(duckdb_bind_info info, c
 Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.
 
 * info: The info object
-* extra_data: The bind data object.
+* bind_data: The bind data object.
 * destroy: The callback that will be called to destroy the bind data (if any)
 */
 DUCKDB_API void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_delete_callback_t destroy);
@@ -2572,7 +2572,7 @@ DUCKDB_API void *duckdb_init_get_bind_data(duckdb_init_info info);
 Sets the user-provided init data in the init object. This object can be retrieved again during execution.
 
 * info: The info object
-* extra_data: The init data object.
+* init_data: The init data object.
 * destroy: The callback that will be called to destroy the init data (if any)
 */
 DUCKDB_API void duckdb_init_set_init_data(duckdb_init_info info, void *init_data, duckdb_delete_callback_t destroy);
@@ -2736,7 +2736,7 @@ DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, con
 /*!
 Returns the number of columns in the table that belongs to the appender.
 
-* appender The appender to get the column count from.
+* appender: The appender to get the column count from.
 * returns: The number of columns in the table.
 */
 DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
@@ -2746,8 +2746,8 @@ Returns the type of the column at the specified index.
 
 Note: The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* appender The appender to get the column type from.
-* col_idx The index of the column to get the type of.
+* appender: The appender to get the column type from.
+* col_idx: The index of the column to get the type of.
 * returns: The duckdb_logical_type of the column.
 */
 DUCKDB_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
@@ -2973,7 +2973,7 @@ DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_ar
 Fetch the internal arrow schema from the prepared statement. Remember to call release on the respective
 ArrowSchema object.
 
-* result: The prepared statement to fetch the schema from.
+* prepared: The prepared statement to fetch the schema from.
 * out_schema: The output schema.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
@@ -3064,7 +3064,7 @@ DUCKDB_API void duckdb_destroy_arrow(duckdb_arrow *result);
 
 Releases the arrow array stream and de-allocates its memory.
 
-* stream: The arrow array stream to destroy.
+* stream_p: The arrow array stream to destroy.
 */
 DUCKDB_API void duckdb_destroy_arrow_stream(duckdb_arrow_stream *stream_p);
 
