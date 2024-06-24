@@ -35,6 +35,13 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
+	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	                                        OperatorState &state) const final;
+
+	bool RequiresFinalExecute() const final {
+		return true;
+	}
+
 	OrderPreservationType OperatorOrder() const override {
 		return OrderPreservationType::FIXED_ORDER;
 	}

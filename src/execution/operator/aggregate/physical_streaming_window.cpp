@@ -131,7 +131,7 @@ public:
 			if (wexpr.type == ExpressionType::WINDOW_LEAD) {
 				offset = -offset;
 			}
-			return 0 <= offset && idx_t(offset) < MAX_BUFFER;
+			return idx_t(abs(offset)) < MAX_BUFFER;
 		}
 
 		static bool ComputeDefault(ClientContext &context, BoundWindowExpression &wexpr, Value &result) {
@@ -148,19 +148,31 @@ public:
 		}
 
 		LeadLagState(ClientContext &context, BoundWindowExpression &wexpr)
-		    : wexpr(wexpr), executor(context, *wexpr.children[0]), curr(wexpr.return_type), prev(wexpr.return_type),
-		      temp(wexpr.return_type) {
+		    : wexpr(wexpr), executor(context, *wexpr.children[0]), prev(wexpr.return_type), temp(wexpr.return_type) {
 			ComputeOffset(context, wexpr, offset);
 			ComputeDefault(context, wexpr, dflt);
 
-			buffered = idx_t(offset);
+			curr_chunk.Initialize(context, {wexpr.return_type});
+
+			buffered = idx_t(abs(offset));
 			prev.Reference(dflt);
 			prev.Flatten(buffered);
 			temp.Initialize(false, buffered);
 		}
 
-		void Execute(ExecutionContext &context, DataChunk &input, Vector &result) {
-			executor.ExecuteExpression(input, curr);
+		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+			if (offset >= 0) {
+				ExecuteLag(context, input, result);
+			} else {
+				ExecuteLead(context, input, delayed, result);
+			}
+		}
+
+		void ExecuteLag(ExecutionContext &context, DataChunk &input, Vector &result) {
+			D_ASSERT(offset >= 0);
+			auto &curr = curr_chunk.data[0];
+			curr_chunk.Reset();
+			executor.Execute(input, curr_chunk);
 			const idx_t count = input.size();
 			//	Copy prev[0, buffered] => result[0, buffered]
 			idx_t source_count = MinValue<idx_t>(buffered, count);
@@ -189,6 +201,37 @@ public:
 			}
 		}
 
+		void ExecuteLead(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+			D_ASSERT(offset < 0);
+			// Input has been set up with the number of rows we CAN produce.
+			const idx_t count = input.size();
+			auto &curr = curr_chunk.data[0];
+			// Copy input[buffered:count] => result[:]
+			idx_t pos = 0;
+			idx_t skipped = 0;
+			if (buffered < count) {
+				curr_chunk.Reset();
+				executor.Execute(input, curr_chunk);
+				VectorOperations::Copy(curr, result, count, buffered, pos);
+				pos += count - buffered;
+			} else {
+				//	We may have to skip the front of the delayed buffer too.
+				skipped = buffered - count;
+			}
+			// Copy delayed[skipped:] => result[pos:]
+			if (skipped < delayed.size()) {
+				curr_chunk.Reset();
+				executor.Execute(delayed, curr_chunk);
+				VectorOperations::Copy(curr, result, delayed.size(), skipped, pos);
+				pos += delayed.size();
+			}
+			// Copy default[:count-pos] => result[pos:]
+			if (pos < count) {
+				const idx_t defaulted = count - pos;
+				VectorOperations::Copy(prev, result, defaulted, 0, pos);
+			}
+		}
+
 		//! The aggregate expression
 		BoundWindowExpression &wexpr;
 		//! Cache the executor to cut down on memory allocation
@@ -200,7 +243,7 @@ public:
 		//! The constant default value
 		Value dflt;
 		//! The current set of values
-		Vector curr;
+		DataChunk curr_chunk;
 		//! The previous set of values
 		Vector prev;
 		//! The copy buffer
@@ -246,26 +289,41 @@ public:
 				break;
 			}
 			case ExpressionType::WINDOW_LAG:
-			case ExpressionType::WINDOW_LEAD:
+			case ExpressionType::WINDOW_LEAD: {
 				lead_lag_states[expr_idx] = make_uniq<LeadLagState>(context, wexpr);
+				const auto offset = lead_lag_states[expr_idx]->offset;
+				if (offset < 0) {
+					lead_count = MaxValue<idx_t>(idx_t(-offset), lead_count);
+				}
 				break;
+			}
 			default:
 				break;
 			}
+		}
+		if (lead_count) {
+			delayed.Initialize(context, input.GetTypes(), lead_count);
+			shifted.Initialize(context, input.GetTypes(), lead_count);
 		}
 		initialized = true;
 	}
 
 public:
+	//! We can't initialise until we have an input chunk
 	bool initialized;
+	//! The values that are determined by the first row.
 	vector<unique_ptr<Vector>> const_vectors;
-
-	// Aggregation
+	//! Aggregation states
 	vector<unique_ptr<AggregateState>> aggregate_states;
 	Allocator &allocator;
-
-	//	Lead/Lag
+	//! Lead/Lag states
 	vector<unique_ptr<LeadLagState>> lead_lag_states;
+	//! The number of rows ahead to buffer for LEAD
+	idx_t lead_count = 0;
+	//! A buffer for delayed input
+	DataChunk delayed;
+	//! A buffer for shifting delayed input
+	DataChunk shifted;
 };
 
 bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr) {
@@ -420,15 +478,70 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
 		chunk.data[col_idx].Reference(input.data[col_idx]);
 	}
-	// Compute window function
-	const idx_t count = input.size();
+	idx_t count = input.size();
+
+	//	Handle LEAD
+	if (state.lead_count > 0) {
+		//	Break the combined delayed + input into chunk + delayed
+		auto &delayed = state.delayed;
+		const idx_t available = delayed.size() + count;
+		//	If we don't have enough to produce a single row,
+		//	then just delay more rows and return nothing
+		if (available <= state.lead_count) {
+			delayed.Append(input, true);
+			chunk.SetCardinality(0);
+			return OperatorResultType::NEED_MORE_INPUT;
+		}
+
+		const idx_t prefixed = MinValue<idx_t>(delayed.size(), count);
+		if (prefixed) {
+			//	Copy delayed[:prefixed] => chunk[:prefixed]
+			chunk.Reset();
+			for (idx_t col_idx = 0; col_idx < delayed.data.size(); col_idx++) {
+				auto &src = delayed.data[col_idx];
+				auto &dst = chunk.data[col_idx];
+				VectorOperations::Copy(src, dst, prefixed, 0, 0);
+			}
+			const idx_t ragged = delayed.size() - prefixed;
+			if (ragged) {
+				// Corner case: didn't consume all the delayed values
+				// Example: input has 1 row but delay is 2 rows.
+				// Copy delayed[ragged:] => delayed[0:]
+				auto &shifted = state.shifted;
+				shifted.Reset();
+				delayed.Copy(shifted, ragged);
+				delayed.Reset();
+				shifted.Copy(delayed, 0);
+				// Copy input[:] => delayed[ragged:]
+				delayed.Append(input, true);
+			} else {
+				// Copy input[:count - prefixed] => chunk[prefixed:count]
+				const idx_t src_count = count - prefixed;
+				for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
+					auto &src = input.data[col_idx];
+					auto &dst = chunk.data[col_idx];
+					VectorOperations::Copy(src, dst, src_count, 0, prefixed);
+				}
+				// Copy input[count - prefixed:] => delayed
+				delayed.Reset();
+				input.Copy(delayed, src_count);
+			}
+		} else {
+			//	Nothing delayed yet, so just truncate and copy the delayed values
+			count -= state.lead_count;
+			input.Copy(delayed, count);
+		}
+	}
+	chunk.SetCardinality(count);
+
+	// Compute window functions
 	for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 		idx_t col_idx = input.data.size() + expr_idx;
 		auto &expr = *select_list[expr_idx];
 		auto &result = chunk.data[col_idx];
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::WINDOW_AGGREGATE:
-			state.aggregate_states[expr_idx]->Execute(context, input, result);
+			state.aggregate_states[expr_idx]->Execute(context, chunk, result);
 			break;
 		case ExpressionType::WINDOW_FIRST_VALUE:
 		case ExpressionType::WINDOW_PERCENT_RANK:
@@ -449,15 +562,78 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		}
 		case ExpressionType::WINDOW_LAG:
 		case ExpressionType::WINDOW_LEAD:
-			state.lead_lag_states[expr_idx]->Execute(context, input, result);
+			state.lead_lag_states[expr_idx]->Execute(context, chunk, state.delayed, result);
 			break;
 		default:
 			throw NotImplementedException("%s for StreamingWindow", ExpressionTypeToString(expr.GetExpressionType()));
 		}
 	}
 	gstate.row_number += NumericCast<int64_t>(count);
-	chunk.SetCardinality(count);
 	return OperatorResultType::NEED_MORE_INPUT;
+}
+
+OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContext &context, DataChunk &chunk,
+                                                                 GlobalOperatorState &gstate_p,
+                                                                 OperatorState &state_p) const {
+
+	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
+	auto &state = state_p.Cast<StreamingWindowState>();
+
+	if (!state.initialized || !state.lead_count) {
+		return OperatorFinalizeResultType::FINISHED;
+	}
+
+	//	The delayed input is the input
+	auto &input = state.delayed;
+
+	// Put payload columns in place
+	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
+		chunk.data[col_idx].Reference(input.data[col_idx]);
+	}
+	idx_t count = input.size();
+	chunk.SetCardinality(count);
+
+	// There is no more delayed data
+	auto &delayed = state.shifted;
+	delayed.Reset();
+
+	// Compute window functions
+	for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
+		idx_t col_idx = input.data.size() + expr_idx;
+		auto &expr = *select_list[expr_idx];
+		auto &result = chunk.data[col_idx];
+		switch (expr.GetExpressionType()) {
+		case ExpressionType::WINDOW_AGGREGATE:
+			state.aggregate_states[expr_idx]->Execute(context, chunk, result);
+			break;
+		case ExpressionType::WINDOW_FIRST_VALUE:
+		case ExpressionType::WINDOW_PERCENT_RANK:
+		case ExpressionType::WINDOW_RANK:
+		case ExpressionType::WINDOW_RANK_DENSE: {
+			// Reference constant vector
+			chunk.data[col_idx].Reference(*state.const_vectors[expr_idx]);
+			break;
+		}
+		case ExpressionType::WINDOW_ROW_NUMBER: {
+			// Set row numbers
+			int64_t start_row = gstate.row_number;
+			auto rdata = FlatVector::GetData<int64_t>(chunk.data[col_idx]);
+			for (idx_t i = 0; i < count; i++) {
+				rdata[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
+			}
+			break;
+		}
+		case ExpressionType::WINDOW_LAG:
+		case ExpressionType::WINDOW_LEAD:
+			state.lead_lag_states[expr_idx]->Execute(context, chunk, delayed, result);
+			break;
+		default:
+			throw NotImplementedException("%s for StreamingWindow", ExpressionTypeToString(expr.GetExpressionType()));
+		}
+	}
+	gstate.row_number += NumericCast<int64_t>(count);
+
+	return OperatorFinalizeResultType::FINISHED;
 }
 
 string PhysicalStreamingWindow::ParamsToString() const {
