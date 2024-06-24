@@ -141,7 +141,7 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
 extern "C" {
 
 // Call the member function through the factory object
-DUCKDB_EXTENSION_API duckdb::AESGCMStateSSLFactory *CreateSSLFactory() {
-	return new duckdb::AESGCMStateSSLFactory();
+DUCKDB_EXTENSION_API AESGCMStateSSLFactory *CreateSSLFactory() {
+	return new AESGCMStateSSLFactory();
 }
 }

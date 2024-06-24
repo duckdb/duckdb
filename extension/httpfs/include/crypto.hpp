@@ -22,19 +22,19 @@ void hmac256(std::string message, hash_bytes secret, hash_bytes &out);
 
 void hex256(hash_bytes &in, hash_str &out);
 
-class AESGCMStateSSL : public EncryptionState {
+class DUCKDB_EXTENSION_API AESGCMStateSSL : public EncryptionState {
 
 public:
-	DUCKDB_API explicit AESGCMStateSSL();
-	DUCKDB_API ~AESGCMStateSSL() override;
+	explicit AESGCMStateSSL();
+	~AESGCMStateSSL() override;
 
 public:
-	DUCKDB_API bool IsOpenSSL() override;
-	DUCKDB_API void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
-	DUCKDB_API void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
-	DUCKDB_API size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
-	DUCKDB_API size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
-	DUCKDB_API void GenerateRandomData(data_ptr_t data, idx_t len) override;
+	bool IsOpenSSL() override;
+	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
+	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
+	size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
+	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
+	void GenerateRandomData(data_ptr_t data, idx_t len) override;
 
 private:
 	bool ssl = true;
@@ -42,17 +42,21 @@ private:
 	Mode mode;
 };
 
-class AESGCMStateSSLFactory : public EncryptionUtil {
+} // namespace duckdb
+
+extern "C" {
+
+class DUCKDB_EXTENSION_API AESGCMStateSSLFactory : public duckdb::EncryptionUtil {
 public:
-	DUCKDB_API explicit AESGCMStateSSLFactory() {
+	explicit AESGCMStateSSLFactory() {
 	}
 
-	shared_ptr<EncryptionState> CreateEncryptionState() const override {
-		return make_shared_ptr<AESGCMStateSSL>();
+	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState() const override {
+		return duckdb::make_shared_ptr<duckdb::AESGCMStateSSL>();
 	}
 
 	~AESGCMStateSSLFactory() override {
-	} //
+	}
 };
 
-} // namespace duckdb
+} // extern c
