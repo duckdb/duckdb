@@ -308,9 +308,6 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	auto &ht = *gstate.hash_table;
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
-	if (gstate.total_size < gstate.temporary_memory_state->GetReservation()) {
-		gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
-	}
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
