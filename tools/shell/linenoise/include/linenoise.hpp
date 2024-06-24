@@ -14,7 +14,7 @@
 #include "linenoise.h"
 
 #define LINENOISE_MAX_LINE    204800
-#define LINENOISE_MAX_HISTORY 536870912
+#define LINENOISE_MAX_HISTORY 104857600
 #define LINENOISE_EDITOR
 
 namespace duckdb {
