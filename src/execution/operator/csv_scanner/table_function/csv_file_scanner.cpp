@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+CSVUnionData::~CSVUnionData() {}
+
 CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
                          shared_ptr<CSVStateMachine> state_machine_p, const CSVReaderOptions &options_p,
                          const ReadCSVData &bind_data, const vector<column_t> &column_ids,
@@ -61,33 +63,24 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
     : file_path(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSV Scan");
-	if (file_idx < bind_data.union_readers.size()) {
-		// we are doing UNION BY NAME - fetch the options from the union reader for this file
-		optional_ptr<CSVFileScan> union_reader_ptr;
-		if (file_idx == 0) {
-			union_reader_ptr = bind_data.initial_reader.get();
-		} else {
-			union_reader_ptr = bind_data.union_readers[file_idx].get();
-		}
-		if (union_reader_ptr) {
-			auto &union_reader = *union_reader_ptr;
-			// Initialize Buffer Manager
-			buffer_manager = union_reader.buffer_manager;
-			// Initialize On Disk and Size of file
-			on_disk_file = union_reader.on_disk_file;
-			file_size = union_reader.file_size;
-			names = union_reader.GetNames();
-			options = union_reader.options;
-			types = union_reader.GetTypes();
-			state_machine = union_reader.state_machine;
-			multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind,
-			                                    bind_data.return_types, bind_data.return_names, column_ids, nullptr,
-			                                    file_path, context, nullptr);
+	if (file_idx == 0 && bind_data.initial_reader) {
+		auto &union_reader = *bind_data.initial_reader;
+		// Initialize Buffer Manager
+		buffer_manager = union_reader.buffer_manager;
+		// Initialize On Disk and Size of file
+		on_disk_file = union_reader.on_disk_file;
+		file_size = union_reader.file_size;
+		names = union_reader.GetNames();
+		options = union_reader.options;
+		types = union_reader.GetTypes();
+		state_machine = union_reader.state_machine;
+		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind,
+		                                    bind_data.return_types, bind_data.return_names, column_ids, nullptr,
+		                                    file_path, context, nullptr);
 
-			InitializeFileNamesTypes();
-			SetStart();
-			return;
-		}
+		InitializeFileNamesTypes();
+		SetStart();
+		return;
 	}
 
 	// Initialize Buffer Manager
@@ -148,7 +141,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	SetStart();
 }
 
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options_p)
+CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p)
     : file_path(file_name), file_idx(0),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
 	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_path, file_idx);

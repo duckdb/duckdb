@@ -99,6 +99,9 @@ public:
 
 class ParquetReader {
 public:
+	using UNION_READER_DATA = shared_ptr<ParquetReader>;
+
+public:
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options);
 	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata);
@@ -122,6 +125,10 @@ public:
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
 	void Scan(ParquetReaderScanState &state, DataChunk &output);
+
+	static unique_ptr<ParquetReader> StoreUnionReader(unique_ptr<ParquetReader> reader_p, idx_t ) {
+		return reader_p;
+	}
 
 	idx_t NumRows();
 	idx_t NumRowGroups();

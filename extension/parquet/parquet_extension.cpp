@@ -78,6 +78,9 @@ struct ParquetReadBindData : public TableFunctionData {
 		initial_file_row_groups = initial_reader->NumRowGroups();
 		parquet_options = initial_reader->parquet_options;
 	}
+	void Initialize(ClientContext &context, shared_ptr<ParquetReader> reader) {
+		Initialize(std::move(reader));
+	}
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
