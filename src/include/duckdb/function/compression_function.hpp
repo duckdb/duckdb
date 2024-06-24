@@ -33,7 +33,6 @@ class CompressionInfo {
 public:
 	CompressionInfo(const idx_t block_size, const PhysicalType &physical_type)
 	    : block_size(block_size), physical_type(physical_type) {
-		D_ASSERT(block_size == Storage::BLOCK_SIZE);
 	}
 
 public:
