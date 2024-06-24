@@ -24,58 +24,72 @@ DUCKDB_EXT_H_HEADER = '''//===--------------------------------------------------
 //===----------------------------------------------------------------------===//
 '''
 
-DUCKDB_EXT_API_PTR_NAME = 'duckdb_ext_api'
-DUCKDB_EXT_API_STRUCT_NAME = 'duckdb_ext_api_v0'
+# Whether the script allows functions with parameters without a comment explaining them
 ALLOW_UNCOMMENTED_PARAMS = True
 
-# Read the base header
-with open("src/include/duckdb/main/capi/header_generation/header_base.hpp", 'r') as f:
-    HEADER_TEMPLATE = f.read()
+DUCKDB_EXT_API_PTR_NAME = 'duckdb_ext_api'
+DUCKDB_EXT_API_STRUCT_NAME = 'duckdb_ext_api_v0'
+EXT_API_DEFINITION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/extension_api_v0.json'
 
-# Trim the base header
-header_mark = '// DUCKDB_START_OF_HEADER\n'
-if header_mark not in HEADER_TEMPLATE:
-    print(f"Could not find the header start mark: {header_mark}")
-    exit(1)
+# The JSON files that define all available CAPI functions
+CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation/functions/**/*.json'
 
-HEADER_TEMPLATE = HEADER_TEMPLATE[HEADER_TEMPLATE.find(header_mark)+len(header_mark):]
+# The original order of the function groups in the duckdb.h files. We maintain this for easier PR reviews.
+ORIGINAL_FUNCTION_GROUP_ORDER = [ 'open_connect', 'configuration', 'query_execution', 'result_functions', 'safe_fetch_functions', 'helpers', 'date_time_timestamp_helpers', 'hugeint_helpers', 'unsigned_hugeint_helpers', 'decimal_helpers', 'prepared_statements', 'bind_values_to_prepared_statements', 'execute_prepared_statements', 'extract_statements', 'pending_result_interface', 'value_interface', 'logical_type_interface', 'data_chunk_interface', 'vector_interface', 'validity_mask_functions', 'scalar_functions', 'table_functions', 'table_function_bind', 'table_function_init', 'table_function', 'replacement_scans', 'appender', 'arrow_interface', 'threading_information', 'streaming_result_interface' ]
 
-functions_mark = '// DUCKDB_FUNCTIONS_ARE_GENERATED_HERE\n'
+# The file that forms the base for the header generation
+BASE_HEADER_TEMPLATE = 'src/include/duckdb/main/capi/header_generation/header_base.hpp'
+# The comment marking where this script will inject its contents
+BASE_HEADER_CONTENT_MARK = '// DUCKDB_FUNCTIONS_ARE_GENERATED_HERE\n'
 
+# Loads the template for the header files to be generated
+def fetch_header_template():
+    # Read the base header
+    with open(BASE_HEADER_TEMPLATE, 'r') as f:
+        result = f.read()
 
-# Collect all functions
-function_files = glob.glob('src/include/duckdb/main/capi/header_generation/functions/**/*.json', recursive=True)
+    # Trim the base header
+    header_mark = '// DUCKDB_START_OF_HEADER\n'
+    if header_mark not in result:
+        print(f"Could not find the header start mark: {header_mark}")
+        exit(1)
 
-function_groups = []
-function_map = {}
+    return result[result.find(header_mark)+len(header_mark):]
 
-original_order = [ 'open_connect', 'configuration', 'query_execution', 'result_functions', 'safe_fetch_functions', 'helpers', 'date_time_timestamp_helpers', 'hugeint_helpers', 'unsigned_hugeint_helpers', 'decimal_helpers', 'prepared_statements', 'bind_values_to_prepared_statements', 'execute_prepared_statements', 'extract_statements', 'pending_result_interface', 'value_interface', 'logical_type_interface', 'data_chunk_interface', 'vector_interface', 'validity_mask_functions', 'scalar_functions', 'table_functions', 'table_function_bind', 'table_function_init', 'table_function', 'replacement_scans', 'appender', 'arrow_interface', 'threading_information', 'streaming_result_interface' ]
+# Parse the CAPI_FUNCTION_DEFINITION_FILES to get the full list of functions
+def parse_capi_function_definitions():
+    # Collect all functions
+    function_files = glob.glob(CAPI_FUNCTION_DEFINITION_FILES, recursive=True)
 
-# Read functions
-for file in function_files:
-    with open(file, 'r') as f:
-        try:
-            json_data = json.loads(f.read())
-        except json.decoder.JSONDecodeError as err:
-            print(f"Invalid JSON found in {file}: {err}")
-            exit(1)
+    function_groups = []
+    function_map = {}
 
-        # TODO verify
-        function_groups.append(json_data)
-        for function in json_data['entries']:
-            if function['name'] in function_map:
-                print(f"Duplicate symbol found when parsing C API file {file}: {function['name']}")
+    # Read functions
+    for file in function_files:
+        with open(file, 'r') as f:
+            try:
+                json_data = json.loads(f.read())
+            except json.decoder.JSONDecodeError as err:
+                print(f"Invalid JSON found in {file}: {err}")
                 exit(1)
-            function_map[function['name']] = function
+
+            function_groups.append(json_data)
+            for function in json_data['entries']:
+                if function['name'] in function_map:
+                    print(f"Duplicate symbol found when parsing C API file {file}: {function['name']}")
+                    exit(1)
+                function_map[function['name']] = function
+
+    return (function_groups, function_map)
 
 # Read extension API
-extension_api_v0_file = 'src/include/duckdb/main/capi/header_generation/apis/extension_api_v0.json'
-with open(extension_api_v0_file, 'r') as f:
-    try:
-        extension_api_v0 = json.loads(f.read())
-    except json.decoder.JSONDecodeError as err:
-        print(f"Invalid JSON found in {extension_api_v0_file}: {err}")
-        exit(1)
+def parse_ext_api_definition():
+    with open(EXT_API_DEFINITION_FILE, 'r') as f:
+        try:
+            return json.loads(f.read())
+        except json.decoder.JSONDecodeError as err:
+            print(f"Invalid JSON found in {extension_api_v0_file}: {err}")
+            exit(1)
 
 # Creates the comment that accompanies describing a C api function
 def create_function_comment(function_obj):
@@ -149,12 +163,12 @@ def to_camel_case(snake_str):
 def create_duckdb_h():
     function_declarations_finished = ''
 
-    function_groups_copy = copy.deepcopy(function_groups)
+    function_groups_copy = copy.deepcopy(FUNCTION_GROUPS)
 
-    if len(function_groups_copy) != len(original_order):
+    if len(function_groups_copy) != len(ORIGINAL_FUNCTION_GROUP_ORDER):
         print("original order list is wrong")
 
-    for order_group in original_order:
+    for order_group in ORIGINAL_FUNCTION_GROUP_ORDER:
         # Lookup the group in the original order: purely intended to keep the PR review sane
         curr_group = next(group for group in function_groups_copy if group['group'] == order_group)
         function_groups_copy.remove(curr_group)
@@ -187,18 +201,18 @@ def create_duckdb_h():
 
 
     duckdb_capi_header_body = function_declarations_finished + "\n\n" + create_extension_api_struct(with_create_method=True)
-    duckdb_h = DUCKDB_H_HEADER + HEADER_TEMPLATE.replace(functions_mark, duckdb_capi_header_body)
+    duckdb_h = DUCKDB_H_HEADER + HEADER_TEMPLATE.replace(BASE_HEADER_CONTENT_MARK, duckdb_capi_header_body)
     with open('src/include/duckdb.h', 'w+') as f:
         f.write(duckdb_h)
 
 def create_extension_api_struct(with_create_method = False):
     # Generate the struct
     extension_struct_finished = 'typedef struct {\n'
-    for api_version_entry in extension_api_v0['version_entries']:
+    for api_version_entry in EXT_API_DEFINITION['version_entries']:
         extension_struct_finished += f'    // Version {api_version_entry['version']}\n'
 
         for function in  api_version_entry['entries']:
-            function_lookup = function_map[function['name']]
+            function_lookup = FUNCTION_MAP[function['name']]
             # TODO: comments inside the struct or no?
             # extension_struct_finished += create_function_comment(function_lookup)
             extension_struct_finished += create_struct_member(function_lookup)
@@ -209,7 +223,7 @@ def create_extension_api_struct(with_create_method = False):
         extension_struct_finished += "inline duckdb_ext_api_v0 CreateApi() {\n"
         extension_struct_finished += "    return {\n"
         for function in  api_version_entry['entries']:
-            function_lookup = function_map[function['name']]
+            function_lookup = FUNCTION_MAP[function['name']]
             extension_struct_finished += f'        {function_lookup['name']}, \n'
         extension_struct_finished = extension_struct_finished[:-1]
         extension_struct_finished += "    };\n"
@@ -222,7 +236,7 @@ def create_duckdb_ext_h():
 
     # Generate the typedefs
     typedefs = ""
-    for group in function_groups:
+    for group in FUNCTION_GROUPS:
         typedefs += f'//! {group['group']}\n'
         if 'deprecated' in group and group['deprecated']:
             typedefs += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
@@ -242,18 +256,26 @@ def create_duckdb_ext_h():
 
     extension_header_body = create_extension_api_struct() + '\n\n' + typedefs
 
-    extension_header_body += f'# define DUCKDB_EXTENSION_INIT1 const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME}=0;\n'
-    extension_header_body += f'# define DUCKDB_EXTENSION_INIT2(v) {DUCKDB_EXT_API_PTR_NAME}=v;\n'
-    extension_header_body += f'# define DUCKDB_EXTENSION_INIT3 extern const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME};\n'
+    extension_header_body += f'// Place in global scope of C/C++ file that contains the `init` function\n'
+    extension_header_body += f'# define DUCKDB_EXTENSION_MAIN const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME}=0;\n'
+    extension_header_body += f'// First line in the `init` function should load the api struct using this function\n'
+    extension_header_body += f'# define DUCKDB_EXTENSION_LOAD_API(v) {DUCKDB_EXT_API_PTR_NAME}=v;\n'
+    extension_header_body += f'// Place in global scope of any C/C++ file that needs to access the extension API\n'
+    extension_header_body += f'# define DUCKDB_EXTENSION_EXTERN extern const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME};\n'
 
-    duckdb_ext_h = DUCKDB_EXT_H_HEADER + HEADER_TEMPLATE.replace(functions_mark, extension_header_body)
+    duckdb_ext_h = DUCKDB_EXT_H_HEADER + HEADER_TEMPLATE.replace(BASE_HEADER_CONTENT_MARK, extension_header_body)
     with open('src/include/duckdb_extension.h', 'w+') as f:
         f.write(duckdb_ext_h)
 
-print("Generating header: src/include/duckdb.h")
-create_duckdb_h()
-print("Generating header: src/include/duckdb_extension.h")
-create_duckdb_ext_h()
+if __name__ == "__main__":
+    EXT_API_DEFINITION = parse_ext_api_definition()
+    HEADER_TEMPLATE = fetch_header_template()
+    FUNCTION_GROUPS, FUNCTION_MAP = parse_capi_function_definitions()
 
-os.system("python3 scripts/format.py src/include/duckdb.h --fix --noconfirm")
-os.system("python3 scripts/format.py src/include/duckdb_extension.h --fix --noconfirm")
+    print("Generating header: src/include/duckdb.h")
+    create_duckdb_h()
+    print("Generating header: src/include/duckdb_extension.h")
+    create_duckdb_ext_h()
+
+    os.system("python3 scripts/format.py src/include/duckdb.h --fix --noconfirm")
+    os.system("python3 scripts/format.py src/include/duckdb_extension.h --fix --noconfirm")

@@ -1201,9 +1201,12 @@ typedef struct {
 #define duckdb_scalar_function_set_function    duckdb_ext_api->duckdb_scalar_function_set_function
 #define duckdb_register_scalar_function        duckdb_ext_api->duckdb_register_scalar_function
 
-#define DUCKDB_EXTENSION_INIT1    const duckdb_ext_api_v0 *duckdb_ext_api = 0;
-#define DUCKDB_EXTENSION_INIT2(v) duckdb_ext_api = v;
-#define DUCKDB_EXTENSION_INIT3    extern const duckdb_ext_api_v0 *duckdb_ext_api;
+// Place in global scope of C/C++ file that contains the `init` function
+#define DUCKDB_EXTENSION_MAIN const duckdb_ext_api_v0 *duckdb_ext_api = 0;
+// First line in the `init` function should load the api struct using this function
+#define DUCKDB_EXTENSION_LOAD_API(v) duckdb_ext_api = v;
+// Place in global scope of any C/C++ file that needs to access the extension API
+#define DUCKDB_EXTENSION_EXTERN extern const duckdb_ext_api_v0 *duckdb_ext_api;
 
 #ifdef __cplusplus
 }
