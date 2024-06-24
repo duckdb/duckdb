@@ -134,6 +134,8 @@ enum class ExpressionClass : uint8_t;
 
 enum class ExpressionType : uint8_t;
 
+enum class ExtensionABIType : uint8_t;
+
 enum class ExtensionInstallMode : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
@@ -497,6 +499,9 @@ const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value);
@@ -966,6 +971,9 @@ ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
 
 template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
+
+template<>
+ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value);
 
 template<>
 ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value);

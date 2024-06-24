@@ -3,6 +3,7 @@ import json
 import re
 import glob
 import copy
+from packaging.version import Version
 
 DUCKDB_H_HEADER = '''//===----------------------------------------------------------------------===//
 //
@@ -35,12 +36,44 @@ EXT_API_DEFINITION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/e
 CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation/functions/**/*.json'
 
 # The original order of the function groups in the duckdb.h files. We maintain this for easier PR reviews.
-ORIGINAL_FUNCTION_GROUP_ORDER = [ 'open_connect', 'configuration', 'query_execution', 'result_functions', 'safe_fetch_functions', 'helpers', 'date_time_timestamp_helpers', 'hugeint_helpers', 'unsigned_hugeint_helpers', 'decimal_helpers', 'prepared_statements', 'bind_values_to_prepared_statements', 'execute_prepared_statements', 'extract_statements', 'pending_result_interface', 'value_interface', 'logical_type_interface', 'data_chunk_interface', 'vector_interface', 'validity_mask_functions', 'scalar_functions', 'table_functions', 'table_function_bind', 'table_function_init', 'table_function', 'replacement_scans', 'appender', 'arrow_interface', 'threading_information', 'streaming_result_interface' ]
+ORIGINAL_FUNCTION_GROUP_ORDER = [
+    'open_connect',
+    'configuration',
+    'query_execution',
+    'result_functions',
+    'safe_fetch_functions',
+    'helpers',
+    'date_time_timestamp_helpers',
+    'hugeint_helpers',
+    'unsigned_hugeint_helpers',
+    'decimal_helpers',
+    'prepared_statements',
+    'bind_values_to_prepared_statements',
+    'execute_prepared_statements',
+    'extract_statements',
+    'pending_result_interface',
+    'value_interface',
+    'logical_type_interface',
+    'data_chunk_interface',
+    'vector_interface',
+    'validity_mask_functions',
+    'scalar_functions',
+    'table_functions',
+    'table_function_bind',
+    'table_function_init',
+    'table_function',
+    'replacement_scans',
+    'appender',
+    'arrow_interface',
+    'threading_information',
+    'streaming_result_interface',
+]
 
 # The file that forms the base for the header generation
 BASE_HEADER_TEMPLATE = 'src/include/duckdb/main/capi/header_generation/header_base.hpp'
 # The comment marking where this script will inject its contents
 BASE_HEADER_CONTENT_MARK = '// DUCKDB_FUNCTIONS_ARE_GENERATED_HERE\n'
+
 
 # Loads the template for the header files to be generated
 def fetch_header_template():
@@ -54,7 +87,8 @@ def fetch_header_template():
         print(f"Could not find the header start mark: {header_mark}")
         exit(1)
 
-    return result[result.find(header_mark)+len(header_mark):]
+    return result[result.find(header_mark) + len(header_mark) :]
+
 
 # Parse the CAPI_FUNCTION_DEFINITION_FILES to get the full list of functions
 def parse_capi_function_definitions():
@@ -82,6 +116,7 @@ def parse_capi_function_definitions():
 
     return (function_groups, function_map)
 
+
 # Read extension API
 def parse_ext_api_definition():
     with open(EXT_API_DEFINITION_FILE, 'r') as f:
@@ -91,9 +126,12 @@ def parse_ext_api_definition():
             print(f"Invalid JSON found in {extension_api_v0_file}: {err}")
             exit(1)
 
+
 # Creates the comment that accompanies describing a C api function
 def create_function_comment(function_obj):
     result = ''
+
+    function_name = function_obj['name']
     # Construct comment
     if 'comment' in function_obj:
         comment = function_obj['comment']
@@ -102,65 +140,108 @@ def create_function_comment(function_obj):
         # result += '\n\n'
         if 'params' in function_obj:
             for param in function_obj['params']:
+                param_name = param['name']
                 if not 'param_comments' in comment:
                     if not ALLOW_UNCOMMENTED_PARAMS:
                         print(comment)
-                        print(f'Missing param comments for function {function_obj['name']}')
+                        print(f'Missing param comments for function {function_name}')
                         exit(1)
                     continue
                 if param['name'] in comment['param_comments']:
-                    result += f'* {param['name']}: {comment['param_comments'][param['name']]}\n'
+                    param_comment = comment['param_comments'][param['name']]
+                    result += f'* {param_name}: {param_comment}\n'
                 elif not ALLOW_UNCOMMENTED_PARAMS:
-                    print(f'Uncommented parameter found: {param['name']} of function {function['name']}')
+                    print(f'Uncommented parameter found: {param_name} of function {function_name}')
                     exit(1)
         if 'return_value' in comment:
-            result += f'* returns: {comment['return_value']}\n'
+            comment_return_value = comment['return_value']
+            result += f'* returns: {comment_return_value}\n'
         result += '*/\n'
     return result
+
 
 # Creates the function declaration for the regular C header file
 def create_function_declaration(function_obj):
     result = ''
+    function_name = function_obj['name']
+    function_return_type = function_obj['return_type']
+
     # Construct function declaration
-    result += f'DUCKDB_API {function_obj['return_type']}'
+    result += f'DUCKDB_API {function_return_type}'
     if result[-1] != '*':
         result += ' '
-    result += f'{function_obj['name']}('
+    result += f'{function_name}('
 
     if 'params' in function_obj:
         if len(function_obj['params']) > 0:
             for param in function_obj['params']:
-                result += f'{param['type']}'
+                param_type = param['type']
+                param_name = param['name']
+                result += f'{param_type}'
                 if result[-1] != '*':
                     result += ' '
-                result += f'{param['name']}, '
-            result = result[:-2] # Trailing comma
+                result += f'{param_name}, '
+            result = result[:-2]  # Trailing comma
     result += ');\n'
 
     return result
 
+
 # Creates the function declaration for extension api struct
 def create_struct_member(function_obj):
     result = ''
-    result += f'    {function_obj['return_type']} (*{function_obj['name']})('
+
+    function_name = function_obj['name']
+    function_return_type = function_obj['return_type']
+    result += f'    {function_return_type} (*{function_name})('
     if 'params' in function_obj:
         if len(function_obj['params']) > 0:
             for param in function_obj['params']:
-                result += f'{param['type']} {param['name']},'
-            result = result[:-1] # Trailing comma
+                param_type = param['type']
+                param_name = param['name']
+                result += f'{param_type} {param_name},'
+            result = result[:-1]  # Trailing comma
     result += ');'
 
     return result
 
+
 # Creates the function declaration for extension api struct
 def create_function_typedef(function_obj):
-    return f'#define {function_obj['name']} {DUCKDB_EXT_API_PTR_NAME}->{function_obj['name']}\n'
+    function_name = function_obj['name']
+    return f'#define {function_name} {DUCKDB_EXT_API_PTR_NAME}->{function_name}\n'
+
 
 def to_camel_case(snake_str):
     return " ".join(x.capitalize() for x in snake_str.lower().split("_"))
 
+
+def parse_semver(version):
+    if version[0] != 'v':
+        print(f"Version string {version} does not start with a v")
+        exit(1)
+
+    versions = version[1:].split(".")
+
+    if len(versions) != 3:
+        print(f"Version string {version} is invalid, only vx.y.z is supported")
+        exit(1)
+
+    return int(versions[0]), int(versions[1]), int(versions[2])
+
+
+def create_version_defines(version):
+    major, minor, patch = parse_semver(EXT_API_VERSION)
+
+    result = f"#define DUCKDB_EXTENSION_API_VERSION_MAJOR {major}\n"
+    result += f"#define DUCKDB_EXTENSION_API_VERSION_MINOR {minor}\n"
+    result += f"#define DUCKDB_EXTENSION_API_VERSION_PATCH {patch}\n"
+
+    return result
+
+
 # Create duckdb.h
-def create_duckdb_h():
+def create_duckdb_h(ext_api_version):
     function_declarations_finished = ''
 
     function_groups_copy = copy.deepcopy(FUNCTION_GROUPS)
@@ -178,7 +259,7 @@ def create_duckdb_h():
 //===--------------------------------------------------------------------===//\n\n'''
 
         if 'description' in curr_group:
-            function_declarations_finished += f'{curr_group['description']}\n'
+            function_declarations_finished += curr_group['description'] + '\n'
 
         if 'deprecated' in curr_group and curr_group['deprecated']:
             function_declarations_finished += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
@@ -195,23 +276,24 @@ def create_duckdb_h():
 
             function_declarations_finished += '\n'
 
-
         if 'deprecated' in curr_group and curr_group['deprecated']:
             function_declarations_finished += '#endif\n'
 
-
-    duckdb_capi_header_body = function_declarations_finished + "\n\n" + create_extension_api_struct(with_create_method=True)
+    duckdb_capi_header_body = (
+        function_declarations_finished + "\n\n" + create_extension_api_struct(ext_api_version, with_create_method=True)
+    )
     duckdb_h = DUCKDB_H_HEADER + HEADER_TEMPLATE.replace(BASE_HEADER_CONTENT_MARK, duckdb_capi_header_body)
     with open('src/include/duckdb.h', 'w+') as f:
         f.write(duckdb_h)
 
-def create_extension_api_struct(with_create_method = False):
+
+def create_extension_api_struct(ext_api_version, with_create_method=False):
     # Generate the struct
     extension_struct_finished = 'typedef struct {\n'
     for api_version_entry in EXT_API_DEFINITION['version_entries']:
-        extension_struct_finished += f'    // Version {api_version_entry['version']}\n'
-
-        for function in  api_version_entry['entries']:
+        version = api_version_entry['version']
+        extension_struct_finished += f'    // Version {version}\n'
+        for function in api_version_entry['entries']:
             function_lookup = FUNCTION_MAP[function['name']]
             # TODO: comments inside the struct or no?
             # extension_struct_finished += create_function_comment(function_lookup)
@@ -222,22 +304,29 @@ def create_extension_api_struct(with_create_method = False):
     if with_create_method:
         extension_struct_finished += "inline duckdb_ext_api_v0 CreateApi() {\n"
         extension_struct_finished += "    return {\n"
-        for function in  api_version_entry['entries']:
-            function_lookup = FUNCTION_MAP[function['name']]
-            extension_struct_finished += f'        {function_lookup['name']}, \n'
+        for api_version_entry in EXT_API_DEFINITION['version_entries']:
+            for function in api_version_entry['entries']:
+                function_lookup = FUNCTION_MAP[function['name']]
+                function_lookup_name = function_lookup['name']
+                extension_struct_finished += f'        {function_lookup_name}, \n'
         extension_struct_finished = extension_struct_finished[:-1]
         extension_struct_finished += "    };\n"
         extension_struct_finished += "}\n\n"
 
+    extension_struct_finished += create_version_defines(ext_api_version)
+    extension_struct_finished += "\n"
+
     return extension_struct_finished
 
+
 # Create duckdb_extension_api.h
-def create_duckdb_ext_h():
+def create_duckdb_ext_h(ext_api_version):
 
     # Generate the typedefs
     typedefs = ""
     for group in FUNCTION_GROUPS:
-        typedefs += f'//! {group['group']}\n'
+        group_name = group['group']
+        typedefs += f'//! {group_name}\n'
         if 'deprecated' in group and group['deprecated']:
             typedefs += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
 
@@ -254,28 +343,56 @@ def create_duckdb_ext_h():
             typedefs += '#endif\n'
         typedefs += '\n'
 
-    extension_header_body = create_extension_api_struct() + '\n\n' + typedefs
+    extension_header_body = create_extension_api_struct(ext_api_version) + '\n\n' + typedefs
 
     extension_header_body += f'// Place in global scope of C/C++ file that contains the `init` function\n'
-    extension_header_body += f'# define DUCKDB_EXTENSION_MAIN const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME}=0;\n'
+    extension_header_body += (
+        f'# define DUCKDB_EXTENSION_MAIN const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME}=0;\n'
+    )
     extension_header_body += f'// First line in the `init` function should load the api struct using this function\n'
     extension_header_body += f'# define DUCKDB_EXTENSION_LOAD_API(v) {DUCKDB_EXT_API_PTR_NAME}=v;\n'
     extension_header_body += f'// Place in global scope of any C/C++ file that needs to access the extension API\n'
-    extension_header_body += f'# define DUCKDB_EXTENSION_EXTERN extern const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME};\n'
+    extension_header_body += (
+        f'# define DUCKDB_EXTENSION_EXTERN extern const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME};\n'
+    )
 
     duckdb_ext_h = DUCKDB_EXT_H_HEADER + HEADER_TEMPLATE.replace(BASE_HEADER_CONTENT_MARK, extension_header_body)
     with open('src/include/duckdb_extension.h', 'w+') as f:
         f.write(duckdb_ext_h)
 
+
+def get_extension_api_version():
+    versions = []
+
+    for version_entry in EXT_API_DEFINITION['version_entries']:
+        versions.append(version_entry['version'])
+
+    versions_copy = copy.deepcopy(versions)
+
+    versions.sort(key=Version)
+
+    if versions != versions_copy:
+        print("Failed to parse extension api: versions are not ordered correctly")
+        exit(1)
+
+    return versions[-1]
+
+
+# TODO make this code less spaghetti
+# TODO make this run on python <3.12
 if __name__ == "__main__":
     EXT_API_DEFINITION = parse_ext_api_definition()
+    EXT_API_VERSION = get_extension_api_version()
     HEADER_TEMPLATE = fetch_header_template()
     FUNCTION_GROUPS, FUNCTION_MAP = parse_capi_function_definitions()
 
+    print("Generating C APIs")
+    print(f" * Extension API Version: {EXT_API_VERSION}")
+
     print("Generating header: src/include/duckdb.h")
-    create_duckdb_h()
+    create_duckdb_h(EXT_API_VERSION)
     print("Generating header: src/include/duckdb_extension.h")
-    create_duckdb_ext_h()
+    create_duckdb_ext_h(EXT_API_VERSION)
 
     os.system("python3 scripts/format.py src/include/duckdb.h --fix --noconfirm")
     os.system("python3 scripts/format.py src/include/duckdb_extension.h --fix --noconfirm")

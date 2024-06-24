@@ -21,9 +21,10 @@ namespace duckdb {
 // Load External Extension
 //===--------------------------------------------------------------------===//
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-typedef void (*ext_init_capi_fun_t)(duckdb_connection con, duckdb_ext_api_v0*);
+// The C++ init function
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
-typedef const char *(*ext_version_capi_fun_t)(void);
+// The C init function
+typedef void (*ext_init_capi_fun_t)(duckdb_connection con, void *);
 typedef const char *(*ext_version_fun_t)(void);
 typedef bool (*ext_is_storage_t)(void);
 
@@ -91,8 +92,16 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *meta
 
 	result.magic_value = FilterZeroAtEnd(metadata_field[0]);
 	result.platform = FilterZeroAtEnd(metadata_field[1]);
-	result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+
 	result.extension_version = FilterZeroAtEnd(metadata_field[3]);
+
+	result.abi_type = EnumUtil::FromString<ExtensionABIType>(FilterZeroAtEnd(metadata_field[4]));
+
+	if (result.abi_type == ExtensionABIType::C_STRUCT) {
+		result.duckdb_capi_version = FilterZeroAtEnd(metadata_field[2]);
+	} else if (result.abi_type == ExtensionABIType::CPP) {
+		result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+	}
 
 	result.signature = string(metadata, ParsedExtensionMetaData::FOOTER_SIZE - ParsedExtensionMetaData::SIGNATURE_SIZE);
 	return result;
@@ -387,7 +396,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		} catch (std::exception &e) {
 			ErrorData error(e);
 			throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-										init_fun_name, res.filename, error.RawMessage());
+			                            init_fun_name, res.filename, error.RawMessage());
 		}
 
 		D_ASSERT(res.install_info);
@@ -398,7 +407,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 	// "NEW WAY" of loading extensions enabling C API only
 	init_fun_name = res.filebase + "_init_capi";
-	ext_init_capi_fun_t init_fun_capi = TryLoadFunctionFromDLL<ext_init_capi_fun_t>(res.lib_hdl, init_fun_name, res.filename);
+	ext_init_capi_fun_t init_fun_capi =
+	    TryLoadFunctionFromDLL<ext_init_capi_fun_t>(res.lib_hdl, init_fun_name, res.filename);
 
 	if (!init_fun_capi) {
 		throw IOException("File \"%s\" did not contain function \"%s\": %s", res.filename, init_fun_name, GetDLError());
@@ -418,7 +428,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-									init_fun_name, res.filename, error.RawMessage());
+		                            init_fun_name, res.filename, error.RawMessage());
 	}
 
 	D_ASSERT(res.install_info);

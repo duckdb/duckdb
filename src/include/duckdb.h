@@ -3242,8 +3242,6 @@ DUCKDB_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
 typedef struct {
 	// Version v0.0.1
 	duckdb_state (*duckdb_open)(const char *path, duckdb_database *out_database);
-	duckdb_state (*duckdb_open_ext)(const char *path, duckdb_database *out_database, duckdb_config config,
-	                                char **out_error);
 	void (*duckdb_close)(duckdb_database *database);
 	duckdb_state (*duckdb_connect)(duckdb_database database, duckdb_connection *out_connection);
 	void (*duckdb_interrupt)(duckdb_connection connection);
@@ -3549,13 +3547,16 @@ typedef struct {
 	void (*duckdb_destroy_task_state)(duckdb_task_state state);
 	bool (*duckdb_execution_is_finished)(duckdb_connection con);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
+	// Version v0.0.2
+	duckdb_state (*duckdb_open_ext)(const char *path, duckdb_database *out_database, duckdb_config config,
+	                                char **out_error);
+	// Version v0.0.3
 	duckdb_data_chunk (*duckdb_fetch_chunk)(duckdb_result result);
 } duckdb_ext_api_v0;
 
 inline duckdb_ext_api_v0 CreateApi() {
 	return {
 	    duckdb_open,
-	    duckdb_open_ext,
 	    duckdb_close,
 	    duckdb_connect,
 	    duckdb_interrupt,
@@ -3833,9 +3834,14 @@ inline duckdb_ext_api_v0 CreateApi() {
 	    duckdb_destroy_task_state,
 	    duckdb_execution_is_finished,
 	    duckdb_stream_fetch_chunk,
+	    duckdb_open_ext,
 	    duckdb_fetch_chunk,
 	};
 }
+
+#define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
+#define DUCKDB_EXTENSION_API_VERSION_MINOR 0
+#define DUCKDB_EXTENSION_API_VERSION_PATCH 3
 
 #ifdef __cplusplus
 }

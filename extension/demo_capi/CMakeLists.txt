@@ -4,4 +4,7 @@ project(DemoCapiExtension)
 
 include_directories(include)
 
-build_loadable_extension(demo_capi "" capi_demo.cpp add_numbers.cpp)
+set(CAPI_VERSION "v0.0.1")
+
+build_loadable_extension_capi(demo_capi ${CAPI_VERSION} capi_demo.cpp
+                              add_numbers.cpp)

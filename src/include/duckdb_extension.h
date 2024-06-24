@@ -528,8 +528,6 @@ typedef struct _duckdb_arrow_array {
 typedef struct {
 	// Version v0.0.1
 	duckdb_state (*duckdb_open)(const char *path, duckdb_database *out_database);
-	duckdb_state (*duckdb_open_ext)(const char *path, duckdb_database *out_database, duckdb_config config,
-	                                char **out_error);
 	void (*duckdb_close)(duckdb_database *database);
 	duckdb_state (*duckdb_connect)(duckdb_database database, duckdb_connection *out_connection);
 	void (*duckdb_interrupt)(duckdb_connection connection);
@@ -835,8 +833,16 @@ typedef struct {
 	void (*duckdb_destroy_task_state)(duckdb_task_state state);
 	bool (*duckdb_execution_is_finished)(duckdb_connection con);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
+	// Version v0.0.2
+	duckdb_state (*duckdb_open_ext)(const char *path, duckdb_database *out_database, duckdb_config config,
+	                                char **out_error);
+	// Version v0.0.3
 	duckdb_data_chunk (*duckdb_fetch_chunk)(duckdb_result result);
 } duckdb_ext_api_v0;
+
+#define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
+#define DUCKDB_EXTENSION_API_VERSION_MINOR 0
+#define DUCKDB_EXTENSION_API_VERSION_PATCH 3
 
 //! table_functions
 #define duckdb_create_table_function              duckdb_ext_api->duckdb_create_table_function

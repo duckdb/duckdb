@@ -4,7 +4,6 @@
             "version": "v0.0.1",
             "entries": [
                 {"name": "duckdb_open"},
-                {"name": "duckdb_open_ext"},
                 {"name": "duckdb_close"},
                 {"name": "duckdb_connect"},
                 {"name": "duckdb_interrupt"},
@@ -281,8 +280,19 @@
                 {"name": "duckdb_task_state_is_finished"},
                 {"name": "duckdb_destroy_task_state"},
                 {"name": "duckdb_execution_is_finished"},
-                {"name": "duckdb_stream_fetch_chunk"},
-                {"name": "duckdb_fetch_chunk"}
+                {"name": "duckdb_stream_fetch_chunk"}
+            ]
+        },
+        {
+            "version": "v0.0.2",
+            "entries": [
+                { "name": "duckdb_open_ext" }
+            ]
+        },
+        {
+            "version": "v0.0.3",
+            "entries": [
+                { "name": "duckdb_fetch_chunk" }
             ]
         }
     ]

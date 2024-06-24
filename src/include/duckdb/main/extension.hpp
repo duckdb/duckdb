@@ -26,6 +26,12 @@ public:
 	}
 };
 
+enum class ExtensionABIType : uint8_t {
+	UNKNOWN = 0,
+	CPP = 1,
+	C_STRUCT = 2,
+};
+
 //! The parsed extension metadata footer
 struct ParsedExtensionMetaData {
 	static constexpr const idx_t FOOTER_SIZE = 512;
@@ -35,8 +41,13 @@ struct ParsedExtensionMetaData {
 
 	string magic_value;
 
+	ExtensionABIType abi_type;
+
 	string platform;
+	// (only for ExtensionABIType::CPP) the DuckDB version this extension is compiled for
 	string duckdb_version;
+	// (only for ExtensionABIType::C_STRUCT) the CAPI version of the C_STRUCT
+	string duckdb_capi_version;
 	string extension_version;
 	string signature;
 
