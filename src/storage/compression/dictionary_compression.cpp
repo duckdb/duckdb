@@ -31,7 +31,7 @@ public:
 
 			if (row_is_valid) {
 				string_size = data[idx].GetSize();
-				if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
+				if (string_size >= StringUncompressed::GetStringBlockLimit(info.GetBlockSize())) {
 					// Big strings not implemented for dictionary compression
 					return false;
 				}
