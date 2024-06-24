@@ -3,6 +3,7 @@
 #include "terminal.hpp"
 #include "duckdb_shell_wrapper.h"
 #include "sqlite3.h"
+#include "utf8proc_wrapper.hpp"
 #include <sys/stat.h>
 
 namespace duckdb {
