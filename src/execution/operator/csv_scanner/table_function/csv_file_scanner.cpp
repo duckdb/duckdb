@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-CSVUnionData::~CSVUnionData() {}
+CSVUnionData::~CSVUnionData() {
+}
 
 void CSVColumnSchema::Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path_p) {
 	if (!columns.empty()) {
@@ -174,9 +175,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		options = union_reader.options;
 		types = union_reader.GetTypes();
 		state_machine = union_reader.state_machine;
-		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind,
-		                                    bind_data.return_types, bind_data.return_names, column_ids, nullptr,
-		                                    file_path, context, nullptr);
+		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
+		                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
 
 		InitializeFileNamesTypes();
 		SetStart();

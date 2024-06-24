@@ -117,7 +117,8 @@ public:
 	using UNION_READER_DATA = unique_ptr<ParquetUnionData>;
 
 public:
-	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options, shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
+	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
+	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
 	~ParquetReader();
 
 	FileSystem &fs;
@@ -184,7 +185,7 @@ public:
 	}
 
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
-	              shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
+	                                                 shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
 
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only

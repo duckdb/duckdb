@@ -502,7 +502,8 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	return result;
 }
 
-ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p, shared_ptr<ParquetFileMetadataCache> metadata_p)
+ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p,
+                             shared_ptr<ParquetFileMetadataCache> metadata_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       parquet_options(std::move(parquet_options_p)) {
 	file_name = std::move(file_name_p);
@@ -532,7 +533,8 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	InitializeSchema(context_p);
 }
 
-ParquetUnionData::~ParquetUnionData() {}
+ParquetUnionData::~ParquetUnionData() {
+}
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
@@ -581,7 +583,8 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 }
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
-	              shared_ptr<ParquetFileMetadataCache> metadata, const string &name) {
+                                                         shared_ptr<ParquetFileMetadataCache> metadata,
+                                                         const string &name) {
 	ParquetReader reader(context, parquet_options, metadata);
 	return reader.ReadStatistics(name);
 }

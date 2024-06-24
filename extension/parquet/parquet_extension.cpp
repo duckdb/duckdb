@@ -106,8 +106,7 @@ struct ParquetFileReaderData {
 	    : reader(std::move(reader_p)), file_state(ParquetFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
 	// Create data for an existing reader
-	explicit ParquetFileReaderData(unique_ptr<ParquetUnionData> union_data_p)
-	    : file_mutex(make_uniq<mutex>()) {
+	explicit ParquetFileReaderData(unique_ptr<ParquetUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
 		if (union_data_p->reader) {
 			reader = std::move(union_data_p->reader);
 			file_state = ParquetFileState::OPEN;
@@ -481,7 +480,8 @@ public:
 					return nullptr;
 				}
 				// get and merge stats for file
-				auto file_stats = ParquetReader::ReadStatistics(context, bind_data.parquet_options, metadata, bind_data.names[column_index]);
+				auto file_stats = ParquetReader::ReadStatistics(context, bind_data.parquet_options, metadata,
+				                                                bind_data.names[column_index]);
 				if (!file_stats) {
 					return nullptr;
 				}
@@ -669,8 +669,8 @@ public:
 				if (file_name != reader_data.reader->file_name) {
 					throw InternalException("Mismatch in filename order and reader order in parquet scan");
 				}
-				InitializeParquetReader(*reader_data.reader, bind_data, input.column_ids, input.filters, context, file_idx,
-				                        result->multi_file_reader_state);
+				InitializeParquetReader(*reader_data.reader, bind_data, input.column_ids, input.filters, context,
+				                        file_idx, result->multi_file_reader_state);
 			}
 		}
 
@@ -922,9 +922,11 @@ public:
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;
-						reader = make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options, union_data.metadata);
+						reader = make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options,
+						                                        union_data.metadata);
 					} else {
-						reader = make_shared_ptr<ParquetReader>(context, current_reader_data.file_to_be_opened, pq_options);
+						reader =
+						    make_shared_ptr<ParquetReader>(context, current_reader_data.file_to_be_opened, pq_options);
 					}
 					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
 					                        context, i, parallel_state.multi_file_reader_state);

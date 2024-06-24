@@ -23,9 +23,9 @@ public:
 
 	//! Union all files(readers) by their col names
 	template <class READER_TYPE, class OPTION_TYPE>
-	static vector<typename READER_TYPE::UNION_READER_DATA> UnionCols(ClientContext &context, const vector<string> &files,
-	                                                 vector<LogicalType> &union_col_types,
-	                                                 vector<string> &union_col_names, OPTION_TYPE &options) {
+	static vector<typename READER_TYPE::UNION_READER_DATA>
+	UnionCols(ClientContext &context, const vector<string> &files, vector<LogicalType> &union_col_types,
+	          vector<string> &union_col_names, OPTION_TYPE &options) {
 		vector<typename READER_TYPE::UNION_READER_DATA> union_readers;
 		case_insensitive_map_t<idx_t> union_names_map;
 		for (idx_t file_idx = 0; file_idx < files.size(); ++file_idx) {
