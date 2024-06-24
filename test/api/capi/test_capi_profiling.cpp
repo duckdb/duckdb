@@ -16,7 +16,7 @@ string BuildProfilingSettingsString(const std::vector<string> &settings) {
 }
 
 void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<string> &settings) {
-	for (size_t i = 0; i < settings.size(); i++) {
+	for (idx_t i = 0; i < settings.size(); i++) {
 		auto value = duckdb_profiling_info_get_value(profiling_info, settings[i].c_str());
 		if (value != nullptr) {
 			if (settings[i] == "EXTRA_INFO") {

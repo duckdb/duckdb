@@ -33,15 +33,36 @@ class ProfilingNode {
 public:
 	virtual ~ProfilingNode() {};
 
-public:
+private:
 	ProfilingInfo profiling_info;
 	vector<unique_ptr<ProfilingNode>> children;
+
+	friend class TreeChildrenIterator;
+
+public:
 	idx_t depth = 0;
 	ProfilingNodeType node_type = ProfilingNodeType::OPERATOR;
 
 public:
 	idx_t GetChildCount() {
 		return children.size();
+	}
+
+	ProfilingInfo &GetProfilingInfo() {
+		return profiling_info;
+	}
+
+	ProfilingInfo &GetProfilingInfo() const {
+		return const_cast<ProfilingInfo &>(profiling_info);
+	}
+
+	ProfilingNode *GetChild(idx_t idx) {
+		return children[idx].get();
+	}
+
+	ProfilingNode *AddChild(unique_ptr<ProfilingNode> child) {
+		children.push_back(std::move(child));
+		return children.back().get();
 	}
 
 	template <class TARGET>

@@ -4,19 +4,23 @@ using duckdb::Connection;
 using duckdb::DuckDB;
 using duckdb::EnumUtil;
 using duckdb::MetricsType;
+using duckdb::optional_ptr;
+using duckdb::ProfilingNode;
 
 duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection) {
 	if (!connection) {
 		return nullptr;
 	}
 	Connection *conn = reinterpret_cast<Connection *>(connection);
-	duckdb::ProfilingNode *profiling_info;
+	optional_ptr<ProfilingNode> profiling_info;
 	try {
 		profiling_info = conn->GetProfilingTree();
 	} catch (std::exception &ex) {
 		return nullptr;
 	}
-	return reinterpret_cast<duckdb_profiling_info>(profiling_info);
+
+	ProfilingNode *profiling_info_ptr = profiling_info.get();
+	return reinterpret_cast<duckdb_profiling_info>(profiling_info_ptr);
 }
 
 const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key) {
@@ -24,7 +28,7 @@ const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const ch
 		return nullptr;
 	}
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	auto &profiling_info = node.profiling_info;
+	auto &profiling_info = node.GetProfilingInfo();
 	auto key_enum = EnumUtil::FromString<MetricsType>(duckdb::StringUtil::Upper(key));
 	if (!profiling_info.Enabled(key_enum)) {
 		return nullptr;
@@ -48,7 +52,7 @@ duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info
 	if (index >= node.GetChildCount()) {
 		return nullptr;
 	}
-	return reinterpret_cast<duckdb_profiling_info>(node.children[index].get());
+	return reinterpret_cast<duckdb_profiling_info>(node.GetChild(index));
 }
 
 const char *duckdb_profiling_info_get_name(duckdb_profiling_info info) {

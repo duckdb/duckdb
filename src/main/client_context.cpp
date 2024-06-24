@@ -1019,12 +1019,6 @@ void ClientContext::Interrupt() {
 	interrupted = true;
 }
 
-bool ClientContext::ProfilingIsEnabled() {
-	auto lock = LockContext();
-	auto &client_config = ClientConfig::GetConfig(*this);
-	return client_config.enable_profiler;
-}
-
 void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
 	auto &client_config = ClientConfig::GetConfig(*this);

@@ -436,7 +436,7 @@ typedef struct _duckdb_value {
 	void *__val;
 } * duckdb_value;
 
-//! Holds the result of a query profiling operation.
+//! Holds a recursive tree that matches the query plan.
 typedef struct _duckdb_profiling_info {
 	void *__prof;
 } * duckdb_profiling_info;
@@ -2724,12 +2724,12 @@ DUCKDB_API idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info inf
 //! Returns the child node at the specified index.
 DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
 
-//! Returns the name of the current profiling info node, if the node is an operation node. Returns nullptr otherwise.
+//! Returns the name of the current profiling info node, if the node is an operator node. Returns nullptr otherwise.
 //!
 //! The result must be freed with `duckdb_free`.
 DUCKDB_API const char *duckdb_profiling_info_get_name(duckdb_profiling_info info);
 
-//! Returns the query of the current profiling info node, if the node the root. Returns nullptr otherwise.
+//! Returns the query of the current profiling info node, if the node the query root node. Returns nullptr otherwise.
 //!
 //! The result must be freed with `duckdb_free`.
 DUCKDB_API const char *duckdb_profiling_info_get_query(duckdb_profiling_info info);
