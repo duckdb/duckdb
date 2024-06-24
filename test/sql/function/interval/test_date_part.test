@@ -205,6 +205,16 @@ ORDER BY 1;
 1 year 4 months	41472000000
 2 years	62208000000
 
+query II
+SELECT i, nanosecond(i) AS parts
+FROM intervals
+ORDER BY 1;
+----
+00:34:26.3434	26343400000
+42 days	0
+1 year 4 months	0
+2 years	0
+
 # Invalid parts
 
 foreach datepart dow isodow doy week isoyear yearweek era timezone timezone_hour timezone_minute

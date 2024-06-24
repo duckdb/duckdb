@@ -1,0 +1,86 @@
+# name: test/sql/index/art/scan/test_art_null_bytes.test
+# description: Test ART keys containing NULL bytes.
+# group: [scan]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE varchars(v VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO varchars VALUES ('hello'), ('hello' || chr(0)), ('hello' || chr(0) || chr(0)), ('hello' || chr(0) || chr(0) || chr(0));
+
+statement error
+INSERT INTO varchars VALUES ('hello' || chr(0) || chr(0) || chr(0));
+----
+Duplicate key
+
+query I
+SELECT * FROM varchars WHERE v = 'hello'
+----
+hello
+
+query I
+SELECT * FROM varchars WHERE v = 'hello' || chr(0)
+----
+hello\0
+
+query I
+SELECT * FROM varchars WHERE v = 'hello' || chr(0) || chr(0)
+----
+hello\0\0
+
+query I
+SELECT * FROM varchars WHERE v = 'hello' || chr(0) || chr(0) || chr(0)
+----
+hello\0\0\0
+
+statement ok
+CREATE TABLE blobs(b BLOB PRIMARY KEY);
+
+statement ok
+INSERT INTO blobs VALUES (''), ('\x00'), ('\x01'), ('\x00\x01'), ('\x01\x00'), ('\x01\x01'), ('\x00\x00');
+
+statement error
+INSERT INTO blobs VALUES ('\x00\x01');
+----
+Duplicate key
+
+query I
+SELECT * FROM blobs WHERE b = ''
+----
+(empty)
+
+query I
+SELECT * FROM blobs WHERE b = '\x00'
+----
+\x00
+
+query I
+SELECT * FROM blobs WHERE b = '\x00\x01'
+----
+\x00\x01
+
+query I
+SELECT * FROM blobs WHERE b >= '\x00' ORDER BY b::VARCHAR
+----
+\x00
+\x00\x00
+\x00\x01
+\x01
+\x01\x00
+\x01\x01
+
+query I
+SELECT * FROM blobs WHERE b >= '\x01' ORDER BY b::VARCHAR
+----
+\x01
+\x01\x00
+\x01\x01
+
+query I
+SELECT * FROM blobs WHERE b >= '\x01\x00' ORDER BY b::VARCHAR
+----
+\x01\x00
+\x01\x01

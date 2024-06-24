@@ -81,7 +81,7 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG 6826755ec32aea77777b136cc81683fa9be4df7b
+    GIT_TAG dbb9971c900c5888e3e3598af91de3b9b884aca6
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     )
@@ -100,12 +100,18 @@ duckdb_extension_load(sqlite_scanner
         GIT_TAG 50b7870be099186f195bc72bac5e9e11247ee2f9
         )
 
+duckdb_extension_load(sqlsmith
+        GIT_URL https://github.com/duckdb/duckdb_sqlsmith
+        GIT_TAG 721460ff1f31ce1dc1e4a9c4a55c0faf0b466dcb
+        )
+
 ################# SUBSTRAIT
 if (NOT WIN32)
     duckdb_extension_load(substrait
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
             GIT_TAG 237931391ebc7e6aee7aa81052fa1411f6c4128e
+            APPLY_PATCHES
             )
 endif()
 

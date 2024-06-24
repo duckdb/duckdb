@@ -396,15 +396,15 @@ class TestAllTypes(object):
             ),
             # Enums don't have a numpy equivalent and yield pandas Categorical.
             'small_enum': pd.Categorical(
-                ['DUCK_DUCK_ENUM', 'GOOSE', np.NaN],
+                ['DUCK_DUCK_ENUM', 'GOOSE', np.nan],
                 ordered=True,
             ),
             'medium_enum': pd.Categorical(
-                ['enum_0', 'enum_299', np.NaN],
+                ['enum_0', 'enum_299', np.nan],
                 ordered=True,
             ),
             'large_enum': pd.Categorical(
-                ['enum_0', 'enum_69999', np.NaN],
+                ['enum_0', 'enum_69999', np.nan],
                 ordered=True,
             ),
             # The following types don't have a numpy equivalent and yield

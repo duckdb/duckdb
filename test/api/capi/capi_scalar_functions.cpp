@@ -105,7 +105,7 @@ TEST_CASE("Test Scalar Functions C API", "[capi]") {
 }
 
 void ReturnStringInfo(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
-	auto extra_info = string((const char *)info);
+	auto extra_info = string((const char *)duckdb_scalar_function_get_extra_info(info));
 	// get the total number of rows in this chunk
 	idx_t input_size = duckdb_data_chunk_get_size(input);
 	// extract the two input vectors

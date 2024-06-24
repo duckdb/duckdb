@@ -75,4 +75,4 @@ FROM generate_series(1, 10) as tbl(x);
 query II
 EXPLAIN FROM noncse;
 ----
-physical_plan	<REGEX>:.*quantile\(x\).*quantile\(x\).*
+physical_plan	<REGEX>:.*quantile_disc\(x\).*quantile_disc\(x\).*

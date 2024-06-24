@@ -1,5 +1,8 @@
 import os
+import sys
 import json
+
+# Requires `python3 -m pip install cxxheaderparser pcpp`
 from get_cpp_methods import get_methods, FunctionParam, ConnectionMethod
 from typing import List, Tuple
 

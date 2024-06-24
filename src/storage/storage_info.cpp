@@ -1,4 +1,6 @@
 #include "duckdb/storage/storage_info.hpp"
+
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
@@ -90,6 +92,12 @@ void Storage::VerifyBlockAllocSize(const idx_t block_alloc_size) {
 		throw InvalidInputException(
 		    "the block size must be greater or equal than the minimum block size of %llu, got %llu",
 		    MIN_BLOCK_ALLOC_SIZE, block_alloc_size);
+	}
+	auto max_value = NumericCast<idx_t>(NumericLimits<int32_t>().Maximum());
+	if (block_alloc_size > max_value) {
+		throw InvalidInputException(
+		    "the block size must not be greater than the maximum 32-bit signed integer value of %llu, got %llu",
+		    max_value, block_alloc_size);
 	}
 	// NOTE: remove this once we start supporting different block sizes.
 	if (block_alloc_size != BLOCK_ALLOC_SIZE) {

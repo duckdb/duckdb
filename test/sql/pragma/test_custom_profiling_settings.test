@@ -24,21 +24,29 @@ statement ok
 SELECT cpu_time, extra_info, operator_cardinality, operator_timing FROM metrics_output;
 
 query I rowsort
-SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
 ----
-CPU_TIME
-EXTRA_INFO
-OPERATOR_CARDINALITY
-OPERATOR_TIMING
+"CPU_TIME": "true"
+"EXTRA_INFO": "true"
+"OPERATOR_CARDINALITY": "true"
+"OPERATOR_TIMING": "true"
 
 # Turn off all settings
 statement ok
 PRAGMA custom_profiling_settings='{}'
 
 query I rowsort
-SELECT string_split(current_setting('custom_profiling_settings'), ', ');
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
 ----
-[]
+(empty)
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -77,11 +85,15 @@ statement ok
 PRAGMA custom_profiling_settings='{"CPU_TIME": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true"}'
 
 query I rowsort
-SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
 ----
-EXTRA_INFO
-OPERATOR_CARDINALITY
-OPERATOR_TIMING
+"EXTRA_INFO": "true"
+"OPERATOR_CARDINALITY": "true"
+"OPERATOR_TIMING": "true"
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -108,11 +120,15 @@ statement ok
 PRAGMA custom_profiling_settings='{"CPU_TIME": "true", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true"}'
 
 query I rowsort
-SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
 ----
-CPU_TIME
-EXTRA_INFO
-OPERATOR_CARDINALITY
+"CPU_TIME": "true"
+"EXTRA_INFO": "true"
+"OPERATOR_CARDINALITY": "true"
 
 statement ok
 PRAGMA enable_profiling = 'json';

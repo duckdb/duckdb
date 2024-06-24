@@ -922,26 +922,45 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCast::Operation(string_t input, bool &result, bool strict) {
-	auto input_data = input.GetData();
+	auto input_data = reinterpret_cast<const uint8_t *>(input.GetData());
 	auto input_size = input.GetSize();
 
 	switch (input_size) {
 	case 1: {
-		char c = UnsafeNumericCast<char>(std::tolower(*input_data));
-		if (c == 't' || (!strict && c == '1')) {
+		unsigned char c = UnsafeNumericCast<uint8_t>(std::tolower(*input_data));
+		if (c == 't' || (!strict && c == 'y') || (!strict && c == '1')) {
 			result = true;
 			return true;
-		} else if (c == 'f' || (!strict && c == '0')) {
+		} else if (c == 'f' || (!strict && c == 'n') || (!strict && c == '0')) {
 			result = false;
 			return true;
 		}
 		return false;
 	}
+	case 2: {
+		unsigned char n = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char o = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
+		if (n == 'n' && o == 'o') {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	case 3: {
+		unsigned char y = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char e = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
+		unsigned char s = UnsafeNumericCast<uint8_t>(std::tolower(input_data[2]));
+		if (y == 'y' && e == 'e' && s == 's') {
+			result = true;
+			return true;
+		}
+		return false;
+	}
 	case 4: {
-		char t = UnsafeNumericCast<char>(std::tolower(input_data[0]));
-		char r = UnsafeNumericCast<char>(std::tolower(input_data[1]));
-		char u = UnsafeNumericCast<char>(std::tolower(input_data[2]));
-		char e = UnsafeNumericCast<char>(std::tolower(input_data[3]));
+		unsigned char t = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char r = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
+		unsigned char u = UnsafeNumericCast<uint8_t>(std::tolower(input_data[2]));
+		unsigned char e = UnsafeNumericCast<uint8_t>(std::tolower(input_data[3]));
 		if (t == 't' && r == 'r' && u == 'u' && e == 'e') {
 			result = true;
 			return true;
@@ -949,11 +968,11 @@ bool TryCast::Operation(string_t input, bool &result, bool strict) {
 		return false;
 	}
 	case 5: {
-		char f = UnsafeNumericCast<char>(std::tolower(input_data[0]));
-		char a = UnsafeNumericCast<char>(std::tolower(input_data[1]));
-		char l = UnsafeNumericCast<char>(std::tolower(input_data[2]));
-		char s = UnsafeNumericCast<char>(std::tolower(input_data[3]));
-		char e = UnsafeNumericCast<char>(std::tolower(input_data[4]));
+		unsigned char f = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char a = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
+		unsigned char l = UnsafeNumericCast<uint8_t>(std::tolower(input_data[2]));
+		unsigned char s = UnsafeNumericCast<uint8_t>(std::tolower(input_data[3]));
+		unsigned char e = UnsafeNumericCast<uint8_t>(std::tolower(input_data[4]));
 		if (f == 'f' && a == 'a' && l == 'l' && s == 's' && e == 'e') {
 			result = false;
 			return true;
@@ -1125,8 +1144,8 @@ bool TryCast::Operation(interval_t input, interval_t &result, bool strict) {
 // Non-Standard Timestamps
 //===--------------------------------------------------------------------===//
 template <>
-duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result) {
-	return StringCast::Operation<timestamp_t>(CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input), result);
+duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_ns_t input, Vector &result) {
+	return StringCast::Operation<timestamp_ns_t>(input, result);
 }
 template <>
 duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result) {
@@ -1258,20 +1277,8 @@ dtime_t CastTimestampSecToTime::Operation(timestamp_t input) {
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToTimestampNS::Operation(string_t input, timestamp_t &result, bool strict) {
-	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
-		return false;
-	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-
-	int64_t nanoseconds;
-	if (!Timestamp::TryGetEpochNanoSeconds(result, nanoseconds)) {
-		throw ConversionException("Could not convert VARCHAR value '%s' to Timestamp(NS)", input.GetString());
-	}
-	result = nanoseconds;
-	return true;
+bool TryCastToTimestampNS::Operation(string_t input, timestamp_ns_t &result, bool strict) {
+	return TryCast::Operation<string_t, timestamp_ns_t>(input, result, strict);
 }
 
 template <>
@@ -1293,7 +1300,7 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 }
 
 template <>
-bool TryCastToTimestampNS::Operation(date_t input, timestamp_t &result, bool strict) {
+bool TryCastToTimestampNS::Operation(date_t input, timestamp_ns_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
@@ -1559,8 +1566,24 @@ bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict) {
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result) == TimestampCastResult::SUCCESS;
+}
+
+template <>
 timestamp_t Cast::Operation(string_t input) {
 	return Timestamp::FromCString(input.GetData(), input.GetSize());
+}
+
+template <>
+timestamp_ns_t Cast::Operation(string_t input) {
+	int32_t nanos;
+	const auto ts = Timestamp::FromCString(input.GetData(), input.GetSize(), &nanos);
+	timestamp_ns_t result;
+	if (!Timestamp::TryFromTimestampNanos(ts, nanos, result)) {
+		throw ConversionException(Timestamp::ConversionError(input));
+	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

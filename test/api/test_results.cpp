@@ -158,12 +158,7 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 
 	// now create a streaming result
 	auto result = con.SendQuery("SELECT CAST(v AS INTEGER) FROM strings");
-	REQUIRE_NO_FAIL(*result);
-	auto chunk = result->Fetch();
-	REQUIRE(!chunk);
-	REQUIRE(result->HasError());
-	auto str = result->ToString();
-	REQUIRE(!str.empty());
+	REQUIRE_FAIL(result);
 }
 
 TEST_CASE("Test UUID", "[api][uuid]") {

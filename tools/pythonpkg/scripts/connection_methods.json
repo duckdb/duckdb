@@ -260,11 +260,6 @@
 				"name": "parameters",
 				"default": "None",
 				"type": "object"
-			},
-			{
-				"name": "multiple_parameter_sets",
-				"default": "False",
-				"type": "bool"
 			}
 		],
 		"return": "DuckDBPyConnection"
