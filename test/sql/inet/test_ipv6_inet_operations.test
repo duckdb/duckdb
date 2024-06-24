@@ -89,3 +89,33 @@ SELECT i FROM tbl WHERE i <<= '::1/8'
 ::1
 ::1
 ::1/127
+
+# one subnet which fully contains another
+query I
+SELECT inet '2001:db8::1/128' <<= inet '2001:db8::/64'
+----
+true
+
+# equal subnets
+query I
+SELECT inet '2001:db8::1/128' <<= inet '2001:db8::1/128'
+----
+true
+
+# partial overlap
+query I
+SELECT inet '2001:db8:0:1::/64' <<= inet '2001:db8::/32'
+----
+true
+
+# different prefix lengths, but the same network address
+query I
+SELECT inet '2001:db8::/48' <<= inet '2001:db8::/32'
+----
+true
+
+# edge case
+query I
+SELECT inet '::/0' <<= inet '2001:db8::/0'
+----
+true

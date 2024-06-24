@@ -32,6 +32,21 @@ SELECT family('::ffff:127.0.0.1/17')
 
 # netmask
 query I
+SELECT netmask(INET '2001:db8:3c4d:8337:6405:d090:6727:4c52/128')
+----
+ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+
+query I
+SELECT netmask(INET '2001:db8:3c4d:8337:6405:d090:6727:4c52/96')
+----
+ffff:ffff:ffff:ffff:ffff:ffff::/96
+
+query I
+SELECT netmask(INET '2001:db8:3c4d:8337:6405:d090:6727:4c52/64')
+----
+ffff:ffff:ffff:ffff::/64
+
+query I
 SELECT netmask(INET '2001:db8:3c4d::/48')
 ----
 ffff:ffff:ffff::/48
@@ -40,6 +55,16 @@ query I
 SELECT netmask(INET '2001:db8:3c4d::/32')
 ----
 ffff:ffff::/32
+
+query I
+SELECT netmask(INET '2001:db8:3c4d::/16')
+----
+ffff::/16
+
+query I
+SELECT netmask(INET '2001:db8:3c4d::/0')
+----
+::/0
 
 # network
 query I
@@ -96,3 +121,10 @@ statement error
 SELECT INET 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff' - -32;
 ----
 Out of Range Error: Overflow in addition
+
+query I
+SELECT * FROM (VALUES (netmask('2001:db8:3c4d::/48')), (broadcast('2001:db8:3c4d::/48')), (network('2001:db8:3c4d::/32')));
+----
+ffff:ffff:ffff::/48
+2001:db8:3c4d:ffff:ffff:ffff:ffff:ffff/48
+2001:db8::/32
