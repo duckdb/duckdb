@@ -97,8 +97,8 @@ private:
 	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
 	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation);
 	//! Computes optimal reservation of a TemporaryMemoryState based on a cost function
-	idx_t ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state, const idx_t &lower_bound,
-	                                const idx_t &upper_bound) const;
+	idx_t ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state, idx_t free_memory,
+	                                idx_t lower_bound, idx_t upper_bound) const;
 	//! Verify internal counts (must hold the lock)
 	void Verify() const;
 

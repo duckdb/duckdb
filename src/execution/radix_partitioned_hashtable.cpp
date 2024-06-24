@@ -547,11 +547,9 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 
 	// Minimum of combining one partition at a time
 	gstate.temporary_memory_state->SetMinimumReservation(gstate.max_partition_size);
-	// Maximum of combining all partitions
-	auto max_threads = MinValue<idx_t>(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()),
-	                                   gstate.partitions.size());
-	gstate.temporary_memory_state->SetRemainingSize(max_threads * gstate.max_partition_size);
-	gstate.temporary_memory_state->UpdateReservation(context);
+	// Set size to 0 until the scan actually starts
+	gstate.temporary_memory_state->SetRemainingSize(0);
+	gstate.temporary_memory_state->UpdateReservation(gstate.context);
 	gstate.finalized = true;
 }
 
@@ -564,14 +562,17 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 		return 0;
 	}
 
+	const auto max_threads = MinValue<idx_t>(
+	    NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), sink.partitions.size());
+	sink.temporary_memory_state->SetRemainingSize(max_threads * sink.max_partition_size);
+	sink.temporary_memory_state->UpdateReservation(sink.context);
+
 	// This many partitions will fit given our reservation (at least 1))
-	auto partitions_fit = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / sink.max_partition_size, 1);
-	// Maximum is either the number of partitions, or the number of threads
-	auto max_possible = MinValue<idx_t>(
-	    sink.partitions.size(), NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()));
+	const auto partitions_fit =
+	    MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / sink.max_partition_size, 1);
 
 	// Mininum of the two
-	return MinValue<idx_t>(partitions_fit, max_possible);
+	return MinValue<idx_t>(partitions_fit, max_threads);
 }
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {

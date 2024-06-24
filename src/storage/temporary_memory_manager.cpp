@@ -105,7 +105,7 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 	} else if (temporary_memory_state.GetRemainingSize() == 0) {
 		// Sometimes set to 0 to denote end of state (before actually deleting the state)
 		SetReservation(temporary_memory_state, 0);
-	} else if (reservation - temporary_memory_state.GetReservation() >= memory_limit) {
+	} else if (reservation - temporary_memory_state.GetReservation() + lower_bound >= memory_limit) {
 		// We overshot. Set reservation equal to the minimum
 		SetReservation(temporary_memory_state, lower_bound);
 	} else {
@@ -116,11 +116,23 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 		auto upper_bound = MinValue<idx_t>(temporary_memory_state.GetRemainingSize(), query_max_memory);
 		const auto free_memory = memory_limit - (reservation - temporary_memory_state.GetReservation());
 		upper_bound = MinValue<idx_t>(upper_bound, NumericCast<idx_t>(MAXIMUM_FREE_MEMORY_RATIO * free_memory));
+		upper_bound = MinValue<idx_t>(upper_bound, free_memory);
 
-		const idx_t new_reservation = temporary_memory_state.GetRemainingSize() > upper_bound
-		                                  ? ComputeOptimalReservation(temporary_memory_state, lower_bound, upper_bound)
-		                                  : MaxValue<idx_t>(lower_bound, upper_bound);
+		idx_t new_reservation;
+		if (lower_bound >= upper_bound) {
+			new_reservation = lower_bound;
+		} else {
+			new_reservation =
+			    remaining_size > memory_limit
+			        ? ComputeOptimalReservation(temporary_memory_state, free_memory, lower_bound, upper_bound)
+			        : MaxValue<idx_t>(lower_bound, upper_bound);
+		}
+
 		SetReservation(temporary_memory_state, new_reservation);
+		// Printer::PrintF("total remaining size: %llu, free memory: %llu, lower bound: %llu, upper bound: %llu, state "
+		//                 "size: %llu, state reservation: %llu",
+		//                 remaining_size, free_memory, lower_bound, upper_bound,
+		//                 temporary_memory_state.GetRemainingSize(), temporary_memory_state.GetReservation());
 	}
 
 	Verify();
@@ -141,7 +153,8 @@ void TemporaryMemoryManager::SetReservation(TemporaryMemoryState &temporary_memo
 }
 
 idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state,
-                                                        const idx_t &lower_bound, const idx_t &upper_bound) const {
+                                                        const idx_t free_memory, const idx_t lower_bound,
+                                                        const idx_t upper_bound) const {
 	static constexpr idx_t OPTIMIZATION_ITERATIONS_BASE = 10;
 	const idx_t n = active_states.size();
 
@@ -168,7 +181,7 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 	}
 
 	// Distribute memory in OPTIMIZATION_ITERATIONS
-	idx_t remaining_memory = upper_bound - lower_bound; // the memory that is currently available for redistribution
+	idx_t remaining_memory = free_memory - lower_bound;
 	const idx_t optimization_iterations = OPTIMIZATION_ITERATIONS_BASE + n;
 	for (idx_t opt_idx = 0; opt_idx < optimization_iterations; opt_idx++) {
 		// Cost function takes "throughput" (reservation / size) of each operator as its principal input
@@ -221,7 +234,7 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 	D_ASSERT(remaining_memory == 0);
 
 	// Return computed reservation of this state
-	return NumericCast<idx_t>(res[state_index.GetIndex()]);
+	return MinValue(NumericCast<idx_t>(res[state_index.GetIndex()]), upper_bound);
 }
 
 void TemporaryMemoryManager::Verify() const {
