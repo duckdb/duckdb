@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/time_type.benchmark
+# name: benchmark/csv/time_type.benchmark
 # description: Run CSV scan with timestamp and date types
 # group: [csv]
 

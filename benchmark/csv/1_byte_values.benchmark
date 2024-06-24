@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/1_byte_values.benchmark
+# name: benchmark/csv/1_byte_values.benchmark
 # description: Run CSV scan on file with muiltiple values of 1 bytes
 # group: [csv]
 

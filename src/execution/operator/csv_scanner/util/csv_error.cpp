@@ -172,7 +172,7 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_s
 	                options, how_to_fix_it.str());
 }
 
-CSVError CSVError::SniffingError(string &file_path) {
+CSVError CSVError::SniffingError(const string &file_path) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when sniffing file \"" << file_path << "\"." << '\n';
