@@ -36,11 +36,10 @@ public:
 
 struct ReplacementScanInput {
 public:
-	ReplacementScanInput(TableRef &ref, const string &table_name) : ref(ref), table_name(table_name) {
+	explicit ReplacementScanInput(const string &table_name) : table_name(table_name) {
 	}
 
 public:
-	TableRef &ref;
 	const string &table_name;
 };
 

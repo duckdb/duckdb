@@ -4,9 +4,8 @@
 
 require skip_reload
 
-# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+# Test fails on windows because byte_position is slightly different due to \r\n instead of \n.
 require notwindows
-
 
 loop buffer_size 5 10
 

@@ -59,10 +59,10 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto cardinality_after_filters = base_table_cardinality;
 	unique_ptr<BaseStatistics> column_statistics;
 
-	auto table_thing = get.GetTable();
+	auto catalog_table = get.GetTable();
 	auto name = string("some table");
-	if (table_thing) {
-		name = table_thing->name;
+	if (catalog_table) {
+		name = catalog_table->name;
 		return_stats.table_name = name;
 	}
 
@@ -82,7 +82,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		if (get.function.statistics) {
 			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
 			if (column_statistics && have_catalog_table_statistics) {
-				auto column_distinct_count = DistinctCount({column_statistics->GetDistinctCount(), true});
+				auto distinct_count = MaxValue((idx_t)1, column_statistics->GetDistinctCount());
+				auto column_distinct_count = DistinctCount({distinct_count, true});
 				return_stats.column_distinct_count.push_back(column_distinct_count);
 				return_stats.column_names.push_back(name + "." + get.names.at(get.column_ids.at(i)));
 				have_distinct_count_stats = true;

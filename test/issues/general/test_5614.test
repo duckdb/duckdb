@@ -3,6 +3,9 @@
 # group: [general]
 
 statement ok
+pragma enable_verification
+
+statement ok
 create table t0 as select (UNNEST(['hello', 'duckdb', 'duck LORD', 'lord duck'])) as column0;
 
 

@@ -1,14 +1,16 @@
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
-#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
-#include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/batched_data_collection.hpp"
+
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
+#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -158,7 +160,7 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 	auto batch_index = state.partition_info.batch_index.GetIndex();
 	if (state.current_task == FixedBatchCopyState::PROCESSING_TASKS) {
 		ExecuteTasks(context.client, gstate);
-		FlushBatchData(context.client, gstate, memory_manager.GetMinimumBatchIndex());
+		FlushBatchData(context.client, gstate);
 
 		if (!memory_manager.IsMinimumBatchIndex(batch_index) && memory_manager.OutOfMemory(batch_index)) {
 			lock_guard<mutex> l(memory_manager.GetBlockedTaskLock());
@@ -232,7 +234,7 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		while (op.ExecuteTask(context, gstate)) {
-			op.FlushBatchData(context, gstate, 0);
+			op.FlushBatchData(context, gstate);
 		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
@@ -279,8 +281,8 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	if (gstate.task_manager.TaskCount() != 0) {
 		throw InternalException("Unexecuted tasks are remaining in PhysicalFixedBatchCopy::FinalFlush!?");
 	}
-	auto min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
-	FlushBatchData(context, gstate_p, min_batch_index);
+
+	FlushBatchData(context, gstate_p);
 	if (gstate.scheduled_batch_index != gstate.flushed_batch_index) {
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
 	}
@@ -323,7 +325,7 @@ public:
 	}
 
 	void Execute(const PhysicalBatchCopyToFile &op, ClientContext &context, GlobalSinkState &gstate_p) override {
-		op.FlushBatchData(context, gstate_p, 0);
+		op.FlushBatchData(context, gstate_p);
 	}
 };
 
@@ -475,7 +477,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 	}
 }
 
-void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const {
+void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
 
@@ -561,7 +563,7 @@ void PhysicalBatchCopyToFile::AddLocalBatch(ClientContext &context, GlobalSinkSt
 		//! Execute a single repartition task
 		ExecuteTask(context, gstate);
 		//! Flush batch data to disk (if any is ready)
-		FlushBatchData(context, gstate, memory_manager.GetMinimumBatchIndex());
+		FlushBatchData(context, gstate);
 	}
 }
 
@@ -605,7 +607,20 @@ SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, Dat
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+	switch (return_type) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		break;
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
+		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, {fp}));
+		break;
+	}
+	default:
+		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	}
+
 	return SourceResultType::FINISHED;
 }
 

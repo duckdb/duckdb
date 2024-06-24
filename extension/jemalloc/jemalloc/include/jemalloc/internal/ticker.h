@@ -1,10 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_TICKER_H
 #define JEMALLOC_INTERNAL_TICKER_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/prng.h"
 #include "jemalloc/internal/util.h"
-
-namespace duckdb_jemalloc {
 
 /**
  * A ticker makes it easy to count-down events until some limit.  You
@@ -59,23 +58,27 @@ ticker_read(const ticker_t *ticker) {
 JEMALLOC_NOINLINE
 #endif
 static bool
-ticker_fixup(ticker_t *ticker) {
+ticker_fixup(ticker_t *ticker, bool delay_trigger) {
+	if (delay_trigger) {
+		ticker->tick = 0;
+		return false;
+	}
 	ticker->tick = ticker->nticks;
 	return true;
 }
 
 static inline bool
-ticker_ticks(ticker_t *ticker, int32_t nticks) {
+ticker_ticks(ticker_t *ticker, int32_t nticks, bool delay_trigger) {
 	ticker->tick -= nticks;
 	if (unlikely(ticker->tick < 0)) {
-		return ticker_fixup(ticker);
+		return ticker_fixup(ticker, delay_trigger);
 	}
 	return false;
 }
 
 static inline bool
-ticker_tick(ticker_t *ticker) {
-	return ticker_ticks(ticker, 1);
+ticker_tick(ticker_t *ticker, bool delay_trigger) {
+	return ticker_ticks(ticker, 1, delay_trigger);
 }
 
 /*
@@ -152,28 +155,35 @@ ticker_geom_read(const ticker_geom_t *ticker) {
 JEMALLOC_NOINLINE
 #endif
 static bool
-ticker_geom_fixup(ticker_geom_t *ticker, uint64_t *prng_state) {
+ticker_geom_fixup(ticker_geom_t *ticker, uint64_t *prng_state,
+    bool delay_trigger) {
+	if (delay_trigger) {
+		ticker->tick = 0;
+		return false;
+	}
+
 	uint64_t idx = prng_lg_range_u64(prng_state, TICKER_GEOM_NBITS);
 	ticker->tick = (uint32_t)(
 	    (uint64_t)ticker->nticks * (uint64_t)ticker_geom_table[idx]
 	    / (uint64_t)TICKER_GEOM_MUL);
+
 	return true;
 }
 
 static inline bool
-ticker_geom_ticks(ticker_geom_t *ticker, uint64_t *prng_state, int32_t nticks) {
+ticker_geom_ticks(ticker_geom_t *ticker, uint64_t *prng_state, int32_t nticks,
+    bool delay_trigger) {
 	ticker->tick -= nticks;
 	if (unlikely(ticker->tick < 0)) {
-		return ticker_geom_fixup(ticker, prng_state);
+		return ticker_geom_fixup(ticker, prng_state, delay_trigger);
 	}
 	return false;
 }
 
 static inline bool
-ticker_geom_tick(ticker_geom_t *ticker, uint64_t *prng_state) {
-	return ticker_geom_ticks(ticker, prng_state, 1);
+ticker_geom_tick(ticker_geom_t *ticker, uint64_t *prng_state,
+    bool delay_trigger) {
+	return ticker_geom_ticks(ticker, prng_state, 1, delay_trigger);
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TICKER_H */

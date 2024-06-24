@@ -33,6 +33,8 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	}
 
 	serializer.WriteProperty(213, "file_extension", file_extension);
+	serializer.WriteProperty(214, "rotate", rotate);
+	serializer.WriteProperty(215, "return_type", return_type);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -81,6 +83,9 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto file_extension =
 	    deserializer.ReadPropertyWithDefault<string>(213, "file_extension", std::move(default_extension));
 
+	auto rotate = deserializer.ReadPropertyWithDefault(214, "rotate", false);
+	auto return_type = deserializer.ReadPropertyWithDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
+
 	auto result = make_uniq<LogicalCopyToFile>(function, std::move(bind_data), std::move(copy_info));
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
@@ -92,8 +97,21 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->partition_columns = partition_columns;
 	result->names = names;
 	result->expected_types = expected_types;
+	result->rotate = rotate;
+	result->return_type = return_type;
 
 	return std::move(result);
+}
+
+vector<ColumnBinding> LogicalCopyToFile::GetColumnBindings() {
+	switch (return_type) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		return {ColumnBinding(0, 0)};
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+		return {ColumnBinding(0, 0), ColumnBinding(0, 1)};
+	default:
+		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	}
 }
 
 idx_t LogicalCopyToFile::EstimateCardinality(ClientContext &context) {

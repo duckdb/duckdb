@@ -436,6 +436,9 @@ void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<Physic
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
+	if (storage.is_dropped) {
+		return;
+	}
 	if (storage.row_groups->GetTotalRows() <= storage.deleted_rows) {
 		return;
 	}
@@ -472,7 +475,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	table.VacuumIndexes();
 }
 
-void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction) {
+void LocalStorage::Commit() {
 	// commit local storage
 	// iterate over all entries in the table storage map and commit them
 	// after this, the local storage is no longer required and can be cleared
@@ -506,6 +509,14 @@ idx_t LocalStorage::AddedRows(DataTable &table) {
 		return 0;
 	}
 	return storage->row_groups->GetTotalRows() - storage->deleted_rows;
+}
+
+void LocalStorage::DropTable(DataTable &table) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		return;
+	}
+	storage->is_dropped = true;
 }
 
 void LocalStorage::MoveStorage(DataTable &old_dt, DataTable &new_dt) {

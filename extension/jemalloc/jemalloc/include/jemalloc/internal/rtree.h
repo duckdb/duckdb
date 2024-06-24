@@ -1,13 +1,14 @@
 #ifndef JEMALLOC_INTERNAL_RTREE_H
 #define JEMALLOC_INTERNAL_RTREE_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/base.h"
 #include "jemalloc/internal/atomic.h"
+#include "jemalloc/internal/edata.h"
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/rtree_tsd.h"
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/tsd.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * This radix tree implementation is tailored to the singular purpose of
@@ -225,9 +226,11 @@ rtree_leaf_elm_bits_decode(uintptr_t bits) {
 	uintptr_t high_bit_mask = ((uintptr_t)1 << LG_VADDR) - 1;
 	/* Mask off metadata. */
 	uintptr_t mask = high_bit_mask & low_bit_mask;
+	/* NOLINTNEXTLINE(performance-no-int-to-ptr) */
 	contents.edata = (edata_t *)(bits & mask);
 #    else
 	/* Restore sign-extended high bits, mask metadata bits. */
+	/* NOLINTNEXTLINE(performance-no-int-to-ptr) */
 	contents.edata = (edata_t *)((uintptr_t)((intptr_t)(bits << RTREE_NHIB)
 	    >> RTREE_NHIB) & low_bit_mask);
 #    endif
@@ -269,7 +272,12 @@ JEMALLOC_ALWAYS_INLINE void
 rtree_contents_encode(rtree_contents_t contents, void **bits,
     unsigned *additional) {
 #ifdef RTREE_LEAF_COMPACT
+	/* NOLINTNEXTLINE(performance-no-int-to-ptr) */
 	*bits = (void *)rtree_leaf_elm_bits_encode(contents);
+	/* Suppress spurious warning from static analysis */
+	if (config_debug) {
+		*additional = 0;
+	}
 #else
 	*additional = (unsigned)contents.metadata.slab
 	    | ((unsigned)contents.metadata.is_head << 1)
@@ -301,7 +309,6 @@ rtree_leaf_elm_write(tsdn_t *tsdn, rtree_t *rtree,
 	assert((uintptr_t)contents.edata % EDATA_ALIGNMENT == 0);
 	void *bits;
 	unsigned additional;
-
 	rtree_contents_encode(contents, &bits, &additional);
 	rtree_leaf_elm_write_commit(tsdn, rtree, elm, bits, additional);
 }
@@ -316,8 +323,10 @@ rtree_leaf_elm_state_update(tsdn_t *tsdn, rtree_t *rtree,
 	    /* dependent */ true);
 	bits &= ~RTREE_LEAF_STATE_MASK;
 	bits |= state << RTREE_LEAF_STATE_SHIFT;
+	/* NOLINTNEXTLINE(performance-no-int-to-ptr) */
 	atomic_store_p(&elm1->le_bits, (void *)bits, ATOMIC_RELEASE);
 	if (elm2 != NULL) {
+		/* NOLINTNEXTLINE(performance-no-int-to-ptr) */
 		atomic_store_p(&elm2->le_bits, (void *)bits, ATOMIC_RELEASE);
 	}
 #else
@@ -552,7 +561,5 @@ rtree_clear_range(tsdn_t *tsdn, rtree_t *rtree, rtree_ctx_t *rtree_ctx,
 	rtree_write_range_impl(tsdn, rtree, rtree_ctx, base, end, contents,
 	    /* clearing */ true);
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_RTREE_H */

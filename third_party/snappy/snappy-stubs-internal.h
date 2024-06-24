@@ -41,6 +41,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+// DuckDB - LNK: define here instead of in CMake
+#ifdef __GNUC__
+#define HAVE_BUILTIN_EXPECT
+#define HAVE_BUILTIN_CTZ
+#define HAVE_BUILTIN_PREFETCH
+#endif
+
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
 #endif

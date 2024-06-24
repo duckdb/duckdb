@@ -98,6 +98,8 @@ private:
 	StorageLock checkpoint_lock;
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
+	//! Mutex used to control writes to the WAL - separate from the transaction lock
+	mutex wal_lock;
 
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {

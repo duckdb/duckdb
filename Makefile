@@ -134,9 +134,6 @@ endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
 endif
-ifeq (${BUILD_SQLSMITH}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};sqlsmith
-endif
 ifeq (${BUILD_TPCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_TPCE=1
 endif
@@ -239,6 +236,14 @@ ifdef SKIP_PLATFORM_UTIL
 endif
 ifdef DEBUG_STACKTRACE
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
+endif
+
+# Optional overrides
+ifneq (${STANDARD_VECTOR_SIZE}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DSTANDARD_VECTOR_SIZE=${STANDARD_VECTOR_SIZE}
+endif
+ifneq (${BLOCK_ALLOC_SIZE}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_ALLOC_SIZE=${BLOCK_ALLOC_SIZE}
 endif
 
 # Enable VCPKG for this build
@@ -405,6 +410,9 @@ format-changes:
 format-main:
 	python3 scripts/format.py main --fix --noconfirm
 
+format-feature:
+	python3 scripts/format.py feature --fix --noconfirm
+
 third_party/sqllogictest:
 	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
 
@@ -437,7 +445,7 @@ generate-files:
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
-	python3 tools/pythonpkg/scripts/generate_connection_code.py
+	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
 	./scripts/generate_micro_extended.sh
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
