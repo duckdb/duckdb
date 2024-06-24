@@ -55,6 +55,8 @@ public:
 	idx_t GetMaxMemory() const final;
 	idx_t GetUsedSwap() final;
 	optional_idx GetMaxSwap() const final;
+	idx_t GetBlockAllocSize() const final;
+	idx_t GetBlockSize() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.

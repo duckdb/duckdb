@@ -22,27 +22,20 @@ struct FileHandle;
 #define INVALID_BLOCK (-1)
 //! The maximum block id is 2^62
 #define MAXIMUM_BLOCK 4611686018427388000LL
+//! The block header size for blocks written to storage.
+#define DEFAULT_BLOCK_HEADER_SIZE sizeof(uint64_t)
 //! The default block allocation size.
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
+//! The default block size.
+#define DEFAULT_BLOCK_SIZE DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE
 //! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 #define MIN_BLOCK_ALLOC_SIZE 16384ULL
-
-#ifndef DUCKDB_BLOCK_ALLOC_SIZE
-#define DUCKDB_BLOCK_ALLOC_SIZE DEFAULT_BLOCK_ALLOC_SIZE
-#endif
 
 using block_id_t = int64_t;
 
 struct Storage {
 	//! The size of a hard disk sector, only really needed for Direct IO
 	constexpr static idx_t SECTOR_SIZE = 4096U;
-	//! Block header size for blocks written to the storage
-	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
-	//! Size of a memory slot managed by the StorageManager and the BlockManager.
-	//! Defaults to DUCKDB_BLOCK_ALLOC_SIZE.
-	constexpr static idx_t BLOCK_ALLOC_SIZE = DUCKDB_BLOCK_ALLOC_SIZE;
-	//! The actual memory space that is available within a block.
-	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
 	//! to the page size, which is 4KB. (1 << 12)
 	constexpr static idx_t FILE_HEADER_SIZE = 4096U;
@@ -67,7 +60,7 @@ vector<string> GetSerializationCandidates();
 struct MainHeader {
 	static constexpr idx_t MAX_VERSION_SIZE = 32;
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
-	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::BLOCK_HEADER_SIZE;
+	static constexpr idx_t MAGIC_BYTE_OFFSET = DEFAULT_BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
 	//! The magic bytes in front of the file should be "DUCK"
 	static const char MAGIC_BYTES[];
@@ -135,14 +128,5 @@ struct DatabaseHeader {
 #if (DUCKDB_BLOCK_ALLOC_SIZE > 2147483647)
 #error The duckdb block allocation size must not exceed the maximum value of a 32-bit signed integer
 #endif
-#if (DUCKDB_BLOCK_ALLOC_SIZE < MIN_BLOCK_ALLOC_SIZE)
-#error The duckdb block allocation size must be greater or equal than the minimum block allocation size
-#endif
-
-static_assert(Storage::BLOCK_ALLOC_SIZE % Storage::SECTOR_SIZE == 0,
-              "the block allocation size has to be a multiple of the sector size");
-static_assert(Storage::BLOCK_SIZE < idx_t(NumericLimits<int32_t>::Maximum()),
-              "the block size cannot exceed the maximum signed integer value,"
-              "as some comparisons require casts");
 
 } // namespace duckdb

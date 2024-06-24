@@ -99,12 +99,6 @@ void Storage::VerifyBlockAllocSize(const idx_t block_alloc_size) {
 		    "the block size must not be greater than the maximum 32-bit signed integer value of %llu, got %llu",
 		    max_value, block_alloc_size);
 	}
-	// NOTE: remove this once we start supporting different block sizes.
-	if (block_alloc_size != BLOCK_ALLOC_SIZE) {
-		throw NotImplementedException(
-		    "other block sizes than the default block size are not supported, expected %llu, got %llu",
-		    BLOCK_ALLOC_SIZE, block_alloc_size);
-	}
 }
 
 } // namespace duckdb
