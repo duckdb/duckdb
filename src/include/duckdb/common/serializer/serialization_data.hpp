@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/serializer/deserialization_data.hpp
+// duckdb/common/serializer/serialization_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -226,18 +226,18 @@ inline void SerializationData::Unset<const LogicalType>() {
 }
 
 template <>
-inline void DeserializationData::Set(const CompressionInfo &compression_info) {
+inline void SerializationData::Set(const CompressionInfo &compression_info) {
 	compression_infos.emplace(compression_info);
 }
 
 template <>
-inline const CompressionInfo &DeserializationData::Get() {
+inline const CompressionInfo &SerializationData::Get() {
 	AssertNotEmpty(compression_infos);
 	return compression_infos.top();
 }
 
 template <>
-inline void DeserializationData::Unset<const CompressionInfo>() {
+inline void SerializationData::Unset<const CompressionInfo>() {
 	AssertNotEmpty(compression_infos);
 	compression_infos.pop();
 }
