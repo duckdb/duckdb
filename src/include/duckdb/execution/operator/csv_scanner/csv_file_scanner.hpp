@@ -29,6 +29,7 @@ struct CSVUnionData {
 	const string &GetFileName() {
 		return file_name;
 	}
+};
 
 //! Basic CSV Column Info
 struct CSVColumnInfo {
