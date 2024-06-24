@@ -2311,7 +2311,8 @@ Sets the name of the given scalar function.
 DUCKDB_API void duckdb_scalar_function_set_name(duckdb_scalar_function scalar_function, const char *name);
 
 /*!
-Sets the parameters of the given scalar function to varargs. Does not require adding parameters with duckdb_scalar_function_add_parameter.
+Sets the parameters of the given scalar function to varargs. Does not require adding parameters with
+duckdb_scalar_function_add_parameter.
 
 * scalar_function: The scalar function
 * type: The type of the arguments
