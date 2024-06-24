@@ -116,9 +116,10 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 		return DUCKDB_PENDING_ERROR;
 	}
 	switch (return_value) {
-	case PendingExecutionResult::BLOCKED:
+	case PendingExecutionResult::EXECUTION_FINISHED:
 	case PendingExecutionResult::RESULT_READY:
 		return DUCKDB_PENDING_RESULT_READY;
+	case PendingExecutionResult::BLOCKED:
 	case PendingExecutionResult::NO_TASKS_AVAILABLE:
 		return DUCKDB_PENDING_NO_TASKS_AVAILABLE;
 	case PendingExecutionResult::RESULT_NOT_READY:
