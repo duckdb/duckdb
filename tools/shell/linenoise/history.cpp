@@ -195,16 +195,30 @@ public:
 		return line_buffer;
 	}
 
+	idx_t GetNextNewline() {
+		for (idx_t i = position; i < capacity; i++) {
+			if (data_buffer[i] == '\r' || data_buffer[i] == '\n') {
+				return i;
+			}
+		}
+		return capacity;
+	}
+
+	void SkipNewline() {
+		if (position >= capacity) {
+			// we are already at the end - fill the buffer
+			FillBuffer();
+		}
+		if (position < capacity && data_buffer[position] == '\n') {
+			position++;
+		}
+	}
+
 	bool NextLine() {
 		idx_t line_size = 0;
 		while (true) {
 			// find the next newline in the current buffer (if any)
-			idx_t i;
-			for (i = position; i < capacity; i++) {
-				if (data_buffer[i] == '\r' || data_buffer[i] == '\n') {
-					break;
-				}
-			}
+			idx_t i = GetNextNewline();
 			// copy over the data and move to the next byte
 			idx_t read_count = i - position;
 			if (line_size + read_count > LINENOISE_MAX_LINE) {
@@ -213,11 +227,9 @@ public:
 				// skip to next newline
 				bool found_next_newline = false;
 				while (!found_next_newline && capacity > 0) {
-					for (i = position; i < capacity; i++) {
-						if (data_buffer[i] == '\r' || data_buffer[i] == '\n') {
-							found_next_newline = true;
-							break;
-						}
+					i = GetNextNewline();
+					if (i < capacity) {
+						found_next_newline = true;
 					}
 					if (!found_next_newline) {
 						// read more data
@@ -230,9 +242,9 @@ public:
 				}
 				// newline found - adjust position and read next line
 				position = i + 1;
-				if (data_buffer[i] == '\r' && data_buffer[i + 1] == '\n') {
+				if (data_buffer[i] == '\r') {
 					// \r\n - skip the next byte as well
-					position++;
+					SkipNewline();
 				}
 				continue;
 			}
@@ -243,9 +255,9 @@ public:
 				// we're still within the buffer - this means we found a newline in the buffer
 				line_buffer[line_size] = '\0';
 				position = i + 1;
-				if (data_buffer[i] == '\r' && data_buffer[i + 1] == '\n') {
+				if (data_buffer[i] == '\r') {
 					// \r\n - skip the next byte as well
-					position++;
+					SkipNewline();
 				}
 				if (line_size == 0 || !Utf8Proc::IsValid(line_buffer, line_size)) {
 					// line is empty OR not valid UTF8
@@ -272,6 +284,7 @@ public:
 		position = 0;
 		capacity = read_data;
 		total_read += read_data;
+		data_buffer[read_data] = '\0';
 
 		if (read_data == 0) {
 			end_of_file = true;
