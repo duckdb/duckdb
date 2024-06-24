@@ -68,9 +68,10 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 		if (cur_idx == 0) {
 			current_file = file_scans.back();
 		} else {
+			auto file_scan = make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
+			                                              bind_data, column_ids, file_schema, true);
 			lock_guard<mutex> parallel_lock(main_mutex);
-			file_scans.emplace_back(make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options,
-			                                                     cur_idx, bind_data, column_ids, file_schema, true));
+			file_scans.emplace_back(std::move(file_scan));
 			current_file = file_scans.back();
 			current_boundary = current_file->start_iterator;
 			current_boundary.SetCurrentBoundaryToPosition(single_threaded);
@@ -114,21 +115,25 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 	// We then produce the next boundary
 	if (!current_boundary.Next(*current_file.buffer_manager)) {
 		// This means we are done scanning the current file
-		auto current_file_idx = current_file.file_idx + 1;
-		if (current_file_idx < bind_data.files.size()) {
-			// If we have a next file we have to construct the file scan for that
-			file_scans.emplace_back(make_shared_ptr<CSVFileScan>(context, bind_data.files[current_file_idx],
-			                                                     bind_data.options, current_file_idx, bind_data,
-			                                                     column_ids, file_schema, false));
-			// And re-start the boundary-iterator
-			current_boundary = file_scans.back()->start_iterator;
-			current_boundary.SetCurrentBoundaryToPosition(single_threaded);
-			current_buffer_in_use =
-			    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
-		} else {
-			// If not we are done with this CSV Scanning
-			finished = true;
-		}
+		do {
+			auto current_file_idx = file_scans.back()->file_idx + 1;
+			if (current_file_idx < bind_data.files.size()) {
+				// If we have a next file we have to construct the file scan for that
+				file_scans.emplace_back(make_shared_ptr<CSVFileScan>(context, bind_data.files[current_file_idx],
+				                                                     bind_data.options, current_file_idx, bind_data,
+				                                                     column_ids, file_schema, false));
+				// And re-start the boundary-iterator
+				current_boundary = file_scans.back()->start_iterator;
+				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
+				                                                        current_boundary.GetBufferIdx());
+
+			} else {
+				// If not we are done with this CSV Scanning
+				finished = true;
+				break;
+			}
+		} while (current_boundary.done);
 	}
 	// We initialize the scan
 	return csv_scanner;

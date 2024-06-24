@@ -62,17 +62,16 @@ void CSVSniffer::RefineTypes() {
 				const auto &sql_type = col_type_candidates.back();
 				if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 					break;
-				} else {
-					if (col_type_candidates.back() == LogicalType::BOOLEAN && is_bool_type) {
-						// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
-						// immediately pop to varchar.
-						while (col_type_candidates.back() != LogicalType::VARCHAR) {
-							col_type_candidates.pop_back();
-						}
-						break;
-					}
-					col_type_candidates.pop_back();
 				}
+				if (col_type_candidates.back() == LogicalType::BOOLEAN && is_bool_type) {
+					// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
+					// immediately pop to varchar.
+					while (col_type_candidates.back() != LogicalType::VARCHAR) {
+						col_type_candidates.pop_back();
+					}
+					break;
+				}
+				col_type_candidates.pop_back();
 			}
 		}
 		// reset parse chunk for the next iteration
@@ -83,7 +82,8 @@ void CSVSniffer::RefineTypes() {
 	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
 		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
 		if (best_sql_types_candidates_per_column_idx[column_idx].size() ==
-		    best_candidate->GetStateMachine().options.auto_type_candidates.size()) {
+		        best_candidate->GetStateMachine().options.auto_type_candidates.size() &&
+		    default_null_to_varchar) {
 			d_type = LogicalType::VARCHAR;
 		}
 		detected_types.push_back(d_type);

@@ -29,6 +29,24 @@ struct CSVUnionData {
 	const string &GetFileName() {
 		return file_name;
 	}
+
+//! Basic CSV Column Info
+struct CSVColumnInfo {
+	CSVColumnInfo(string &name_p, LogicalType &type_p) : name(name_p), type(type_p) {
+	}
+	string name;
+	LogicalType type;
+};
+
+//! Basic CSV Schema
+struct CSVColumnSchema {
+	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
+	bool Empty() const;
+	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
+	                  const string &file_path);
+	vector<CSVColumnInfo> columns;
+	unordered_map<string, idx_t> name_idx_map;
+	string file_path;
 };
 
 //! Struct holding information over a CSV File we will scan
@@ -41,12 +59,12 @@ public:
 	//! This means the options are alreadu set, and the buffer manager is already up and runinng.
 	CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager,
 	            shared_ptr<CSVStateMachine> state_machine, const CSVReaderOptions &options,
-	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, vector<LogicalType> &file_schema);
+	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVColumnSchema &file_schema);
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
 	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, const idx_t file_idx,
-	            const ReadCSVData &bind_data, const vector<column_t> &column_ids,
-	            const vector<LogicalType> &file_schema, bool per_file_single_threaded);
+	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVColumnSchema &file_schema,
+	            bool per_file_single_threaded);
 
 	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options);
 
