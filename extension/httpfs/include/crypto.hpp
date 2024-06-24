@@ -2,6 +2,7 @@
 
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/winapi.hpp"
 
 #include <stddef.h>
 #include <string>
@@ -46,11 +47,11 @@ public:
 	DUCKDB_API explicit AESGCMStateSSLFactory() {
 	}
 
-	DUCKDB_API shared_ptr<EncryptionState> CreateEncryptionState() const override {
+	shared_ptr<EncryptionState> CreateEncryptionState() const override {
 		return make_shared_ptr<AESGCMStateSSL>();
 	}
 
-	DUCKDB_API ~AESGCMStateSSLFactory() override {
+	~AESGCMStateSSLFactory() override {
 	} //
 };
 

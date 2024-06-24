@@ -1,7 +1,6 @@
 #include "crypto.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/winapi.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -30,9 +29,12 @@ void hex256(hash_bytes &in, hash_str &out) {
 	}
 }
 
+extern "C" {
+
 // Call the member function through the factory object
-extern "C" DUCKDB_API AESGCMStateSSLFactory *CreateSSLFactory() {
+DUCKDB_EXTENSION_API AESGCMStateSSLFactory *CreateSSLFactory() {
 	return new AESGCMStateSSLFactory();
+}
 }
 
 const EVP_CIPHER *GetCipher(const string &key) {
