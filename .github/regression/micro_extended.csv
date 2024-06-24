@@ -17,6 +17,9 @@ benchmark/micro/case/integer_case_alternate.benchmark
 benchmark/micro/case/integer_case_predictable.benchmark
 benchmark/micro/cast/cast_constant_string_to_enum.benchmark
 benchmark/micro/cast/cast_date_string.benchmark
+benchmark/micro/cast/cast_decimal_double_1.benchmark
+benchmark/micro/cast/cast_decimal_double_2.benchmark
+benchmark/micro/cast/cast_decimal_double_3.benchmark
 benchmark/micro/cast/cast_double_string.benchmark
 benchmark/micro/cast/cast_enum_string.benchmark
 benchmark/micro/cast/cast_huge_hugeint_string_benchmark.benchmark
