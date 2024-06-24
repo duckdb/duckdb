@@ -1,5 +1,5 @@
-# name: test/sql/index/art/scan/art_null_bytes.test
-# description: Test ART with null bytes
+# name: test/sql/index/art/scan/test_art_null_bytes.test
+# description: Test ART keys containing NULL bytes.
 # group: [scan]
 
 statement ok
