@@ -192,19 +192,23 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 			prod_res *= res[i];
 			mat_cost -= res[i] / siz[i]; // Materialization cost: n - sum of (1 - throughput) of each operator
 		}
-		const double nd = n;                                   // n as double for convenience
-		double tp_mult = 1 - pow(prod_res / prod_siz, 1 / nd); // Throughput multiplier: geometric mean of throughputs
-		double intermediate = (prod_res * prod_siz) / (nd * prod_siz * pow(prod_res / prod_siz, (nd - 1) / nd));
+		const double nd = n;   // n as double for convenience
+		const double tp_mult = // Throughput multiplier: 1 - geometric mean of throughputs
+		    1 - pow(prod_res / prod_siz, 1 / nd);
 
 		// Cost function: materialization cost * (1 - throughput multiplier), but we don't actually need to compute it
 		// here. We need to compute the derivative with respect to every reservation, stored in "der"
+		// Just use https://www.derivative-calculator.net with this (n = 3) to see what's going on
+		// (3 - (a_1/s_1)-(a_2/s_2)-(a_3/s_3))*(1-((a_1/s_1)*(a_2/s_2)*(a_3/s_3))^(1/3))
+		const double intermediate = -(pow(prod_res, 1 / nd) * mat_cost) / (nd * pow(prod_siz, 1 / nd));
+
 		double sum_of_nonmaxed = 0;
 		idx_t nonmax_count = 0;
 		for (i = 0; i < n; i++) {
 			if (res[i] == siz[i]) {
 				continue; // We can't increase the reservation of "maxed" states, so we skip these
 			}
-			der[i] = -(tp_mult / siz[i]) - (intermediate / res[i]);
+			der[i] = intermediate / res[i] - tp_mult / siz[i];
 			D_ASSERT(res[i] <= siz[i]);
 			sum_of_nonmaxed += der[i];
 			nonmax_count++;
