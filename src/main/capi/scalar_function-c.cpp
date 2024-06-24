@@ -45,13 +45,11 @@ duckdb::ScalarFunction &GetCScalarFunction(duckdb_scalar_function function) {
 unique_ptr<FunctionData> BindCAPIScalarFunction(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	auto &info = bound_function.function_info->Cast<CScalarFunctionInfo>();
-
 	if (bound_function.HasVarArgs()) {
 		for (const auto &expr : arguments) {
 			bound_function.arguments.push_back(expr->return_type);
 		}
 	}
-
 	return make_uniq<CScalarFunctionBindData>(info);
 }
 
