@@ -585,7 +585,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
                                                          shared_ptr<ParquetFileMetadataCache> metadata,
                                                          const string &name) {
-	ParquetReader reader(context, parquet_options, metadata);
+	ParquetReader reader(context, std::move(parquet_options), std::move(metadata));
 	return reader.ReadStatistics(name);
 }
 
