@@ -113,3 +113,12 @@ SELECT unnest(map_keys(histogram(l_comment))) FROM lineitem
 query I nosort histstrings
 SELECT DISTINCT l_comment FROM lineitem ORDER BY l_comment
 ----
+
+# approx_top_k stress test
+query I
+SELECT list_sort(approx_top_k(l_returnflag, 5)) FROM lineitem
+----
+[A, N, R]
+
+statement ok
+SELECT approx_top_k(l_comment, 5) FROM lineitem
