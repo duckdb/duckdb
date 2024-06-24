@@ -464,6 +464,9 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 }
 
 bool Executor::ResultCollectorIsBlocked() {
+	if (!HasResultCollector()) {
+		return false;
+	}
 	if (completed_pipelines + 1 != total_pipelines) {
 		// The result collector is always in the last pipeline
 		return false;
