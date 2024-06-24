@@ -2689,7 +2689,7 @@ hugeint_t GetPowerOfTen(hugeint_t input, uint8_t scale) {
 
 template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
-	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0))) {
+	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0)) || scale == 0) {
 		// Fast path, integer is representable exaclty as a float/double
 		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 		return true;
