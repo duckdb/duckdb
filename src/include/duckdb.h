@@ -2338,7 +2338,7 @@ DUCKDB_API void duckdb_scalar_function_set_return_type(duckdb_scalar_function sc
 /*!
 Assigns extra information to the scalar function that can be fetched during binding, etc.
 
-* scalar_function: The table function
+* scalar_function: The scalar function
 * extra_info: The extra information
 * destroy: The callback that will be called to destroy the bind data (if any)
 */
@@ -2346,9 +2346,9 @@ DUCKDB_API void duckdb_scalar_function_set_extra_info(duckdb_scalar_function sca
                                                       duckdb_delete_callback_t destroy);
 
 /*!
-Sets the main function of the table function.
+Sets the main function of the scalar function.
 
-* table_function: The table function
+* scalar_function: The scalar function
 * function: The function
 */
 DUCKDB_API void duckdb_scalar_function_set_function(duckdb_scalar_function scalar_function,
