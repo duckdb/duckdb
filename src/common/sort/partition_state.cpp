@@ -316,11 +316,10 @@ void PartitionLocalSinkState::Sink(DataChunk &input_chunk) {
 		//	No sorts, so build paged row chunks
 		if (!rows) {
 			const auto entry_size = payload_layout.GetRowWidth();
-			const auto capacity =
-			    MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (gstate.buffer_manager.GetBlockSize() / entry_size) + 1);
+			const auto block_size = gstate.buffer_manager.GetBlockSize();
+			const auto capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, block_size / entry_size + 1);
 			rows = make_uniq<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
-			strings =
-			    make_uniq<RowDataCollection>(gstate.buffer_manager, gstate.buffer_manager.GetBlockSize(), 1U, true);
+			strings = make_uniq<RowDataCollection>(gstate.buffer_manager, block_size, 1U, true);
 		}
 		const auto row_count = input_chunk.size();
 		const auto row_sel = FlatVector::IncrementalSelectionVector();

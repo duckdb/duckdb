@@ -163,25 +163,25 @@ void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManage
 	sort_layout = &global_sort_state.sort_layout;
 	payload_layout = &global_sort_state.payload_layout;
 	buffer_manager = &buffer_manager_p;
+	const auto block_size = buffer_manager->GetBlockSize();
+
 	// Radix sorting data
-	radix_sorting_data = make_uniq<RowDataCollection>(
-	    *buffer_manager, RowDataCollection::EntriesPerBlock(sort_layout->entry_size, buffer_manager->GetBlockSize()),
-	    sort_layout->entry_size);
+	auto entries_per_block = RowDataCollection::EntriesPerBlock(sort_layout->entry_size, block_size);
+	radix_sorting_data = make_uniq<RowDataCollection>(*buffer_manager, entries_per_block, sort_layout->entry_size);
+
 	// Blob sorting data
 	if (!sort_layout->all_constant) {
 		auto blob_row_width = sort_layout->blob_layout.GetRowWidth();
-		blob_sorting_data = make_uniq<RowDataCollection>(
-		    *buffer_manager, RowDataCollection::EntriesPerBlock(blob_row_width, buffer_manager->GetBlockSize()),
-		    blob_row_width);
-		blob_sorting_heap = make_uniq<RowDataCollection>(*buffer_manager, buffer_manager->GetBlockSize(), 1U, true);
+		entries_per_block = RowDataCollection::EntriesPerBlock(blob_row_width, block_size);
+		blob_sorting_data = make_uniq<RowDataCollection>(*buffer_manager, entries_per_block, blob_row_width);
+		blob_sorting_heap = make_uniq<RowDataCollection>(*buffer_manager, block_size, 1U, true);
 	}
+
 	// Payload data
 	auto payload_row_width = payload_layout->GetRowWidth();
-	payload_data = make_uniq<RowDataCollection>(
-	    *buffer_manager, RowDataCollection::EntriesPerBlock(payload_row_width, buffer_manager->GetBlockSize()),
-	    payload_row_width);
-	payload_heap = make_uniq<RowDataCollection>(*buffer_manager, buffer_manager->GetBlockSize(), 1U, true);
-	// Init done
+	entries_per_block = RowDataCollection::EntriesPerBlock(payload_row_width, block_size);
+	payload_data = make_uniq<RowDataCollection>(*buffer_manager, entries_per_block, payload_row_width);
+	payload_heap = make_uniq<RowDataCollection>(*buffer_manager, block_size, 1U, true);
 	initialized = true;
 }
 
