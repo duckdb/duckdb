@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/multiple_small_files.benchmark
+# name: benchmark/csv/multiple_small_files.benchmark
 # description: Run CSV scan over multiple small (2048 rows) values
 # group: [csv]
 

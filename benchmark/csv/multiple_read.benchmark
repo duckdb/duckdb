@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/multiple_read.benchmark
+# name: benchmark/csv/multiple_read.benchmark
 # description: Run CSV auto-detection on the lineitem CSV in multiple files
 # group: [csv]
 

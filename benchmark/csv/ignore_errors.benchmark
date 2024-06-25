@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/ignore_errors.benchmark
+# name: benchmark/csv/ignore_errors.benchmark
 # description: Run CSV scan with many cast errors over ignored values
 # group: [csv]
 

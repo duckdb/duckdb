@@ -374,7 +374,7 @@ void CSVSniffer::DetectDialect() {
 
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
-		auto error = CSVError::SniffingError(options.file_path);
+		auto error = CSVError::SniffingError(buffer_manager->GetFilePath());
 		error_handler->Error(error);
 	}
 }
