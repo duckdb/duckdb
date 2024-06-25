@@ -244,26 +244,20 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 
 	// set the length of this string
 	auto str_length_data = GetListLengthData(segment);
-	uint64_t str_length = 0;
-
-	// get the string
-	string_t str_entry;
-	if (valid) {
-		str_entry = UnifiedVectorFormat::GetData<string_t>(input_data.unified)[sel_entry_idx];
-		str_length = str_entry.GetSize();
-	}
 
 	// we can reconstruct the offset from the length
-	Store<uint64_t>(str_length, data_ptr_cast(str_length_data + segment->count));
 	if (!valid) {
+		Store<uint64_t>(0, data_ptr_cast(str_length_data + segment->count));
 		return;
 	}
+	string_t str_entry = UnifiedVectorFormat::GetData<string_t>(input_data.unified)[sel_entry_idx];
+	auto str_data = str_entry.GetData();
+	idx_t str_size = str_entry.GetSize();
+	Store<uint64_t>(str_size, data_ptr_cast(str_length_data + segment->count));
 
 	// write the characters to the linked list of child segments
 	auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
-	auto str_data = str_entry.GetData();
 	idx_t current_offset = 0;
-	idx_t str_size = str_entry.GetSize();
 	while(current_offset < str_size) {
 		auto child_segment = GetSegment(functions.child_functions.back(), allocator, child_segments);
 		auto data = GetPrimitiveData<char>(child_segment);
