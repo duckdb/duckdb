@@ -258,7 +258,7 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 	// write the characters to the linked list of child segments
 	auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
 	idx_t current_offset = 0;
-	while(current_offset < str_size) {
+	while (current_offset < str_size) {
 		auto child_segment = GetSegment(functions.child_functions.back(), allocator, child_segments);
 		auto data = GetPrimitiveData<char>(child_segment);
 		idx_t copy_count = MinValue<idx_t>(str_size - current_offset, child_segment->capacity - child_segment->count);
@@ -414,7 +414,7 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 		auto result_data = result_str.GetDataWriteable();
 		// copy over the data
 		idx_t current_offset = 0;
-		while(current_offset < str_length) {
+		while (current_offset < str_length) {
 			if (!linked_child_list.first_segment) {
 				throw InternalException("Insufficient data to read string");
 			}
