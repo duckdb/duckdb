@@ -262,9 +262,11 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 
 	// write the characters to the linked list of child segments
 	auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
-	for (char &c : str_entry.GetString()) {
-		auto child_segment = GetSegment(functions.child_functions.back(), allocator, child_segments);
-		auto data = GetPrimitiveData<char>(child_segment);
+	auto str_data = str_entry.GetData();
+	auto child_segment = GetSegment(functions.child_functions.back(), allocator, child_segments);
+	auto data = GetPrimitiveData<char>(child_segment);
+	for (idx_t i = 0; i < str_entry.GetSize(); i++) {
+		auto c = str_data[i];
 		data[child_segment->count] = c;
 		child_segment->count++;
 		child_segments.total_capacity++;
