@@ -109,7 +109,7 @@ struct ClientConfig {
 	idx_t pivot_limit = 100000;
 
 	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
-	idx_t pivot_filter_threshold = 10;
+	idx_t pivot_filter_threshold = 20;
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
