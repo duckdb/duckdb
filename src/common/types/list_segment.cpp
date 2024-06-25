@@ -194,7 +194,6 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, ArenaAlloc
 		segment = functions.create_segment(functions, allocator, UnsafeNumericCast<uint16_t>(capacity));
 		linked_list.first_segment = segment;
 		linked_list.last_segment = segment;
-
 	} else if (linked_list.last_segment->capacity == linked_list.last_segment->count) {
 		// the last segment of the linked list is full, create a new one and append it
 		auto capacity = GetCapacityForNewSegment(linked_list.last_segment->capacity);
@@ -263,15 +262,17 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 	// write the characters to the linked list of child segments
 	auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
 	auto str_data = str_entry.GetData();
-	auto child_segment = GetSegment(functions.child_functions.back(), allocator, child_segments);
-	auto data = GetPrimitiveData<char>(child_segment);
-	for (idx_t i = 0; i < str_entry.GetSize(); i++) {
-		auto c = str_data[i];
-		data[child_segment->count] = c;
-		child_segment->count++;
-		child_segments.total_capacity++;
+	idx_t current_offset = 0;
+	idx_t str_size = str_entry.GetSize();
+	while(current_offset < str_size) {
+		auto child_segment = GetSegment(functions.child_functions.back(), allocator, child_segments);
+		auto data = GetPrimitiveData<char>(child_segment);
+		idx_t copy_count = MinValue<idx_t>(str_size - current_offset, child_segment->capacity - child_segment->count);
+		memcpy(data + child_segment->count, str_data + current_offset, copy_count);
+		current_offset += copy_count;
+		child_segment->count += copy_count;
 	}
-
+	child_segments.total_capacity += str_size;
 	// store the updated linked list
 	Store<LinkedList>(child_segments, data_ptr_cast(GetListChildData(segment)));
 }
