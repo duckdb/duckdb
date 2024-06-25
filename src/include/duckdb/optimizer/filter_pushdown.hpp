@@ -18,7 +18,8 @@ class Optimizer;
 
 class FilterPushdown {
 public:
-	explicit FilterPushdown(Optimizer &optimizer, bool convert_mark_joins = true);
+	FilterPushdown(Optimizer &optimizer, LogicalOperator &plan, bool convert_mark_joins = true);
+	explicit FilterPushdown(Optimizer &optimizer, unordered_set<idx_t> &projected_mark_indexes, bool convert_mark_joins = true);
 
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
@@ -40,6 +41,7 @@ public:
 private:
 	Optimizer &optimizer;
 	FilterCombiner combiner;
+	unordered_set<idx_t> projected_mark_indexes;
 	bool convert_mark_joins;
 
 	vector<unique_ptr<Filter>> filters;

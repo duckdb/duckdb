@@ -360,7 +360,8 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
 
 	// not allowed to let filter pushdowwn change mark joins to semi joins.
 	// semi joins are potentially slower AND the conversion can ruin column binding information
-	FilterPushdown filter_pushdown(optimizer, false);
+	unordered_set<idx_t> wat;
+	FilterPushdown filter_pushdown(optimizer, wat, false);
 	child = filter_pushdown.Rewrite(std::move(child));
 	PropagateExpression(expr);
 }

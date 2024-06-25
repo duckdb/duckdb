@@ -10,8 +10,67 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-FilterPushdown::FilterPushdown(Optimizer &optimizer, bool convert_mark_joins)
-    : optimizer(optimizer), combiner(optimizer.context), convert_mark_joins(convert_mark_joins) {
+static unordered_set<idx_t> GetMarkJoinIndexes(LogicalOperator &plan, unordered_set<idx_t> &table_bindings) {
+	unordered_set<idx_t> projected_mark_join_indexes;
+	switch(plan.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = plan.Cast<LogicalComparisonJoin>();
+		if (join.join_type != JoinType::MARK) {
+			break;
+		}
+		// if the projected table bindings include the mark join index,
+		if (table_bindings.find(join.mark_index) != table_bindings.end()) {
+			projected_mark_join_indexes.insert(join.mark_index);
+		}
+		break;
+	}
+	// you need to store table.column index.
+	// if you get to a projection, you need to change the table_bindings passed so they reflect the
+	// table index of the original expression they originated from.
+
+
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		for (auto &child : plan.children) {
+			auto extra_mark_indexes = GetMarkJoinIndexes(*child, table_bindings);
+			for (auto extra_index : extra_mark_indexes) {
+				projected_mark_join_indexes.insert(extra_index);
+			}
+		}
+		return projected_mark_join_indexes;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		auto break_here = 0;
+		break;
+	}
+	default:
+		break;
+	}
+
+	auto plan_bindings = plan.GetColumnBindings();
+	for (auto &binding: plan_bindings) {
+		table_bindings.insert(binding.table_index);
+	}
+
+	for (auto &child : plan.children) {
+		auto extra_mark_indexes = GetMarkJoinIndexes(*child, table_bindings);
+		for (auto extra_index : extra_mark_indexes) {
+			projected_mark_join_indexes.insert(extra_index);
+		}
+	}
+	return projected_mark_join_indexes;
+}
+
+FilterPushdown::FilterPushdown(Optimizer &optimizer, LogicalOperator &plan, bool convert_mark_joins)
+	: optimizer(optimizer), combiner(optimizer.context), convert_mark_joins(convert_mark_joins) {
+	unordered_set<idx_t> table_bindings;
+	for (auto &binding : plan.GetColumnBindings()) {
+		table_bindings.insert(binding.table_index);
+	}
+	// projected_mark_indexes = GetMarkJoinIndexes(plan, table_bindings);
+}
+
+FilterPushdown::FilterPushdown(Optimizer &optimizer, unordered_set<idx_t> &projected_mark_indexes, bool convert_mark_joins)
+    : optimizer(optimizer), combiner(optimizer.context), projected_mark_indexes(projected_mark_indexes), convert_mark_joins(convert_mark_joins) {
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
@@ -76,6 +135,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	case JoinType::LEFT:
 		return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::MARK:
+		// return FinishPushdown(std::move(op));
 		return PushdownMarkJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::SINGLE:
 		return PushdownSingleJoin(std::move(op), left_bindings, right_bindings);
@@ -148,7 +208,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalO
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (auto &child : op->children) {
-		FilterPushdown pushdown(optimizer, convert_mark_joins);
+		FilterPushdown pushdown(optimizer, projected_mark_indexes, convert_mark_joins);
 		child = pushdown.Rewrite(std::move(child));
 	}
 	// now push any existing filters

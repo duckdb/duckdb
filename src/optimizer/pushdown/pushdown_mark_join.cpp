@@ -9,6 +9,7 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<idx_t> &left_bindings,
                                                              unordered_set<idx_t> &right_bindings) {
+	auto op_bindings = op->GetColumnBindings();
 	auto &join = op->Cast<LogicalJoin>();
 	auto &comp_join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::MARK);
@@ -16,7 +17,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
 
 	right_bindings.insert(comp_join.mark_index);
-	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
+	FilterPushdown left_pushdown(optimizer, projected_mark_indexes, convert_mark_joins), right_pushdown(optimizer, projected_mark_indexes, convert_mark_joins);
 #ifdef DEBUG
 	bool simplified_mark_join = false;
 #endif

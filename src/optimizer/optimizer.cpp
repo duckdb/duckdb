@@ -109,7 +109,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
-		FilterPushdown filter_pushdown(*this);
+		FilterPushdown filter_pushdown(*this, *plan);
 		plan = filter_pushdown.Rewrite(std::move(plan));
 	});
 

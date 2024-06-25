@@ -1,0 +1,61 @@
+# name: test/optimizer/pushdown/pushdown_issue.test
+# description: ????
+# group: [pushdown]
+
+
+statement ok
+CREATE OR REPLACE TABLE BaseData AS (
+    SELECT
+      '10' AS my_key,
+      '20' AS parent_key,
+      '30' AS payload,
+      '40' as doot,
+      '50' as double_doot,
+      '60' as triple_doot
+);
+
+
+query III
+SELECT
+	 c.my_key,
+	 (c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
+	 p.my_key IS NOT NULL AS parentExists2,
+FROM BaseData AS c
+LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
+WHERE parentExists;
+----
+
+
+mode skip
+
+query III
+SELECT *
+FROM (SELECT
+             c.my_key,
+             (c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
+             p.my_key IS NOT NULL AS parentExists2,
+         FROM BaseData AS c
+         LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
+)
+WHERE parentExists;
+----
+
+
+mode skip
+
+query III
+WITH
+Example AS (
+    SELECT
+        c.my_key,
+        (c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
+        p.my_key IS NOT NULL AS parentExists2,
+    FROM BaseData AS c
+    LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
+)
+SELECT *
+FROM Example
+WHERE parentExists;
+----
+
+
