@@ -154,7 +154,7 @@ public:
 
 			curr_chunk.Initialize(context, {wexpr.return_type});
 
-			buffered = idx_t(abs(offset));
+			buffered = idx_t(std::abs(offset));
 			prev.Reference(dflt);
 			prev.Flatten(buffered);
 			temp.Initialize(false, buffered);
