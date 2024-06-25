@@ -911,8 +911,8 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
 		auto required_part_size = config_params.max_file_size / max_part_count;
 		auto minimum_part_size = MaxValue<idx_t>(aws_minimum_part_size, required_part_size);
 
-		// Round part size up to multiple of BLOCK_SIZE
-		part_size = ((minimum_part_size + Storage::BLOCK_SIZE - 1) / Storage::BLOCK_SIZE) * Storage::BLOCK_SIZE;
+		// Round part size up to multiple of DEFAULT_BLOCK_SIZE
+		part_size = ((minimum_part_size + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE) * DEFAULT_BLOCK_SIZE;
 		D_ASSERT(part_size * max_part_count >= config_params.max_file_size);
 
 		multipart_upload_id = s3fs.InitializeMultipartUpload(*this);
