@@ -391,42 +391,48 @@ static void ReadDataFromPrimitiveSegment(const ListSegmentFunctions &, const Lis
 
 static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListSegment *segment, Vector &result,
                                        idx_t &total_count) {
-
 	auto &aggr_vector_validity = FlatVector::Validity(result);
-
-	// set NULLs
-	auto null_mask = GetNullMask(segment);
-	for (idx_t i = 0; i < segment->count; i++) {
-		if (null_mask[i]) {
-			aggr_vector_validity.SetInvalid(total_count + i);
-		}
-	}
-
-	// append all the child chars to one string
-	string str = "";
-	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
-	while (linked_child_list.first_segment) {
-		auto child_segment = linked_child_list.first_segment;
-		auto data = GetPrimitiveData<char>(child_segment);
-		str.append(data, child_segment->count);
-		linked_child_list.first_segment = child_segment->next;
-	}
-	linked_child_list.last_segment = nullptr;
 
 	// use length and (reconstructed) offset to get the correct substrings
 	auto aggr_vector_data = FlatVector::GetData<string_t>(result);
 	auto str_length_data = GetListLengthData(segment);
 
-	// get the substrings and write them to the result vector
-	idx_t offset = 0;
+	auto null_mask = GetNullMask(segment);
+	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
+	idx_t child_offset = 0;
 	for (idx_t i = 0; i < segment->count; i++) {
-		if (!null_mask[i]) {
-			auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + i));
-			auto substr = str.substr(offset, str_length);
-			auto str_t = StringVector::AddStringOrBlob(result, substr);
-			aggr_vector_data[total_count + i] = str_t;
-			offset += str_length;
+		if (null_mask[i]) {
+			// set to null
+			aggr_vector_validity.SetInvalid(total_count + i);
+			continue;
 		}
+		// read the string
+		auto &result_str = aggr_vector_data[total_count + i];
+		auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + i));
+		// allocate an empty string for the given size
+		result_str = StringVector::EmptyString(result, str_length);
+		auto result_data = result_str.GetDataWriteable();
+		// copy over the data
+		idx_t current_offset = 0;
+		while(current_offset < str_length) {
+			if (!linked_child_list.first_segment) {
+				throw InternalException("Insufficient data to read string");
+			}
+			auto child_segment = linked_child_list.first_segment;
+			auto child_data = GetPrimitiveData<char>(child_segment);
+			idx_t max_copy = MinValue<idx_t>(str_length - current_offset, child_segment->capacity - child_offset);
+			memcpy(result_data + current_offset, child_data + child_offset, max_copy);
+			current_offset += max_copy;
+			child_offset += max_copy;
+			if (child_offset >= child_segment->capacity) {
+				D_ASSERT(child_offset == child_segment->capacity);
+				linked_child_list.first_segment = child_segment->next;
+				child_offset = 0;
+			}
+		}
+
+		// finalize the str
+		result_str.Finalize();
 	}
 }
 
