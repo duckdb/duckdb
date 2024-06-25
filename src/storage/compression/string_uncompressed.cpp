@@ -311,7 +311,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	if (!state.head || state.head->offset + total_length >= state.head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
-		idx_t alloc_size = MaxValue<idx_t>(total_length, segment.GetBlockManager().GetBlockSize());
+		auto alloc_size = MaxValue<idx_t>(total_length, segment.GetBlockManager().GetBlockSize());
 		auto new_block = make_uniq<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;

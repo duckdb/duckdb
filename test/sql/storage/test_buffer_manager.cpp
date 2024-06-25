@@ -249,7 +249,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 
 	// now we do exactly the same, but with variable-sized blocks
 	idx_t variable_block_size = 424242;
-	idx_t alloc_size = BufferManager::GetAllocSize(variable_block_size);
+	auto alloc_size = BufferManager::GetAllocSize(variable_block_size);
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", alloc_size * pin_count)));
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();

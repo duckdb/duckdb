@@ -72,7 +72,6 @@ public:
 	//! Initializes an Append state - useful for optimizing many appends made to the same column data collection
 	DUCKDB_API void InitializeAppend(ColumnDataAppendState &state);
 	//! Append a DataChunk to this ColumnDataCollection using the specified append state
-	// TODO: set when initializing or something?
 	DUCKDB_API void Append(ColumnDataAppendState &state, DataChunk &new_chunk,
 	                       const idx_t block_size = DEFAULT_BLOCK_SIZE);
 
@@ -102,7 +101,6 @@ public:
 	DUCKDB_API bool Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result) const;
 
 	//! Append a DataChunk directly to this ColumnDataCollection - calls InitializeAppend and Append internally
-	// TODO: set when initializing or something?
 	DUCKDB_API void Append(DataChunk &new_chunk, const idx_t block_size = DEFAULT_BLOCK_SIZE);
 
 	//! Appends the other ColumnDataCollection to this, destroying the other data collection

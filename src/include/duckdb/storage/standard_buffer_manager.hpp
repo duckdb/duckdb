@@ -55,7 +55,9 @@ public:
 	idx_t GetMaxMemory() const final;
 	idx_t GetUsedSwap() final;
 	optional_idx GetMaxSwap() const final;
+	//! Returns the block allocation size for buffer-managed blocks.
 	idx_t GetBlockAllocSize() const final;
+	//! Returns the block size for buffer-managed blocks.
 	idx_t GetBlockSize() const final;
 
 	//! Allocate an in-memory buffer with a single pin.

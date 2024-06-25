@@ -200,7 +200,6 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       any_combined(false), finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
       count_before_combining(0), max_partition_size(0) {
 
-	// TODO: not DEFAULT_BLOCK_ALLOC_SIZE?
 	auto tuples_per_block = DEFAULT_BLOCK_ALLOC_SIZE / radix_ht.GetLayout().GetRowWidth();
 	idx_t ht_count =
 	    NumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
@@ -417,7 +416,6 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 
 	const auto row_size_per_partition =
 	    partitioned_data->Count() * partitioned_data->GetLayout().GetRowWidth() / partition_count;
-	// TODO: is this not the default block size?
 	if (row_size_per_partition > NumericCast<idx_t>(config.BLOCK_FILL_FACTOR * DEFAULT_BLOCK_SIZE)) {
 		// We crossed our block filling threshold, try to increment radix bits
 		config.SetRadixBits(current_radix_bits + config.REPARTITION_RADIX_BITS);

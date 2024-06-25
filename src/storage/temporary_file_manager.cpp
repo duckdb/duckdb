@@ -58,8 +58,7 @@ bool BlockIndexManager::HasFreeBlocks() {
 }
 
 void BlockIndexManager::SetMaxIndex(idx_t new_index) {
-	// TODO: or pass it to here? Or set it?
-	static constexpr idx_t TEMPFILE_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE;
+	static constexpr idx_t TEMP_FILE_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE;
 	if (!manager) {
 		max_index = new_index;
 	} else {
@@ -67,11 +66,11 @@ void BlockIndexManager::SetMaxIndex(idx_t new_index) {
 		if (new_index < old) {
 			max_index = new_index;
 			auto difference = old - new_index;
-			auto size_on_disk = difference * TEMPFILE_BLOCK_SIZE;
+			auto size_on_disk = difference * TEMP_FILE_BLOCK_SIZE;
 			manager->DecreaseSizeOnDisk(size_on_disk);
 		} else if (new_index > old) {
 			auto difference = new_index - old;
-			auto size_on_disk = difference * TEMPFILE_BLOCK_SIZE;
+			auto size_on_disk = difference * TEMP_FILE_BLOCK_SIZE;
 			manager->IncreaseSizeOnDisk(size_on_disk);
 			// Increase can throw, so this is only updated after it was succesfully updated
 			max_index = new_index;

@@ -264,7 +264,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	// compute the checksum
 	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
-	uint64_t computed_checksum = Checksum(block.buffer, block.size);
+	auto computed_checksum = Checksum(block.buffer, block.size);
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
