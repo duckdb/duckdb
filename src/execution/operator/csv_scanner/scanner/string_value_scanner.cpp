@@ -466,12 +466,12 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 	if (current_line_position.begin == error_position) {
 		auto csv_error = CSVError::InvalidUTF8(state_machine.options, col_idx, lines_per_batch, borked_line,
 		                                       current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
-		                                       error_position.GetGlobalPosition(requested_size, first_nl));
+		                                       error_position.GetGlobalPosition(requested_size, first_nl), csv_file_scan->file_path);
 		error_handler.Error(csv_error, true);
 	} else {
 		auto csv_error = CSVError::InvalidUTF8(state_machine.options, col_idx, lines_per_batch, borked_line,
 		                                       current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
-		                                       error_position.GetGlobalPosition(requested_size));
+		                                       error_position.GetGlobalPosition(requested_size), csv_file_scan->file_path);
 		error_handler.Error(csv_error, true);
 	}
 }
@@ -500,12 +500,12 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				csv_error = CSVError::IncorrectColumnAmountError(
 				    result.state_machine.options, col_idx, lines_per_batch, borked_line,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size, first_nl));
+				    line_pos.GetGlobalPosition(result.requested_size, first_nl), result.csv_file_scan->file_path);
 			} else {
 				csv_error = CSVError::IncorrectColumnAmountError(
 				    result.state_machine.options, col_idx, lines_per_batch, borked_line,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size));
+				    line_pos.GetGlobalPosition(result.requested_size), result.csv_file_scan->file_path);
 			}
 			break;
 		case CSVErrorType::INVALID_UNICODE: {
@@ -513,12 +513,12 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				csv_error = CSVError::InvalidUTF8(
 				    result.state_machine.options, col_idx, lines_per_batch, borked_line,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size, first_nl));
+				    line_pos.GetGlobalPosition(result.requested_size, first_nl), result.csv_file_scan->file_path);
 			} else {
 				csv_error = CSVError::InvalidUTF8(
 				    result.state_machine.options, col_idx, lines_per_batch, borked_line,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size));
+				    line_pos.GetGlobalPosition(result.requested_size), result.csv_file_scan->file_path);
 			}
 			break;
 		}
@@ -527,12 +527,12 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				csv_error = CSVError::UnterminatedQuotesError(
 				    result.state_machine.options, col_idx, lines_per_batch, borked_line,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size, first_nl));
+				    line_pos.GetGlobalPosition(result.requested_size, first_nl), result.csv_file_scan->file_path);
 			} else {
 				csv_error = CSVError::UnterminatedQuotesError(
 				    result.state_machine.options, col_idx, lines_per_batch, borked_line,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size));
+				    line_pos.GetGlobalPosition(result.requested_size), result.csv_file_scan->file_path);
 			}
 			break;
 		case CSVErrorType::CAST_ERROR:
@@ -542,19 +542,19 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    cur_error.col_idx, borked_line, lines_per_batch,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
 				    line_pos.GetGlobalPosition(result.requested_size, first_nl),
-				    result.parse_types[cur_error.chunk_idx].type_id);
+				    result.parse_types[cur_error.chunk_idx].type_id, result.csv_file_scan->file_path);
 			} else {
 				csv_error = CSVError::CastError(
 				    result.state_machine.options, result.names[cur_error.col_idx], cur_error.error_message,
 				    cur_error.col_idx, borked_line, lines_per_batch,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size), result.parse_types[cur_error.chunk_idx].type_id);
+				    line_pos.GetGlobalPosition(result.requested_size), result.parse_types[cur_error.chunk_idx].type_id, result.csv_file_scan->file_path);
 			}
 			break;
 		case CSVErrorType::MAXIMUM_LINE_SIZE:
 			csv_error = CSVError::LineSizeError(
 			    result.state_machine.options, cur_error.current_line_size, lines_per_batch, borked_line,
-			    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl));
+			    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl), result.csv_file_scan->file_path);
 			break;
 		default:
 			throw InvalidInputException("CSV Error not allowed when inserting row");
@@ -580,7 +580,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line) {
 		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel; We error.
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
-		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch);
+		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch, csv_file_scan->file_path);
 		error_handler.Error(csv_error);
 	}
 }
@@ -686,13 +686,13 @@ bool StringValueResult::AddRowInternal() {
 					auto csv_error = CSVError::IncorrectColumnAmountError(
 					    state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
 					    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
-					    last_position.GetGlobalPosition(requested_size, first_nl));
+					    last_position.GetGlobalPosition(requested_size, first_nl), csv_file_scan->file_path);
 					error_handler.Error(csv_error);
 				} else {
 					auto csv_error = CSVError::IncorrectColumnAmountError(
 					    state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
 					    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
-					    last_position.GetGlobalPosition(requested_size));
+					    last_position.GetGlobalPosition(requested_size), csv_file_scan->file_path);
 					error_handler.Error(csv_error);
 				}
 			}
@@ -897,7 +897,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
 					    lines_per_batch,
 					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
-					    optional_idx::Invalid(), result_vector.GetType().id());
+					    optional_idx::Invalid(), result_vector.GetType().id(), csv_file_scan->file_path);
 					error_handler->Error(csv_error);
 				}
 			}
@@ -928,7 +928,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						                        col_idx, borked_line, lines_per_batch,
 						                        result.line_positions_per_row[line_error].begin.GetGlobalPosition(
 						                            result.result_size, first_nl),
-						                        optional_idx::Invalid(), result_vector.GetType().id());
+						                        optional_idx::Invalid(), result_vector.GetType().id(), csv_file_scan->file_path);
 						error_handler->Error(csv_error);
 					}
 				}
