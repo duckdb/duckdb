@@ -21,8 +21,8 @@ struct CSVColumnInfo {
 struct CSVSchema {
 	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
 	bool Empty() const;
-	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types, const string &file_path,
-	                  vector<idx_t> &projection_order) const;
+	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
+                                   const string &cur_file_path);
 
 private:
 	static bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination);

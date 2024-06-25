@@ -150,8 +150,7 @@ SnifferResult CSVSniffer::MinimalSniff() {
 	return {detected_types, names};
 }
 
-vector<idx_t> CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
-	vector<idx_t> projection_order;
+SnifferResult CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
 	auto min_sniff_res = MinimalSniff();
 	bool run_full = error_handler->AnyErrors() || detection_error_handler->AnyErrors();
 	// Check if we are happy with the result or if we need to do more sniffing
@@ -160,21 +159,19 @@ vector<idx_t> CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
 		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
 			string error;
 			run_full = !file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types,
-			                                     options.file_path, projection_order);
+			                                     options.file_path);
 		}
 	}
 	if (run_full) {
 		// We run full sniffer
 		string error;
-		projection_order.clear();
 		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
-			if (!file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types, options.file_path,
-			                              projection_order)) {
+			if (!file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types, options.file_path)) {
 				throw InvalidInputException(error);
 			}
 		}
 	}
-	return projection_order;
+	return min_sniff_res;
 }
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;

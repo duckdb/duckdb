@@ -20,6 +20,8 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 		return true;
 	}
 	switch (source) {
+	case LogicalTypeId::SQLNULL:
+		return true;
 	case LogicalTypeId::TINYINT:
 		return destination == LogicalTypeId::SMALLINT || destination == LogicalTypeId::INTEGER ||
 		       destination == LogicalTypeId::BIGINT || destination == LogicalTypeId::DECIMAL ||
@@ -59,7 +61,7 @@ bool CSVSchema::Empty() const {
 }
 
 bool CSVSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
-                             const string &cur_file_path, vector<idx_t> &projection_order) const {
+                                   const string &cur_file_path) {
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	bool match = true;
 	unordered_map<string, TypeIdxPair> current_schema;
@@ -88,12 +90,10 @@ bool CSVSchema::SchemasMatch(string &error_message, vector<string> &names, vecto
 				      << "\" is expected to have type: " << column.type.ToString();
 				error << " But has type: " << current_schema[column.name].type.ToString() << "\n";
 				match = false;
-			} else {
-				// We have a good match
-				projection_order.push_back(current_schema[column.name].idx);
 			}
 		}
 	}
+
 	// Lets suggest some potential fixes
 	error << "Potential Fix: Since your schema has a mismatch, consider setting union_by_name=true.";
 	if (!match) {
