@@ -39,6 +39,8 @@ public:
 	//! Reallocate an in-memory buffer that is pinned.
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
+	//! Prefetch a series of blocks. Note that this is a performance suggestion.
+	virtual void Prefetch(vector<shared_ptr<BlockHandle>> &handles) = 0;
 	virtual void Unpin(shared_ptr<BlockHandle> &handle) = 0;
 
 	//! Returns the currently allocated memory
@@ -50,10 +52,10 @@ public:
 	//! Returns the maximum swap space that can be used
 	virtual optional_idx GetMaxSwap() const = 0;
 
-	//! Returns a new block of memory that is transient.
+	//! Returns a new block of transient memory.
 	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size);
 	//! Returns a new block of memory that is smaller than the block size setting.
-	virtual shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size);
+	virtual shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size);
 
 	virtual DUCKDB_API Allocator &GetBufferAllocator();
 	virtual DUCKDB_API void ReserveMemory(idx_t size);

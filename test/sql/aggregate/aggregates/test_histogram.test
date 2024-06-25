@@ -143,4 +143,4 @@ INSERT INTO enums VALUES ('happy'), ('ok')
 query I
 SELECT histogram(e) FROM enums
 ----
-{happy=1, ok=1}
+{ok=1, happy=1}

@@ -4,6 +4,7 @@ add_library_unity(
   OBJECT
   caseconvert.cpp
   concat.cpp
+  concat_ws.cpp
   length.cpp
   like.cpp
   nfc_normalize.cpp

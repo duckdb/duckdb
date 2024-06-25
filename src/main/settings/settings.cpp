@@ -734,10 +734,9 @@ Value CustomProfilingSettings::GetSetting(const ClientContext &context) {
 		if (!profiling_settings_str.empty()) {
 			profiling_settings_str += ", ";
 		}
-		profiling_settings_str += EnumUtil::ToString(entry);
+		profiling_settings_str += StringUtil::Format("\"%s\": \"true\"", EnumUtil::ToString(entry));
 	}
-
-	return Value(profiling_settings_str);
+	return Value(StringUtil::Format("{%s}", profiling_settings_str));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1136,6 +1135,24 @@ Value MaximumMemorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Streaming Buffer Size
+//===--------------------------------------------------------------------===//
+void StreamingBufferSize::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
+}
+
+void StreamingBufferSize::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.SetDefaultStreamingBufferSize();
+}
+
+Value StreamingBufferSize::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.streaming_buffer_size));
+}
+
+//===--------------------------------------------------------------------===//
 // Maximum Temp Directory Size
 //===--------------------------------------------------------------------===//
 void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1216,7 +1233,7 @@ Value PartitionedWriteFlushThreshold::GetSetting(const ClientContext &context) {
 // Preferred block allocation size
 //===--------------------------------------------------------------------===//
 void DefaultBlockAllocSize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	idx_t block_alloc_size = input.GetValue<uint64_t>();
+	auto block_alloc_size = input.GetValue<uint64_t>();
 	Storage::VerifyBlockAllocSize(block_alloc_size);
 	config.options.default_block_alloc_size = block_alloc_size;
 }
@@ -1228,6 +1245,43 @@ void DefaultBlockAllocSize::ResetGlobal(DatabaseInstance *db, DBConfig &config) 
 Value DefaultBlockAllocSize::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::UBIGINT(config.options.default_block_alloc_size);
+}
+
+//===--------------------------------------------------------------------===//
+// Index scan percentage
+//===--------------------------------------------------------------------===//
+void IndexScanPercentage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto index_scan_percentage = input.GetValue<double>();
+	if (index_scan_percentage < 0 || index_scan_percentage > 1.0) {
+		throw InvalidInputException("the index scan percentage must be within [0, 1]");
+	}
+	config.options.index_scan_percentage = index_scan_percentage;
+}
+
+void IndexScanPercentage::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.index_scan_percentage = DBConfig().options.index_scan_percentage;
+}
+
+Value IndexScanPercentage::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::DOUBLE(config.options.index_scan_percentage);
+}
+
+//===--------------------------------------------------------------------===//
+// Index scan max count
+//===--------------------------------------------------------------------===//
+void IndexScanMaxCount::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto index_scan_max_count = input.GetValue<uint64_t>();
+	config.options.index_scan_max_count = index_scan_max_count;
+}
+
+void IndexScanMaxCount::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.index_scan_max_count = DBConfig().options.index_scan_max_count;
+}
+
+Value IndexScanMaxCount::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.index_scan_max_count);
 }
 
 //===--------------------------------------------------------------------===//

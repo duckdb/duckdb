@@ -1,0 +1,22 @@
+# name: test/sql/aggregate/aggregates/first_test_all_types.test_slow
+# description: Test the first aggregate on all types
+# group: [aggregates]
+
+statement ok
+pragma enable_verification
+
+# verify that first produces the same result as limit 1 for all types
+statement ok
+CREATE TABLE all_types AS FROM test_all_types();
+
+query I nosort all_types_first
+SELECT * FROM all_types LIMIT 1
+
+query I nosort all_types_first
+SELECT FIRST(COLUMNS(*)) FROM all_types
+
+query I nosort all_types_last
+SELECT * FROM all_types LIMIT 1 OFFSET 2
+
+query I nosort all_types_last
+SELECT LAST(COLUMNS(*)) FROM all_types

@@ -1,0 +1,92 @@
+# name: test/sql/parallelism/interquery/concurrent_append_metadata_queries.test_slow
+# description: Run metadata queries while appending/checkpointing
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+CREATE INDEX i_index ON integers(i);
+
+statement ok
+CREATE VIEW v1 AS FROM integers;
+
+statement ok
+INSERT INTO integers SELECT * FROM range(10000);
+
+concurrentloop threadid 0 20
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+CREATE SCHEMA s1;
+
+onlyif threadid=0
+statement ok
+CREATE TABLE s1.tbl(i INTEGER);
+
+onlyif threadid=0
+statement ok
+CREATE INDEX i_index ON s1.tbl(i);
+
+onlyif threadid=0
+statement ok
+INSERT INTO s1.tbl FROM range(10000);
+
+onlyif threadid=0
+statement ok
+INSERT INTO integers SELECT * FROM range(10000 + ${i} * 100, 10100 + ${i} * 100);
+
+onlyif threadid=0
+statement ok
+DROP TABLE s1.tbl;
+
+onlyif threadid=0
+statement ok
+DROP SCHEMA s1;
+
+endloop
+
+loop i 0 100
+
+skipif threadid=0
+statement ok
+FROM duckdb_tables();
+
+skipif threadid=0
+statement ok
+FROM duckdb_indexes();
+
+skipif threadid=0
+statement ok
+FROM duckdb_schemas();
+
+skipif threadid=0
+statement ok
+FROM pragma_metadata_info();
+
+skipif threadid=0
+statement ok
+FROM pragma_storage_info('integers');
+
+skipif threadid=0
+statement ok
+from pragma_table_info('integers');
+
+skipif threadid=0
+statement ok
+from duckdb_dependencies();
+
+skipif threadid=0
+statement ok
+from duckdb_temporary_files();
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+12000	71994000

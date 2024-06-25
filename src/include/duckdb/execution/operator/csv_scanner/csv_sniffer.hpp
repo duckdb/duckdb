@@ -93,7 +93,7 @@ struct HeaderValue {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache);
+	                    CSVStateMachineCache &state_machine_cache, bool default_null_to_varchar = true);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
@@ -206,6 +206,8 @@ private:
 	void RefineTypes();
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 	vector<LogicalType> detected_types;
+	//! If when finding a SQLNULL type in type detection we default it to varchar
+	const bool default_null_to_varchar;
 	//! ------------------------------------------------------//
 	//! ------------------ Header Detection ----------------- //
 	//! ------------------------------------------------------//

@@ -115,6 +115,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"produce_arrow_string_view", {true}},
 	    {"enable_http_logging", {true}},
 	    {"http_logging_output", {"my_cool_outputfile"}},
+	    {"produce_arrow_string_view", {true}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
 	    {"allocator_background_threads", {true}}};
 	// Every option that's not excluded has to be part of this map
@@ -137,6 +138,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allow_unsigned_extensions",  // cant change this while db is running
 	    "allow_community_extensions", // cant change this while db is running
 	    "allow_unredacted_secrets",   // cant change this while db is running
+	    "streaming_buffer_size",
 	    "log_query_path",
 	    "password",
 	    "username",
@@ -147,7 +149,9 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "custom_user_agent",
 	    "custom_profiling_settings",
 	    "custom_user_agent",
-	    "default_block_size"};
+	    "default_block_size",
+	    "index_scan_percentage",
+	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }
 

@@ -62,13 +62,13 @@ create  table t as select range a, mod(range,10) b from range(2000);
 query III
 SELECT COUNT( a),approx_count_distinct(a),approx_count_distinct(b) from t
 ----
-2000	1991	10
+2000	2322	11
 
 query I
 SELECT approx_count_distinct(a) from t group by a %2 order by all;
 ----
-986
-993
+1006
+1230
 
 query I
 SELECT count(*) from t where a < 10;
@@ -92,7 +92,7 @@ SELECT approx_count_distinct(a) over (partition by a%2) from t where a < 10;
 query II
 SELECT COUNT( t),approx_count_distinct(t) from timestamp
 ----
-7	7
+7	6
 
 query II
 SELECT COUNT( t),approx_count_distinct(t) from dates

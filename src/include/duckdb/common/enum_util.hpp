@@ -100,7 +100,11 @@ enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
 
+enum class CopyFunctionReturnType : uint8_t;
+
 enum class CopyOverwriteMode : uint8_t;
+
+enum class CopyToType : uint8_t;
 
 enum class DataFileType : uint8_t;
 
@@ -314,6 +318,8 @@ enum class TaskExecutionResult : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
+enum class TransactionModifierType : uint8_t;
+
 enum class TransactionType : uint8_t;
 
 enum class TupleDataPinProperties : uint8_t;
@@ -444,7 +450,13 @@ template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
+const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value);
+
+template<>
 const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
+
+template<>
+const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
@@ -765,6 +777,9 @@ template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
+const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
+
+template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
 
 template<>
@@ -907,7 +922,13 @@ template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
+CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value);
+
+template<>
 CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
+
+template<>
+CopyToType EnumUtil::FromString<CopyToType>(const char *value);
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
@@ -1226,6 +1247,9 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);

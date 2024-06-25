@@ -114,10 +114,11 @@ public:
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const py::object &query, py::object params = py::list());
 
-	unique_ptr<QueryResult> ExecuteInternal(vector<unique_ptr<SQLStatement>> statements, py::object params = py::list(),
-	                                        bool many = false);
+	void ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements);
+	unique_ptr<PreparedStatement> PrepareQuery(unique_ptr<SQLStatement> statement);
+	unique_ptr<QueryResult> ExecuteInternal(PreparedStatement &prep, py::object params = py::list());
 
-	shared_ptr<DuckDBPyConnection> Execute(const py::object &query, py::object params = py::list(), bool many = false);
+	shared_ptr<DuckDBPyConnection> Execute(const py::object &query, py::object params = py::list());
 	shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
 
 	shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value, bool by_name);
@@ -128,8 +129,7 @@ public:
 
 	void LoadExtension(const string &extension);
 
-	unique_ptr<DuckDBPyRelation> RunQuery(const py::object &query, string alias = "",
-	                                      const py::object &params = py::none());
+	unique_ptr<DuckDBPyRelation> RunQuery(const py::object &query, string alias = "", py::object params = py::list());
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 

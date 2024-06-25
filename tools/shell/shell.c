@@ -11134,7 +11134,7 @@ static void output_html_string(FILE *out, const char *z){
 static const char needCsvQuote[] = {
   1, 1, 1, 1, 1, 1, 1, 1,   1, 1, 1, 1, 1, 1, 1, 1,
   1, 1, 1, 1, 1, 1, 1, 1,   1, 1, 1, 1, 1, 1, 1, 1,
-  1, 0, 1, 0, 0, 0, 0, 1,   0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 1, 0, 0, 0, 0, 1,   0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0,
@@ -11600,22 +11600,22 @@ static int shell_callback(
     }
     case MODE_Html: {
       if( p->cnt++==0 && p->showHeader ){
-        raw_printf(p->out,"<TR>");
+        raw_printf(p->out,"<tr>");
         for(i=0; i<nArg; i++){
-          raw_printf(p->out,"<TH>");
+          raw_printf(p->out,"<th>");
           output_html_string(p->out, azCol[i]);
-          raw_printf(p->out,"</TH>\n");
+          raw_printf(p->out,"</th>\n");
         }
-        raw_printf(p->out,"</TR>\n");
+        raw_printf(p->out,"</tr>\n");
       }
       if( azArg==0 ) break;
-      raw_printf(p->out,"<TR>");
+      raw_printf(p->out,"<tr>");
       for(i=0; i<nArg; i++){
-        raw_printf(p->out,"<TD>");
+        raw_printf(p->out,"<td>");
         output_html_string(p->out, azArg[i] ? azArg[i] : p->nullValue);
-        raw_printf(p->out,"</TD>\n");
+        raw_printf(p->out,"</td>\n");
       }
-      raw_printf(p->out,"</TR>\n");
+      raw_printf(p->out,"</tr>\n");
       break;
     }
     case MODE_Tcl: {

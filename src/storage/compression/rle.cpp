@@ -1,12 +1,11 @@
-#include "duckdb/function/compression/compression.hpp"
-
-#include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/function/compression/compression.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+
 #include <functional>
 
 namespace duckdb {
@@ -81,7 +80,7 @@ public:
 
 template <class T>
 struct RLEAnalyzeState : public AnalyzeState {
-	RLEAnalyzeState() {
+	explicit RLEAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
 	}
 
 	RLEState<T> state;
@@ -89,7 +88,8 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<RLEAnalyzeState<T>>();
+	CompressionInfo info(Storage::BLOCK_SIZE, type);
+	return make_uniq<RLEAnalyzeState<T>>(info);
 }
 
 template <class T>
@@ -129,14 +129,13 @@ struct RLECompressState : public CompressionState {
 		}
 	};
 
-	static idx_t MaxRLECount() {
+	idx_t MaxRLECount() {
 		auto entry_size = sizeof(T) + sizeof(rle_count_t);
-		auto entry_count = (Storage::BLOCK_SIZE - RLEConstants::RLE_HEADER_SIZE) / entry_size;
-		return entry_count;
+		return (info.GetBlockSize() - RLEConstants::RLE_HEADER_SIZE) / entry_size;
 	}
 
-	explicit RLECompressState(ColumnDataCheckpointer &checkpointer_p)
-	    : checkpointer(checkpointer_p),
+	RLECompressState(ColumnDataCheckpointer &checkpointer_p, const CompressionInfo &info)
+	    : CompressionState(info), checkpointer(checkpointer_p),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
@@ -147,9 +146,11 @@ struct RLECompressState : public CompressionState {
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
+
 		auto column_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		column_segment->function = function;
 		current_segment = std::move(column_segment);
+
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 	}
@@ -222,7 +223,7 @@ struct RLECompressState : public CompressionState {
 
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpointer);
+	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpointer, state->info);
 }
 
 template <class T, bool WRITE_STATISTICS>
@@ -431,8 +432,8 @@ CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool RLEFun::TypeIsSupported(PhysicalType type) {
-	switch (type) {
+bool RLEFun::TypeIsSupported(const CompressionInfo &info) {
+	switch (info.GetPhysicalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:

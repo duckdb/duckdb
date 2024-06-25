@@ -82,9 +82,9 @@ SinkResultType PhysicalCreateARTIndex::SinkUnsorted(Vector &row_identifiers, Ope
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	auto count = l_state.key_chunk.size();
 
-	// get the corresponding row IDs
-	row_identifiers.Flatten(count);
-	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+	UnifiedVectorFormat row_id_data;
+	row_identifiers.ToUnifiedFormat(count, row_id_data);
+	auto row_ids = UnifiedVectorFormat::GetData<row_t>(row_id_data);
 
 	// insert the row IDs
 	auto &art = l_state.local_index->Cast<ART>();
@@ -123,29 +123,29 @@ SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk
                                             OperatorSinkInput &input) const {
 
 	D_ASSERT(chunk.ColumnCount() >= 2);
-
-	// generate the keys for the given input
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	l_state.key_chunk.ReferenceColumns(chunk, l_state.key_column_ids);
 	l_state.arena_allocator.Reset();
-	ART::GenerateKeys(l_state.arena_allocator, l_state.key_chunk, l_state.keys);
 
-	// insert the keys and their corresponding row IDs
+	// Insert the keys and their corresponding row identifiers.
 	auto &row_identifiers = chunk.data[chunk.ColumnCount() - 1];
 	if (sorted) {
+		ART::GenerateKeys<true>(l_state.arena_allocator, l_state.key_chunk, l_state.keys);
 		return SinkSorted(row_identifiers, input);
 	}
+
+	ART::GenerateKeys(l_state.arena_allocator, l_state.key_chunk, l_state.keys);
 	return SinkUnsorted(row_identifiers, input);
 }
 
 SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
                                                       OperatorSinkCombineInput &input) const {
 
-	auto &gstate = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
-	auto &lstate = input.local_state.Cast<CreateARTIndexLocalSinkState>();
+	auto &g_state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
+	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 
 	// merge the local index into the global index
-	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
+	if (!g_state.global_index->MergeIndexes(*l_state.local_index)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 
