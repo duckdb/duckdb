@@ -53,7 +53,7 @@ public:
 	CSVError() {};
 	CSVError(string error_message, CSVErrorType type, idx_t column_idx, string csv_row, LinesPerBoundary error_info,
 	         idx_t row_byte_position, optional_idx byte_position, const CSVReaderOptions &reader_options,
-	         const string &fixes,const string& current_path);
+	         const string &fixes, const string &current_path);
 	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
@@ -71,13 +71,15 @@ public:
 	                                        LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
 	                                        optional_idx byte_position, const string &current_path);
 	//! Produces error messages for null_padding option is set and we have quoted new values in parallel
-	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info,const string& current_path);
+	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info,
+	                                const string &current_path);
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
 	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &state_machine, idx_t actual_columns,
 	                                           LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
 	                                           optional_idx byte_position, const string &current_path);
 	static CSVError InvalidUTF8(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
-	                            string &csv_row, idx_t row_byte_position, optional_idx byte_position, const string &current_path);
+	                            string &csv_row, idx_t row_byte_position, optional_idx byte_position,
+	                            const string &current_path);
 
 	idx_t GetBoundaryIndex() {
 		return error_info.boundary_idx;

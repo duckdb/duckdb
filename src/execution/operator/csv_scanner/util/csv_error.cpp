@@ -88,7 +88,7 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, LinesPerBoundary
 
 CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, string csv_row_p,
                    LinesPerBoundary error_info_p, idx_t row_byte_position, optional_idx byte_position_p,
-                   const CSVReaderOptions &reader_options, const string &fixes, const string& current_path)
+                   const CSVReaderOptions &reader_options, const string &fixes, const string &current_path)
     : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p), csv_row(std::move(csv_row_p)),
       error_info(error_info_p), row_byte_position(row_byte_position), byte_position(byte_position_p) {
 	// What were the options
@@ -180,7 +180,8 @@ CSVError CSVError::SniffingError(const string &file_path) {
 	return CSVError(error.str(), CSVErrorType::SNIFFING, {});
 }
 
-CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info, const string& current_path) {
+CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info,
+                                   const string &current_path) {
 	std::ostringstream error;
 	error << " The parallel scanner does not support null_padding in conjunction with quoted new lines. Please "
 	         "disable the parallel csv reader with parallel=false"
@@ -226,7 +227,8 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 }
 
 CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
-                               string &csv_row, idx_t row_byte_position, optional_idx byte_position, const string &current_path) {
+                               string &csv_row, idx_t row_byte_position, optional_idx byte_position,
+                               const string &current_path) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
 	error << "Invalid unicode (byte sequence mismatch) detected." << '\n';

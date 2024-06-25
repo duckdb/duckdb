@@ -60,6 +60,7 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 
 unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScanner> previous_scanner) {
 	if (single_threaded) {
+		lock_guard<mutex> parallel_lock(main_mutex);
 		idx_t cur_idx = last_file_idx++;
 		if (cur_idx >= bind_data.files.size()) {
 			return nullptr;
@@ -70,7 +71,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 		} else {
 			auto file_scan = make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
 			                                              bind_data, column_ids, file_schema, true);
-			lock_guard<mutex> parallel_lock(main_mutex);
 			file_scans.emplace_back(std::move(file_scan));
 			current_file = file_scans.back();
 			current_boundary = current_file->start_iterator;
@@ -79,7 +79,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 		}
 		if (previous_scanner) {
-			lock_guard<mutex> parallel_lock(main_mutex);
 			previous_scanner->buffer_tracker.reset();
 			current_buffer_in_use.reset();
 			previous_scanner->csv_file_scan->Finish();
@@ -127,7 +126,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
 				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
 				                                                        current_boundary.GetBufferIdx());
-
 			} else {
 				// If not we are done with this CSV Scanning
 				finished = true;
