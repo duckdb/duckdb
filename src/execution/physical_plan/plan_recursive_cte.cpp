@@ -1,13 +1,14 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
-#include "duckdb/execution/operator/set/physical_recursive_key_cte.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 
 namespace duckdb {
 
@@ -78,7 +79,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 
 		auto cte = make_uniq<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, std::move(left),
 		                                           std::move(right), op.estimated_cardinality);
-
+		cte->distinct_types = op.types;
 		cte->working_table = working_table;
 		return std::move(cte);
 	} else {
@@ -88,8 +89,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 
 		auto right = CreatePlan(*op.children[1]);
 
-		auto cte = make_uniq<PhysicalRecursiveKeyCTE>(op.ctename, op.table_index, op.types, op.union_all,
-		                                              std::move(left), std::move(right), op.estimated_cardinality);
+		auto cte = make_uniq<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, std::move(left),
+		                                           std::move(right), op.estimated_cardinality);
+		cte->using_key = true;
 		cte->payload_aggregates = std::move(payload_aggregates);
 		cte->distinct_idx = distinct_idx;
 		cte->distinct_types = distinct_types;
