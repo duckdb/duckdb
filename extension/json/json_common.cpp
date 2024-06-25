@@ -36,15 +36,23 @@ string ThrowPathError(const char *ptr, const char *end, const bool binder) {
 struct JSONKeyReadResult {
 public:
 	static inline JSONKeyReadResult Empty() {
-		return {idx_t(0), string()};
+		return {idx_t(0), false, string()};
 	}
 
 	static inline JSONKeyReadResult WildCard() {
-		return {1, "*"};
+		return {1, false, "*"};
+	}
+
+	static inline JSONKeyReadResult RecWildCard() {
+		return {2, true, "*"};
+	}
+
+	static inline JSONKeyReadResult RecWildCardShortcut() {
+		return {0, true, "*"};
 	}
 
 	inline bool IsValid() {
-		return chars_read != 0;
+		return (chars_read != 0) || recursive;
 	}
 
 	inline bool IsWildCard() {
@@ -53,6 +61,7 @@ public:
 
 public:
 	idx_t chars_read;
+	bool recursive;
 	string key;
 };
 
@@ -83,7 +92,7 @@ static inline JSONKeyReadResult ReadString(const char *ptr, const char *const en
 		if (ptr == end || backslash) {
 			return JSONKeyReadResult::Empty();
 		} else {
-			return {idx_t(ptr - before), string(key.get(), key_len)};
+			return {idx_t(ptr - before), false, string(key.get(), key_len)};
 		}
 	} else {
 		while (ptr != end) {
@@ -92,7 +101,7 @@ static inline JSONKeyReadResult ReadString(const char *ptr, const char *const en
 			}
 			ptr++;
 		}
-		return {idx_t(ptr - before), string(before, ptr - before)};
+		return {idx_t(ptr - before), false, string(before, ptr - before)};
 	}
 }
 
@@ -126,7 +135,22 @@ static inline idx_t ReadInteger(const char *ptr, const char *const end, idx_t &i
 static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) {
 	D_ASSERT(ptr != end);
 	if (*ptr == '*') { // Wildcard
+		if (*(ptr + 1) == '*') {
+			return JSONKeyReadResult::RecWildCard();
+		}
 		return JSONKeyReadResult::WildCard();
+	}
+	if (*ptr == '.') {
+		char next = *(ptr + 1);
+		if (next == '*') {
+			return JSONKeyReadResult::RecWildCard();
+		}
+		if (next == '[') {
+			return {1, true, "*"};
+		}
+		if (next != '.') {
+			return JSONKeyReadResult::RecWildCardShortcut();
+		}
 	}
 	bool escaped = false;
 	if (*ptr == '"') {
@@ -202,9 +226,6 @@ JSONPathType JSONCommon::ValidatePath(const char *ptr, const idx_t &len, const b
 				path_type = JSONPathType::WILDCARD;
 			}
 			ptr += key.chars_read;
-			if (key.IsWildCard() &&*ptr == '*') {
-				ptr++;
-			}
 			break;
 		}
 		case '[': { // Array index
@@ -270,53 +291,64 @@ yyjson_val *JSONCommon::GetPath(yyjson_val *val, const char *ptr, const idx_t &l
 	return val;
 }
 
-bool  GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const end, vector<yyjson_val *> &vals) {
-	bool recursive = false;
+void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const end, vector<yyjson_val *> &vals) {
 	while (val != nullptr && ptr != end) {
 		const auto &c = *ptr++;
 		D_ASSERT(ptr != end);
 		switch (c) {
 		case '.': { // Object field
-			if (!unsafe_yyjson_is_obj(val)) {
-				return recursive;
-			}
 			auto key_result = ReadKey(ptr, end);
 			D_ASSERT(key_result.IsValid());
 			ptr += key_result.chars_read;
-			if (*ptr == '*') {
-				recursive = true;
-				ptr++;
+			if (key_result.recursive) {
+				vector<yyjson_val *> rec_vals;
+				rec_vals.emplace_back(val);
+				for (idx_t i = 0; i < rec_vals.size(); i++) {
+					yyjson_val* rec_val = rec_vals[i];
+					if (yyjson_is_arr(rec_val)) {
+						size_t idx, max;
+						yyjson_val *element;
+						yyjson_arr_foreach(rec_val, idx, max, element) {
+							rec_vals.emplace_back(element);
+						}
+					}
+					else if (yyjson_is_obj(rec_val)) {
+						size_t idx, max;
+						yyjson_val *key, *element;
+						yyjson_obj_foreach(rec_val, idx, max, key, element) {
+							rec_vals.emplace_back(element);
+						}
+					}
+					if (i > 0 || ptr != end) {
+						GetWildcardPathInternal(rec_val, ptr, end, vals);
+					}
+				}
+				return;
+			}
+			if (!unsafe_yyjson_is_obj(val)) {
+				return;
 			}
 			if (key_result.IsWildCard()) { // Wildcard
 				size_t idx, max;
 				yyjson_val *key, *obj_val;
 				yyjson_obj_foreach(val, idx, max, key, obj_val) {
 					GetWildcardPathInternal(obj_val, ptr, end, vals);
-					/*
-					if (yyjson_is_arr(obj_val)) {
-						JSONCommon::GetWildcardPath(obj_val, "$[*]", 4, vals);
-					}
-					if (yyjson_is_obj(obj_val)) {
-						JSONCommon::GetWildcardPath(obj_val, "$.*", 3, vals);
-					}
-
-					 */
 				}
-				return recursive;
+				return;
 			}
 			val = yyjson_obj_getn(val, key_result.key.c_str(), key_result.key.size());
 			break;
 		}
 		case '[': { // Array index
 			if (!unsafe_yyjson_is_arr(val)) {
-				return recursive;
+				return;
 			}
 			idx_t array_index;
 			bool from_back;
 #ifdef DEBUG
 			bool success =
 #endif
-			    ReadArrayIndex(ptr, end, array_index, from_back);
+				ReadArrayIndex(ptr, end, array_index, from_back);
 #ifdef DEBUG
 			D_ASSERT(success);
 #endif
@@ -326,17 +358,8 @@ bool  GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *cons
 				yyjson_val *arr_val;
 				yyjson_arr_foreach(val, idx, max, arr_val) {
 					GetWildcardPathInternal(arr_val, ptr, end, vals);
-					/*
-					if (yyjson_is_obj(arr_val)) {
-						JSONCommon::GetWildcardPath(arr_val, "$.*", 3, vals);
-					}
-					if (yyjson_is_arr(arr_val)) {
-						JSONCommon::GetWildcardPath(arr_val, "$[*]", 4, vals);
-					}
-
-					 */
 				}
-				return recursive;
+				return;
 			}
 			if (from_back && array_index != 0) {
 				array_index = unsafe_yyjson_get_len(val) - array_index;
@@ -346,37 +369,20 @@ bool  GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *cons
 		}
 		default: // LCOV_EXCL_START
 			throw InternalException(
-			    "Invalid JSON Path encountered in GetWildcardPathInternal, call JSONCommon::ValidatePath first!");
+				"Invalid JSON Path encountered in GetWildcardPathInternal, call JSONCommon::ValidatePath first!");
 		} // LCOV_EXCL_STOP
 	}
 	if (val != nullptr) {
 		vals.emplace_back(val);
 	}
-	return recursive;
+	return;
 }
 
 void JSONCommon::GetWildcardPath(yyjson_val *val, const char *ptr, const idx_t &len, vector<yyjson_val *> &vals) {
 	// Path has been validated at this point
 	const char *const end = ptr + len;
 	ptr++; // Skip past '$'
-	bool recursive = GetWildcardPathInternal(val, ptr, end, vals);
-
-	if (recursive) {
-		for (idx_t i = 0; i < vals.size(); i++) {
-			auto &val = vals[i];
-			//std::cout << i << ": " << yyjson_get_type_desc(val) << "\n";
-			if (yyjson_is_arr(val)) {
-				size_t idx, max;
-				yyjson_val *element;
-				yyjson_arr_foreach(val, idx, max, element) {
-					vals.emplace_back(element);
-				}
-			}
-			else if (yyjson_is_obj(val)) {
-				JSONCommon::GetWildcardPath(val, "$.*", 3, vals);
-			}
-		}
-	}
+	GetWildcardPathInternal(val, ptr, end, vals);
 }
 
 } // namespace duckdb
