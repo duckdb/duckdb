@@ -12,10 +12,14 @@
 //! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_API
 #ifdef _WIN32
+#ifdef DUCKDB_STATIC
+#define DUCKDB_API
+#else
 #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
 #define DUCKDB_API __declspec(dllexport)
 #else
 #define DUCKDB_API __declspec(dllimport)
+#endif
 #endif
 #else
 #define DUCKDB_API
@@ -61,8 +65,8 @@
 #endif
 
 #include <stdbool.h>
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -335,7 +339,7 @@ typedef struct {
 //! data chunk lives, i.e., must not be destroyed.
 typedef struct _duckdb_vector {
 	void *__vctr;
-} * duckdb_vector;
+} *duckdb_vector;
 
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)
@@ -382,65 +386,65 @@ typedef struct {
 //! A database object. Should be closed with `duckdb_close`.
 typedef struct _duckdb_database {
 	void *__db;
-} * duckdb_database;
+} *duckdb_database;
 
 //! A connection to a duckdb database. Must be closed with `duckdb_disconnect`.
 typedef struct _duckdb_connection {
 	void *__conn;
-} * duckdb_connection;
+} *duckdb_connection;
 
 //! A prepared statement is a parameterized query that allows you to bind parameters to it.
 //! Must be destroyed with `duckdb_destroy_prepare`.
 typedef struct _duckdb_prepared_statement {
 	void *__prep;
-} * duckdb_prepared_statement;
+} *duckdb_prepared_statement;
 
 //! Extracted statements. Must be destroyed with `duckdb_destroy_extracted`.
 typedef struct _duckdb_extracted_statements {
 	void *__extrac;
-} * duckdb_extracted_statements;
+} *duckdb_extracted_statements;
 
 //! The pending result represents an intermediate structure for a query that is not yet fully executed.
 //! Must be destroyed with `duckdb_destroy_pending`.
 typedef struct _duckdb_pending_result {
 	void *__pend;
-} * duckdb_pending_result;
+} *duckdb_pending_result;
 
 //! The appender enables fast data loading into DuckDB.
 //! Must be destroyed with `duckdb_appender_destroy`.
 typedef struct _duckdb_appender {
 	void *__appn;
-} * duckdb_appender;
+} *duckdb_appender;
 
 //! The table description allows querying info about the table.
 //! Must be destroyed with `duckdb_table_description_destroy`.
 typedef struct _duckdb_table_description {
 	void *__tabledesc;
-} * duckdb_table_description;
+} *duckdb_table_description;
 
 //! Can be used to provide start-up options for the DuckDB instance.
 //! Must be destroyed with `duckdb_destroy_config`.
 typedef struct _duckdb_config {
 	void *__cnfg;
-} * duckdb_config;
+} *duckdb_config;
 
 //! Holds an internal logical type.
 //! Must be destroyed with `duckdb_destroy_logical_type`.
 typedef struct _duckdb_logical_type {
 	void *__lglt;
-} * duckdb_logical_type;
+} *duckdb_logical_type;
 
 //! Contains a data chunk from a duckdb_result.
 //! Must be destroyed with `duckdb_destroy_data_chunk`.
 typedef struct _duckdb_data_chunk {
 	void *__dtck;
-} * duckdb_data_chunk;
+} *duckdb_data_chunk;
 
 //! Holds a DuckDB value, which wraps a type.
 //! Must be destroyed with `duckdb_destroy_value`.
 typedef struct _duckdb_value {
 	void *__val;
-} * duckdb_value;
+} *duckdb_value;
 
 //! Holds a recursive tree that matches the query plan.
 typedef struct _duckdb_profiling_info {
@@ -453,7 +457,7 @@ typedef struct _duckdb_profiling_info {
 //! Additional function info. When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_function_info {
 	void *__val;
-} * duckdb_function_info;
+} *duckdb_function_info;
 
 //===--------------------------------------------------------------------===//
 // Scalar function types
@@ -461,7 +465,7 @@ typedef struct _duckdb_function_info {
 //! A scalar function. Must be destroyed with `duckdb_destroy_scalar_function`.
 typedef struct _duckdb_scalar_function {
 	void *__val;
-} * duckdb_scalar_function;
+} *duckdb_scalar_function;
 
 //! The main function of the scalar function.
 typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output);
@@ -474,17 +478,17 @@ typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_
 //! A table function. Must be destroyed with `duckdb_destroy_table_function`.
 typedef struct _duckdb_table_function {
 	void *__val;
-} * duckdb_table_function;
+} *duckdb_table_function;
 
 //! The bind info of the function. When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_bind_info {
 	void *__val;
-} * duckdb_bind_info;
+} *duckdb_bind_info;
 
 //! Additional function init info. When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_init_info {
 	void *__val;
-} * duckdb_init_info;
+} *duckdb_init_info;
 
 //! The bind function of the table function.
 typedef void (*duckdb_table_function_bind_t)(duckdb_bind_info info);
@@ -502,7 +506,7 @@ typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_c
 //! Additional replacement scan info. When setting this info, it is necessary to pass a destroy-callback function.
 typedef struct _duckdb_replacement_scan_info {
 	void *__val;
-} * duckdb_replacement_scan_info;
+} *duckdb_replacement_scan_info;
 
 //! A replacement scan function that can be added to a database.
 typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info, const char *table_name, void *data);
@@ -515,22 +519,22 @@ typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info,
 //! Holds an arrow query result. Must be destroyed with `duckdb_destroy_arrow`.
 typedef struct _duckdb_arrow {
 	void *__arrw;
-} * duckdb_arrow;
+} *duckdb_arrow;
 
 //! Holds an arrow array stream. Must be destroyed with `duckdb_destroy_arrow_stream`.
 typedef struct _duckdb_arrow_stream {
 	void *__arrwstr;
-} * duckdb_arrow_stream;
+} *duckdb_arrow_stream;
 
 //! Holds an arrow schema. Remember to release the respective ArrowSchema object.
 typedef struct _duckdb_arrow_schema {
 	void *__arrs;
-} * duckdb_arrow_schema;
+} *duckdb_arrow_schema;
 
 //! Holds an arrow array. Remember to release the respective ArrowArray object.
 typedef struct _duckdb_arrow_array {
 	void *__arra;
-} * duckdb_arrow_array;
+} *duckdb_arrow_array;
 
 //===--------------------------------------------------------------------===//
 // Functions
