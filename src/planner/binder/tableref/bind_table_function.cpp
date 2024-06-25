@@ -228,20 +228,6 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			return_names[i] = "C" + to_string(i);
 		}
 	}
-	if (column_name_alias.size() > return_names.size()) {
-		throw BinderException("Function produces only %d columns, but aliases for %d columns were provided!",
-		                      return_names.size(), column_name_alias.size());
-	}
-	if (!column_type_hint.empty() && column_type_hint[0].id() != LogicalTypeId::ANY) {
-		// Schema was provided, e.g: (a varchar, b boolean)
-		// Only output bindings for these columns
-		auto unfiltered_names = std::move(return_names);
-		auto unfiltered_types = std::move(return_types);
-		for (idx_t i = 0; i < column_type_hint.size(); i++) {
-			return_names.emplace_back(std::move(unfiltered_names[i]));
-			return_types.emplace_back(std::move(unfiltered_types[i]));
-		}
-	}
 
 	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names);
 	get->parameters = parameters;
@@ -254,6 +240,8 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			get->column_ids.push_back(i);
 		}
 	}
+	get->user_provided_names = column_name_alias;
+	get->user_provided_types = column_type_hint;
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
 	                              get->GetTable().get());

@@ -134,6 +134,8 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 
 void LogicalGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
+	serializer.WriteProperty(198, "user_provided_names", user_provided_names);
+	serializer.WriteProperty(199, "user_provided_types", user_provided_types);
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
 	serializer.WriteProperty(202, "names", names);
@@ -154,6 +156,8 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
 	auto result = unique_ptr<LogicalGet>(new LogicalGet());
+	deserializer.ReadPropertyWithDefault(198, "user_provided_names", result->user_provided_names);
+	deserializer.ReadPropertyWithDefault(199, "user_provided_types", result->user_provided_types);
 	deserializer.ReadProperty(200, "table_index", result->table_index);
 	deserializer.ReadProperty(201, "returned_types", result->returned_types);
 	deserializer.ReadProperty(202, "names", result->names);
@@ -173,6 +177,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
 		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
 		TableFunctionRef empty_ref;
+		empty_ref.column_name_alias = result->user_provided_names;
+		empty_ref.column_type_hint = result->user_provided_types;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
 		                             empty_ref);
@@ -192,6 +198,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw SerializationException(
 			    "Table function deserialization failure - bind returned different returned names than were serialized");
 		}
+
 	} else {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}

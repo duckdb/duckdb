@@ -22,7 +22,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
-	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<TableRef> ref, unique_ptr<FunctionData> bind_data,
+	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
 	           vector<LogicalType> returned_types, vector<string> returned_names);
 
 	//! The table index in the current bind context
@@ -54,8 +54,9 @@ public:
 	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
 	//! Stored so the can be included in explain output
 	ExtraOperatorInfo extra_info;
-	//! The TableFunctionRef of the function that is called
-	unique_ptr<TableRef> ref;
+	//! User provided types+names, such as: function(...) as (t integer, j boolean)
+	vector<string> user_provided_names;
+	vector<LogicalType> user_provided_types;
 
 	string GetName() const override;
 	string ParamsToString() const override;
