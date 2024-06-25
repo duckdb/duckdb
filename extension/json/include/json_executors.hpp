@@ -63,22 +63,7 @@ public:
 
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 					JSONCommon::GetWildcardPath(doc->root, ptr, len, vals);
-					/*
-					for (idx_t i = 0; i < vals.size(); i++) {
-						auto &val = vals[i];
-						//std::cout << i << ": " << yyjson_get_type_desc(val) << "\n";
-						if (yyjson_is_arr(val)) {
-							size_t idx, max;
-							yyjson_val *element;
-							yyjson_arr_foreach(val, idx, max, element) {
-								vals.emplace_back(element);
-							}
-						}
-						else if (yyjson_is_obj(val)) {
-							JSONCommon::GetWildcardPath(val, "$.*", 3, vals);
-						}
-					}
-					*/
+
 					auto current_size = ListVector::GetListSize(result);
 					auto new_size = current_size + vals.size();
 					if (ListVector::GetListCapacity(result) < new_size) {
