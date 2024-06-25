@@ -26,7 +26,8 @@ class MetaPipeline : public enable_shared_from_this<MetaPipeline> {
 	//!         * And all pipelines that were added to the MetaPipeline after 'current'
 public:
 	//! Create a MetaPipeline with the given sink
-	MetaPipeline(Executor &executor, PipelineBuildState &state, optional_ptr<PhysicalOperator> sink);
+	MetaPipeline(Executor &executor, PipelineBuildState &state, optional_ptr<PhysicalOperator> sink,
+	             bool is_join_build = false);
 
 public:
 	//! Get the Executor for this MetaPipeline
@@ -44,6 +45,8 @@ public:
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
 	//! Get the dependencies (within this MetaPipeline) of the given Pipeline
 	optional_ptr<const vector<reference<Pipeline>>> GetDependencies(Pipeline &dependant) const;
+	//! Whether the sink of this pipeline is a join build
+	bool IsJoinBuild() const;
 	//! Whether this MetaPipeline has a recursive CTE
 	bool HasRecursiveCTE() const;
 	//! Set the flag that this MetaPipeline is a recursive CTE pipeline
@@ -52,7 +55,7 @@ public:
 	void AssignNextBatchIndex(Pipeline &pipeline);
 	//! Let 'dependant' depend on all pipeline that were created since 'start',
 	//! where 'including' determines whether 'start' is added to the dependencies
-	void AddDependenciesFrom(Pipeline &dependant, Pipeline &start, bool including);
+	void AddDependenciesFrom(Pipeline &dependant, const Pipeline &start, bool including);
 	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
 	void AddFinishEvent(Pipeline &pipeline);
 	//! Whether the pipeline needs its own PipelineFinishEvent
@@ -64,7 +67,7 @@ public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)
 	void Build(PhysicalOperator &op);
 	//! Ready all the pipelines (recursively)
-	void Ready();
+	void Ready() const;
 
 	//! Create an empty pipeline within this MetaPipeline
 	Pipeline &CreatePipeline();
@@ -74,7 +77,7 @@ public:
 	//! where 'last_pipeline' is the last pipeline added before building out 'current'
 	void CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline &last_pipeline);
 	//! Create a MetaPipeline child that 'current' depends on
-	MetaPipeline &CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op);
+	MetaPipeline &CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, bool is_join_build = false);
 
 private:
 	//! The executor for all MetaPipelines in the query plan
@@ -83,6 +86,8 @@ private:
 	PipelineBuildState &state;
 	//! The sink of all pipelines within this MetaPipeline
 	optional_ptr<PhysicalOperator> sink;
+	//! Whether the sink of this pipeline is a join build
+	bool is_join_build;
 	//! Whether this MetaPipeline is a the recursive pipeline of a recursive CTE
 	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink

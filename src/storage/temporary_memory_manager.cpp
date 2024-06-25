@@ -11,7 +11,7 @@ namespace duckdb {
 TemporaryMemoryState::TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager_p,
                                            idx_t minimum_reservation_p)
     : temporary_memory_manager(temporary_memory_manager_p), remaining_size(0),
-      minimum_reservation(minimum_reservation_p), reservation(0) {
+      minimum_reservation(minimum_reservation_p), reservation(0), materialization_penalty(1) {
 }
 
 TemporaryMemoryState::~TemporaryMemoryState() {
@@ -36,11 +36,16 @@ idx_t TemporaryMemoryState::GetMinimumReservation() const {
 }
 
 void TemporaryMemoryState::UpdateReservation(ClientContext &context) {
+	auto guard = temporary_memory_manager.Lock();
 	temporary_memory_manager.UpdateState(context, *this);
 }
 
 idx_t TemporaryMemoryState::GetReservation() const {
 	return reservation;
+}
+
+void TemporaryMemoryState::SetMaterializationPenalty(idx_t new_materialization_penalty) {
+	// materialization_penalty = new_materialization_penalty;
 }
 
 TemporaryMemoryManager::TemporaryMemoryManager() : reservation(0), remaining_size(0) {
@@ -125,7 +130,7 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 			new_reservation =
 			    remaining_size > memory_limit
 			        ? ComputeOptimalReservation(temporary_memory_state, free_memory, lower_bound, upper_bound)
-			        : MaxValue<idx_t>(lower_bound, upper_bound);
+			        : upper_bound;
 		}
 
 		SetReservation(temporary_memory_state, new_reservation);
@@ -158,14 +163,16 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 	optional_idx state_index;
 	vector<double> siz(n, 0);
 	vector<double> res(n, 0);
+	vector<double> pen(n, 0);
 	vector<double> der(n, 0);
 
 	idx_t i = 0;
 	for (auto &active_state : active_states) {
 		D_ASSERT(active_state.get().GetRemainingSize() != 0);
 		D_ASSERT(active_state.get().GetReservation() != 0);
-		siz[i] = active_state.get().GetRemainingSize();
-		res[i] = active_state.get().GetReservation();
+		siz[i] = MaxValue<double>(active_state.get().GetRemainingSize(), 1);
+		res[i] = MaxValue<double>(active_state.get().GetReservation(), 1);
+		pen[i] = active_state.get().materialization_penalty;
 		if (RefersToSameObject(active_state.get(), temporary_memory_state)) {
 			state_index = i;
 			// We can't actually reserve memory for all active operators, only for "temporary_memory_state"
@@ -183,14 +190,14 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 		// Cost function takes "throughput" (reservation / size) of each operator as its principal input
 		double prod_siz = 1;
 		double prod_res = 1;
-		double mat_cost = n;
+		double mat_cost = 0;
 		for (i = 0; i < n; i++) {
 			if (res[i] == siz[i]) {
 				continue; // We can't increase the reservation of "maxed" states, so we skip these
 			}
 			prod_siz *= siz[i];
 			prod_res *= res[i];
-			mat_cost -= res[i] / siz[i]; // Materialization cost: n - sum of (1 - throughput) of each operator
+			mat_cost += pen[i] * (1 - res[i] / siz[i]); // Materialization cost: sum of (1 - throughput)
 		}
 		const double nd = n;   // n as double for convenience
 		const double tp_mult = // Throughput multiplier: 1 - geometric mean of throughputs
@@ -208,7 +215,7 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 			if (res[i] == siz[i]) {
 				continue; // We can't increase the reservation of "maxed" states, so we skip these
 			}
-			der[i] = intermediate / res[i] - tp_mult / siz[i];
+			der[i] = intermediate / res[i] - pen[i] * tp_mult / siz[i];
 			D_ASSERT(res[i] <= siz[i]);
 			sum_of_nonmaxed += der[i];
 			nonmax_count++;

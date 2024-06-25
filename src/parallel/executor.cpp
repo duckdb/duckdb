@@ -213,10 +213,10 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	}
 
 	// these dependencies make it so that things happen in this order:
-	// 1. all child pipelines run until Combine
-	// 2. all child pipeline PrepareFinalize
+	// 1. all join build child pipelines run until Combine
+	// 2. all join build child pipeline PrepareFinalize
 	// 3. the parent base pipeline is initialized
-	// 4. all child pipelines Finalize
+	// 4. all join build child pipelines Finalize
 	// operators communicate their memory usage through the TemporaryMemoryManger (TMM) in PrepareFinalize
 	// then, when the child pipelines Finalize, all required memory is known, and TMM can make an informed decision
 	for (auto &meta_pipeline : event_data.meta_pipelines) {
@@ -227,6 +227,9 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		vector<shared_ptr<MetaPipeline>> children;
 		meta_pipeline->GetMetaPipelines(children, false, true);
 		for (auto &child : children) {
+			if (!child->IsJoinBuild()) {
+				continue;
+			}
 			auto &child_base = *child->GetBasePipeline();
 			auto child_entry = event_map.find(child_base);
 			D_ASSERT(child_entry != event_map.end());
@@ -254,7 +257,7 @@ void Executor::ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipel
 }
 
 void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
-#ifdef DEBUG
+	// #ifdef DEBUG
 	const idx_t count = event_data.events.size();
 	vector<reference<Event>> vertices;
 	vertices.reserve(count);
@@ -266,12 +269,15 @@ void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
 	for (idx_t i = 0; i < count; i++) {
 		VerifyScheduledEventsInternal(i, vertices, visited, recursion_stack);
 	}
-#endif
+	// #endif
 }
 
 void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<reference<Event>> &vertices,
                                              vector<bool> &visited, vector<bool> &recursion_stack) {
 	D_ASSERT(!recursion_stack[vertex]); // this vertex is in the recursion stack: circular dependency!
+	if (recursion_stack[vertex]) {
+		throw InternalException("oops");
+	}
 	if (visited[vertex]) {
 		return; // early out: we already visited this vertex
 	}

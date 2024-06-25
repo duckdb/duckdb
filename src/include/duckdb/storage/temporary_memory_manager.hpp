@@ -42,6 +42,8 @@ public:
 	void UpdateReservation(ClientContext &context);
 	//! Get the reservation of this state
 	idx_t GetReservation() const;
+	//! TODO
+	void SetMaterializationPenalty(idx_t new_materialization_penalty);
 
 private:
 	//! The TemporaryMemoryManager that owns this state
@@ -53,6 +55,8 @@ private:
 	atomic<idx_t> minimum_reservation;
 	//! How much memory this operator has reserved
 	atomic<idx_t> reservation;
+	//! TODO
+	atomic<idx_t> materialization_penalty;
 };
 
 //! TemporaryMemoryManager is a one-of class owned by the buffer pool that tries to dynamically assign memory

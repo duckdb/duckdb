@@ -282,14 +282,20 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-static idx_t GetPartitioningSpaceRequirement(const vector<LogicalType> &types, const idx_t radix_bits,
-                                             const idx_t num_threads) {
+static idx_t GetTupleWidth(const vector<LogicalType> &types, bool &all_constant) {
 	idx_t tuple_width = 0;
-	bool all_constant = true;
+	all_constant = true;
 	for (auto &type : types) {
 		tuple_width += GetTypeIdSize(type.InternalType());
 		all_constant &= TypeIsConstantSize(type.InternalType());
 	}
+	return tuple_width + AlignValue(types.size()) / 8 + GetTypeIdSize(PhysicalType::UINT64);
+}
+
+static idx_t GetPartitioningSpaceRequirement(const vector<LogicalType> &types, const idx_t radix_bits,
+                                             const idx_t num_threads) {
+	bool all_constant;
+	idx_t tuple_width = GetTupleWidth(types, all_constant);
 
 	auto tuples_per_block = Storage::BLOCK_SIZE / tuple_width;
 	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
@@ -308,6 +314,8 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	auto &ht = *gstate.hash_table;
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
+	bool all_constant;
+	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0]->types, all_constant));
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
