@@ -250,7 +250,7 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 		Store<uint64_t>(0, data_ptr_cast(str_length_data + segment->count));
 		return;
 	}
-	string_t str_entry = UnifiedVectorFormat::GetData<string_t>(input_data.unified)[sel_entry_idx];
+	auto &str_entry = UnifiedVectorFormat::GetData<string_t>(input_data.unified)[sel_entry_idx];
 	auto str_data = str_entry.GetData();
 	idx_t str_size = str_entry.GetSize();
 	Store<uint64_t>(str_size, data_ptr_cast(str_length_data + segment->count));
