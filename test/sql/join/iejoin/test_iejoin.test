@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET merge_join_threshold=0
+
 # Restrictive tail predicates
 # Use inequalities to prevent future range choice optimisation
 query II
