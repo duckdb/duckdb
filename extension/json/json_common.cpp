@@ -48,11 +48,11 @@ public:
 	}
 
 	static inline JSONKeyReadResult RecWildCardShortcut() {
-		return {0, true, "*"};
+		return {1, true, "*"};
 	}
 
 	inline bool IsValid() {
-		return (chars_read != 0) || recursive;
+		return (chars_read != 0);
 	}
 
 	inline bool IsWildCard() {
@@ -140,17 +140,17 @@ static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) 
 		}
 		return JSONKeyReadResult::WildCard();
 	}
+	bool recursive = false;
 	if (*ptr == '.') {
 		char next = *(ptr + 1);
 		if (next == '*') {
 			return JSONKeyReadResult::RecWildCard();
 		}
 		if (next == '[') {
-			return {1, true, "*"};
-		}
-		if (next != '.') {
 			return JSONKeyReadResult::RecWildCardShortcut();
 		}
+		ptr++;
+		recursive = true;
 	}
 	bool escaped = false;
 	if (*ptr == '"') {
@@ -163,6 +163,10 @@ static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) 
 	}
 	if (escaped) {
 		result.chars_read += 2; // Account for surrounding quotes
+	}
+	if (recursive) {
+		result.chars_read += 1;
+		result.recursive = true;
 	}
 	return result;
 }
@@ -222,7 +226,7 @@ JSONPathType JSONCommon::ValidatePath(const char *ptr, const idx_t &len, const b
 			auto key = ReadKey(ptr, end);
 			if (!key.IsValid()) {
 				ThrowPathError(ptr, end, binder);
-			} else if (key.IsWildCard()) {
+			} else if (key.IsWildCard() || key.recursive) {
 				path_type = JSONPathType::WILDCARD;
 			}
 			ptr += key.chars_read;
@@ -299,8 +303,10 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 		case '.': { // Object field
 			auto key_result = ReadKey(ptr, end);
 			D_ASSERT(key_result.IsValid());
-			ptr += key_result.chars_read;
 			if (key_result.recursive) {
+				if (key_result.IsWildCard()) {
+					ptr += key_result.chars_read;
+				}
 				vector<yyjson_val *> rec_vals;
 				rec_vals.emplace_back(val);
 				for (idx_t i = 0; i < rec_vals.size(); i++) {
@@ -325,6 +331,7 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 				}
 				return;
 			}
+			ptr += key_result.chars_read;
 			if (!unsafe_yyjson_is_obj(val)) {
 				return;
 			}
