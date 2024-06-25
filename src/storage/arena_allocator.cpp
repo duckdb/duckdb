@@ -50,8 +50,9 @@ static data_ptr_t ArenaAllocateReallocate(PrivateAllocatorData *private_data, da
 // Arena Allocator
 //===--------------------------------------------------------------------===//
 ArenaAllocator::ArenaAllocator(Allocator &allocator, idx_t initial_capacity)
-    : allocator(allocator), initial_capacity(initial_capacity), arena_allocator(ArenaAllocatorAllocate, ArenaAllocatorFree, ArenaAllocateReallocate,
-                                            make_uniq<ArenaAllocatorData>(*this)) {
+    : allocator(allocator), initial_capacity(initial_capacity),
+      arena_allocator(ArenaAllocatorAllocate, ArenaAllocatorFree, ArenaAllocateReallocate,
+                      make_uniq<ArenaAllocatorData>(*this)) {
 	head = nullptr;
 	tail = nullptr;
 }
@@ -80,7 +81,7 @@ data_ptr_t ArenaAllocator::Allocate(idx_t len) {
 		}
 		// we double the size until we can fit `len`
 		// this is generally only relevant if len is very large
-		while(capacity < len) {
+		while (capacity < len) {
 			capacity *= 2;
 		}
 		auto new_chunk = make_unsafe_uniq<ArenaChunk>(allocator, capacity);
