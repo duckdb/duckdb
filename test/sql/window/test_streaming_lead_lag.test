@@ -2,6 +2,8 @@
 # description: Streaming window functions
 # group: [window]
 
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification
 
@@ -160,12 +162,28 @@ FROM range(10) tbl(i);
 
 # Test sparse leads
 query TT
+EXPLAIN
+SELECT i, LEAD(i, 2) OVER() AS i1
+FROM range(3000) tbl(i)
+WHERE i % 2048 = 0
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
 SELECT i, LEAD(i, 2) OVER() AS i1
 FROM range(3000) tbl(i)
 WHERE i % 2048 = 0
 ----
 0	NULL
 2048	NULL
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, 2) OVER() AS i1
+FROM range(5000) tbl(i)
+WHERE i % 2048 = 0
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 SELECT i, LEAD(i, 2) OVER() AS i1
@@ -175,4 +193,19 @@ WHERE i % 2048 = 0
 0	4096
 2048	NULL
 4096	NULL
+
+# Test long deltas
+query TT
+EXPLAIN
+SELECT i, LAG(i, 3000) OVER() AS i1
+FROM range(5000) tbl(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, 3000) OVER() AS i1
+FROM range(5000) tbl(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
