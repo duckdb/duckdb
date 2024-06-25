@@ -1207,7 +1207,6 @@ void MergeJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
 
 void MergeJoinThreshold::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).merge_join_threshold = ClientConfig().merge_join_threshold;
-	auto &config = ClientConfig::GetConfig(context);
 }
 
 Value MergeJoinThreshold::GetSetting(const ClientContext &context) {
@@ -1225,7 +1224,6 @@ void NestedLoopJoinThreshold::SetLocal(ClientContext &context, const Value &inpu
 
 void NestedLoopJoinThreshold::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).nested_loop_join_threshold = ClientConfig().nested_loop_join_threshold;
-	auto &config = ClientConfig::GetConfig(context);
 }
 
 Value NestedLoopJoinThreshold::GetSetting(const ClientContext &context) {
