@@ -158,18 +158,20 @@ SnifferResult CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
 		// If we got no errors, we also run full if schemas do not match.
 		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
 			string error;
-			run_full = !file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types,
-			                                     options.file_path);
+			run_full =
+			    !file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types, options.file_path);
 		}
 	}
 	if (run_full) {
 		// We run full sniffer
 		string error;
+		auto full_sniffer = SniffCSV();
 		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
-			if (!file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types, options.file_path)) {
+			if (!file_schema.SchemasMatch(error, full_sniffer.names, full_sniffer.return_types, options.file_path)) {
 				throw InvalidInputException(error);
 			}
 		}
+		return full_sniffer;
 	}
 	return min_sniff_res;
 }
