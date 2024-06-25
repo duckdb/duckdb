@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/types.hpp"
+
 namespace duckdb {
 //! Basic CSV Column Info
 struct CSVColumnInfo {
