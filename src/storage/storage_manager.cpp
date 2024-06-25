@@ -202,6 +202,12 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 
+		if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != block_manager->GetBlockAllocSize()) {
+			throw InvalidInputException(
+			    "block size parameter does not match the file's block size, got %llu, expected %llu",
+			    block_alloc_size.GetIndex(), block_manager->GetBlockAllocSize());
+		}
+
 		// load the db from storage
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
 		checkpoint_reader.LoadFromStorage();
