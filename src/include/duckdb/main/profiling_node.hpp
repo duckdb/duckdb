@@ -52,8 +52,8 @@ public:
 		return profiling_info;
 	}
 
-	ProfilingInfo &GetProfilingInfo() const {
-		return const_cast<ProfilingInfo &>(profiling_info);
+	const ProfilingInfo &GetProfilingInfo() const {
+		return profiling_info;
 	}
 
 	ProfilingNode *GetChild(idx_t idx) {
