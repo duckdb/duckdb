@@ -127,11 +127,11 @@ public:
 				offset = bigint_value.GetValue<int64_t>();
 			}
 
-			//	We can only support negative LEAD values and positive LAG values
+			//	We can only support LEAD and LAG values within one standard vector
 			if (wexpr.type == ExpressionType::WINDOW_LEAD) {
 				offset = -offset;
 			}
-			return idx_t(abs(offset)) < MAX_BUFFER;
+			return idx_t(std::abs(offset)) < MAX_BUFFER;
 		}
 
 		static bool ComputeDefault(ClientContext &context, BoundWindowExpression &wexpr, Value &result) {
