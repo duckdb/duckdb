@@ -46,15 +46,13 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	idx_t total_files = bind_data.files.size();
 	// get the progress WITHIN the current file
 	double percentage = 0;
-	if (file_scans.back() && file_scans.back()->file_size == 0) {
+	if (file_scans.front()->file_size == 0) {
 		percentage = 1.0;
 	} else {
 		// for compressed files, readed bytes may greater than files size.
 		for (auto &file : file_scans) {
-			if (file) {
-				percentage += (double(1) / double(total_files)) *
-				              std::min(1.0, double(file->bytes_read) / double(file->file_size));
-			}
+			percentage +=
+			    (double(1) / double(total_files)) * std::min(1.0, double(file->bytes_read) / double(file->file_size));
 		}
 	}
 	return percentage * 100;
