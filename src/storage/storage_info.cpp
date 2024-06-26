@@ -93,6 +93,11 @@ void Storage::VerifyBlockAllocSize(const idx_t block_alloc_size) {
 		    "the block size must be greater or equal than the minimum block size of %llu, got %llu",
 		    MIN_BLOCK_ALLOC_SIZE, block_alloc_size);
 	}
+	if (block_alloc_size > MAX_BLOCK_ALLOC_SIZE) {
+		throw InvalidInputException(
+		    "the block size must be lesser or equal than the maximum block size of %llu, got %llu",
+		    MAX_BLOCK_ALLOC_SIZE, block_alloc_size);
+	}
 	auto max_value = NumericCast<idx_t>(NumericLimits<int32_t>().Maximum());
 	if (block_alloc_size > max_value) {
 		throw InvalidInputException(

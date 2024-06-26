@@ -118,6 +118,7 @@ TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex() {
 }
 
 void TemporaryFileHandle::WriteTemporaryFile(FileBuffer &buffer, TemporaryFileIndex index) {
+	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.size == BufferManager::GetBufferManager(db).GetBlockSize());
 	buffer.Write(*handle, GetPositionInFile(index.block_index));
 }
@@ -180,7 +181,7 @@ void TemporaryFileHandle::RemoveTempBlockIndex(TemporaryFileLock &, idx_t index)
 }
 
 idx_t TemporaryFileHandle::GetPositionInFile(idx_t index) {
-	return index * BufferManager::GetBufferManager(db).GetBlockSize();
+	return index * BufferManager::GetBufferManager(db).GetBlockAllocSize();
 }
 
 //===--------------------------------------------------------------------===//
@@ -277,6 +278,7 @@ TemporaryFileManager::TemporaryManagerLock::TemporaryManagerLock(mutex &mutex) :
 }
 
 void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
+	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.size == BufferManager::GetBufferManager(db).GetBlockSize());
 	TemporaryFileIndex index;
 	TemporaryFileHandle *handle = nullptr;

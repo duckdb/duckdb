@@ -107,8 +107,9 @@ DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 	header.block_count = source.Read<uint64_t>();
 
 	header.block_alloc_size = source.Read<idx_t>();
+
+	// backwards compatibility
 	if (!header.block_alloc_size) {
-		// backwards compatibility
 		header.block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	}
 

@@ -28,8 +28,10 @@ struct FileHandle;
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
 //! The default block size.
 #define DEFAULT_BLOCK_SIZE DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE
-//! The minimum block allocation size. This is the minimum size we test in our nightly tests.
-#define MIN_BLOCK_ALLOC_SIZE 16384ULL
+
+#ifndef DUCKDB_BLOCK_ALLOC_SIZE
+#define DUCKDB_BLOCK_ALLOC_SIZE DEFAULT_BLOCK_ALLOC_SIZE
+#endif
 
 using block_id_t = int64_t;
 
@@ -43,6 +45,10 @@ struct Storage {
 	constexpr static const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
 	//! The number of vectors per row group
 	constexpr static const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
+	//! The minimum block allocation size. This is the minimum size we test in our nightly tests.
+	constexpr static idx_t MIN_BLOCK_ALLOC_SIZE = 16384ULL;
+	//! The maximum block allocation size. This is the maximum size currently supported by duckdb.
+	constexpr static idx_t MAX_BLOCK_ALLOC_SIZE = 262144ULL;
 
 	//! Ensures that a user-provided block allocation size matches all requirements.
 	static void VerifyBlockAllocSize(const idx_t block_alloc_size);
@@ -121,12 +127,6 @@ struct DatabaseHeader {
 #endif
 #if (DUCKDB_BLOCK_ALLOC_SIZE & (DUCKDB_BLOCK_ALLOC_SIZE - 1) != 0)
 #error The duckdb block allocation size must be a power of two
-#endif
-#if (MIN_BLOCK_ALLOC_SIZE & (MIN_BLOCK_ALLOC_SIZE - 1) != 0)
-#error The minimum block allocation size must be a power of two
-#endif
-#if (DUCKDB_BLOCK_ALLOC_SIZE > 2147483647)
-#error The duckdb block allocation size must not exceed the maximum value of a 32-bit signed integer
 #endif
 
 } // namespace duckdb
