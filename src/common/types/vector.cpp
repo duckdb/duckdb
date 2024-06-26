@@ -1897,7 +1897,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
 	return string_buffer.AddBlob(data);
 }
 
@@ -1910,7 +1910,7 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
 	return string_buffer.EmptyString(len);
 }
 

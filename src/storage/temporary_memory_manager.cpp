@@ -45,7 +45,7 @@ idx_t TemporaryMemoryState::GetReservation() const {
 }
 
 void TemporaryMemoryState::SetMaterializationPenalty(idx_t new_materialization_penalty) {
-	// materialization_penalty = new_materialization_penalty;
+	materialization_penalty = new_materialization_penalty;
 }
 
 TemporaryMemoryManager::TemporaryMemoryManager() : reservation(0), remaining_size(0) {

@@ -1,9 +1,9 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -21,7 +21,7 @@ constexpr idx_t TupleDataWithinListFixedSize<string_t>() {
 
 template <class T>
 static inline void TupleDataValueStore(const T &source, const data_ptr_t &row_location, const idx_t offset_in_row,
-                                       data_ptr_t &heap_location) {
+                                       data_ptr_t &) {
 	Store<T>(source, row_location + offset_in_row);
 }
 
@@ -42,8 +42,7 @@ inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_lo
 }
 
 template <class T>
-static inline void TupleDataWithinListValueStore(const T &source, const data_ptr_t &location,
-                                                 data_ptr_t &heap_location) {
+static inline void TupleDataWithinListValueStore(const T &source, const data_ptr_t &location, data_ptr_t &) {
 	Store<T>(source, location);
 }
 
@@ -53,13 +52,13 @@ inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr
 #ifdef DEBUG
 	source.VerifyCharacters();
 #endif
-	Store<uint32_t>(NumericCast<uint32_t>(source.GetSize()), location);
+	Store<uint32_t>(UnsafeNumericCast<uint32_t>(source.GetSize()), location);
 	memcpy(heap_location, source.GetData(), source.GetSize());
 	heap_location += source.GetSize();
 }
 
 template <class T>
-inline void TupleDataValueVerify(const LogicalType &type, const T &value) {
+inline void TupleDataValueVerify(const LogicalType &, const T &) {
 #ifdef DEBUG
 	// NOP
 #endif
@@ -75,7 +74,7 @@ inline void TupleDataValueVerify(const LogicalType &type, const string_t &value)
 }
 
 template <class T>
-static inline T TupleDataWithinListValueLoad(const data_ptr_t &location, data_ptr_t &heap_location) {
+static inline T TupleDataWithinListValueLoad(const data_ptr_t &location, data_ptr_t &) {
 	return Load<T>(location);
 }
 
@@ -228,7 +227,7 @@ void TupleDataCollection::WithinCollectionComputeHeapSizes(Vector &heap_sizes_v,
 }
 
 void TupleDataCollection::ComputeFixedWithinCollectionHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
-                                                                TupleDataVectorFormat &source_format,
+                                                                TupleDataVectorFormat &,
                                                                 const SelectionVector &append_sel,
                                                                 const idx_t append_count,
                                                                 const UnifiedVectorFormat &list_data) {
@@ -261,7 +260,7 @@ void TupleDataCollection::ComputeFixedWithinCollectionHeapSizes(Vector &heap_siz
 	}
 }
 
-void TupleDataCollection::StringWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+void TupleDataCollection::StringWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &,
                                                                  TupleDataVectorFormat &source_format,
                                                                  const SelectionVector &append_sel,
                                                                  const idx_t append_count,
@@ -512,6 +511,54 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 	                                                      append_count, combined_child_list_data);
 }
 
+template <class T>
+static inline void TemplatedInitializeValidityMask(const data_ptr_t row_locations[], const idx_t append_count) {
+	for (idx_t i = 0; i < append_count; i++) {
+		Store<T>(T(-1), row_locations[i]);
+	}
+}
+
+template <idx_t validity_bytes>
+static inline void TemplatedInitializeValidityMask(const data_ptr_t row_locations[], const idx_t append_count) {
+	for (idx_t i = 0; i < append_count; i++) {
+		memset(row_locations[i], ~0, validity_bytes);
+	}
+}
+
+static inline void InitializeValidityMask(const data_ptr_t row_locations[], const idx_t append_count,
+                                          const idx_t validity_bytes) {
+	switch (validity_bytes) {
+	case 1:
+		TemplatedInitializeValidityMask<uint8_t>(row_locations, append_count);
+		break;
+	case 2:
+		TemplatedInitializeValidityMask<uint16_t>(row_locations, append_count);
+		break;
+	case 3:
+		TemplatedInitializeValidityMask<3>(row_locations, append_count);
+		break;
+	case 4:
+		TemplatedInitializeValidityMask<uint32_t>(row_locations, append_count);
+		break;
+	case 5:
+		TemplatedInitializeValidityMask<5>(row_locations, append_count);
+		break;
+	case 6:
+		TemplatedInitializeValidityMask<6>(row_locations, append_count);
+		break;
+	case 7:
+		TemplatedInitializeValidityMask<7>(row_locations, append_count);
+		break;
+	case 8:
+		TemplatedInitializeValidityMask<uint64_t>(row_locations, append_count);
+		break;
+	default:
+		for (idx_t i = 0; i < append_count; i++) {
+			FastMemset(row_locations[i], ~0, validity_bytes);
+		}
+	}
+}
+
 void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
 #ifdef DEBUG
@@ -524,17 +571,14 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
 	// Set the validity mask for each row before inserting data
-	const auto validity_bytes = ValidityBytes::SizeInBytes(layout.ColumnCount());
-	for (idx_t i = 0; i < append_count; i++) {
-		FastMemset(row_locations[i], ~0, validity_bytes);
-	}
+	InitializeValidityMask(row_locations, append_count, ValidityBytes::SizeInBytes(layout.ColumnCount()));
 
 	if (!layout.AllConstant()) {
 		// Set the heap size for each row
 		const auto heap_size_offset = layout.GetHeapSizeOffset();
 		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 		for (idx_t i = 0; i < append_count; i++) {
-			Store<uint32_t>(NumericCast<uint32_t>(heap_sizes[i]), row_locations[i] + heap_size_offset);
+			Store<uint32_t>(UnsafeNumericCast<uint32_t>(heap_sizes[i]), row_locations[i] + heap_size_offset);
 		}
 	}
 
@@ -568,8 +612,8 @@ template <class T>
 static void TupleDataTemplatedScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                       const SelectionVector &append_sel, const idx_t append_count,
                                       const TupleDataLayout &layout, const Vector &row_locations,
-                                      Vector &heap_locations, const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
-                                      const vector<TupleDataScatterFunction> &child_functions) {
+                                      Vector &heap_locations, const idx_t col_idx, const UnifiedVectorFormat &,
+                                      const vector<TupleDataScatterFunction> &) {
 	// Source
 	const auto &source_data = source_format.unified;
 	const auto &source_sel = *source_data.sel;
@@ -667,7 +711,7 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 static void TupleDataListScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                  const SelectionVector &append_sel, const idx_t append_count,
                                  const TupleDataLayout &layout, const Vector &row_locations, Vector &heap_locations,
-                                 const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
+                                 const idx_t col_idx, const UnifiedVectorFormat &,
                                  const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
 	const auto &source_data = source_format.unified;
@@ -715,7 +759,7 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                   const SelectionVector &append_sel, const idx_t append_count,
                                   const TupleDataLayout &layout, const Vector &row_locations, Vector &heap_locations,
-                                  const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
+                                  const idx_t col_idx, const UnifiedVectorFormat &,
                                   const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
 	// The Array vector has fake list_entry_t's set by this point, so this is fine
@@ -762,12 +806,11 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 // Collection Scatter
 //------------------------------------------------------------------------------
 template <class T>
-static void TupleDataTemplatedWithinCollectionScatter(const Vector &source, const TupleDataVectorFormat &source_format,
+static void TupleDataTemplatedWithinCollectionScatter(const Vector &, const TupleDataVectorFormat &source_format,
                                                       const SelectionVector &append_sel, const idx_t append_count,
-                                                      const TupleDataLayout &layout, const Vector &row_locations,
-                                                      Vector &heap_locations, const idx_t col_idx,
-                                                      const UnifiedVectorFormat &list_data,
-                                                      const vector<TupleDataScatterFunction> &child_functions) {
+                                                      const TupleDataLayout &, const Vector &, Vector &heap_locations,
+                                                      const idx_t, const UnifiedVectorFormat &list_data,
+                                                      const vector<TupleDataScatterFunction> &) {
 	// Parent list data
 	const auto &list_sel = *list_data.sel;
 	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
@@ -823,7 +866,7 @@ static void TupleDataTemplatedWithinCollectionScatter(const Vector &source, cons
 static void TupleDataStructWithinCollectionScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                                    const SelectionVector &append_sel, const idx_t append_count,
                                                    const TupleDataLayout &layout, const Vector &row_locations,
-                                                   Vector &heap_locations, const idx_t col_idx,
+                                                   Vector &heap_locations, const idx_t,
                                                    const UnifiedVectorFormat &list_data,
                                                    const vector<TupleDataScatterFunction> &child_functions) {
 	// Parent list data
@@ -1064,8 +1107,8 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
 template <class T>
 static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                                      const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
-                                     const SelectionVector &target_sel, optional_ptr<Vector> dummy_vector,
-                                     const vector<TupleDataGatherFunction> &child_functions) {
+                                     const SelectionVector &target_sel, optional_ptr<Vector>,
+                                     const vector<TupleDataGatherFunction> &) {
 	// Source
 	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
@@ -1146,7 +1189,7 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 //------------------------------------------------------------------------------
 static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                                 const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
-                                const SelectionVector &target_sel, optional_ptr<Vector> dummy_vector,
+                                const SelectionVector &target_sel, optional_ptr<Vector>,
                                 const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
@@ -1203,12 +1246,11 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 // Collection Gather
 //------------------------------------------------------------------------------
 template <class T>
-static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
-                                                     const idx_t list_size_before, const SelectionVector &scan_sel,
-                                                     const idx_t scan_count, Vector &target,
-                                                     const SelectionVector &target_sel,
-                                                     optional_ptr<Vector> list_vector,
-                                                     const vector<TupleDataGatherFunction> &child_functions) {
+static void
+TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &, Vector &heap_locations, const idx_t list_size_before,
+                                         const SelectionVector &, const idx_t scan_count, Vector &target,
+                                         const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
+                                         const vector<TupleDataGatherFunction> &) {
 	// List parent
 	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
 	const auto &list_validity = FlatVector::Validity(*list_vector);

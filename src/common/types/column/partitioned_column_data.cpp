@@ -87,10 +87,10 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 
 	// Now initialize a single selection vector that acts as a selection vector for every partition
 	auto &all_partitions_sel = state.partition_sel;
-	for (idx_t i = 0; i < count; i++) {
+	for (sel_t i = 0; i < count; i++) {
 		const auto &partition_index = partition_indices[i];
 		auto &partition_offset = partition_entries[partition_index].offset;
-		all_partitions_sel[partition_offset++] = NumericCast<sel_t>(i);
+		all_partitions_sel[partition_offset++] = i;
 	}
 
 	// Loop through the partitions to append the new data to the partition buffers, and flush the buffers if necessary

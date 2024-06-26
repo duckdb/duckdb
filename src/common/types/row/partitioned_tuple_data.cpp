@@ -215,9 +215,9 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	// Early out: check if everything belongs to a single partition
 	if (partition_entries.size() == 1) {
 		// This needs to be initialized, even if we go the short path here
-		for (idx_t i = 0; i < append_count; i++) {
+		for (sel_t i = 0; i < append_count; i++) {
 			const auto index = append_sel.get_index(i);
-			state.reverse_partition_sel[index] = NumericCast<sel_t>(i);
+			state.reverse_partition_sel[index] = i;
 		}
 		return;
 	}
