@@ -538,6 +538,25 @@ struct MaximumTempDirectorySize {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct MergeJoinThreshold {
+	static constexpr const char *Name = "merge_join_threshold";
+	static constexpr const char *Description = "The number of rows we need on either table to choose a merge join";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct NestedLoopJoinThreshold {
+	static constexpr const char *Name = "nested_loop_join_threshold";
+	static constexpr const char *Description =
+	    "The number of rows we need on either table to choose a nested loop join";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct OldImplicitCasting {
 	static constexpr const char *Name = "old_implicit_casting";
 	static constexpr const char *Description = "Allow implicit casting to/from VARCHAR";
