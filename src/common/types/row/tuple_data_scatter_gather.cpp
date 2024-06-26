@@ -34,7 +34,7 @@ inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_lo
 	if (source.IsInlined()) {
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
-		memcpy(heap_location, source.GetData(), source.GetSize());
+		FastMemcpy(heap_location, source.GetData(), source.GetSize());
 		Store<string_t>(string_t(const_char_ptr_cast(heap_location), UnsafeNumericCast<uint32_t>(source.GetSize())),
 		                row_location + offset_in_row);
 		heap_location += source.GetSize();
@@ -53,7 +53,7 @@ inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr
 	source.VerifyCharacters();
 #endif
 	Store<uint32_t>(UnsafeNumericCast<uint32_t>(source.GetSize()), location);
-	memcpy(heap_location, source.GetData(), source.GetSize());
+	FastMemcpy(heap_location, source.GetData(), source.GetSize());
 	heap_location += source.GetSize();
 }
 
