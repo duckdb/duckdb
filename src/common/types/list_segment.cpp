@@ -140,7 +140,7 @@ static uint16_t GetCapacityForNewSegment(uint16_t capacity) {
 template <class T>
 static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, ArenaAllocator &allocator, uint16_t capacity) {
 	// allocate data and set the header
-	auto segment = (ListSegment *)AllocatePrimitiveData<T>(allocator, capacity);
+	auto segment = reinterpret_cast<ListSegment *>(AllocatePrimitiveData<T>(allocator, capacity));
 	segment->capacity = capacity;
 	segment->count = 0;
 	segment->next = nullptr;
@@ -150,7 +150,7 @@ static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, ArenaAl
 static ListSegment *CreateVarcharDataSegment(const ListSegmentFunctions &, ArenaAllocator &allocator,
                                              uint16_t capacity) {
 	// allocate data and set the header
-	auto segment = (ListSegment *)AllocateStringData(allocator, capacity);
+	auto segment = reinterpret_cast<ListSegment *>(AllocateStringData(allocator, capacity));
 	segment->capacity = capacity;
 	segment->count = 0;
 	segment->next = nullptr;
