@@ -184,9 +184,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 	default:
 		break;
 	}
+	auto &client_config = ClientConfig::GetConfig(context);
 
 	//	TODO: Extend PWMJ to handle all comparisons and projection maps
-	const auto prefer_range_joins = (ClientConfig::GetConfig(context).prefer_range_joins && can_iejoin);
+	const auto prefer_range_joins = client_config.prefer_range_joins && can_iejoin;
 
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality && !prefer_range_joins) {
@@ -198,11 +199,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 		                                   std::move(op.mark_types), op.estimated_cardinality, perfect_join_stats);
 
 	} else {
-		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;
-		if (left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
-		    right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) {
+		if (left->estimated_cardinality <= client_config.nested_loop_join_threshold ||
+		    right->estimated_cardinality <= client_config.nested_loop_join_threshold) {
 			can_iejoin = false;
 			can_merge = false;
+		}
+		if (can_merge && can_iejoin) {
+			if (left->estimated_cardinality <= client_config.merge_join_threshold ||
+			    right->estimated_cardinality <= client_config.merge_join_threshold) {
+				can_iejoin = false;
+			}
 		}
 		if (can_iejoin) {
 			plan = make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(right), std::move(op.conditions),

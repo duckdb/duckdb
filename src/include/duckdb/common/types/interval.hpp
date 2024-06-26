@@ -40,6 +40,9 @@ struct interval_t { // NOLINT
 
 		return lmonths == rmonths && ldays == rdays && lmicros == rmicros;
 	}
+	inline bool operator!=(const interval_t &right) const {
+		return !(*this == right);
+	}
 
 	inline bool operator>(const interval_t &right) const {
 		const auto &left = *this;

@@ -81,6 +81,7 @@ bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality
 	}
 	auto &client = executor.context;
 	current_percentage = source->GetProgress(client, *source_state);
+	current_percentage = sink->GetSinkProgress(client, *sink->sink_state, current_percentage);
 	return current_percentage >= 0;
 }
 

@@ -352,8 +352,7 @@ struct QuantileListFallback : QuantileOperation {
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 
-		auto v_t = state.v.data();
-		D_ASSERT(v_t);
+		D_ASSERT(state.v.data());
 
 		auto &entry = target;
 		entry.offset = ridx;

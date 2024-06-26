@@ -4,7 +4,7 @@ namespace duckdb {
 void CSVSniffer::ReplaceTypes() {
 	auto &sniffing_state_machine = best_candidate->GetStateMachine();
 	manually_set = vector<bool>(detected_types.size(), false);
-	if (sniffing_state_machine.options.sql_type_list.empty()) {
+	if (sniffing_state_machine.options.sql_type_list.empty() || sniffing_state_machine.options.columns_set) {
 		return;
 	}
 	// user-defined types were supplied for certain columns
