@@ -1302,6 +1302,10 @@ void StringValueScanner::SetStart() {
 		}
 		return;
 	}
+	if (state_machine->options.IgnoreErrors()) {
+		// If we are ignoring errors we don't really need to figure out a line.
+		return;
+	}
 	// The result size of the data after skipping the row is one line
 	const idx_t result_size = 1;
 	// We have to look for a new line that fits our schema
