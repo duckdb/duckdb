@@ -1443,24 +1443,24 @@ struct next_size;
 template <class T>
 using next_size_t = typename next_size<T>::type;
 template <class T>
-struct tag {
+struct Tag {
 	using type = T;
 };
 
 template <>
-struct next_size<uint8_t> : tag<uint16_t> {};
+struct next_size<uint8_t> : Tag<uint16_t> {};
 template <>
-struct next_size<uint16_t> : tag<uint32_t> {};
+struct next_size<uint16_t> : Tag<uint32_t> {};
 template <>
-struct next_size<uint32_t> : tag<uint64_t> {};
+struct next_size<uint32_t> : Tag<uint64_t> {};
 template <>
-struct next_size<uint64_t> : tag<uhugeint_t> {};
+struct next_size<uint64_t> : Tag<uhugeint_t> {};
 template <>
-struct next_size<int8_t> : tag<int16_t> {};
+struct next_size<int8_t> : Tag<int16_t> {};
 template <>
-struct next_size<int16_t> : tag<int32_t> {};
+struct next_size<int16_t> : Tag<int32_t> {};
 template <>
-struct next_size<int32_t> : tag<int64_t> {};
+struct next_size<int32_t> : Tag<int64_t> {};
 
 template <class T>
 using m_t = next_size_t<typename std::make_unsigned<T>::type>;
