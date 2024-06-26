@@ -140,10 +140,6 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 
 void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size) {
 	if (InMemory()) {
-		// TODO: does this throw, if config.hpp does not set the default value to DEFAULT_BLOCK_ALLOC_SIZE?
-		if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != DEFAULT_BLOCK_ALLOC_SIZE) {
-			throw InternalException("in-memory databases must have DEFAULT_BLOCK_ALLOC_SIZE");
-		}
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;

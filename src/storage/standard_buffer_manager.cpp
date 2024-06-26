@@ -118,6 +118,9 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size) {
 	const idx_t block_size = GetBlockSize();
 	D_ASSERT(size <= block_size);
+
+	// TODO: this is problematic, because we sometimes want to NOT register small memory - as we cannot convert the
+	// block later...
 	if (size < block_size) {
 		return RegisterSmallMemory(size);
 	}
@@ -145,7 +148,6 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t s
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy) {
-	D_ASSERT(block_size >= GetBlockSize());
 	auto alloc_size = GetAllocSize(block_size);
 
 	// Evict blocks until there is enough memory to store the buffer.
@@ -164,6 +166,7 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	shared_ptr<BlockHandle> local_block;
 	auto block_ptr = block ? block : &local_block;
 	*block_ptr = RegisterMemory(tag, block_size, can_destroy);
+
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
 	WriteGarbageIntoBuffer(*(*block_ptr)->buffer);
