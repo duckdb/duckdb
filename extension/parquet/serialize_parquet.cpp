@@ -71,6 +71,7 @@ void ParquetOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MultiFileReaderOptions>(102, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", encryption_config, nullptr);
+
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {

@@ -32,6 +32,7 @@ typedef unique_ptr<TransactionManager> (*create_transaction_manager_t)(StorageEx
                                                                        AttachedDatabase &db, Catalog &catalog);
 
 class StorageExtension {
+
 public:
 	attach_function_t attach;
 	create_transaction_manager_t create_transaction_manager;

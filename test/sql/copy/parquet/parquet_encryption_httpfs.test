@@ -1,0 +1,68 @@
+# name: test/sql/copy/parquet/parquet_encryption_httpfs.test
+# description: Test Parquet encryption with OpenSSL
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+# add keys of 3 different lengths
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+PRAGMA add_parquet_key('key192', '012345678911234501234567')
+
+statement ok
+PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
+
+# test all valid AES key lengths
+foreach key_len 128 192 256
+
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
+----
+42
+
+statement ok
+CREATE OR REPLACE TABLE test (i INTEGER)
+
+statement ok
+COPY test FROM '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+
+query I
+SELECT * FROM test
+----
+42
+
+endloop
+
+# what happens if we don't try to decrypt even if the file is encrypted?
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted128_openssl.parquet')
+----
+Invalid Input Error
+
+# what if we try to decrypt with the wrong key?
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted128_openssl.parquet', encryption_config={footer_key: 'key192'})
+----
+Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
+
+# what if we don't encrypt, but try to decrypt?
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/unencrypted.parquet'
+
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/unencrypted.parquet', encryption_config={footer_key: 'key256'})
+----
+Invalid Input Error
