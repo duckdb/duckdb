@@ -24,7 +24,8 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 	}
 }
 
-BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op) : context(context) {
+BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op)
+    : context(context), swap_status(SWAP_STATUS::NOT_SWAPPED) {
 	vector<ColumnBinding> updating_columns, current_op_bindings;
 	auto bindings = op.GetColumnBindings();
 	vector<ColumnBinding> row_id_bindings;
@@ -34,7 +35,6 @@ BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, Logical
 	// cardinalities are the same, we prefer to have the child with the rowid bindings in the probe side.
 	GetRowidBindings(op, preferred_on_probe_side);
 }
-
 static void FlipChildren(LogicalOperator &op) {
 	std::swap(op.children[0], op.children[1]);
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
@@ -64,6 +64,44 @@ static inline idx_t ComputeOverlappingBindings(const vector<ColumnBinding> &hays
 	return result;
 }
 
+BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
+	BuildSize ret;
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+		auto &left_child = op.children[0];
+		auto &right_child = op.children[1];
+
+		auto left_column_count = left_child->GetColumnBindings();
+		auto right_column_count = right_child->GetColumnBindings();
+
+		// resolve operator types to determine how big the build side is going to be
+		op.ResolveOperatorTypes();
+		auto left_column_types = left_child->types;
+		auto right_column_types = right_child->types;
+
+		idx_t left_build_side = 0;
+		for (auto &type : left_column_types) {
+			left_build_side += GetTypeIdSize(type.InternalType());
+		}
+		idx_t right_build_side = 0;
+		for (auto &type : right_column_types) {
+			right_build_side += GetTypeIdSize(type.InternalType());
+		}
+		// Don't multiply by cardinalities, the only important metric is the size of the row
+		// in the hash table
+		ret.left_side = left_build_side;
+		ret.right_side = right_build_side;
+		return ret;
+	}
+	default:
+		break;
+	}
+	return ret;
+}
+
 void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio) {
 	auto &left_child = op.children[0];
 	auto &right_child = op.children[1];
@@ -72,9 +110,21 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
 	                                                              : right_child->EstimateCardinality(context);
 
-	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
-		return;
+	auto build_sizes = GetBuildSizes(op);
+	// special math.
+	auto left_side_metric = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
+	auto right_side_metric = rhs_cardinality * build_sizes.right_side;
+
+	// swap for build side?
+	if (right_side_metric > left_side_metric * MAGIC_RATIO_TO_SWAP_BUILD_SIDES) {
+		FlipChildren(op);
+		D_ASSERT(swap_status == SWAP_STATUS::NOT_SWAPPED);
+		swap_status = SWAP_STATUS::SWAPPED;
+	} else {
+		auto not_swapped = 0;
 	}
+
+	// swap for preferred on probe side
 	if (rhs_cardinality == lhs_cardinality * cardinality_ratio && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
 		auto bindings_left = left_child->GetColumnBindings();
@@ -82,11 +132,11 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 		auto bindings_in_left = ComputeOverlappingBindings(bindings_left, preferred_on_probe_side);
 		auto bindings_in_right = ComputeOverlappingBindings(bindings_right, preferred_on_probe_side);
 		if (bindings_in_right > bindings_in_left) {
-			FlipChildren(op);
+			if (swap_status == SWAP_STATUS::NOT_SWAPPED) {
+				FlipChildren(op);
+			}
 		}
-		return;
 	}
-	FlipChildren(op);
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
