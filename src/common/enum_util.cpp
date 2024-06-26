@@ -4498,6 +4498,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "DUPLICATE_GROUPS";
 	case OptimizerType::REORDER_FILTER:
 		return "REORDER_FILTER";
+	case OptimizerType::SAMPLING_PUSHDOWN:
+		return "SAMPLING_PUSHDOWN";
 	case OptimizerType::EXTENSION:
 		return "EXTENSION";
 	default:
