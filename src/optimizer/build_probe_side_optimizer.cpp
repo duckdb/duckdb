@@ -115,8 +115,12 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	auto left_side_metric = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
 	auto right_side_metric = rhs_cardinality * build_sizes.right_side;
 
+	// swap for cardinality
+	auto swap_bc_cardinality = !(rhs_cardinality < lhs_cardinality * cardinality_ratio);
+	auto swap_bc_build_sizes = right_side_metric > left_side_metric * MAGIC_RATIO_TO_SWAP_BUILD_SIDES;
+
 	// swap for build side?
-	if (right_side_metric > left_side_metric * MAGIC_RATIO_TO_SWAP_BUILD_SIDES) {
+	if (swap_bc_cardinality || swap_bc_build_sizes) {
 		FlipChildren(op);
 		D_ASSERT(swap_status == SWAP_STATUS::NOT_SWAPPED);
 		swap_status = SWAP_STATUS::SWAPPED;
@@ -125,14 +129,15 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	// swap for preferred on probe side
 	if (rhs_cardinality == lhs_cardinality * cardinality_ratio && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
-		auto bindings_left = left_child->GetColumnBindings();
-		auto bindings_right = right_child->GetColumnBindings();
+		auto bindings_left = swap_status == SWAP_STATUS::NOT_SWAPPED ? left_child->GetColumnBindings()
+		                                                             : right_child->GetColumnBindings();
+		auto bindings_right = swap_status == SWAP_STATUS::NOT_SWAPPED ? right_child->GetColumnBindings()
+		                                                              : left_child->GetColumnBindings();
 		auto bindings_in_left = ComputeOverlappingBindings(bindings_left, preferred_on_probe_side);
 		auto bindings_in_right = ComputeOverlappingBindings(bindings_right, preferred_on_probe_side);
-		if (bindings_in_right > bindings_in_left) {
-			if (swap_status == SWAP_STATUS::NOT_SWAPPED) {
-				FlipChildren(op);
-			}
+		if ((swap_status == SWAP_STATUS::NOT_SWAPPED && bindings_in_right > bindings_in_left) ||
+		    (swap_status == SWAP_STATUS::SWAPPED && bindings_in_left > bindings_in_right)) {
+			FlipChildren(op);
 		}
 	}
 }

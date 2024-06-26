@@ -31,7 +31,7 @@ struct BuildSize {
 };
 
 class BuildProbeSideOptimizer : LogicalOperatorVisitor {
-	static constexpr idx_t MAGIC_RATIO_TO_SWAP_BUILD_SIDES = 2;
+	static constexpr double MAGIC_RATIO_TO_SWAP_BUILD_SIDES = 1.2;
 
 public:
 	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op);
