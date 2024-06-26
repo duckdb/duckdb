@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/common/json_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
@@ -108,7 +109,9 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 }
 
 string LogicalOperator::ToString() const {
-	TreeRenderer renderer;
+	// TreeRenderer renderer;
+	// return renderer.ToString(*this);
+	JSONRenderer renderer;
 	return renderer.ToString(*this);
 }
 

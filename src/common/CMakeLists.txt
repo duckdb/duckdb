@@ -58,6 +58,7 @@ add_library_unity(
   symbols.cpp
   render_tree.cpp
   tree_renderer.cpp
+  json_renderer.cpp
   types.cpp
   virtual_file_system.cpp
   windows_util.cpp)

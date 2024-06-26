@@ -3,6 +3,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/common/json_renderer.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -19,7 +20,8 @@ string PhysicalOperator::GetName() const {
 }
 
 string PhysicalOperator::ToString() const {
-	TreeRenderer renderer;
+	// TreeRenderer renderer;
+	JSONRenderer renderer;
 	return renderer.ToString(*this);
 }
 
