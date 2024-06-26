@@ -14,6 +14,7 @@ namespace duckdb {
 
 struct PartitionWriteInfo {
 	unique_ptr<GlobalFunctionData> global_state;
+	idx_t active_writes = 0;
 };
 
 struct VectorOfValuesHashFunction {
@@ -44,6 +45,9 @@ template <class T>
 using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
 
 class CopyToFunctionGlobalState : public GlobalSinkState {
+public:
+	static constexpr idx_t PARTITIONED_WRITE_MAX_OPEN_FILES = 100;
+
 public:
 	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
 	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)) {
@@ -109,16 +113,35 @@ public:
 	                                          const vector<Value> &values) {
 		auto global_lock = lock.GetExclusiveLock();
 		// check if we have already started writing this partition
-		auto entry = active_partitioned_writes.find(values);
-		if (entry != active_partitioned_writes.end()) {
+		auto active_write_entry = active_partitioned_writes.find(values);
+		if (active_write_entry != active_partitioned_writes.end()) {
 			// we have - continue writing in this partition
-			return *entry->second;
+			active_write_entry->second->active_writes++;
+			return *active_write_entry->second;
+		}
+		// check if we need to close any writers before we can continue
+		if (active_partitioned_writes.size() >= PARTITIONED_WRITE_MAX_OPEN_FILES) {
+			// we need to! try to close writers
+			for (auto &entry : active_partitioned_writes) {
+				if (entry.second->active_writes == 0) {
+					// we can evict this entry - evict the partition
+					FinalizePartition(context.client, op, *entry.second);
+					++previous_partitions[entry.first];
+					active_partitioned_writes.erase(entry.first);
+					break;
+				}
+			}
+		}
+		idx_t offset = 0;
+		auto prev_offset = previous_partitions.find(values);
+		if (prev_offset != previous_partitions.end()) {
+			offset = prev_offset->second;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		// Create a writer for the current file
 		auto trimmed_path = op.GetTrimmedPath(context.client);
 		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
-		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
+		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset));
 		if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
 			// when appending, we first check if the file exists
 			while (fs.FileExists(full_path)) {
@@ -126,7 +149,7 @@ public:
 				if (!op.filename_pattern.HasUUID()) {
 					throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
 				}
-				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0);
+				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
 			}
 		}
 		if (op.return_type == CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST) {
@@ -136,14 +159,21 @@ public:
 		auto info = make_uniq<PartitionWriteInfo>();
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
 		auto &result = *info;
+		info->active_writes = 1;
 		// store in active write map
 		active_partitioned_writes.insert(make_pair(values, std::move(info)));
 		return result;
 	}
 
+	void FinishPartitionWrite(PartitionWriteInfo &info) {
+		auto global_lock = lock.GetExclusiveLock();
+		info.active_writes--;
+	}
+
 private:
 	//! The active writes per partition (for partitioned write)
 	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_partitioned_writes;
+	vector_of_value_map_t<idx_t> previous_partitions;
 };
 
 string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
@@ -219,6 +249,7 @@ public:
 			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
 			local_copy_state.reset();
 			partitions[i].reset();
+			g.FinishPartitionWrite(info);
 		}
 		ResetAppendState();
 	}
