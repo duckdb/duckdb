@@ -168,4 +168,13 @@ struct EquiWidthBinsFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct IsHistogramOtherBinFun {
+	static constexpr const char *Name = "is_histogram_other_bin";
+	static constexpr const char *Parameters = "val";
+	static constexpr const char *Description = "Whether or not the provided value is the histogram \"other\" bin (used for values not belonging to any provided bin)";
+	static constexpr const char *Example = "is_histogram_other_bin(v)";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

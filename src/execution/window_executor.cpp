@@ -461,18 +461,20 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		int64_t computed_start;
 		if (!TrySubtractOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
 		                                    computed_start)) {
-			throw OutOfRangeException("Overflow computing ROWS PRECEDING start");
+			window_start = partition_start;
+		} else {
+			window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		}
-		window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
 		int64_t computed_start;
 		if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
 		                               computed_start)) {
-			throw OutOfRangeException("Overflow computing ROWS FOLLOWING start");
+			window_start = partition_start;
+		} else {
+			window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		}
-		window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		break;
 	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
@@ -513,18 +515,20 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		int64_t computed_start;
 		if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
 		                                    computed_start)) {
-			throw OutOfRangeException("Overflow computing ROWS PRECEDING end");
+			window_end = partition_end;
+		} else {
+			window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		}
-		window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
 		int64_t computed_start;
 		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
 		                               computed_start)) {
-			throw OutOfRangeException("Overflow computing ROWS FOLLOWING end");
+			window_end = partition_end;
+		} else {
+			window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		}
-		window_end = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 		break;
 	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {

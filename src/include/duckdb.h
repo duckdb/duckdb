@@ -2358,6 +2358,23 @@ If the function is incomplete or a function with this name already exists DuckDB
 * returns: Whether or not the registration was successful.
 */
 DUCKDB_API duckdb_state duckdb_register_scalar_function(duckdb_connection con, duckdb_scalar_function scalar_function);
+
+/*!
+Retrieves the extra info of the function as set in `duckdb_scalar_function_set_extra_info`.
+
+* info: The info object
+* returns: The extra info
+*/
+DUCKDB_API void *duckdb_scalar_function_get_extra_info(duckdb_function_info info);
+
+/*!
+Report that an error has occurred while executing the scalar function.
+
+* info: The info object
+* error: The error message
+*/
+DUCKDB_API void duckdb_scalar_function_set_error(duckdb_function_info info, const char *error);
+
 //===--------------------------------------------------------------------===//
 // Table Functions
 //===--------------------------------------------------------------------===//

@@ -20,7 +20,7 @@ FROM lineitem
 {0=1000048, 1=1000447, 2=999171, 3=1000989, 4=1000498, 5=1000060, 6=2}
 
 query I
-SELECT histogram(l_shipdate, list_append(range((SELECT MIN(l_shipdate) FROM lineitem), (SELECT MAX(l_shipdate) FROM lineitem), interval '1' year), 'infinity'::timestamp))
+SELECT histogram(l_shipdate, range((SELECT MIN(l_shipdate) FROM lineitem), (SELECT MAX(l_shipdate) FROM lineitem), interval '1' year))
 FROM lineitem
 ----
 {1992-01-02=17, 1993-01-02=761193, 1994-01-02=908785, 1995-01-02=909464, 1996-01-02=914963, 1997-01-02=913658, 1998-01-02=911349, infinity=681786}
@@ -89,6 +89,22 @@ A	1478493
 N	3043852
 R	1478870
 
+# list
+query II
+SELECT bin, count FROM histogram(lineitem, [l_returnflag])
+----
+[A]	1478493
+[N]	3043852
+[R]	1478870
+
+# struct
+query II
+SELECT bin, count FROM histogram(lineitem, {'i': l_returnflag})
+----
+{'i': A}	1478493
+{'i': N}	3043852
+{'i': R}	1478870
+
 # string stress test
 query I nosort histstrings
 SELECT unnest(map_keys(histogram(l_comment))) FROM lineitem
@@ -97,3 +113,12 @@ SELECT unnest(map_keys(histogram(l_comment))) FROM lineitem
 query I nosort histstrings
 SELECT DISTINCT l_comment FROM lineitem ORDER BY l_comment
 ----
+
+# approx_top_k stress test
+query I
+SELECT list_sort(approx_top_k(l_returnflag, 5)) FROM lineitem
+----
+[A, N, R]
+
+statement ok
+SELECT approx_top_k(l_comment, 5) FROM lineitem
