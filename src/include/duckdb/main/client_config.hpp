@@ -95,6 +95,10 @@ struct ClientConfig {
 	idx_t ordered_aggregate_threshold = (idx_t(1) << 18);
 	//! The number of rows to accumulate before flushing during a partitioned write
 	idx_t partitioned_write_flush_threshold = idx_t(1) << idx_t(19);
+	//! The number of rows we need on either table to choose a nested loop join
+	idx_t nested_loop_join_threshold = 5;
+	//! The number of rows we need on either table to choose a merge join over an IE join
+	idx_t merge_join_threshold = 1000;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
@@ -109,7 +113,7 @@ struct ClientConfig {
 	idx_t pivot_limit = 100000;
 
 	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
-	idx_t pivot_filter_threshold = 10;
+	idx_t pivot_filter_threshold = 20;
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;

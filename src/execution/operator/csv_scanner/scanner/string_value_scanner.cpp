@@ -1402,7 +1402,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 			}
 		}
 		iterator.done = FinishedFile();
-		if (result.null_padding && result.number_of_rows < STANDARD_VECTOR_SIZE) {
+		if (result.null_padding && result.number_of_rows < STANDARD_VECTOR_SIZE && result.chunk_col_id > 0) {
 			while (result.chunk_col_id < result.parse_chunk.ColumnCount()) {
 				result.validity_mask[result.chunk_col_id++]->SetInvalid(result.number_of_rows);
 				result.cur_col_id++;

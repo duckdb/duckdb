@@ -193,7 +193,6 @@ unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateBearerSecretFromConfig(
                                                                                 CreateSecretInput &input) {
 	string token;
 
-	auto token_input = input.options.find("token");
 	for (const auto &named_param : input.options) {
 		auto lower_name = StringUtil::Lower(named_param.first);
 		if (lower_name == "token") {

@@ -3,6 +3,8 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/core_functions/aggregate/histogram_helpers.hpp"
+#include "duckdb/core_functions/scalar/generic_functions.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
@@ -119,7 +121,31 @@ struct HistogramBinFunction {
 	}
 };
 
-template <class OP, class T>
+struct HistogramRange {
+	static constexpr bool EXACT = false;
+
+	template <class T>
+	static idx_t GetBin(T value, const unsafe_vector<T> &bin_boundaries) {
+		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
+		return UnsafeNumericCast<idx_t>(entry - bin_boundaries.begin());
+	}
+};
+
+struct HistogramExact {
+	static constexpr bool EXACT = true;
+
+	template <class T>
+	static idx_t GetBin(T value, const unsafe_vector<T> &bin_boundaries) {
+		auto entry = std::lower_bound(bin_boundaries.begin(), bin_boundaries.end(), value);
+		if (entry == bin_boundaries.end() || !(*entry == value)) {
+			// entry not found - return last bucket
+			return bin_boundaries.size();
+		}
+		return UnsafeNumericCast<idx_t>(entry - bin_boundaries.begin());
+	}
+};
+
+template <class OP, class T, class HIST>
 static void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count,
                                        Vector &state_vector, idx_t count) {
 	auto &input = inputs[0];
@@ -143,10 +169,100 @@ static void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr
 		if (!state.IsSet()) {
 			state.template InitializeBins<OP>(bin_vector, count, i, aggr_input);
 		}
-		auto entry = std::lower_bound(state.bin_boundaries->begin(), state.bin_boundaries->end(), data[idx]);
-		auto bin_entry = UnsafeNumericCast<idx_t>(entry - state.bin_boundaries->begin());
+		auto bin_entry = HIST::template GetBin<T>(data[idx], *state.bin_boundaries);
 		++(*state.counts)[bin_entry];
 	}
+}
+
+static bool SupportsOtherBucket(const LogicalType &type) {
+	if (type.HasAlias()) {
+		return false;
+	}
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::LIST:
+		return true;
+	default:
+		return false;
+	}
+}
+static Value OtherBucketValue(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+		return Value::MaximumValue(type);
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+		return Value::Infinity(type);
+	case LogicalTypeId::VARCHAR:
+		return Value("");
+	case LogicalTypeId::BLOB:
+		return Value::BLOB("");
+	case LogicalTypeId::STRUCT: {
+		// for structs we can set all child members to NULL
+		auto &child_types = StructType::GetChildTypes(type);
+		child_list_t<Value> child_list;
+		for (auto &child_type : child_types) {
+			child_list.push_back(make_pair(child_type.first, Value(child_type.second)));
+		}
+		return Value::STRUCT(std::move(child_list));
+	}
+	case LogicalTypeId::LIST:
+		return Value::EMPTYLIST(type);
+	default:
+		throw InternalException("Unsupported type for other bucket");
+	}
+}
+
+static void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &input_type = args.data[0].GetType();
+	if (!SupportsOtherBucket(input_type)) {
+		result.Reference(Value::BOOLEAN(false));
+		return;
+	}
+	auto v = OtherBucketValue(input_type);
+	Vector ref(v);
+	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
 }
 
 template <class OP, class T>
@@ -159,6 +275,7 @@ static void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputDat
 	auto &mask = FlatVector::Validity(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
+	bool supports_other_bucket = SupportsOtherBucket(MapType::KeyType(result.GetType()));
 	// figure out how much space we need
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[sdata.sel->get_index(i)];
@@ -166,6 +283,10 @@ static void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputDat
 			continue;
 		}
 		new_entries += state.bin_boundaries->size();
+		if (state.counts->back() > 0 && supports_other_bucket) {
+			// overflow bucket has entries
+			new_entries++;
+		}
 	}
 	// reserve space in the list vector
 	ListVector::Reserve(result, old_len + new_entries);
@@ -190,6 +311,13 @@ static void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputDat
 			count_entries[current_offset] = (*state.counts)[bin_idx];
 			current_offset++;
 		}
+		if (state.counts->back() > 0 && supports_other_bucket) {
+			// add overflow bucket ("others")
+			// set bin boundary to NULL for overflow bucket
+			keys.SetValue(current_offset, OtherBucketValue(keys.GetType()));
+			count_entries[current_offset] = state.counts->back();
+			current_offset++;
+		}
 		list_entry.length = current_offset - list_entry.offset;
 	}
 	D_ASSERT(current_offset == old_len + new_entries);
@@ -197,49 +325,53 @@ static void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputDat
 	result.Verify(count);
 }
 
-template <class OP, class T>
+template <class OP, class T, class HIST>
 static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	using STATE_TYPE = HistogramBinState<T>;
 
+	const char *function_name = HIST::EXACT ? "histogram_exact" : "histogram";
+
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
 	return AggregateFunction(
-	    "histogram", {type, LogicalType::LIST(type)}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
-	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T>,
+	    function_name, {type, LogicalType::LIST(type)}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
+	    AggregateFunction::StateInitialize<STATE_TYPE, HistogramBinFunction>, HistogramBinUpdateFunction<OP, T, HIST>,
 	    AggregateFunction::StateCombine<STATE_TYPE, HistogramBinFunction>, HistogramBinFinalizeFunction<OP, T>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HistogramBinFunction>);
 }
 
+template <class HIST>
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		return GetHistogramBinFunction<HistogramFunctor, bool>(type);
+		return GetHistogramBinFunction<HistogramFunctor, bool, HIST>(type);
 	case PhysicalType::UINT8:
-		return GetHistogramBinFunction<HistogramFunctor, uint8_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint8_t, HIST>(type);
 	case PhysicalType::UINT16:
-		return GetHistogramBinFunction<HistogramFunctor, uint16_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint16_t, HIST>(type);
 	case PhysicalType::UINT32:
-		return GetHistogramBinFunction<HistogramFunctor, uint32_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint32_t, HIST>(type);
 	case PhysicalType::UINT64:
-		return GetHistogramBinFunction<HistogramFunctor, uint64_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, uint64_t, HIST>(type);
 	case PhysicalType::INT8:
-		return GetHistogramBinFunction<HistogramFunctor, int8_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int8_t, HIST>(type);
 	case PhysicalType::INT16:
-		return GetHistogramBinFunction<HistogramFunctor, int16_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int16_t, HIST>(type);
 	case PhysicalType::INT32:
-		return GetHistogramBinFunction<HistogramFunctor, int32_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int32_t, HIST>(type);
 	case PhysicalType::INT64:
-		return GetHistogramBinFunction<HistogramFunctor, int64_t>(type);
+		return GetHistogramBinFunction<HistogramFunctor, int64_t, HIST>(type);
 	case PhysicalType::FLOAT:
-		return GetHistogramBinFunction<HistogramFunctor, float>(type);
+		return GetHistogramBinFunction<HistogramFunctor, float, HIST>(type);
 	case PhysicalType::DOUBLE:
-		return GetHistogramBinFunction<HistogramFunctor, double>(type);
+		return GetHistogramBinFunction<HistogramFunctor, double, HIST>(type);
 	case PhysicalType::VARCHAR:
-		return GetHistogramBinFunction<HistogramStringFunctor, string_t>(type);
+		return GetHistogramBinFunction<HistogramStringFunctor, string_t, HIST>(type);
 	default:
-		return GetHistogramBinFunction<HistogramGenericFunctor, string_t>(type);
+		return GetHistogramBinFunction<HistogramGenericFunctor, string_t, HIST>(type);
 	}
 }
 
+template <class HIST>
 unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, AggregateFunction &function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	for (auto &arg : arguments) {
@@ -248,13 +380,25 @@ unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, Aggreg
 		}
 	}
 
-	function = GetHistogramBinFunction(arguments[0]->return_type);
+	function = GetHistogramBinFunction<HIST>(arguments[0]->return_type);
 	return nullptr;
 }
 
 AggregateFunction HistogramFun::BinnedHistogramFunction() {
 	return AggregateFunction("histogram", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)}, LogicalTypeId::MAP,
-	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, HistogramBinBindFunction, nullptr);
+	                         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                         HistogramBinBindFunction<HistogramRange>, nullptr);
+}
+
+AggregateFunction HistogramExactFun::GetFunction() {
+	return AggregateFunction("histogram_exact", {LogicalType::ANY, LogicalType::LIST(LogicalType::ANY)},
+	                         LogicalTypeId::MAP, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                         HistogramBinBindFunction<HistogramExact>, nullptr);
+}
+
+ScalarFunction IsHistogramOtherBinFun::GetFunction() {
+	return ScalarFunction("is_histogram_other_bin", {LogicalType::ANY}, LogicalType::BOOLEAN,
+	                      IsHistogramOtherBinFunction);
 }
 
 } // namespace duckdb
