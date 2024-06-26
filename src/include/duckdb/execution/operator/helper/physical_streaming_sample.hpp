@@ -41,6 +41,7 @@ public:
 private:
 	void SystemSample(DataChunk &input, DataChunk &result, OperatorState &state) const;
 	void BernoulliSample(DataChunk &input, DataChunk &result, OperatorState &state) const;
+	void ChunkSample(DataChunk &input, DataChunk &result, OperatorState &state) const;
 };
 
 } // namespace duckdb

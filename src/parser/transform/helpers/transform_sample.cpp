@@ -13,6 +13,8 @@ static SampleMethod GetSampleMethod(const string &method) {
 		return SampleMethod::BERNOULLI_SAMPLE;
 	} else if (lmethod == "reservoir") {
 		return SampleMethod::RESERVOIR_SAMPLE;
+	} else if (lmethod == "chunk") {
+		return SampleMethod::CHUNK_SAMPLE;
 	} else {
 		throw ParserException("Unrecognized sampling method %s, expected system, bernoulli or reservoir", method);
 	}
