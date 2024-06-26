@@ -91,6 +91,8 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
+	    {"merge_join_threshold", {73}},
+	    {"nested_loop_join_threshold", {73}},
 	    {"memory_limit", {"4.0 GiB"}},
 	    {"storage_compatibility_version", {"v0.10.0"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
