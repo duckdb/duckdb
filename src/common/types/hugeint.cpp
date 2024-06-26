@@ -6,10 +6,8 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/windows_undefs.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <cmath>
