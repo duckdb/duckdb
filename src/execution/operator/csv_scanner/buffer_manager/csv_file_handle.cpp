@@ -32,12 +32,8 @@ unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &all
 	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression);
 }
 
-double CSVFileHandle::GetCompressedProgress() {
-	if (uncompressed) {
-		throw InternalException("Trying to call a GetCompressedProgress from an uncompressed file");
-	}
-	auto &compressed_file_handle = file_handle->Cast<CompressedFile>();
-	return (double)compressed_file_handle.GetCurrentPosition() / file_size;
+double CSVFileHandle::GetProgress() {
+	return file_handle->GetProgress();
 }
 
 bool CSVFileHandle::CanSeek() {

@@ -623,6 +623,10 @@ FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
 }
 
+DUCKDB_API idx_t FileHandle::GetProgress() {
+	throw NotImplementedException("GetProgress is not implemented for this file handle");
+}
+
 bool FileSystem::IsRemoteFile(const string &path) {
 	string extension = "";
 	return IsRemoteFile(path, extension);

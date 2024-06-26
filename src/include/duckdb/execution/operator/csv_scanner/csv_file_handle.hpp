@@ -47,8 +47,7 @@ public:
 	                                          FileCompressionType compression);
 	bool uncompressed = false;
 
-	// Gets Progress of how far we are in this file, if it is a compressed file
-	double GetCompressedProgress();
+	double GetProgress();
 
 private:
 	unique_ptr<FileHandle> file_handle;

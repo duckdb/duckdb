@@ -61,7 +61,7 @@ public:
 	DUCKDB_API CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path);
 	DUCKDB_API ~CompressedFile() override;
 
-	DUCKDB_API idx_t GetCurrentPosition();
+	DUCKDB_API idx_t GetProgress() override;
 
 	CompressedFileSystem &compressed_fs;
 	unique_ptr<FileHandle> child_handle;

@@ -32,7 +32,7 @@ void CompressedFile::Initialize(bool write) {
 	stream_wrapper->Initialize(*this, write);
 }
 
-idx_t CompressedFile::GetCurrentPosition() {
+idx_t CompressedFile::GetProgress() {
 	return current_position;
 }
 

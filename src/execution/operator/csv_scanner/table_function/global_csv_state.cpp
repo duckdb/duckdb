@@ -55,8 +55,10 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 				percentage += (double(1) / double(total_files)) *
 				              std::min(1.0, double(file->bytes_read) / double(file->file_size));
 			} else {
-				percentage += (double(1) / double(total_files)) *
-				              std::min(1.0, file->buffer_manager->file_handle->GetCompressedProgress());
+				if (file->buffer_manager && file->buffer_manager->file_handle) {
+					percentage += (double(1) / double(total_files)) *
+					              std::min(1.0, file->buffer_manager->file_handle->GetProgress());
+				}
 			}
 		}
 	}
