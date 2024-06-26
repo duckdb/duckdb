@@ -250,4 +250,7 @@ TEST_CASE("Test Scalar Functions - variadic number of input parameters", "[capi]
 	result = tester.Query("SELECT my_addition()");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->IsNull(0, 0));
+
+	result = tester.Query("SELECT my_addition('hello', [1])");
+	REQUIRE_FAIL(result);
 }

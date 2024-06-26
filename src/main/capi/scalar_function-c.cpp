@@ -42,13 +42,11 @@ duckdb::ScalarFunction &GetCScalarFunction(duckdb_scalar_function function) {
 	return *reinterpret_cast<duckdb::ScalarFunction *>(function);
 }
 
-unique_ptr<FunctionData> BindCAPIScalarFunction(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> BindCAPIScalarFunction(ClientContext &, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	auto &info = bound_function.function_info->Cast<CScalarFunctionInfo>();
 	if (bound_function.HasVarArgs()) {
-		for (const auto &expr : arguments) {
-			bound_function.arguments.push_back(expr->return_type);
-		}
+		bound_function.arguments.assign(arguments.size(), bound_function.varargs);
 	}
 	return make_uniq<CScalarFunctionBindData>(info);
 }
