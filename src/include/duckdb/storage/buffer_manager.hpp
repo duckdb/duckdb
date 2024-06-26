@@ -90,7 +90,7 @@ public:
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
 	static idx_t GetAllocSize(const idx_t block_size) {
-		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + DEFAULT_BLOCK_HEADER_SIZE);
+		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
 	}
 	//! Returns the maximum available memory for a given query
 	idx_t GetQueryMaxMemory() const;

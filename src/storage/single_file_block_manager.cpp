@@ -143,7 +143,7 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size), db(db), path(path_p),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                    Storage::FILE_HEADER_SIZE - DEFAULT_BLOCK_HEADER_SIZE),
+                    Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
 }
 
@@ -457,7 +457,7 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 		// compute the checksum
 		auto start_ptr = ptr + i * GetBlockAllocSize();
 		auto stored_checksum = Load<uint64_t>(start_ptr);
-		uint64_t computed_checksum = Checksum(start_ptr + DEFAULT_BLOCK_HEADER_SIZE, GetBlockSize());
+		uint64_t computed_checksum = Checksum(start_ptr + Storage::DEFAULT_BLOCK_HEADER_SIZE, GetBlockSize());
 		// verify the checksum
 		if (stored_checksum != computed_checksum) {
 			throw IOException(

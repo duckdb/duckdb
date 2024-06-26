@@ -22,13 +22,10 @@ struct FileHandle;
 #define INVALID_BLOCK (-1)
 //! The maximum block id is 2^62
 #define MAXIMUM_BLOCK 4611686018427388000LL
-//! The block header size for blocks written to storage.
-#define DEFAULT_BLOCK_HEADER_SIZE sizeof(uint64_t)
+
 //! The default block allocation size.
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
-//! The default block size.
-#define DEFAULT_BLOCK_SIZE DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE
-
+//! The configurable block allocation size.
 #ifndef DUCKDB_BLOCK_ALLOC_SIZE
 #define DUCKDB_BLOCK_ALLOC_SIZE DEFAULT_BLOCK_ALLOC_SIZE
 #endif
@@ -45,10 +42,15 @@ struct Storage {
 	constexpr static const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
 	//! The number of vectors per row group
 	constexpr static const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
+
 	//! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 	constexpr static idx_t MIN_BLOCK_ALLOC_SIZE = 16384ULL;
 	//! The maximum block allocation size. This is the maximum size currently supported by duckdb.
 	constexpr static idx_t MAX_BLOCK_ALLOC_SIZE = 262144ULL;
+	//! The default block header size for blocks written to storage.
+	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(uint64_t);
+	//! The default block size.
+	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 
 	//! Ensures that a user-provided block allocation size matches all requirements.
 	static void VerifyBlockAllocSize(const idx_t block_alloc_size);
@@ -66,7 +68,7 @@ vector<string> GetSerializationCandidates();
 struct MainHeader {
 	static constexpr idx_t MAX_VERSION_SIZE = 32;
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
-	static constexpr idx_t MAGIC_BYTE_OFFSET = DEFAULT_BLOCK_HEADER_SIZE;
+	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
 	//! The magic bytes in front of the file should be "DUCK"
 	static const char MAGIC_BYTES[];

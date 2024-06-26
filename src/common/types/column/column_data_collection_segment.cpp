@@ -28,7 +28,7 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const Logica
 	                     ? 0
 	                     : GetTypeIdSize(internal_type);
 	// TODO: or pass it to here?
-	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, DEFAULT_BLOCK_SIZE,
+	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, Storage::DEFAULT_BLOCK_SIZE,
 	                        meta_data.block_id, meta_data.offset, chunk_state);
 	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR ||
 	    allocator->GetType() == ColumnDataAllocatorType::HYBRID) {
@@ -80,7 +80,7 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateStringHeap(idx_t size, Chun
 	meta_data.count = 0;
 
 	// TODO: or pass it to here?
-	allocator->AllocateData(AlignValue(size), DEFAULT_BLOCK_SIZE, meta_data.block_id, meta_data.offset,
+	allocator->AllocateData(AlignValue(size), Storage::DEFAULT_BLOCK_SIZE, meta_data.block_id, meta_data.offset,
 	                        &append_state.current_chunk_state);
 	chunk_meta.block_ids.insert(meta_data.block_id);
 
