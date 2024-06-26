@@ -62,28 +62,37 @@ void JSONRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-static void RenderRecursive(RenderTree &tree, RenderTreeNode::Coordinate &pos, std::ostream &ss, idx_t depth) {
-	auto indent = string(depth * 2, ' ');
-	auto node_p = tree.GetNode(pos.x, pos.y);
+static yyjson_mut_val *RenderRecursive(yyjson_mut_doc *doc, RenderTree &tree, idx_t x, idx_t y) {
+	auto node_p = tree.GetNode(x, y);
 	D_ASSERT(node_p);
 	auto &node = *node_p;
-	ss << StringUtil::Format("%s\"name\": \"%s\",\n", indent, node.name);
-	ss << StringUtil::Format("%s\"children\": [\n", indent);
+
+	auto object = yyjson_mut_obj(doc);
+	auto children = yyjson_mut_arr(doc);
 	for (auto &child_pos : node.child_positions) {
-		ss << StringUtil::Format("%s  {\n", indent);
-		RenderRecursive(tree, child_pos, ss, depth + 2);
-		ss << StringUtil::Format("%s  }\n", indent);
+		auto child_object = RenderRecursive(doc, tree, child_pos.x, child_pos.y);
+		yyjson_mut_arr_append(children, child_object);
 	}
-	ss << StringUtil::Format("%s]\n", indent);
+	yyjson_mut_obj_add_str(doc, object, "name", node.name.c_str());
+	yyjson_mut_obj_add_val(doc, object, "children", children);
+	return object;
 }
 
 void JSONRenderer::ToStream(RenderTree &root, std::ostream &ss) {
-	ss << "[\n";
-	ss << "  {\n";
-	RenderTreeNode::Coordinate pos(0, 0);
-	RenderRecursive(root, pos, ss, 2);
-	ss << "  }\n";
-	ss << "]\n";
+	auto doc = yyjson_mut_doc_new(nullptr);
+	auto result_obj = yyjson_mut_arr(doc);
+	yyjson_mut_doc_set_root(doc, result_obj);
+
+	auto plan = RenderRecursive(doc, root, 0, 0);
+	yyjson_mut_arr_append(result_obj, plan);
+
+	size_t len;
+	auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
+	                                      &len, nullptr);
+	if (!data) {
+		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
+	}
+	ss << string(data);
 }
 
 } // namespace duckdb
