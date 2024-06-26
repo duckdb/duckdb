@@ -67,7 +67,7 @@ jobs:
       CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -123,7 +123,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -198,7 +198,7 @@ jobs:
       CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -289,7 +289,7 @@ jobs:
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -367,7 +367,7 @@ jobs:
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -437,7 +437,7 @@ jobs:
        PYPI_CLEANUP_OTP: ${{secrets.PYPI_CLEANUP_OTP}}
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
          ref: ${{ inputs.git_ref }}

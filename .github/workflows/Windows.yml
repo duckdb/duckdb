@@ -57,7 +57,7 @@ jobs:
     name: Windows (64 Bit)
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -187,7 +187,7 @@ jobs:
     needs: win-release-64
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -228,7 +228,7 @@ jobs:
      if: ${{ inputs.skip_tests != 'true' }}
      needs: win-release-64
      steps:
-       - uses: actions/checkout@v3
+       - uses: actions/checkout@v4
          with:
            ref: ${{ inputs.git_ref }}
        - uses: msys2/setup-msys2@v2
@@ -277,7 +277,7 @@ jobs:
          git config --global core.autocrlf false
          git config --global core.eol lf
 
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
          ref: ${{ inputs.git_ref }}

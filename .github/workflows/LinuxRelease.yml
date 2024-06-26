@@ -69,7 +69,7 @@ jobs:
       DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -157,7 +157,7 @@ jobs:
      DUCKDB_PLATFORM: linux_arm64
 
    steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
          ref: ${{ inputs.git_ref }}
@@ -211,7 +211,7 @@ jobs:
     needs: linux-release-64
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -251,7 +251,7 @@ jobs:
     needs: linux-release-64
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -295,7 +295,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -361,7 +361,7 @@ jobs:
     needs: linux-release-64
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -394,7 +394,7 @@ jobs:
       CXX: clang++
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
