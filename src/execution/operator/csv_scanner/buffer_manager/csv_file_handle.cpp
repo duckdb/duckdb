@@ -1,6 +1,9 @@
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
+
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+
+#include "duckdb/common/compressed_file_system.hpp"
 
 namespace duckdb {
 
@@ -29,6 +32,14 @@ unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &all
 	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression);
 }
 
+double CSVFileHandle::GetCompressedProgress() {
+	if (uncompressed) {
+		throw InternalException("Trying to call a GetCompressedProgress from an uncompressed file");
+	}
+	auto &compressed_file_handle = file_handle->Cast<CompressedFile>();
+	return (double)compressed_file_handle.GetCurrentPosition() / file_size;
+}
+
 bool CSVFileHandle::CanSeek() {
 	return can_seek;
 }
@@ -51,6 +62,7 @@ void CSVFileHandle::Reset() {
 	file_handle->Reset();
 	finished = false;
 	requested_bytes = 0;
+	// uncompressed_bytes_read = 0;
 }
 
 bool CSVFileHandle::IsPipe() {
@@ -72,6 +84,7 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	if (!finished) {
 		finished = bytes_read == 0;
 	}
+	uncompressed_bytes_read += bytes_read;
 	return UnsafeNumericCast<idx_t>(bytes_read);
 }
 

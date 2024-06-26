@@ -51,8 +51,13 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	} else {
 		// for compressed files, readed bytes may greater than files size.
 		for (auto &file : file_scans) {
-			percentage +=
-			    (double(1) / double(total_files)) * std::min(1.0, double(file->bytes_read) / double(file->file_size));
+			if (file->buffer_manager->file_handle->uncompressed) {
+				percentage += (double(1) / double(total_files)) *
+				              std::min(1.0, double(file->bytes_read) / double(file->file_size));
+			} else {
+				percentage += (double(1) / double(total_files)) *
+				              std::min(1.0, file->buffer_manager->file_handle->GetCompressedProgress());
+			}
 		}
 	}
 	return percentage * 100;

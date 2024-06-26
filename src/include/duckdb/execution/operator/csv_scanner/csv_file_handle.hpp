@@ -24,7 +24,6 @@ public:
 
 	mutex main_mutex;
 
-public:
 	bool CanSeek();
 	void Seek(idx_t position);
 	bool OnDiskFile();
@@ -48,12 +47,16 @@ public:
 	                                          FileCompressionType compression);
 	bool uncompressed = false;
 
+	// Gets Progress of how far we are in this file, if it is a compressed file
+	double GetCompressedProgress();
+
 private:
 	unique_ptr<FileHandle> file_handle;
 	string path;
 	bool can_seek = false;
 	bool on_disk_file = false;
 	bool is_pipe = false;
+	idx_t uncompressed_bytes_read = 0;
 
 	idx_t file_size = 0;
 
