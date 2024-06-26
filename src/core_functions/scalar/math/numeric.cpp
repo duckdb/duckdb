@@ -1438,23 +1438,35 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 // and Software Libraries, Software: Practice and Experience 49 (6), 2019.
 // https://arxiv.org/abs/1902.01961
 
-template <class > struct next_size;
-template <class T> using next_size_t = typename next_size<T>::type;
-template <class T> struct tag { using type = T; };
+template <class>
+struct next_size;
+template <class T>
+using next_size_t = typename next_size<T>::type;
+template <class T>
+struct tag {
+	using type = T;
+};
 
-template <> struct next_size<uint8_t>  : tag<uint16_t> { };
-template <> struct next_size<uint16_t> : tag<uint32_t> { };
-template <> struct next_size<uint32_t> : tag<uint64_t> { };
-template <> struct next_size<uint64_t> : tag<uhugeint_t> { };
-template <> struct next_size<int8_t>  : tag<int16_t> { };
-template <> struct next_size<int16_t> : tag<int32_t> { };
-template <> struct next_size<int32_t> : tag<int64_t> { };
+template <>
+struct next_size<uint8_t> : tag<uint16_t> {};
+template <>
+struct next_size<uint16_t> : tag<uint32_t> {};
+template <>
+struct next_size<uint32_t> : tag<uint64_t> {};
+template <>
+struct next_size<uint64_t> : tag<uhugeint_t> {};
+template <>
+struct next_size<int8_t> : tag<int16_t> {};
+template <>
+struct next_size<int16_t> : tag<int32_t> {};
+template <>
+struct next_size<int32_t> : tag<int64_t> {};
 
-template <class T> using m_t = next_size_t<typename std::make_unsigned<T>::type>;
+template <class T>
+using m_t = next_size_t<typename std::make_unsigned<T>::type>;
 
 template <class RHS>
-typename std::enable_if<std::is_unsigned<RHS>::value, next_size_t<RHS>>::type
-ComputeM(RHS rhs) {
+typename std::enable_if<std::is_unsigned<RHS>::value, next_size_t<RHS>>::type ComputeM(RHS rhs) {
 	return next_size_t<RHS>(-1) / rhs + 1;
 }
 
@@ -1464,8 +1476,7 @@ m_t<uint64_t> ComputeM<uint64_t>(uint64_t rhs) {
 }
 
 template <class RHS>
-typename std::enable_if<!std::is_unsigned<RHS>::value, m_t<RHS>>::type
-ComputeM(RHS rhs) {
+typename std::enable_if<!std::is_unsigned<RHS>::value, m_t<RHS>>::type ComputeM(RHS rhs) {
 	if (rhs < 0) {
 		rhs = -rhs;
 	}
@@ -1475,11 +1486,10 @@ ComputeM(RHS rhs) {
 // fastdiv computes (a / d) given precomputed M for d>1
 
 template <class RHS>
-inline static typename std::enable_if<std::is_unsigned<RHS>::value, RHS>::type
-Fastdiv(RHS a, m_t<RHS> m, RHS d) {
+inline static typename std::enable_if<std::is_unsigned<RHS>::value, RHS>::type Fastdiv(RHS a, m_t<RHS> m, RHS d) {
 	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
 	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
-	return ((((m & RHS(-1)) * a) >> (sizeof(RHS) * 8)) + ((m >> (sizeof(RHS)*8)) * a)) >> (sizeof(RHS) * 8);
+	return ((((m & RHS(-1)) * a) >> (sizeof(RHS) * 8)) + ((m >> (sizeof(RHS) * 8)) * a)) >> (sizeof(RHS) * 8);
 }
 
 template <>
@@ -1490,8 +1500,7 @@ inline uint64_t Fastdiv<uint64_t>(uint64_t a, m_t<uint64_t> m, uint64_t d) {
 }
 
 template <class RHS>
-static typename std::enable_if<!std::is_unsigned<RHS>::value, RHS>::type
-Fastdiv(RHS a, m_t<RHS> m, RHS d) {
+static typename std::enable_if<!std::is_unsigned<RHS>::value, RHS>::type Fastdiv(RHS a, m_t<RHS> m, RHS d) {
 	next_size_t<next_size_t<RHS>> lhs = a;
 	if (a < 0) {
 		lhs |= next_size_t<next_size_t<RHS>>(-1) << (sizeof(m_t<RHS>) * 8);
@@ -1505,7 +1514,7 @@ Fastdiv(RHS a, m_t<RHS> m, RHS d) {
 }
 
 template <>
-inline int32_t Fastdiv<int32_t> (int32_t a, m_t<int32_t> m, int32_t d) {
+inline int32_t Fastdiv<int32_t>(int32_t a, m_t<int32_t> m, int32_t d) {
 	hugeint_t lhs;
 	if (a < 0) {
 		lhs = hugeint_t(0xffffffffffffffff, a);
