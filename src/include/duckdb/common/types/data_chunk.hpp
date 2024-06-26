@@ -54,7 +54,7 @@ public:
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
-	
+
 	//! Options for sampling pushdown
 	SamplingPushdownOption sampling_pushdown_option;
 
