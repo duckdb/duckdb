@@ -177,13 +177,23 @@ void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vect
 //------------------------------------------------------------------------------
 
 unique_ptr<GeoParquetFileMetadata>
-GeoParquetFileMetadata::Read(const duckdb_parquet::format::FileMetaData &file_meta_data) {
+GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file_meta_data, ClientContext &context) {
 	for (auto &kv : file_meta_data.key_value_metadata) {
 		if (kv.key == "geo") {
 			const auto geo_metadata = yyjson_read(kv.value.c_str(), kv.value.size(), 0);
 			if (!geo_metadata) {
-				throw InvalidInputException("Failed to parse geoparquet metadata");
+				// Could not parse the JSON
+				return nullptr;
 			}
+
+			// Check if the spatial extension is loaded, or try to autoload it.
+			const auto is_loaded = ExtensionHelper::TryAutoLoadExtension(context, "spatial");
+			if (!is_loaded) {
+				// Spatial extension is not available, we can't make use of the metadata anyway.
+				yyjson_doc_free(geo_metadata);
+				return nullptr;
+			}
+
 			try {
 				// Check the root object
 				const auto root = yyjson_doc_get_root(geo_metadata);
@@ -255,6 +265,8 @@ GeoParquetFileMetadata::Read(const duckdb_parquet::format::FileMetaData &file_me
 				}
 
 				// Return the result
+				// Make sure to free the JSON document
+				yyjson_doc_free(geo_metadata);
 				return result;
 
 			} catch (...) {
@@ -374,11 +386,6 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 
 	// Otherwise, unrecognized encoding
 	throw NotImplementedException("Unsupported geometry encoding");
-}
-
-bool GeoParquetFileMetadata::IsSpatialExtensionInstalled(ClientContext &context) {
-	// Try to load the spatial extension
-	return ExtensionHelper::TryAutoLoadExtension(context, "spatial");
 }
 
 } // namespace duckdb
