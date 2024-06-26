@@ -379,7 +379,6 @@ def get_extension_api_version():
 
 
 # TODO make this code less spaghetti
-# TODO make this run on python <3.12
 if __name__ == "__main__":
     EXT_API_DEFINITION = parse_ext_api_definition()
     EXT_API_VERSION = get_extension_api_version()

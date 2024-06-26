@@ -14,15 +14,15 @@ so for example consider the api currently:
     {
       "version": "v0.0.1",
       "entries": [
-        { "name": "duckdb_open", "group": "core" },
-        {"name": "duckdb_open_ext", "group": "core"}
+        { "name": "duckdb_open" },
+        {"name": "duckdb_open_ext" }
       ]
     },
     {
       "version": "v0.0.2",
       "entries": [
-        { "name": "duckdb_open", "group": "core" },
-        { "name": "duckdb_create_scalar_function",  "group": "scalar_functions"  }
+        { "name": "duckdb_open" },
+        { "name": "duckdb_create_scalar_function" }
       ]
     }
   ]
@@ -36,21 +36,21 @@ Let's say we want to add another function `my_function` to the extension api, we
     {
       "version": "v0.0.1",
       "entries": [
-        { "name": "duckdb_open", "group": "core" },
-        {"name": "duckdb_open_ext", "group": "core"}
+        { "name": "duckdb_open" },
+        {"name": "duckdb_open_ext" }
       ]
     },
     {
       "version": "v0.0.2",
       "entries": [
-        { "name": "duckdb_open", "group": "core" },
-        { "name": "duckdb_create_scalar_function",  "group": "scalar_functions"  }
+        { "name": "duckdb_open" },
+        { "name": "duckdb_create_scalar_function" }
       ]
     },
     {
       "version": "v0.0.3",
       "entries": [
-        { "name": "my_function", "group": "core" }
+        { "name": "my_function" }
       ]
     }
   ]
