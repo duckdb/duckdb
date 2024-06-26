@@ -1503,7 +1503,7 @@ template <class RHS>
 static typename std::enable_if<!std::is_unsigned<RHS>::value, RHS>::type Fastdiv(RHS a, m_t<RHS> m, RHS d) {
 	next_size_t<next_size_t<RHS>> lhs = a;
 	if (a < 0) {
-		lhs |= next_size_t<next_size_t<RHS>>(-1) << (sizeof(m_t<RHS>) * 8);
+		lhs |= next_size_t<next_size_t<RHS>>(0xFFFFFFFFFFFFFFFF) << (sizeof(m_t<RHS>) * 8);
 	}
 	m_t<RHS> highbits = (lhs * m) >> (sizeof(m_t<RHS>) * 8);
 	highbits += (a < 0 ? 1 : 0);
