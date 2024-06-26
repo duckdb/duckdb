@@ -1387,7 +1387,8 @@ void DuckDBPyConnection::Close() {
 	if (parent) {
 		auto myself = shared_from_this();
 		auto it = std::find(parent->cursors.begin(), parent->cursors.end(), myself);
-		if (it != parent->cursors.end()) parent->cursors.erase(it);
+		if (it != parent->cursors.end())
+			parent->cursors.erase(it);
 	}
 }
 
