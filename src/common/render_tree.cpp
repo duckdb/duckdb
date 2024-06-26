@@ -3,6 +3,18 @@
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 
+namespace duckdb {
+
+struct PipelineRenderNode {
+	explicit PipelineRenderNode(const PhysicalOperator &op) : op(op) {
+	}
+
+	const PhysicalOperator &op;
+	unique_ptr<PipelineRenderNode> child;
+};
+
+} // namespace duckdb
+
 namespace {
 
 using namespace duckdb;
@@ -48,14 +60,6 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 		}
 	}
 }
-
-struct PipelineRenderNode {
-	explicit PipelineRenderNode(const PhysicalOperator &op) : op(op) {
-	}
-
-	const PhysicalOperator &op;
-	unique_ptr<PipelineRenderNode> child;
-};
 
 template <>
 bool TreeChildrenIterator::HasChildren(const PipelineRenderNode &op) {

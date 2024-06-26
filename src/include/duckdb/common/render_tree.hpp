@@ -10,8 +10,14 @@
 
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
+class LogicalOperator;
+class PhysicalOperator;
+class Pipeline;
+struct PipelineRenderNode;
 
 struct RenderTreeNode {
 public:
