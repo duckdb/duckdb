@@ -8,7 +8,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <cmath>
