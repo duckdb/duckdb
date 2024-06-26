@@ -53,7 +53,7 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 	ComputePartitionIndices(state, input);
 
 	// Build the selection vector for the partitions
-	BuildPartitionSel(state, append_sel, actual_append_count);
+	BuildPartitionSel(state, append_sel, actual_append_count, UseFixedSizeMap());
 
 	// Early out: check if everything belongs to a single partition
 	optional_idx partition_index;
@@ -96,7 +96,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	ComputePartitionIndices(input.row_locations, append_count, state.partition_indices);
 
 	// Build the selection vector for the partitions
-	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count);
+	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count, UseFixedSizeMap());
 
 	// Early out: check if everything belongs to a single partition
 	optional_idx partition_index;
@@ -176,8 +176,8 @@ struct FixedSizeMapGetter {
 // LCOV_EXCL_STOP
 
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
-                                             const idx_t append_count) {
-	if (UseFixedSizeMap()) {
+                                             const idx_t append_count, const bool use_fixed_size_map) {
+	if (use_fixed_size_map) {
 		BuildPartitionSel<fixed_size_map_t<list_entry_t>, FixedSizeMapGetter<list_entry_t>>(
 		    state, state.fixed_partition_entries, append_sel, append_count);
 	} else {

@@ -130,6 +130,9 @@ void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumn
 		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
 		state.partition_buffers.emplace_back(CreatePartitionBuffer());
 	}
+
+	// Initialize fixed-size map
+	state.fixed_partition_entries.resize(RadixPartitioning::NumberOfPartitions(radix_bits));
 }
 
 void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {

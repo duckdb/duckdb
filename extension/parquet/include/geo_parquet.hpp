@@ -117,7 +117,10 @@ public:
 
 struct GeoParquetFileMetadata {
 public:
-	static unique_ptr<GeoParquetFileMetadata> Read(const duckdb_parquet::format::FileMetaData &file_meta_data);
+	// Try to read GeoParquet metadata. Returns nullptr if not found, invalid or the required spatial extension is not
+	// available.
+	static unique_ptr<GeoParquetFileMetadata> TryRead(const duckdb_parquet::format::FileMetaData &file_meta_data,
+	                                                  ClientContext &context);
 	void Write(duckdb_parquet::format::FileMetaData &file_meta_data) const;
 
 public:
@@ -131,8 +134,6 @@ public:
 	                                            idx_t max_define_p, idx_t max_repeat_p, ClientContext &context);
 
 	bool IsGeometryColumn(const string &column_name) const;
-
-	static bool IsSpatialExtensionInstalled(ClientContext &context);
 };
 
 } // namespace duckdb

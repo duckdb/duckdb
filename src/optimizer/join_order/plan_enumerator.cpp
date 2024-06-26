@@ -188,7 +188,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 	}
 
 	//! Neighbors should be reversed when iterating over them.
-	std::sort(neighbors.begin(), neighbors.end(), std::greater_equal<idx_t>());
+	std::sort(neighbors.begin(), neighbors.end(), std::greater<idx_t>());
 	for (idx_t i = 0; i < neighbors.size() - 1; i++) {
 		D_ASSERT(neighbors[i] > neighbors[i + 1]);
 	}

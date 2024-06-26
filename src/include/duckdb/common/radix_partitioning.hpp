@@ -89,6 +89,9 @@ protected:
 
 	void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const override;
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
+	idx_t MaxPartitionIndex() const override {
+		return RadixPartitioning::NumberOfPartitions(radix_bits) - 1;
+	}
 
 	static constexpr idx_t GetBufferSize(idx_t div) {
 		return STANDARD_VECTOR_SIZE / div == 0 ? 1 : STANDARD_VECTOR_SIZE / div;

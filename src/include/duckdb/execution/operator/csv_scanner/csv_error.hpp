@@ -65,7 +65,7 @@ public:
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
 	                              string &csv_row, idx_t byte_position);
 	//! Produces error for when the sniffer couldn't find viable options
-	static CSVError SniffingError(string &file_path);
+	static CSVError SniffingError(const string &file_path);
 	//! Produces error messages for unterminated quoted values
 	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
 	                                        LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
