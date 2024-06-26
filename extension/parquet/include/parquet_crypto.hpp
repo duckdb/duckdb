@@ -75,7 +75,8 @@ public:
 	//! Decrypt and read a Thrift object from the transport protocol
 	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const shared_ptr<EncryptionState> &aes_p);
 	//! Encrypt and write a Thrift object to the transport protocol
-	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key, const shared_ptr<EncryptionState> &aes_p);
+	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
+	                      const shared_ptr<EncryptionState> &aes_p);
 	//! Decrypt and read a buffer
 	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key,
 	                         const shared_ptr<EncryptionState> &aes_p);

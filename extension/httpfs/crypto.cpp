@@ -139,5 +139,4 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
 	}
 }
 
-
 } // namespace duckdb
