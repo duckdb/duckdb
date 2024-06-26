@@ -1,7 +1,6 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/execution/operator/helper/physical_streaming_sample.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #include <thread>
@@ -463,6 +462,7 @@ SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput
 		return SourceResultType::BLOCKED;
 	}
 #endif
+
 	return pipeline.source->GetData(context, chunk, input);
 }
 

@@ -5911,8 +5911,6 @@ const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value) {
 		return "Bernoulli";
 	case SampleMethod::RESERVOIR_SAMPLE:
 		return "Reservoir";
-	case SampleMethod::CHUNK_SAMPLE:
-		return "Chunk";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5928,9 +5926,6 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "Reservoir")) {
 		return SampleMethod::RESERVOIR_SAMPLE;
-	}
-	if (StringUtil::Equals(value, "Chunk")) {
-		return SampleMethod::CHUNK_SAMPLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
