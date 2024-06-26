@@ -4498,6 +4498,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "DUPLICATE_GROUPS";
 	case OptimizerType::REORDER_FILTER:
 		return "REORDER_FILTER";
+	case OptimizerType::SAMPLING_PUSHDOWN:
+		return "SAMPLING_PUSHDOWN";
 	case OptimizerType::EXTENSION:
 		return "EXTENSION";
 	default:
@@ -4566,6 +4568,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "REORDER_FILTER")) {
 		return OptimizerType::REORDER_FILTER;
+	}
+	if (StringUtil::Equals(value, "SAMPLING_PUSHDOWN")) {
+		return OptimizerType::SAMPLING_PUSHDOWN;
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return OptimizerType::EXTENSION;
@@ -5911,8 +5916,6 @@ const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value) {
 		return "Bernoulli";
 	case SampleMethod::RESERVOIR_SAMPLE:
 		return "Reservoir";
-	case SampleMethod::CHUNK_SAMPLE:
-		return "Chunk";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5928,9 +5931,6 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "Reservoir")) {
 		return SampleMethod::RESERVOIR_SAMPLE;
-	}
-	if (StringUtil::Equals(value, "Chunk")) {
-		return SampleMethod::CHUNK_SAMPLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

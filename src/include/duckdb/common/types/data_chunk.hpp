@@ -13,7 +13,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
-// #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -41,9 +40,9 @@ class Deserializer;
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-struct ChunkSampleOp {
-	bool do_chunk_sample = false;
-	double percentage = 0;
+struct SamplingPushdownOption {
+	bool do_system_sample = false;
+	double sample_rate = 0;
 };
 
 class DataChunk {
@@ -55,7 +54,8 @@ public:
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
 
-	ChunkSampleOp chunk_sample_op;
+	//! Options for sampling pushdown
+	SamplingPushdownOption sampling_pushdown_option;
 
 public:
 	inline idx_t size() const { // NOLINT
