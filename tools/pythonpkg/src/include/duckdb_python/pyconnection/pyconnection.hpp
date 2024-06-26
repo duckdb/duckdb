@@ -44,8 +44,8 @@ public:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
 	unique_ptr<DuckDBPyRelation> result;
-	shared_ptr<DuckDBPyConnection> parent;
-	vector<shared_ptr<DuckDBPyConnection>> cursors;
+	// shared_ptr<DuckDBPyConnection> parent;
+	vector<weak_ptr<DuckDBPyConnection>> cursors;
 	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::mutex py_connection_lock;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading

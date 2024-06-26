@@ -1379,18 +1379,22 @@ void DuckDBPyConnection::Close() {
 	database = nullptr;
 	temporary_views.clear();
 	// https://peps.python.org/pep-0249/#Connection.close
-	for (auto &cur : cursors) {
-		cur->parent = nullptr; // prevent Close to remove this element
-		cur->Close();
+	for (auto cur : cursors) {
+		// cur->parent = nullptr; // prevent Close to remove this element
+		auto cur_ptr = cur.lock();
+		if (cur_ptr)
+			cur_ptr->Close();
 	}
 	registered_functions.clear();
 	cursors.clear();
+	/*
 	if (parent) {
 		auto myself = shared_from_this();
 		auto it = std::find(parent->cursors.begin(), parent->cursors.end(), myself);
 		if (it != parent->cursors.end())
 			parent->cursors.erase(it);
 	}
+	*/
 }
 
 void DuckDBPyConnection::Interrupt() {
@@ -1416,7 +1420,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared_ptr<DuckDBPyConnection>();
 	res->database = database;
 	res->connection = make_uniq<Connection>(*res->database);
-	res->parent = shared_from_this();
+	// res->parent = shared_from_this();
 	cursors.push_back(res);
 	return res;
 }
@@ -1513,7 +1517,7 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
 	res.database = instance_cache.CreateInstance(database, config, cache_instance);
 	res.connection = make_uniq<Connection>(*res.database);
-	res.parent = nullptr;
+	// res.parent = nullptr;
 	auto &context = *res.connection->context;
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo scan_info(scan_fun);
@@ -1568,7 +1572,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 		return res;
 	}
 	res->connection = make_uniq<Connection>(*res->database);
-	res->parent = nullptr;
+	// res->parent = nullptr;
 	return res;
 }
 
