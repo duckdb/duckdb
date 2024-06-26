@@ -4569,6 +4569,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	if (StringUtil::Equals(value, "REORDER_FILTER")) {
 		return OptimizerType::REORDER_FILTER;
 	}
+	if (StringUtil::Equals(value, "SAMPLING_PUSHDOWN")) {
+		return OptimizerType::SAMPLING_PUSHDOWN;
+	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return OptimizerType::EXTENSION;
 	}
