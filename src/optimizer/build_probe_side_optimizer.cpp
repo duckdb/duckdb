@@ -120,8 +120,6 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 		FlipChildren(op);
 		D_ASSERT(swap_status == SWAP_STATUS::NOT_SWAPPED);
 		swap_status = SWAP_STATUS::SWAPPED;
-	} else {
-		auto not_swapped = 0;
 	}
 
 	// swap for preferred on probe side
