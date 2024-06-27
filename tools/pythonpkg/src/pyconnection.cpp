@@ -1380,7 +1380,12 @@ void DuckDBPyConnection::Close() {
 	temporary_views.clear();
 	// https://peps.python.org/pep-0249/#Connection.close
 	for (auto &cur : cursors) {
-		cur->Close();
+		auto cursor = cur.lock();
+		if (!cursor) {
+			// The cursor has already been closed
+			continue;
+		}
+		cursor->Close();
 	}
 	registered_functions.clear();
 	cursors.clear();
