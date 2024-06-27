@@ -3858,6 +3858,8 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "STRING_LITERAL";
 	case LogicalTypeId::INTEGER_LITERAL:
 		return "INTEGER_LITERAL";
+	case LogicalTypeId::VARINT:
+		return "VARINT";
 	case LogicalTypeId::UHUGEINT:
 		return "UHUGEINT";
 	case LogicalTypeId::HUGEINT:
@@ -3988,6 +3990,9 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "INTEGER_LITERAL")) {
 		return LogicalTypeId::INTEGER_LITERAL;
+	}
+	if (StringUtil::Equals(value, "VARINT")) {
+		return LogicalTypeId::VARINT;
 	}
 	if (StringUtil::Equals(value, "UHUGEINT")) {
 		return LogicalTypeId::UHUGEINT;
