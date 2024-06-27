@@ -202,28 +202,31 @@ public:
 		}
 
 		void ExecuteLead(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+			//	We treat input || delayed as a logical unified buffer
 			D_ASSERT(offset < 0);
 			// Input has been set up with the number of rows we CAN produce.
 			const idx_t count = input.size();
 			auto &curr = curr_chunk.data[0];
-			// Copy input[buffered:count] => result[:]
+			// Copy unified[buffered:count] => result[pos:]
 			idx_t pos = 0;
-			idx_t skipped = 0;
-			if (buffered < count) {
+			idx_t unified_offset = buffered;
+			if (unified_offset < count) {
 				curr_chunk.Reset();
 				executor.Execute(input, curr_chunk);
-				VectorOperations::Copy(curr, result, count, buffered, pos);
-				pos += count - buffered;
-			} else {
-				//	We may have to skip the front of the delayed buffer too.
-				skipped = buffered - count;
+				VectorOperations::Copy(curr, result, count, unified_offset, pos);
+				pos += count - unified_offset;
+				unified_offset = count;
 			}
-			// Copy delayed[skipped:] => result[pos:]
-			if (skipped < delayed.size()) {
+			// Copy unified[unified_offset:] => result[pos:]
+			idx_t unified_count = count + delayed.size();
+			if (unified_offset < unified_count) {
 				curr_chunk.Reset();
 				executor.Execute(delayed, curr_chunk);
-				VectorOperations::Copy(curr, result, delayed.size(), skipped, pos);
-				pos += delayed.size();
+				idx_t delayed_offset = unified_offset - count;
+				// Only copy as many values as we need
+				idx_t delayed_count = MinValue<idx_t>(delayed.size(), delayed_offset + (count - pos));
+				VectorOperations::Copy(curr, result, delayed_count, delayed_offset, pos);
+				pos += delayed_count - delayed_offset;
 			}
 			// Copy default[:count-pos] => result[pos:]
 			if (pos < count) {
