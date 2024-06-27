@@ -21,10 +21,13 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 		// it has! emit a constant directly
 		auto &data = param_data_it->second;
 		auto return_type = binder.parameters->GetReturnType(parameter_id);
+		bool is_literal =
+		    return_type.id() == LogicalTypeId::INTEGER_LITERAL || return_type.id() == LogicalTypeId::STRING_LITERAL;
 		auto constant = make_uniq<BoundConstantExpression>(data.GetValue());
 		constant->alias = expr.alias;
-		constant->return_type = return_type;
-
+		if (is_literal) {
+			return BindResult(std::move(constant));
+		}
 		auto cast = BoundCastExpression::AddCastToType(context, std::move(constant), return_type);
 		return BindResult(std::move(cast));
 	}
