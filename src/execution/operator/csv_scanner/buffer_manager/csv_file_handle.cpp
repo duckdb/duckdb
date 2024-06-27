@@ -1,9 +1,8 @@
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
-
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-
 #include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
