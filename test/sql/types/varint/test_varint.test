@@ -10,3 +10,7 @@ CREATE TABLE integers(a varint);
 
 statement ok
 insert into integers values (0), (1), (-1);
+
+query I
+select count(*) from integers where a >= 0::VARINT
+----
