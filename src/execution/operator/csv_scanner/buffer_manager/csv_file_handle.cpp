@@ -9,12 +9,20 @@ namespace duckdb {
 
 CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
                              const string &path_p, FileCompressionType compression)
-    : file_handle(std::move(file_handle_p)), path(path_p) {
+    : compression_type(compression), file_handle(std::move(file_handle_p)), path(path_p) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
 	is_pipe = file_handle->IsPipe();
-	uncompressed = compression == FileCompressionType::UNCOMPRESSED;
+	if (compression_type == FileCompressionType::AUTO_DETECT) {
+		if (StringUtil::EndsWith(path, ".gz")) {
+			compression_type = FileCompressionType::GZIP;
+		} else if (StringUtil::EndsWith(path, ".zst")) {
+			compression_type = FileCompressionType::ZSTD;
+		} else {
+			compression_type = FileCompressionType::UNCOMPRESSED;
+		}
+	}
 }
 
 unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
@@ -80,7 +88,7 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	if (!finished) {
 		finished = bytes_read == 0;
 	}
-	uncompressed_bytes_read += bytes_read;
+	uncompressed_bytes_read += static_cast<idx_t>(bytes_read);
 	return UnsafeNumericCast<idx_t>(bytes_read);
 }
 

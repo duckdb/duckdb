@@ -59,7 +59,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		if (!stream_wrapper) {
 			return UnsafeNumericCast<int64_t>(total_read);
 		}
-		current_position += stream_data.in_buff_end - stream_data.in_buff_start;
+		current_position += static_cast<idx_t>(stream_data.in_buff_end - stream_data.in_buff_start);
 		// ran out of buffer: read more data from the child stream
 		stream_data.out_buff_start = stream_data.out_buff.get();
 		stream_data.out_buff_end = stream_data.out_buff.get();

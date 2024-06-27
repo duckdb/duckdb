@@ -45,7 +45,7 @@ public:
 	                                             FileCompressionType compression);
 	static unique_ptr<CSVFileHandle> OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
 	                                          FileCompressionType compression);
-	bool uncompressed = false;
+	FileCompressionType compression_type;
 
 	double GetProgress();
 
