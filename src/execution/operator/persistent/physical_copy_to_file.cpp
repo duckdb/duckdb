@@ -46,11 +46,9 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
-	static constexpr idx_t PARTITIONED_WRITE_MAX_OPEN_FILES = 100;
-
-public:
-	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
+	explicit CopyToFunctionGlobalState(ClientContext &context, unique_ptr<GlobalFunctionData> global_state)
 	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)) {
+		max_open_files = ClientConfig::GetConfig(context).partitioned_write_max_open_files;
 	}
 	StorageLock lock;
 	atomic<idx_t> rows_copied;
@@ -62,6 +60,8 @@ public:
 	shared_ptr<GlobalHivePartitionState> partition_state;
 	//! File names
 	vector<Value> file_names;
+	//! Max open files
+	idx_t max_open_files;
 
 	void CreateDir(const string &dir_path, FileSystem &fs) {
 		if (created_directories.find(dir_path) != created_directories.end()) {
@@ -120,7 +120,7 @@ public:
 			return *active_write_entry->second;
 		}
 		// check if we need to close any writers before we can continue
-		if (active_partitioned_writes.size() >= PARTITIONED_WRITE_MAX_OPEN_FILES) {
+		if (active_partitioned_writes.size() >= max_open_files) {
 			// we need to! try to close writers
 			for (auto &entry : active_partitioned_writes) {
 				if (entry.second->active_writes == 0) {
@@ -342,7 +342,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			CheckDirectory(fs, file_path, overwrite_mode);
 		}
 
-		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
+		auto state = make_uniq<CopyToFunctionGlobalState>(context, nullptr);
 		if (!per_thread_output && rotate) {
 			auto global_lock = state->lock.GetExclusiveLock();
 			state->global_state = CreateFileState(context, *state, *global_lock);
@@ -355,8 +355,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	auto state =
-	    make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	auto state = make_uniq<CopyToFunctionGlobalState>(
+	    context, function.copy_to_initialize_global(context, *bind_data, file_path));
 	if (use_tmp_file) {
 		auto global_lock = state->lock.GetExclusiveLock();
 		state->AddFileName(*global_lock, file_path);
