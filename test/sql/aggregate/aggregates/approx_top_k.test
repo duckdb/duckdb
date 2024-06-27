@@ -1,0 +1,60 @@
+# name: test/sql/aggregate/aggregates/approx_top_k.test
+# description: Test approx top K operator
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT i%5 as even_groups, log(1 + i*i)::int as skewed_groups  FROM range(10000) t(i);
+
+# select all groups
+query I
+SELECT list_sort(approx_top_k(even_groups, 10)) FROM integers
+----
+[0, 1, 2, 3, 4]
+
+# select a subset of the groups
+# they should be ordered from most frequent to least frequent
+query I
+SELECT approx_top_k(skewed_groups, 5) FROM integers
+----
+[8, 7, 6, 5, 4]
+
+# varchars
+query I
+SELECT approx_top_k(concat('this is a long prefix', skewed_groups::VARCHAR), 5) FROM integers
+----
+[this is a long prefix8, this is a long prefix7, this is a long prefix6, this is a long prefix5, this is a long prefix4]
+
+# lists
+query I
+SELECT approx_top_k([skewed_groups], 5) FROM integers
+----
+[[8], [7], [6], [5], [4]]
+
+# structs
+query I
+SELECT approx_top_k({'i': skewed_groups}, 5) FROM integers
+----
+[{'i': 8}, {'i': 7}, {'i': 6}, {'i': 5}, {'i': 4}]
+
+statement error
+select approx_top_k(i, 0) from range(5) t(i)
+----
+k value must be > 0
+
+statement error
+select approx_top_k(i, -1) from range(5) t(i)
+----
+k value must be > 0
+
+statement error
+select approx_top_k(i, 999999999999999) from range(5) t(i)
+----
+k value must be < 1000000
+
+statement error
+select approx_top_k(i, NULL) from range(5) t(i)
+----
+NULL

@@ -1,49 +1,50 @@
-import clang.cindex
+from cxxheaderparser.parser import CxxParser, ParserOptions
+from cxxheaderparser.visitor import CxxVisitor
+from cxxheaderparser.preprocessor import make_pcpp_preprocessor
+from cxxheaderparser.parserstate import NamespaceBlockState
+from cxxheaderparser.types import EnumDecl
 import textwrap
 import os
-from typing import Optional
 
 
-def visit_enum(cursor):
-    enum_name = cursor.spelling
+class Visitor:
+    def on_enum(self, state: NamespaceBlockState, cursor: EnumDecl) -> None:
+        enum_name = cursor.typename.segments[0].format()
+        if '<' in enum_name:
+            raise Exception(
+                "Enum '{}' is an anonymous enum, please name it\n".format(cursor.doxygen[3:] if cursor.doxygen else '')
+            )
 
-    enum_constants = dict()
-    for enum_const in cursor.get_children():
-        if enum_const.kind == clang.cindex.CursorKind.ENUM_CONSTANT_DECL:
-            name = enum_const.spelling
-            tokens = enum_const.get_tokens()
-            if len(list(tokens)) == 1:
+        enum_constants = dict()
+        for enum_const in cursor.values:
+            name = enum_const.name.format()
+            if enum_const.value is None:
                 raise Exception(f"Enum constant '{name}' in '{enum_name}' does not have an explicit value assignment.")
-            value = enum_const.enum_value
+            value = enum_const.value.format()
             if value in enum_constants:
                 other_constant = enum_constants[value]
                 error = f"""
-                    Enum '{enum_name}' contains a duplicate value:
-                    Value {value} is defined for both '{other_constant}' and '{name}'
-                """
+                        Enum '{enum_name}' contains a duplicate value:
+                        Value {value} is defined for both '{other_constant}' and '{name}'
+                    """
                 error = textwrap.dedent(error)
                 raise Exception(error)
             enum_constants[value] = name
-    print(f"Succesfully verified the integrity of enum {enum_name} ({len(enum_constants)} entries)")
+        print(f"Succesfully verified the integrity of enum {enum_name} ({len(enum_constants)} entries)")
+
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: True
 
 
 def parse_enum(file_path):
     # Create index
-    index = clang.cindex.Index.create()
-
-    # Parse the file
-    tu = index.parse(file_path)
-
-    # Traverse the AST
-    for cursor in tu.cursor.walk_preorder():
-        try:
-            kind = cursor.kind
-            is_enum = kind == clang.cindex.CursorKind.ENUM_DECL
-        except:
-            is_enum = False
-        if not is_enum:
-            continue
-        visit_enum(cursor)
+    parser = CxxParser(
+        file_path,
+        None,
+        visitor=Visitor(),
+        options=ParserOptions(preprocessor=make_pcpp_preprocessor()),
+    )
+    parser.parse()
 
 
 if __name__ == "__main__":

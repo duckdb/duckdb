@@ -6,7 +6,7 @@ name Extract Year
 group date
 
 load
-CREATE TABLE dates AS SELECT DATE '1992-01-01' + concat(i % 10000, ' days')::interval AS d FROM range(0, 10000000) tbl(i);
+CREATE TABLE dates AS SELECT DATE '1992-01-01' + (i % 10000)::INT AS d FROM range(0, 1000000000) tbl(i);
 
 run
 SELECT MIN(EXTRACT(YEAR FROM d)) FROM dates

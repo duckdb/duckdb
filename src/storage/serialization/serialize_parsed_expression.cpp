@@ -292,6 +292,7 @@ void StarExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
 	serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
+	serializer.WritePropertyWithDefault<bool>(205, "unpacked", unpacked, false);
 }
 
 unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deserializer) {
@@ -301,6 +302,7 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", result->replace_list);
 	deserializer.ReadPropertyWithDefault<bool>(203, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", result->expr);
+	deserializer.ReadPropertyWithDefault<bool>(205, "unpacked", result->unpacked, false);
 	return std::move(result);
 }
 

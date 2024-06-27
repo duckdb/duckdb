@@ -48,19 +48,22 @@ else()
 endif()
 
 # Determine install paths
+# default to gnu standard installation directories (lib, bin, include)
+# https://cmake.org/cmake/help/latest/module/GNUInstallDirs.html
+include(GNUInstallDirs)
 set(INSTALL_LIB_DIR
-    lib
+    ${CMAKE_INSTALL_LIBDIR}
     CACHE PATH "Installation directory for libraries")
 set(INSTALL_BIN_DIR
-    bin
+    ${CMAKE_INSTALL_BINDIR}
     CACHE PATH "Installation directory for executables")
 set(INSTALL_INCLUDE_DIR
-    include
+    ${CMAKE_INSTALL_INCLUDEDIR}
     CACHE PATH "Installation directory for header files")
 if(WIN32 AND NOT CYGWIN)
   set(DEF_INSTALL_CMAKE_DIR cmake)
 else()
-  set(DEF_INSTALL_CMAKE_DIR lib/cmake/DuckDB)
+  set(DEF_INSTALL_CMAKE_DIR ${INSTALL_LIB_DIR}/cmake/DuckDB)
 endif()
 set(INSTALL_CMAKE_DIR
     ${DEF_INSTALL_CMAKE_DIR}
@@ -373,7 +376,6 @@ option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
-option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
@@ -568,7 +570,7 @@ if(NOT MSVC)
   endif()
 else()
   set(CMAKE_CXX_WINDOWS_FLAGS
-      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8 /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR")
+      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()

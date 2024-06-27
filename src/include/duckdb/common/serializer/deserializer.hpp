@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/serializer/serialization_data.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
-#include "duckdb/common/serializer/deserialization_data.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
@@ -22,7 +22,7 @@ namespace duckdb {
 class Deserializer {
 protected:
 	bool deserialize_enum_from_string = false;
-	DeserializationData data;
+	SerializationData data;
 
 public:
 	virtual ~Deserializer() {
@@ -163,6 +163,14 @@ public:
 	template <class T>
 	void Unset() {
 		return data.Unset<T>();
+	}
+
+	SerializationData &GetSerializationData() {
+		return data;
+	}
+
+	void SetSerializationData(const SerializationData &other) {
+		data = other;
 	}
 
 	template <class FUNC>

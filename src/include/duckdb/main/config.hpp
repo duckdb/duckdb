@@ -37,6 +37,7 @@ namespace duckdb {
 class BufferManager;
 class BufferPool;
 class CastFunctionSet;
+class CollationBinding;
 class ClientContext;
 class ErrorManager;
 class CompressionFunction;
@@ -45,6 +46,7 @@ class OperatorExtension;
 class StorageExtension;
 class ExtensionCallback;
 class SecretManager;
+class CompressionInfo;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -241,6 +243,14 @@ struct DBConfigOptions {
 	idx_t default_block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
+	//! The index_scan_percentage sets a threshold for index scans.
+	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
+	// rows match, we perform an index scan instead of a table scan.
+	double index_scan_percentage = 0.001;
+	//! The index_scan_max_count sets a threshold for index scans.
+	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
+	// rows match, we perform an index scan instead of a table scan.
+	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -318,15 +328,17 @@ public:
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
-	//! Return the list of possible compression functions for the specific physical type
-	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(PhysicalType data_type);
-	//! Return the compression function for the specified compression type/physical type combo
-	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type, PhysicalType data_type);
+	//! Return the list of possible compression functions for the provided compression information.
+	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const CompressionInfo &info);
+	//! Return the compression function matching the compression type and its compression information.
+	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
+	                                                                    const CompressionInfo &info);
 
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	void SetDefaultMaxMemory();
@@ -339,6 +351,7 @@ public:
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<CastFunctionSet> cast_functions;
+	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
 };
 

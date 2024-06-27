@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/function/function.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/map.hpp"
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/function/function.hpp"
 #include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -29,7 +29,33 @@ struct ColumnScanState;
 struct PrefetchState;
 struct SegmentScanState;
 
+class CompressionInfo {
+public:
+	CompressionInfo(const idx_t block_size, const PhysicalType &physical_type)
+	    : block_size(block_size), physical_type(physical_type) {
+	}
+
+public:
+	//! The size below which the segment is compacted on flushing.
+	idx_t GetCompactionFlushLimit() const {
+		return block_size / 5 * 4;
+	}
+	//! The block size for blocks using this compression.
+	idx_t GetBlockSize() const {
+		return block_size;
+	}
+	//! The physical type to compress.
+	PhysicalType GetPhysicalType() const {
+		return physical_type;
+	}
+
+private:
+	idx_t block_size;
+	PhysicalType physical_type;
+};
+
 struct AnalyzeState {
+	explicit AnalyzeState(const CompressionInfo &info) : info(info) {};
 	virtual ~AnalyzeState() {
 	}
 
@@ -43,9 +69,12 @@ struct AnalyzeState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	CompressionInfo info;
 };
 
 struct CompressionState {
+	explicit CompressionState(const CompressionInfo &info) : info(info) {};
 	virtual ~CompressionState() {
 	}
 
@@ -59,6 +88,8 @@ struct CompressionState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	CompressionInfo info;
 };
 
 struct CompressedSegmentState {

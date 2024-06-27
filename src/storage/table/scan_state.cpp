@@ -77,7 +77,7 @@ ParallelCollectionScanState::ParallelCollectionScanState()
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
     : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
-      parent(parent_p) {
+      valid_sel(STANDARD_VECTOR_SIZE), parent(parent_p) {
 }
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {

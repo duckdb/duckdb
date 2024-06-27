@@ -15,6 +15,11 @@ ATTACH '__TEST_DIR__/not_pow_of_two.db' (BLOCK_SIZE 123456);
 ----
 must be a power of two
 
+statement error
+ATTACH '__TEST_DIR__/exceeds_maximum.db' (BLOCK_SIZE 2147483648);
+----
+the block size must not be greater than the maximum 32-bit signed integer value
+
 # FIXME: once we implement this feature, we expect this to work
 statement error
 ATTACH '__TEST_DIR__/not_default.db' (BLOCK_SIZE 16384);

@@ -575,8 +575,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			throw InternalException("FSST Vector with non-string datatype found!");
 		}
 		auto str_compressed = reinterpret_cast<string_t *>(data)[index];
-		Value result = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(*vector), str_compressed.GetData(),
-		                                               str_compressed.GetSize());
+		auto decoder = FSSTVector::GetDecoder(*vector);
+		auto &decompress_buffer = FSSTVector::GetDecompressBuffer(*vector);
+		Value result = FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(),
+		                                               decompress_buffer);
 		return result;
 	}
 
@@ -777,8 +779,10 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::FSST_VECTOR: {
 		for (idx_t i = 0; i < count; i++) {
 			string_t compressed_string = reinterpret_cast<string_t *>(data)[i];
-			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(*this), compressed_string.GetData(),
-			                                            compressed_string.GetSize());
+			auto decoder = FSSTVector::GetDecoder(*this);
+			auto &decompress_buffer = FSSTVector::GetDecompressBuffer(*this);
+			Value val = FSSTPrimitives::DecompressValue(decoder, compressed_string.GetData(),
+			                                            compressed_string.GetSize(), decompress_buffer);
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 	} break;
@@ -803,6 +807,44 @@ string Vector::ToString(idx_t count) const {
 
 void Vector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
+}
+
+// TODO: add the size of validity masks to this
+idx_t Vector::GetAllocationSize(idx_t cardinality) const {
+	if (!type.IsNested()) {
+		auto physical_size = GetTypeIdSize(type.InternalType());
+		return cardinality * physical_size;
+	}
+	auto internal_type = type.InternalType();
+	switch (internal_type) {
+	case PhysicalType::LIST: {
+		auto physical_size = GetTypeIdSize(type.InternalType());
+		auto total_size = physical_size * cardinality;
+
+		auto child_cardinality = ListVector::GetListCapacity(*this);
+		auto &child_entry = ListVector::GetEntry(*this);
+		total_size += (child_entry.GetAllocationSize(child_cardinality));
+		return total_size;
+	}
+	case PhysicalType::ARRAY: {
+		auto child_cardinality = ArrayVector::GetTotalSize(*this);
+
+		auto &child_entry = ArrayVector::GetEntry(*this);
+		auto total_size = (child_entry.GetAllocationSize(child_cardinality));
+		return total_size;
+	}
+	case PhysicalType::STRUCT: {
+		idx_t total_size = 0;
+		auto &children = StructVector::GetEntries(*this);
+		for (auto &child : children) {
+			total_size += child->GetAllocationSize(cardinality);
+		}
+		return total_size;
+	}
+	default:
+		throw NotImplementedException("Vector::GetAllocationSize not implemented for type: %s", type.ToString());
+		break;
+	}
 }
 
 string Vector::ToString() const {
@@ -1962,7 +2004,18 @@ void *FSSTVector::GetDecoder(const Vector &vector) {
 	return fsst_string_buffer.GetDecoder();
 }
 
-void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder) {
+vector<unsigned char> &FSSTVector::GetDecompressBuffer(const Vector &vector) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	if (!vector.auxiliary) {
+		throw InternalException("GetDecompressBuffer called on FSST Vector without registered buffer");
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();
+	return fsst_string_buffer.GetDecompressBuffer();
+}
+
+void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder,
+                                 const idx_t string_block_limit) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 
 	if (!vector.auxiliary) {
@@ -1971,7 +2024,7 @@ void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_d
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
 
 	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();
-	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder);
+	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder, string_block_limit);
 }
 
 void FSSTVector::SetCount(Vector &vector, idx_t count) {
@@ -2010,8 +2063,10 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 		auto target_idx = dst_offset + i;
 		string_t compressed_string = ldata[source_idx];
 		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
-			tdata[target_idx] = FSSTPrimitives::DecompressValue(
-			    FSSTVector::GetDecoder(src), dst, compressed_string.GetData(), compressed_string.GetSize());
+			auto decoder = FSSTVector::GetDecoder(src);
+			auto &decompress_buffer = FSSTVector::GetDecompressBuffer(src);
+			tdata[target_idx] = FSSTPrimitives::DecompressValue(decoder, dst, compressed_string.GetData(),
+			                                                    compressed_string.GetSize(), decompress_buffer);
 		} else {
 			tdata[target_idx] = string_t(nullptr, 0);
 		}

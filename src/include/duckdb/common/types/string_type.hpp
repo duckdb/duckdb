@@ -209,6 +209,10 @@ public:
 		return StringComparisonOperators::Equals(*this, r);
 	}
 
+	bool operator!=(const string_t &r) const {
+		return !(*this == r);
+	}
+
 	bool operator>(const string_t &r) const {
 		return StringComparisonOperators::GreaterThan(*this, r);
 	}
