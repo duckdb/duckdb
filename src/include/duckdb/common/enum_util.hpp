@@ -258,6 +258,8 @@ enum class RenderMode : uint8_t;
 
 enum class ResultModifierType : uint8_t;
 
+enum class SWAP_STATUS : uint8_t;
+
 enum class SampleMethod : uint8_t;
 
 enum class SampleType : uint8_t;
@@ -685,6 +687,9 @@ const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
+
+template<>
+const char* EnumUtil::ToChars<SWAP_STATUS>(SWAP_STATUS value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
@@ -1157,6 +1162,9 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
+
+template<>
+SWAP_STATUS EnumUtil::FromString<SWAP_STATUS>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
