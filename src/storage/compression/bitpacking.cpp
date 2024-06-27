@@ -617,12 +617,12 @@ public:
 	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
-		auto dataptr = handle.Ptr();
+		auto data_ptr = handle.Ptr();
 
 		// load offset to bitpacking widths pointer
-		auto bitpacking_metadata_offset = Load<idx_t>(dataptr + segment.GetBlockOffset());
+		auto bitpacking_metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
 		bitpacking_metadata_ptr =
-		    dataptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
+		    data_ptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
 
 		// load the first group
 		LoadNextGroup();
@@ -634,7 +634,6 @@ public:
 	T decompression_buffer[BITPACKING_METADATA_GROUP_SIZE];
 
 	bitpacking_metadata_t current_group;
-
 	bitpacking_width_t current_width;
 	T current_frame_of_reference;
 	T current_constant;
@@ -646,11 +645,11 @@ public:
 
 public:
 	//! Loads the metadata for the current metadata group. This will set bitpacking_metadata_ptr to the next group.
-	//! this will also load any metadata that is at the start of a compressed buffer (e.g. the width, for, or constant
-	//! value) depending on the bitpacking mode for that group
+	//! It also loads any metadata at the start of a compressed buffer (e.g. the width, for, or constant value)
+	//! depending on the bitpacking mode of that group.
 	void LoadNextGroup() {
 		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         bitpacking_metadata_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
+		         bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockManager().GetBlockSize());
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 

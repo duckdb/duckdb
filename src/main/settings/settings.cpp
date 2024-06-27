@@ -1198,6 +1198,40 @@ Value MaximumTempDirectorySize::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Merge Join Threshold
+//===--------------------------------------------------------------------===//
+void MergeJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.merge_join_threshold = input.GetValue<int64_t>();
+}
+
+void MergeJoinThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).merge_join_threshold = ClientConfig().merge_join_threshold;
+}
+
+Value MergeJoinThreshold::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BIGINT(config.merge_join_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Nested Loop Join Threshold
+//===--------------------------------------------------------------------===//
+void NestedLoopJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.nested_loop_join_threshold = input.GetValue<int64_t>();
+}
+
+void NestedLoopJoinThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).nested_loop_join_threshold = ClientConfig().nested_loop_join_threshold;
+}
+
+Value NestedLoopJoinThreshold::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BIGINT(config.nested_loop_join_threshold);
+}
+
+//===--------------------------------------------------------------------===//
 // Old Implicit Casting
 //===--------------------------------------------------------------------===//
 void OldImplicitCasting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

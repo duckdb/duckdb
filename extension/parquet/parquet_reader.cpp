@@ -111,14 +111,10 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 		metadata->read(file_proto.get());
 	}
 
-	unique_ptr<GeoParquetFileMetadata> geo_meta = nullptr;
+	// Try to read the GeoParquet metadata (if present)
+	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 
-	// Only read the GeoParquet metadata if the spatial extension is installed
-	if (GeoParquetFileMetadata::IsSpatialExtensionInstalled(context)) {
-		geo_meta = GeoParquetFileMetadata::Read(*metadata);
-	}
-
-	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time, std::move(geo_meta));
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time, std::move(geo_metadata));
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
