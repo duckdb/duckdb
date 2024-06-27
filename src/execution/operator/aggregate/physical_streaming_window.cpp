@@ -108,7 +108,8 @@ public:
 	};
 
 	struct LeadLagState {
-		static constexpr idx_t MAX_BUFFER = STANDARD_VECTOR_SIZE;
+		//	Fixed size
+		static constexpr idx_t MAX_BUFFER = 2048U;
 
 		static bool ComputeOffset(ClientContext &context, BoundWindowExpression &wexpr, int64_t &offset) {
 			offset = 1;
@@ -491,7 +492,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		//	If we don't have enough to produce a single row,
 		//	then just delay more rows and return nothing
 		if (available <= state.lead_count) {
-			delayed.Append(input, true);
+			delayed.Append(input);
 			chunk.SetCardinality(0);
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
@@ -516,7 +517,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 				delayed.Reset();
 				shifted.Copy(delayed, 0);
 				// Copy input[:] => delayed[ragged:]
-				delayed.Append(input, true);
+				delayed.Append(input);
 			} else {
 				// Copy input[:count - prefixed] => chunk[prefixed:count]
 				const idx_t src_count = count - prefixed;
