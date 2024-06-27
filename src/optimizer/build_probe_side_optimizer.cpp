@@ -121,8 +121,8 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 
 	// swap for build side?
 	if (swap_bc_cardinality || swap_bc_build_sizes) {
-		FlipChildren(op);
 		D_ASSERT(swap_status == SWAP_STATUS::NOT_SWAPPED);
+		FlipChildren(op);
 		swap_status = SWAP_STATUS::SWAPPED;
 	}
 
