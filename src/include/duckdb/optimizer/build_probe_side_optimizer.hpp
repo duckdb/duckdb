@@ -40,7 +40,6 @@ public:
 
 private:
 	ClientContext &context;
-	SwapStatus swap_status;
 	vector<ColumnBinding> preferred_on_probe_side;
 };
 

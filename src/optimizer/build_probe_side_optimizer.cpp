@@ -24,8 +24,7 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 	}
 }
 
-BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op)
-    : context(context), swap_status(SwapStatus::NOT_SWAPPED) {
+BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op) : context(context) {
 	vector<ColumnBinding> updating_columns, current_op_bindings;
 	auto bindings = op.GetColumnBindings();
 	vector<ColumnBinding> row_id_bindings;
@@ -117,14 +116,12 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 
 	const auto flip_coefficient = right_side_metric - left_side_metric;
 
-	bool swapped = false;
+	bool swap = false;
 	// RHS is build side.
 	// if right_side metric is larger than left_side metric, then right_side is more costly to build on
 	// than the lhs. So we swap
 	if (flip_coefficient > 0) {
-		FlipChildren(op);
-		swapped = true;
-		;
+		swap = true;
 	}
 
 	// swap for preferred on probe side
@@ -134,9 +131,20 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 		auto bindings_right = right_child->GetColumnBindings();
 		auto bindings_in_left = ComputeOverlappingBindings(bindings_left, preferred_on_probe_side);
 		auto bindings_in_right = ComputeOverlappingBindings(bindings_right, preferred_on_probe_side);
-		if (!swapped && bindings_in_right > bindings_in_left) {
-			FlipChildren(op);
+		// (if the sides are planning to be swapped AND
+		// if more projected bindings are in the left (meaning right/build side after the swap)
+		// then swap them back. The projected bindings stay in the left/probe side.)
+		// OR
+		// (if the sides are planning not to be swapped AND
+		// if more projected bindings are in the right (meaning right/build)
+		// then swap them. The projected bindings are swapped to the left/probe side.)
+		if ((swap && bindings_in_left > bindings_in_right) || (!swap && bindings_in_right > bindings_in_left)) {
+			swap = !swap;
 		}
+	}
+
+	if (swap) {
+		FlipChildren(op);
 	}
 }
 
