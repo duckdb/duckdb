@@ -25,7 +25,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
@@ -36,7 +35,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
@@ -76,7 +74,7 @@ jobs:
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
@@ -111,8 +109,7 @@ jobs:
         choco install zip -y --force
         zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
     - uses: actions/upload-artifact@v3
       with:
@@ -120,62 +117,11 @@ jobs:
         path: |
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
-          duckdb_odbc-windows-amd64.zip
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
       shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
-
-    - name: Install ODBC Driver
-      shell: bash
-      run: |
-        tools/odbc/bin/Release/odbc_install.exe //CI //Install
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\DuckDB"
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
-
-    - name: Enable ODBC Trace HKCU
-      shell: bash
-      run: |
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceDll //t REG_SZ //d "C:\Windows\system32\odbctrac.dll"
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceFile //t REG_SZ //d "D:\a\duckdb\duckdb\ODBC_TRACE.log"
-        echo "----------------------------------------------------------------"
-        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
-
-    - name: Test Standard ODBC tests
-      if: ${{ inputs.skip_tests != 'true' }}
-      shell: bash
-      run: |
-        tools/odbc/bin/Release/test_odbc.exe
-
-    - name: Setup Register For Connection Tests
-      shell: bash
-      run: |
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v database //t REG_SZ //d "/d/a/duckdb/duckdb/test/sql/storage_version/storage_version.db"
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v access_mode //t REG_SZ //d "READ_ONLY"
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v allow_unsigned_extensions //t REG_SZ //d "true"
-        echo "----------------------------------------------------------------"
-        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB"
-
-    - name: Test Connection ODBC tests
-      if: ${{ inputs.skip_tests != 'true' }}
-      shell: bash
-      run: |
-        tools/odbc/bin/Release/test_connection_odbc.exe
-
-    - name: Print ODBC trace on failure
-      if: ${{ failure() }}
-      shell: bash
-      run: cat ODBC_TRACE.log
-      
-    - name: System.Data.ODBC tests
-      shell: bash
-      run: |
-        tools/odbc/bin/Release/SystemDataODBC_tests.exe
-
 
  win-release-32:
     name: Windows (32 Bit)

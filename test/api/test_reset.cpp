@@ -91,6 +91,8 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
+	    {"merge_join_threshold", {73}},
+	    {"nested_loop_join_threshold", {73}},
 	    {"memory_limit", {"4.0 GiB"}},
 	    {"storage_compatibility_version", {"v0.10.0"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
@@ -149,7 +151,9 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "custom_user_agent",
 	    "custom_profiling_settings",
 	    "custom_user_agent",
-	    "default_block_size"};
+	    "default_block_size",
+	    "index_scan_percentage",
+	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }
 

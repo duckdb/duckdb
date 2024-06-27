@@ -16,11 +16,22 @@ SELECT histogram(n, [10, 20, 30, 40, 50]) FROM obs
 ----
 {10=3, 20=2, 30=5, 40=3, 50=2}
 
+# other values are placed into the other bin
+query I
+SELECT histogram(n, [10, 20, 30, 40]) FROM obs
+----
+{10=3, 20=2, 30=5, 40=3, 9223372036854775807=2}
+
+query I
+SELECT histogram(n::double, [10, 20, 30, 40]) FROM obs
+----
+{10.0=3, 20.0=2, 30.0=5, 40.0=3, inf=2}
+
 # empty bins
 query I
 SELECT histogram(n, []) FROM obs
 ----
-{}
+{9223372036854775807=15}
 
 # bounds that are not sorted
 query I

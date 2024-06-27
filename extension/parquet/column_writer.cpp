@@ -4,21 +4,19 @@
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
+#include "geo_parquet.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #endif
 
 #include "lz4.hpp"
@@ -1211,6 +1209,47 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
+// Geometry Column Writer
+//===--------------------------------------------------------------------===//
+// This class just wraps another column writer, but also calculates the extent
+// of the geometry column by updating the geodata object with every written
+// vector.
+template <class WRITER_IMPL>
+class GeometryColumnWriter : public WRITER_IMPL {
+	GeoParquetColumnMetadata geo_data;
+	GeoParquetColumnMetadataWriter geo_data_writer;
+	string column_name;
+
+public:
+	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
+		// Just write normally
+		WRITER_IMPL::Write(state, vector, count);
+
+		// And update the geodata object
+		geo_data_writer.Update(geo_data, vector, count);
+	}
+	void FinalizeWrite(ColumnWriterState &state) override {
+		WRITER_IMPL::FinalizeWrite(state);
+
+		// Add the geodata object to the writer
+		this->writer.GetGeoParquetData().geometry_columns[column_name] = geo_data;
+	}
+
+public:
+	GeometryColumnWriter(ClientContext &context, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
+	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
+	    : WRITER_IMPL(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
+	      geo_data_writer(context), column_name(std::move(name)) {
+
+		auto &geo_data = writer.GetGeoParquetData();
+		if (geo_data.primary_geometry_column.empty()) {
+			// Set the first column to the primary column
+			geo_data.primary_geometry_column = column_name;
+		}
+	}
+};
+
+//===--------------------------------------------------------------------===//
 // String Column Writer
 //===--------------------------------------------------------------------===//
 class StringStatisticsState : public ColumnWriterStatistics {
@@ -2031,7 +2070,8 @@ void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 // Create Column Writer
 //===--------------------------------------------------------------------===//
 
-unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
+unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context,
+                                                             vector<duckdb_parquet::format::SchemaElement> &schemas,
                                                              ParquetWriter &writer, const LogicalType &type,
                                                              const string &name, vector<string> schema_path,
                                                              optional_ptr<const ChildFieldIDs> field_ids,
@@ -2073,7 +2113,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(child_types.size());
 		for (auto &child_type : child_types) {
-			child_writers.push_back(CreateWriterRecursive(schemas, writer, child_type.second, child_type.first,
+			child_writers.push_back(CreateWriterRecursive(context, schemas, writer, child_type.second, child_type.first,
 			                                              schema_path, child_field_ids, max_repeat, max_define + 1));
 		}
 		return make_uniq<StructColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
@@ -2112,8 +2152,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schemas.push_back(std::move(repeated_element));
 		schema_path.emplace_back(is_list ? "list" : "array");
 
-		auto child_writer = CreateWriterRecursive(schemas, writer, child_type, "element", schema_path, child_field_ids,
-		                                          max_repeat + 1, max_define + 2);
+		auto child_writer = CreateWriterRecursive(context, schemas, writer, child_type, "element", schema_path,
+		                                          child_field_ids, max_repeat + 1, max_define + 2);
 		if (is_list) {
 			return make_uniq<ListColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 			                                   std::move(child_writer), can_have_nulls);
@@ -2167,7 +2207,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		for (idx_t i = 0; i < 2; i++) {
 			// key needs to be marked as REQUIRED
 			bool is_key = i == 0;
-			auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], schema_path,
+			auto child_writer = CreateWriterRecursive(context, schemas, writer, kv_types[i], kv_names[i], schema_path,
 			                                          child_field_ids, max_repeat + 1, max_define + 2, !is_key);
 
 			child_writers.push_back(std::move(child_writer));
@@ -2191,6 +2231,11 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 	ParquetWriter::SetSchemaProperties(type, schema_element);
 	schemas.push_back(std::move(schema_element));
 	schema_path.push_back(name);
+
+	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
+		return make_uniq<GeometryColumnWriter<StringColumnWriter>>(context, writer, schema_idx, std::move(schema_path),
+		                                                           max_repeat, max_define, can_have_nulls, name);
+	}
 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:

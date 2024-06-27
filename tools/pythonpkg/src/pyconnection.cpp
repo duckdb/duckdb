@@ -441,7 +441,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object 
 
 	auto prep = PrepareQuery(std::move(last_statement));
 
-	if (!py::isinstance<py::list>(params_p)) {
+	if (!py::is_list_like(params_p)) {
 		throw InvalidInputException("executemany requires a list of parameter sets to be provided");
 	}
 	auto outer_list = py::list(params_p);
@@ -526,7 +526,7 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 
 case_insensitive_map_t<Value> TransformPreparedParameters(PreparedStatement &prep, const py::object &params) {
 	case_insensitive_map_t<Value> named_values;
-	if (py::isinstance<py::list>(params) || py::isinstance<py::tuple>(params)) {
+	if (py::is_list_like(params)) {
 		if (prep.n_param != py::len(params)) {
 			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.n_param,
 			                            py::len(params));
@@ -537,7 +537,7 @@ case_insensitive_map_t<Value> TransformPreparedParameters(PreparedStatement &pre
 			auto identifier = std::to_string(i + 1);
 			named_values[identifier] = std::move(value);
 		}
-	} else if (py::isinstance<py::dict>(params)) {
+	} else if (py::is_dict_like(params)) {
 		auto dict = py::cast<py::dict>(params);
 		named_values = DuckDBPyConnection::TransformPythonParamDict(dict);
 	} else {
@@ -749,7 +749,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 	named_parameter_map_t options;
 
 	if (!py::none().is(columns)) {
-		if (!py::isinstance<py::dict>(columns)) {
+		if (!py::is_dict_like(columns)) {
 			throw BinderException("read_json only accepts 'columns' as a dict[str, str]");
 		}
 		py::dict columns_dict = columns;
@@ -871,7 +871,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 
 	if (!py::none().is(dtype)) {
-		if (py::isinstance<py::dict>(dtype)) {
+		if (py::is_dict_like(dtype)) {
 			child_list_t<Value> struct_fields;
 			py::dict dtype_dict = dtype;
 			for (auto &kv : dtype_dict) {
@@ -883,7 +883,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 			}
 			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
 			bind_parameters["dtypes"] = std::move(dtype_struct);
-		} else if (py::isinstance<py::list>(dtype)) {
+		} else if (py::is_list_like(dtype)) {
 			vector<Value> list_values;
 			py::list dtype_list = dtype;
 			for (auto &child : dtype_list) {
@@ -911,7 +911,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 
 	if (!py::none().is(names_p)) {
-		if (!py::isinstance<py::list>(names_p)) {
+		if (!py::is_list_like(names_p)) {
 			throw InvalidInputException("read_csv only accepts 'names' as a list of strings");
 		}
 		vector<Value> names;
@@ -927,7 +927,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 
 	if (!py::none().is(na_values)) {
 		vector<Value> null_values;
-		if (!py::isinstance<py::str>(na_values) && !py::isinstance<py::list>(na_values)) {
+		if (!py::isinstance<py::str>(na_values) && !py::is_list_like(na_values)) {
 			throw InvalidInputException("read_csv only accepts 'na_values' as a string or a list of strings");
 		} else if (py::isinstance<py::str>(na_values)) {
 			null_values.push_back(Value(py::str(na_values)));
@@ -1163,7 +1163,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	if (params.is_none()) {
 		params = py::list();
 	}
-	if (!py::isinstance<py::list>(params)) {
+	if (!py::is_list_like(params)) {
 		throw InvalidInputException("'params' has to be a list of parameters");
 	}
 	if (!connection) {
@@ -1380,7 +1380,12 @@ void DuckDBPyConnection::Close() {
 	temporary_views.clear();
 	// https://peps.python.org/pep-0249/#Connection.close
 	for (auto &cur : cursors) {
-		cur->Close();
+		auto cursor = cur.lock();
+		if (!cursor) {
+			// The cursor has already been closed
+			continue;
+		}
+		cursor->Close();
 	}
 	registered_functions.clear();
 	cursors.clear();
@@ -1723,7 +1728,7 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 		default:
 			return NumpyObjectType::INVALID;
 		}
-	} else if (py::isinstance<py::dict>(object)) {
+	} else if (py::is_dict_like(object)) {
 		int dim = -1;
 		for (auto item : py::cast<py::dict>(object)) {
 			if (!IsValidNumpyDimensions(item.second, dim)) {
@@ -1731,7 +1736,7 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 			}
 		}
 		return NumpyObjectType::DICT;
-	} else if (py::isinstance<py::list>(object)) {
+	} else if (py::is_list_like(object)) {
 		int dim = -1;
 		for (auto item : py::cast<py::list>(object)) {
 			if (!IsValidNumpyDimensions(item, dim)) {

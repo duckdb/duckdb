@@ -134,12 +134,6 @@ endif
 ifeq (${BUILD_TPCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_TPCE=1
 endif
-ifeq (${BUILD_ODBC}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_ODBC_DRIVER=1
-endif
-ifneq ($(ODBC_CONFIG),)
-	CMAKE_VARS:=${CMAKE_VARS} -DODBC_CONFIG=${ODBC_CONFIG}
-endif
 ifeq (${BUILD_PYTHON}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_PYTHON=1 -DDUCKDB_EXTENSION_CONFIGS="tools/pythonpkg/duckdb_extension_config.cmake"
 endif
@@ -407,6 +401,9 @@ format-changes:
 format-main:
 	python3 scripts/format.py main --fix --noconfirm
 
+format-feature:
+	python3 scripts/format.py feature --fix --noconfirm
+
 third_party/sqllogictest:
 	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
 
@@ -439,7 +436,7 @@ generate-files:
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
-	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, libclang==16.0.6 is required to perform this step"
+	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
 	./scripts/generate_micro_extended.sh
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main

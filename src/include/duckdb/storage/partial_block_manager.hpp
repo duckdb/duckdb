@@ -126,6 +126,9 @@ public:
 		return unique_lock<mutex>(partial_block_lock);
 	}
 
+	//! Returns a reference to the underlying block manager.
+	BlockManager &GetBlockManager() const;
+
 protected:
 	BlockManager &block_manager;
 	PartialBlockType partial_block_type;

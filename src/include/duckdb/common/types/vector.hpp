@@ -472,8 +472,10 @@ struct FSSTVector {
 
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, string_t data);
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, const char *data, idx_t len);
-	DUCKDB_API static void RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder);
+	DUCKDB_API static void RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder,
+	                                       const idx_t string_block_limit);
 	DUCKDB_API static void *GetDecoder(const Vector &vector);
+	DUCKDB_API static vector<unsigned char> &GetDecompressBuffer(const Vector &vector);
 	//! Setting the string count is required to be able to correctly flatten the vector
 	DUCKDB_API static void SetCount(Vector &vector, idx_t count);
 	DUCKDB_API static idx_t GetCount(Vector &vector);
