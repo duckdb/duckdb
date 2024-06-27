@@ -45,7 +45,7 @@ public:
 	                                                          unique_ptr<FileBuffer> reusable_buffer);
 
 	//! Registers a transient memory buffer.
-	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size) final;
+	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, const idx_t block_size) final;
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed.
 	//! This buffer can be small (smaller than the block size of the temporary block manager).
 	//! Unpin and Pin are NOPs on this block of memory.

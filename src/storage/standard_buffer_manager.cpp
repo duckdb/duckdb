@@ -115,12 +115,14 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 	return std::move(r.reservation);
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size) {
-	const idx_t block_size = GetBlockSize();
+shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size) {
+	//	const idx_t block_size = GetBlockSize();
 	D_ASSERT(size <= block_size);
 
 	// TODO: this is problematic, because we sometimes want to NOT register small memory - as we cannot convert the
 	// block later...
+	// the block_size comes from 'higher up' the call stack and is not necessarily the temp_block_manager block size...
+	// :thinking:
 	if (size < block_size) {
 		return RegisterSmallMemory(size);
 	}

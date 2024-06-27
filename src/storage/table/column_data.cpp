@@ -494,7 +494,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	// The segment size is bound by the block size, but can be smaller.
 	idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
 	allocation_size += segment_size;
-	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
+	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size, block_size);
 	data.AppendSegment(l, std::move(new_segment));
 }
 

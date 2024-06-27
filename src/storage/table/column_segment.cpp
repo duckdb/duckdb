@@ -48,15 +48,16 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
-                                                                const idx_t start, const idx_t segment_size) {
+                                                                const idx_t start, const idx_t segment_size,
+                                                                const idx_t block_size) {
 
 	// Allocate a buffer for the uncompressed segment.
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto block = buffer_manager.RegisterTransientMemory(segment_size);
+	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_size);
 
 	// Get the segment compression function.
 	auto &config = DBConfig::GetConfig(db);
-	CompressionInfo info(block->block_manager.GetBlockSize(), type.InternalType());
+	CompressionInfo info(block_size, type.InternalType());
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, info);
 
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, *function,
