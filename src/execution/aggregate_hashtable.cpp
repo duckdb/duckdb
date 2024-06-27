@@ -558,54 +558,38 @@ void GroupedAggregateHashTable::UnpinData() {
 	partitioned_data->Unpin();
 }
 
-void GroupedAggregateHashTable::FetchAll(DataChunk &keys, DataChunk &payload) {
-	UnpinData();
+void GroupedAggregateHashTable::InitializeScan(AggregateHTScanState &scan_state) {
+	scan_state.partition_idx = 0;
 	vector<idx_t> group_indexes(layout.ColumnCount() - 1);
 	for (idx_t i = 0; i < group_indexes.size(); i++) {
 		group_indexes[i] = i;
 	}
 
-	for (auto &data_collection : partitioned_data->GetPartitions()) {
-		// Skip empty partitions
-		if (data_collection->Count() == 0) {
-			continue;
-		}
+	auto &partition = partitioned_data->GetPartitions()[scan_state.partition_idx];
+	partition->InitializeScan(scan_state.scan_states, group_indexes);
+}
 
-		// Initialise the scan state with the group indexes as the columns to scan
-		// which excludes the hash column
-		TupleDataScanState scan_state;
-		data_collection->InitializeScan(scan_state, group_indexes);
+bool GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk &distinct_rows,
+                                     DataChunk &payload_rows) {
+	if (scan_state.partition_idx >= partitioned_data->PartitionCount()) {
+		return false;
+	}
 
-		// Initialise chunk we are scanning into
-		DataChunk scan_chunk;
-		data_collection->InitializeScanChunk(scan_state, scan_chunk);
+	payload_rows.Reset();
+	distinct_rows.Reset();
+	auto &current_partition = partitioned_data->GetPartitions()[scan_state.partition_idx];
 
-		DataChunk scan_payload;
-		scan_payload.Initialize(Allocator::DefaultAllocator(), payload_types);
-
-		// As long as we can scan new chunks from a data collection,
-		// we will append them to our result.
-		while (data_collection->Scan(scan_state, scan_chunk)) {
-			scan_payload.Reset();
-			// Using the scanned key, we will retrieve our payload.
-			keys.Append(scan_chunk, true);
-			FetchAggregates(scan_chunk, scan_payload);
-			payload.Append(scan_payload, true);
+	if (current_partition->Scan(scan_state.scan_states, distinct_rows)) {
+		FetchAggregates(distinct_rows, payload_rows);
+		return true;
+	} else {
+		if (++(scan_state.partition_idx) >= partitioned_data->PartitionCount()) {
+			return false;
+		} else {
+			auto &new_partition = partitioned_data->GetPartitions()[scan_state.partition_idx];
+			new_partition->InitializeScan(scan_state.scan_states);
+			return true;
 		}
 	}
 }
-
-void GroupedAggregateHashTable::Reset() {
-	UnpinData();
-	stored_allocators.clear();
-	// Reset the partitioned data and the pointer table
-	partitioned_data->Reset();
-	InitializePartitionedData();
-	InitialCapacity();
-	ResetCount();
-	ClearPointerTable();
-	// Reset the stored allocators
-	Verify();
-}
-
 } // namespace duckdb

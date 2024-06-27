@@ -150,26 +150,26 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 			// and fill it up with the new hash table rows for the next iteration.
 			if (using_key && gstate.intermediate_table.Count() != 0) {
 				recurring_table->Reset();
-				// Set the size of the DataChunks to the maximum of the hash table size and the standard vector size.
-				idx_t size = std::max<idx_t>(gstate.ht->Count(), STANDARD_VECTOR_SIZE);
+				AggregateHTScanState scan_state;
+				gstate.ht->InitializeScan(scan_state);
+
 				// Initialise the DataChunks to read the resulting rows.
 				// One DataChunk for the payload, one for the keys.
-				DataChunk payload_rows;
-				DataChunk distinct_rows;
-				distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types, size);
-				payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types, size);
-
-				// Collect all currently available keys and their payload.
-				gstate.ht->FetchAll(distinct_rows, payload_rows);
-
 				// Create a new DataChunk to store the result.
 				DataChunk result;
-				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes(), size);
-				// Populate the result DataChunk with the keys and the payload.
-				PopulateChunk(result, payload_rows, payload_idx, false);
-				PopulateChunk(result, distinct_rows, distinct_idx, false);
-				// Append the result to the recurring table.
-				recurring_table->Append(result);
+				DataChunk payload_rows;
+				DataChunk distinct_rows;
+				distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
+				payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+
+				while (gstate.ht->Scan(scan_state, distinct_rows, payload_rows)) {
+					// Populate the result DataChunk with the keys and the payload.
+					PopulateChunk(result, distinct_rows, distinct_idx, false);
+					PopulateChunk(result, payload_rows, payload_idx, false);
+					// Append the result to the recurring table.
+					recurring_table->Append(result);
+				}
 			}
 
 			working_table->Reset();
