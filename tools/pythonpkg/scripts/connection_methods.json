@@ -623,12 +623,7 @@
 				"type": "Optional[bool | str]"
 			},
 			{
-				"name": "hive_types",
-				"default": "None",
-				"type": "Optional[Dict[str, str], List[str]]"
-			},
-			{
-				"name": "hive_types_autocast",
+				"name": "hive_partitioning",
 				"default": "None",
 				"type": "Optional[bool]"
 			},
@@ -638,7 +633,12 @@
 				"type": "Optional[bool]"
 			},
 			{
-				"name": "hive_partitioning",
+				"name": "hive_types",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "hive_types_autocast",
 				"default": "None",
 				"type": "Optional[bool]"
 			}

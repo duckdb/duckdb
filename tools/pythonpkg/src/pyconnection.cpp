@@ -220,8 +220,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("ignore_errors") = py::none(), py::arg("convert_strings_to_integers") = py::none(),
 	      py::arg("field_appearance_threshold") = py::none(), py::arg("map_inference_threshold") = py::none(),
 	      py::arg("maximum_sample_files") = py::none(), py::arg("filename") = py::none(),
-	      py::arg("hive_types") = py::none(), py::arg("hive_types_autocast") = py::none(),
-	      py::arg("union_by_name") = py::none(), py::arg("hive_partitioning") = py::none());
+	      py::arg("hive_partitioning") = py::none(), py::arg("union_by_name") = py::none(),
+	      py::arg("hive_types") = py::none(), py::arg("hive_types_autocast") = py::none());
 	m.def("extract_statements", &DuckDBPyConnection::ExtractStatements,
 	      "Parse the query string and extract the Statement object(s) produced", py::arg("query"));
 	m.def("sql", &DuckDBPyConnection::RunQuery,
