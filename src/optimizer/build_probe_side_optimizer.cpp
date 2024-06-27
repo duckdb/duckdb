@@ -113,17 +113,16 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	auto build_sizes = GetBuildSizes(op);
 	// special math.
 	auto left_side_metric = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
-	auto right_side_metric = rhs_cardinality * build_sizes.right_side;
+	auto right_side_metric = rhs_cardinality * build_sizes.right_side * MAGIC_RATIO_TO_SWAP_BUILD_SIDES;
 
-	// swap for cardinality
-	auto swap_bc_cardinality = !(rhs_cardinality < lhs_cardinality * cardinality_ratio);
-	auto swap_bc_build_sizes = right_side_metric > left_side_metric * MAGIC_RATIO_TO_SWAP_BUILD_SIDES;
+	const auto flip_coefficient = right_side_metric - left_side_metric;
 
-	// swap for build side?
-	if (swap_bc_cardinality || swap_bc_build_sizes) {
-		D_ASSERT(swap_status == SWAP_STATUS::NOT_SWAPPED);
+	// RHS is build side.
+	// if right_side metric is larger than left_side metric, then right_side is more costly to build on
+	// than the lhs. So we swap
+	if (flip_coefficient > 0) {
 		FlipChildren(op);
-		swap_status = SWAP_STATUS::SWAPPED;
+		swap_status = swap_status == SWAP_STATUS::SWAPPED ? SWAP_STATUS::NOT_SWAPPED : SWAP_STATUS::SWAPPED;
 	}
 
 	// swap for preferred on probe side
