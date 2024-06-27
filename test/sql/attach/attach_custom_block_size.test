@@ -48,13 +48,13 @@ DETACH default_size;
 # We detect the block allocation size in the header.
 
 statement ok
-ATTACH 'dbname.db' (BLOCK_SIZE 16384);
+ATTACH '__TEST_DIR__/dbname.db' (BLOCK_SIZE 16384);
 
 statement ok
 DETACH dbname;
 
 statement ok
-ATTACH 'dbname.db';
+ATTACH '__TEST_DIR__/dbname.db';
 
 statement error
 SET default_block_size = '123456';
@@ -74,7 +74,3 @@ SET default_block_size = '262144';
 
 statement ok
 ATTACH '__TEST_DIR__/default_size.db';
-
-# TODO: add test that (in a tx) attaches a new database file. Then, we ROLLBACK the transaction.
-# TODO: Then, we attach the same file with a different block size.
-# TODO: We'll create an error in SingleFileStorageManager::LoadDatabase, as we do not remove the file on ROLLBACK.
