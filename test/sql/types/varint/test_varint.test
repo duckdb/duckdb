@@ -7,3 +7,6 @@ PRAGMA enable_verification
 
 statement ok
 CREATE TABLE integers(a varint);
+
+statement ok
+insert into integers values (0), (1), (-1);

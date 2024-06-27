@@ -648,7 +648,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	}
 	case LogicalTypeId::VARINT: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
-		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
+		return Value::VARINT(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];

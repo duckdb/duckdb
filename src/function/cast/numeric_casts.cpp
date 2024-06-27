@@ -40,6 +40,7 @@ static BoundCastInfo InternalNumericCastSwitch(const LogicalType &source, const 
 	case LogicalTypeId::VARCHAR:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<SRC, duckdb::StringCast>);
 	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<SRC, duckdb::NumericTryCastToBit>);
 	default:
 		return DefaultCasts::TryVectorNullCast;
