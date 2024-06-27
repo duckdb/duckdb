@@ -2,8 +2,6 @@
 # description: Streaming window functions
 # group: [window]
 
-require vector_size 2048
-
 statement ok
 PRAGMA enable_verification
 
@@ -209,3 +207,18 @@ FROM range(5000) tbl(i);
 ----
 physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
+# Test multiple, unequal LEADs
+query III
+SELECT i, LEAD(i, 1) OVER(), LEAD(i, 2) OVER()
+FROM range(10) tbl(i)
+----
+0	1	2
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+6	7	8
+7	8	9
+8	9	NULL
+9	NULL	NULL
