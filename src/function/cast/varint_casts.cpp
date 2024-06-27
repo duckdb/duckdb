@@ -11,7 +11,7 @@ string_t IntToVarInt(int32_t int_value) {
 
 	// If negative, convert to two's complement
 	if (is_negative) {
-		int_value = ~(-int_value) + 1;
+		int_value = ~int_value;
 	}
 
 	// Determine the number of data bytes
@@ -21,7 +21,8 @@ string_t IntToVarInt(int32_t int_value) {
 	// Create the header
 	uint32_t header = data_byte_size;
 	if (!is_negative) {
-		header |= (1 << 23); // Set the sign bit for positive numbers
+		header = ~header;
+		// header |= (1 << 23); // Set the sign bit for positive numbers
 	}
 
 	string_t blob {data_byte_size + VARINT_HEADER_SIZE};
@@ -40,10 +41,50 @@ string_t IntToVarInt(int32_t int_value) {
 	return blob;
 }
 
-struct IntTryCastToBit {
+// Function to convert VARINT blob to a VARCHAR
+// FIXME: This should probably use a double
+string_t VarIntToVarchar(string_t &blob) {
+	if (blob.GetSize() < 4) {
+		throw std::invalid_argument("Invalid blob size.");
+	}
+	auto blob_ptr = blob.GetData();
+
+	// Extract the header
+	uint32_t header = (blob_ptr[0] << 16) | (blob_ptr[1] << 8) | blob_ptr[2];
+
+	// Determine the number of data bytes
+	int data_byte_size = blob.GetSize() - 3;
+
+	// Determine if the number is negative
+	bool is_negative = (header & (1 << 23)) == 0;
+
+	// Extract the data bytes
+	int64_t int_value = 0;
+	for (int i = 0; i < data_byte_size; ++i) {
+		int_value = (int_value << 8) | blob_ptr[3 + i];
+	}
+
+	// If negative, convert from two's complement
+	if (is_negative) {
+		int_value = ~int_value;
+
+		// int_value = -((~int_value + 1) & ((1LL << (data_byte_size * 8)) - 1));
+	}
+
+	return std::to_string(int_value);
+}
+
+struct IntTryCastToVarInt {
 	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
 		return StringVector::AddStringOrBlob(result, IntToVarInt(input));
+	}
+};
+
+struct VarIntTryCastToVarchar {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		return StringVector::AddStringOrBlob(result, VarIntToVarchar(input));
 	}
 };
 
@@ -53,7 +94,7 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 	// now switch on the result type
 	switch (source.id()) {
 	case LogicalTypeId::INTEGER:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<int32_t, duckdb::IntTryCastToBit>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int32_t, duckdb::IntTryCastToVarInt>);
 	case LogicalTypeId::DOUBLE:
 		return TryVectorNullCast;
 	default:
@@ -63,8 +104,11 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 
 BoundCastInfo DefaultCasts::VarintCastSwitch(BindCastInput &input, const LogicalType &source,
                                              const LogicalType &target) {
+	D_ASSERT(source.id() == LogicalTypeId::VARINT);
 	// now switch on the result type
 	switch (target.id()) {
+	case LogicalTypeId::VARCHAR:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::VarIntTryCastToVarchar>);
 	default:
 		return TryVectorNullCast;
 	}

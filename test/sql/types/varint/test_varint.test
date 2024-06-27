@@ -2,8 +2,23 @@
 # description: Test basics of varint type
 # group: [varint]
 
-statement ok
-PRAGMA enable_verification
+#statement ok
+#PRAGMA enable_verification
+
+query I
+select 0::varint
+----
+0
+
+query I
+select 1::varint
+----
+1
+
+query I
+select (-1)::varint
+----
+-1
 
 statement ok
 CREATE TABLE integers(a varint);
@@ -12,5 +27,52 @@ statement ok
 insert into integers values (0), (1), (-1);
 
 query I
-select count(*) from integers where a >= 0::VARINT
+select * from integers where a >= 0::VARINT
 ----
+0
+1
+
+query I
+select * from integers where a < 0::VARINT
+----
+-1
+
+statement ok
+insert into integers values (300), (-300), (-10);
+
+query I
+select * from integers where a >= 0::VARINT
+----
+0
+1
+300
+
+query I
+select * from integers where a < 0::VARINT
+----
+-1
+-300
+-10
+
+query I
+select * from integers where a >= (-10)::VARINT
+----
+0
+1
+300
+-10
+
+query I
+select * from integers where a = 1::VARINT
+----
+1
+
+query I
+select count(*) from integers where a = 0::VARINT
+----
+1
+
+query I
+select count(*) from integers where a < 0::VARINT
+----
+3
