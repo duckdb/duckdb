@@ -24,8 +24,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
-	error_handler(error_hander_p), iterator(iterator_p),
-      store_line_size(store_line_size_p), csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
+      error_handler(error_hander_p), iterator(iterator_p), store_line_size(store_line_size_p),
+      csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
       current_errors(state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(std::move(path_p)) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
@@ -795,9 +795,10 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
                                        const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size,
                                        CSVIterator boundary)
     : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, boundary), scanner_idx(0),
-      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size, iterator.pos.buffer_pos,
-             *error_handler, iterator, buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan,
-             lines_read, sniffing, buffer_manager->GetFilePath()) {
+      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
+             iterator.pos.buffer_pos, *error_handler, iterator,
+             buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
+             buffer_manager->GetFilePath()) {
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {

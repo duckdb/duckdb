@@ -158,9 +158,9 @@ class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
-	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler,
-	                  CSVIterator &iterator, bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan,
-	                  idx_t &lines_read, bool sniffing, string path);
+	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
+	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing,
+	                  string path);
 
 	~StringValueResult();
 
