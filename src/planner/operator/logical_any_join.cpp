@@ -5,8 +5,10 @@ namespace duckdb {
 LogicalAnyJoin::LogicalAnyJoin(JoinType type) : LogicalJoin(type, LogicalOperatorType::LOGICAL_ANY_JOIN) {
 }
 
-string LogicalAnyJoin::ParamsToString() const {
-	return condition->ToString();
+case_insensitive_map_t<string> LogicalAnyJoin::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	result["Condition"] = condition->ToString();
+	return result;
 }
 
 } // namespace duckdb

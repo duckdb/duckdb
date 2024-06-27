@@ -35,7 +35,7 @@ public:
 	bool delim_flipped = false;
 
 public:
-	string ParamsToString() const override;
+	case_insensitive_map_t<string> ParamsToString() const override;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);

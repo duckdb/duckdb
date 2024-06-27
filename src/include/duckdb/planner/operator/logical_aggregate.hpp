@@ -40,7 +40,7 @@ public:
 	vector<unique_ptr<BaseStatistics>> group_stats;
 
 public:
-	string ParamsToString() const override;
+	case_insensitive_map_t<string> ParamsToString() const override;
 
 	vector<ColumnBinding> GetColumnBindings() override;
 

@@ -22,7 +22,7 @@ vector<const_reference<PhysicalOperator>> PhysicalDelimJoin::GetChildren() const
 	return result;
 }
 
-string PhysicalDelimJoin::ParamsToString() const {
+case_insensitive_map_t<string> PhysicalDelimJoin::ParamsToString() const {
 	return join->ParamsToString();
 }
 

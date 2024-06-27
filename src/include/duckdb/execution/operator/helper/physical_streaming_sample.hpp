@@ -36,7 +36,7 @@ public:
 		return true;
 	}
 
-	string ParamsToString() const override;
+	case_insensitive_map_t<string> ParamsToString() const override;
 
 private:
 	void SystemSample(DataChunk &input, DataChunk &result, OperatorState &state) const;

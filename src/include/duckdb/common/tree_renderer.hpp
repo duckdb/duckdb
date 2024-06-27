@@ -105,7 +105,7 @@ private:
 	bool CanSplitOnThisChar(char l);
 	bool IsPadding(char l);
 	string RemovePadding(string l);
-	void SplitUpExtraInfo(const string &extra_info, vector<string> &result);
+	void SplitUpExtraInfo(const case_insensitive_map_t<string> &extra_info, vector<string> &result);
 	void SplitStringBuffer(const string &source, vector<string> &result);
 };
 

@@ -24,15 +24,24 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 	}
 }
 
-string PhysicalComparisonJoin::ParamsToString() const {
-	string extra_info = EnumUtil::ToString(join_type) + "\n";
-	for (auto &it : conditions) {
-		string op = ExpressionTypeToOperator(it.comparison);
-		extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
+case_insensitive_map_t<string> PhysicalComparisonJoin::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	result["Join Type"] = EnumUtil::ToString(join_type);
+	string condition_info;
+	for (idx_t i = 0; i < conditions.size(); i++) {
+		auto &join_condition = conditions[i];
+		if (i > 0) {
+			condition_info += "\n";
+		}
+		condition_info +=
+		    StringUtil::Format("%s %s %s", join_condition.left->GetName(),
+		                       ExpressionTypeToOperator(join_condition.comparison), join_condition.right->GetName());
+		// string op = ExpressionTypeToOperator(it.comparison);
+		// extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
 	}
-	extra_info += "\n[INFOSEPARATOR]\n";
-	extra_info += StringUtil::Format("EC: %llu\n", estimated_cardinality);
-	return extra_info;
+	result["Conditions"] = condition_info;
+	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
+	return result;
 }
 
 void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool has_null, DataChunk &input,

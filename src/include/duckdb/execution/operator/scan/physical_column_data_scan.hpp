@@ -39,7 +39,7 @@ public:
 		return true;
 	}
 
-	string ParamsToString() const override;
+	case_insensitive_map_t<string> ParamsToString() const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;

@@ -91,8 +91,10 @@ SourceResultType PhysicalReservoirSample::GetData(ExecutionContext &context, Dat
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-string PhysicalReservoirSample::ParamsToString() const {
-	return options->sample_size.ToString() + (options->is_percentage ? "%" : " rows");
+case_insensitive_map_t<string> PhysicalReservoirSample::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	result["Sample Size"] = options->sample_size.ToString() + (options->is_percentage ? "%" : " rows");
+	return result;
 }
 
 } // namespace duckdb

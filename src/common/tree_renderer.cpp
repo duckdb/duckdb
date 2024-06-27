@@ -313,27 +313,29 @@ void TreeRenderer::SplitStringBuffer(const string &source, vector<string> &resul
 	}
 }
 
-void TreeRenderer::SplitUpExtraInfo(const string &extra_info, vector<string> &result) {
+void TreeRenderer::SplitUpExtraInfo(const case_insensitive_map_t<string> &extra_info, vector<string> &result) {
 	if (extra_info.empty()) {
 		return;
 	}
-	if (!Utf8Proc::IsValid(extra_info.c_str(), extra_info.size())) {
-		return;
-	}
-	auto splits = StringUtil::Split(extra_info, "\n");
-	if (!splits.empty() && splits[0] != "[INFOSEPARATOR]") {
-		result.push_back(ExtraInfoSeparator());
-	}
-	for (auto &split : splits) {
-		if (split == "[INFOSEPARATOR]") {
-			result.push_back(ExtraInfoSeparator());
-			continue;
+	for (auto &item : extra_info) {
+		auto &text = item.second;
+		if (!Utf8Proc::IsValid(text.c_str(), text.size())) {
+			return;
 		}
-		string str = RemovePadding(split);
+	}
+
+	for (auto &item : extra_info) {
+		result.push_back(ExtraInfoSeparator());
+		string str = RemovePadding(item.second);
 		if (str.empty()) {
 			continue;
 		}
-		SplitStringBuffer(str, result);
+
+		str = item.first + ": " + str;
+		auto splits = StringUtil::Split(str, "\n");
+		for (auto &split : splits) {
+			SplitStringBuffer(split, result);
+		}
 	}
 }
 

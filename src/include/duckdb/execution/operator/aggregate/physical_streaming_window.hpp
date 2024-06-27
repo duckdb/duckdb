@@ -39,7 +39,7 @@ public:
 		return OrderPreservationType::FIXED_ORDER;
 	}
 
-	string ParamsToString() const override;
+	case_insensitive_map_t<string> ParamsToString() const override;
 
 private:
 	void ExecuteAggregate();

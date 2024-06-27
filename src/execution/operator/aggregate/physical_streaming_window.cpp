@@ -460,14 +460,16 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-string PhysicalStreamingWindow::ParamsToString() const {
-	string result;
+case_insensitive_map_t<string> PhysicalStreamingWindow::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	string projections;
 	for (idx_t i = 0; i < select_list.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			projections += "\n";
 		}
-		result += select_list[i]->GetName();
+		projections += select_list[i]->GetName();
 	}
+	result["Projections"] = projections;
 	return result;
 }
 

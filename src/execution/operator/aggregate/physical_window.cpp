@@ -808,14 +808,16 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-string PhysicalWindow::ParamsToString() const {
-	string result;
+case_insensitive_map_t<string> PhysicalWindow::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	string projections;
 	for (idx_t i = 0; i < select_list.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			projections += "\n";
 		}
-		result += select_list[i]->GetName();
+		projections += select_list[i]->GetName();
 	}
+	result["Projections"] = projections;
 	return result;
 }
 

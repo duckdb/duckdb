@@ -69,12 +69,18 @@ PhysicalProjection::CreateJoinProjection(vector<LogicalType> proj_types, const v
 	return make_uniq<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), estimated_cardinality);
 }
 
-string PhysicalProjection::ParamsToString() const {
-	string extra_info;
-	for (auto &expr : select_list) {
-		extra_info += expr->GetName() + "\n";
+case_insensitive_map_t<string> PhysicalProjection::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	string projections;
+	for (idx_t i = 0; i < select_list.size(); i++) {
+		if (i > 0) {
+			projections += "\n";
+		}
+		auto &expr = select_list[i];
+		projections += expr->GetName();
 	}
-	return extra_info;
+	result["Projections"] = projections;
+	return result;
 }
 
 } // namespace duckdb

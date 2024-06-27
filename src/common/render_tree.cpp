@@ -106,15 +106,14 @@ static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const QueryProfiler::TreeNode &op) {
-	string extra_info;
+	case_insensitive_map_t<string> extra_info;
 	if (op.profiling_info.Enabled(MetricsType::EXTRA_INFO)) {
 		extra_info = op.profiling_info.metrics.extra_info;
 	}
 	auto result = make_uniq<RenderTreeNode>(op.name, extra_info);
-	result->extra_text += "\n[INFOSEPARATOR]";
-	result->extra_text += "\n" + to_string(op.profiling_info.metrics.operator_cardinality);
+	result->extra_text["Cardinality"] = to_string(op.profiling_info.metrics.operator_cardinality);
 	string timing = StringUtil::Format("%.2f", op.profiling_info.metrics.operator_timing);
-	result->extra_text += "\n(" + timing + "s)";
+	result->extra_text["Timing"] = timing + "s";
 	return result;
 }
 

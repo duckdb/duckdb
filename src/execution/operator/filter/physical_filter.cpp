@@ -52,10 +52,10 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-string PhysicalFilter::ParamsToString() const {
-	auto result = expression->GetName();
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu", estimated_cardinality);
+case_insensitive_map_t<string> PhysicalFilter::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	result["Name"] = expression->GetName();
+	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
 

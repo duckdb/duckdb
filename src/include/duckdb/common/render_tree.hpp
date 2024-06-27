@@ -21,12 +21,12 @@ struct PipelineRenderNode;
 
 struct RenderTreeNode {
 public:
-	RenderTreeNode(const string &name, const string &extra_text) : name(name), extra_text(extra_text) {
+	RenderTreeNode(const string &name, case_insensitive_map_t<string> extra_text) : name(name), extra_text(extra_text) {
 	}
 
 public:
 	string name;
-	string extra_text;
+	case_insensitive_map_t<string> extra_text;
 };
 
 struct RenderTree {

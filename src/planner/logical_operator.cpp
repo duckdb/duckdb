@@ -47,14 +47,16 @@ string LogicalOperator::GetName() const {
 	return LogicalOperatorToString(type);
 }
 
-string LogicalOperator::ParamsToString() const {
-	string result;
+case_insensitive_map_t<string> LogicalOperator::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	string expressions_info;
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			expressions_info += "\n";
 		}
-		result += expressions[i]->GetName();
+		expressions_info += expressions[i]->GetName();
 	}
+	result["Expressions"] = expressions_info;
 	return result;
 }
 

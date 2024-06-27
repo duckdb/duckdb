@@ -640,18 +640,20 @@ SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, 
 	return SourceResultType::FINISHED;
 }
 
-string PhysicalUngroupedAggregate::ParamsToString() const {
-	string result;
+case_insensitive_map_t<string> PhysicalUngroupedAggregate::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	string aggregate_info;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
 		if (i > 0) {
-			result += "\n";
+			aggregate_info += "\n";
 		}
-		result += aggregates[i]->GetName();
+		aggregate_info += aggregates[i]->GetName();
 		if (aggregate.filter) {
-			result += " Filter: " + aggregate.filter->GetName();
+			aggregate_info += " Filter: " + aggregate.filter->GetName();
 		}
 	}
+	result["Aggregates"] = aggregate_info;
 	return result;
 }
 

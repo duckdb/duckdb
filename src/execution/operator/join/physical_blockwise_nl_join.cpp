@@ -203,10 +203,11 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-string PhysicalBlockwiseNLJoin::ParamsToString() const {
-	string extra_info = EnumUtil::ToString(join_type) + "\n";
-	extra_info += condition->GetName();
-	return extra_info;
+case_insensitive_map_t<string> PhysicalBlockwiseNLJoin::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	result["Join Type"] = EnumUtil::ToString(join_type);
+	result["Condition"] = condition->GetName();
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

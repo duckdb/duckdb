@@ -18,6 +18,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 class Event;
@@ -59,8 +60,8 @@ public:
 
 public:
 	virtual string GetName() const;
-	virtual string ParamsToString() const {
-		return "";
+	virtual case_insensitive_map_t<string> ParamsToString() const {
+		return case_insensitive_map_t<string>();
 	}
 	virtual string ToString() const;
 	void Print() const;

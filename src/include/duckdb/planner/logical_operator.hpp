@@ -14,6 +14,7 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -52,7 +53,7 @@ public:
 	void ResolveOperatorTypes();
 
 	virtual string GetName() const;
-	virtual string ParamsToString() const;
+	virtual case_insensitive_map_t<string> ParamsToString() const;
 	virtual string ToString() const;
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained

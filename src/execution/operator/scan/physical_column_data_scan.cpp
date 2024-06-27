@@ -96,13 +96,12 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 	state.SetPipelineSource(current, *this);
 }
 
-string PhysicalColumnDataScan::ParamsToString() const {
-	string result = "";
+case_insensitive_map_t<string> PhysicalColumnDataScan::ParamsToString() const {
+	case_insensitive_map_t<string> result;
 	switch (type) {
 	case PhysicalOperatorType::CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
-		result += "\n[INFOSEPARATOR]\n";
-		result += StringUtil::Format("idx: %llu", cte_index);
+		result["CTE Index"] = StringUtil::Format("%llu", cte_index);
 		break;
 	}
 	default:

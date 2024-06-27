@@ -53,7 +53,7 @@ public:
 	PerfectHashJoinStats perfect_join_statistics;
 
 public:
-	string ParamsToString() const override;
+	case_insensitive_map_t<string> ParamsToString() const override;
 
 public:
 	// Operator Interface

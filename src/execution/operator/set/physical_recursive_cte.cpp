@@ -223,12 +223,10 @@ vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() con
 	return {*this};
 }
 
-string PhysicalRecursiveCTE::ParamsToString() const {
-	string result = "";
-	result += "\n[INFOSEPARATOR]\n";
-	result += ctename;
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("idx: %llu", table_index);
+case_insensitive_map_t<string> PhysicalRecursiveCTE::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	result["CTE Name"] = ctename;
+	result["Table Index"] = StringUtil::Format("%llu", table_index);
 	return result;
 }
 
