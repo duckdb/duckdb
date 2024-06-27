@@ -52,7 +52,9 @@ duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info
 	if (index >= node.GetChildCount()) {
 		return nullptr;
 	}
-	return reinterpret_cast<duckdb_profiling_info>(node.GetChild(index));
+
+	ProfilingNode *profiling_info_ptr = node.GetChild(index).get();
+	return reinterpret_cast<duckdb_profiling_info>(profiling_info_ptr);
 }
 
 const char *duckdb_profiling_info_get_name(duckdb_profiling_info info) {

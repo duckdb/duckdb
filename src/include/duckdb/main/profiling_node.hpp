@@ -56,11 +56,11 @@ public:
 		return profiling_info;
 	}
 
-	ProfilingNode *GetChild(idx_t idx) {
+	optional_ptr<ProfilingNode> GetChild(idx_t idx) {
 		return children[idx].get();
 	}
 
-	ProfilingNode *AddChild(unique_ptr<ProfilingNode> child) {
+	optional_ptr<ProfilingNode> AddChild(unique_ptr<ProfilingNode> child) {
 		children.push_back(std::move(child));
 		return children.back().get();
 	}
