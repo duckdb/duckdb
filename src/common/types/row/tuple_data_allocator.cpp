@@ -121,7 +121,7 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
-		row_blocks.emplace_back(buffer_manager, (idx_t)Storage::BLOCK_SIZE);
+		row_blocks.emplace_back(buffer_manager, static_cast<idx_t>(Storage::BLOCK_SIZE));
 	}
 	result.row_block_index = NumericCast<uint32_t>(row_blocks.size() - 1);
 	auto &row_block = row_blocks[result.row_block_index];
@@ -142,9 +142,9 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 		if (total_heap_size == 0) {
 			result.SetHeapEmpty();
 		} else {
-			const auto heap_remaining = MaxValue<idx_t>(heap_blocks.empty() ? (idx_t)Storage::BLOCK_SIZE
-			                                                                : heap_blocks.back().RemainingCapacity(),
-			                                            heap_sizes[append_offset]);
+			const auto heap_remaining =
+			    MaxValue<idx_t>(heap_blocks.empty() ? Storage::BLOCK_SIZE : heap_blocks.back().RemainingCapacity(),
+			                    heap_sizes[append_offset]);
 
 			if (total_heap_size <= heap_remaining) {
 				// Everything fits
@@ -167,7 +167,7 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 			} else {
 				// Allocate heap block (if needed)
 				if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
-					const auto size = MaxValue<idx_t>((idx_t)Storage::BLOCK_SIZE, heap_sizes[append_offset]);
+					const auto size = MaxValue<idx_t>(Storage::BLOCK_SIZE, heap_sizes[append_offset]);
 					heap_blocks.emplace_back(buffer_manager, size);
 				}
 				result.heap_block_index = NumericCast<uint32_t>(heap_blocks.size() - 1);

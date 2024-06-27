@@ -609,7 +609,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const Vector
 }
 
 template <class T>
-static void TupleDataTemplatedScatter(const Vector &source, const TupleDataVectorFormat &source_format,
+static void TupleDataTemplatedScatter(const Vector &, const TupleDataVectorFormat &source_format,
                                       const SelectionVector &append_sel, const idx_t append_count,
                                       const TupleDataLayout &layout, const Vector &row_locations,
                                       Vector &heap_locations, const idx_t col_idx, const UnifiedVectorFormat &,
@@ -689,10 +689,8 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 	D_ASSERT(struct_layout.ColumnCount() == struct_sources.size());
 
 	// Set the validity of the entries within the STRUCTs
-	const auto validity_bytes = ValidityBytes::SizeInBytes(struct_layout.ColumnCount());
-	for (idx_t i = 0; i < append_count; i++) {
-		memset(struct_target_locations[i], ~0, validity_bytes);
-	}
+	InitializeValidityMask(struct_target_locations, append_count,
+	                       ValidityBytes::SizeInBytes(struct_layout.ColumnCount()));
 
 	// Recurse through the struct children
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
@@ -1125,13 +1123,16 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
 	for (idx_t i = 0; i < scan_count; i++) {
 		const auto &source_row = source_locations[scan_sel.get_index(i)];
 		const auto target_idx = target_sel.get_index(i);
+		target_data[target_idx] = Load<T>(source_row + offset_in_row);
 		ValidityBytes row_mask(source_row);
-		if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
-			target_data[target_idx] = Load<T>(source_row + offset_in_row);
-			TupleDataValueVerify<T>(target.GetType(), target_data[target_idx]);
-		} else {
+		if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 			target_validity.SetInvalid(target_idx);
 		}
+#ifdef DEBUG
+		else {
+			TupleDataValueVerify<T>(target.GetType(), target_data[target_idx]);
+		}
+#endif
 	}
 }
 
