@@ -139,8 +139,7 @@ template <bool LAST, bool SKIP_NULLS>
 struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	using STATE = FirstState<string_t>;
 
-	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t , Vector &state_vector,
-	                   idx_t count) {
+	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
