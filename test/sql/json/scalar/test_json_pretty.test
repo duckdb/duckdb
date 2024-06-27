@@ -7,27 +7,40 @@ require json
 statement ok
 pragma enable_verification
 
-mode output_hash
-
-query T
-SELECT json_pretty('[1,2,{"a":43,    "g":[true, true]}]');
+query I
+SELECT json_pretty('[1,2,{"a":43,    "g":[true, true]}]') = '[
+    1,
+    2,
+    {
+        "a": 43,
+        "g": [
+            true,
+            true
+        ]
+    }
+]'
 ----
-1 values hashing to d41d8cd98f00b204e9800998ecf8427e
+true
 
-# The Hash corresponds to the output below.
-# It was needed as there was some problem with the escape characters.
+query I
+SELECT json_pretty(NULL)
+----
+NULL
 
-# json_pretty('[1,2,{"a":43,    "g":[true, true]}]')
-# VARCHAR
-# [ Rows: 1]
-# [
-#     1,
-#     2,
-#     {
-#         "a": 43,
-#         "g": [
-#             true,
-#             true
-#         ]
-#     }
-# ]
+query I
+SELECT json_pretty('null'::json);
+----
+null
+
+query I
+SELECT json_pretty('[1,2,null,   {"a": null},  42]'::json) = '[
+    1,
+    2,
+    null,
+    {
+        "a": null
+    },
+    42
+]'
+----
+true
