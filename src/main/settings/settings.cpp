@@ -1260,7 +1260,22 @@ void PartitionedWriteFlushThreshold::SetLocal(ClientContext &context, const Valu
 }
 
 Value PartitionedWriteFlushThreshold::GetSetting(const ClientContext &context) {
-	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).partitioned_write_flush_threshold));
+	return Value::UBIGINT(ClientConfig::GetConfig(context).partitioned_write_flush_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Partitioned Write Flush Threshold
+//===--------------------------------------------------------------------===//
+void PartitionedWriteMaxOpenFiles::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).partitioned_write_max_open_files = ClientConfig().partitioned_write_max_open_files;
+}
+
+void PartitionedWriteMaxOpenFiles::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).partitioned_write_max_open_files = input.GetValue<idx_t>();
+}
+
+Value PartitionedWriteMaxOpenFiles::GetSetting(const ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).partitioned_write_max_open_files);
 }
 
 //===--------------------------------------------------------------------===//
