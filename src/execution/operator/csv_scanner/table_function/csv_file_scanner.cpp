@@ -192,13 +192,21 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	auto &state_machine_cache = CSVStateMachineCache::Get(context);
 
 	if (file_idx < bind_data.column_info.size()) {
-		// Serialized Union By name
+		// (Serialized) Union By name
 		names = bind_data.column_info[file_idx].names;
 		types = bind_data.column_info[file_idx].types;
-		options.dialect_options.num_cols = names.size();
-		if (options.auto_detect) {
-			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
-			sniffer.SniffCSV();
+		if (file_idx < bind_data.union_readers.size()) {
+			// union readers - use cached options
+			D_ASSERT(names == bind_data.union_readers[file_idx]->names);
+			D_ASSERT(types == bind_data.union_readers[file_idx]->types);
+			options = bind_data.union_readers[file_idx]->options;
+		} else {
+			// Serialized union by name - sniff again
+			options.dialect_options.num_cols = names.size();
+			if (options.auto_detect) {
+				CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+				sniffer.SniffCSV();
+			}
 		}
 		state_machine = make_shared_ptr<CSVStateMachine>(
 		    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
