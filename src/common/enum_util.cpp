@@ -101,7 +101,6 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -5899,29 +5898,6 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LIMIT_PERCENT_MODIFIER")) {
 		return ResultModifierType::LIMIT_PERCENT_MODIFIER;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<SWAP_STATUS>(SWAP_STATUS value) {
-	switch(value) {
-	case SWAP_STATUS::NOT_SWAPPED:
-		return "NOT_SWAPPED";
-	case SWAP_STATUS::SWAPPED:
-		return "SWAPPED";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-SWAP_STATUS EnumUtil::FromString<SWAP_STATUS>(const char *value) {
-	if (StringUtil::Equals(value, "NOT_SWAPPED")) {
-		return SWAP_STATUS::NOT_SWAPPED;
-	}
-	if (StringUtil::Equals(value, "SWAPPED")) {
-		return SWAP_STATUS::SWAPPED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

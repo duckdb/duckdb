@@ -15,11 +15,6 @@
 
 namespace duckdb {
 
-enum class SWAP_STATUS : uint8_t {
-	NOT_SWAPPED = 0,
-	SWAPPED = 1,
-};
-
 struct BuildSize {
 	idx_t left_side;
 	idx_t right_side;
@@ -45,7 +40,7 @@ public:
 
 private:
 	ClientContext &context;
-	SWAP_STATUS swap_status;
+	SwapStatus swap_status;
 	vector<ColumnBinding> preferred_on_probe_side;
 };
 

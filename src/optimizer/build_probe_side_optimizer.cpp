@@ -25,7 +25,7 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 }
 
 BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op)
-    : context(context), swap_status(SWAP_STATUS::NOT_SWAPPED) {
+    : context(context), swap_status(SwapStatus::NOT_SWAPPED) {
 	vector<ColumnBinding> updating_columns, current_op_bindings;
 	auto bindings = op.GetColumnBindings();
 	vector<ColumnBinding> row_id_bindings;
@@ -117,25 +117,24 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 
 	const auto flip_coefficient = right_side_metric - left_side_metric;
 
+	bool swapped = false;
 	// RHS is build side.
 	// if right_side metric is larger than left_side metric, then right_side is more costly to build on
 	// than the lhs. So we swap
 	if (flip_coefficient > 0) {
 		FlipChildren(op);
-		swap_status = swap_status == SWAP_STATUS::SWAPPED ? SWAP_STATUS::NOT_SWAPPED : SWAP_STATUS::SWAPPED;
+		swapped = true;
+		;
 	}
 
 	// swap for preferred on probe side
 	if (rhs_cardinality == lhs_cardinality * cardinality_ratio && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
-		auto bindings_left = swap_status == SWAP_STATUS::NOT_SWAPPED ? left_child->GetColumnBindings()
-		                                                             : right_child->GetColumnBindings();
-		auto bindings_right = swap_status == SWAP_STATUS::NOT_SWAPPED ? right_child->GetColumnBindings()
-		                                                              : left_child->GetColumnBindings();
+		auto bindings_left = left_child->GetColumnBindings();
+		auto bindings_right = right_child->GetColumnBindings();
 		auto bindings_in_left = ComputeOverlappingBindings(bindings_left, preferred_on_probe_side);
 		auto bindings_in_right = ComputeOverlappingBindings(bindings_right, preferred_on_probe_side);
-		if ((swap_status == SWAP_STATUS::NOT_SWAPPED && bindings_in_right > bindings_in_left) ||
-		    (swap_status == SWAP_STATUS::SWAPPED && bindings_in_left > bindings_in_right)) {
+		if (!swapped && bindings_in_right > bindings_in_left) {
 			FlipChildren(op);
 		}
 	}
