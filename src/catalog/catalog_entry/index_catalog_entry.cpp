@@ -3,12 +3,19 @@
 namespace duckdb {
 
 IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
-    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info.index_name), sql(info.sql), options(info.options),
-      index_type(info.index_type), index_constraint_type(info.constraint_type), column_ids(info.column_ids) {
+    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, std::move(info.index_name)), sql(std::move(info.sql)),
+      options(std::move(info.options)), index_type(info.index_type), index_constraint_type(info.constraint_type),
+      column_ids(std::move(info.column_ids)) {
 
 	this->temporary = info.temporary;
-	this->dependencies = info.dependencies;
-	this->comment = info.comment;
+	this->dependencies = std::move(info.dependencies);
+	this->comment = std::move(info.comment);
+	for (auto &expr : expressions) {
+		expressions.push_back(std::move(expr));
+	}
+	for (auto &parsed_expr : info.parsed_expressions) {
+		parsed_expressions.push_back(std::move(parsed_expr));
+	}
 }
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
@@ -42,12 +49,12 @@ string IndexCatalogEntry::ToSQL() const {
 	return info->ToString();
 }
 
-bool IndexCatalogEntry::IsUnique() {
+bool IndexCatalogEntry::IsUnique() const {
 	return (index_constraint_type == IndexConstraintType::UNIQUE ||
 	        index_constraint_type == IndexConstraintType::PRIMARY);
 }
 
-bool IndexCatalogEntry::IsPrimary() {
+bool IndexCatalogEntry::IsPrimary() const {
 	return (index_constraint_type == IndexConstraintType::PRIMARY);
 }
 

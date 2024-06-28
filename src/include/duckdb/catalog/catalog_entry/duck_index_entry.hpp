@@ -27,13 +27,14 @@ struct IndexDataTableInfo {
 class DuckIndexEntry : public IndexCatalogEntry {
 public:
 	//! Create a DuckIndexEntry
-	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
+	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info, TableCatalogEntry &table);
+	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
+	               shared_ptr<IndexDataTableInfo> storage_info);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	//! The indexed table information
 	shared_ptr<IndexDataTableInfo> info;
-
 	//! We need the initial size of the index after the CREATE INDEX statement,
 	//! as it is necessary to determine the auto checkpoint threshold
 	idx_t initial_index_size;
