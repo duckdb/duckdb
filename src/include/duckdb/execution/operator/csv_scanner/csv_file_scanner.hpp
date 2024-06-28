@@ -16,8 +16,27 @@
 
 namespace duckdb {
 struct ReadCSVData;
+class CSVFileScan;
+
+struct CSVUnionData {
+	~CSVUnionData();
+
+	string file_name;
+	vector<string> names;
+	vector<LogicalType> types;
+	CSVReaderOptions options;
+	unique_ptr<CSVFileScan> reader;
+
+	const string &GetFileName() {
+		return file_name;
+	}
+};
+
 //! Struct holding information over a CSV File we will scan
 class CSVFileScan {
+public:
+	using UNION_READER_DATA = unique_ptr<CSVUnionData>;
+
 public:
 	//! Constructor for when a CSV File Scan is being constructed over information acquired during sniffing
 	//! This means the options are alreadu set, and the buffer manager is already up and runinng.
@@ -39,8 +58,28 @@ public:
 	void InitializeProjection();
 	void Finish();
 
+	static unique_ptr<CSVUnionData> StoreUnionReader(unique_ptr<CSVFileScan> scan_p, idx_t file_idx) {
+		auto data = make_uniq<CSVUnionData>();
+		if (file_idx == 0) {
+			data->file_name = scan_p->file_path;
+			data->options = scan_p->options;
+			data->names = scan_p->names;
+			data->types = scan_p->types;
+			data->reader = std::move(scan_p);
+		} else {
+			data->file_name = scan_p->file_path;
+			data->options = std::move(scan_p->options);
+			data->names = std::move(scan_p->names);
+			data->types = std::move(scan_p->types);
+		}
+		data->options.auto_detect = false;
+		return data;
+	}
+
 	//! Initialize the actual names and types to be scanned from the file
 	void InitializeFileNamesTypes();
+
+public:
 	const string file_path;
 	//! File Index
 	idx_t file_idx;

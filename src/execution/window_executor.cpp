@@ -155,11 +155,11 @@ struct WindowColumnIterator {
 		return iterator(a.coll, a.pos + n);
 	}
 
-	friend inline iterator &operator-(const iterator &a, difference_type n) {
+	friend inline iterator operator-(const iterator &a, difference_type n) {
 		return iterator(a.coll, a.pos - n);
 	}
 
-	friend inline iterator &operator+(difference_type n, const iterator &a) {
+	friend inline iterator operator+(difference_type n, const iterator &a) {
 		return a + n;
 	}
 	friend inline difference_type operator-(const iterator &a, const iterator &b) {
