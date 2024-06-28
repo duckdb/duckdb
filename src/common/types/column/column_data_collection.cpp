@@ -15,7 +15,7 @@ namespace duckdb {
 struct ColumnDataMetaData;
 
 typedef void (*column_data_copy_function_t)(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
-                                            Vector &source, idx_t offset, idx_t copy_count, const idx_t block_size);
+                                            Vector &source, idx_t offset, idx_t copy_count);
 
 struct ColumnDataCopyFunction {
 	column_data_copy_function_t function;
@@ -389,7 +389,7 @@ struct StructValueCopy {
 
 template <class OP>
 static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
-                                    Vector &source, idx_t offset, idx_t count, const idx_t block_size) {
+                                    Vector &source, idx_t offset, idx_t count) {
 	auto &segment = meta_data.segment;
 	auto &append_state = meta_data.state;
 
@@ -434,19 +434,19 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 
 template <class T>
 static void ColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                           idx_t offset, idx_t copy_count, const idx_t block_size) {
-	TemplatedColumnDataCopy<StandardValueCopy<T>>(meta_data, source_data, source, offset, copy_count, block_size);
+                           idx_t offset, idx_t copy_count) {
+	TemplatedColumnDataCopy<StandardValueCopy<T>>(meta_data, source_data, source, offset, copy_count);
 }
 
 template <>
 void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                              idx_t offset, idx_t copy_count, const idx_t block_size) {
+                              idx_t offset, idx_t copy_count) {
 
 	const auto &allocator_type = meta_data.segment.allocator->GetType();
 	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
 	    allocator_type == ColumnDataAllocatorType::HYBRID) {
 		// strings cannot be spilled to disk - use StringHeap
-		TemplatedColumnDataCopy<StringValueCopy>(meta_data, source_data, source, offset, copy_count, block_size);
+		TemplatedColumnDataCopy<StringValueCopy>(meta_data, source_data, source, offset, copy_count);
 		return;
 	}
 	D_ASSERT(allocator_type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
@@ -485,19 +485,18 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			if (entry.IsInlined()) {
 				continue;
 			}
-			if (heap_size + entry.GetSize() > block_size) {
+			if (heap_size + entry.GetSize() > Storage::DEFAULT_BLOCK_SIZE) {
 				break;
 			}
 			heap_size += entry.GetSize();
 		}
 
 		if (vector_remaining != 0 && append_count == 0) {
-			// single string is longer than Storage::BLOCK_SIZE
-			// we allocate one block at a time for long strings
+			// The string exceeds Storage::DEFAULT_BLOCK_SIZE, so we allocate one block at a time for long strings.
 			auto source_idx = source_data.sel->get_index(offset + append_count);
 			D_ASSERT(source_data.validity.RowIsValid(source_idx));
 			D_ASSERT(!source_entries[source_idx].IsInlined());
-			D_ASSERT(source_entries[source_idx].GetSize() > block_size);
+			D_ASSERT(source_entries[source_idx].GetSize() > Storage::DEFAULT_BLOCK_SIZE);
 			heap_size += source_entries[source_idx].GetSize();
 			append_count++;
 		}
@@ -568,7 +567,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 
 template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                                  idx_t offset, idx_t copy_count, const idx_t block_size) {
+                                  idx_t offset, idx_t copy_count) {
 
 	auto &segment = meta_data.segment;
 
@@ -607,29 +606,29 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 
 		sliced_child_vector.ToUnifiedFormat(info.child_list_info.length, child_vector_data);
 		child_function.function(child_meta_data, child_vector_data, sliced_child_vector, info.child_list_info.offset,
-		                        info.child_list_info.length, block_size);
+		                        info.child_list_info.length);
 
 	} else {
 		child_vector.ToUnifiedFormat(info.child_list_info.length, child_vector_data);
 		child_function.function(child_meta_data, child_vector_data, child_vector, info.child_list_info.offset,
-		                        info.child_list_info.length, block_size);
+		                        info.child_list_info.length);
 	}
 
 	// now copy the list entries
 	meta_data.child_list_size = current_list_size;
 	if (info.is_constant) {
-		TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count, block_size);
+		TemplatedColumnDataCopy<ConstListValueCopy>(meta_data, source_data, source, offset, copy_count);
 	} else {
-		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count, block_size);
+		TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
 	}
 }
 
 void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                          idx_t offset, idx_t copy_count, const idx_t block_size) {
+                          idx_t offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
 
 	// copy the NULL values for the main struct vector
-	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count, block_size);
+	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	// now copy all the child vectors
@@ -643,17 +642,17 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 		UnifiedVectorFormat child_data;
 		child_vectors[child_idx]->ToUnifiedFormat(copy_count, child_data);
 
-		child_function.function(child_meta_data, child_data, *child_vectors[child_idx], offset, copy_count, block_size);
+		child_function.function(child_meta_data, child_data, *child_vectors[child_idx], offset, copy_count);
 	}
 }
 
 void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                         idx_t offset, idx_t copy_count, const idx_t block_size) {
+                         idx_t offset, idx_t copy_count) {
 
 	auto &segment = meta_data.segment;
 
 	// copy the NULL values for the main array vector (the same as for a struct vector)
-	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count, block_size);
+	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
 	auto &child_vector = ArrayVector::GetEntry(source);
 	auto &child_type = child_vector.GetType();
@@ -694,11 +693,11 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	// If the array is constant, we need to copy the child vector n times
 	if (is_constant) {
 		for (idx_t i = 0; i < copy_count; i++) {
-			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size, block_size);
+			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
 		}
 	} else {
 		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
-		                        copy_count * array_size, block_size);
+		                        copy_count * array_size);
 	}
 }
 
@@ -789,7 +788,7 @@ static bool IsComplexType(const LogicalType &type) {
 	};
 }
 
-void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input, const idx_t block_size) {
+void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input) {
 	D_ASSERT(!finished_append);
 	D_ASSERT(types == input.GetTypes());
 
@@ -811,7 +810,7 @@ void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input
 				ColumnDataMetaData meta_data(copy_functions[vector_idx], segment, state, chunk_data,
 				                             chunk_data.vector_data[vector_idx]);
 				copy_functions[vector_idx].function(meta_data, state.vector_data[vector_idx], input.data[vector_idx],
-				                                    offset, append_amount, block_size);
+				                                    offset, append_amount);
 			}
 			chunk_data.count += append_amount;
 		}
@@ -827,10 +826,10 @@ void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input
 	count += input.size();
 }
 
-void ColumnDataCollection::Append(DataChunk &input, const idx_t block_size) {
+void ColumnDataCollection::Append(DataChunk &input) {
 	ColumnDataAppendState state;
 	InitializeAppend(state);
-	Append(state, input, block_size);
+	Append(state, input);
 }
 
 //===--------------------------------------------------------------------===//

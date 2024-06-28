@@ -24,12 +24,11 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const Logica
 	meta_data.count = 0;
 
 	auto internal_type = type.InternalType();
-	auto type_size = ((internal_type == PhysicalType::STRUCT) || (internal_type == PhysicalType::ARRAY))
-	                     ? 0
-	                     : GetTypeIdSize(internal_type);
-	// TODO: or pass it to here?
-	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, Storage::DEFAULT_BLOCK_SIZE,
-	                        meta_data.block_id, meta_data.offset, chunk_state);
+	auto struct_or_array = internal_type == PhysicalType::STRUCT || internal_type == PhysicalType::ARRAY;
+	auto type_size = struct_or_array ? 0 : GetTypeIdSize(internal_type);
+
+	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
+	                        meta_data.offset, chunk_state);
 	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR ||
 	    allocator->GetType() == ColumnDataAllocatorType::HYBRID) {
 		chunk_meta.block_ids.insert(meta_data.block_id);
@@ -78,10 +77,7 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateStringHeap(idx_t size, Chun
 
 	VectorMetaData meta_data;
 	meta_data.count = 0;
-
-	// TODO: or pass it to here?
-	allocator->AllocateData(AlignValue(size), Storage::DEFAULT_BLOCK_SIZE, meta_data.block_id, meta_data.offset,
-	                        &append_state.current_chunk_state);
+	allocator->AllocateData(AlignValue(size), meta_data.block_id, meta_data.offset, &append_state.current_chunk_state);
 	chunk_meta.block_ids.insert(meta_data.block_id);
 
 	VectorDataIndex index(vector_data.size());

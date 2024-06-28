@@ -61,8 +61,7 @@ public:
 	}
 
 public:
-	void AllocateData(const idx_t size, const idx_t block_size, uint32_t &block_id, uint32_t &offset,
-	                  ChunkManagementState *chunk_state);
+	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
 
 	void Initialize(ColumnDataAllocator &other);
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
@@ -74,8 +73,8 @@ public:
 	void DeleteBlock(uint32_t block_id);
 
 private:
-	void AllocateEmptyBlock(const idx_t size, const idx_t block_size);
-	BufferHandle AllocateBlock(const idx_t size, const idx_t block_size);
+	void AllocateEmptyBlock(idx_t size);
+	BufferHandle AllocateBlock(idx_t size);
 	BufferHandle Pin(uint32_t block_id);
 
 	bool HasBlocks() const {
@@ -83,10 +82,8 @@ private:
 	}
 
 private:
-	void AllocateBuffer(const idx_t size, const idx_t block_size, uint32_t &block_id, uint32_t &offset,
-	                    ChunkManagementState *chunk_state);
-	void AllocateMemory(const idx_t size, const idx_t block_size, uint32_t &block_id, uint32_t &offset,
-	                    ChunkManagementState *chunk_state);
+	void AllocateBuffer(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
+	void AllocateMemory(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
 	void AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer);
 
 private:
