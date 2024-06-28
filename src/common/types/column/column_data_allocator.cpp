@@ -136,7 +136,7 @@ void ColumnDataAllocator::AllocateMemory(idx_t size, uint32_t &block_id, uint32_
 	block.size += size;
 }
 
-void ColumnDataAllocator::AllocateData(const idx_t size, uint32_t &block_id, uint32_t &offset,
+void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset,
                                        ChunkManagementState *chunk_state) {
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
