@@ -19,6 +19,7 @@
 #include "fsst.h"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -386,15 +387,10 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 }
 
 static bool IsStructOrArrayRecursive(const LogicalType &type) {
-	auto physical_type = type.InternalType();
-	if (physical_type == PhysicalType::STRUCT || physical_type == PhysicalType::ARRAY) {
-		return true;
-	}
-	if (physical_type == PhysicalType::LIST) {
-		auto &child_type = ListType::GetChildType(type);
-		return IsStructOrArrayRecursive(child_type);
-	}
-	return false;
+	return TypeVisitor::Contains(type, [](const LogicalType &type) {
+		auto physical_type = type.InternalType();
+		return (physical_type == PhysicalType::STRUCT || physical_type == PhysicalType::ARRAY);
+	});
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {
