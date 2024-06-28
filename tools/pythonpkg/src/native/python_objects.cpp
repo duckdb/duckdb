@@ -42,15 +42,24 @@ interval_t PyTimeDelta::ToInterval() {
 }
 
 int64_t PyTimeDelta::GetDays(py::handle &obj) {
-	return PyDateTime_TIMEDELTA_GET_DAYS(obj.ptr()); // NOLINT
+	if (py::none().is(obj)) {
+		return 0;
+	}
+	return py::int_(obj.attr("days")).cast<int64_t>();
 }
 
 int64_t PyTimeDelta::GetSeconds(py::handle &obj) {
-	return PyDateTime_TIMEDELTA_GET_SECONDS(obj.ptr()); // NOLINT
+	if (py::none().is(obj)) {
+		return 0;
+	}
+	return py::int_(obj.attr("seconds")).cast<int64_t>();
 }
 
 int64_t PyTimeDelta::GetMicros(py::handle &obj) {
-	return PyDateTime_TIMEDELTA_GET_MICROSECONDS(obj.ptr()); // NOLINT
+	if (py::none().is(obj)) {
+		return 0;
+	}
+	return py::int_(obj.attr("microseconds")).cast<int64_t>();
 }
 
 PyDecimal::PyDecimal(py::handle &obj) : obj(obj) {
