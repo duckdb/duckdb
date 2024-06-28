@@ -157,7 +157,6 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 		int64_t start, end;
 
 		// we express start and end as unicode codepoints from the front
-		offset--;
 		if (length < 0) {
 			// negative length
 			start = MaxValue<int64_t>(0, offset + length);
