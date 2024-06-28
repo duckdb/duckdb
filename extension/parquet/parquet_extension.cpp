@@ -779,6 +779,12 @@ public:
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
+
+		auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
+		if (file_list_cardinality_estimate) {
+			return file_list_cardinality_estimate;
+		}
+
 		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.file_list->GetTotalFileCount());
 	}
 
