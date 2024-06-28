@@ -58,7 +58,7 @@ struct WindowInputExpression {
 		return FlatVector::IsNull(chunk.data[0], i);
 	}
 
-	inline void CopyCell(Vector &target, idx_t target_offset) const {
+	inline void CopyCell(Vector &target, idx_t target_offset, idx_t width = 1) const {
 		D_ASSERT(!chunk.data.empty());
 		auto &source = chunk.data[0];
 		auto source_offset = scalar ? 0 : target_offset;
