@@ -3,6 +3,7 @@
 #include "terminal.hpp"
 #include "duckdb_shell_wrapper.h"
 #include "sqlite3.h"
+#include "utf8proc_wrapper.hpp"
 #include <sys/stat.h>
 
 namespace duckdb {
@@ -51,6 +52,10 @@ void History::RemoveLastEntry() {
 }
 
 int History::Add(const char *line) {
+	return History::Add(line, strlen(line));
+}
+
+int History::Add(const char *line, idx_t len) {
 	char *linecopy;
 
 	if (history_max_len == 0) {
@@ -68,6 +73,11 @@ int History::Add(const char *line) {
 
 	/* Don't add duplicated lines. */
 	if (history_len && !strcmp(history[history_len - 1], line)) {
+		return 0;
+	}
+
+	if (!Utf8Proc::IsValid(line, len)) {
+		// don't add invalid UTF8 to history
 		return 0;
 	}
 
@@ -183,27 +193,154 @@ int History::Save(const char *filename) {
 	return 0;
 }
 
-int History::Load(const char *filename) {
-	FILE *fp = fopen(filename, "r");
-	char buf[LINENOISE_MAX_LINE + 1];
-	buf[LINENOISE_MAX_LINE] = '\0';
+struct LineReader {
+	static constexpr idx_t LINE_BUFFER_SIZE = LINENOISE_MAX_LINE * 2ULL;
 
-	if (fp == nullptr) {
+public:
+	LineReader() : fp(nullptr), filename(nullptr), end_of_file(false), position(0), capacity(0), total_read(0) {
+		line_buffer[LINENOISE_MAX_LINE] = '\0';
+		data_buffer[LINE_BUFFER_SIZE] = '\0';
+	}
+
+	bool Init(const char *filename_p) {
+		filename = filename_p;
+		fp = fopen(filename, "r");
+		return fp;
+	}
+
+	void Close() {
+		if (fp) {
+			fclose(fp);
+			fp = nullptr;
+		}
+	}
+
+	const char *GetLine() {
+		return line_buffer;
+	}
+
+	idx_t GetNextNewline() {
+		for (idx_t i = position; i < capacity; i++) {
+			if (data_buffer[i] == '\r' || data_buffer[i] == '\n') {
+				return i;
+			}
+		}
+		return capacity;
+	}
+
+	void SkipNewline() {
+		if (position >= capacity) {
+			// we are already at the end - fill the buffer
+			FillBuffer();
+		}
+		if (position < capacity && data_buffer[position] == '\n') {
+			position++;
+		}
+	}
+
+	bool NextLine() {
+		idx_t line_size = 0;
+		while (true) {
+			// find the next newline in the current buffer (if any)
+			idx_t i = GetNextNewline();
+			// copy over the data and move to the next byte
+			idx_t read_count = i - position;
+			if (line_size + read_count > LINENOISE_MAX_LINE) {
+				// exceeded max line size
+				// move on to next line and don't add to history
+				// skip to next newline
+				bool found_next_newline = false;
+				while (!found_next_newline && capacity > 0) {
+					i = GetNextNewline();
+					if (i < capacity) {
+						found_next_newline = true;
+					}
+					if (!found_next_newline) {
+						// read more data
+						FillBuffer();
+					}
+				}
+				if (!found_next_newline) {
+					// no newline found - skip
+					return false;
+				}
+				// newline found - adjust position and read next line
+				position = i + 1;
+				if (data_buffer[i] == '\r') {
+					// \r\n - skip the next byte as well
+					SkipNewline();
+				}
+				continue;
+			}
+			memcpy(line_buffer + line_size, data_buffer + position, read_count);
+			line_size += read_count;
+
+			if (i < capacity) {
+				// we're still within the buffer - this means we found a newline in the buffer
+				line_buffer[line_size] = '\0';
+				position = i + 1;
+				if (data_buffer[i] == '\r') {
+					// \r\n - skip the next byte as well
+					SkipNewline();
+				}
+				if (line_size == 0 || !Utf8Proc::IsValid(line_buffer, line_size)) {
+					// line is empty OR not valid UTF8
+					// move on to next line and don't add to history
+					line_size = 0;
+					continue;
+				}
+				return true;
+			}
+			// we need to read more data - fill up the buffer
+			FillBuffer();
+			if (capacity == 0) {
+				// no more data available - return true if there is anything we copied over (i.e. part of the next line)
+				return line_size > 0;
+			}
+		}
+	}
+
+	void FillBuffer() {
+		if (end_of_file || !fp) {
+			return;
+		}
+		size_t read_data = fread(data_buffer, 1, LINE_BUFFER_SIZE, fp);
+		position = 0;
+		capacity = read_data;
+		total_read += read_data;
+		data_buffer[read_data] = '\0';
+
+		if (read_data == 0) {
+			end_of_file = true;
+		}
+		if (total_read >= LINENOISE_MAX_HISTORY) {
+			fprintf(stderr, "History file \"%s\" exceeds maximum history file size of %d MB - skipping full load\n",
+			        filename, LINENOISE_MAX_HISTORY / 1024 / 1024);
+			capacity = 0;
+			end_of_file = true;
+		}
+	}
+
+private:
+	FILE *fp;
+	const char *filename;
+	char line_buffer[LINENOISE_MAX_LINE + 1];
+	char data_buffer[LINE_BUFFER_SIZE + 1];
+	bool end_of_file;
+	idx_t position;
+	idx_t capacity;
+	idx_t total_read;
+};
+
+int History::Load(const char *filename) {
+	LineReader reader;
+	if (!reader.Init(filename)) {
 		return -1;
 	}
 
 	std::string result;
-	while (fgets(buf, LINENOISE_MAX_LINE, fp) != nullptr) {
-		char *p;
-
-		// strip the newline first
-		p = strchr(buf, '\r');
-		if (!p) {
-			p = strchr(buf, '\n');
-		}
-		if (p) {
-			*p = '\0';
-		}
+	while (reader.NextLine()) {
+		auto buf = reader.GetLine();
 		if (result.empty() && buf[0] == '.') {
 			// if the first character is a dot this is a dot command
 			// add the full line to the history
@@ -214,14 +351,14 @@ int History::Load(const char *filename) {
 		result += buf;
 		if (sqlite3_complete(result.c_str())) {
 			// this line contains a full SQL statement - add it to the history
-			History::Add(result.c_str());
+			History::Add(result.c_str(), result.size());
 			result = std::string();
 			continue;
 		}
 		// the result does not contain a full SQL statement - add a newline deliminator and move on to the next line
 		result += "\r\n";
 	}
-	fclose(fp);
+	reader.Close();
 
 	history_file = strdup(filename);
 	return 0;

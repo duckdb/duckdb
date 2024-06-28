@@ -139,8 +139,7 @@ template <bool LAST, bool SKIP_NULLS>
 struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	using STATE = FirstState<string_t>;
 
-	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t input_count, Vector &state_vector,
-	                   idx_t count) {
+	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
@@ -172,8 +171,8 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		Vector sort_key(LogicalType::BLOB);
 		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 		// slice with a selection vector and generate sort keys
-		if (assign_count == input_count) {
-			CreateSortKeyHelpers::CreateSortKey(input, input_count, modifiers, sort_key);
+		if (assign_count == count) {
+			CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_key);
 		} else {
 			SelectionVector sel(assign_sel);
 			Vector sliced_input(input, sel, assign_count);

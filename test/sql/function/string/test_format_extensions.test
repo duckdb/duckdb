@@ -69,11 +69,30 @@ select format('{:tss}', 123456789)
 ----
 123s456s789
 
-# and for floats?
-statement error
+# thousands separator for floats
+query I
 select format('{:,}', 123456789.123)
 ----
-Thousand separators are not supported for floating point numbers
+123,456,789.123
+
+query I
+select format('{:_}', 123456789.123)
+----
+123_456_789.123
+
+query I
+select printf('%,.3f', 123456.789::DOUBLE)
+----
+123,456.789
+
+foreach val 1.724e12 1.7e12 1.72456e12 1.723456e11 1.724567e12 1.234e4
+
+query I
+select printf('%,.f', ${val}::double) = printf('%,d', ${val}::bigint);
+----
+true
+
+endloop
 
 statement error
 select format('{:t}', 123456789)

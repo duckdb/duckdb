@@ -33,6 +33,11 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
+		// column was not found - check if it is a SQL value function
+		auto value_function = GetSQLValueFunction(col_ref.GetColumnName());
+		if (value_function) {
+			return BindExpression(value_function, depth);
+		}
 	}
 
 	// Bind the alias.

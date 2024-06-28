@@ -514,7 +514,7 @@ class TestRelation(object):
 
         except_rel = unioned_rel.except_(materialized_one)
         res = except_rel.fetchall()
-        assert res == [('a',)]
+        assert res == [tuple('a') for _ in range(5)]
 
         intersect_rel = unioned_rel.intersect(materialized_one).order('range')
         res = intersect_rel.fetchall()

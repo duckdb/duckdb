@@ -1,0 +1,36 @@
+# name: test/sql/index/art/scan/test_art_adaptive_scan.test
+# description: Test scanning more than standard vector size rows with an index scan.
+# group: [scan]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT 42 AS i FROM range(2050);
+
+statement ok
+INSERT INTO integers SELECT 42 + 1 + range FROM range(5000);
+
+statement ok
+CREATE INDEX i_index ON integers USING ART(i);
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+query I
+SELECT COUNT(i) FROM integers WHERE i = 42;
+----
+2050
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+# Verify that the plan contains an index scan.
+
+query II
+EXPLAIN SELECT COUNT(i) FROM integers WHERE i = 42;
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
