@@ -42,7 +42,7 @@ inline string_t NullValue() {
 
 template <>
 inline char *NullValue() {
-	return (char *)NullValue<const char *>();
+	return (char *)NullValue<const char *>(); // NOLINT
 }
 
 template <>

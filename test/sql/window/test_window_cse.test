@@ -1,0 +1,78 @@
+# name: test/sql/window/test_window_cse.test
+# description: Test window Common Subexpression Elimination
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+SELECT SETSEED(0.867309);
+
+statement ok
+CREATE TABLE eventlog AS
+	SELECT ts,
+		CHR((RANDOM() * 3 + 65)::INTEGER) AS activity_name,
+		(RANDOM() * 100)::INTEGER AS case_id
+	FROM generate_series('2023-01-01'::TIMESTAMP, '2023-02-01'::TIMESTAMP, INTERVAL 1 HOUR) tbl(ts);
+
+statement ok
+CREATE VIEW cse AS 
+WITH t AS (SELECT
+    string_agg(activity_name, ',' order by ts asc, activity_name) as trace,
+    1 as cnt
+from
+    eventlog
+group by case_id
+)
+SELECT
+    trace,
+    sum(cnt) as cnt_trace,
+    sum(cnt_trace) over () as cnt_total,
+    sum(cnt) / sum(cnt_trace) over () as rel,
+    sum(cnt_trace) over (
+         order by cnt_trace desc 
+         ROWS between UNBOUNDED PRECEDING and CURRENT ROW) 
+      / sum(cnt_trace) over () 
+      as rel
+from t
+group by trace
+order by cnt_trace desc
+
+# CSE should produce only one window operator
+query II
+EXPLAIN FROM cse;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+query II
+EXPLAIN FROM cse;
+----
+physical_plan	<!REGEX>:.*WINDOW.*WINDOW.*
+
+# CSE should produce only two computations of sum(cnt_trace)
+query II
+EXPLAIN FROM cse;
+----
+physical_plan	<REGEX>:.*sum\(cnt_trace\).*sum\(cnt_trace\).*
+
+query II
+EXPLAIN FROM cse;
+----
+physical_plan	<!REGEX>:.*sum\(cnt_trace\).*sum\(cnt_trace\).*sum\(cnt_trace\).*
+
+
+statement ok
+CREATE VIEW noncse AS
+SELECT
+    quantile(x, 0.3) over() as q3,
+    quantile(x, 0.7) over() as q7
+FROM generate_series(1, 10) as tbl(x);
+
+# Non-CSE should not eliminate the 2nd quantile computation
+query II
+EXPLAIN FROM noncse;
+----
+physical_plan	<REGEX>:.*quantile_disc\(x\).*quantile_disc\(x\).*

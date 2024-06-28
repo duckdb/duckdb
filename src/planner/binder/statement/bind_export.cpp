@@ -11,8 +11,13 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
-
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -31,7 +36,7 @@ string SanitizeExportIdentifier(const string &str) {
 
 		if (c >= 'A' && c <= 'Z') {
 			// To lowercase
-			result[i] = tolower(c);
+			result[i] = NumericCast<char>(tolower(c));
 		} else {
 			// Substitute to underscore
 			result[i] = '_';
@@ -41,47 +46,63 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
-bool IsExistMainKeyTable(string &table_name, vector<reference<TableCatalogEntry>> &unordered) {
-	for (idx_t i = 0; i < unordered.size(); i++) {
-		if (unordered[i].get().name == table_name) {
+bool ReferencedTableIsOrdered(string &referenced_table, catalog_entry_vector_t &ordered) {
+	for (auto &entry : ordered) {
+		auto &table_entry = entry.get().Cast<TableCatalogEntry>();
+		if (StringUtil::CIEquals(table_entry.name, referenced_table)) {
+			// The referenced table is already ordered
 			return true;
 		}
 	}
 	return false;
 }
 
-void ScanForeignKeyTable(vector<reference<TableCatalogEntry>> &ordered, vector<reference<TableCatalogEntry>> &unordered,
-                         bool move_only_pk_table) {
-	for (auto i = unordered.begin(); i != unordered.end();) {
-		auto table_entry = *i;
+void ScanForeignKeyTable(catalog_entry_vector_t &ordered, catalog_entry_vector_t &unordered,
+                         bool move_primary_keys_only) {
+	catalog_entry_vector_t remaining;
+
+	for (auto &entry : unordered) {
+		auto &table_entry = entry.get().Cast<TableCatalogEntry>();
 		bool move_to_ordered = true;
-		auto &constraints = table_entry.get().GetConstraints();
-		for (idx_t j = 0; j < constraints.size(); j++) {
-			auto &cond = constraints[j];
-			if (cond->type == ConstraintType::FOREIGN_KEY) {
-				auto &fk = cond->Cast<ForeignKeyConstraint>();
-				if ((move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) ||
-				    (!move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE &&
-				     IsExistMainKeyTable(fk.info.table, unordered))) {
-					move_to_ordered = false;
-					break;
-				}
+		auto &constraints = table_entry.GetConstraints();
+
+		for (auto &cond : constraints) {
+			if (cond->type != ConstraintType::FOREIGN_KEY) {
+				continue;
+			}
+			auto &fk = cond->Cast<ForeignKeyConstraint>();
+			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				continue;
+			}
+
+			if (move_primary_keys_only) {
+				// This table references a table, don't move it yet
+				move_to_ordered = false;
+				break;
+			} else if (!ReferencedTableIsOrdered(fk.info.table, ordered)) {
+				// The table that it references isn't ordered yet
+				move_to_ordered = false;
+				break;
 			}
 		}
+
 		if (move_to_ordered) {
 			ordered.push_back(table_entry);
-			i = unordered.erase(i);
 		} else {
-			i++;
+			remaining.push_back(table_entry);
 		}
 	}
+	unordered = remaining;
 }
 
-void ReorderTableEntries(vector<reference<TableCatalogEntry>> &tables) {
-	vector<reference<TableCatalogEntry>> ordered;
-	vector<reference<TableCatalogEntry>> unordered = tables;
+void ReorderTableEntries(catalog_entry_vector_t &tables) {
+	catalog_entry_vector_t ordered;
+	catalog_entry_vector_t unordered = tables;
+	// First only move the tables that don't have any dependencies
 	ScanForeignKeyTable(ordered, unordered, true);
 	while (!unordered.empty()) {
+		// Now we will start moving tables that have foreign key constraints
+		// if the tables they reference are already moved
 		ScanForeignKeyTable(ordered, unordered, false);
 	}
 	tables = ordered;
@@ -94,6 +115,25 @@ string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const s
 	}
 	auto schema = SanitizeExportIdentifier(table.schema.name);
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
+}
+
+static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_list_t<LogicalType> &select_list) {
+	auto ref = make_uniq<BaseTableRef>();
+	ref->catalog_name = stmt.info->catalog;
+	ref->schema_name = stmt.info->schema;
+	ref->table_name = stmt.info->table;
+
+	auto statement = make_uniq<SelectNode>();
+	statement->from_table = std::move(ref);
+
+	vector<unique_ptr<ParsedExpression>> expressions;
+	for (auto &col : select_list) {
+		auto expression = make_uniq_base<ParsedExpression, ColumnRefExpression>(col.first);
+		expressions.push_back(std::move(expression));
+	}
+
+	statement->select_list = std::move(expressions);
+	return std::move(statement);
 }
 
 BoundStatement Binder::Bind(ExportStatement &stmt) {
@@ -115,7 +155,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	// gather a list of all the tables
 	string catalog = stmt.database.empty() ? INVALID_CATALOG : stmt.database;
-	vector<reference<TableCatalogEntry>> tables;
+	catalog_entry_vector_t tables;
 	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
@@ -136,7 +176,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	unordered_set<string> table_name_index;
 	for (auto &t : tables) {
-		auto &table = t.get();
+		auto &table = t.get().Cast<TableCatalogEntry>();
 		auto info = make_uniq<CopyInfo>();
 		// we copy the options supplied to the EXPORT
 		info->format = stmt.info->format;
@@ -151,7 +191,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			auto full_path = fs.JoinPath(directory, name);
 			info->file_path = full_path;
 			auto insert_result = table_name_index.insert(info->file_path);
-			if (insert_result.second == true) {
+			if (insert_result.second) {
 				// this name was not yet taken: take it
 				break;
 			}
@@ -163,8 +203,17 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->table = table.name;
 
 		// We can not export generated columns
+		child_list_t<LogicalType> select_list;
+		// Let's verify if any on these columns have not null constraints
+		vector<string> not_null_columns;
+		for (auto &constaint : table.GetConstraints()) {
+			if (constaint->type == ConstraintType::NOT_NULL) {
+				auto &not_null_constraint = constaint->Cast<NotNullConstraint>();
+				not_null_columns.push_back(table.GetColumn(not_null_constraint.index).GetName());
+			}
+		}
 		for (auto &col : table.GetColumns().Physical()) {
-			info->select_list.push_back(col.GetName());
+			select_list.push_back(std::make_pair(col.Name(), col.Type()));
 		}
 
 		ExportedTableData exported_data;
@@ -174,24 +223,27 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		exported_data.file_path = info->file_path;
 
-		ExportedTableInfo table_info(table, std::move(exported_data));
+		ExportedTableInfo table_info(table, std::move(exported_data), not_null_columns);
 		exported_tables.data.push_back(table_info);
 		id++;
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
 		copy_stmt.info = std::move(info);
+		copy_stmt.info->select_statement = CreateSelectStatement(copy_stmt, select_list);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
-		auto bound_statement = copy_binder->Bind(copy_stmt);
+		auto bound_statement = copy_binder->Bind(copy_stmt, CopyToType::EXPORT_DATABASE);
+
+		auto plan = std::move(bound_statement.plan);
+
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union =
-			    make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
-			                                   std::move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
+			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(child_operator),
+			                                                 std::move(plan), LogicalOperatorType::LOGICAL_UNION, true);
 			child_operator = std::move(copy_union);
 		} else {
-			child_operator = std::move(bound_statement.plan);
+			child_operator = std::move(plan);
 		}
 	}
 
@@ -201,6 +253,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		fs.CreateDirectory(stmt.info->file_path);
 	}
 
+	stmt.info->catalog = catalog;
 	// create the export node
 	auto export_node = make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), exported_tables);
 
@@ -209,6 +262,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	result.plan = std::move(export_node);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

@@ -41,14 +41,17 @@ SELECT * FROM out_of_path.oop_table;
 
 statement error
 SELECT * FROM out_of_path.test_table;
+----
 
 statement error
 SELECT * FROM main.test_table;
+----
 
 # Testing INSERT, UPDATE and DELETE
 
 statement error
 INSERT INTO main.test_table (i) VALUES (1);
+----
 
 statement ok
 INSERT INTO test_table (i) VALUES (1);
@@ -64,18 +67,22 @@ INSERT INTO main.main_table (j) VALUES (5), (6);
 
 statement error
 INSERT INTO oop_table (k) VALUES (7);
+----
 
 statement ok
 INSERT INTO out_of_path.oop_table (k) VALUES (8), (9);
 
 statement error
 DELETE FROM main.test_table WHERE i=3;
+----
 
 statement error
 DELETE FROM test.main_table WHERE i=5;
+----
 
 statement error
 DELETE FROM oop_table WHERE k=8;
+----
 
 statement ok
 DELETE FROM test.test_table WHERE i=1;
@@ -109,6 +116,7 @@ SELECT k FROM out_of_path.oop_table;
 
 statement error
 UPDATE main.test_table SET i=10 WHERE i=1;
+----
 
 statement ok
 UPDATE test_table SET i=30 WHERE i=3;
@@ -140,9 +148,11 @@ CREATE TEMP TABLE test_temp_table(i INTEGER);
 
 statement error
 SELECT * FROM memory.main.test_temp_table;
+----
 
 statement error
 SELECT * FROM test.test_temp_table;
+----
 
 statement ok
 SELECT * FROM test_temp_table;
@@ -174,6 +184,7 @@ CREATE VIEW out_of_path.oop_view AS SELECT * FROM out_of_path.oop_table;
 
 statement error
 SELECT * FROM main.test_view;
+----
 
 statement ok
 SELECT * FROM test.test_view;
@@ -189,6 +200,7 @@ SELECT * FROM main_view;
 
 statement error
 SELECT * FROM oop_view;
+----
 
 statement ok
 SELECT * FROM out_of_path.oop_view;
@@ -199,6 +211,7 @@ SET SESSION schema = 'main';
 # Test view's schema being bound on definition.
 statement error
 CREATE VIEW bad_test_view AS SELECT * FROM test_table;
+----
 
 # TODO(omo):
 #   Currenly this fails because we bind the table name
@@ -212,6 +225,7 @@ SET SESSION schema = 'test';
 
 statement error
 DROP VIEW main.test_view
+----
 
 statement ok
 DROP VIEW test_view
@@ -221,6 +235,7 @@ DROP VIEW main_view
 
 statement error
 DROP VIEW oop_view
+----
 
 statement ok
 DROP VIEW out_of_path.oop_view
@@ -241,9 +256,11 @@ CREATE MACRO out_of_path.oop_macro(a, b) AS a * b;
 
 statement error
 SELECT main.test_macro(1, 2);
+----
 
 statement error
 SELECT oop_macro(1, 2);
+----
 
 statement ok
 SELECT main_macro(1, 2);
@@ -262,6 +279,7 @@ SELECT out_of_path.oop_macro(1, 2);
 
 statement error
 DROP MACRO main.test_macro;
+----
 
 statement ok
 DROP MACRO test_macro;
@@ -274,6 +292,7 @@ DROP MACRO main_macro;
 
 statement error
 DROP MACRO oop_macro;
+----
 
 statement ok
 DROP MACRO out_of_path.oop_macro;
@@ -294,6 +313,7 @@ CREATE SEQUENCE out_of_path.oop_sequence;
 
 statement error
 SELECT main.nextval('main.test_sequence');
+----
 
 statement ok
 SELECT main.nextval('test.test_sequence');
@@ -309,12 +329,14 @@ SELECT main.nextval('main_sequence');
 
 statement error
 SELECT main.nextval('oop_sequence');
+----
 
 statement ok
 SELECT main.nextval('out_of_path.oop_sequence');
 
 statement error
 DROP SEQUENCE main.test_sequence;
+----
 
 statement ok
 DROP SEQUENCE test_sequence;
@@ -327,6 +349,7 @@ DROP SEQUENCE main_sequence;
 
 statement error
 DROP SEQUENCE oop_sequence;
+----
 
 statement ok
 DROP SEQUENCE out_of_path.oop_sequence;
@@ -335,6 +358,7 @@ DROP SEQUENCE out_of_path.oop_sequence;
 
 statement error
 ALTER TABLE main.test_table ADD COLUMN k INTEGER;
+----
 
 statement ok
 ALTER TABLE main.main_table ADD COLUMN k INTEGER;
@@ -350,6 +374,7 @@ ALTER TABLE test.test_table ADD COLUMN n INTEGER;
 
 statement error
 ALTER TABLE oop_table ADD COLUMN o INTEGER;
+----
 
 statement ok
 ALTER TABLE out_of_path.oop_table ADD COLUMN p INTEGER;
@@ -358,9 +383,11 @@ ALTER TABLE out_of_path.oop_table ADD COLUMN p INTEGER;
 
 statement error
 DROP TABLE main.test_table;
+----
 
 statement error
 DROP TABLE test.main_table;
+----
 
 statement ok
 DROP TABLE test_table;
@@ -370,6 +397,7 @@ DROP TABLE main_table;
 
 statement error
 DROP TABLE oop_table;
+----
 
 statement ok
 DROP TABLE out_of_path.oop_table;

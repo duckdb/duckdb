@@ -1,0 +1,62 @@
+# name: test/sql/aggregate/aggregates/test_count_all_types.test
+# description: Test COUNT operator with different vector types
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+foreach flatten false true
+
+query I nosort count_int
+SELECT COUNT(n) FROM test_vector_types(NULL::INT, all_flat=${flatten}) t(n);
+----
+
+query I nosort count_int_list
+SELECT list_aggr(n, 'count') FROM test_vector_types(NULL::INT[], all_flat=${flatten}) t(n);
+----
+
+query I nosort count_varchar
+SELECT COUNT(n) FROM test_vector_types(NULL::VARCHAR, all_flat=${flatten}) t(n);
+----
+
+query I nosort count_distinct_int
+SELECT COUNT(DISTINCT n) FROM test_vector_types(NULL::INT, all_flat=${flatten}) t(n);
+----
+
+query I nosort count_distinct_varchar
+SELECT COUNT(DISTINCT n) FROM test_vector_types(NULL::VARCHAR, all_flat=${flatten}) t(n);
+----
+
+query I nosort count_int_grouped
+SELECT n, COUNT(n) FROM test_vector_types(NULL::INT, all_flat=${flatten}) t(n) GROUP BY n ORDER BY ALL;
+----
+
+endloop
+
+statement ok
+CREATE TABLE int(i INT);
+
+statement ok
+INSERT INTO int FROM range(128);
+INSERT INTO int SELECT NULL FROM range(128);
+INSERT INTO int FROM range(77);
+INSERT INTO int SELECT NULL FROM range(61);
+INSERT INTO int FROM range(88);
+INSERT INTO int SELECT NULL FROM range(33);
+INSERT INTO int FROM range(44);
+INSERT INTO int SELECT NULL FROM range(11);
+INSERT INTO int FROM range(13);
+INSERT INTO int SELECT NULL FROM range(27);
+
+query II
+SELECT COUNT(i), COUNT(rowid) FROM int
+----
+350	610
+
+query III rowsort
+SELECT rowid // 200 AS g, COUNT(i), COUNT(rowid) FROM int GROUP BY g
+----
+0	128	200
+1	83	200
+2	139	200
+3	0	10

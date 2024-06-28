@@ -1,0 +1,174 @@
+# name: test/sql/cast/cast_error_location.test
+# description: Test reporting error location of casts
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+# unimplemented cast
+statement error
+SELECT 1::STRUCT(i INTEGER)
+----
+^
+
+# out of range integer cast
+statement error
+SELECT 1000::utinyint
+----
+^
+
+# string cast
+statement error
+SELECT 'hello'::int
+----
+^
+
+# numeric -> decimal cast
+statement error
+SELECT 1000::decimal(2,1)
+----
+^
+
+# decimal -> decimal cast
+statement error
+SELECT 1000.0::decimal(5,1)::decimal(2,1)
+----
+^
+
+# list cast
+statement error
+SELECT [1000]::utinyint[]
+----
+^
+
+# struct cast
+statement error
+SELECT {'x': 1000}::row(x tinyint)
+----
+^
+
+# double -> float
+statement error
+select 1e308::float
+----
+^
+
+# double -> hugeint
+statement error
+select 1e308::hugeint
+----
+^
+
+# hugeint -> int
+statement error
+select 1000000000000000000000000000000::hugeint::int
+----
+^
+
+# automatically added cast
+statement error
+select nth_value(42, 'hello') over ()
+----
+^
+
+# dates
+statement error
+select '1900'::date
+----
+^
+
+statement error
+select 42::utinyint + 'hello'
+----
+^
+
+# bit
+statement error
+SELECT bitstring('1', 9)::BOOL;
+----
+^
+
+# array
+statement error
+SELECT [1,2,3]::INT[2]
+----
+^
+
+# blob
+statement error
+SELECT '\x'::BYTEA
+----
+^
+
+# now with a table
+statement ok
+CREATE TABLE cast_table(i INTEGER, s VARCHAR, d DECIMAL(5,1), l INT[], int_struct ROW(i INTEGER), dbl DOUBLE, hge HUGEINT, invalid_blob_str VARCHAR);
+
+statement ok
+INSERT INTO cast_table VALUES (1000, 'hello', 1000.0, [1000], {'i': 1000}, 1e308, 1000000000000000000000000000000, '\x')
+
+# out of range integer cast
+statement error
+SELECT i::utinyint from cast_table
+----
+^
+
+# string cast
+statement error
+SELECT s::int FROM cast_table
+----
+^
+
+# numeric -> decimal cast
+statement error
+SELECT i::decimal(2,1) FROM cast_table
+----
+^
+
+# decimal -> decimal cast
+statement error
+SELECT d::decimal(2,1) FROM cast_table
+----
+^
+
+# list cast
+statement error
+SELECT l::utinyint[] FROM cast_table
+----
+^
+
+# struct cast
+statement error
+SELECT int_struct::row(x tinyint) FROM cast_table
+----
+^
+
+# double -> float
+statement error
+select dbl::float FROM cast_table
+----
+^
+
+# double -> hugeint
+statement error
+select dbl::hugeint FROM cast_table
+----
+^
+
+# hugeint -> int
+statement error
+select hge::hugeint::int FROM cast_table
+----
+^
+
+# array
+statement error
+SELECT l::INT[3] FROM cast_table
+----
+^
+
+# blob
+statement error
+SELECT invalid_blob_str::BYTEA FROM cast_table
+----
+^

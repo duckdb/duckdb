@@ -289,6 +289,8 @@ cmake_build
 .cmake_build
 cmake-build-debug
 cmake-build-release
+cmake-build-relwithdebinfo
+CMakeUserPresets.json
 
 # Generated documentation
 docs
@@ -324,21 +326,30 @@ tools/*.tar.gz
 .Rhistory
 ub_*.cpp
 
-# python parquet files used in tests
-tools/pythonpkg/tests/unsigned.parquet
-tools/pythonpkg/tests/userdata1.parquet
-
 # node tests
 __nvm
 
 *.vcxproj*
-*.cmake
 *.sln
 
 # Zig files
-zig-out/*
+zig-out/*gs
 zig-cache/*
 *.zig
 
 # .db files
 *.db
+*.db.gz
+
+# local cmake extension config
+extension/extension_config_local.cmake
+
+# extension_external dir
+extension_external
+
+# pyodide (emscripten python) build and test environment
+.pyodide-xbuildenv
+.venv-pyodide
+
+test/sql/pragma/output.json
+

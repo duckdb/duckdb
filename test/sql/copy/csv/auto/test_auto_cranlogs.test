@@ -31,4 +31,3 @@ query IIIIIIIIII
 UNION ALL
 (SELECT * FROM cranlogs2 EXCEPT SELECT * FROM cranlogs)
 ----
-

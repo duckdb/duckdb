@@ -120,8 +120,8 @@ query IIIIIIIII
 SELECT schema_name, function_name, function_type, description, return_type, parameters, parameter_types, varargs, macro_definition FROM duckdb_functions() WHERE function_type = 'table_macro' AND
  ( function_name = 'sgreek' or  function_name = 'xt') order by function_name;
 ----
-main	sgreek	table_macro	NULL	NULL	[a, b, c]	[NULL, NULL, NULL]	NULL	NULL
-main	xt	table_macro	NULL	NULL	[id, imax]	[NULL, NULL]	NULL	NULL
+main	sgreek	table_macro	NULL	NULL	[a, b, c]	[NULL, NULL, NULL]	NULL	SELECT a, b FROM greek_tbl WHERE (id >= c)
+main	xt	table_macro	NULL	NULL	[id, imax]	[NULL, NULL]	NULL	SELECT id, "name" FROM test_tbl WHERE (id <= imax)
 
 
 

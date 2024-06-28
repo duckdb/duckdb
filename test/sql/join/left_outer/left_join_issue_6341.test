@@ -18,19 +18,19 @@ INSERT INTO foo VALUES ('2023-01-01 00:00:00');
 statement ok
 INSERT INTO foo VALUES ('2023-01-01 00:00:01');
 
-query II
+query II rowsort
 SELECT foo.ts foo, bar.ts bar FROM foo LEFT JOIN bar ON foo.ts = bar.ts;
 ----
 2023-01-01 00:00:00	NULL
 2023-01-01 00:00:01	NULL
 
-query II
+query II rowsort
 SELECT foo.ts foo, bar.ts bar FROM foo LEFT JOIN bar ON foo.ts < bar.ts;
 ----
 2023-01-01 00:00:00	NULL
 2023-01-01 00:00:01	NULL
 
-query II
+query II rowsort
 SELECT foo.ts foo, bar.ts bar FROM foo LEFT JOIN bar ON foo.ts > bar.ts;
 ----
 2023-01-01 00:00:00	NULL

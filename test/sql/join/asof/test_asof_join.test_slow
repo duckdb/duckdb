@@ -1,0 +1,64 @@
+# name: test/sql/join/asof/test_asof_join.test_slow
+# description: Coverage tests for AsOf Joins
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma verify_external
+
+# Highly skewed data to trigger spin-waits
+statement ok
+CREATE TABLE build AS
+	SELECT 
+		'1990-03-21 13:00:00'::TIMESTAMP + INTERVAL (range) MINUTE AS begin,
+		range % 4 AS key,
+		range AS value,
+	FROM range(0, 10000000);
+
+statement ok
+CREATE TABLE skewed_probe (begin TIMESTAMP, key INTEGER);
+
+statement ok
+INSERT INTO skewed_probe
+	SELECT 
+		'1990-04-21 13:00:01'::TIMESTAMP + INTERVAL (range) MINUTE AS begin,
+		0::INTEGER AS key,
+	FROM range(0, 5);
+
+statement ok
+INSERT INTO skewed_probe
+	SELECT 
+		'1990-05-21 13:00:01'::TIMESTAMP + INTERVAL (range) MINUTE AS begin,
+		1::INTEGER AS key,
+	FROM range(0, 10);
+
+statement ok
+INSERT INTO skewed_probe
+	SELECT 
+		'1990-06-21 13:00:01'::TIMESTAMP + INTERVAL (range) MINUTE AS begin,
+		2::INTEGER AS key,
+	FROM range(0, 20);
+
+statement ok
+INSERT INTO skewed_probe
+	SELECT 
+		'1990-03-21 13:00:01'::TIMESTAMP + INTERVAL (range) MINUTE AS begin,
+		3::INTEGER AS key,
+	FROM range(0, 10000000);
+
+
+# Early finish to some left partition scans: Highly skewed data
+query II
+SELECT SUM(value), COUNT(*)
+FROM skewed_probe ASOF JOIN build USING(key, begin);
+----
+49999983751397	10000032
+
+# Blocked until all left scans are completed
+query II
+SELECT SUM(value), COUNT(*)
+FROM skewed_probe ASOF RIGHT JOIN build USING(key, begin);
+----
+87499975015813	17500020

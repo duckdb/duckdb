@@ -7,13 +7,17 @@
 statement ok
 PRAGMA enable_verification
 
-# don't allow BOUND_AGGREGATE inside lambda expressions (binder error)
+# this BOUND_AGGREGATE is a constant, so we can allow it inside lambda functions
 
-statement error
+query I
 SELECT list_transform([10], x -> sum(1) + x)
+----
+[11]
 
-statement error
+query I
 SELECT list_filter([10], x -> sum(1) > 0)
+----
+[10]
 
 # BOUND_BETWEEN
 
@@ -103,15 +107,21 @@ SELECT list_filter([2], x -> x + x = 4)
 
 statement error
 SELECT list_transform([2], x -> (SELECT 1 - x) * x)
+----
+Invalid Input Error: Subqueries are not supported in lambda expressions!
 
 statement error
 SELECT list_filter([2], x -> (SELECT 1 - x) * x > 2)
+----
+Invalid Input Error: Subqueries are not supported in lambda expressions!
 
 statement ok
 CREATE MACRO list_contains_macro(x, y) AS (SELECT list_contains(x, y))
 
 statement error
 SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x, 3))
+----
+Invalid Input Error: Subqueries are not supported in lambda expressions!
 
 # BOUND_UNNEST
 

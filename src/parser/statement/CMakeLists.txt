@@ -5,6 +5,7 @@ add_library_unity(
   attach_statement.cpp
   call_statement.cpp
   copy_statement.cpp
+  copy_database_statement.cpp
   create_statement.cpp
   detach_statement.cpp
   delete_statement.cpp
@@ -21,9 +22,9 @@ add_library_unity(
   relation_statement.cpp
   select_statement.cpp
   set_statement.cpp
-  show_statement.cpp
   transaction_statement.cpp
   update_statement.cpp
+  update_extensions_statement.cpp
   vacuum_statement.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_statement>

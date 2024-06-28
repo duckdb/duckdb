@@ -1,0 +1,57 @@
+# name: test/sql/storage/reclaim_space/test_reclaim_space_update_large_string.test
+# description: Test that we reclaim space when updating a large string
+# group: [reclaim_space]
+
+load __TEST_DIR__/test_reclaim_space.db
+
+statement ok
+PRAGMA force_checkpoint;
+
+# FIXME: overflow strings are not reclaimed yet when overwritten on updates
+mode skip
+
+# create a big string
+statement ok
+CREATE TABLE test (a VARCHAR);
+
+# length 1000000
+statement ok
+INSERT INTO test VALUES (repeat('a', 1000000));
+
+query I
+SELECT LENGTH(SUBSTRING(a, 0, 1000000)) FROM test
+----
+999999
+
+# checkpoint the string
+statement ok
+CHECKPOINT
+
+query I
+SELECT LENGTH(SUBSTRING(a, 0, 1000000)) FROM test
+----
+999999
+
+# now update by adding one character to the string on every iteration
+loop i 0 10
+
+statement ok
+UPDATE test SET a=concat(a, 'a')
+
+query I
+SELECT LENGTH(SUBSTRING(a, 0, 1000000)) FROM test
+----
+999999
+
+statement ok
+CHECKPOINT
+
+query I nosort expected_blocks
+select total_blocks from pragma_database_size();
+
+query I
+SELECT LENGTH(SUBSTRING(a, 0, 1000000)) FROM test
+----
+999999
+
+endloop

@@ -1,6 +1,6 @@
 #include "benchmark_runner.hpp"
 #include "compare_result.hpp"
-#include "tpch-extension.hpp"
+#include "tpch_extension.hpp"
 #include "duckdb_benchmark_macro.hpp"
 
 using namespace duckdb;
@@ -70,6 +70,6 @@ TPCHStartup("PRAGMA tpch(1)") NormalConfig() string VerifyResult(QueryResult *re
 	if (result->HasError()) {
 		return result->GetError();
 	}
-	return compare_csv(*result, TPCHExtension::GetAnswer(SF, 1), true);
+	return compare_csv(*result, TpchExtension::GetAnswer(SF, 1), true);
 }
 FINISH_BENCHMARK(TPCHQ1)

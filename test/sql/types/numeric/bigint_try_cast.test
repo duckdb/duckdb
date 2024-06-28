@@ -12,24 +12,31 @@ CREATE TABLE bigints AS SELECT i::BIGINT i FROM (VALUES (-9223372036854775808), 
 # -> unsigned
 statement error
 SELECT i::UTINYINT FROM bigints
+----
 
 statement error
 SELECT i::USMALLINT FROM bigints
+----
 
 statement error
 SELECT i::UINTEGER FROM bigints
+----
 
 statement error
 SELECT i::UBIGINT FROM bigints
+----
 
 statement error
 SELECT i::UTINYINT FROM bigints WHERE i>=0 ORDER BY i
+----
 
 statement error
 SELECT i::USMALLINT FROM bigints WHERE i>=0 ORDER BY i
+----
 
 statement error
 SELECT i::UINTEGER FROM bigints WHERE i>=0 ORDER BY i
+----
 
 query I
 SELECT i::UBIGINT FROM bigints WHERE i>=0 ORDER BY i
@@ -68,6 +75,7 @@ NULL
 # -> signed
 statement error
 SELECT i::TINYINT FROM bigints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM bigints ORDER BY i
@@ -78,6 +86,7 @@ NULL
 
 statement error
 SELECT i::SMALLINT FROM bigints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS SMALLINT) FROM bigints ORDER BY i
@@ -88,6 +97,7 @@ NULL
 
 statement error
 SELECT i::INTEGER FROM bigints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS INTEGER) FROM bigints ORDER BY i
@@ -140,6 +150,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000
 
 statement error
 SELECT s::BIGINT FROM strings
+----
 
 query I
 SELECT TRY_CAST(s AS BIGINT) FROM strings
@@ -155,12 +166,15 @@ NULL
 # -> decimal casts
 statement error
 SELECT i::DECIMAL(3,0)::BIGINT FROM bigints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(9,0)::BIGINT FROM bigints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(18,0)::BIGINT FROM bigints ORDER BY i
+----
 
 query I
 SELECT i::DECIMAL(38,0)::BIGINT FROM bigints ORDER BY i
@@ -171,6 +185,7 @@ SELECT i::DECIMAL(38,0)::BIGINT FROM bigints ORDER BY i
 
 statement error
 SELECT i::DECIMAL(38,20)::BIGINT FROM bigints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::BIGINT FROM bigints ORDER BY i

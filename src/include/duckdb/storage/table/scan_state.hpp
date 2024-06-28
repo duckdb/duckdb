@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
@@ -31,14 +32,37 @@ class TableFilterSet;
 class ColumnData;
 class DuckTransaction;
 class RowGroupSegmentTree;
+struct TableScanOptions;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 struct IndexScanState {
 	virtual ~IndexScanState() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -61,18 +85,16 @@ struct ColumnScanState {
 	bool initialized = false;
 	//! If this segment has already been checked for skipping purposes
 	bool segment_checked = false;
-	//! The version of the column data that we are scanning.
-	//! This is used to detect if the ColumnData has been changed out from under us during a scan
-	//! If this is the case, we re-initialize the scan
-	idx_t version = 0;
 	//! We initialize one SegmentScanState per segment, however, if scanning a DataChunk requires us to scan over more
 	//! than one Segment, we need to keep the scan states of the previous segments around
 	vector<unique_ptr<SegmentScanState>> previous_states;
 	//! The last read offset in the child state (used for LIST columns only)
 	idx_t last_offset = 0;
+	//! Contains TableScan level config for scanning
+	optional_ptr<TableScanOptions> scan_options;
 
 public:
-	void Initialize(const LogicalType &type);
+	void Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
@@ -90,7 +112,7 @@ struct ColumnFetchState {
 
 class CollectionScanState {
 public:
-	CollectionScanState(TableScanState &parent_p);
+	explicit CollectionScanState(TableScanState &parent_p);
 
 	//! The current row_group we are scanning
 	RowGroup *row_group;
@@ -106,18 +128,26 @@ public:
 	idx_t max_row;
 	//! The current batch index
 	idx_t batch_index;
+	//! The valid selection
+	SelectionVector valid_sel;
 
 public:
 	void Initialize(const vector<LogicalType> &types);
 	const vector<storage_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
+	TableScanOptions &GetOptions();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
 	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
 
 private:
 	TableScanState &parent;
+};
+
+struct TableScanOptions {
+	//! Fetch rows one-at-a-time instead of using the regular scans.
+	bool force_fetch_row = false;
 };
 
 class TableScanState {
@@ -128,6 +158,10 @@ public:
 	CollectionScanState table_state;
 	//! Transaction-local scan state
 	CollectionScanState local_state;
+	//! Options for scanning
+	TableScanOptions options;
+	//! Shared lock over the checkpoint to prevent checkpoints while reading
+	unique_ptr<StorageLockKey> checkpoint_lock;
 
 public:
 	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
@@ -163,6 +197,16 @@ struct ParallelTableScanState {
 	ParallelCollectionScanState scan_state;
 	//! Parallel scan state for the transaction-local state
 	ParallelCollectionScanState local_state;
+	//! Shared lock over the checkpoint to prevent checkpoints while reading
+	unique_ptr<StorageLockKey> checkpoint_lock;
+};
+
+struct PrefetchState {
+	~PrefetchState();
+
+	void AddBlock(shared_ptr<BlockHandle> block);
+
+	vector<shared_ptr<BlockHandle>> blocks;
 };
 
 class CreateIndexScanState : public TableScanState {

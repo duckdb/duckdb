@@ -131,6 +131,7 @@ inline string_t udf_varchar(string_t a, string_t b, string_t c) {
  */
 template <typename TYPE>
 static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	input.Flatten();
 	switch (GetTypeId<TYPE>()) {
 	case PhysicalType::VARCHAR: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -171,6 +172,7 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
  */
 template <typename TYPE>
 static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	input.Flatten();
 	switch (GetTypeId<TYPE>()) {
 	case PhysicalType::VARCHAR: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -211,6 +213,7 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
  */
 template <typename TYPE>
 static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	input.Flatten();
 	switch (GetTypeId<TYPE>()) {
 	case PhysicalType::VARCHAR: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -287,6 +290,7 @@ static void udf_max_constant(DataChunk &args, ExpressionState &state, Vector &re
  */
 template <typename TYPE>
 static void udf_max_flat(DataChunk &args, ExpressionState &state, Vector &result) {
+	args.Flatten();
 	D_ASSERT(TypeIsNumeric(GetTypeId<TYPE>()));
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -318,36 +322,35 @@ struct udf_avg_state_t {
 
 struct UDFAverageFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->count = 0;
-		state->sum = 0;
+	static void Initialize(STATE &state) {
+		state.count = 0;
+		state.sum = 0;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		state->sum += input[idx];
-		state->count++;
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
+		state.sum += input;
+		state.count++;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
-		state->count += count;
-		state->sum += input[0] * count;
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
+		state.count += count;
+		state.sum += input * count;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		target->count += source.count;
-		target->sum += source.sum;
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target.count += source.count;
+		target.sum += source.sum;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->sum / state->count;
+			target = state.sum / state.count;
 		}
 	}
 
@@ -368,51 +371,48 @@ struct udf_covar_state_t {
 
 struct UDFCovarOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->count = 0;
-		state->meanx = 0;
-		state->meany = 0;
-		state->co_moment = 0;
+	static void Initialize(STATE &state) {
+		state.count = 0;
+		state.meanx = 0;
+		state.meany = 0;
+		state.co_moment = 0;
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
 		// update running mean and d^2
-		const uint64_t n = ++(state->count);
+		const uint64_t n = ++(state.count);
 
-		const auto x = x_data[xidx];
-		const double dx = (x - state->meanx);
-		const double meanx = state->meanx + dx / n;
+		const double dx = (x - state.meanx);
+		const double meanx = state.meanx + dx / n;
 
-		const auto y = y_data[yidx];
-		const double dy = (y - state->meany);
-		const double meany = state->meany + dy / n;
+		const double dy = (y - state.meany);
+		const double meany = state.meany + dy / n;
 
-		const double C = state->co_moment + dx * (y - meany);
+		const double C = state.co_moment + dx * (y - meany);
 
-		state->meanx = meanx;
-		state->meany = meany;
-		state->co_moment = C;
+		state.meanx = meanx;
+		state.meany = meany;
+		state.co_moment = C;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		if (target->count == 0) {
-			*target = source;
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (target.count == 0) {
+			target = source;
 		} else if (source.count > 0) {
-			const auto count = target->count + source.count;
-			const auto meanx = (source.count * source.meanx + target->count * target->meanx) / count;
-			const auto meany = (source.count * source.meany + target->count * target->meany) / count;
+			const auto count = target.count + source.count;
+			const auto meanx = (source.count * source.meanx + target.count * target.meanx) / count;
+			const auto meany = (source.count * source.meany + target.count * target.meany) / count;
 
 			//  Schubert and Gertz SSDBM 2018, equation 21
-			const auto deltax = target->meanx - source.meanx;
-			const auto deltay = target->meany - source.meany;
-			target->co_moment =
-			    source.co_moment + target->co_moment + deltax * deltay * source.count * target->count / count;
-			target->meanx = meanx;
-			target->meany = meany;
-			target->count = count;
+			const auto deltax = target.meanx - source.meanx;
+			const auto deltay = target.meany - source.meany;
+			target.co_moment =
+			    source.co_moment + target.co_moment + deltax * deltay * source.count * target.count / count;
+			target.meanx = meanx;
+			target.meany = meany;
+			target.count = count;
 		}
 	}
 
@@ -423,11 +423,11 @@ struct UDFCovarOperation {
 
 struct UDFCovarPopOperation : public UDFCovarOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->co_moment / state->count;
+			target = state.co_moment / state.count;
 		}
 	}
 };
@@ -453,13 +453,13 @@ struct UDFSum {
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, idx_t idx) {
 		state->isset = true;
 		state->value += input[idx];
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, idx_t count) {
 		state->isset = true;
 		state->value += (INPUT_TYPE)input[0] * (INPUT_TYPE)count;
 	}
@@ -479,8 +479,8 @@ struct UDFSum {
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>(*sdata, aggr_input_data, idata, count);
-		} else if (inputs[0].GetVectorType() == VectorType::FLAT_VECTOR &&
-		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
+		} else {
+			inputs[0].Flatten(input_count);
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto mask = FlatVector::Validity(inputs[0]);
@@ -497,8 +497,6 @@ struct UDFSum {
 					UDFSum::Operation<INPUT_TYPE, STATE_TYPE>(sdata[i], aggr_input_data, idata, i);
 				}
 			}
-		} else {
-			throw duckdb::NotImplementedException("UDFSum only supports CONSTANT and FLAT vectors!");
 		}
 	}
 
@@ -515,7 +513,8 @@ struct UDFSum {
 			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, aggr_input_data, idata, count);
 			break;
 		}
-		case VectorType::FLAT_VECTOR: {
+		default: {
+			inputs[0].Flatten(count);
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto &mask = FlatVector::Validity(inputs[0]);
 			if (!mask.AllValid()) {
@@ -532,9 +531,6 @@ struct UDFSum {
 				}
 			}
 			break;
-		}
-		default: {
-			throw duckdb::NotImplementedException("UDFSum only supports CONSTANT and FLAT vectors!");
 		}
 		}
 	}

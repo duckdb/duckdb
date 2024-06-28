@@ -29,12 +29,16 @@ select struct_insert({'a': 1, 'b': 'abc', 'c': true}, d := {'a': 'new stuff'})
 # test incorrect usage
 statement error
 select struct_insert()
+----
 
 statement error
 select struct_insert({a: 1, b: 2})
+----
 
 statement error
 select struct_insert(123, a := 1)
+----
 
 statement error
 select struct_insert({a: 1, b: 2}, a := 2)
+----

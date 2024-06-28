@@ -6,9 +6,9 @@ import numpy
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
+
 # Join from pandas not matching identical strings #1767
 class TestIssue1767(object):
-    
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_unicode_join_pandas(self, duckdb_cursor, pandas):
         A = pandas.DataFrame({"key": ["a", "п"]})

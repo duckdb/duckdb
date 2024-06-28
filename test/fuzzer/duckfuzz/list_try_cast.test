@@ -1,0 +1,34 @@
+# name: test/fuzzer/duckfuzz/list_try_cast.test
+# description: list try cast
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table integers(i INT[]);
+
+statement ok
+INSERT INTO integers VALUES ([42, 999, NULL, NULL, -42]);
+
+query I
+SELECT TRY_CAST(i AS TIMESTAMP WITH TIME ZONE[]) FROM integers;
+----
+[NULL, NULL, NULL, NULL, NULL]
+
+statement ok
+create table strings(v VARCHAR[]);
+
+statement ok
+INSERT INTO strings VALUES (['42', NULL, '84', 'hello world', '100']);
+
+query I
+SELECT TRY_CAST(v AS INTEGER[]) FROM strings;
+----
+[42, NULL, 84, NULL, 100]
+
+# Issue #10140 (used to crash)
+statement error
+SELECT DISTINCT OPERATOR ( / ) + ARRAY [ ] :: INTERVAL SECONDS [ ] [ ] :: SETOF NCHAR ARRAY :: FLOAT ; 
+----
+No function matches the given name and argument types

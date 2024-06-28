@@ -13,8 +13,7 @@
 
 namespace duckdb {
 
-//! PhysicalAsOfJoin represents a piecewise merge loop join between
-//! two tables
+//! PhysicalAsOfJoin represents an as-of join between two tables
 class PhysicalAsOfJoin : public PhysicalComparisonJoin {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ASOF_JOIN;
@@ -24,6 +23,7 @@ public:
 
 	vector<LogicalType> join_key_types;
 	vector<column_t> null_sensitive;
+	ExpressionType comparison_type;
 
 	// Equalities
 	vector<unique_ptr<Expression>> lhs_partitions;
@@ -58,7 +58,7 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
-		return IsRightOuterJoin(join_type);
+		return true;
 	}
 	bool ParallelSource() const override {
 		return true;
@@ -69,9 +69,9 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          GlobalSinkState &gstate) const override;
+	                          OperatorSinkFinalizeInput &input) const override;
 
 	bool IsSink() const override {
 		return true;
@@ -79,13 +79,6 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
-
-private:
-	// resolve joins that output max N elements (SEMI, ANTI, MARK)
-	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
-	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	OperatorResultType ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                      OperatorState &state) const;
 };
 
 } // namespace duckdb

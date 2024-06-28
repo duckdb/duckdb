@@ -1,0 +1,34 @@
+# name: test/sql/storage/filter_pushdown_struct.test
+# description: Issue #10889 - The result of a WHERE clause on a "large" table of structs change when duckdb is connected to a persistent database file
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/filter_pushdown_struct.db
+
+statement ok
+CREATE TABLE tbl (a STRUCT("id" VARCHAR), b STRUCT("id" VARCHAR));
+
+statement ok
+INSERT INTO tbl SELECT {'id': LPAD(i::VARCHAR, 4, '0')}, {'id': 'abc'} FROM range(10000) t(i)
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM tbl WHERE b.id='abc') t
+----
+10000
+
+restart
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM tbl WHERE b.id='abc') t
+----
+10000
+
+statement ok
+INSERT INTO tbl SELECT {'id': LPAD((i + 10000)::VARCHAR, 4, '0')}, {'id': 'bcd'} FROM range(10000) t(i)
+
+restart
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM tbl WHERE b.id='bcd') t
+----
+10000

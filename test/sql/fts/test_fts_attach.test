@@ -1,0 +1,67 @@
+# name: test/sql/fts/test_fts_attach.test
+# description: Test FTS and attach
+# group: [fts]
+
+# issue #7384 and #8141
+
+require fts
+
+require skip_reload
+
+require noalternativeverify
+
+statement ok
+ATTACH '__TEST_DIR__/tester.db' as search_con
+
+statement ok
+CREATE TABLE search_con.main.my_table AS SELECT 1 AS CustomerId, 'hans' as CustomerName
+
+statement ok
+PRAGMA create_fts_index(search_con.main.my_table, 'CustomerId', 'CustomerName')
+
+statement ok
+SELECT search_con.fts_main_my_table.match_bm25(1, 'han')
+
+statement ok
+DETACH search_con
+
+# test reopened #8141
+load __TEST_DIR__/index.db
+
+statement ok
+CREATE TABLE data AS SELECT 0 __index, 0 id, 'lorem ipsum' nl, NULL code;
+
+statement ok
+PRAGMA create_fts_index('data', '__index', '*', overwrite=1);
+
+# test that it works before doing the problematic stuff
+query IIII
+SELECT * FROM data WHERE fts_main_data.match_bm25(__index, 'lorem') IS NOT NULL;
+----
+0	0	lorem ipsum	NULL
+
+statement ok
+ATTACH ':memory:' AS memory;
+
+statement ok
+USE memory;
+
+statement ok
+DETACH "index";
+
+# now attach again
+statement ok
+ATTACH '__TEST_DIR__/index.db' AS db;
+
+statement ok
+USE db;
+
+query T
+SELECT COUNT(*) FROM data;
+----
+1
+
+query IIII
+SELECT * FROM data WHERE fts_main_data.match_bm25(__index, 'lorem') IS NOT NULL;
+----
+0	0	lorem ipsum	NULL

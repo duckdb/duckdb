@@ -19,7 +19,7 @@ class ClientContext;
 struct RandomState;
 
 struct RandomEngine {
-	RandomEngine(int64_t seed = -1);
+	explicit RandomEngine(int64_t seed = -1);
 	~RandomEngine();
 
 public:

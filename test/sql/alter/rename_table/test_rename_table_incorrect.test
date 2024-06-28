@@ -11,8 +11,10 @@ CREATE TABLE tbl2(i INTEGER)
 # Renaming a non existing table
 statement error
 ALTER TABLE non_table RENAME TO tbl
+----
 
 # rename to an already existing table
 statement error
 ALTER TABLE tbl2 RENAME TO tbl
+----
 

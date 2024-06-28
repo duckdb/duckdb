@@ -1,12 +1,13 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
 template <class T>
 static void CopyToStorageLoop(UnifiedVectorFormat &vdata, idx_t count, data_ptr_t target) {
-	auto ldata = (T *)vdata.data;
+	auto ldata = UnifiedVectorFormat::GetData<T>(vdata);
 	auto result_data = (T *)target;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
@@ -53,6 +54,9 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 		break;
 	case PhysicalType::INT128:
 		CopyToStorageLoop<hugeint_t>(vdata, count, target);
+		break;
+	case PhysicalType::UINT128:
+		CopyToStorageLoop<uhugeint_t>(vdata, count, target);
 		break;
 	case PhysicalType::FLOAT:
 		CopyToStorageLoop<float>(vdata, count, target);
@@ -107,6 +111,9 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 		break;
 	case PhysicalType::INT128:
 		ReadFromStorageLoop<hugeint_t>(source, count, result);
+		break;
+	case PhysicalType::UINT128:
+		ReadFromStorageLoop<uhugeint_t>(source, count, result);
 		break;
 	case PhysicalType::FLOAT:
 		ReadFromStorageLoop<float>(source, count, result);

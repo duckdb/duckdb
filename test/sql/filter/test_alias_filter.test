@@ -24,6 +24,7 @@ SELECT i % 2 AS k FROM integers WHERE k<>0;
 # alias cannot be qualified
 statement error
 SELECT i % 2 AS k FROM integers WHERE integers.k<>0;
+----
 
 # columns take priority
 query I
@@ -52,3 +53,4 @@ SELECT i % 2 AS k FROM integers WHERE k=k;
 # alias to an aggregate doesn't work.
 statement error
 SELECT i % 2 AS o, COUNT(i) AS c FROM integers WHERE c = 0 GROUP BY o;
+----

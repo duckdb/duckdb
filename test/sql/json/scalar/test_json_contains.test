@@ -1,0 +1,93 @@
+# name: test/sql/json/scalar/test_json_contains.test
+# description: Test JSON merge patch
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# some examples copied from the first link I clicked when googling json_contains:
+# https://database.guide/json_contains-examples-in-mysql/
+query T
+SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 3}}', '{"c": {"d": 3}}') AS Result;
+----
+True
+
+statement error
+SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 3}}', '"c": {"d": 3}') AS Result;
+----
+
+# some home-made tests
+
+# empty list is contained in the list
+query T
+select json_contains('[1, 2]', '[]')
+----
+True
+
+query T
+select json_contains('[1, 2]', '2');
+----
+True
+
+query T
+select json_contains('[1, 2]', '[1, 2]');
+----
+True
+
+query T
+select json_contains('[1, 2, 3]', '[1, 2]');
+----
+True
+
+# order-independent (follows MySQL behaviour)
+query T
+select json_contains('[1, 2]', '[2, 1]');
+----
+True
+
+# {"d": 2} is contained in {"c": 1, "d": 2}, so it counts
+query T
+select json_contains('{"a": {"b": [{"c": 1, "d": 2}]}}', '{"d": 2}')
+----
+True
+
+# same with {"c": 1}
+query T
+select json_contains('{"a": {"b": [{"c": 1, "d": 2}]}}', '{"c": 1}')
+----
+True
+
+query T
+select json_contains('{"a": {"b": [{"c": 1, "d": 2}]}}', '{"c": 1, "d": 2}')
+----
+True
+
+query T
+select json_contains('{"a": {"b": [{"c": 1, "d": 2}]}}', '[{"d": 2, "c": 1}]')
+----
+True
+
+# same reasoning with the lists here as before, empty list is contained in the list
+query T
+select json_contains('{"a": {"b": [{"c": 1, "d": 2}]}}', '{"a": {"b": []}}')
+----
+True
+
+query T
+select json_contains('{"a": {"b": [{"c": 1, "d": 2}]}}', '[]')
+----
+True
+
+# Issue 5960
+query T
+select json_contains(json('{"key":"value"}'),json('{"blah":"value"}'))
+----
+False
+
+# Check if the recursion properly stops
+query T
+select json_contains('{"a": {"b": 42}}', '{"a": 42}')
+----
+False

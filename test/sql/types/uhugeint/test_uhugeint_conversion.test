@@ -1,0 +1,171 @@
+# name: test/sql/types/uhugeint/test_uhugeint_conversion.test
+# description: Test uhugeint conversion
+# group: [uhugeint]
+
+# small numbers in uhugeint
+query III
+SELECT '7'::UHUGEINT, '130'::UHUGEINT, '924829852'::UHUGEINT
+----
+7	130	924829852
+
+# zero
+query II
+SELECT '0'::UHUGEINT, '-0'::UHUGEINT
+----
+0	0
+
+query I
+SELECT '10000000000000000000000000000'::UHUGEINT;
+----
+10000000000000000000000000000
+
+# huge numbers in hugeint
+query II
+SELECT '1267650600228229401496703205376'::UHUGEINT, '340282366920938463463374607431768211455'::UHUGEINT;
+----
+1267650600228229401496703205376	340282366920938463463374607431768211455
+
+# negative numbers in hugeint
+statement error
+SELECT '-1267650600228229401496703205376'::UHUGEINT, '-17014118346046923173168730371588410572'::UHUGEINT;
+----
+Conversion Error
+
+# string -> hugeint conversion throws error on overflow
+statement error
+SELECT '340282366920938463463374607431768211456'::UHUGEINT;
+----
+Conversion Error
+
+statement error
+SELECT '-1'::UHUGEINT;
+----
+Conversion Error
+
+# test the exact boundaries
+# these work
+query II
+SELECT '340282366920938463463374607431768211455'::UHUGEINT, '0'::UHUGEINT;
+----
+340282366920938463463374607431768211455	0
+
+# these don't
+statement error
+SELECT '340282366920938463463374607431768211456'::UHUGEINT;
+----
+Conversion Error
+
+statement error
+SELECT '-1'::UHUGEINT;
+----
+Conversion Error
+
+# cast various types to uhugeint
+query IIIIII
+SELECT 42::TINYINT::UHUGEINT, 42::SMALLINT::UHUGEINT, 42::INTEGER::UHUGEINT, 42::BIGINT::UHUGEINT, 42::FLOAT::UHUGEINT, 42::DOUBLE::UHUGEINT;
+----
+42	42	42	42	42	42
+
+# negative values
+statement error
+SELECT (-42)::TINYINT::UHUGEINT, (-42)::SMALLINT::UHUGEINT, (-42)::INTEGER::UHUGEINT, (-42)::BIGINT::UHUGEINT, (-42)::FLOAT::UHUGEINT, (-42)::DOUBLE::UHUGEINT;
+----
+Conversion Error
+
+# cast uhugeint to various types
+query IIIIRR
+SELECT 42::UHUGEINT::TINYINT, 42::UHUGEINT::SMALLINT, 42::UHUGEINT::INTEGER, 42::UHUGEINT::BIGINT, 42::UHUGEINT::FLOAT, 42::UHUGEINT::DOUBLE;
+----
+42	42	42	42	42	42
+
+# overflow in hugeint -> integer conversion
+# test the exact boundaries for each type
+statement error
+SELECT 1000::UHUGEINT::TINYINT;
+----
+Conversion Error
+
+# TINYINT
+statement error
+SELECT 128::UHUGEINT::TINYINT;
+----
+Conversion Error
+
+statement ok
+SELECT 127::UHUGEINT::TINYINT;
+
+# SMALLINT
+statement error
+SELECT 100000::UHUGEINT::SMALLINT;
+----
+Conversion Error
+
+statement error
+SELECT 32768::UHUGEINT::SMALLINT;
+----
+Conversion Error
+
+query I
+SELECT 32767::UHUGEINT::SMALLINT;
+----
+32767
+
+# INTEGER
+statement error
+SELECT 100000000000::UHUGEINT::INTEGER;
+----
+Conversion Error
+
+statement error
+SELECT 2147483648::UHUGEINT::INTEGER;
+----
+Conversion Error
+
+statement ok
+SELECT 2147483647::UHUGEINT::INTEGER;
+
+# BIGINT
+statement error
+SELECT 10000000000000000000::UHUGEINT::BIGINT;
+----
+Conversion Error
+
+statement error
+SELECT '9223372036854775808'::UHUGEINT::BIGINT;
+----
+Conversion Error
+
+query I
+SELECT 9223372036854775807::UHUGEINT::BIGINT;
+----
+9223372036854775807
+
+# overflow in double -> hugeint conversion
+statement error
+SELECT 1e100::FLOAT::UHUGEINT;
+----
+Conversion Error
+
+statement error
+SELECT 1e100::DOUBLE::UHUGEINT;
+----
+Conversion Error
+
+# typeof large constant is hugeint, as long as it fits
+query TTTTT
+SELECT typeof(10), typeof(10000000000), typeof(170141183460469231731687303715884105727), typeof(170141183460469231731687303715884105728), typeof(170141183460469231731687303715884105728000)
+----
+INTEGER	BIGINT	HUGEINT	DOUBLE	DOUBLE
+
+# exponents are always double
+query III
+select 1e30, 1e100, 1e-1
+----
+1000000000000000000000000000000
+10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0.1
+
+query III
+select typeof(1e30), typeof(1e100), typeof(1e-1)
+----
+DOUBLE	DOUBLE	DOUBLE

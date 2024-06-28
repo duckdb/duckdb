@@ -1,0 +1,40 @@
+# name: test/sql/index/art/create_drop/test_art_create_unique.test
+# description: Test unique ART creation
+# group: [create_drop]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INTEGER);
+
+statement ok
+CREATE UNIQUE INDEX i0 ON t0(c0);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1);
+
+statement error
+INSERT INTO t0(c0) VALUES (1);
+----
+
+query I
+SELECT * FROM t0 WHERE t0.c0 = 1;
+----
+1
+
+statement ok
+CREATE TABLE merge_violation (id INT);
+
+statement ok
+INSERT INTO merge_violation SELECT range FROM range(2048);
+
+statement ok
+INSERT INTO merge_violation SELECT range + 10000 FROM range(2048);
+
+statement ok
+INSERT INTO merge_violation VALUES (2047);
+
+statement error
+CREATE UNIQUE INDEX idx ON merge_violation(id);
+----

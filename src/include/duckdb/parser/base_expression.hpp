@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -40,6 +41,8 @@ public:
 	ExpressionClass expression_class;
 	//! The alias of the expression,
 	string alias;
+	//! The location in the query (if any)
+	optional_idx query_location;
 
 public:
 	//! Returns true if this expression is an aggregate or not.
@@ -71,19 +74,13 @@ public:
 	//! Expression::Equals() returns true), that their hash value is identical as well.
 	virtual hash_t Hash() const = 0;
 	//! Returns true if this expression is equal to another expression
-	virtual bool Equals(const BaseExpression *other) const;
+	virtual bool Equals(const BaseExpression &other) const;
 
-	static bool Equals(const BaseExpression *left, const BaseExpression *right) {
-		if (left == right) {
-			return true;
-		}
-		if (!left || !right) {
-			return false;
-		}
-		return left->Equals(right);
+	static bool Equals(const BaseExpression &left, const BaseExpression &right) {
+		return left.Equals(right);
 	}
-	bool operator==(const BaseExpression &rhs) {
-		return this->Equals(&rhs);
+	bool operator==(const BaseExpression &rhs) const {
+		return Equals(rhs);
 	}
 
 	virtual void Verify() const;
@@ -94,7 +91,7 @@ public:
 		if (expression_class != TARGET::TYPE) {
 			throw InternalException("Failed to cast expression to type - expression type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -102,7 +99,7 @@ public:
 		if (expression_class != TARGET::TYPE) {
 			throw InternalException("Failed to cast expression to type - expression type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

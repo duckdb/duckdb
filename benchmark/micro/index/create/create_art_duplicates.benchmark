@@ -1,0 +1,15 @@
+# name: benchmark/micro/index/create/create_art_duplicates.benchmark
+# description: Create ART on 10M integers, approx. 100 distinct values
+# group: [create]
+
+name Create ART Duplicates
+group art
+
+load
+CREATE TABLE art AS SELECT (random() * 100)::INT AS id FROM range(10000000);
+
+run
+CREATE INDEX idx ON art USING ART(id);
+
+cleanup
+DROP INDEX idx;

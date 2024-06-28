@@ -1,5 +1,6 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 namespace duckdb {
 

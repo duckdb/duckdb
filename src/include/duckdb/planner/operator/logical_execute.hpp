@@ -27,12 +27,14 @@ public:
 	shared_ptr<PreparedStatementData> prepared;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	//! Skips the serialization check in VerifyPlan
+	bool SupportSerialization() const override {
+		return false;
+	}
 
 protected:
 	void ResolveTypes() override {
-		// already resolved
+		types = prepared->types;
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(0, types.size());

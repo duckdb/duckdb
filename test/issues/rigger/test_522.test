@@ -8,4 +8,5 @@ PRAGMA enable_verification
 # Casting a large number to REAL and multiplying it with zero results in -nan
 statement error
 SELECT 1e100::real*0;
+----
 

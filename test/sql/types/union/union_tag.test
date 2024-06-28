@@ -2,12 +2,10 @@
 # description: Test union_tag
 # group: [union]
 
-# See issue #5132 - this should be fixed and then skip_reload can be removed
-require skip_reload
-
 # Union type must be fully resolved
 statement error
 SELECT union_tag(1);
+----
 
 query I
 SELECT union_tag(1::UNION(a INT, b VARCHAR));
@@ -77,6 +75,7 @@ PREPARE p2 as SELECT union_tag(?);
 
 statement error
 EXECUTE p2(1);
+----
 
 query I
 EXECUTE p2('woo'::UNION(a INT, b VARCHAR));

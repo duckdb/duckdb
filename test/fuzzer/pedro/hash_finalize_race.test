@@ -15,5 +15,6 @@ loop i 0 10
 
 statement error
 SELECT 1 FROM ((SELECT 2) INTERSECT (SELECT 2)) t2(c3) WHERE "currval"('t4') = EXISTS (SELECT 2);
+----
 
 endloop

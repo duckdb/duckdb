@@ -1,0 +1,27 @@
+# name: test/sql/storage/issue7582_list_storage.test
+# description: Issue #7582: EXC_BAD_ACCESS during insert
+# group: [storage]
+
+require parquet
+
+load __TEST_DIR__/issue7582.db
+
+statement ok
+SET wal_autocheckpoint='1GB';
+
+statement ok
+CREATE TABLE tbl (n TEXT[]);
+
+statement ok
+INSERT INTO tbl (n) SELECT CASE WHEN i < 100 THEN ['a', 'b'] ELSE [] END l FROM range(1026) t(i);
+
+statement ok
+INSERT INTO tbl (n) SELECT CASE WHEN i < 100 THEN ['a', 'b'] ELSE [] END l FROM range(1026) t(i);
+
+statement ok
+INSERT INTO tbl (n) SELECT CASE WHEN i < 100 THEN ['a', 'b'] ELSE [] END l FROM range(1026) t(i);
+
+restart
+
+statement ok
+FROM tbl;

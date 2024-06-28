@@ -100,10 +100,17 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 	std::cerr << std::endl;
 }
 
-void SQLLogicTestLogger::PrintErrorHeader(const string &description) {
+void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_line, const string &description) {
 	PrintLineSep();
 	std::cerr << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
-	std::cerr << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset << std::endl;
+	if (!file_name.empty()) {
+		std::cerr << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset;
+	}
+	std::cerr << std::endl;
+}
+
+void SQLLogicTestLogger::PrintErrorHeader(const string &description) {
+	PrintErrorHeader(file_name, query_line, description);
 }
 
 void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, const vector<string> &values,
@@ -267,6 +274,13 @@ void SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, Mat
 	PrintHeader("Actual result:");
 	PrintLineSep();
 	result.Print();
+}
+
+void SQLLogicTestLogger::LoadDatabaseFail(const string &dbpath, const string &message) {
+	PrintErrorHeader(string(), 0, "Failed to load database " + dbpath);
+	PrintLineSep();
+	Log("Error message: " + message + "\n");
+	PrintLineSep();
 }
 
 } // namespace duckdb

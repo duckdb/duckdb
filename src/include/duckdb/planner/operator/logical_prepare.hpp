@@ -22,8 +22,9 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_PREPARE;
 
 public:
-	LogicalPrepare(string name, shared_ptr<PreparedStatementData> prepared, unique_ptr<LogicalOperator> logical_plan)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_PREPARE), name(name), prepared(std::move(prepared)) {
+	LogicalPrepare(string name_p, shared_ptr<PreparedStatementData> prepared, unique_ptr<LogicalOperator> logical_plan)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_PREPARE), name(std::move(name_p)),
+	      prepared(std::move(prepared)) {
 		if (logical_plan) {
 			children.push_back(std::move(logical_plan));
 		}
@@ -33,9 +34,11 @@ public:
 	shared_ptr<PreparedStatementData> prepared;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	idx_t EstimateCardinality(ClientContext &context) override;
+	//! Skips the serialization check in VerifyPlan
+	bool SupportSerialization() const override {
+		return false;
+	}
 
 protected:
 	void ResolveTypes() override {

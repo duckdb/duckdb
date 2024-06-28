@@ -6,9 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-PRAGMA force_index_join
-
-statement ok
 CREATE TABLE actor (
     actor_id numeric NOT NULL,
     first_name VARCHAR(45) NOT NULL,
@@ -216,7 +213,7 @@ SELECT
     a.phone AS phone,
     city.city AS city,
     country.country AS country,
-    CASE WHEN cu.active = 1 THEN
+    CASE WHEN cu.active = 'Y' THEN
         'active'
     ELSE
         ''
@@ -395,7 +392,7 @@ Jon	Stephens	1411 Lillydale Drive
 Mike	Hillyer	23 Workhaven Lane
 
 query TTR
-SELECT first_name, last_name, SUM(amount) as total FROM staff INNER JOIN payment ON staff.staff_id = payment.staff_id AND payment_date LIKE '2005-08%' GROUP BY first_name, last_name ORDER BY total
+SELECT first_name, last_name, SUM(amount) as total FROM staff INNER JOIN payment ON staff.staff_id = payment.staff_id AND payment_date::VARCHAR LIKE '2005-08%' GROUP BY first_name, last_name ORDER BY total
 ----
 Mike	Hillyer	11853.650000
 Jon	Stephens	12218.480000

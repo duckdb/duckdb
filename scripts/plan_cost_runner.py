@@ -17,7 +17,9 @@ BANNER_SIZE = 52
 
 
 def print_usage():
-    print(f"Expected usage: python3 scripts/{os.path.basename(__file__)} --old=/old/duckdb_cli --new=/new/duckdb_cli --dir=/path/to/benchmark/dir")
+    print(
+        f"Expected usage: python3 scripts/{os.path.basename(__file__)} --old=/old/duckdb_cli --new=/new/duckdb_cli --dir=/path/to/benchmark/dir"
+    )
     exit(1)
 
 
@@ -41,25 +43,81 @@ def parse_args():
 
 def init_db(cli, dbname, benchmark_dir):
     print(f"INITIALIZING {dbname} ...")
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(
+        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
+    )
     subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
     print("INITIALIZATION DONE")
 
 
-def op_inspect(op):
-    cost = 0
-    if op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
-        cost = op['cardinality']
-    if 'children' not in op:
+class PlanCost:
+    def __init__(self):
+        self.total = 0
+        self.build_side = 0
+        self.probe_side = 0
+        self.time = 0
+
+    def __add__(self, other):
+        self.total += other.total
+        self.build_side += other.build_side
+        self.probe_side += other.probe_side
+        return self
+
+    def __gt__(self, other):
+        if self == other or self.total < other.total:
+            return False
+        # if the total intermediate cardinalities is greater, also inspect time.
+        # it's possible a plan reordering increased cardinalities, but overall execution time
+        # was not greatly affected
+        total_card_increased = self.total > other.total
+        build_card_increased = self.build_side > other.build_side
+        if total_card_increased and build_card_increased:
+            return True
+        # we know the total cardinality is either the same or higher and the build side has not increased
+        # in this case fall back to the timing. It's possible that even if the probe side is higher
+        # since the tuples are in flight, the plan executes faster
+        return self.time > other.time * 1.03
+
+    def __lt__(self, other):
+        if self == other:
+            return False
+        return not (self > other)
+
+    def __eq__(self, other):
+        return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
+
+
+def op_inspect(op) -> PlanCost:
+    cost = PlanCost()
+    if 'Query' in op:
+        cost.time = op['operator_timing']
+    if 'name' in op and op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
+        cost.total = op['operator_cardinality']
+        if 'operator_cardinality' in op['children'][0]:
+            cost.probe_side += op['children'][0]['operator_cardinality']
+        if 'operator_cardinality' in op['children'][1]:
+            cost.build_side += op['children'][1]['operator_cardinality']
+        left_cost = op_inspect(op['children'][0])
+        right_cost = op_inspect(op['children'][1])
+        cost.probe_side += left_cost.probe_side + right_cost.probe_side
+        cost.build_side += left_cost.build_side + right_cost.build_side
+        cost.total += left_cost.total + right_cost.total
         return cost
+
     for child_op in op['children']:
         cost += op_inspect(child_op)
+
     return cost
 
 
 def query_plan_cost(cli, dbname, query):
     try:
-        subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, capture_output=True)
+        subprocess.run(
+            f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"",
+            shell=True,
+            check=True,
+            capture_output=True,
+        )
     except subprocess.CalledProcessError as e:
         print("-------------------------")
         print("--------Failure----------")
@@ -92,13 +150,13 @@ def print_diffs(diffs):
     for query_name, old_cost, new_cost in diffs:
         print("")
         print("Query:", query_name)
-        print("Old cost:", old_cost)
-        print("New cost:", new_cost)
+        print("Old total cost:", old_cost.total)
+        print("Old build cost:", old_cost.build_side)
+        print("Old probe cost:", old_cost.probe_side)
+        print("New total cost:", new_cost.total)
+        print("New build cost:", new_cost.build_side)
+        print("New probe cost:", new_cost.probe_side)
 
-def cardinality_is_higher(card_a, card_b):
-    # card_a > card_b?
-    # add 20% threshold before we start caring
-    return card_a > (card_b + card_b / 5 + 5000)
 
 def main():
     old, new, benchmark_dir = parse_args()
@@ -122,11 +180,11 @@ def main():
         old_cost = query_plan_cost(old, OLD_DB_NAME, query)
         new_cost = query_plan_cost(new, NEW_DB_NAME, query)
 
-        if cardinality_is_higher(old_cost, new_cost):
+        if old_cost > new_cost:
             improvements.append((query_name, old_cost, new_cost))
-        elif cardinality_is_higher(new_cost, old_cost):
+        elif new_cost > old_cost:
             regressions.append((query_name, old_cost, new_cost))
-            
+
     exit_code = 0
     if improvements:
         print_banner("IMPROVEMENTS DETECTED")
@@ -137,7 +195,7 @@ def main():
         print_diffs(regressions)
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
-    
+
     os.remove(OLD_DB_NAME)
     os.remove(NEW_DB_NAME)
     os.remove(PROFILE_FILENAME)

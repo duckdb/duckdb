@@ -40,6 +40,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
 	                                                 result->types);
 	result->right = result->right_binder->BindNode(*statement.right);
+	for (auto &c : result->left_binder->correlated_columns) {
+		result->right_binder->AddCorrelatedColumn(c);
+	}
 
 	// move the correlated expressions from the child binders to this binder
 	MoveCorrelatedExpressions(*result->left_binder);

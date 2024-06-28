@@ -1,16 +1,16 @@
 #pragma once
 
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
+#include "duckdb_python/pyutil.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/main/client_properties.hpp"
 
 #include "datetime.h" //from python
-
-namespace duckdb {
 
 /* Backport for Python < 3.10 */
 #if PY_VERSION_HEX < 0x030a00a1
@@ -27,17 +27,25 @@ namespace duckdb {
 #define PyDateTime_TIMEDELTA_GET_SECONDS(o)      (((PyDateTime_Delta *)(o))->seconds)
 #define PyDateTime_TIMEDELTA_GET_MICROSECONDS(o) (((PyDateTime_Delta *)(o))->microseconds)
 
+namespace duckdb {
+
 struct PyDictionary {
 public:
 	PyDictionary(py::object dict);
-	// FIXME: should probably remove these, as they aren't used if the dictionary has MAP format
+	// These are cached so we don't have to create new objects all the time
+	// The CPython API offers PyDict_Keys but that creates a new reference every time, same for values
 	py::object keys;
 	py::object values;
 	idx_t len;
 
 public:
-	PyObject *operator[](const py::object &obj) const {
+	py::handle operator[](const py::object &obj) const {
 		return PyDict_GetItem(dict.ptr(), obj.ptr());
+	}
+
+public:
+	string ToString() const {
+		return string(py::str(dict));
 	}
 
 private:
@@ -108,12 +116,17 @@ private:
 struct PyTimeDelta {
 public:
 	PyTimeDelta(py::handle &obj);
-	int64_t days;
-	int64_t seconds;
+	int32_t days;
+	int32_t seconds;
 	int64_t microseconds;
 
 public:
 	interval_t ToInterval();
+
+private:
+	static int64_t GetDays(py::handle &obj);
+	static int64_t GetSeconds(py::handle &obj);
+	static int64_t GetMicros(py::handle &obj);
 };
 
 struct PyTime {
@@ -124,11 +137,18 @@ public:
 	int32_t minute;
 	int32_t second;
 	int32_t microsecond;
-	PyObject *timezone_obj;
+	py::object timezone_obj;
 
 public:
 	dtime_t ToDuckTime();
 	Value ToDuckValue();
+
+private:
+	static int32_t GetHours(py::handle &obj);
+	static int32_t GetMinutes(py::handle &obj);
+	static int32_t GetSeconds(py::handle &obj);
+	static int32_t GetMicros(py::handle &obj);
+	static py::object GetTZInfo(py::handle &obj);
 };
 
 struct PyDateTime {
@@ -142,13 +162,23 @@ public:
 	int32_t minute;
 	int32_t second;
 	int32_t micros;
-	PyObject *tzone_obj;
+	py::object tzone_obj;
 
 public:
 	timestamp_t ToTimestamp();
 	date_t ToDate();
 	dtime_t ToDuckTime();
-	Value ToDuckValue();
+	Value ToDuckValue(const LogicalType &target_type);
+
+public:
+	static int32_t GetYears(py::handle &obj);
+	static int32_t GetMonths(py::handle &obj);
+	static int32_t GetDays(py::handle &obj);
+	static int32_t GetHours(py::handle &obj);
+	static int32_t GetMinutes(py::handle &obj);
+	static int32_t GetSeconds(py::handle &obj);
+	static int32_t GetMicros(py::handle &obj);
+	static py::object GetTZInfo(py::handle &obj);
 };
 
 struct PyDate {
@@ -167,12 +197,14 @@ public:
 	PyTimezone() = delete;
 
 public:
-	DUCKDB_API static interval_t GetUTCOffset(PyObject *tzone_obj);
+	DUCKDB_API static int32_t GetUTCOffsetSeconds(py::handle &tzone_obj);
+	DUCKDB_API static interval_t GetUTCOffset(py::handle &tzone_obj);
 };
 
 struct PythonObject {
 	static void Initialize();
-	static py::object FromValue(const Value &value, const LogicalType &id);
+	static py::object FromStruct(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
+	static py::object FromValue(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 };
 
 template <class T>

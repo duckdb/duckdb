@@ -53,7 +53,8 @@ public:
 
 	static void PandasBackendScanSwitch(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out);
 
-	static void PandasSerialize(FieldWriter &writer, const FunctionData *bind_data, const TableFunction &function);
+	static void PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                            const TableFunction &function);
 };
 
 } // namespace duckdb

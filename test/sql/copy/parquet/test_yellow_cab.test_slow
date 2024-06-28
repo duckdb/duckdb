@@ -7,7 +7,7 @@ require parquet
 require httpfs
 
 statement ok
-CREATE TABLE yellow_cab AS SELECT * FROM 'https://github.com/cwida/duckdb-data/releases/download/v1.0/yellowcab.parquet'
+CREATE TABLE yellow_cab AS SELECT * FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/yellowcab.parquet'
 
 statement ok
 PRAGMA enable_verification

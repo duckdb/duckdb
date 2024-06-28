@@ -1,6 +1,6 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
@@ -26,13 +26,63 @@ unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
 	                                                      owner_name, if_not_found);
 }
 
-void ChangeOwnershipInfo::Serialize(FieldWriter &writer) const {
-	throw InternalException("ChangeOwnershipInfo cannot be serialized");
+string ChangeOwnershipInfo::ToString() const {
+	string result = "";
+
+	result += "ALTER ";
+	result += TypeToString(entry_catalog_type);
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " OWNED BY ";
+	result += QualifierToString(catalog, owner_schema, owner_name);
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetCommentInfo
+//===--------------------------------------------------------------------===//
+SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, string entry_catalog_p, string entry_schema_p,
+                               string entry_name_p, Value new_comment_value_p, OnEntryNotFound if_not_found)
+    : AlterInfo(AlterType::SET_COMMENT, std::move(entry_catalog_p), std::move(entry_schema_p), std::move(entry_name_p),
+                if_not_found),
+      entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
+}
+
+CatalogType SetCommentInfo::GetCatalogType() const {
+	return entry_catalog_type;
+}
+
+unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
+	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog, schema, name, comment_value,
+	                                                 if_not_found);
+}
+
+string SetCommentInfo::ToString() const {
+	string result = "";
+
+	result += "COMMENT ON ";
+	result += ParseInfo::TypeToString(entry_catalog_type);
+	result += " ";
+	result += QualifierToString(catalog, schema, name);
+	result += " IS ";
+	result += comment_value.ToSQLString();
+
+	result += ";";
+	return result;
+}
+
+SetCommentInfo::SetCommentInfo() : AlterInfo(AlterType::SET_COMMENT) {
 }
 
 //===--------------------------------------------------------------------===//
 // AlterTableInfo
 //===--------------------------------------------------------------------===//
+AlterTableInfo::AlterTableInfo(AlterTableType type) : AlterInfo(AlterType::ALTER_TABLE), alter_table_type(type) {
+}
+
 AlterTableInfo::AlterTableInfo(AlterTableType type, AlterEntryData data)
     : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog), std::move(data.schema), std::move(data.name),
                 data.if_not_found),
@@ -44,49 +94,6 @@ AlterTableInfo::~AlterTableInfo() {
 CatalogType AlterTableInfo::GetCatalogType() const {
 	return CatalogType::TABLE_ENTRY;
 }
-
-void AlterTableInfo::Serialize(FieldWriter &writer) const {
-	writer.WriteField<AlterTableType>(alter_table_type);
-	writer.WriteString(catalog);
-	writer.WriteString(schema);
-	writer.WriteString(name);
-	writer.WriteField(if_not_found);
-	SerializeAlterTable(writer);
-}
-
-unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader) {
-	auto type = reader.ReadRequired<AlterTableType>();
-	AlterEntryData data;
-	data.catalog = reader.ReadRequired<string>();
-	data.schema = reader.ReadRequired<string>();
-	data.name = reader.ReadRequired<string>();
-	data.if_not_found = reader.ReadRequired<OnEntryNotFound>();
-
-	unique_ptr<AlterTableInfo> info;
-	switch (type) {
-	case AlterTableType::RENAME_COLUMN:
-		return RenameColumnInfo::Deserialize(reader, std::move(data));
-	case AlterTableType::RENAME_TABLE:
-		return RenameTableInfo::Deserialize(reader, std::move(data));
-	case AlterTableType::ADD_COLUMN:
-		return AddColumnInfo::Deserialize(reader, std::move(data));
-	case AlterTableType::REMOVE_COLUMN:
-		return RemoveColumnInfo::Deserialize(reader, std::move(data));
-	case AlterTableType::ALTER_COLUMN_TYPE:
-		return ChangeColumnTypeInfo::Deserialize(reader, std::move(data));
-	case AlterTableType::SET_DEFAULT:
-		return SetDefaultInfo::Deserialize(reader, std::move(data));
-	case AlterTableType::FOREIGN_KEY_CONSTRAINT:
-		return AlterForeignKeyInfo::Deserialize(reader, std::move(data));
-	case AlterTableType::SET_NOT_NULL:
-		return SetNotNullInfo::Deserialize(reader, std::move(data));
-	case AlterTableType::DROP_NOT_NULL:
-		return DropNotNullInfo::Deserialize(reader, std::move(data));
-	default:
-		throw SerializationException("Unknown alter table type for deserialization!");
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // RenameColumnInfo
 //===--------------------------------------------------------------------===//
@@ -94,6 +101,10 @@ RenameColumnInfo::RenameColumnInfo(AlterEntryData data, string old_name_p, strin
     : AlterTableInfo(AlterTableType::RENAME_COLUMN, std::move(data)), old_name(std::move(old_name_p)),
       new_name(std::move(new_name_p)) {
 }
+
+RenameColumnInfo::RenameColumnInfo() : AlterTableInfo(AlterTableType::RENAME_COLUMN) {
+}
+
 RenameColumnInfo::~RenameColumnInfo() {
 }
 
@@ -101,23 +112,31 @@ unique_ptr<AlterInfo> RenameColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name, new_name);
 }
 
-void RenameColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteString(old_name);
-	writer.WriteString(new_name);
-}
-
-unique_ptr<AlterInfo> RenameColumnInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto old_name = reader.ReadRequired<string>();
-	auto new_name = reader.ReadRequired<string>();
-	return make_uniq<RenameColumnInfo>(std::move(data), old_name, new_name);
+string RenameColumnInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(old_name);
+	result += " TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
+RenameTableInfo::RenameTableInfo() : AlterTableInfo(AlterTableType::RENAME_TABLE) {
+}
+
 RenameTableInfo::RenameTableInfo(AlterEntryData data, string new_name_p)
     : AlterTableInfo(AlterTableType::RENAME_TABLE, std::move(data)), new_table_name(std::move(new_name_p)) {
 }
+
 RenameTableInfo::~RenameTableInfo() {
 }
 
@@ -125,18 +144,26 @@ unique_ptr<AlterInfo> RenameTableInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name);
 }
 
-void RenameTableInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteString(new_table_name);
-}
-
-unique_ptr<AlterInfo> RenameTableInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto new_name = reader.ReadRequired<string>();
-	return make_uniq<RenameTableInfo>(std::move(data), new_name);
+string RenameTableInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_table_name);
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
+AddColumnInfo::AddColumnInfo(ColumnDefinition new_column_p)
+    : AlterTableInfo(AlterTableType::ADD_COLUMN), new_column(std::move(new_column_p)) {
+}
+
 AddColumnInfo::AddColumnInfo(AlterEntryData data, ColumnDefinition new_column, bool if_column_not_exists)
     : AlterTableInfo(AlterTableType::ADD_COLUMN, std::move(data)), new_column(std::move(new_column)),
       if_column_not_exists(if_column_not_exists) {
@@ -149,20 +176,28 @@ unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, AddColumnInfo>(GetAlterEntryData(), new_column.Copy(), if_column_not_exists);
 }
 
-void AddColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteSerializable(new_column);
-	writer.WriteField<bool>(if_column_not_exists);
-}
-
-unique_ptr<AlterInfo> AddColumnInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto new_column = reader.ReadRequiredSerializable<ColumnDefinition, ColumnDefinition>();
-	auto if_column_not_exists = reader.ReadRequired<bool>();
-	return make_uniq<AddColumnInfo>(std::move(data), std::move(new_column), if_column_not_exists);
+string AddColumnInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ADD COLUMN";
+	if (if_column_not_exists) {
+		result += " IF NOT EXISTS";
+	}
+	throw NotImplementedException("COLUMN SERIALIZATION");
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // RemoveColumnInfo
 //===--------------------------------------------------------------------===//
+RemoveColumnInfo::RemoveColumnInfo() : AlterTableInfo(AlterTableType::REMOVE_COLUMN) {
+}
+
 RemoveColumnInfo::RemoveColumnInfo(AlterEntryData data, string removed_column, bool if_column_exists, bool cascade)
     : AlterTableInfo(AlterTableType::REMOVE_COLUMN, std::move(data)), removed_column(std::move(removed_column)),
       if_column_exists(if_column_exists), cascade(cascade) {
@@ -174,22 +209,31 @@ unique_ptr<AlterInfo> RemoveColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RemoveColumnInfo>(GetAlterEntryData(), removed_column, if_column_exists, cascade);
 }
 
-void RemoveColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteString(removed_column);
-	writer.WriteField<bool>(if_column_exists);
-	writer.WriteField<bool>(cascade);
-}
-
-unique_ptr<AlterInfo> RemoveColumnInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto new_name = reader.ReadRequired<string>();
-	auto if_column_exists = reader.ReadRequired<bool>();
-	auto cascade = reader.ReadRequired<bool>();
-	return make_uniq<RemoveColumnInfo>(std::move(data), std::move(new_name), if_column_exists, cascade);
+string RemoveColumnInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " DROP COLUMN ";
+	if (if_column_exists) {
+		result += "IF EXISTS ";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(removed_column);
+	if (cascade) {
+		result += " CASCADE";
+	}
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
+ChangeColumnTypeInfo::ChangeColumnTypeInfo() : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE) {
+}
+
 ChangeColumnTypeInfo::ChangeColumnTypeInfo(AlterEntryData data, string column_name, LogicalType target_type,
                                            unique_ptr<ParsedExpression> expression)
     : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE, std::move(data)), column_name(std::move(column_name)),
@@ -203,23 +247,38 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
 	                                                       expression->Copy());
 }
 
-void ChangeColumnTypeInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteString(column_name);
-	writer.WriteSerializable(target_type);
-	writer.WriteOptional(expression);
-}
-
-unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto column_name = reader.ReadRequired<string>();
-	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
-	return make_uniq<ChangeColumnTypeInfo>(std::move(data), std::move(column_name), std::move(target_type),
-	                                       std::move(expression));
+string ChangeColumnTypeInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " TYPE ";
+	result += target_type.ToString(); // FIXME: ToSQLString ?
+	auto extra_type_info = target_type.AuxInfo();
+	if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+		auto &string_info = extra_type_info->Cast<StringTypeInfo>();
+		if (!string_info.collation.empty()) {
+			result += " COLLATE " + string_info.collation;
+		}
+	}
+	if (expression) {
+		result += " USING ";
+		result += expression->ToString();
+	}
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
+SetDefaultInfo::SetDefaultInfo() : AlterTableInfo(AlterTableType::SET_DEFAULT) {
+}
+
 SetDefaultInfo::SetDefaultInfo(AlterEntryData data, string column_name_p, unique_ptr<ParsedExpression> new_default)
     : AlterTableInfo(AlterTableType::SET_DEFAULT, std::move(data)), column_name(std::move(column_name_p)),
       expression(std::move(new_default)) {
@@ -232,20 +291,31 @@ unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
 	                                                 expression ? expression->Copy() : nullptr);
 }
 
-void SetDefaultInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteString(column_name);
-	writer.WriteOptional(expression);
-}
-
-unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto column_name = reader.ReadRequired<string>();
-	auto new_default = reader.ReadOptional<ParsedExpression>(nullptr);
-	return make_uniq<SetDefaultInfo>(std::move(data), std::move(column_name), std::move(new_default));
+string SetDefaultInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	if (expression) {
+		result += " SET DEFAULT ";
+		result += expression->ToString();
+	} else {
+		result += " DROP DEFAULT";
+	}
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // SetNotNullInfo
 //===--------------------------------------------------------------------===//
+SetNotNullInfo::SetNotNullInfo() : AlterTableInfo(AlterTableType::SET_NOT_NULL) {
+}
+
 SetNotNullInfo::SetNotNullInfo(AlterEntryData data, string column_name_p)
     : AlterTableInfo(AlterTableType::SET_NOT_NULL, std::move(data)), column_name(std::move(column_name_p)) {
 }
@@ -256,18 +326,26 @@ unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
 	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
 }
 
-void SetNotNullInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteString(column_name);
-}
-
-unique_ptr<AlterInfo> SetNotNullInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto column_name = reader.ReadRequired<string>();
-	return make_uniq<SetNotNullInfo>(std::move(data), std::move(column_name));
+string SetNotNullInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " SET NOT NULL";
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // DropNotNullInfo
 //===--------------------------------------------------------------------===//
+DropNotNullInfo::DropNotNullInfo() : AlterTableInfo(AlterTableType::DROP_NOT_NULL) {
+}
+
 DropNotNullInfo::DropNotNullInfo(AlterEntryData data, string column_name_p)
     : AlterTableInfo(AlterTableType::DROP_NOT_NULL, std::move(data)), column_name(std::move(column_name_p)) {
 }
@@ -278,18 +356,26 @@ unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
 	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
 }
 
-void DropNotNullInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteString(column_name);
-}
-
-unique_ptr<AlterInfo> DropNotNullInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto column_name = reader.ReadRequired<string>();
-	return make_uniq<DropNotNullInfo>(std::move(data), std::move(column_name));
+string DropNotNullInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " DROP NOT NULL";
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // AlterForeignKeyInfo
 //===--------------------------------------------------------------------===//
+AlterForeignKeyInfo::AlterForeignKeyInfo() : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT) {
+}
+
 AlterForeignKeyInfo::AlterForeignKeyInfo(AlterEntryData data, string fk_table, vector<string> pk_columns,
                                          vector<string> fk_columns, vector<PhysicalIndex> pk_keys,
                                          vector<PhysicalIndex> fk_keys, AlterForeignKeyType type_p)
@@ -305,29 +391,16 @@ unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
 	                                                      pk_keys, fk_keys, type);
 }
 
-void AlterForeignKeyInfo::SerializeAlterTable(FieldWriter &writer) const {
-	writer.WriteString(fk_table);
-	writer.WriteList<string>(pk_columns);
-	writer.WriteList<string>(fk_columns);
-	writer.WriteIndexList<PhysicalIndex>(pk_keys);
-	writer.WriteIndexList<PhysicalIndex>(fk_keys);
-	writer.WriteField<AlterForeignKeyType>(type);
-}
-
-unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto fk_table = reader.ReadRequired<string>();
-	auto pk_columns = reader.ReadRequiredList<string>();
-	auto fk_columns = reader.ReadRequiredList<string>();
-	auto pk_keys = reader.ReadRequiredIndexList<PhysicalIndex>();
-	auto fk_keys = reader.ReadRequiredIndexList<PhysicalIndex>();
-	auto type = reader.ReadRequired<AlterForeignKeyType>();
-	return make_uniq<AlterForeignKeyInfo>(std::move(data), std::move(fk_table), std::move(pk_columns),
-	                                      std::move(fk_columns), std::move(pk_keys), std::move(fk_keys), type);
+string AlterForeignKeyInfo::ToString() const {
+	throw NotImplementedException("NOT PARSABLE CURRENTLY");
 }
 
 //===--------------------------------------------------------------------===//
 // Alter View
 //===--------------------------------------------------------------------===//
+AlterViewInfo::AlterViewInfo(AlterViewType type) : AlterInfo(AlterType::ALTER_VIEW), alter_view_type(type) {
+}
+
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
     : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog), std::move(data.schema), std::move(data.name),
                 data.if_not_found),
@@ -340,34 +413,11 @@ CatalogType AlterViewInfo::GetCatalogType() const {
 	return CatalogType::VIEW_ENTRY;
 }
 
-void AlterViewInfo::Serialize(FieldWriter &writer) const {
-	writer.WriteField<AlterViewType>(alter_view_type);
-	writer.WriteString(catalog);
-	writer.WriteString(schema);
-	writer.WriteString(name);
-	writer.WriteField<OnEntryNotFound>(if_not_found);
-	SerializeAlterView(writer);
-}
-
-unique_ptr<AlterInfo> AlterViewInfo::Deserialize(FieldReader &reader) {
-	auto type = reader.ReadRequired<AlterViewType>();
-	AlterEntryData data;
-	data.catalog = reader.ReadRequired<string>();
-	data.schema = reader.ReadRequired<string>();
-	data.name = reader.ReadRequired<string>();
-	data.if_not_found = reader.ReadRequired<OnEntryNotFound>();
-	unique_ptr<AlterViewInfo> info;
-	switch (type) {
-	case AlterViewType::RENAME_VIEW:
-		return RenameViewInfo::Deserialize(reader, std::move(data));
-	default:
-		throw SerializationException("Unknown alter view type for deserialization!");
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // RenameViewInfo
 //===--------------------------------------------------------------------===//
+RenameViewInfo::RenameViewInfo() : AlterViewInfo(AlterViewType::RENAME_VIEW) {
+}
 RenameViewInfo::RenameViewInfo(AlterEntryData data, string new_name_p)
     : AlterViewInfo(AlterViewType::RENAME_VIEW, std::move(data)), new_view_name(std::move(new_name_p)) {
 }
@@ -378,12 +428,17 @@ unique_ptr<AlterInfo> RenameViewInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name);
 }
 
-void RenameViewInfo::SerializeAlterView(FieldWriter &writer) const {
-	writer.WriteString(new_view_name);
+string RenameViewInfo::ToString() const {
+	string result = "";
+	result += "ALTER VIEW ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_view_name);
+	result += ";";
+	return result;
 }
 
-unique_ptr<AlterInfo> RenameViewInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
-	auto new_name = reader.ReadRequired<string>();
-	return make_uniq<RenameViewInfo>(std::move(data), new_name);
-}
 } // namespace duckdb

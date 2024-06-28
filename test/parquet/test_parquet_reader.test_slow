@@ -1,0 +1,1319 @@
+# name: test/parquet/test_parquet_reader.test_slow
+# description: Test Parquet Reader with files on data/parquet-testing
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/manyrowgroups.parquet') limit 50;
+----
+42	
+42	
+43	
+44	
+45	
+46	
+47	
+48	
+49	
+50	
+51	
+52	
+53	
+54	
+55	
+56	
+57	
+58	
+59	
+60	
+61	
+62	
+63	
+64	
+65	
+66	
+67	
+68	
+69	
+70	
+71	
+72	
+73	
+74	
+75	
+76	
+77	
+78	
+79	
+80	
+81	
+82	
+83	
+84	
+85	
+86	
+87	
+88	
+89	
+90	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/map.parquet') limit 50;
+----
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:19:57 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=921}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:19:59 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=922}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:19:59 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=919}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:01 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=908}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:02 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=908}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:05 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=907}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:05 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=910}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Cascade=pass, X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:07 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=MISS from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=20}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:07 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=907}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:06 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=908}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:08 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=910}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:08 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=907}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:09 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=909}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:10 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=913}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Cascade=pass, X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:10 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=MISS from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=20}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:11 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=873}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:12 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=868}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:14 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=871}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:15 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=871}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:15 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=870}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:14 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=867}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:16 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=874}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:16 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=869}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:20 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=874}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:20 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=877}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:21 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=876}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:22 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=873}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:23 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=874}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:26 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=879}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:25 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=876}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:26 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=875}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:26 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=874}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:28 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=872}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:29 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=876}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:29 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=878}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Cascade=pass, X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:31 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=MISS from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=20}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:30 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=877}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Cascade=pass, X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:34 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=MISS from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=20}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Cascade=pass, X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:34 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=MISS from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=20}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Cascade=pass, X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:35 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=MISS from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=20}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:36 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=920}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Cascade=pass, X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:36 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=MISS from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=20}
+{Content-Encoding=gzip, Connection=keep-alive, Content-Type=application/javascript;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:43 GMT, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Content-Type-Options=nosniff, Last-Modified=Tue, 26 Jan 2021 15:49:12 GMT, Content-Length=151}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:43 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=917}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:44 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=876}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:49 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=891}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:49 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=892}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:49 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=892}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:50 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=892}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:20:53 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=891}
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/int32_decimal.parquet') limit 50;
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query IIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nonnullable.impala.parquet') limit 50;
+----
+8	[-1]	[[-1, -2], []]	{k1=-1}	[{}, {k1=1}, {}, {}]	{'a': -1, 'B': [-1], 'c': {'D': [[{'e': -1, 'f': nonnullable}]]}, 'G': {}}
+
+query IIIIIIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/bug687_nulls.parquet') limit 50;
+----
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	
+95	42	39	49	16	34	82	7	40	82	
+49	92	59	47	49	48	59	18	70	73	
+9	31	80	77	94	28	53	93	75	89	
+0	90	62	0	56	61	71	46	52	4	
+83	60	94	14	38	31	48	67	27	93	
+28	91	68	26	14	87	19	96	8	26	
+10	38	42	47	90	38	37	55	66	41	
+63	96	53	42	1	45	98	11	19	3	
+86	48	97	33	36	41	62	58	2	40	
+27	24	70	65	91	44	83	70	69	5	
+62	25	17	69	20	75	66	33	95	91	
+9	67	20	44	89	3	47	16	39	15	
+21	8	0	30	38	14	13	41	80	43	
+18	4	49	24	4	70	87	4	88	5	
+55	58	29	39	58	3	16	80	2	70	
+54	26	63	8	19	57	99	80	62	8	
+76	33	8	18	46	57	23	49	14	97	
+74	60	84	27	16	39	29	30	35	13	
+3	51	50	87	86	16	64	45	93	18	
+10	72	87	6	66	55	38	62	55	56	
+80	47	84	25	100	92	95	43	20	45	
+58	66	65	86	19	46	75	100	40	17	
+29	64	60	5	32	10	71	41	19	72	
+84	100	47	26	22	21	29	25	0	10	
+97	71	84	88	99	50	26	45	82	34	
+29	89	9	9	57	66	24	1	61	97	
+98	58	62	85	2	18	0	75	50	23	
+65	60	92	49	60	73	68	40	18	38	
+35	34	50	81	56	13	1	94	69	44	
+0	90	7	66	62	78	62	5	11	9	
+4	96	70	34	83	91	49	23	30	72	
+20	49	15	13	3	70	33	74	74	1	
+35	26	5	81	55	99	86	74	18	73	
+37	74	52	45	18	83	25	54	68	57	
+88	42	6	30	39	51	26	35	71	3	
+93	53	57	66	40	69	47	91	59	46	
+24	97	45	81	78	72	92	46	7	19	
+71	7	59	99	39	53	11	91	89	63	
+91	89	21	50	50	14	29	70	35	49	
+39	43	91	50	64	78	60	70	13	26	
+62	59	33	37	14	53	95	0	47	46	
+86	15	56	13	65	97	80	80	71	95	
+81	74	22	9	87	24	36	96	89	0	
+16	98	73	66	20	57	49	53	36	3	
+70	87	100	82	29	95	44	59	69	48	
+23	99	9	79	58	40	60	37	47	53	
+43	69	45	2	12	86	4	48	74	24	
+13	73	74	19	61	6	79	54	84	37	
+4	94	21	52	43	32	43	51	56	60	
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/bug1554.parquet') limit 50;
+----
+1584883:SSuWRbZnFmIqCUBQYxk9+48fdIwywjfQUyfcKP+pbJhaqWS+UZh0Sua8VNJKlQpIlRzyWr57xyrqTh2ZgIQnxQ==	False	NULL	200	
+1584883:VduFa/R/CL7CbbEUmdFKysh80R38hXdrfuDlFhsa5mU3G3vfUDiQdTR0H0LzJzWojUDGgUr+hKp55VRRXMxaaQ==	False	NULL	200	
+1584883:NWflFlh0KoHKTGAQ6G1GM3cs6HiRkJuWX+GAmgI0TSo6zxjXB9YuidjQfJNP8dNi5fuHf6gkY83x5RqJkWuqLw==	True	NULL	200	
+1584883:Hi9EQ0dC7sFD8uphsqx96y/QCPmVyHpE+0EhMfgIBpsWzinDKam6zdEw7rnV8IgI0DYAZZaKVoBrqoHywLVZig==	False	NULL	200	
+1584883:n/Bpv+w2E1VG36/a6fwm2zsLEAIHwsRmfW33wuSfwbrvOXCzMInLeNKpR+mioFw3W1smXcZFimjLRRsbQhEAUw==	True	NULL	200	
+1584883:5a+QZSuM5S9qyPAjF9XpdYNRLNyX2P0yhAMBrbZYThG2szIh6Be/GuVv746g1hT8f0hQiy49VCKlKqae9146Tg==	False	NULL	200	
+1584883:7FpD1PaTyBxSYLgF5iSpCJ9k1M3gA5/X1O4m5Vy9M03TjNnVKagejLzOWm/Rg6mkm1gZKnmOxpKCb00e9pk21Q==	False	NULL	200	
+1584883:FDyqOk9N9HQ5UWmp4UY/tO7s8p6eFXz9Acbm5OJrUa8BLU7Zu9j4wUlTAAh4NjQjpBA46+/XTdX6Ojt4RNCeHw==	False	NULL	200	
+1584883:FSq0NM7FsCnVNlUTLv2EN5tiGAkWwvCx2VvggkpbyQJ0ErvXb3Kc+8OvaBsjptykB6RHgcQe89ePyEZRTqBJ/A==	False	NULL	200	
+1584883:LAtKt9Q5MKeUG/zt00DD152KmBmZs5h5K1ymW8mCua+pJr9W2oW6JbPUL0e98O3i1nQQuYJy0HTNwWMFsbKYZA==	True	NULL	200	
+1584883:rhINhrcakKvZaKnNhzMyXZf6ZFRmUtgKxO8JtWXrORiIvOuVoBL7hl1sxCVBHOTFUFKGFeJkCCLaWUv6NJFJUw==	True	NULL	200	
+1584883:jS4a83jeLln8kcT2C887EQNSHz4c0RFk7nYvHPWQnqheMPGsP4DOcZ15eV+7Ofc3vMm5PEI5OgSBo74TiYz+Cw==	False	NULL	200	
+1584883:pD3KJW8KScd31AUq62Bx3dYytwgcFnGuVU4UFdZ4iwuRJ5gIIUtLVugQF7N6/n5IjyOT2lhmcrSSGxWGksk2iQ==	True	NULL	200	
+1584883:CHC8pEvGofqoTO7ervysD6aQUxlKrtDKyvwl0ORgay6u7zbMEU4+ACWoQtCvqiVHyObJDM40f+PN04uweypN5w==	False	NULL	200	
+1584883:2kTbjxtsfe1D1nvFjGkoWJidTL/TgoIK+nH7RU6IkNQuSTB6otiTqWCqEuqVZz//j9JkIR2J0ok8vdqdg96rEQ==	False	NULL	200	
+1584883:1PXA4U5vJpf8b9kR7CODrO1/WIGmZuFBvgHQ6UxOLLwnkFholO2Fn4lo2S9xnzBd/gbkKtC8FZA7VL4WFcP36w==	False	NULL	200	
+1584883:K21CFjX22B2isdsK9aNrZYPVUYhI3wDEw4IpS4EYCCVk77CkxwZARxfuW5DEKz+RXyaItEa1akibR8bDDbrSeA==	False	NULL	301	
+1584883:SO4F1QyovhE55GDmeT1yZ0liYdJBMwoEDGgq5G8oYAIhDoiIKLEvHLC+abQKm2pWnQS5HELmmrJXYUXcY9zmKg==	False	NULL	301	
+1584883:2RWYSn8ut9IWkiYUnGKBKYCOr3fO6SxVvG8zJoo+RyK3OLtOT00fGxiIdveFWCAigMwtCSdUdtXVs8LJYk3TLw==	True	NULL	200	
+1584883:ao/jijv+bA0HH/E213d9EWo9E61CEbz1nCXF0VobQ9cfDvWvVCiXVCBkj3luac2eXQ2oU71xicBidakQHwUpbQ==	True	NULL	200	
+1584883:1XO5nBvhK90bbcTrm0lp0EegFWY2cFOHErgnb5+Dj/JEE/BSmwptDDYMnZ18oGOFfAi78yBAaO7UvyRLSZAi9g==	True	NULL	200	
+1584883:6P5saT4xV+F+6Jl78lnHF27Gi0GWtMSHIztdqmJ3/8GbWYW4PDIU/LFjljGGpXIglWKaHrZQQZEOQdPfqxYTfQ==	False	NULL	200	
+1584883:LQNAJaeBQsgBNQj3iJrsCTp+B+2i/M4UdUw4yvaoi1re8kitqW32tzgs7z1+Zb/v9wRGYohDyXG8F34kX63G2w==	False	NULL	301	
+1584883:ksaReqttvBfQSW0TzmHiIMzT6sr3tSQRRgqOVU1stNPioK85uhqQm1qlpZWy8l3qY/27zmSlBKpgq1pSV5eqHA==	True	NULL	200	
+1584883:tdIsoH3sq0orLbgMRYJdKYnAbys/EUQ54IdTbMtGecyiKP6favlnEN+tSHxwLIR+8KGND9ZJCUxob2T77fpg2Q==	False	NULL	200	
+1584883:RQGT0bRljTJkv8QFXVl9ysNKsgXYXaDrnbik9UaWpFp1w1mw18BkkhGuoHseoKC4VDQ4cOizNs/rnQoxtvWk8w==	True	NULL	200	
+1584883:uYPae/Chl/gXIofH5stxoHHV/EU68uI28n6Ku+fq84928t5u1TSGN0lP+D97ToSzDun7lMfJivDpNa9ifwuJtg==	False	NULL	200	
+1584883:VyPybZtYXa0YLSyUTxSvAdjCaMPCooat5jun5iO3s3pVahmr4iYMbo9WziXZp0ZWlbfWFeWyIx53JWKQ9K+z4w==	False	NULL	200	
+1584883:xJhnEy1F60+nrv2FMceSUXSVQj1yawmhOC9FlqTWBdXsVEQkJbNx3MpEzFObHQi2FwuADhpYH7avo3Xr4k1U8Q==	False	NULL	200	
+1584883:4Uuv0F+1c880igajW5a8afHH8yM1ykC22jjeVkReOVjnxrfc32nPyBsNYYMGx5GqtuS0em8sL9gKBKyBzccyhQ==	True	NULL	200	
+1584883:H2k0FSNL3EhhNiHsLMlQuiszT07pFjCeDg4Gjz6JlNNAPKOR/ylH43dRAK4OF890b1oDO4ODDW+idKpalci7ng==	True	NULL	200	
+1584883:8HxcllmeCZykPQL4onp9sngu5NyhldllG+uooFHx+ffrvD2JzuvZPXtgfJHTnVqixXqHy+qvvrKI5KRnITZybA==	False	NULL	200	
+1584883:F8cHJKmDG/cjx9lmaZxgIESDtisUUIVcNE3CCQaZjKxLAtahwAl00EeVIExemLCYtxMhU0hzpHPelp4pIUYa9w==	False	NULL	200	
+1584883:ZwQMNv9XpwPCZHPbFj6jcvs0bG14STM8IEA/HUR6GJeXdCEME4pGpOvU16uic8R7jg2No2PbiWR1WFI6dg91kA==	False	NULL	200	
+1584883:/9oNXa41L7LpkzrCFIx4msuCJm2s80n0wemNj9wtKDB6fMaeaq9irScjrQGRvSTrg5oB1Kku3vPZVnOaXzQECw==	True	NULL	200	
+1584883:fQToEo+zxHPica3wgclvEvuOz8wz85sVGS0s28jwwsMiCKvweOihRgiLF/kOJVSRNrVh+Uy8S7rxf1BTk7Sa7A==	False	NULL	200	
+1584883:lHNGzm9b7GvugJOfk7tpXVgbrbl2m8KvkO4/+4t7XnHOlePIvjBnFtDaid/j0SLQFscbl+1uE8vuuilMloGCzg==	True	NULL	200	
+1584883:Zw+6ZMtKV1TP2aHxwM6Wb+py63OTgS1z0hg23NZ6v6KOigrBuIQG5yDWZqq2xf3L/KlMTtYmm6B4NAOOCxYa+A==	False	NULL	200	
+1584883:e3I5/mprON71/PKMu4VGLZvKSQqjHdpUsMd3mhtvyfq7FxsNtmq917uWZTsGhYa/aH/fKgNQwcO2Lz28enf2Cg==	False	NULL	200	
+1584883:+5a8QvGHJXEKan6gTR3QC4P0O2kNi5s+AjDCJ5jIc1iM8Hwy3xCugdDCZkJZl/2DOlC1eZ7oN5nPDAKeMqaEZw==	False	NULL	200	
+1584883:xfPdqO/p0wq7M6VDb0dPNl5nVOHQzx+16a86zTwQ5a6H7gRG7zRCrbuZIkoeHCS3pzrPOXuszN+awLf9L8Pc7g==	False	NULL	200	
+1584883:sloC8+ntcmq+uA1T6fj6B3LnYBX+My+eP2z4HWe3UZWIVvmJU/65OHbxq9j8GJ9Cl19IW8640UhYJi+9K2myXw==	False	NULL	200	
+1584883:xigiEuwAT9hgD7sf+m7izWk4Fg+CSQzL4dA/a4Awmvibg67z2/TdFmEpv9ThDwmmATZLJljmMI/AYYlpUrCSZA==	False	NULL	200	
+1584883:AmkI0OfE1E3ThllBN4Mzt6zo5knnh6qA6nd2YklzUrWqxOZgrX1RUO2Pbo9R9xmvHcz9CS9W0LbbRK7blIvnVA==	False	NULL	301	
+1584883:splAiNNTxaloux0vAGrdLqYGYz439TGLsZQ4ajURDqegXD5NXHaTOS3KLZ1OTE3FANIRv3TK7sZezRKy6flZlg==	False	NULL	301	
+1584883:x+AyNGI2O7NqHQTHF9Oqe7nagU8YpCyP8XfSAMr7uRB/yVjriA/ygEX8h6hSRWobFbUmia7dPL4hXs+5PU0i0g==	False	NULL	200	
+1584883:uqcjRG00swnHtDfcbr1LaXrYZpTXww01FuKwVeYeg9lqe8wSVlH+uueRMlQbGi89xsE63A4qcqvvmT6kDQ+FWw==	False	NULL	200	
+1584883:LhIrARYOS0qN+fQ8dR75Wdby4mBhcg4dkwRJsChfQi3SXzczS/26T9owAGBRygTIiOHwTWJYy2sOK/JV3OVKzg==	False	NULL	200	
+1584883:7ANjserj/Xp/vz4XFpL1wOC68SXgZ4LvfE5ggEiTrl1yjOtH4TWIezdNsg4TNakKE5TsYM06P4Qd9HQenS9ksA==	True	NULL	200	
+1584883:sV6uqASHK17GJVEXh2mxbbRIk08qivvqS561cy09Zn+SCUMHZL7J/BLRsx0/kYi1Uzkh52SsocpbQzuYeRT+lQ==	False	NULL	200	
+
+query IIIII
+SELECT * FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 50;
+----
+250 values hashing to 562eeaca73c7830bb6b5457b51156014
+
+query II
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nested_lists.snappy.parquet') limit 50;
+----
+[[[a, b], [c]], [NULL, [d]]]	1
+[[[a, b], [c, d]], [NULL, [e]]]	1
+[[[a, b], [c, d], [e]], [NULL, [f]]]	1
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nulls.snappy.parquet') limit 50;
+----
+{'b_c_int': NULL}
+{'b_c_int': NULL}
+{'b_c_int': NULL}
+{'b_c_int': NULL}
+{'b_c_int': NULL}
+{'b_c_int': NULL}
+{'b_c_int': NULL}
+{'b_c_int': NULL}
+
+query III
+SELECT * FROM parquet_scan('data/parquet-testing/nan-float.parquet') limit 50;
+----
+-1.0	foo	True	
+inf	bar	False
+2.5	baz	True	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/manyrowgroups2.parquet') limit 50;
+----
+42	
+42	
+43	
+44	
+45	
+46	
+47	
+48	
+49	
+50	
+51	
+52	
+53	
+54	
+55	
+56	
+57	
+58	
+59	
+60	
+61	
+62	
+63	
+64	
+65	
+66	
+67	
+68	
+69	
+70	
+71	
+72	
+73	
+74	
+75	
+76	
+77	
+78	
+79	
+80	
+81	
+82	
+83	
+84	
+85	
+86	
+87	
+88	
+89	
+90	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/struct.parquet') limit 50;
+----
+{'str_field': hello, 'f64_field': NULL}
+{'str_field': NULL, 'f64_field': 1.23}
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/byte_array_decimal.parquet') limit 50;
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query II
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/list_columns.parquet') limit 50;
+----
+[1, 2, 3]	[abc, efg, hij]	
+[NULL, 1]	NULL	
+[4]	[efg, NULL, hij, xyz]	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/timestamp-ms.parquet') limit 50;
+----
+2020-10-05 17:21:49	
+
+query IIIIIIIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_dictionary.parquet') limit 50;
+----
+0	True	0	0	0	0	0.0	0.0	01/01/09	0	2009-01-01 00:00:00	
+1	False	1	1	1	10	1.100000023841858	10.1	01/01/09	1	2009-01-01 00:01:00	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/binary.parquet') limit 50;
+----
+\x00
+\x01
+\x02
+\x03
+\x04
+\x05
+\x06
+\x07
+\x08
+\x09
+\x0A
+\x0B
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nation.dict-malformed.parquet') limit 50;
+----
+0	ALGERIA	0	 haggle. carefully final deposits detect slyly agai	
+1	ARGENTINA	1	al foxes promise slyly according to the regular accounts. bold requests alon	
+2	BRAZIL	1	y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 	
+3	CANADA	1	eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold	
+4	EGYPT	4	y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d	
+5	ETHIOPIA	0	ven packages wake quickly. regu	
+6	FRANCE	3	refully final requests. regular, ironi	
+7	GERMANY	3	l platelets. regular accounts x-ray: unusual, regular acco	
+8	INDIA	2	ss excuses cajole slyly across the packages. deposits print aroun	
+9	INDONESIA	2	 slyly express asymptotes. regular deposits haggle slyly. carefully ironic hockey players sleep blithely. carefull	
+10	IRAN	4	efully alongside of the slyly final dependencies. 	
+11	IRAQ	4	nic deposits boost atop the quickly final requests? quickly regula	
+12	JAPAN	2	ously. final, express gifts cajole a	
+13	JORDAN	4	ic deposits are blithely about the carefully regular pa	
+14	KENYA	0	 pending excuses haggle furiously deposits. pending, express pinto beans wake fluffily past t	
+15	MOROCCO	0	rns. blithely bold courts among the closely regular packages use furiously bold platelets?	
+16	MOZAMBIQUE	0	s. ironic, unusual asymptotes wake blithely r	
+17	PERU	1	platelets. blithely pending dependencies use fluffily across the even pinto beans. carefully silent accoun	
+18	CHINA	2	c dependencies. furiously express notornis sleep slyly regular accounts. ideas sleep. depos	
+19	ROMANIA	3	ular asymptotes are about the furious multipliers. express dependencies nag above the ironically ironic account	
+20	SAUDI ARABIA	4	ts. silent requests haggle. closely express packages sleep across the blithely	
+21	VIETNAM	2	hely enticingly express accounts. even, final 	
+22	RUSSIA	3	 requests against the platelets use never according to the quickly regular pint	
+23	UNITED KINGDOM	3	eans boost carefully special requests. accounts are. carefull	
+24	UNITED STATES	1	y final packages. slow foxes cajole quickly. quickly silent platelets breach ironic accounts. unusual pinto be	
+
+query IIIIIIIIIIIIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet') limit 50;
+----
+1	155190	7706	1	17	21168.23	0.04	0.02	N	O	1996-03-13	1996-02-12	1996-03-22	DELIVER IN PERSON	TRUCK	egular courts above the	
+1	67310	7311	2	36	45983.16	0.09	0.06	N	O	1996-04-12	1996-02-28	1996-04-20	TAKE BACK RETURN	MAIL	ly final dependencies: slyly bold 	
+1	63700	3701	3	8	13309.6	0.1	0.02	N	O	1996-01-29	1996-03-05	1996-01-31	TAKE BACK RETURN	REG AIR	riously. regular, express dep	
+1	2132	4633	4	28	28955.64	0.09	0.06	N	O	1996-04-21	1996-03-30	1996-05-16	NONE	AIR	lites. fluffily even de	
+1	24027	1534	5	24	22824.48	0.1	0.04	N	O	1996-03-30	1996-03-14	1996-04-01	NONE	FOB	 pending foxes. slyly re	
+1	15635	638	6	32	49620.16	0.07	0.02	N	O	1996-01-30	1996-02-07	1996-02-03	DELIVER IN PERSON	MAIL	arefully slyly ex	
+2	106170	1191	1	38	44694.46	0.0	0.05	N	O	1997-01-28	1997-01-14	1997-02-02	TAKE BACK RETURN	RAIL	ven requests. deposits breach a	
+3	4297	1798	1	45	54058.05	0.06	0.0	R	F	1994-02-02	1994-01-04	1994-02-23	NONE	AIR	ongside of the furiously brave acco	
+3	19036	6540	2	49	46796.47	0.1	0.0	R	F	1993-11-09	1993-12-20	1993-11-24	TAKE BACK RETURN	RAIL	 unusual accounts. eve	
+3	128449	3474	3	27	39890.88	0.06	0.07	A	F	1994-01-16	1993-11-22	1994-01-23	DELIVER IN PERSON	SHIP	nal foxes wake. 	
+3	29380	1883	4	2	2618.76	0.01	0.06	A	F	1993-12-04	1994-01-07	1994-01-01	NONE	TRUCK	y. fluffily pending d	
+3	183095	650	5	28	32986.52	0.04	0.0	R	F	1993-12-14	1994-01-10	1994-01-01	TAKE BACK RETURN	FOB	ages nag slyly pending	
+3	62143	9662	6	26	28733.64	0.1	0.02	A	F	1993-10-29	1993-12-18	1993-11-04	TAKE BACK RETURN	RAIL	ges sleep after the caref	
+4	88035	5560	1	30	30690.9	0.03	0.08	N	O	1996-01-10	1995-12-14	1996-01-18	DELIVER IN PERSON	REG AIR	- quickly regular packages sleep. idly	
+5	108570	8571	1	15	23678.55	0.02	0.04	R	F	1994-10-31	1994-08-31	1994-11-20	NONE	AIR	ts wake furiously 	
+5	123927	3928	2	26	50723.92	0.07	0.08	R	F	1994-10-16	1994-09-25	1994-10-19	NONE	FOB	sts use slyly quickly special instruc	
+5	37531	35	3	50	73426.5	0.08	0.03	A	F	1994-08-08	1994-10-13	1994-08-26	DELIVER IN PERSON	AIR	eodolites. fluffily unusual	
+6	139636	2150	1	37	61998.31	0.08	0.03	A	F	1992-04-27	1992-05-15	1992-05-02	TAKE BACK RETURN	TRUCK	p furiously special foxes	
+7	182052	9607	1	12	13608.6	0.07	0.03	N	O	1996-05-07	1996-03-13	1996-06-03	TAKE BACK RETURN	FOB	ss pinto beans wake against th	
+7	145243	7758	2	9	11594.16	0.08	0.08	N	O	1996-02-01	1996-03-02	1996-02-19	TAKE BACK RETURN	SHIP	es. instructions	
+7	94780	9799	3	46	81639.88	0.1	0.07	N	O	1996-01-15	1996-03-27	1996-02-03	COLLECT COD	MAIL	 unusual reques	
+7	163073	3074	4	28	31809.96	0.03	0.04	N	O	1996-03-21	1996-04-08	1996-04-20	NONE	FOB	. slyly special requests haggl	
+7	151894	9440	5	38	73943.82	0.08	0.01	N	O	1996-02-11	1996-02-24	1996-02-18	DELIVER IN PERSON	TRUCK	ns haggle carefully ironic deposits. bl	
+7	79251	1759	6	35	43058.75	0.06	0.03	N	O	1996-01-16	1996-02-23	1996-01-22	TAKE BACK RETURN	FOB	jole. excuses wake carefully alongside of 	
+7	157238	2269	7	5	6476.15	0.04	0.02	N	O	1996-02-10	1996-03-26	1996-02-13	NONE	FOB	ithely regula	
+32	82704	7721	1	28	47227.6	0.05	0.08	N	O	1995-10-23	1995-08-27	1995-10-26	TAKE BACK RETURN	TRUCK	sleep quickly. req	
+32	197921	441	2	32	64605.44	0.02	0.0	N	O	1995-08-14	1995-10-07	1995-08-27	COLLECT COD	AIR	lithely regular deposits. fluffily 	
+32	44161	6666	3	2	2210.32	0.09	0.02	N	O	1995-08-07	1995-10-07	1995-08-23	DELIVER IN PERSON	AIR	 express accounts wake according to the	
+32	2743	7744	4	4	6582.96	0.09	0.03	N	O	1995-08-04	1995-10-01	1995-09-03	NONE	REG AIR	e slyly final pac	
+32	85811	8320	5	44	79059.64	0.05	0.06	N	O	1995-08-28	1995-08-20	1995-09-14	DELIVER IN PERSON	AIR	symptotes nag according to the ironic depo	
+32	11615	4117	6	6	9159.66	0.04	0.03	N	O	1995-07-21	1995-09-23	1995-07-25	COLLECT COD	RAIL	 gifts cajole carefully.	
+33	61336	8855	1	31	40217.23	0.09	0.04	A	F	1993-10-29	1993-12-19	1993-11-08	COLLECT COD	TRUCK	ng to the furiously ironic package	
+33	60519	5532	2	32	47344.32	0.02	0.05	A	F	1993-12-09	1994-01-04	1993-12-28	COLLECT COD	MAIL	gular theodolites	
+33	137469	9983	3	5	7532.3	0.05	0.03	A	F	1993-12-09	1993-12-25	1993-12-23	TAKE BACK RETURN	AIR	. stealthily bold exc	
+33	33918	3919	4	41	75928.31	0.09	0.0	R	F	1993-11-09	1994-01-24	1993-11-11	TAKE BACK RETURN	MAIL	unusual packages doubt caref	
+34	88362	871	1	13	17554.68	0.0	0.07	N	O	1998-10-23	1998-09-14	1998-11-06	NONE	REG AIR	nic accounts. deposits are alon	
+34	89414	1923	2	22	30875.02	0.08	0.06	N	O	1998-10-09	1998-10-16	1998-10-12	NONE	FOB	thely slyly p	
+34	169544	4577	3	6	9681.24	0.02	0.06	N	O	1998-10-30	1998-09-20	1998-11-05	NONE	FOB	ar foxes sleep 	
+35	450	2951	1	24	32410.8	0.02	0.0	N	O	1996-02-21	1996-01-03	1996-03-18	TAKE BACK RETURN	FOB	, regular tithe	
+35	161940	4457	2	34	68065.96	0.06	0.08	N	O	1996-01-22	1996-01-06	1996-01-27	DELIVER IN PERSON	RAIL	s are carefully against the f	
+35	120896	8433	3	7	13418.23	0.06	0.04	N	O	1996-01-19	1995-12-22	1996-01-29	NONE	MAIL	 the carefully regular 	
+35	85175	7684	4	25	29004.25	0.06	0.05	N	O	1995-11-26	1995-12-25	1995-12-21	DELIVER IN PERSON	SHIP	 quickly unti	
+35	119917	4940	5	34	65854.94	0.08	0.06	N	O	1995-11-08	1996-01-15	1995-11-26	COLLECT COD	MAIL	. silent, unusual deposits boost	
+35	30762	3266	6	28	47397.28	0.03	0.02	N	O	1996-02-01	1995-12-24	1996-02-28	COLLECT COD	RAIL	ly alongside of 	
+36	119767	9768	1	42	75043.92	0.09	0.0	N	O	1996-02-03	1996-01-21	1996-02-23	COLLECT COD	SHIP	 careful courts. special 	
+37	22630	5133	1	40	62105.2	0.09	0.03	A	F	1992-07-21	1992-08-01	1992-08-15	NONE	REG AIR	luffily regular requests. slyly final acco	
+37	126782	1807	2	39	70542.42	0.05	0.02	A	F	1992-07-02	1992-08-18	1992-07-28	TAKE BACK RETURN	RAIL	the final requests. ca	
+37	12903	5405	3	43	78083.7	0.05	0.08	A	F	1992-07-10	1992-07-06	1992-08-02	DELIVER IN PERSON	TRUCK	iously ste	
+38	175839	874	1	44	84252.52	0.04	0.02	N	O	1996-09-29	1996-11-17	1996-09-30	COLLECT COD	MAIL	s. blithely unusual theodolites am	
+39	2320	9821	1	44	53782.08	0.09	0.06	N	O	1996-11-14	1996-12-15	1996-12-12	COLLECT COD	RAIL	eodolites. careful	
+
+query III
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nested_maps.snappy.parquet') limit 50;
+----
+{a={1=true, 2=false}}	1	1.000000
+{b={1=true}}	1	1.000000
+{c=NULL}	1	1.000000
+{d={}}	1	1.000000
+{e={1=true}}	1	1.000000
+{f={3=true, 4=false, 5=true}}	1	1.000000
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/dict-page-offset-zero.parquet') limit 50;
+----
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+1552	
+
+query III
+SELECT * FROM parquet_scan('data/parquet-testing/silly-names.parquet') limit 50;
+----
+1	foo	True	
+2	bar	False	
+3	baz	True	
+
+query III
+SELECT * FROM parquet_scan('data/parquet-testing/zstd.parquet') limit 50;
+----
+-1.0	foo	True	
+NULL	bar	False	
+2.5	baz	True	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/bug1618_struct_strings.parquet') limit 50;
+----
+{'str_field': hello, 'f64_field': NULL}
+{'str_field': NULL, 'f64_field': 1.23}
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/single_nan.parquet') limit 50;
+----
+NULL	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/int64_decimal.parquet') limit 50;
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query IIIIIIIIIIIIIIIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/filter_bug1391.parquet') limit 50;
+----
+98	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+13	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+175	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+200	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+262	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+206	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+204	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+131	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+181	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+269	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+156	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	64	Outpatient	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+221	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	64	Outpatient	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+134	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	141	Therapies CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+132	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	141	Therapies CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+128	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	141	Therapies CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+129	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	141	Therapies CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+268	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	141	Therapies CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+171	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	2011-09-04 00:00:00.000	31	MOTH BALLED	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+103	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	57	Head and Neck CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+107	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	57	Head and Neck CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+10091	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	61	Radiology	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+10161	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	35	Division of Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	4	Division	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+254	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	141	Therapies CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+57	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	35	Division of Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	3	Department	4	Division	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+38	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	31	MOTH BALLED	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+240	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	31	MOTH BALLED	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+192	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	169	Other Patient Services	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+122	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+72	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	61	Radiology	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+181	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	35	Division of Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	4	Division	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+14	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	2011-06-05 00:00:00.000	31	MOTH BALLED	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+76	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	278	Thoracic, Haematology, Palliative Care & Acute Oncology CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+95	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	10323	Medical Support Directorate	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+10002	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	57	Head and Neck CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+10331	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	169	Other Patient Services	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	2015-07-13 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+89	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	34	Division of Medicine	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	4	Division	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+35	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	114	AHT	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	4	Division	6	Trust	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+23	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	169	Other Patient Services	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	2015-07-13 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+240	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	114	AHT	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	6	Trust	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+119	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	34	Division of Medicine	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	4	Division	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+145	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+10061	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+84	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	275	DDU Emergency & General Surgery	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	3	Department	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+130	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	141	Therapies CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+18	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	2009-09-21 00:00:00.000	31	MOTH BALLED	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+18	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	2009-09-22 00:00:00.000	9999-12-31 00:00:00.000	31	MOTH BALLED	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+142	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	31	MOTH BALLED	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+228	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	169	Other Patient Services	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+248	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	10325	E.B.M.E CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+257	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	141	Therapies CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/fixed_length_decimal_legacy.parquet') limit 50;
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/timestamp.parquet') limit 50;
+----
+2020-10-05 17:21:49.48844
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/fixed_length_decimal.parquet') limit 50;
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query IIIIIIIIIIIIIIIIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/leftdate3_192_loop_1.parquet') limit 50;
+----
+00080010	10006	22156	0.0	1.0	3743.0	1925-12-31	109.0	109.75	109.0	400.0	NULL	109.375	109.5	600.0	7.412625	7.26	109.75	NULL	NULL	
+00299090	10022	22158	0.0	1.0	3420.0	1925-12-31	55.0	56.0	56.0	3400.0	NULL	56.0	56.25	200.0	9.365437	9.365437	55.125	NULL	NULL	
+00338690	10030	22160	0.0	1.0	3310.0	1925-12-31	150.0	150.625	150.0	300.0	NULL	150.0	150.75	156.0	9.969793	9.15552	150.625	NULL	NULL	
+00369890	10049	22161	0.0	1.0	2640.0	1925-12-31	73.5	74.0	74.0	500.0	NULL	73.75	74.0	250.0	2.0	2.0	73.5	NULL	NULL	
+00462610	10057	20020	0.0	1.0	3541.0	1925-12-31	11.75	12.625	12.25	2200.0	NULL	12.125	12.5	500.0	4.0	4.0	11.75	NULL	NULL	
+00621210	10065	20023	0.0	1.0	6726.0	1925-12-31	107.0	108.0	-107.5	0.0	NULL	107.0	108.0	120.0	68.298164	60.599998	NULL	NULL	NULL	
+00799090	10073	22162	0.0	1.0	3520.0	1925-12-31	17.5	17.5	17.5	200.0	NULL	17.25	18.0	138.0	0.2	0.2	17.5	NULL	NULL	
+00899390	10081	22163	0.0	1.0	1000.0	1925-12-31	9.0	9.0	9.0	600.0	NULL	9.0	9.125	1192.0	1.0	1.0	9.0	NULL	NULL	
+00929210	10102	22164	0.0	1.0	2813.0	1925-12-31	109.75	110.125	109.75	700.0	NULL	109.5	110.5	201.0	18.137865	18.0	110.125	NULL	NULL	
+00999290	10110	22165	0.0	1.0	3010.0	1925-12-31	10.375	10.5	10.5	1800.0	NULL	10.5	10.75	500.0	1.01	1.0	10.5	NULL	NULL	
+01699090	10129	22167	0.0	1.0	4820.0	1925-12-31	129.0	135.0	-132.0	0.0	NULL	129.0	135.0	270.0	1.0	1.0	NULL	NULL	NULL	
+01736110	10137	20045	0.0	1.0	4911.0	1925-12-31	69.875	71.75	71.75	2300.0	NULL	71.0	71.75	613.0	21.842743	20.92087	70.375	NULL	NULL	
+43851610	10145	22168	0.0	1.0	5099.0	1925-12-31	113.0	114.0	114.0	5600.0	NULL	113.75	114.0	2178.0	71.049881	60.736095	113.0	NULL	NULL	
+01964510	10153	22169	0.0	1.0	3511.0	1925-12-31	91.5	93.0	93.0	1700.0	NULL	92.0	93.0	300.0	9.16754	8.0	91.75	NULL	NULL	
+02312710	10161	20063	0.0	1.0	1011.0	1925-12-31	53.875	54.5	54.5	800.0	NULL	54.0	54.5	593.0	13.406483	12.663904	53.875	NULL	NULL	
+02314110	10188	22170	0.0	1.0	3714.0	1925-12-31	30.75	32.75	32.75	6100.0	NULL	32.75	32.875	207.0	4.075912	2.755006	30.75	NULL	NULL	
+02366390	10196	22171	0.0	1.0	4910.0	1925-12-31	40.25	42.5	41.75	10100.0	NULL	41.75	42.0	920.0	0.026207	0.0202	40.5	NULL	NULL	
+02399290	10209	22173	0.0	1.0	2870.0	1925-12-31	26.375	26.5	26.5	2000.0	NULL	26.625	26.875	333.0	0.9	0.9	26.5	NULL	NULL	
+02437510	10217	22174	0.0	1.0	2752.0	1925-12-31	39.5	39.875	39.875	300.0	NULL	39.25	40.0	495.0	2.64	2.64	39.625	NULL	NULL	
+07373010	10225	20067	0.0	1.0	3433.0	1925-12-31	113.375	113.875	113.875	700.0	NULL	113.25	114.0	1148.0	152.412537	64.0	113.5	NULL	NULL	
+02473510	10233	22176	0.0	1.0	4832.0	1925-12-31	106.75	108.375	108.0	5100.0	NULL	107.75	108.0	370.0	16.025894	3.993214	106.75	NULL	NULL	
+74158710	10241	22177	0.0	1.0	3411.0	1925-12-31	290.5	297.625	292.5	16900.0	NULL	293.5	295.0	412.0	48.432194	48.0	291.0	NULL	NULL	
+02523110	10268	22178	0.0	3.0	7399.0	1925-12-31	132.5	134.0	134.0	800.0	NULL	133.5	134.0	94.0	5.765141	5.598812	132.5	NULL	NULL	
+02530310	10276	22179	0.0	1.0	2063.0	1925-12-31	33.0	34.0	-33.5	0.0	NULL	33.0	34.0	150.0	3.076929	3.0	NULL	NULL	NULL	
+02581690	10284	90	0.0	1.0	7390.0	1925-12-31	136.0	136.0	136.0	500.0	NULL	136.0	138.0	180.0	1.0	1.0	136.0	NULL	NULL	
+02599090	10292	22181	0.0	1.0	2067.0	1925-12-31	47.0	47.25	47.0	1200.0	NULL	46.75	47.0	187.0	15.614843	15.18	47.25	NULL	NULL	
+02599290	10305	22182	0.0	1.0	2830.0	1925-12-31	4.25	4.25	4.25	700.0	NULL	4.25	4.5	678.0	1.0	1.0	4.25	NULL	NULL	
+02686610	10313	22183	0.0	1.0	6720.0	1925-12-31	42.875	44.625	44.125	14700.0	NULL	44.0	44.25	490.0	4.389864	4.329729	42.875	NULL	NULL	
+02762710	10321	22184	0.0	1.0	3711.0	1925-12-31	460.0	462.0	-461.0	0.0	NULL	460.0	462.0	273.0	32.130001	32.130001	NULL	NULL	NULL	
+02799090	10348	22185	0.0	1.0	3710.0	1925-12-31	15.375	15.75	15.5	1600.0	NULL	15.375	15.5	345.0	1.028926	1.0	15.375	NULL	NULL	
+02799190	10356	22186	0.0	1.0	2030.0	1925-12-31	52.5	53.0	-52.75	0.0	NULL	52.5	53.0	166.0	1.0	1.0	NULL	NULL	NULL	
+04341310	10364	20220	0.0	1.0	3356.0	1925-12-31	141.0	144.5	144.5	19200.0	NULL	144.25	144.5	610.0	40.244209	38.399998	141.625	NULL	NULL	
+02971710	10372	22187	0.0	1.0	3567.0	1925-12-31	114.125	115.0	114.625	800.0	NULL	114.5	115.0	1243.0	8.392157	8.0	115.0	NULL	NULL	
+02999290	10380	22188	0.0	1.0	1310.0	1925-12-31	72.0	72.0	72.0	200.0	NULL	72.0	73.5	200.0	1.0	1.0	72.0	NULL	NULL	
+02999390	10399	22189	0.0	1.0	4400.0	1925-12-31	5.5	5.875	5.5	600.0	NULL	5.625	6.0	591.0	1.0	1.0	5.75	NULL	NULL	
+00195750	10401	20103	0.0	1.0	4813.0	1925-12-31	142.375	142.625	142.625	1100.0	NULL	142.5	142.625	9248.0	48.684566	1.8	142.625	NULL	NULL	
+03023190	10428	20067	0.0	1.0	2110.0	1925-12-31	114.25	115.25	114.875	600.0	NULL	114.0	114.75	805.0	2.189339	2.0	115.25	NULL	NULL	
+03053710	10436	22191	0.0	1.0	3356.0	1925-12-31	8.25	9.0	-8.625	0.0	NULL	8.25	9.0	193.0	1.406886	1.406886	NULL	NULL	NULL	
+03099090	10444	22192	0.0	1.0	110.0	1925-12-31	10.5	11.0	11.0	300.0	NULL	10.625	11.0	144.0	1.40091	1.3905	10.5	NULL	NULL	
+03099190	10452	22193	0.0	1.0	2210.0	1925-12-31	40.875	42.25	41.875	4500.0	NULL	41.75	42.0	400.0	1.0	1.0	40.875	NULL	NULL	
+03110510	10460	20188	0.0	1.0	3822.0	1925-12-31	55.75	56.875	56.875	1700.0	NULL	56.75	57.0	81.0	77.143211	64.0	55.75	NULL	NULL	
+03217210	10479	22194	0.0	1.0	2061.0	1925-12-31	74.875	75.5	75.0	1500.0	NULL	75.0	75.25	450.0	16.0	16.0	75.0	NULL	NULL	
+03217710	10487	22195	0.0	1.0	3321.0	1925-12-31	46.0	46.5	46.0	2000.0	NULL	46.0	46.5	902.0	9.274065	8.4	46.125	NULL	NULL	
+03239310	10495	22196	0.0	1.0	3333.0	1925-12-31	49.375	50.125	50.125	6700.0	NULL	50.0	50.125	3000.0	2.433341	2.0	49.625	NULL	NULL	
+03559110	10508	22197	0.0	1.0	4000.0	1925-12-31	45.0	47.0	-46.0	0.0	NULL	45.0	47.0	33.0	1.0	1.0	NULL	NULL	NULL	
+03948310	10516	20207	0.0	1.0	2046.0	1925-12-31	44.0	46.0	44.0	1100.0	NULL	43.75	44.5	200.0	1456.430542	1357.758545	45.0	NULL	NULL	
+04230310	10524	22198	0.0	1.0	2011.0	1925-12-31	16.0	16.5	16.5	7800.0	NULL	16.375	16.5	2000.0	0.698638	0.6655	16.25	NULL	NULL	
+04257310	10532	22199	0.0	1.0	5311.0	1925-12-31	20.5	25.0	-22.75	0.0	NULL	20.5	25.0	178.0	1.15486	1.124864	NULL	NULL	NULL	
+04299190	10540	22201	0.0	1.0	3490.0	1925-12-31	19.375	19.375	19.375	100.0	NULL	19.0	19.5	321.0	1.0	1.0	19.375	NULL	NULL	
+04557310	10559	22202	0.0	1.0	5311.0	1925-12-31	53.0	54.125	53.0	3800.0	NULL	52.75	53.0	599.0	18.0	18.0	53.5	NULL	NULL	
+
+query III
+SELECT * FROM parquet_scan('data/parquet-testing/blob.parquet') limit 50;
+----
+1	\x04\x00	str1	
+2	\x04\x00\x80	str2	
+3	\x03\xFF\x00\xFF	str3
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/bug1588.parquet') limit 50;
+----
+1621259:e1WMOfPKh7EnuBJ+dG3V8mksk2NSFL8m7vLi1NPB3xk6NzQI4Dfqs3Ok2GmTRXqMqo3oc7T3ckM0/uTs/e4nVg==	1621259	e1WMOfPKh7EnuBJ+dG3V8mksk2NSFL8m7vLi1NPB3xk6NzQI4Dfqs3Ok2GmTRXqMqo3oc7T3ckM0/uTs/e4nVg==	a	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length_n	0.66	200	Page URL Length	wl8lmqkOqcTS8gbpoGaBf0ZxvleJXOCIrIDuQui6k7nhUPa5Xu/tupkmw0xYxSz8ByUNjMGgY0i0egvh6WNBBw==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.0	200	Page URL Length (400 characters	a	Page URL Length (400 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/page_url_length_n	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	wl8lmqkOqcTS8gbpoGaBf0ZxvleJXOCIrIDuQui6k7nhUPa5Xu/tupkmw0xYxSz8ByUNjMGgY0i0egvh6WNBBw==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:fCt7H+I6nGxXkRaRSYXL5kW5lkuXmaXAXiZdcm5dejcpwITcdVYNeYY0JQAJbDAOX2mjEOQX0Z/vvq9OAQDFUQ==	1621259	fCt7H+I6nGxXkRaRSYXL5kW5lkuXmaXAXiZdcm5dejcpwITcdVYNeYY0JQAJbDAOX2mjEOQX0Z/vvq9OAQDFUQ==	a	XnZecm8bhAZFA327isPnIwA+v6xejmC5P8/iQ0ax8ZMBhM/mCxes6Ugj8WsvwK6qKJteGGM5pLvdyBDhcaisyw==	https://crawler-test.com/content/page_html_size_n	1.89	200	Page HTML Size	hzYV7GhCYN6hhz7hXVTbyIct7YXRsyHzsCriciWYnQeMCzu9UKIsFAKdKf3yecmiDIVgYA/N8lLETj4AyprBmA==	https://crawler-test.com/content/page_html_size/5	0.27	200	Page html Size (~5 KB)	a	Page HTML Size (~5 KB)	False	False	True	False	NULL	NULL	https://crawler-test.com/content/page_html_size_n	XnZecm8bhAZFA327isPnIwA+v6xejmC5P8/iQ0ax8ZMBhM/mCxes6Ugj8WsvwK6qKJteGGM5pLvdyBDhcaisyw==	https://crawler-test.com/content/page_html_size/5	hzYV7GhCYN6hhz7hXVTbyIct7YXRsyHzsCriciWYnQeMCzu9UKIsFAKdKf3yecmiDIVgYA/N8lLETj4AyprBmA==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:SD9T82+CLcX4a7QjQUvoanlQXGX6ZBgnKGk+pP6fV8qPDxjbKRyz8XZtXKMQq5GEW1isr+DFlaYjUbdATUgd3g==	1621259	SD9T82+CLcX4a7QjQUvoanlQXGX6ZBgnKGk+pP6fV8qPDxjbKRyz8XZtXKMQq5GEW1isr+DFlaYjUbdATUgd3g==	a	2LdpJwsq6oa97HRlSBHgwfNvTdzuu+Y7deFektI5IavAMUqLPHgy815d9eh/o7o88eNhFVV5uhIliul7BOW2Aw==	http://crawler-test.com/urls/pages_with_hreflang	0.66	200	Pages with HREFLANG	iuAucy9+qJeCLHpEAyZW+08ZsviP3DWd6SZrH1/3X+d2NjkkbevbYihTn6wJwOOCBfJOtx97upl2iel4d0l5OQ==	http://crawler-test.com/urls/page_with_hreflang/2	0.0	200	Page with HREFLANG - en	a	Page with HREFLANG - en	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/pages_with_hreflang	2LdpJwsq6oa97HRlSBHgwfNvTdzuu+Y7deFektI5IavAMUqLPHgy815d9eh/o7o88eNhFVV5uhIliul7BOW2Aw==	http://crawler-test.com/urls/page_with_hreflang/2	iuAucy9+qJeCLHpEAyZW+08ZsviP3DWd6SZrH1/3X+d2NjkkbevbYihTn6wJwOOCBfJOtx97upl2iel4d0l5OQ==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:T+0dzrlmYi/9/qTgd4zVpNHCE8PFqnOqZI4+fGUY0MrsJEIziqhuq/9etCTBKFvSt24mU3gr2CRX2aL+nWTJ9Q==	1621259	T+0dzrlmYi/9/qTgd4zVpNHCE8PFqnOqZI4+fGUY0MrsJEIziqhuq/9etCTBKFvSt24mU3gr2CRX2aL+nWTJ9Q==	a	ci/Cyfgh86rdWDNiygtDZ2+TmmotNaWx4UuRHgG3Rl0iK1oST2m2Oi+Fkg8LW6G1z4PjGMYdOlBHibU794v6Ig==	http://crawler-test.com/mobile/separate_desktop_with_different_links_out	0.66	200	Desktop and Mobile pages with different links out	GsvnXeuqzj+6lHHZavw3BpvibYMIHQSSdGifqXByI1ZeMrV0mSZtNaK7CC2s9TJSiizUJnv7VKDRaEYWkfue4Q==	http://crawler-test.com/mobile/separate_desktop_with_different_links_in	1.76	200	Desktop and Mobile pages with different links in	a	Link To Links In 4	False	False	True	False	NULL	NULL	http://crawler-test.com/mobile/separate_desktop_with_different_links_out	ci/Cyfgh86rdWDNiygtDZ2+TmmotNaWx4UuRHgG3Rl0iK1oST2m2Oi+Fkg8LW6G1z4PjGMYdOlBHibU794v6Ig==	http://crawler-test.com/mobile/separate_desktop_with_different_links_in	GsvnXeuqzj+6lHHZavw3BpvibYMIHQSSdGifqXByI1ZeMrV0mSZtNaK7CC2s9TJSiizUJnv7VKDRaEYWkfue4Q==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:admI+zvtdrdsEcfz7rCIKqXcUoVNsgXQabY2LYwX7YBe3SdZT99qHuqM7NjDxSDDxQ34jlzhyKKcASgT6m+QXg==	1621259	admI+zvtdrdsEcfz7rCIKqXcUoVNsgXQabY2LYwX7YBe3SdZT99qHuqM7NjDxSDDxQ34jlzhyKKcASgT6m+QXg==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	0X/PtoiH/KffAhzqC6X/KOgubdw/RjH95CcZaa+tKbuWmmUKc7mWrjtOyW52B9eF8ND80ERAQGzKeu/mwWkZsQ==	http://crawler-test.com/titles/page_title_length/180	0.0	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (180 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/180	0X/PtoiH/KffAhzqC6X/KOgubdw/RjH95CcZaa+tKbuWmmUKc7mWrjtOyW52B9eF8ND80ERAQGzKeu/mwWkZsQ==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:c1JZlsdyXBQlPnxGvTQdUsCKkSW2AqEXcoT8FiISUOD6q+t3yxMimdgZWtsjXgLJGZcluTN8xbyMF28T7PUnCw==	1621259	c1JZlsdyXBQlPnxGvTQdUsCKkSW2AqEXcoT8FiISUOD6q+t3yxMimdgZWtsjXgLJGZcluTN8xbyMF28T7PUnCw==	a	gBV6L3AXxfsTB+4CI4ctVzrvh/tT+omaJMH0qTpa7+d1oAo6XZBrrPMbOJbLwL1IuwK379nWNLPtr+AZ+3FGAw==	https://crawler-test.com/urls/pages_with_hreflang	1.89	200	Pages with HREFLANG	OoSfQ9iZv/tNWiO553nzF53dqa6RK5ap//g5c9F/fc5TSwCR3TVXIVR+j8M30+RhwCjD2t5ideyrrbwcjH1LUA==	https://crawler-test.com/urls/page_with_hreflang/2	0.27	200	Page with HREFLANG - en	a	Page with HREFLANG - en	False	False	True	False	NULL	NULL	https://crawler-test.com/urls/pages_with_hreflang	gBV6L3AXxfsTB+4CI4ctVzrvh/tT+omaJMH0qTpa7+d1oAo6XZBrrPMbOJbLwL1IuwK379nWNLPtr+AZ+3FGAw==	https://crawler-test.com/urls/page_with_hreflang/2	OoSfQ9iZv/tNWiO553nzF53dqa6RK5ap//g5c9F/fc5TSwCR3TVXIVR+j8M30+RhwCjD2t5ideyrrbwcjH1LUA==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:cX2rcaStRpu0UBy0IF5D6dE2tOlYO215LEkb2M7yWgm3/2/0yBUY8c9fSc6cXg77cJINkBjU/hA7FaO1JtkHZQ==	1621259	cX2rcaStRpu0UBy0IF5D6dE2tOlYO215LEkb2M7yWgm3/2/0yBUY8c9fSc6cXg77cJINkBjU/hA7FaO1JtkHZQ==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	g5yo2+gGHtYz3bNKbXbzOs2ZX5etEy/OIxKrJE7bLF7w68C7t+VttMJ4gVq2sEzDwsmTpMYHgecrmJPIsurnig==	http://crawler-test.com/titles/page_title_length/210	0.0	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (210 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/210	g5yo2+gGHtYz3bNKbXbzOs2ZX5etEy/OIxKrJE7bLF7w68C7t+VttMJ4gVq2sEzDwsmTpMYHgecrmJPIsurnig==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:HQptUgLH9nkVaQS8Uw94oUcjevU3fwGnfZdaUOE31ZQKGOojR+4IWHafNoVD0LWh3ijdBAW1CMUlbKyN9c+e0w==	1621259	HQptUgLH9nkVaQS8Uw94oUcjevU3fwGnfZdaUOE31ZQKGOojR+4IWHafNoVD0LWh3ijdBAW1CMUlbKyN9c+e0w==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	yLGqrb0bCHVFlkHYBj2vGZ6j0eNzGCNBAyYsxML9wZDmHoH2XXKT+xYPV6hd3lYPb36ACANytD7m6KUQSk5Y1g==	http://crawler-test.com/titles/page_title_length/110	0.0	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (110 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/110	yLGqrb0bCHVFlkHYBj2vGZ6j0eNzGCNBAyYsxML9wZDmHoH2XXKT+xYPV6hd3lYPb36ACANytD7m6KUQSk5Y1g==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:a3rfnAuoHqX0GYottPEyGV1MsFU5rb6IIBlpd9h1EMk6JOvW7wR7Vw9sOg2D/QTuAmnXYEJ6Kg0oGkhNk5J1xg==	1621259	a3rfnAuoHqX0GYottPEyGV1MsFU5rb6IIBlpd9h1EMk6JOvW7wR7Vw9sOg2D/QTuAmnXYEJ6Kg0oGkhNk5J1xg==	a	b6SOsqrSLYHQH0CVFfQjhSmNaYWOQDEQNsXwfAAI6uGwiDAnJOcbkY10UPZ2pXz+4hZFSa4OAkKJg/uJe8M10w==	http://crawler-test.com/links/nofollow_and_follow_link	0.66	200	Nofollow & Followed Link	YRC6Yl+Hx1BtyrznluzF+lYzipn1PPDXbFqyWVieWmjS+g4eVDJFFTGy67LNg4SjSVQ8Z5I5iTk3ngXv8a9+XQ==	http://crawler-test.com/links/nofollow_and_follow_link_target	0.0	200	Nofollow and Follow Target	a	Nofollow and Follow Target	True	False	True	False	NULL	nofollow	http://crawler-test.com/links/nofollow_and_follow_link	b6SOsqrSLYHQH0CVFfQjhSmNaYWOQDEQNsXwfAAI6uGwiDAnJOcbkY10UPZ2pXz+4hZFSa4OAkKJg/uJe8M10w==	http://crawler-test.com/links/nofollow_and_follow_link_target	YRC6Yl+Hx1BtyrznluzF+lYzipn1PPDXbFqyWVieWmjS+g4eVDJFFTGy67LNg4SjSVQ8Z5I5iTk3ngXv8a9+XQ==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:wL7ZaijaE3UFkIAMdKaXmJmJ9+MoDG8sq/o+ioj6ZOV01Qhs7DoxjgD4E2jXxQwkTnDv2jabF7WM8d1d1SlIqQ==	1621259	wL7ZaijaE3UFkIAMdKaXmJmJ9+MoDG8sq/o+ioj6ZOV01Qhs7DoxjgD4E2jXxQwkTnDv2jabF7WM8d1d1SlIqQ==	a	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length_n	1.89	200	Page URL Length	LOIPm0Yrd2DYkh1xoUr6XkIF26ZA6atn8HUGyzUzdoSTlc4P0bAtSI4edUebE7dM0rGIgUatG0LRcm2oD9uBTA==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.27	200	Page URL Length (600 characters	a	Page URL Length (600 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/urls/page_url_length_n	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	LOIPm0Yrd2DYkh1xoUr6XkIF26ZA6atn8HUGyzUzdoSTlc4P0bAtSI4edUebE7dM0rGIgUatG0LRcm2oD9uBTA==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:RgVUNC1wE3jDHsmjXII4Hb7Ne7iIhp5LIDxNFuaf5Q0SfhT2msNvVtA9inuVgGHrQ/YDkXBI97yeakT95RAKHQ==	1621259	RgVUNC1wE3jDHsmjXII4Hb7Ne7iIhp5LIDxNFuaf5Q0SfhT2msNvVtA9inuVgGHrQ/YDkXBI97yeakT95RAKHQ==	a	JdHf5tBhnL7AlfApKp+0m/K40yvkMcH0jzoFj2FN8qVpednvKAKVO5JQN5qRAmdQDRsPrrsHI7ThGeKYiAROxQ==	https://crawler-test.com/links/image_links	1.89	200	Image Links	ZNR8GfxheuLvO5v0lAbrfBcYGv+3GvSY4Ha5fE6VAcPWOJWAD9exyFF9VHyNKBdgnf7q7NaGHJeDc27/mxcKZg==	https://crawler-test.com/	10.0	200	Crawler Test Site	a	NULL	False	False	True	False	NULL	NULL	https://crawler-test.com/links/image_links	JdHf5tBhnL7AlfApKp+0m/K40yvkMcH0jzoFj2FN8qVpednvKAKVO5JQN5qRAmdQDRsPrrsHI7ThGeKYiAROxQ==	https://crawler-test.com/	ZNR8GfxheuLvO5v0lAbrfBcYGv+3GvSY4Ha5fE6VAcPWOJWAD9exyFF9VHyNKBdgnf7q7NaGHJeDc27/mxcKZg==	True	True	False	2	2	True	True	True	2	doc	0	
+1621259:XCXhuWCsMAG3/ZSfHs3IQxSgngq1Krp19bhb9dZdjCl6RBjzEYEs65/mjWeRhuwlrQpgZmnmGdcAEa/864KulQ==	1621259	XCXhuWCsMAG3/ZSfHs3IQxSgngq1Krp19bhb9dZdjCl6RBjzEYEs65/mjWeRhuwlrQpgZmnmGdcAEa/864KulQ==	a	o0BfCvi++x9f/otW6Ew5mCt0enyChDatIo0+hWEINEeq61PkwIOTsMoplJWMrVDfQvKhSeXRZ+4ps23xPO9yEQ==	http://crawler-test.com/urls/paginated_page	0.66	200	Paginated Page 1	qGc+f07/MfE/CQsTzfJmj3TiVphJxbd5wwbotb3IMVeY1WHTGrIVE1nKK3BvNT/6hXd75gBDnKFS5dwAtX7mvQ==	http://crawler-test.com/urls/paginated_page?page=1	0.58	200	Paginated Page 1	a	1	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/paginated_page	o0BfCvi++x9f/otW6Ew5mCt0enyChDatIo0+hWEINEeq61PkwIOTsMoplJWMrVDfQvKhSeXRZ+4ps23xPO9yEQ==	http://crawler-test.com/urls/paginated_page?page=1	qGc+f07/MfE/CQsTzfJmj3TiVphJxbd5wwbotb3IMVeY1WHTGrIVE1nKK3BvNT/6hXd75gBDnKFS5dwAtX7mvQ==	False	False	False	2	2	False	False	False	5	doc	0	
+1621259:UOETrF3QXMbDCs5da4uBqbfaeEbo6JX3E31RLOi/O8l58B4zJYgSd4oaIGHbSaBSfY+cJTf0sghG8RkNu+aE+g==	1621259	UOETrF3QXMbDCs5da4uBqbfaeEbo6JX3E31RLOi/O8l58B4zJYgSd4oaIGHbSaBSfY+cJTf0sghG8RkNu+aE+g==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	i9LzIzoUv9426hOkEjUcXGdgUQgY7MQ4pepUR5f3iad0fyUXI1ndKfLT2Ezpb0NinO9pvqxJj2jXgVL9iCXJoQ==	http://crawler-test.com/titles/page_title_length/20	0.0	200	xxxxxxxxxxxxxxxxxxxx	a	Page Title Length (20 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/20	i9LzIzoUv9426hOkEjUcXGdgUQgY7MQ4pepUR5f3iad0fyUXI1ndKfLT2Ezpb0NinO9pvqxJj2jXgVL9iCXJoQ==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:ntxKD8pYQGqbLT2N5QXXLKpvgdAw8jjaMKEtpafeNmPtQdeLQuIRhOtjgP5HMkH1tH4lXaJV86aZP1LbxfOGuQ==	1621259	ntxKD8pYQGqbLT2N5QXXLKpvgdAw8jjaMKEtpafeNmPtQdeLQuIRhOtjgP5HMkH1tH4lXaJV86aZP1LbxfOGuQ==	a	EFA5fdnCO/QUmnN21SEykOzcQZ7k8nQkj6bnBLFA2z9wM198JSyrsWOyrpOy56WmXARP/cdEd/onvPN+B/jzfg==	http://crawler-test.com/titles/page_title_width_n	0.66	200	Page Title width	4Cy2eyQhGcynV9fN/MqYWBuzDaH3LRmsN+qMszf2e7Ows6wafao7HhJMWDcJJaEgigH+Csq8xZckqTCqIxHk0w==	http://crawler-test.com/titles/page_title_width/510	0.0	200	iiiiiiqqf ffiffefrffpfffwe aef afaer asw eaedfe sixfw iirier xxxxxxxxxx	a	510px	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_width_n	EFA5fdnCO/QUmnN21SEykOzcQZ7k8nQkj6bnBLFA2z9wM198JSyrsWOyrpOy56WmXARP/cdEd/onvPN+B/jzfg==	http://crawler-test.com/titles/page_title_width/510	4Cy2eyQhGcynV9fN/MqYWBuzDaH3LRmsN+qMszf2e7Ows6wafao7HhJMWDcJJaEgigH+Csq8xZckqTCqIxHk0w==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:ujMxnsF9YRaEH5bkLUaeLXMVC7fWSOgPWRJ8ppzc3phd7mmd4yjDnwUkDY8zoBcGyt6soWvNfNNeudBpTLvN7Q==	1621259	ujMxnsF9YRaEH5bkLUaeLXMVC7fWSOgPWRJ8ppzc3phd7mmd4yjDnwUkDY8zoBcGyt6soWvNfNNeudBpTLvN7Q==	a	iJ6vGQRxjjoKdvcblkvZlAqoThrkFbFjHd6+dqdeikZ/2GmNKB2ZcJXtFASLsBi9W5wmlKh6RYCuXOl0lDfa6w==	https://crawler-test.com/?removed_parameter=1&retained_parameter=1	1.89	200	Crawler Test Site	m/7rayEZOEHXdZh0G/y7JHsMOpsjH6G4YI08PR8cKdHUNyDNZT4lzH/dzTXRdCI3RmjGibUr9Ae1ur47uIa8gg==	https://crawler-test.com/urls/with_session_id?sessionID=yXqXrHNcpdGO4BaKh1PU	0.27	200	Url With Session Id	a	Url With Session Id	False	False	True	False	NULL	NULL	https://crawler-test.com/?removed_parameter=1&retained_parameter=1	iJ6vGQRxjjoKdvcblkvZlAqoThrkFbFjHd6+dqdeikZ/2GmNKB2ZcJXtFASLsBi9W5wmlKh6RYCuXOl0lDfa6w==	https://crawler-test.com/urls/with_session_id?sessionID=yXqXrHNcpdGO4BaKh1PU	m/7rayEZOEHXdZh0G/y7JHsMOpsjH6G4YI08PR8cKdHUNyDNZT4lzH/dzTXRdCI3RmjGibUr9Ae1ur47uIa8gg==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:vxcupEIDxKvyQfq1Q+U594QJ4hOe8/OSjmRaw1go9VEHwpdujgyB/3Uk/BbcFB1zO03ANcugT2JDeh8lsDVO8g==	1621259	vxcupEIDxKvyQfq1Q+U594QJ4hOe8/OSjmRaw1go9VEHwpdujgyB/3Uk/BbcFB1zO03ANcugT2JDeh8lsDVO8g==	a	o0BfCvi++x9f/otW6Ew5mCt0enyChDatIo0+hWEINEeq61PkwIOTsMoplJWMrVDfQvKhSeXRZ+4ps23xPO9yEQ==	http://crawler-test.com/urls/paginated_page	0.66	200	Paginated Page 1	prCbSt+LQBpV2gOnTnFMJ3nx5dJRJdewYj03sLy+caKSGtAC/fBV2ZHVfY3+8e0tHNnKEVCLllGTS+FuZVALiw==	http://crawler-test.com/urls/paginated_page?page=5	0.58	200	Paginated Page 5	a	5	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/paginated_page	o0BfCvi++x9f/otW6Ew5mCt0enyChDatIo0+hWEINEeq61PkwIOTsMoplJWMrVDfQvKhSeXRZ+4ps23xPO9yEQ==	http://crawler-test.com/urls/paginated_page?page=5	prCbSt+LQBpV2gOnTnFMJ3nx5dJRJdewYj03sLy+caKSGtAC/fBV2ZHVfY3+8e0tHNnKEVCLllGTS+FuZVALiw==	False	False	False	2	2	False	False	False	5	doc	0	
+1621259:zYLW9jEVbnF5i1j1eb0dL759TI5G0KMc4hlkTifB1wv9XBCta2CtATmF3IVCjA2ql2gU42W27r9wAFadES8VIw==	1621259	zYLW9jEVbnF5i1j1eb0dL759TI5G0KMc4hlkTifB1wv9XBCta2CtATmF3IVCjA2ql2gU42W27r9wAFadES8VIw==	a	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length_n	1.89	200	Page Title Length	3u+uWw8YqYZwi6VBdj+q92/5nP1U8rBVAPCD+OS4p8C+d+fj2FaEguvMGP6ao+VHNDL6wJJxizXnquSiM5scFg==	https://crawler-test.com/titles/page_title_length/40	0.27	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (40 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/titles/page_title_length_n	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length/40	3u+uWw8YqYZwi6VBdj+q92/5nP1U8rBVAPCD+OS4p8C+d+fj2FaEguvMGP6ao+VHNDL6wJJxizXnquSiM5scFg==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:HRWH1a2f0Ej0lceEVJ9QETFBX3AelbhUvJGK2CzH/SUPPUqFaDbrxydHLDXB9Gy1l+j5ROsZ+5TcXo5pWC56ZQ==	1621259	HRWH1a2f0Ej0lceEVJ9QETFBX3AelbhUvJGK2CzH/SUPPUqFaDbrxydHLDXB9Gy1l+j5ROsZ+5TcXo5pWC56ZQ==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	nd1zYDorkjgfu8+bDVIkcE9UaTiAth4bFh82XoN935B+usVMG0Cgy1j/qwCBsKE0H0aqI2vXubHqilaSHq3cPw==	http://crawler-test.com/titles/page_title_length/90	0.0	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (90 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/90	nd1zYDorkjgfu8+bDVIkcE9UaTiAth4bFh82XoN935B+usVMG0Cgy1j/qwCBsKE0H0aqI2vXubHqilaSHq3cPw==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:cOP6gWqzSRHlTa6QtzDK15hV3DpNZKOXKYJRhz1yOLxbqqHaTQJzSCF5XmanZOd0MeCpceCEH+epvMQoc2GSgQ==	1621259	cOP6gWqzSRHlTa6QtzDK15hV3DpNZKOXKYJRhz1yOLxbqqHaTQJzSCF5XmanZOd0MeCpceCEH+epvMQoc2GSgQ==	a	o0BfCvi++x9f/otW6Ew5mCt0enyChDatIo0+hWEINEeq61PkwIOTsMoplJWMrVDfQvKhSeXRZ+4ps23xPO9yEQ==	http://crawler-test.com/urls/paginated_page	0.66	200	Paginated Page 1	9iaqORAmXIbffypyjII3AvSsLREBV5uuWFrY7NH9fiO8CFERKBpD8DUNlsUNzF0BnczpUTWCaqtmmQloU80uFw==	http://crawler-test.com/urls/paginated_page?page=4	0.58	200	Paginated Page 4	a	4	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/paginated_page	o0BfCvi++x9f/otW6Ew5mCt0enyChDatIo0+hWEINEeq61PkwIOTsMoplJWMrVDfQvKhSeXRZ+4ps23xPO9yEQ==	http://crawler-test.com/urls/paginated_page?page=4	9iaqORAmXIbffypyjII3AvSsLREBV5uuWFrY7NH9fiO8CFERKBpD8DUNlsUNzF0BnczpUTWCaqtmmQloU80uFw==	False	False	False	2	2	False	False	False	5	doc	0	
+1621259:cStxKJ/ZpmaUO3TbL7apkFNtQz5KYt+WASHFyh5hGbD35lcpruCJ+ARwyDGAVjqmIYx1YVDlSWv2W+Og42NE/w==	1621259	cStxKJ/ZpmaUO3TbL7apkFNtQz5KYt+WASHFyh5hGbD35lcpruCJ+ARwyDGAVjqmIYx1YVDlSWv2W+Og42NE/w==	a	riFsFK0zZ697PPSpRcvL9ovRZHwfuwol4xcLrjUdDovIJdn3U+03wjuXfFz0Munwuu3enYpBJVoYkEEvGmvzjw==	http://crawler-test.com/?removed_parameter=1&retained_parameter=1	0.66	200	Crawler Test Site	TGxyDmihgfcuyRH7TmRkSBUN3xpwtJWQKobPPCjEEAvZ1TPM2qaDxZvrDxmPHwGs5zsrsEpVcuYmVeB7gWzUOw==	http://crawler-test.com/other/expiring_page_for_removed_test/1617905449.6912856	0.0	404	NULL	a	Expiring Page for Removed Test	False	False	True	False	NULL	NULL	http://crawler-test.com/?removed_parameter=1&retained_parameter=1	riFsFK0zZ697PPSpRcvL9ovRZHwfuwol4xcLrjUdDovIJdn3U+03wjuXfFz0Munwuu3enYpBJVoYkEEvGmvzjw==	http://crawler-test.com/other/expiring_page_for_removed_test/1617905449.6912856	TGxyDmihgfcuyRH7TmRkSBUN3xpwtJWQKobPPCjEEAvZ1TPM2qaDxZvrDxmPHwGs5zsrsEpVcuYmVeB7gWzUOw==	False	False	False	2	4	False	False	False	1	doc	0	
+1621259:zTAjZeAXYQNRBhxwZ7dQgFmZyjfkDAR00x/LMe6Op9DN5lCSf2mHBmx6OlsrKt7v+pZCgK2nFPFcAs1q38fqmw==	1621259	zTAjZeAXYQNRBhxwZ7dQgFmZyjfkDAR00x/LMe6Op9DN5lCSf2mHBmx6OlsrKt7v+pZCgK2nFPFcAs1q38fqmw==	a	EFA5fdnCO/QUmnN21SEykOzcQZ7k8nQkj6bnBLFA2z9wM198JSyrsWOyrpOy56WmXARP/cdEd/onvPN+B/jzfg==	http://crawler-test.com/titles/page_title_width_n	0.66	200	Page Title width	q+RePC9HdaUvCaBpmW2DK8lXFDV2YpERxIRRk5e2/OZTvONgzMQsq6dBmK1rrIE8omA0tmQ/d3GiNhLZbvO6JQ==	http://crawler-test.com/titles/page_title_width/505	0.0	200	wwerf ffffrrffffwe aef aefaer asdw eaedfe sxfw iirwer xxxxxxxxxx	a	505px	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_width_n	EFA5fdnCO/QUmnN21SEykOzcQZ7k8nQkj6bnBLFA2z9wM198JSyrsWOyrpOy56WmXARP/cdEd/onvPN+B/jzfg==	http://crawler-test.com/titles/page_title_width/505	q+RePC9HdaUvCaBpmW2DK8lXFDV2YpERxIRRk5e2/OZTvONgzMQsq6dBmK1rrIE8omA0tmQ/d3GiNhLZbvO6JQ==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:2fMqzyjaIf+/GaOlnCz+rUhZrmjfY+5mg+rP1tnYGkobv5v2QUekenLy1hL+NPP8YnPXHZ8gBfwinfIiIfTWHw==	1621259	2fMqzyjaIf+/GaOlnCz+rUhZrmjfY+5mg+rP1tnYGkobv5v2QUekenLy1hL+NPP8YnPXHZ8gBfwinfIiIfTWHw==	a	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length_n	1.89	200	Page URL Length	DELIlIsVZtj89KuRlq7hkT4iBMMkDkbDCqQXtay/rZ9uy/Oj7YFDo7Htqj2zRTiDXQxc3CbsYU8OSPr7rtl5KQ==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.27	200	Page URL Length (2000 characters	a	Page URL Length (2000 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/urls/page_url_length_n	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	DELIlIsVZtj89KuRlq7hkT4iBMMkDkbDCqQXtay/rZ9uy/Oj7YFDo7Htqj2zRTiDXQxc3CbsYU8OSPr7rtl5KQ==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:4C+/FQOpwcyX0wiu8xm35UnVtaDuxQPqnod63Oo77ft7MVK3iBQf3pTrqVWsMx3xh5u/XBkaxr8VHHemEKUFyA==	1621259	4C+/FQOpwcyX0wiu8xm35UnVtaDuxQPqnod63Oo77ft7MVK3iBQf3pTrqVWsMx3xh5u/XBkaxr8VHHemEKUFyA==	a	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length_n	1.89	200	Page Title Length	4CfCvCnG73h1vuf9qdNsuH6Pl7JloDTEmdVrE3XaeKxoNhVrj1eFhgQzjIf2LOlYFCAko9oxDjBGxPNbJXy3Kw==	https://crawler-test.com/titles/page_title_length/120	0.27	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (120 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/titles/page_title_length_n	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length/120	4CfCvCnG73h1vuf9qdNsuH6Pl7JloDTEmdVrE3XaeKxoNhVrj1eFhgQzjIf2LOlYFCAko9oxDjBGxPNbJXy3Kw==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:ld3lQiHThge2agmTeBtU89UqW9NLdz04gvfILHK0Euxpn6LTTr6eh3chqG8rowVn7wbcZvz+K/OpHjVyhD7ISA==	1621259	ld3lQiHThge2agmTeBtU89UqW9NLdz04gvfILHK0Euxpn6LTTr6eh3chqG8rowVn7wbcZvz+K/OpHjVyhD7ISA==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	Np3uGD9/DtKBTcDKxtYIq5nOy9Bz4PTklw9d9SHqQ3JdJ7RHHlM307Br0bF7FgEqVlSOcSRHfnPZT1CJF7LDLQ==	http://crawler-test.com/titles/page_title_length/5	0.0	200	xxxxx	a	Page Title Length (5 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/5	Np3uGD9/DtKBTcDKxtYIq5nOy9Bz4PTklw9d9SHqQ3JdJ7RHHlM307Br0bF7FgEqVlSOcSRHfnPZT1CJF7LDLQ==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:sXP0nuZd8o+yOj/+f9qdvTJ61MxGBeYwDV5FHynneQc+dsSmdEnTTGwgTiWavs3VBhR2G0Mv1mMeok9jrHp0xw==	1621259	sXP0nuZd8o+yOj/+f9qdvTJ61MxGBeYwDV5FHynneQc+dsSmdEnTTGwgTiWavs3VBhR2G0Mv1mMeok9jrHp0xw==	a	EFA5fdnCO/QUmnN21SEykOzcQZ7k8nQkj6bnBLFA2z9wM198JSyrsWOyrpOy56WmXARP/cdEd/onvPN+B/jzfg==	http://crawler-test.com/titles/page_title_width_n	0.66	200	Page Title width	g8e1ECizyUPTVl7qYGu+4HXTl7vsQi4F2efEIdIaedHuS9uus2NSKdhmecnuk1eKfMs5DO5oJkzS1fuAEEDGpg==	http://crawler-test.com/titles/page_title_width/506	0.0	200	iiiiiiqqf ffffefrffpfffwe aef afaer asw eaedfe sixfw iirier xxxxxxxxxx	a	506px	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_width_n	EFA5fdnCO/QUmnN21SEykOzcQZ7k8nQkj6bnBLFA2z9wM198JSyrsWOyrpOy56WmXARP/cdEd/onvPN+B/jzfg==	http://crawler-test.com/titles/page_title_width/506	g8e1ECizyUPTVl7qYGu+4HXTl7vsQi4F2efEIdIaedHuS9uus2NSKdhmecnuk1eKfMs5DO5oJkzS1fuAEEDGpg==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:wIHtc8z3IJoNigfdEV7rF1UxWLK2yaWRgHfw+75Gfgi02pUxnAaaObffS0WGXqEjHu1tTunF9cvWE6qzQrdwGQ==	1621259	wIHtc8z3IJoNigfdEV7rF1UxWLK2yaWRgHfw+75Gfgi02pUxnAaaObffS0WGXqEjHu1tTunF9cvWE6qzQrdwGQ==	a	MupViUH60Y6vwrLnn+PnMMjA4lSaIWcKdk7KCDDhcjWbpDGJULiqAMtJtT4pLHjXixOFXq4qY2yKN9zG171YJA==	https://crawler-test.com/other/in_web_linking	1.89	200	In Web Linking	2MaUanEdFdY9gLLMgeAYNCYJDerlc8CWPp+Cac/3yv3/KG9WLpbjsukmnnMV/3Tgn+MDaRz65XjJoOEMCY4cCQ==	https://crawler-test.com/other/in_web_linked	2.11	200	In Web Linked	a	In Web Linked	False	False	True	False	NULL	NULL	https://crawler-test.com/other/in_web_linking	MupViUH60Y6vwrLnn+PnMMjA4lSaIWcKdk7KCDDhcjWbpDGJULiqAMtJtT4pLHjXixOFXq4qY2yKN9zG171YJA==	https://crawler-test.com/other/in_web_linked	2MaUanEdFdY9gLLMgeAYNCYJDerlc8CWPp+Cac/3yv3/KG9WLpbjsukmnnMV/3Tgn+MDaRz65XjJoOEMCY4cCQ==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:6XS+pQvvQdej+FcqdCfJH4SP1KwA8r3L0stbVcRDeZKesh1Ik7G54QXVwajAxLFBPBIvTFduw3Zi97VRi6LaZA==	1621259	6XS+pQvvQdej+FcqdCfJH4SP1KwA8r3L0stbVcRDeZKesh1Ik7G54QXVwajAxLFBPBIvTFduw3Zi97VRi6LaZA==	a	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length_n	0.66	200	Page URL Length	2eF//gXmjQF1uUERWx1utiHGhW1sX5dXC0Ek8jOvfYNyUBcIViLxZbbG5NnxJ9xItDf8r5KtuFPwJ1gZJHKGrw==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.0	200	Page URL Length (1300 characters	a	Page URL Length (1300 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/page_url_length_n	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	2eF//gXmjQF1uUERWx1utiHGhW1sX5dXC0Ek8jOvfYNyUBcIViLxZbbG5NnxJ9xItDf8r5KtuFPwJ1gZJHKGrw==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:L/gFxx7pvvDUKFmHMjnsb/w3a/b0IQHPXsw7p8AscrV72Rr6bTPdlDmmOCTqK3N2DVMZnVjg2SpHoEFQ9KZVJQ==	1621259	L/gFxx7pvvDUKFmHMjnsb/w3a/b0IQHPXsw7p8AscrV72Rr6bTPdlDmmOCTqK3N2DVMZnVjg2SpHoEFQ9KZVJQ==	a	EFA5fdnCO/QUmnN21SEykOzcQZ7k8nQkj6bnBLFA2z9wM198JSyrsWOyrpOy56WmXARP/cdEd/onvPN+B/jzfg==	http://crawler-test.com/titles/page_title_width_n	0.66	200	Page Title width	q3LUDcC88nk1pjF9Sb1fSvx0ad0f4FYXpsu2/Dp8u85Fxk7HghGykjLsFS1eYcsyMpOTPPiH9McJ7L3exCnzVg==	http://crawler-test.com/titles/page_title_width/502	0.0	200	wwwrf ffffrffffwe aef aefaer asdw eaedfe sxfw iirwer xxxxxxxxxx	a	502px	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_width_n	EFA5fdnCO/QUmnN21SEykOzcQZ7k8nQkj6bnBLFA2z9wM198JSyrsWOyrpOy56WmXARP/cdEd/onvPN+B/jzfg==	http://crawler-test.com/titles/page_title_width/502	q3LUDcC88nk1pjF9Sb1fSvx0ad0f4FYXpsu2/Dp8u85Fxk7HghGykjLsFS1eYcsyMpOTPPiH9McJ7L3exCnzVg==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:P3aSIBm/TbjNSGHSpuWS5PQWBz3rbMSnBTz2xoRIY3FoLHxF+7KokNJoIvzkfKZcIcDRuoBtd74lx3Qa+BIEpQ==	1621259	P3aSIBm/TbjNSGHSpuWS5PQWBz3rbMSnBTz2xoRIY3FoLHxF+7KokNJoIvzkfKZcIcDRuoBtd74lx3Qa+BIEpQ==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	wPCtcWvwGeYFW+fSn5t/ALnJGfwhjeuQ19LmZRaBTs/6z85NGCqexz3Cm0K2ERuxIExwS25MdHYPekppCiyNgQ==	http://crawler-test.com/titles/page_title_length/4	0.0	200	xxxx	a	Page Title Length (4 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/4	wPCtcWvwGeYFW+fSn5t/ALnJGfwhjeuQ19LmZRaBTs/6z85NGCqexz3Cm0K2ERuxIExwS25MdHYPekppCiyNgQ==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:lO9Swvs6tdXBs0sQtgVDiLKAOja/r0MFu8ogc/5otqYJ9IcdCNI6iFKwGO5JUq8VwfWMtvZVacmKBTocJdHvpQ==	1621259	lO9Swvs6tdXBs0sQtgVDiLKAOja/r0MFu8ogc/5otqYJ9IcdCNI6iFKwGO5JUq8VwfWMtvZVacmKBTocJdHvpQ==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	aqzQThVQyQ8LEBkxiGQk2D8oUsi0hr2lxBXP9B79mZJuifCPlHZI4CpNFPgyveB9b/2/NGQP+Wc5L9j9jFLKzQ==	http://crawler-test.com/titles/page_title_length/230	0.0	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (230 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/230	aqzQThVQyQ8LEBkxiGQk2D8oUsi0hr2lxBXP9B79mZJuifCPlHZI4CpNFPgyveB9b/2/NGQP+Wc5L9j9jFLKzQ==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:Bxf+5cjVvyt52u7HrP5oUVchGCSE02P+34gYBtBs07z498X6daPTFnHKwji5HD6yXKlD++xN5+SX4+xioJHI4Q==	1621259	Bxf+5cjVvyt52u7HrP5oUVchGCSE02P+34gYBtBs07z498X6daPTFnHKwji5HD6yXKlD++xN5+SX4+xioJHI4Q==	a	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length_n	1.89	200	Page URL Length	QfDC0XmAak7RVmwu5ZxGEjr/HP33Dr3/VJbXPlZcEKnstz48KIw9wy6II/GQapd3kfzRBPwMyr4eQc/noeigaw==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.27	200	Page URL Length (1600 characters	a	Page URL Length (1600 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/urls/page_url_length_n	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	QfDC0XmAak7RVmwu5ZxGEjr/HP33Dr3/VJbXPlZcEKnstz48KIw9wy6II/GQapd3kfzRBPwMyr4eQc/noeigaw==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:Ieu95ga6UpcbOceycK3uBnTl2fxgoLxzjwUygb4Tsc/aa/Js1nWLY5DKGj6nsr4RsyaM5kZ0GAlteL2vPBOqwA==	1621259	Ieu95ga6UpcbOceycK3uBnTl2fxgoLxzjwUygb4Tsc/aa/Js1nWLY5DKGj6nsr4RsyaM5kZ0GAlteL2vPBOqwA==	a	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length_n	1.89	200	Page URL Length	x8TaZBqMA26G4qAnmd5uOPkxm0CORCHH+3icCJ2Oc0FNt9I9cIuGqf2mzXrKSDqwcC42EBcrrU7ahOdyUuibqQ==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.27	200	Page URL Length (1100 characters	a	Page URL Length (1100 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/urls/page_url_length_n	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	x8TaZBqMA26G4qAnmd5uOPkxm0CORCHH+3icCJ2Oc0FNt9I9cIuGqf2mzXrKSDqwcC42EBcrrU7ahOdyUuibqQ==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:yz7iPeWkq5DCrenz3qzsc8WbiqWxrQqaORVSkmMh2sdmuyf7+HXD+/Btj0b+0YfKlAwKQgjGvIpOqRyH6VOnBQ==	1621259	yz7iPeWkq5DCrenz3qzsc8WbiqWxrQqaORVSkmMh2sdmuyf7+HXD+/Btj0b+0YfKlAwKQgjGvIpOqRyH6VOnBQ==	a	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length_n	1.89	200	Page Title Length	QBNdrDKgXt6aAt3Yo3zrRtOtU4xZ1T+WPx4P5yZnU9pC1YNY+5xrRl+WXsFyTWqabCg5MCUSWZ/jqrCdjOb/DQ==	https://crawler-test.com/titles/page_title_length/1	0.27	200	x	a	Page Title Length (1 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/titles/page_title_length_n	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length/1	QBNdrDKgXt6aAt3Yo3zrRtOtU4xZ1T+WPx4P5yZnU9pC1YNY+5xrRl+WXsFyTWqabCg5MCUSWZ/jqrCdjOb/DQ==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:BQ+W7VrcsrtUY3PWs0fiY342DR0LpOoKvk9DJSj2DeyN0eGZ7XJynR9xeGu0gf1N2E8eDUJNyIWJ3WlSFWaAcA==	1621259	BQ+W7VrcsrtUY3PWs0fiY342DR0LpOoKvk9DJSj2DeyN0eGZ7XJynR9xeGu0gf1N2E8eDUJNyIWJ3WlSFWaAcA==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	hWr6cBDOXDiyKfxhrxCHz0vG6HvgRpEqNvxSWbtw8fDUD+RaL29DZIICZCqe5K558UR+xg6phJoHz1SM/3pwZA==	http://crawler-test.com/titles/page_title_length/150	0.0	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (150 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/150	hWr6cBDOXDiyKfxhrxCHz0vG6HvgRpEqNvxSWbtw8fDUD+RaL29DZIICZCqe5K558UR+xg6phJoHz1SM/3pwZA==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:nmtsvSftkOWM8NtUylVM/b3j2i9SrYOW2jiXF6QcPLyMpDpr0OHbxzbThpnHgr495mmfrr2LthGw92j2b7g3qQ==	1621259	nmtsvSftkOWM8NtUylVM/b3j2i9SrYOW2jiXF6QcPLyMpDpr0OHbxzbThpnHgr495mmfrr2LthGw92j2b7g3qQ==	a	EBiwDpSpLdQXob6kMYEOwFPPEj0UHyySNDtC3vU3fkHA+joVwkpbg/c4nBJvrFJcaumu/bjP0Pklpz4Fp0Z7+A==	https://crawler-test.com/robots_protocol/user_excluded	1.89	200	User Excluded	hZPAmaqYXfU7WntHejaDnzAeDngLgpjjAEssPDxGRVNbkVkODzk78zu7KGnPMsotb1gHl4IyPpEDgeH0oqfi8Q==	https://crawler-test.com/robots_protocol/user_excluded_3	0.27	200	Default title UFpmUxoaLjCAXv5l5hZ8	a	User exluded 3	False	False	True	False	NULL	NULL	https://crawler-test.com/robots_protocol/user_excluded	EBiwDpSpLdQXob6kMYEOwFPPEj0UHyySNDtC3vU3fkHA+joVwkpbg/c4nBJvrFJcaumu/bjP0Pklpz4Fp0Z7+A==	https://crawler-test.com/robots_protocol/user_excluded_3	hZPAmaqYXfU7WntHejaDnzAeDngLgpjjAEssPDxGRVNbkVkODzk78zu7KGnPMsotb1gHl4IyPpEDgeH0oqfi8Q==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:VpX0pDxtk+NUm7XAPG1TrlG3V5e2KSIhizOWtlzmldC6mm5v6f14oFPEwQEySczzddO2Ddf9TELUuTecvyLK9Q==	1621259	VpX0pDxtk+NUm7XAPG1TrlG3V5e2KSIhizOWtlzmldC6mm5v6f14oFPEwQEySczzddO2Ddf9TELUuTecvyLK9Q==	a	Lv3+vFKjEHj2FNXYr16CUp26gjPBJql+gwuYYKtzQezxzCV1SZHhnAN6B34u4R2cEsGfx/YUlMAPX+W3FKQRsw==	https://crawler-test.com/urls/paginated_page	1.89	200	Paginated Page 1	Xo2Py7UUcJ1y7uIq9snabiqhyfrbblD3WMm/vZQw+7EmAkVVTMeaa5GWQ0kMUM3jM863bKqIsK0a4nEJNam9HQ==	https://crawler-test.com/urls/paginated_page?page=1	1.13	200	Paginated Page 1	a	1	False	False	True	False	NULL	NULL	https://crawler-test.com/urls/paginated_page	Lv3+vFKjEHj2FNXYr16CUp26gjPBJql+gwuYYKtzQezxzCV1SZHhnAN6B34u4R2cEsGfx/YUlMAPX+W3FKQRsw==	https://crawler-test.com/urls/paginated_page?page=1	Xo2Py7UUcJ1y7uIq9snabiqhyfrbblD3WMm/vZQw+7EmAkVVTMeaa5GWQ0kMUM3jM863bKqIsK0a4nEJNam9HQ==	True	True	False	2	2	False	False	False	5	doc	0	
+1621259:mpAX2A1wAmGrU60b1nQ1hGPDb8qynbvUEKwCDWaTfSItP15KH8BV3dgdZ6ax1pil0MNcTN9YuvcrHBZgBGmeaA==	1621259	mpAX2A1wAmGrU60b1nQ1hGPDb8qynbvUEKwCDWaTfSItP15KH8BV3dgdZ6ax1pil0MNcTN9YuvcrHBZgBGmeaA==	a	gBV6L3AXxfsTB+4CI4ctVzrvh/tT+omaJMH0qTpa7+d1oAo6XZBrrPMbOJbLwL1IuwK379nWNLPtr+AZ+3FGAw==	https://crawler-test.com/urls/pages_with_hreflang	1.89	200	Pages with HREFLANG	Javdq+OGfgoowxNKBxKiYAs1ErSwuNXBToFXi3h7u7oWRYZLFSnlHgnYuiGa9BA5EHPa8iATDp9cnJbOijs87A==	https://crawler-test.com/urls/page_with_broken_hreflang	0.27	200	Page with broken HREFLANG	a	Page with broken HREFLANG	False	False	True	False	NULL	NULL	https://crawler-test.com/urls/pages_with_hreflang	gBV6L3AXxfsTB+4CI4ctVzrvh/tT+omaJMH0qTpa7+d1oAo6XZBrrPMbOJbLwL1IuwK379nWNLPtr+AZ+3FGAw==	https://crawler-test.com/urls/page_with_broken_hreflang	Javdq+OGfgoowxNKBxKiYAs1ErSwuNXBToFXi3h7u7oWRYZLFSnlHgnYuiGa9BA5EHPa8iATDp9cnJbOijs87A==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:goTrT7TXl0hWsQxm1nw4umWRuiwngjaAODu/sazvp24WfHhV8qkoAayeBwJ5F5mev+Glox6TRS4YLqPYXElAxA==	1621259	goTrT7TXl0hWsQxm1nw4umWRuiwngjaAODu/sazvp24WfHhV8qkoAayeBwJ5F5mev+Glox6TRS4YLqPYXElAxA==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	/nRkF8RSHmqD8/RURxLtSlwmM7cGWloO0bPAzfJdQey1RqGVumx3uTaR9/Eost7t2Yq0sKv6MXZUtWJu7YkLWQ==	http://crawler-test.com/titles/page_title_length/100	0.0	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (100 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/100	/nRkF8RSHmqD8/RURxLtSlwmM7cGWloO0bPAzfJdQey1RqGVumx3uTaR9/Eost7t2Yq0sKv6MXZUtWJu7YkLWQ==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:7Oda2xSu4VMnL5yYwNNnb8uzkMswyNAKr0aodKxFVP6FdHJ0XaQfqhkbqX0jlqQTFPhRPmDF43cFdz6APqjUGA==	1621259	7Oda2xSu4VMnL5yYwNNnb8uzkMswyNAKr0aodKxFVP6FdHJ0XaQfqhkbqX0jlqQTFPhRPmDF43cFdz6APqjUGA==	a	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length_n	0.66	200	Page URL Length	H+7h6HZG4ZKqxz4vxoxwJADnvN2pF0RbpeCooFe4yKA+4OaCQuIy4h7rix5LbGOYhuHonalSLvZymg94pKCpOg==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.0	200	Page URL Length (1800 characters	a	Page URL Length (1800 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/page_url_length_n	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	H+7h6HZG4ZKqxz4vxoxwJADnvN2pF0RbpeCooFe4yKA+4OaCQuIy4h7rix5LbGOYhuHonalSLvZymg94pKCpOg==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:7zbuHuyae+OIBpTG2t5Rl9vbudXUuoeCkgyrHiihKRIASwxdJwdTnGyiO+4R0Q2rkzeHHJ/2kwFrKI9XXqDYFQ==	1621259	7zbuHuyae+OIBpTG2t5Rl9vbudXUuoeCkgyrHiihKRIASwxdJwdTnGyiO+4R0Q2rkzeHHJ/2kwFrKI9XXqDYFQ==	a	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length_n	1.89	200	Page URL Length	bflCnavBLMro33RpqYOzNj1jAZnbHiTZXv6OyWOK3cEsBgE9GCMHhCJiPR8o2knvdAV8Js9HLdoyxF/hqNm8pw==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.27	200	Page URL Length (800 characters	a	Page URL Length (800 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/urls/page_url_length_n	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	bflCnavBLMro33RpqYOzNj1jAZnbHiTZXv6OyWOK3cEsBgE9GCMHhCJiPR8o2knvdAV8Js9HLdoyxF/hqNm8pw==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:DQbWIP+qSbOBLtP0roCd9t+7tYqoyRj5L3RTVSZfaDT0dLpdcQEvLeA+puw6JZcn73kaZh0sK9F7/57KWDhMcg==	1621259	DQbWIP+qSbOBLtP0roCd9t+7tYqoyRj5L3RTVSZfaDT0dLpdcQEvLeA+puw6JZcn73kaZh0sK9F7/57KWDhMcg==	link	pYaQw9hXwf+btZxgNYTIrb4n52/Y5TiSp2rElw+ldO8//rdGrjpoi4HOqsb76VfrpcdkIjIP4KsfLzU4czk07g==	https://subdomain.crawler-test.com/	2.48	200	Crawler Test Site	C4/iZH4PKnZTnZ0knqtzhEHXWwquCtUcGtcqBVx4t8vNkWeEPiLYFhIYYv/ZwIKnFIylzdC4BpNWxoWR2pS2cw==	http://subdomain.crawler-test.com/css/app.css	0.0	200	NULL	link	NULL	False	False	True	False	NULL	stylesheet	https://subdomain.crawler-test.com/	pYaQw9hXwf+btZxgNYTIrb4n52/Y5TiSp2rElw+ldO8//rdGrjpoi4HOqsb76VfrpcdkIjIP4KsfLzU4czk07g==	http://subdomain.crawler-test.com/css/app.css	C4/iZH4PKnZTnZ0knqtzhEHXWwquCtUcGtcqBVx4t8vNkWeEPiLYFhIYYv/ZwIKnFIylzdC4BpNWxoWR2pS2cw==	False	True	False	2	2	False	False	False	1	doc	0	
+1621259:NzqMh+zY2gNS9T+xB05CG5UnvN8YyA5wg0gR+gBjTGmcMQFlHYIPaytVxgHSIgKXMBOc+77JxQeG7oj/AmWZFA==	1621259	NzqMh+zY2gNS9T+xB05CG5UnvN8YyA5wg0gR+gBjTGmcMQFlHYIPaytVxgHSIgKXMBOc+77JxQeG7oj/AmWZFA==	a	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length_n	0.66	200	Page Title Length	kHoSYfyIiQmIZEuv0fqSnYOUmo4eJJxIhfWU6s6bhjElk/Kshb+PXHJD97JyveNIZB8n+2gRl4fOTqG0qrXyNg==	http://crawler-test.com/titles/page_title_length/190	0.0	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (190 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/titles/page_title_length_n	a9AGFAD0qwSvf1p1Ozux7xODjezu/HQPoAZUxpEqE5pQSGv8AI5qlNt3WMIlI9RVNTlo/kFnQzSYjuaD+R1OUQ==	http://crawler-test.com/titles/page_title_length/190	kHoSYfyIiQmIZEuv0fqSnYOUmo4eJJxIhfWU6s6bhjElk/Kshb+PXHJD97JyveNIZB8n+2gRl4fOTqG0qrXyNg==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:Z+uo2qP8tXZoJrO9xT8kdtbjP62Q39J/1X6N0a4UPfy0FksySND04/JodG0FMmzv/Rc59QUJ4UsaY48kVccBnQ==	1621259	Z+uo2qP8tXZoJrO9xT8kdtbjP62Q39J/1X6N0a4UPfy0FksySND04/JodG0FMmzv/Rc59QUJ4UsaY48kVccBnQ==	a	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length_n	1.89	200	Page Title Length	dIT6yknwLzEYBoD0CQGi+EOpeOfW67EZJ0b9T/jdFXnnlQG3B5RwanLSHijRdTD4JuZOHhL0y3O0WhfOJNPO+w==	https://crawler-test.com/titles/page_title_length/210	0.27	200	xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	a	Page Title Length (210 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/titles/page_title_length_n	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length/210	dIT6yknwLzEYBoD0CQGi+EOpeOfW67EZJ0b9T/jdFXnnlQG3B5RwanLSHijRdTD4JuZOHhL0y3O0WhfOJNPO+w==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:mZqddIMmVL1BXoD3mSToxzuL2ptkVE8Y6x6H8ZbfG+mN0Q+7huAgcIFl3HrQl1t1NhuwRluUly0NfzCkJ+YVng==	1621259	mZqddIMmVL1BXoD3mSToxzuL2ptkVE8Y6x6H8ZbfG+mN0Q+7huAgcIFl3HrQl1t1NhuwRluUly0NfzCkJ+YVng==	a	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length_n	0.66	200	Page URL Length	h3zdvU+Yoqb4DcKOFDTUZFW/JSITReBk+1MSKxFt96Xj3QORhxBVFWUaoML+sIvpeAxz8+QjI6uA8+cGQjMV5g==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.0	200	Page URL Length (500 characters	a	Page URL Length (500 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/page_url_length_n	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	h3zdvU+Yoqb4DcKOFDTUZFW/JSITReBk+1MSKxFt96Xj3QORhxBVFWUaoML+sIvpeAxz8+QjI6uA8+cGQjMV5g==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:BKAS8EC3AbZzqsaf8eWc7X9zAv7gBjML+ZzWXT/X1T/CzYBLoYfzyIowIr8ZC13dKcCJ1fkLiH0qU9qmMxLDJw==	1621259	BKAS8EC3AbZzqsaf8eWc7X9zAv7gBjML+ZzWXT/X1T/CzYBLoYfzyIowIr8ZC13dKcCJ1fkLiH0qU9qmMxLDJw==	link	pYaQw9hXwf+btZxgNYTIrb4n52/Y5TiSp2rElw+ldO8//rdGrjpoi4HOqsb76VfrpcdkIjIP4KsfLzU4czk07g==	https://subdomain.crawler-test.com/	2.48	200	Crawler Test Site	lZwYNMAae1k5nco0ArHZ3jaMDvbgfQqlOIX87EVQ9HSrbNBYCiQaTurSGQ1YkC+IO0tHfz1ffWaTXCy851YATQ==	https://subdomain.crawler-test.com/brokencss.css	0.0	404	NULL	link	NULL	False	False	True	False	NULL	stylesheet	https://subdomain.crawler-test.com/	pYaQw9hXwf+btZxgNYTIrb4n52/Y5TiSp2rElw+ldO8//rdGrjpoi4HOqsb76VfrpcdkIjIP4KsfLzU4czk07g==	https://subdomain.crawler-test.com/brokencss.css	lZwYNMAae1k5nco0ArHZ3jaMDvbgfQqlOIX87EVQ9HSrbNBYCiQaTurSGQ1YkC+IO0tHfz1ffWaTXCy851YATQ==	True	True	False	2	4	False	False	False	1	doc	0	
+1621259:PkqPsOU6LgRBRW98FTPNij9Tpf3hLImo15esTizOk0/6sDekwaJD7Jk+88uJD4pvEbFgYha8dxNcarMXxxTcKg==	1621259	PkqPsOU6LgRBRW98FTPNij9Tpf3hLImo15esTizOk0/6sDekwaJD7Jk+88uJD4pvEbFgYha8dxNcarMXxxTcKg==	a	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length_n	1.89	200	Page URL Length	iX5sY6A18E4+nDvzuImzp7+o6hyswiJiQah9//PQOuYdqvZNMlDmhDArTuYYIKYHriPmhD6OTAfQcNd6k3LMqg==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.27	200	Page URL Length (200 characters	a	Page URL Length (200 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/urls/page_url_length_n	xtXwTMIUY+TtybfFOPUUe5UvU9x85ByRVgHAwNJ5eP/mJld2PoQk7fMbCc1G/MlD3xIGSCFNG3UipifI9xcIng==	https://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	iX5sY6A18E4+nDvzuImzp7+o6hyswiJiQah9//PQOuYdqvZNMlDmhDArTuYYIKYHriPmhD6OTAfQcNd6k3LMqg==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:UCst0AgVCWCOVl6e8vmxrMfMNCtjkWaFLOLdgd0Qz7g1Wb0ACc6ef7KpTTGoDrJHQJBuRKvV5Vj8fjJHFKO4uw==	1621259	UCst0AgVCWCOVl6e8vmxrMfMNCtjkWaFLOLdgd0Qz7g1Wb0ACc6ef7KpTTGoDrJHQJBuRKvV5Vj8fjJHFKO4uw==	a	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length_n	0.66	200	Page URL Length	qAus4ijt4LkrBjsqSpMYEqAqLl97GhKUBDau0+XQpM008m4iQQSCkBxGr1HfmxrbnHCrMKcQQRxSvw3pvMpT9w==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.0	200	Page URL Length (1400 characters	a	Page URL Length (1400 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/page_url_length_n	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	qAus4ijt4LkrBjsqSpMYEqAqLl97GhKUBDau0+XQpM008m4iQQSCkBxGr1HfmxrbnHCrMKcQQRxSvw3pvMpT9w==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:5PVEl+nDGnj3eIFNuyLqZv9nGKJm5urRLIC2IvdmU6Clu7S+6v3iG214zHDtk8aDKeWfooas0xxfvTXI1Fhejg==	1621259	5PVEl+nDGnj3eIFNuyLqZv9nGKJm5urRLIC2IvdmU6Clu7S+6v3iG214zHDtk8aDKeWfooas0xxfvTXI1Fhejg==	a	EBiwDpSpLdQXob6kMYEOwFPPEj0UHyySNDtC3vU3fkHA+joVwkpbg/c4nBJvrFJcaumu/bjP0Pklpz4Fp0Z7+A==	https://crawler-test.com/robots_protocol/user_excluded	1.89	200	User Excluded	7oe8WqVuNE56KbGD28kscvpsb6kSbRr98Q19IwWI81e0G4chJUjUXc40yvV68q9m6ISvBahdH8CCNXLuuTjLIA==	https://crawler-test.com/robots_protocol/user_excluded_2/foo	0.27	200	Default title 6vMRfag77yJISsixmCF6	a	User exluded 2	False	False	True	False	NULL	NULL	https://crawler-test.com/robots_protocol/user_excluded	EBiwDpSpLdQXob6kMYEOwFPPEj0UHyySNDtC3vU3fkHA+joVwkpbg/c4nBJvrFJcaumu/bjP0Pklpz4Fp0Z7+A==	https://crawler-test.com/robots_protocol/user_excluded_2/foo	7oe8WqVuNE56KbGD28kscvpsb6kSbRr98Q19IwWI81e0G4chJUjUXc40yvV68q9m6ISvBahdH8CCNXLuuTjLIA==	True	True	False	2	2	False	False	False	1	doc	0	
+1621259:C9Z1q4Vvzn1K63jxRVyECAWqcKK/lEAI3WNEHQH0fNthhkBg1d+qTZ6fcp67OYWUwQjDnL3qb9RcnA24dwDHkg==	1621259	C9Z1q4Vvzn1K63jxRVyECAWqcKK/lEAI3WNEHQH0fNthhkBg1d+qTZ6fcp67OYWUwQjDnL3qb9RcnA24dwDHkg==	a	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length_n	0.66	200	Page URL Length	yVtkgfi6EeErMtCUHT7cPJPgOdEfYxzg6f/UK+V/CwFSqva78c2GGGiwSDsgWhGUcRUqpP6zSj1v1uDWkJwVzw==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	0.0	200	Page URL Length (2000 characters	a	Page URL Length (2000 characters)	False	False	True	False	NULL	NULL	http://crawler-test.com/urls/page_url_length_n	YiX2OkkxZvSMMT5TmbyZjlE8gCQSSmvxUrNBtLw1rWrs5cmxQNdTwPJgzgXNB3nF+1vaazrHwH32rnq67T7cHg==	http://crawler-test.com/urls/page_url_length/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx	yVtkgfi6EeErMtCUHT7cPJPgOdEfYxzg6f/UK+V/CwFSqva78c2GGGiwSDsgWhGUcRUqpP6zSj1v1uDWkJwVzw==	False	False	False	2	2	False	False	False	1	doc	0	
+1621259:QQ/wWoUYYMJETokJJxVZSlqTHUMifVE7YGZcGNvLQkWH4CpFqgXBlt/ABSfSJs3zBJL9gitT6ABEmV5MWFwOUQ==	1621259	QQ/wWoUYYMJETokJJxVZSlqTHUMifVE7YGZcGNvLQkWH4CpFqgXBlt/ABSfSJs3zBJL9gitT6ABEmV5MWFwOUQ==	a	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length_n	1.89	200	Page Title Length	/yh69joQhtpoZX9pPVfv7cbB3acvTzB22nfHIpCNP1cgfcZC3BnkcflsLTVeRY5xZ1qDpYf5fGlQMu72PhPOxQ==	https://crawler-test.com/titles/page_title_length/2	0.27	200	xx	a	Page Title Length (2 characters)	False	False	True	False	NULL	NULL	https://crawler-test.com/titles/page_title_length_n	0FgjuY6ilewP5/Tv2RHwt9A66vuidBx3jYV1+sEb5Rcld/ErHsWinoZyRnlrirqQiLdBjxv9zCe/9i9wj+FPkg==	https://crawler-test.com/titles/page_title_length/2	/yh69joQhtpoZX9pPVfv7cbB3acvTzB22nfHIpCNP1cgfcZC3BnkcflsLTVeRY5xZ1qDpYf5fGlQMu72PhPOxQ==	True	True	False	2	2	False	False	False	1	doc	0	
+
+query II
+SELECT * FROM parquet_scan('data/parquet-testing/bug1589.parquet') limit 50;
+----
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+400	NULL	
+500	NULL	
+200	NULL	
+300	NULL	
+
+mode skip
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/hadoop_lz4_compressed_larger.parquet') limit 50;
+----
+c7ce6bef-d5b0-4863-b199-8ea8c7fb117b	
+e8fb9197-cb9f-4118-b67f-fbfa65f61843	
+885136e1-0aa1-4fdb-8847-63d87b07c205	
+ce7b2019-8ebe-4906-a74d-0afa2409e5df	
+a9ee2527-821b-4b71-a926-03f73c3fc8b7	
+daed52e5-32ef-49b5-a973-0b37490dd068	
+528c4bc0-02f8-4cb7-bde5-a26d57b1d8a4	
+3512424e-b0dc-42aa-bf5f-458b8661c227	
+2f0b6d52-ed12-4d80-949f-d39bba619313	
+8c85e94c-4130-4999-a029-6b48a8f946ad	
+87eb02ef-ad73-4166-a76f-69406771fa5b	
+0d91e808-4969-4083-9c0f-c16516449f99	
+2fe2d6ee-4b9d-4e45-a280-fdac5ff72afb	
+9ec1c79a-33eb-4dae-80bb-71a06fcd286b	
+0f7639cd-aa15-46a0-aa34-a576422cfd7b	
+89a4a6ed-4f5c-4759-a208-a5bb6d7924d3	
+eaee0fd3-b6e7-4bcf-8591-dfad2378ce59	
+80be70cf-480c-4066-8bae-007d08ef8980	
+3e9f9bc0-81eb-48bf-a057-6dc73a81001d	
+10632cc9-4e27-47c4-a0cf-1f17f9358161	
+da081f6a-0ddf-4963-ad27-c8dddc18a59b	
+3efef88a-1434-4db3-9da0-2826c9ef6464	
+7cc0ff61-9991-4305-b382-612281fa4f05	
+71e548c2-46a7-4f6b-a3b0-71181b900d56	
+e8d5a14c-5d18-42c5-9354-e8778849d635	
+b3fffae2-bcd8-4118-b682-9fe180318739	
+7acaf58c-e036-4d64-9ee0-e1dc1ef9e4a0	
+3a72508d-8a63-4ebd-9333-32d4e447a549	
+025a405a-6a28-4587-acb3-7d066df03ba5	
+5abedef1-9f44-4dac-94d9-12183137237c	
+1b62cb27-2a02-40c7-aaa8-28b3d9eaf564	
+5faadffa-dfb9-4c3c-a21a-99ace6aadd95	
+951b7b4d-de16-4cb0-a048-8f5c9ba9cb35	
+6b5feeec-e323-43b6-a0da-894f87ee4145	
+2e274f4a-e1f8-42de-ac0a-a073ae478476	
+5c927485-73dd-48fb-854a-7707f2559a66	
+d949ce46-9e87-4342-85b9-36354d02a619	
+1bff8c69-df20-4240-8a2f-3c3fe90c799a	
+eb271d42-7791-45f6-919b-4f2378d3d72c	
+239599c5-3192-4a7d-b3c2-bdff1b78f89e	
+b3f10961-64f2-4f38-a55f-624e4000e735	
+9e252dfc-060e-447f-95c6-09707d550a45	
+f2807544-a424-444a-add3-3d5d486b70e2	
+72ebe2ac-35c9-42cc-9e6f-44e4f809471f	
+89878ffe-4c97-4d88-aa2c-3ff2eb011f93	
+8a279abb-9397-4666-9a7c-686b932bf241	
+1a21bc07-a59b-4ba0-8b71-d28256980823	
+2eb9395e-97a6-44c3-b75d-2ec6dab83275	
+d0018041-41e3-4013-ba90-535ba03d46c3	
+c50e8ade-6051-436f-a26e-acc9c0594be5	
+
+mode skip
+
+query III
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/non_hadoop_lz4_compressed.parquet') limit 50;
+----
+1593604800	abc	42.0	
+1593604800	def	7.7	
+1593604801	abc	42.125	
+1593604801	def	7.7	
+
+mode unskip
+
+query IIIIIIIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.parquet') limit 50;
+----
+4	True	0	0	0	0	0.0	0.0	03/01/09	0	2009-03-01 00:00:00	
+5	False	1	1	1	10	1.100000023841858	10.1	03/01/09	1	2009-03-01 00:01:00	
+6	True	0	0	0	0	0.0	0.0	04/01/09	0	2009-04-01 00:00:00	
+7	False	1	1	1	10	1.100000023841858	10.1	04/01/09	1	2009-04-01 00:01:00	
+2	True	0	0	0	0	0.0	0.0	02/01/09	0	2009-02-01 00:00:00	
+3	False	1	1	1	10	1.100000023841858	10.1	02/01/09	1	2009-02-01 00:01:00	
+0	True	0	0	0	0	0.0	0.0	01/01/09	0	2009-01-01 00:00:00	
+1	False	1	1	1	10	1.100000023841858	10.1	01/01/09	1	2009-01-01 00:01:00	
+
+query II
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/repeated_no_annotation.parquet') limit 50;
+----
+1	NULL
+2	NULL
+3	{'phone': []}
+4	{'phone': [{'number': 5555555555, 'kind': NULL}]}
+5	{'phone': [{'number': 1111111111, 'kind': home}]}
+6	{'phone': [{'number': 1111111111, 'kind': home}, {'number': 2222222222, 'kind': NULL}, {'number': 3333333333, 'kind': mobile}]}
+
+query IIIIIIIIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/data-types.parquet') limit 50;
+----
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	
+42	43	44	45	4.599999904632568	4.7	4.80	49	50	True	2019-11-26 20:11:42.501	2020-01-10
+-127	-32767	-2147483647	-9223372036854775807	-4.599999904632568	-4.7	NULL	NULL	NULL	False	NULL	NULL	
+127	32767	2147483647	9223372036854775807	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	
+
+query IIII
+SELECT * FROM parquet_scan('data/parquet-testing/unsigned.parquet') limit 50;
+----
+1	1	1	1	
+2	2	2	2	
+3	3	3	3	
+4	4	4	4	
+5	5	5	5	
+255	65535	4294967295	18446744073709551615	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/pandas-date.parquet') limit 50;
+----
+2021-01-12	
+1921-12-24	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/date.parquet') limit 50;
+----
+1970-01-01	
+1971-01-01	
+1972-01-01	
+1973-01-01	
+1974-01-01	
+1975-01-01	
+1975-02-01	
+1975-03-01	
+1975-04-01	
+1975-05-01	
+1976-01-01	
+1977-01-01	
+NULL	
+NULL	
+1982-01-01	
+1983-01-01	
+1984-01-01	
+1985-01-01	
+1985-02-01	
+1985-03-01	
+1985-04-01	
+1985-05-01	
+NULL	
+NULL	
+1990-01-01	
+1991-01-01	
+1992-01-01	
+1993-01-01	
+1994-01-01	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+1996-01-01	
+1997-01-01	
+
+query IIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nullable.impala.parquet') limit 50;
+----
+1	[1, 2, 3]	[[1, 2], [3, 4]]	{k1=1, k2=100}	[{k1=1}]	{'A': 1, 'b': [1], 'C': {'d': [[{'E': 10, 'F': aaa}, {'E': -10, 'F': bbb}], [{'E': 11, 'F': c}]]}, 'g': {foo={'H': {'i': [1.100000]}}}}
+2	[NULL, 1, 2, NULL, 3, NULL]	[[NULL, 1, 2, NULL], [3, NULL, 4], [], NULL]	{k1=2, k2=NULL}	[{k3=NULL, k1=1}, NULL, {}]	{'A': NULL, 'b': [NULL], 'C': {'d': [[{'E': NULL, 'F': NULL}, {'E': 10, 'F': aaa}, {'E': NULL, 'F': NULL}, {'E': -10, 'F': bbb}, {'E': NULL, 'F': NULL}], [{'E': 11, 'F': c}, NULL], [], NULL]}, 'g': {g1={'H': {'i': [2.200000, NULL]}}, g2={'H': {'i': []}}, g3=NULL, g4={'H': {'i': NULL}}, g5={'H': NULL}}}
+3	[]	[NULL]	{}	[NULL, NULL]	{'A': NULL, 'b': NULL, 'C': {'d': []}, 'g': {}}
+4	NULL	[]	{}	[]	{'A': NULL, 'b': NULL, 'C': {'d': NULL}, 'g': NULL}
+5	NULL	NULL	{}	NULL	{'A': NULL, 'b': NULL, 'C': NULL, 'g': {foo={'H': {'i': [2.200000, 3.300000]}}}}
+6	NULL	NULL	NULL	NULL	NULL
+7	NULL	[NULL, [5, 6]]	{k1=NULL, k3=NULL}	NULL	{'A': 7, 'b': [2, 3, NULL], 'C': {'d': [[], [NULL], NULL]}, 'g': NULL}
+
+mode skip
+
+query III
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/hadoop_lz4_compressed.parquet') limit 50;
+----
+1593604800	abc	42.0	
+1593604800	def	7.7	
+1593604801	abc	42.125	
+1593604801	def	7.7	
+
+mode unskip
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/fixed.parquet') limit 50;
+----
+\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F
+
+query IIIIIIIIIII
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.snappy.parquet') limit 50;
+----
+6	True	0	0	0	0	0.0	0.0	04/01/09	0	2009-04-01 00:00:00	
+7	False	1	1	1	10	1.100000023841858	10.1	04/01/09	1	2009-04-01 00:01:00	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/decimal/int32_decimal.parquet') limit 50;
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query IIIII
+SELECT * FROM parquet_scan('data/parquet-testing/decimal/pandas_decimal.parquet') limit 50;
+----
+1234.0	12.34	12345.6789	123456789.98765433	922337203685477580700.92230685477500000	
+-1234.0	-12.34	-9765.4321	-987654321.12345680	-922337236854775807.92233720306854775	
+1.0	1.00	1.0000	1.00000000	1.00000000000000000	
+-1.0	-1.00	-1.0000	-1.00000000	-1.00000000000000000	
+0.0	0.00	0.0000	0E-8	0E-17	
+NULL	NULL	NULL	NULL	0E-17	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/decimal/arrow/byte_array_decimal.parquet') limit 50;
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/decimal/decimal_dc.parquet') limit 50
+----
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+NULL	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/decimal/int64_decimal.parquet') limit 50
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/decimal/fixed_length_decimal_legacy.parquet') limit 50;
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/decimal/fixed_length_decimal.parquet') limit 50;
+----
+1.00	
+2.00	
+3.00	
+4.00	
+5.00	
+6.00	
+7.00	
+8.00	
+9.00	
+10.00	
+11.00	
+12.00	
+13.00	
+14.00	
+15.00	
+16.00	
+17.00	
+18.00	
+19.00	
+20.00	
+21.00	
+22.00	
+23.00	
+24.00	
+
+query II
+SELECT * FROM parquet_scan('data/parquet-testing/glob2/t1.parquet') limit 50;
+----
+1	hello	
+
+query II
+SELECT * FROM parquet_scan('data/parquet-testing/cache/cache1.parquet') limit 50;
+----
+1	hello	
+
+query II
+SELECT * FROM parquet_scan('data/parquet-testing/cache/cache2.parquet') limit 50;
+----
+0	10	
+1	20	
+2	30	
+
+query II
+SELECT * FROM parquet_scan('data/parquet-testing/glob/t2.parquet') limit 50;
+----
+1	hello	
+
+query II
+SELECT * FROM parquet_scan('data/parquet-testing/glob/t1.parquet') limit 50;
+----
+1	hello	
+
+query III
+SELECT * FROM parquet_scan('data/parquet-testing/bug2557.parquet') limit 10
+----
+[adipiscing, elit]	[267]	[]
+[adipiscing, elit]	[58, 146]	[3105.735731, 7332.144961, 2693.459659, 2058.830347]
+[dolor, sit, amet, consectetur, adipiscing, elit]	[26, 701]	[2252.315041]
+[Lorem, ipsum, dolor, sit, amet, consectetur, adipiscing, elit]	[763]	[4318.131164, 703.332322]
+[consectetur, adipiscing, elit]	[]	[4921.065813]
+[ipsum, dolor, sit, amet, consectetur, adipiscing, elit]	[503]	[3143.311724]
+[amet, consectetur, adipiscing, elit]	[981]	[1556.844782, 5388.780546]
+[consectetur, adipiscing, elit]	[822, 843, 702, 469]	[]
+[dolor, sit, amet, consectetur, adipiscing, elit]	[698, 385]	[3591.160509]
+[Lorem, ipsum, dolor, sit, amet, consectetur, adipiscing, elit]	[597, 719]	[1218.803740]
+
+

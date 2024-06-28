@@ -11,6 +11,7 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 # we disallow ALTER TYPE on a column with a CHECK constraint
 statement error
 ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
+----
 
 # we can change the other columns' type though
 statement ok

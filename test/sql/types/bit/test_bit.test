@@ -124,6 +124,7 @@ INSERT INTO bits VALUES (NULL)
 
 statement error
 INSERT INTO bits VALUES ('')
+----
 
 query I
 SELECT * FROM bits

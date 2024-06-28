@@ -1,0 +1,24 @@
+# name: test/sql/types/list/list_extract_types.test_slow
+# description: Test list extract on various types
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE all_types AS SELECT * FROM test_all_types();
+
+foreach colname bool tinyint smallint int bigint hugeint utinyint usmallint uint ubigint uhugeint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
+
+statement ok
+CREATE TABLE a AS SELECT LIST_EXTRACT(["${colname}"], 1) col FROM all_types;
+
+query I
+SELECT COUNT(*) FROM a JOIN all_types ON (a.col=all_types."${colname}");
+----
+2
+
+statement ok
+DROP TABLE a;
+
+endloop

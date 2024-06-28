@@ -1,0 +1,33 @@
+[
+  {
+    "class": "ExtraDropInfo",
+    "class_type": "info_type",
+    "includes": [
+      "duckdb/parser/parsed_data/extra_drop_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "info_type",
+        "type": "ExtraDropInfoType"
+      }
+    ]
+  },
+  {
+    "class": "ExtraDropSecretInfo",
+    "base": "ExtraDropInfo",
+    "enum": "SECRET_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "persist_mode",
+        "type": "SecretPersistType"
+      },
+      {
+        "id": 201,
+        "name": "secret_storage",
+        "type": "string"
+      }
+    ]
+  }
+]

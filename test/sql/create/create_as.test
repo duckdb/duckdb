@@ -31,6 +31,7 @@ SELECT * FROM tbl3;
 
 statement error
 CREATE TABLE tbl1 AS SELECT 3;
+----
 
 statement ok
 CREATE OR REPLACE TABLE tbl1 AS SELECT 4;
@@ -58,6 +59,8 @@ SELECT * FROM tbl1;
 
 statement error
 CREATE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
+----
 
 statement error
 CREATE OR REPLACE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
+----

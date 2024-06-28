@@ -1,24 +1,53 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
-TransactionInfo::TransactionInfo(TransactionType type) : type(type) {
+TransactionInfo::TransactionInfo() : ParseInfo(TYPE) {
 }
 
-void TransactionInfo::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField(type);
-	writer.Finalize();
+TransactionInfo::TransactionInfo(TransactionType type)
+    : ParseInfo(TYPE), type(type), modifier(TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER) {
 }
 
-unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
-	FieldReader reader(deserializer);
-	auto transaction_type = reader.ReadRequired<TransactionType>();
-	reader.Finalize();
+string TransactionInfo::ToString() const {
+	string result = "";
+	switch (type) {
+	case TransactionType::BEGIN_TRANSACTION:
+		result += "BEGIN";
+		break;
+	case TransactionType::COMMIT:
+		result += "COMMIT";
+		break;
+	case TransactionType::ROLLBACK:
+		result += "ROLLBACK";
+		break;
+	default: {
+		throw InternalException("ToString for TransactionStatement with type: %s not implemented",
+		                        EnumUtil::ToString(type));
+	}
+	}
+	switch (modifier) {
+	case TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER:
+		break;
+	case TransactionModifierType::TRANSACTION_READ_ONLY:
+		result += " READ ONLY";
+		break;
+	case TransactionModifierType::TRANSACTION_READ_WRITE:
+		result += " READ WRITE";
+		break;
+	default:
+		throw InternalException("ToString for TransactionStatement with modifier type: %s not implemented",
+		                        EnumUtil::ToString(modifier));
+	}
+	result += ";";
+	return result;
+}
 
-	auto transaction_info = make_uniq<TransactionInfo>(transaction_type);
-	return std::move(transaction_info);
+unique_ptr<TransactionInfo> TransactionInfo::Copy() const {
+	auto result = make_uniq<TransactionInfo>(type);
+	result->modifier = modifier;
+	return result;
 }
 
 } // namespace duckdb

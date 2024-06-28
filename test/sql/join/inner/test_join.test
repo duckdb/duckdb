@@ -31,6 +31,7 @@ SELECT a, test.b, c FROM test, test2 WHERE test.b = test2.b ORDER BY c;
 # ambiguous reference to column
 statement error
 SELECT b FROM test, test2 WHERE test.b > test2.b;
+----
 
 # simple cross product + multiple join conditions
 query III

@@ -45,6 +45,7 @@ with cte1 as (select i as j from a), cte2 as (select ref.j as k from cte1 as ref
 # duplicate CTE alias
 statement error
 with cte1 as (select 42), cte1 as (select 42) select * FROM cte1;
+----
 
 # reference to CTE before its actually defined
 query I

@@ -1,0 +1,24 @@
+# name: test/sql/copy/csv/csv_line_too_long.test
+# description: Test that verifies that the CSV has long lines and properly errors that
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE T1 (name VARCHAR);
+
+
+foreach path data/csv/line_too_long.csv.gz data/csv/line_too_long_with_newline.csv.gz data/csv/multiple_line_too_long.csv.gz
+
+foreach header true false
+
+
+statement error
+COPY T1(name) from '${path}' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
+----
+Maximum line size of 2097152 bytes exceeded
+
+endloop
+
+endloop

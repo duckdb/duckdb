@@ -1,0 +1,175 @@
+# name: test/sql/join/test_huge_nested_payloads.test_slow
+# description: Test join with nested types in a HUGE payload
+# group: [join]
+
+require parquet
+
+statement ok
+IMPORT DATABASE 'data/parquet-testing/malloy-smaller';
+
+# minimal reproducible examples for internal issue 1546
+query I
+SELECT count(DISTINCT [[p.v2ProductName for p in h.product] for h in hits]) FROM tbl2;
+----
+1022
+
+query I
+SELECT count(DISTINCT [[p.customDimensions for p in h.product] for h in hits]) FROM tbl2;
+----
+794
+
+query III
+SELECT
+   hits_0.page."pageTitle" as "pageTitle",
+   COUNT(DISTINCT CONCAT(ga_sessions."__distinct_key", 'x', hits_0_outer.__row_id)) as "hits_count",
+   COUNT(DISTINCT CASE WHEN product_0."productQuantity">0
+   THEN CONCAT(ga_sessions."__distinct_key", 'x', hits_0_outer.__row_id) END) as "sold_count"
+FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM tbl2) as ga_sessions
+LEFT JOIN LATERAL (SELECT UNNEST(GENERATE_SERIES(1, length(ga_sessions."hits"),1)) as __row_id,
+	UNNEST(ga_sessions."hits"), 1 as ignoreme) as hits_0_outer(__row_id, hits_0,ignoreme) ON  hits_0_outer.ignoreme=1
+LEFT JOIN LATERAL (SELECT UNNEST(hits_0."product"), 1 as ignoreme) as product_0_outer(product_0,ignoreme)
+	ON product_0_outer.ignoreme=1
+WHERE ga_sessions.totals."transactionRevenue">0
+GROUP BY 1
+ORDER BY 2 DESC NULLS LAST, 1;
+----
+Shopping Cart	207	22
+Checkout Confirmation	92	45
+Infant | Kids' Apparel | Google Merchandise Store	89	24
+Payment Method	89	0
+Checkout Your Information	76	76
+Home	62	0
+Men's T-Shirts | Apparel | Google Merchandise Store	58	1
+Store search results	56	8
+Notebooks & Journals | Office | Google Merchandise Store	54	4
+Electronics | Google Merchandise Store	51	3
+The Google Merchandise Store - Log In	50	0
+Men's Outerwear | Apparel | Google Merchandise Store	49	11
+Bags | Google Merchandise Store	45	7
+The Google Merchandise Store - My Account	43	0
+Checkout Review	42	0
+Men's Apparel | Google Merchandise Store	41	7
+Headgear | Apparel | Google Merchandise Store	31	3
+More Bags | Bags | Google Merchandise Store	29	0
+Shopping & Totes | Bags | Google Merchandise Store	28	4
+Youth | Kids' Apparel | Google Merchandise Store	25	4
+Toddler | Kids' Apparel | Google Merchandise Store	24	5
+Office | Google Merchandise Store	23	1
+Accessories | Google Merchandise Store	21	2
+Drinkware | Google Merchandise Store	21	3
+Fun | Accessories | Google Merchandise Store	21	5
+Women's Outerwear | Apparel | Google Merchandise Store	21	2
+Water Bottles & Tumblers | Drinkware | Google Merchandise Store	17	2
+Women's T-Shirts | Apparel | Google Merchandise Store	17	2
+Flashlights | Electronics | Google Merchandise Store	13	1
+Women's Performance Wear | Apparel | Google Merchandise Store	12	0
+Google Men's 100% Cotton Short Sleeve Hero Tee Navy	11	1
+Stickers | Accessories | Google Merchandise Store	11	1
+Writing Instruments | Office | Google Merchandise Store	11	2
+Google | Shop by Brand | Google Merchandise Store	10	0
+Google Women's Scoop Neck Tee Black	9	0
+The Google Merchandise Store/Malibu Sunglasses	9	5
+Audio | Electronics | Google Merchandise Store	8	1
+Google Infant Short Sleeve Tee Green	8	4
+Google Power Bank	8	3
+Google Women's 1/4 Zip Performance Pullover Black	7	3
+Apparel | Google Merchandise Store	6	0
+Backpacks | Bags | Google Merchandise Store	6	0
+Google Men's Zip Hoodie	6	0
+Kids' Apparel | Google Merchandise Store	6	1
+NULL	6	1
+Google Spiral Journal with Pen	5	2
+Housewares | Accessories | Google Merchandise Store	5	0
+Page Unavailable	5	0
+The Google Merchandise Store/BRIGHTtravels Seat Pack Organizer	5	1
+Accessories | Electronics | Google Merchandise Store	4	0
+Google Men's 100% Cotton Short Sleeve Hero Tee White	4	1
+Google Men's Bayside Graphic Tee	4	0
+Google Snapback Hat Black	4	1
+Google Women's Vintage Hero Tee Black	4	0
+Mugs & Cups | Drinkware | Google Merchandise Store	4	0
+Sports & Fitness | Accessories | Google Merchandise Store	4	0
+Android Men's Long Sleeve Badge Crew Tee Heather	3	0
+Collapsible Shopping Bag	3	2
+Google 17oz Stainless Steel Sport Bottle	3	1
+Google High Capacity 10,400mAh Charger	3	0
+Google Leather Journal	3	1
+Google Men's 100% Cotton Short Sleeve Hero Tee Black	3	0
+Google Men's 100% Cotton Short Sleeve Hero Tee Red	3	0
+Google Men's Watershed Full Zip Hoodie Grey	3	0
+Google Online Store	3	0
+Google Slim Utility Travel Bag	3	0
+Google Women's Short Sleeve Hero Tee White	3	2
+Other | Office | Google Merchandise Store	3	0
+Suitcase Organizer Cubes	3	1
+The Google Merchandise Store/Ballpoint LED Light Pen	3	1
+Women's Apparel | Google Merchandise Store	3	0
+26 oz Double Wall Insulated Bottle	2	1
+Android Men's Short Sleeve Hero Tee White	2	1
+Badge Holder	2	1
+Clearance Sale	2	0
+Clip-on Compact Charger	2	1
+Crunch Noise Dog Toy	2	1
+Foam Can and Bottle Cooler	2	1
+Frequently Asked Questions	2	0
+Google 22 oz Water Bottle	2	1
+Google Car Clip Phone Holder	2	0
+Google Doodle Decal	2	1
+Google Luggage Tag	2	1
+Google Lunch Bag	2	0
+Google Men's Bike Short Sleeve Tee Charcoal	2	0
+Google Men's Short Sleeve Badge Tee Charcoal	2	0
+Google Men's Short Sleeve Hero Tee Charcoal	2	0
+Google RFID Journal	2	0
+Google Tube Power Bank	2	0
+Google Women's Scoop Neck Tee White	2	0
+Google Women's Short Sleeve Hero Tee Black	2	0
+Google Women's Short Sleeve Performance Tee Charcoal	2	1
+Google Women's Vintage Hero Tee White	2	0
+Men's Performance Wear | Apparel | Google Merchandise Store	2	0
+Power & Chargers | Electronics | Google Merchandise Store	2	0
+Return Policy	2	0
+SPF-15 Slim & Slender Lip Balm	2	1
+Satin Black Ballpoint Pen	2	1
+Spiral Notebook and Pen Set	2	1
+Switch Tone Color Crayon Pen	2	1
+The Google Merchandise Store/Galaxy Screen Cleaning Cloth	2	1
+Waze Mood Original Window Decal	2	1
+25L Classic Rucksack	1	0
+Android Lunch Kit	1	0
+Android Men's Engineer Short Sleeve Tee Charcoal	1	0
+Android RFID Journal	1	0
+Android Stretch Fit Hat	1	0
+Ballpoint Stylus Pen	1	0
+Four Color Retractable Pen	1	0
+Google 4400mAh Power Bank	1	0
+Google Alpine Style Backpack	1	0
+Google Bib Red	1	0
+Google Canvas Tote Natural/Navy	1	0
+Google Flashlight	1	0
+Google Hard Cover Journal	1	0
+Google Infant Short Sleeve Tee White	1	0
+Google Men's Vintage Badge Tee Black	1	0
+Google Rucksack	1	0
+Google Spiral Leather Journal	1	0
+Google Tote Bag	1	0
+Google Twill Cap	1	0
+Google Women's 1/4 Zip Performance Pullover Two-Tone Blue	1	0
+Google Women's Performance Full Zip Jacket Black	1	0
+Google Women's Quilted Insulated Vest White	1	0
+Google Women's Short Sleeve Badge Tee Navy	1	0
+Google Women's Short Sleeve Hero Tee Grey	1	0
+Google Youth Baseball Raglan Heather/Black	1	0
+Google Youth Short Sleeve Tee White	1	0
+Micro Wireless Earbud	1	0
+Shipping Information	1	0
+Shop by Brand | Google Merchandise Store	1	0
+The Google Merchandise Store/Basecamp Explorer Powerbank Flashlight	1	0
+The Google Merchandise Store/Colored Pencil Set	1	0
+The Google Merchandise Store/Maze Pen	1	0
+The Google Merchandise Store/Pen Pencil & Highlighter Set	1	0
+The Google Merchandise Store/Plastic Sliding Flashlight	1	0
+UpCycled Handlebar Bag	1	0
+Waterproof Backpack	1	0
+YouTube | Shop by Brand | Google Merchandise Store	1	0
+Your Wishlist	1	0

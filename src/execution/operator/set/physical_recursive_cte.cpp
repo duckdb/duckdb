@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -12,10 +13,11 @@
 
 namespace duckdb {
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
-                                           unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
+                                           unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
+                                           idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
-      union_all(union_all) {
+      ctename(std::move(ctename)), table_index(table_index), union_all(union_all) {
 	children.push_back(std::move(top));
 	children.push_back(std::move(bottom));
 }
@@ -30,19 +32,19 @@ class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
-		ht = make_uniq<GroupedAggregateHashTable>(context, Allocator::Get(context), op.types, vector<LogicalType>(),
-		                                          vector<BoundAggregateExpression *>());
+		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.types,
+		                                          vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
 
 	bool intermediate_empty = true;
+	mutex intermediate_table_lock;
 	ColumnDataCollection intermediate_table;
 	ColumnDataScanState scan_state;
 	bool initialized = false;
 	bool finished_scan = false;
 	SelectionVector new_groups;
-	AggregateHTAppendState append_state;
 };
 
 unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientContext &context) const {
@@ -53,7 +55,7 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 	Vector dummy_addresses(LogicalType::POINTER);
 
 	// Use the HT to eliminate duplicate rows
-	idx_t new_group_count = state.ht->FindOrCreateGroups(state.append_state, chunk, dummy_addresses, state.new_groups);
+	idx_t new_group_count = state.ht->FindOrCreateGroups(chunk, dummy_addresses, state.new_groups);
 
 	// we only return entries we have not seen before (i.e. new groups)
 	chunk.Slice(state.new_groups, new_group_count);
@@ -63,6 +65,8 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 
 SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+
+	lock_guard<mutex> guard(gstate.intermediate_table_lock);
 	if (!union_all) {
 		idx_t match_count = ProbeHT(chunk, gstate);
 		if (match_count > 0) {
@@ -170,6 +174,16 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
+
+static void GatherColumnDataScans(const PhysicalOperator &op, vector<const_reference<PhysicalOperator>> &delim_scans) {
+	if (op.type == PhysicalOperatorType::DELIM_SCAN || op.type == PhysicalOperatorType::CTE_SCAN) {
+		delim_scans.push_back(op);
+	}
+	for (auto &child : op.children) {
+		GatherColumnDataScans(*child, delim_scans);
+	}
+}
+
 void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
@@ -186,13 +200,36 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	initial_state_pipeline.Build(*children[0]);
 
 	// the RHS is the recursive pipeline
-	recursive_meta_pipeline = make_shared<MetaPipeline>(executor, state, this);
+	recursive_meta_pipeline = make_shared_ptr<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
 	recursive_meta_pipeline->Build(*children[1]);
+
+	vector<const_reference<PhysicalOperator>> ops;
+	GatherColumnDataScans(*children[1], ops);
+
+	for (auto op : ops) {
+		auto entry = state.cte_dependencies.find(op);
+		if (entry == state.cte_dependencies.end()) {
+			continue;
+		}
+		// this chunk scan introduces a dependency to the current pipeline
+		// namely a dependency on the CTE pipeline to finish
+		auto cte_dependency = entry->second.get().shared_from_this();
+		current.AddDependency(cte_dependency);
+	}
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() const {
 	return {*this};
+}
+
+string PhysicalRecursiveCTE::ParamsToString() const {
+	string result = "";
+	result += "\n[INFOSEPARATOR]\n";
+	result += ctename;
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("idx: %llu", table_index);
+	return result;
 }
 
 } // namespace duckdb

@@ -22,7 +22,7 @@ struct UpdateNode;
 
 class UpdateSegment {
 public:
-	UpdateSegment(ColumnData &column_data);
+	explicit UpdateSegment(ColumnData &column_data);
 	~UpdateSegment();
 
 	ColumnData &column_data;
@@ -101,7 +101,7 @@ struct UpdateNodeData {
 };
 
 struct UpdateNode {
-	unique_ptr<UpdateNodeData> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
+	unique_ptr<UpdateNodeData> info[Storage::ROW_GROUP_VECTOR_COUNT];
 };
 
 } // namespace duckdb

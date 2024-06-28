@@ -8,19 +8,19 @@ PRAGMA enable_verification
 foreach flatten true false
 
 query I rowsort sortintarray
-SELECT list_sort(l) FROM test_vector_types(NULL::INT[], ${flatten}) tbl(l)
+SELECT list_sort(l) FROM test_vector_types(NULL::INT[], all_flat=${flatten}) tbl(l)
 ----
 
 query I rowsort sortnestedintarray
-SELECT list_sort(l) FROM test_vector_types(NULL::INT[][], ${flatten}) tbl(l)
+SELECT list_sort(l) FROM test_vector_types(NULL::INT[][], all_flat=${flatten}) tbl(l)
 ----
 
 query I rowsort sortvarchararray
-SELECT list_sort(l) FROM test_vector_types(NULL::VARCHAR[], ${flatten}) tbl(l)
+SELECT list_sort(l) FROM test_vector_types(NULL::VARCHAR[], all_flat=${flatten}) tbl(l)
 ----
 
 query I rowsort sortnestedvarchararray
-SELECT list_sort(l) FROM test_vector_types(NULL::VARCHAR[][], ${flatten}) tbl(l)
+SELECT list_sort(l) FROM test_vector_types(NULL::VARCHAR[][], all_flat=${flatten}) tbl(l)
 ----
 
 endloop

@@ -4,8 +4,11 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -48,17 +51,17 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 	types.clear();
 	count = 0;
 	this->finished_append = false;
-	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
-	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
-	allocator = make_shared<ColumnDataAllocator>(buffer_manager);
+	allocator = make_shared_ptr<ColumnDataAllocator>(buffer_manager);
 }
 
 ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
@@ -68,7 +71,7 @@ ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> alloc
 
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type)
-    : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), std::move(types_p)) {
+    : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type), std::move(types_p)) {
 	D_ASSERT(!types.empty());
 }
 
@@ -98,6 +101,22 @@ void ColumnDataCollection::CreateSegment() {
 
 Allocator &ColumnDataCollection::GetAllocator() const {
 	return allocator->GetAllocator();
+}
+
+idx_t ColumnDataCollection::SizeInBytes() const {
+	idx_t total_size = 0;
+	for (const auto &segment : segments) {
+		total_size += segment->SizeInBytes();
+	}
+	return total_size;
+}
+
+idx_t ColumnDataCollection::AllocationSize() const {
+	idx_t total_size = 0;
+	for (const auto &segment : segments) {
+		total_size += segment->AllocationSize();
+	}
+	return total_size;
 }
 
 //===--------------------------------------------------------------------===//
@@ -180,7 +199,7 @@ ColumnDataChunkIterationHelper::ColumnDataChunkIterationHelper(const ColumnDataC
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
     const ColumnDataCollection *collection_p, vector<column_t> column_ids_p)
-    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), row_index(0) {
+    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), row_index(0) {
 	if (!collection) {
 		return;
 	}
@@ -227,7 +246,7 @@ ColumnDataRowIterationHelper::ColumnDataRowIterationHelper(const ColumnDataColle
 }
 
 ColumnDataRowIterationHelper::ColumnDataRowIterator::ColumnDataRowIterator(const ColumnDataCollection *collection_p)
-    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), current_row(*scan_chunk, 0, 0) {
+    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), current_row(*scan_chunk, 0, 0) {
 	if (!collection) {
 		return;
 	}
@@ -278,6 +297,7 @@ const ColumnDataRow &ColumnDataRowIterationHelper::ColumnDataRowIterator::operat
 //===--------------------------------------------------------------------===//
 void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
 	D_ASSERT(!finished_append);
+	state.current_chunk_state.handles.clear();
 	state.vector_data.resize(types.size());
 	if (segments.empty()) {
 		CreateSegment();
@@ -333,7 +353,7 @@ struct StandardValueCopy : public BaseValueCopy<T> {
 
 struct StringValueCopy : public BaseValueCopy<string_t> {
 	static string_t Operation(ColumnDataMetaData &meta_data, string_t input) {
-		return input.IsInlined() ? input : meta_data.segment.heap.AddBlob(input);
+		return input.IsInlined() ? input : meta_data.segment.heap->AddBlob(input);
 	}
 };
 
@@ -423,7 +443,8 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
                               idx_t offset, idx_t copy_count) {
 
 	const auto &allocator_type = meta_data.segment.allocator->GetType();
-	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
+	    allocator_type == ColumnDataAllocatorType::HYBRID) {
 		// strings cannot be spilled to disk - use StringHeap
 		TemplatedColumnDataCopy<StringValueCopy>(meta_data, source_data, source, offset, copy_count);
 		return;
@@ -454,7 +475,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		// 'append_count' is less if we cannot fit that amount of non-inlined strings on one buffer-managed block
 		idx_t append_count;
 		idx_t heap_size = 0;
-		const auto source_entries = (string_t *)source_data.data;
+		const auto source_entries = UnifiedVectorFormat::GetData<string_t>(source_data);
 		for (append_count = 0; append_count < vector_remaining; append_count++) {
 			auto source_idx = source_data.sel->get_index(offset + append_count);
 			if (!source_data.validity.RowIsValid(source_idx)) {
@@ -505,7 +526,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			target_validity.SetAllValid(STANDARD_VECTOR_SIZE);
 		}
 
-		auto target_entries = (string_t *)base_ptr;
+		auto target_entries = reinterpret_cast<string_t *>(base_ptr);
 		for (idx_t i = 0; i < append_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
 			auto target_idx = current_segment.count + i;
@@ -520,7 +541,8 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			} else {
 				D_ASSERT(heap_ptr != nullptr);
 				memcpy(heap_ptr, source_entry.GetData(), source_entry.GetSize());
-				target_entry = string_t((const char *)heap_ptr, source_entry.GetSize());
+				target_entry =
+				    string_t(const_char_ptr_cast(heap_ptr), UnsafeNumericCast<uint32_t>(source_entry.GetSize()));
 				heap_ptr += source_entry.GetSize();
 			}
 		}
@@ -625,6 +647,61 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 	}
 }
 
+void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
+                         idx_t offset, idx_t copy_count) {
+
+	auto &segment = meta_data.segment;
+
+	// copy the NULL values for the main array vector (the same as for a struct vector)
+	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
+
+	auto &child_vector = ArrayVector::GetEntry(source);
+	auto &child_type = child_vector.GetType();
+	auto array_size = ArrayType::GetSize(source.GetType());
+
+	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
+	}
+
+	auto &child_function = meta_data.copy_function.child_functions[0];
+	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+
+	auto current_child_index = child_index;
+	while (current_child_index.IsValid()) {
+		auto &child_vdata = segment.GetVectorData(current_child_index);
+		current_child_index = child_vdata.next_data;
+	}
+
+	UnifiedVectorFormat child_vector_data;
+	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
+	child_vector.ToUnifiedFormat(copy_count * array_size, child_vector_data);
+
+	// Broadcast and sync the validity of the array vector to the child vector
+
+	if (source_data.validity.IsMaskSet()) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = source_data.sel->get_index(offset + i);
+			if (!source_data.validity.RowIsValid(source_idx)) {
+				for (idx_t j = 0; j < array_size; j++) {
+					child_vector_data.validity.SetInvalid(source_idx * array_size + j);
+				}
+			}
+		}
+	}
+
+	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	// If the array is constant, we need to copy the child vector n times
+	if (is_constant) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
+		}
+	} else {
+		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+		                        copy_count * array_size);
+	}
+}
+
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
 	ColumnDataCopyFunction result;
 	column_data_copy_function_t function;
@@ -659,6 +736,9 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 	case PhysicalType::UINT64:
 		function = ColumnDataCopy<uint64_t>;
 		break;
+	case PhysicalType::UINT128:
+		function = ColumnDataCopy<uhugeint_t>;
+		break;
 	case PhysicalType::FLOAT:
 		function = ColumnDataCopy<float>;
 		break;
@@ -685,6 +765,12 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		result.child_functions.push_back(child_function);
 		break;
 	}
+	case PhysicalType::ARRAY: {
+		function = ColumnDataCopyArray;
+		auto child_function = GetCopyFunction(ArrayType::GetChildType(type));
+		result.child_functions.push_back(child_function);
+		break;
+	}
 	default:
 		throw InternalException("Unsupported type for ColumnDataCollection::GetCopyFunction");
 	}
@@ -696,6 +782,7 @@ static bool IsComplexType(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
 		return true;
 	default:
 		return false;
@@ -930,6 +1017,7 @@ void ColumnDataCollection::Verify() {
 #endif
 }
 
+// LCOV_EXCL_START
 string ColumnDataCollection::ToString() const {
 	DataChunk chunk;
 	InitializeScanChunk(chunk);
@@ -950,6 +1038,7 @@ string ColumnDataCollection::ToString() const {
 
 	return result;
 }
+// LCOV_EXCL_STOP
 
 void ColumnDataCollection::Print() const {
 	Printer::Print(ToString());
@@ -960,7 +1049,7 @@ void ColumnDataCollection::Reset() {
 	segments.clear();
 
 	// Refreshes the ColumnDataAllocator to prevent holding on to allocated data unnecessarily
-	allocator = make_shared<ColumnDataAllocator>(*allocator);
+	allocator = make_shared_ptr<ColumnDataAllocator>(*allocator);
 }
 
 struct ValueResultEquals {
@@ -1030,8 +1119,61 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 	return true;
 }
 
+vector<shared_ptr<StringHeap>> ColumnDataCollection::GetHeapReferences() {
+	vector<shared_ptr<StringHeap>> result(segments.size(), nullptr);
+	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+		result[segment_idx] = segments[segment_idx]->heap;
+	}
+	return result;
+}
+
+ColumnDataAllocatorType ColumnDataCollection::GetAllocatorType() const {
+	return allocator->GetType();
+}
+
 const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {
 	return segments;
+}
+
+void ColumnDataCollection::Serialize(Serializer &serializer) const {
+	vector<vector<Value>> values;
+	values.resize(ColumnCount());
+	for (auto &chunk : Chunks()) {
+		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+			for (idx_t r = 0; r < chunk.size(); r++) {
+				values[c].push_back(chunk.GetValue(c, r));
+			}
+		}
+	}
+	serializer.WriteProperty(100, "types", types);
+	serializer.WriteProperty(101, "values", values);
+}
+
+unique_ptr<ColumnDataCollection> ColumnDataCollection::Deserialize(Deserializer &deserializer) {
+	auto types = deserializer.ReadProperty<vector<LogicalType>>(100, "types");
+	auto values = deserializer.ReadProperty<vector<vector<Value>>>(101, "values");
+
+	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	if (values.empty()) {
+		return collection;
+	}
+	DataChunk chunk;
+	chunk.Initialize(Allocator::DefaultAllocator(), types);
+
+	for (idx_t r = 0; r < values[0].size(); r++) {
+		for (idx_t c = 0; c < types.size(); c++) {
+			chunk.SetValue(c, chunk.size(), values[c][r]);
+		}
+		chunk.SetCardinality(chunk.size() + 1);
+		if (chunk.size() == STANDARD_VECTOR_SIZE) {
+			collection->Append(chunk);
+			chunk.Reset();
+		}
+	}
+	if (chunk.size() > 0) {
+		collection->Append(chunk);
+	}
+	return collection;
 }
 
 } // namespace duckdb

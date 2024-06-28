@@ -10,3 +10,17 @@ select * from pragma_version();
 
 statement ok
 select library_version from pragma_version();
+
+statement ok
+PRAGMA platform;
+
+statement ok
+select * from pragma_platform();
+
+statement ok
+select platform from pragma_platform();
+
+query I
+SELECT count(*) FROM pragma_version() WHERE library_version LIKE 'v%';
+----
+1

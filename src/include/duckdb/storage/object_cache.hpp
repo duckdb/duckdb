@@ -16,7 +16,6 @@
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {
-class ClientContext;
 
 //! ObjectCache is the base class for objects caches in DuckDB
 class ObjectCacheEntry {
@@ -44,12 +43,34 @@ public:
 		if (!object || object->GetObjectType() != T::ObjectType()) {
 			return nullptr;
 		}
-		return std::static_pointer_cast<T, ObjectCacheEntry>(object);
+		return shared_ptr_cast<ObjectCacheEntry, T>(object);
+	}
+
+	template <class T, class... ARGS>
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
+		lock_guard<mutex> glock(lock);
+
+		auto entry = cache.find(key);
+		if (entry == cache.end()) {
+			auto value = make_shared_ptr<T>(args...);
+			cache[key] = value;
+			return value;
+		}
+		auto object = entry->second;
+		if (!object || object->GetObjectType() != T::ObjectType()) {
+			return nullptr;
+		}
+		return shared_ptr_cast<ObjectCacheEntry, T>(object);
 	}
 
 	void Put(string key, shared_ptr<ObjectCacheEntry> value) {
 		lock_guard<mutex> glock(lock);
-		cache[key] = std::move(value);
+		cache.insert(make_pair(std::move(key), std::move(value)));
+	}
+
+	void Delete(const string &key) {
+		lock_guard<mutex> glock(lock);
+		cache.erase(key);
 	}
 
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);

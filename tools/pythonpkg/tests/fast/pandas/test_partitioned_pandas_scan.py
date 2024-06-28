@@ -4,6 +4,7 @@ import numpy
 import datetime
 import time
 
+
 class TestPartitionedPandasScan(object):
     def test_parallel_pandas(self, duckdb_cursor):
         con = duckdb.connect()

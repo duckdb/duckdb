@@ -11,12 +11,12 @@ PRAGMA enable_verification
 statement ok
 SELECT * FROM duckdb_databases();
 
-query IIII
-SELECT database_name, internal, path, type FROM duckdb_databases() ORDER BY database_name;
+query IIIII
+SELECT database_name, internal, readonly, path, type FROM duckdb_databases() ORDER BY database_name;
 ----
-memory	false	NULL	duckdb
-system	true	NULL	duckdb
-temp	true	NULL	duckdb
+memory	false	false	NULL	duckdb
+system	true	false	NULL	duckdb
+temp	true	false	NULL	duckdb
 
 statement ok
 ATTACH '__TEST_DIR__/duckdb_databases.db' AS new_duckdb_database
@@ -25,6 +25,11 @@ query IIII
 SELECT database_name, internal, split(replace(path, '\', '/'), '/')[-1], type FROM duckdb_databases() WHERE path IS NOT NULL;
 ----
 new_duckdb_database	false	duckdb_databases.db	duckdb
+
+query I
+SELECT readonly FROM duckdb_databases WHERE database_name='new_duckdb_database';
+----
+false
 
 query II nosort show_db
 SELECT database_name FROM duckdb_databases ORDER BY database_name
@@ -41,3 +46,14 @@ memory
 new_duckdb_database
 system
 temp
+
+statement ok
+DETACH new_duckdb_database;
+
+statement ok
+ATTACH '__TEST_DIR__/duckdb_databases.db' AS readonly_duckdb_database (READONLY 1);
+
+query I
+SELECT readonly FROM duckdb_databases WHERE database_name='readonly_duckdb_database';
+----
+true

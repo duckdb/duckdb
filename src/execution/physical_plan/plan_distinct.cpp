@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/rule/ordered_aggregate_optimizer.hpp"
 
 namespace duckdb {
 
@@ -61,6 +62,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 			auto first_aggregate = function_binder.BindAggregateFunction(
 			    FirstFun::GetFunction(logical_type), std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 			first_aggregate->order_bys = op.order_by ? op.order_by->Copy() : nullptr;
+
+			if (ClientConfig::GetConfig(context).enable_optimizer) {
+				bool changes_made = false;
+				auto new_expr = OrderedAggregateOptimizer::Apply(context, *first_aggregate, groups, changes_made);
+				if (new_expr) {
+					D_ASSERT(new_expr->return_type == first_aggregate->return_type);
+					D_ASSERT(new_expr->type == ExpressionType::BOUND_AGGREGATE);
+					first_aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(new_expr));
+				}
+			}
 			// add the projection
 			projections.push_back(make_uniq<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
 			// push it to the list of aggregates

@@ -5,6 +5,7 @@
 # incorrect usage
 statement error
 select list_entropy()
+----
 
 query I
 select list_entropy([1])

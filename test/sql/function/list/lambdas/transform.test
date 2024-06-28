@@ -123,8 +123,13 @@ SELECT list_transform([[1], [2], [3]], x -> list_concat(list_transform(x, y -> y
 ----
 [[2, 0], [3, 1], [4, 2]]
 
-query I
+statement error
 SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x))
+----
+an explicit cast is required
+
+query I
+SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x::VARCHAR[]))
 ----
 [[nay, 1], [yay, 4], NULL, [nay, 1], [yay, 8]]
 
@@ -279,7 +284,7 @@ query III
 select list_transform(bb, x->[x,b]), bb, b
 from (select list(b) over wind as bb, first(b) over wind as b
     from test window wind as
-        (order by a asc rows between 4 preceding and current row)
+        (order by a asc, b asc rows between 4 preceding and current row)
     qualify row_number() over wind >4);
 ----
 [[2, 2], [3, 2], [4, 2], [2, 2], [3, 2]]	[2, 3, 4, 2, 3]	2

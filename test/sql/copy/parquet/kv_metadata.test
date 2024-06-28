@@ -1,0 +1,54 @@
+# name: test/sql/copy/parquet/kv_metadata.test
+# group: [parquet]
+
+require parquet
+
+# Test basic roundtrip
+statement ok
+COPY (SELECT 1, 'foo') TO  '__TEST_DIR__/kv_metadata_test.parquet' (FORMAT PARQUET, KV_METADATA {foo: 'bar', baz: 42, quz: '\xC3\xB6\xC3\xA4\xC3\xA5'::BLOB});
+
+query II
+SELECT key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_test.parquet');
+----
+foo	bar
+baz	42
+quz	\xC3\xB6\xC3\xA4\xC3\xA5
+
+query II
+SELECT * FROM '__TEST_DIR__/kv_metadata_test.parquet'
+----
+1	foo
+
+# Test decoding blobs
+query II
+SELECT key::VARCHAR, decode(value) FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_test.parquet') WHERE key = 'quz';
+----
+quz	öäå
+
+# Test invalid metadata
+statement error
+COPY (SELECT 1, 'foo') TO  '__TEST_DIR__/kv_metadata_test_fail.parquet' (FORMAT PARQUET, KV_METADATA 'foobar');
+----
+Expected kv_metadata argument to be a STRUCT
+
+# Test no kv
+statement ok
+COPY (SELECT 3, 'baz') TO '__TEST_DIR__/kv_metadata_test3.parquet' (FORMAT PARQUET);
+
+query II
+SELECT key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_test3.parquet');
+----
+
+# Test globbing
+statement ok
+COPY (SELECT 2, 'bar') TO  '__TEST_DIR__/kv_metadata_test2.parquet' (FORMAT PARQUET, KV_METADATA {a: 'b', c: 'd'});
+
+query III
+SELECT replace(replace(file_name, '\', '/'),replace('__TEST_DIR__/', '\', '/'), '') AS file_name, key::VARCHAR, value::VARCHAR FROM parquet_kv_metadata('__TEST_DIR__/kv_metadata_tes*') ORDER BY 1, 2;
+----
+kv_metadata_test.parquet	baz	42
+kv_metadata_test.parquet	foo	bar
+kv_metadata_test.parquet	quz	\xC3\xB6\xC3\xA4\xC3\xA5
+kv_metadata_test2.parquet	a	b
+kv_metadata_test2.parquet	c	d
+

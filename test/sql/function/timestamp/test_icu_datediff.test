@@ -18,7 +18,7 @@ statement ok
 CREATE TABLE datetime1 AS
 SELECT '2005-12-31 23:59:59.9999999-08'::TIMESTAMPTZ AS startdate, '2006-01-01 00:00:00.0000000-08'::TIMESTAMPTZ AS enddate;
 
-foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond julian
 
 query I
 SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
@@ -45,7 +45,7 @@ SELECT DATEDIFF('isoyear', '2022-01-01 00:00:00-08'::TIMESTAMPTZ, '2022-01-03 00
 #
 # Infinities
 #
-foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour
+foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour julian
 
 foreach lspecial infinity -infinity 2004-01-31T12:00:00.000050-08
 
@@ -68,7 +68,7 @@ endloop
 endloop
 
 # Negation
-foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear
+foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 query I
 SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM datetime1
@@ -117,3 +117,23 @@ query I
 SELECT date_diff('week', '2015-10-06 04:22:11'::timestamptz, '2016-11-25 23:19:37'::timestamptz);
 ----
 59
+
+# DST diffs should not be negative
+statement ok
+set timezone='CET';
+
+statement ok
+CREATE TABLE issue9673(starttime TIMESTAMPTZ, recordtime TIMESTAMPTZ);
+
+statement ok
+INSERT INTO issue9673 VALUES ('2022-10-30 02:17:00+02', '2022-10-30 02:00:21+01');
+
+statement ok
+INSERT INTO issue9673 VALUES ('2021-10-31 02:39:00+02', '2021-10-31 02:38:20+01');
+
+query III
+SELECT starttime, recordtime, date_diff('minute', starttime, recordtime)
+FROM issue9673;
+----
+2022-10-30 02:17:00+02	2022-10-30 02:00:21+01	43
+2021-10-31 02:39:00+02	2021-10-31 02:38:20+01	59

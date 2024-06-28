@@ -6,19 +6,50 @@ import fuzzer_helper
 import multiprocessing
 import sqlite3
 
-multiprocessing.set_start_method('fork')
+# this script can be used as a library, but can also be directly called
+# example usage:
+# python3 scripts/reduce_sql.py --load load.sql --exec exec.sql
+
+try:
+    multiprocessing.set_start_method('fork')
+except RuntimeError:
+    pass
 get_reduced_query = '''
 SELECT * FROM reduce_sql_statement('${QUERY}');
 '''
 
+
+class MultiStatementManager:
+    delimiter = ';'
+
+    def __init__(self, multi_statement):
+        # strip whitespace, then the final ';', and split on all ';' inbetween.
+        statements = list(
+            map(lambda x: x.strip(), multi_statement.strip().strip(';').split(MultiStatementManager.delimiter))
+        )
+        self.statements = []
+        for stmt in statements:
+            if len(stmt) > 0:
+                self.statements.append(stmt.strip() + ";")
+
+    def is_multi_statement(sql_statement):
+        if len(sql_statement.split(';')) > 1:
+            return True
+        return False
+
+    def get_last_statement(self):
+        return self.statements[-1]
+
+
 def sanitize_error(err):
-    err = re.sub('Error: near line \d+: ', '', err)
+    err = re.sub(r'Error: near line \d+: ', '', err)
     err = err.replace(os.getcwd() + '/', '')
     err = err.replace(os.getcwd(), '')
     if 'AddressSanitizer' in err:
         match = re.search(r'[ \t]+[#]0 ([A-Za-z0-9]+) ([^\n]+)', err).groups()[1]
         err = 'AddressSanitizer error ' + match
     return err
+
 
 def run_shell_command(shell, cmd):
     command = [shell, '-csv', '--batch', '-init', '/dev/null']
@@ -27,6 +58,7 @@ def run_shell_command(shell, cmd):
     stdout = res.stdout.decode('utf8').strip()
     stderr = res.stderr.decode('utf8').strip()
     return (stdout, stderr, res.returncode)
+
 
 def get_reduced_sql(shell, sql_query):
     reduce_query = get_reduced_query.replace('${QUERY}', sql_query.replace("'", "''"))
@@ -39,6 +71,7 @@ def get_reduced_sql(shell, sql_query):
     for line in stdout.split('\n'):
         reduce_candidates.append(line.strip('"').replace('""', '"'))
     return reduce_candidates[1:]
+
 
 def reduce(sql_query, data_load, shell, error_msg, max_time_seconds=300):
     start = time.time()
@@ -66,18 +99,22 @@ def reduce(sql_query, data_load, shell, error_msg, max_time_seconds=300):
             break
     return sql_query
 
+
 def is_ddl_query(query):
     query = query.lower()
     if 'create' in query or 'insert' in query or 'update' in query or 'delete' in query:
         return True
     return False
 
+
 def initial_cleanup(query_log):
     query_log = query_log.replace('SELECT * FROM pragma_version()\n', '')
     return query_log
 
+
 def run_queries_until_crash_mp(queries, result_file):
     import duckdb
+
     con = duckdb.connect()
     sqlite_con = sqlite3.connect(result_file)
     sqlite_con.execute('CREATE TABLE queries(id INT, text VARCHAR)')
@@ -102,7 +139,7 @@ def run_queries_until_crash_mp(queries, result_file):
                 keep_query = True
                 sqlite_con.execute('UPDATE result SET text=?', (exception_error,))
         if not keep_query:
-            sqlite_con.execute('DELETE FROM queries WHERE id=?', (id, ))
+            sqlite_con.execute('DELETE FROM queries WHERE id=?', (id,))
         if is_internal_error:
             # found internal error: no need to try further queries
             break
@@ -112,6 +149,7 @@ def run_queries_until_crash_mp(queries, result_file):
         sqlite_con.execute('DELETE FROM result')
         sqlite_con.commit()
     sqlite_con.close()
+
 
 def run_queries_until_crash(queries):
     sqlite_file = 'cleaned_queries.db'
@@ -140,7 +178,9 @@ def cleanup_irrelevant_queries(query_log):
     queries = [x for x in query_log.split(';\n') if len(x) > 0]
     return run_queries_until_crash(queries)
 
+
 # def reduce_internal(start, sql_query, data_load, queries_final, shell, error_msg, max_time_seconds=300):
+
 
 def reduce_query_log_query(start, shell, queries, query_index, max_time_seconds):
     new_query_list = queries[:]
@@ -173,7 +213,21 @@ def reduce_query_log_query(start, shell, queries, query_index, max_time_seconds)
             break
     return sql_query
 
-def reduce_query_log(queries, shell, max_time_seconds=300):
+
+def reduce_multi_statement(sql_queries, local_shell, local_data_load):
+    reducer = MultiStatementManager(sql_queries)
+    last_statement = reducer.get_last_statement()
+    print(f"testing if just last statement of multi statement creates the error")
+    (stdout, stderr, returncode) = run_shell_command(local_shell, local_data_load + last_statement)
+    expected_error = sanitize_error(stderr).strip()
+    if len(expected_error) > 0:
+        # reduce just the last statement
+        return reduce(last_statement, local_data_load, local_shell, expected_error, int(args.max_time))
+    queries = reduce_query_log(reducer.statements, local_shell, [local_data_load])
+    return "\n".join(queries)
+
+
+def reduce_query_log(queries, shell, data_load=[], max_time_seconds=300):
     start = time.time()
     current_index = 0
     # first try to remove as many queries as possible
@@ -183,9 +237,10 @@ def reduce_query_log(queries, shell, max_time_seconds=300):
         if current_time - start > max_time_seconds:
             break
         # remove the query at "current_index"
-        new_queries = queries[:current_index] + queries[current_index + 1:]
+        new_queries = queries[:current_index] + queries[current_index + 1 :]
+        new_queries_with_data = data_load + new_queries
         # try to run the queries and check if we still get the same error
-        (new_queries_x, current_error) = run_queries_until_crash(new_queries)
+        (new_queries_x, current_error) = run_queries_until_crash(new_queries_with_data)
         if current_error is None:
             # cannot remove this query without invalidating the test case
             current_index += 1
@@ -202,6 +257,56 @@ def reduce_query_log(queries, shell, max_time_seconds=300):
         queries[i] = reduce_query_log_query(start, shell, queries, i, max_time_seconds)
     return queries
 
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Reduce a problematic SQL query')
+    parser.add_argument(
+        '--shell', dest='shell', action='store', help='Path to the shell executable', default='build/debug/duckdb'
+    )
+    parser.add_argument('--load', dest='load', action='store', help='Path to the data load script', required=True)
+    parser.add_argument('--exec', dest='exec', action='store', help='Path to the executable script', required=True)
+    parser.add_argument(
+        '--inplace', dest='inplace', action='store_true', help='If true, overrides the exec script with the final query'
+    )
+    parser.add_argument(
+        '--max-time', dest='max_time', action='store', help='Maximum time in seconds to run the reducer', default=300
+    )
+
+    args = parser.parse_args()
+    print("Starting reduce process")
+
+    shell = args.shell
+    data_load = open(args.load).read()
+    sql_query = open(args.exec).read()
+    (stdout, stderr, returncode) = run_shell_command(shell, data_load + sql_query)
+    expected_error = sanitize_error(stderr).strip()
+    if len(expected_error) == 0:
+        print("===================================================")
+        print("Could not find expected error - no error encountered")
+        print("===================================================")
+        exit(1)
+
+    print("===================================================")
+    print("Found expected error")
+    print("===================================================")
+    print(expected_error)
+    print("===================================================")
+
+    if MultiStatementManager.is_multi_statement(sql_query):
+        final_query = reduce_multi_statement(sql_query, shell, data_load)
+    else:
+        final_query = reduce(sql_query, data_load, shell, expected_error, int(args.max_time))
+
+    print("Found final reduced query")
+    print("===================================================")
+    print(final_query)
+    print("===================================================")
+    if args.inplace:
+        print(f"Writing to file {args.exec}")
+        with open(args.exec, 'w+') as f:
+            f.write(final_query)
 
 
 # Example usage:

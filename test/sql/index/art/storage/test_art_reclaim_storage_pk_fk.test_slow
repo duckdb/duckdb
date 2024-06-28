@@ -1,0 +1,100 @@
+# name: test/sql/index/art/storage/test_art_reclaim_storage_pk_fk.test_slow
+# description: Test that the block manager reclaims index memory of PK and FK tables
+# group: [storage]
+
+# PRIMARY KEY
+
+load __TEST_DIR__/pk_mem_cleanup.db
+
+query I
+SELECT used_blocks < 2 FROM pragma_database_size();
+----
+1
+
+statement ok
+CREATE TABLE pk_tbl (i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO pk_tbl SELECT range FROM range(200000);
+
+query I
+SELECT used_blocks > 2 FROM pragma_database_size();
+----
+1
+
+statement ok
+DROP TABLE pk_tbl;
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT used_blocks < 2 FROM pragma_database_size();
+----
+1
+
+# FOREIGN KEY
+
+load __TEST_DIR__/fk_mem_cleanup.db
+
+query I
+SELECT used_blocks < 2 FROM pragma_database_size();
+----
+1
+
+statement ok
+CREATE TABLE pk_tbl (i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO pk_tbl SELECT range FROM range(200000);
+
+statement ok
+CREATE TABLE fk_tbl (i INTEGER REFERENCES pk_tbl(i));
+
+statement ok
+INSERT INTO fk_tbl SELECT range FROM range(200000);
+
+statement ok
+DROP TABLE fk_tbl;
+
+statement ok
+DROP TABLE pk_tbl;
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT used_blocks < 2 FROM pragma_database_size();
+----
+1
+
+# UNIQUE
+
+load __TEST_DIR__/unique_mem_cleanup.db
+
+query I
+SELECT used_blocks < 2 FROM pragma_database_size();
+----
+1
+
+statement ok
+CREATE TABLE unique_tbl (i INTEGER UNIQUE);
+
+statement ok
+INSERT INTO unique_tbl SELECT range FROM range(200000);
+
+query I
+SELECT used_blocks > 2 FROM pragma_database_size();
+----
+1
+
+statement ok
+DROP TABLE unique_tbl;
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT used_blocks < 2 FROM pragma_database_size();
+----
+1

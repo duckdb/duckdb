@@ -8,37 +8,37 @@ namespace duckdb {
 
 struct SumSetOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->Initialize();
+	static void Initialize(STATE &state) {
+		state.Initialize();
 	}
 	template <class STATE>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		target->Combine(source);
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target.Combine(source);
 	}
 	template <class STATE>
-	static void AddValues(STATE *state, idx_t count) {
-		state->isset = true;
+	static void AddValues(STATE &state, idx_t count) {
+		state.isset = true;
 	}
 };
 
 struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = Hugeint::Convert(state->value);
+			target = Hugeint::Convert(state.value);
 		}
 	}
 };
 
-struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
+struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, AddToHugeint> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->value;
+			target = state.value;
 		}
 	}
 };
@@ -46,11 +46,11 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintA
 template <class ADD_OPERATOR>
 struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->value;
+			target = state.value;
 		}
 	}
 };
@@ -58,16 +58,30 @@ struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATO
 using NumericSumOperation = DoubleSumOperation<RegularAdd>;
 using KahanSumOperation = DoubleSumOperation<KahanAdd>;
 
-struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
+struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->value;
+			target = state.value;
 		}
 	}
 };
+
+unique_ptr<FunctionData> SumNoOverflowBind(ClientContext &context, AggregateFunction &function,
+                                           vector<unique_ptr<Expression>> &arguments) {
+	throw BinderException("sum_no_overflow is for internal use only!");
+}
+
+void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+                            const AggregateFunction &function) {
+	return;
+}
+
+unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, AggregateFunction &function) {
+	return nullptr;
+}
 
 AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	switch (type) {
@@ -76,6 +90,9 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		    LogicalType::INTEGER, LogicalType::HUGEINT);
 		function.name = "sum_no_overflow";
 		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		function.bind = SumNoOverflowBind;
+		function.serialize = SumNoOverflowSerialize;
+		function.deserialize = SumNoOverflowDeserialize;
 		return function;
 	}
 	case PhysicalType::INT64: {
@@ -83,11 +100,22 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		    LogicalType::BIGINT, LogicalType::HUGEINT);
 		function.name = "sum_no_overflow";
 		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		function.bind = SumNoOverflowBind;
+		function.serialize = SumNoOverflowSerialize;
+		function.deserialize = SumNoOverflowDeserialize;
 		return function;
 	}
 	default:
 		throw BinderException("Unsupported internal type for sum_no_overflow");
 	}
+}
+
+AggregateFunction GetSumAggregateNoOverflowDecimal() {
+	AggregateFunction aggr({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
+	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, SumNoOverflowBind);
+	aggr.serialize = SumNoOverflowSerialize;
+	aggr.deserialize = SumNoOverflowDeserialize;
+	return aggr;
 }
 
 unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
@@ -112,8 +140,8 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 		default:
 			throw InternalException("Unsupported type for propagate sum stats");
 		}
-		auto max_sum_negative = max_negative * hugeint_t(input.node_stats->max_cardinality);
-		auto max_sum_positive = max_positive * hugeint_t(input.node_stats->max_cardinality);
+		auto max_sum_negative = max_negative * Hugeint::Convert(input.node_stats->max_cardinality);
+		auto max_sum_positive = max_positive * Hugeint::Convert(input.node_stats->max_cardinality);
 		if (max_sum_positive >= NumericLimits<int64_t>::Maximum() ||
 		    max_sum_negative <= NumericLimits<int64_t>::Minimum()) {
 			// sum can potentially exceed int64_t bounds: use hugeint sum
@@ -173,17 +201,6 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 	return nullptr;
 }
 
-unique_ptr<FunctionData> BindDecimalSumNoOverflow(ClientContext &context, AggregateFunction &function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
-	auto decimal_type = arguments[0]->return_type;
-	function = GetSumAggregateNoOverflow(decimal_type.InternalType());
-	function.name = "sum_no_overflow";
-	function.arguments[0] = decimal_type;
-	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	return nullptr;
-}
-
 AggregateFunctionSet SumFun::GetFunctions() {
 	AggregateFunctionSet sum;
 	// decimal
@@ -203,9 +220,7 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	AggregateFunctionSet sum_no_overflow;
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT32));
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT64));
-	sum_no_overflow.AddFunction(
-	    AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSumNoOverflow));
+	sum_no_overflow.AddFunction(GetSumAggregateNoOverflowDecimal());
 	return sum_no_overflow;
 }
 

@@ -1,0 +1,18 @@
+# name: test/sql/index/art/issues/test_art_issue_7530.test
+# description: Test to ensure correct multi-value leaf deletions
+# group: [issues]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t14(c0 BIGINT);
+
+statement ok
+INSERT INTO t14(c0) VALUES ((1)), ((1)), ((1));
+
+statement ok
+CREATE INDEX i1 ON t14(c0 );
+
+statement ok
+DELETE FROM t14 WHERE t14.rowid;

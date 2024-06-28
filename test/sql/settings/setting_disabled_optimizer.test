@@ -16,6 +16,8 @@ SELECT current_setting('disabled_optimizers');
 
 statement error
 SET disabled_optimizers TO 'expression_rewriteX'
+----
 
 statement error
 SET disabled_optimizers TO 'unknown_optimizer'
+----

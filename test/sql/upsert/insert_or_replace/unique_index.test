@@ -1,0 +1,33 @@
+# name: test/sql/upsert/insert_or_replace/unique_index.test
+# group: [insert_or_replace]
+
+# Single UNIQUE INDEX
+statement ok
+create table tbl(
+	a int,
+	b int,
+	c int
+);
+
+statement ok
+create UNIQUE index "unique" on tbl(a, b);
+
+statement ok
+insert or replace into tbl values (1,2,3);
+
+statement ok
+insert or replace into tbl values (1,2,3);
+
+query III
+select * from tbl;
+----
+1	2	3
+
+# Multiple UNIQUE INDEXes
+statement ok
+create unique index idx3 on tbl(b, c);
+
+statement error
+insert or replace into tbl values (1,2,3);
+----
+Binder Error: Conflict target has to be provided for a DO UPDATE operation when the table has multiple UNIQUE/PRIMARY KEY constraints

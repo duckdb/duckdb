@@ -1,0 +1,49 @@
+# name: test/sql/constraints/foreignkey/test_action.test
+# description: Test non-default foreign key actions
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE t1(id INTEGER PRIMARY KEY);
+
+# this is fine
+
+statement ok
+CREATE TABLE t2(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id));
+
+statement ok
+CREATE TABLE t3(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE NO ACTION);
+
+statement ok
+CREATE TABLE t4(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE NO ACTION);
+
+statement ok
+CREATE TABLE t5(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE RESTRICT);
+
+statement ok
+CREATE TABLE t6(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE RESTRICT);
+
+# this is not
+
+statement error
+CREATE TABLE t7(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE CASCADE);
+----
+
+statement error
+CREATE TABLE t8(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE CASCADE);
+----
+
+statement error
+CREATE TABLE t9(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE SET DEFAULT);
+----
+
+statement error
+CREATE TABLE t10(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE SET DEFAULT);
+----
+
+statement error
+CREATE TABLE t11(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE SET NULL);
+----
+
+statement error
+CREATE TABLE t12(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE SET NULL);
+----

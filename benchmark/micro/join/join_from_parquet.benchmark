@@ -7,9 +7,10 @@ group join
 
 require tpch
 
-cache tpch_sf1.duckdb
+cache tpch_sf1_join_from_parquet.duckdb
 
 load
+call dbgen(sf=1);
 COPY lineitem TO 'lineitem.parquet';
 COPY (SELECT 42) TO 'singlerow.parquet';
 

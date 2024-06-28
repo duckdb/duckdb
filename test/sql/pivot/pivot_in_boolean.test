@@ -1,0 +1,50 @@
+# name: test/sql/pivot/pivot_in_boolean.test
+# description: Issue #8596 - Pivot with IN clause doesn't work for a boolean column
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+query III rowsort
+pivot cities on (Country='NL') using avg(Population) group by name;
+----
+Amsterdam	NULL	1076.0
+New York City	8320.666666666666	NULL
+Seattle	636.6666666666666	NULL
+
+query III rowsort
+pivot cities on (Country='NL') in (false, true) using avg(Population) group by name;
+----
+Amsterdam	NULL	1076.0
+New York City	8320.666666666666	NULL
+Seattle	636.6666666666666	NULL

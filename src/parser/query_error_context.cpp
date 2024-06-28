@@ -7,18 +7,37 @@
 
 namespace duckdb {
 
-string QueryErrorContext::Format(const string &query, const string &error_message, int error_loc) {
-	if (error_loc < 0 || size_t(error_loc) >= query.size()) {
+string QueryErrorContext::Format(const string &query, const string &error_message, optional_idx error_loc,
+                                 bool add_line_indicator) {
+	if (!error_loc.IsValid()) {
 		// no location in query provided
 		return error_message;
 	}
-	idx_t error_location = idx_t(error_loc);
+	idx_t error_location = error_loc.GetIndex();
+	if (error_location >= query.size()) {
+		// out of bounds
+		return error_message;
+	}
 	// count the line numbers until the error location
 	// and set the start position as the first character of that line
 	idx_t start_pos = 0;
 	idx_t line_number = 1;
 	for (idx_t i = 0; i < error_location; i++) {
-		if (StringUtil::CharacterIsNewline(query[i])) {
+		bool is_newline = false;
+		switch (query[i]) {
+		case '\r':
+			if (i + 1 >= error_location || query[i + 1] != '\n') {
+				// not \r\n
+				is_newline = true;
+			}
+			break;
+		case '\n':
+			is_newline = true;
+			break;
+		default:
+			break;
+		}
+		if (is_newline) {
 			line_number++;
 			start_pos = i + 1;
 		}
@@ -90,7 +109,10 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 			break;
 		}
 	}
-	string line_indicator = "LINE " + to_string(line_number) + ": ";
+	string line_indicator;
+	if (add_line_indicator) {
+		line_indicator = "LINE " + to_string(line_number) + ": ";
+	}
 	string begin_trunc = truncate_beginning ? "..." : "";
 	string end_trunc = truncate_end ? "..." : "";
 
@@ -107,15 +129,6 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 	// print an arrow pointing at the error location
 	result += "\n" + string(error_render_width, ' ') + "^";
 	return result;
-}
-
-string QueryErrorContext::FormatErrorRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
-	string error_message = values.empty() ? msg : ExceptionFormatValue::Format(msg, values);
-	if (!statement || query_location >= statement->query.size()) {
-		// no statement provided or query location out of range
-		return error_message;
-	}
-	return Format(statement->query, error_message, query_location);
 }
 
 } // namespace duckdb

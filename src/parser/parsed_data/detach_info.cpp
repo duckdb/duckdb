@@ -1,9 +1,9 @@
 #include "duckdb/parser/parsed_data/detach_info.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
-DetachInfo::DetachInfo() {
+DetachInfo::DetachInfo() : ParseInfo(TYPE) {
 }
 
 unique_ptr<DetachInfo> DetachInfo::Copy() const {
@@ -13,22 +13,15 @@ unique_ptr<DetachInfo> DetachInfo::Copy() const {
 	return result;
 }
 
-void DetachInfo::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(name);
-	writer.WriteField(if_not_found);
-	writer.Finalize();
-}
-
-unique_ptr<ParseInfo> DetachInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_uniq<DetachInfo>();
-
-	FieldReader reader(deserializer);
-	result->name = reader.ReadRequired<string>();
-	result->if_not_found = reader.ReadRequired<OnEntryNotFound>();
-	reader.Finalize();
-
-	return std::move(result);
+string DetachInfo::ToString() const {
+	string result = "";
+	result += "DETACH DATABASE";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += " " + KeywordHelper::WriteOptionallyQuoted(name);
+	result += ";";
+	return result;
 }
 
 } // namespace duckdb

@@ -1,0 +1,24 @@
+# name: test/sql/aggregate/distinct/issue8505.test
+# description: Issue #8505: Distinct On Memory Issues
+# group: [distinct]
+
+statement ok
+create table test (id int, provider int, record_key int, record_rank int, record_date int)
+
+# this subquery was fast, we select only record_key from it so it's equivalent to the next query
+query II
+explain select record_key from (
+    select distinct on (id, provider) id, provider, record_key from test order by id, provider, record_rank desc, record_date
+)
+----
+physical_plan	<REGEX>:.*HASH_GROUP_BY.*#0.*#1.*arg_min_null.*
+
+
+# this query was slow, but should be equivalent to the first query
+query II
+explain select distinct on (id, provider) record_key from test order by id, provider, record_rank desc, record_date
+----
+physical_plan	<REGEX>:.*HASH_GROUP_BY.*#0.*#1.*arg_min_null.*
+
+# the problem was that our aggregate became way too big in the second case because we didn't de-duplicate columns
+# this regex checks that they both have the same 'minimal' aggregate (this test is a bit fragile to binder changes tho)

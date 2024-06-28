@@ -1,11 +1,9 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -17,25 +15,26 @@ namespace duckdb {
 // Analyze
 //===--------------------------------------------------------------------===//
 struct FixedSizeAnalyzeState : public AnalyzeState {
-	FixedSizeAnalyzeState() : count(0) {
+	explicit FixedSizeAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), count(0) {
 	}
 
 	idx_t count;
 };
 
 unique_ptr<AnalyzeState> FixedSizeInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<FixedSizeAnalyzeState>();
+	CompressionInfo info(Storage::BLOCK_SIZE, type);
+	return make_uniq<FixedSizeAnalyzeState>(info);
 }
 
 bool FixedSizeAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = (FixedSizeAnalyzeState &)state_p;
+	auto &state = state_p.Cast<FixedSizeAnalyzeState>();
 	state.count += count;
 	return true;
 }
 
 template <class T>
 idx_t FixedSizeFinalAnalyze(AnalyzeState &state_p) {
-	auto &state = (FixedSizeAnalyzeState &)state_p;
+	auto &state = state_p.template Cast<FixedSizeAnalyzeState>();
 	return sizeof(T) * state.count;
 }
 
@@ -43,7 +42,7 @@ idx_t FixedSizeFinalAnalyze(AnalyzeState &state_p) {
 // Compress
 //===--------------------------------------------------------------------===//
 struct UncompressedCompressState : public CompressionState {
-	explicit UncompressedCompressState(ColumnDataCheckpointer &checkpointer);
+	UncompressedCompressState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info);
 
 	ColumnDataCheckpointer &checkpointer;
 	unique_ptr<ColumnSegment> current_segment;
@@ -54,18 +53,19 @@ struct UncompressedCompressState : public CompressionState {
 	void Finalize(idx_t segment_size);
 };
 
-UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointer &checkpointer)
-    : checkpointer(checkpointer) {
+UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
+    : CompressionState(info), checkpointer(checkpointer) {
 	UncompressedCompressState::CreateEmptySegment(checkpointer.GetRowGroup().start);
 }
 
 void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 	auto &db = checkpointer.GetDatabase();
 	auto &type = checkpointer.GetType();
+
 	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		auto &state = (UncompressedStringSegmentState &)*compressed_segment->GetSegmentState();
-		state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(checkpointer.GetColumnData().GetBlockManager());
+		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
+		state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(checkpointer.GetRowGroup().GetBlockManager());
 	}
 	current_segment = std::move(compressed_segment);
 	current_segment->InitializeAppend(append_state);
@@ -73,6 +73,11 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 
 void UncompressedCompressState::FlushSegment(idx_t segment_size) {
 	auto &state = checkpointer.GetCheckpointState();
+	if (current_segment->type.InternalType() == PhysicalType::VARCHAR) {
+		auto &segment_state = current_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
+		segment_state.overflow_writer->Flush();
+		segment_state.overflow_writer.reset();
+	}
 	state.FlushSegment(std::move(current_segment), segment_size);
 }
 
@@ -83,11 +88,11 @@ void UncompressedCompressState::Finalize(idx_t segment_size) {
 
 unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                                     unique_ptr<AnalyzeState> state) {
-	return make_uniq<UncompressedCompressState>(checkpointer);
+	return make_uniq<UncompressedCompressState>(checkpointer, state->info);
 }
 
 void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, idx_t count) {
-	auto &state = (UncompressedCompressState &)state_p;
+	auto &state = state_p.Cast<UncompressedCompressState>();
 	UnifiedVectorFormat vdata;
 	data.ToUnifiedFormat(count, vdata);
 
@@ -110,7 +115,7 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 }
 
 void UncompressedFunctions::FinalizeCompress(CompressionState &state_p) {
-	auto &state = (UncompressedCompressState &)state_p;
+	auto &state = state_p.Cast<UncompressedCompressState>();
 	state.Finalize(state.current_segment->FinalizeAppend(state.append_state));
 }
 
@@ -134,7 +139,7 @@ unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
 template <class T>
 void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                           idx_t result_offset) {
-	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<FixedSizeScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -147,7 +152,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 
 template <class T>
 void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
+	auto &scan_state = state.scan_state->template Cast<FixedSizeScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -167,7 +172,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 	auto handle = buffer_manager.Pin(segment.block);
 
 	// first fetch the data from the base table
-	auto data_ptr = handle.Ptr() + segment.GetBlockOffset() + row_id * sizeof(T);
+	auto data_ptr = handle.Ptr() + segment.GetBlockOffset() + NumericCast<idx_t>(row_id) * sizeof(T);
 
 	memcpy(FlatVector::GetData(result) + result_idx * sizeof(T), data_ptr, sizeof(T));
 }
@@ -185,8 +190,8 @@ struct StandardFixedSizeAppend {
 	template <class T>
 	static void Append(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
 	                   idx_t offset, idx_t count) {
-		auto sdata = (T *)adata.data;
-		auto tdata = (T *)target;
+		auto sdata = UnifiedVectorFormat::GetData<T>(adata);
+		auto tdata = reinterpret_cast<T *>(target);
 		if (!adata.validity.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto source_idx = adata.sel->get_index(offset + i);
@@ -216,8 +221,8 @@ struct ListFixedSizeAppend {
 	template <class T>
 	static void Append(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
 	                   idx_t offset, idx_t count) {
-		auto sdata = (uint64_t *)adata.data;
-		auto tdata = (uint64_t *)target;
+		auto sdata = UnifiedVectorFormat::GetData<uint64_t>(adata);
+		auto tdata = reinterpret_cast<uint64_t *>(target);
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
@@ -255,7 +260,7 @@ CompressionFunction FixedSizeGetFunction(PhysicalType data_type) {
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
 	                           FixedSizeInitScan, FixedSizeScan<T>, FixedSizeScanPartial<T>, FixedSizeFetchRow<T>,
 	                           UncompressedFunctions::EmptySkip, nullptr, FixedSizeInitAppend,
-	                           FixedSizeAppend<T, APPENDER>, FixedSizeFinalizeAppend<T>, nullptr);
+	                           FixedSizeAppend<T, APPENDER>, FixedSizeFinalizeAppend<T>);
 }
 
 CompressionFunction FixedSizeUncompressed::GetFunction(PhysicalType data_type) {
@@ -279,6 +284,8 @@ CompressionFunction FixedSizeUncompressed::GetFunction(PhysicalType data_type) {
 		return FixedSizeGetFunction<uint64_t>(data_type);
 	case PhysicalType::INT128:
 		return FixedSizeGetFunction<hugeint_t>(data_type);
+	case PhysicalType::UINT128:
+		return FixedSizeGetFunction<uhugeint_t>(data_type);
 	case PhysicalType::FLOAT:
 		return FixedSizeGetFunction<float>(data_type);
 	case PhysicalType::DOUBLE:

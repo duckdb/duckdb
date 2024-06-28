@@ -1,0 +1,14 @@
+# name: test/sql/copy/parquet/parquet_hive_empty.test
+# description: Test empty partitioning values
+# group: [parquet]
+
+require parquet
+
+query II
+select * 
+from parquet_scan('data/parquet-testing/hive-partitioning/empty_string/*/*.parquet', hive_partitioning=1)
+ORDER BY ALL
+----
+a	a
+b	(empty)
+

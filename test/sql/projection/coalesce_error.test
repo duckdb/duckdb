@@ -13,6 +13,7 @@ SELECT COALESCE(1, 'hello'::INT)
 
 statement error
 SELECT COALESCE(NULL, 'hello'::INT)
+----
 
 # non-constant
 statement ok
@@ -29,4 +30,5 @@ SELECT COALESCE(a, b::INT) FROM vals
 
 statement error
 SELECT COALESCE(NULL, b::INT) FROM vals
+----
 

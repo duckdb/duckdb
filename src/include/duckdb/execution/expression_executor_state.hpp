@@ -10,7 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/cycle_counter.hpp"
 #include "duckdb/function/function.hpp"
 
 namespace duckdb {
@@ -29,27 +28,38 @@ struct ExpressionState {
 	vector<unique_ptr<ExpressionState>> child_states;
 	vector<LogicalType> types;
 	DataChunk intermediate_chunk;
-	CycleCounter profiler;
 
 public:
 	void AddChild(Expression *expr);
-	void Finalize();
+	void Finalize(bool empty = false);
 	Allocator &GetAllocator();
 	bool HasContext();
 	DUCKDB_API ClientContext &GetContext();
 
 	void Verify(ExpressionExecutorState &root);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct ExecuteFunctionState : public ExpressionState {
 	ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root);
-	~ExecuteFunctionState();
+	~ExecuteFunctionState() override;
 
 	unique_ptr<FunctionLocalState> local_state;
 
 public:
-	static FunctionLocalState *GetFunctionState(ExpressionState &state) {
-		return ((ExecuteFunctionState &)state).local_state.get();
+	static optional_ptr<FunctionLocalState> GetFunctionState(ExpressionState &state) {
+		return state.Cast<ExecuteFunctionState>().local_state.get();
 	}
 };
 
@@ -58,7 +68,6 @@ struct ExpressionExecutorState {
 
 	unique_ptr<ExpressionState> root_state;
 	ExpressionExecutor *executor = nullptr;
-	CycleCounter profiler;
 
 	void Verify();
 };

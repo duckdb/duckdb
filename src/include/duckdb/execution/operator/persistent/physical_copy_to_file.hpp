@@ -8,11 +8,13 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/function/copy_function.hpp"
+#include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/filename_pattern.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/function/copy_function.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 
@@ -30,9 +32,13 @@ public:
 	string file_path;
 	bool use_tmp_file;
 	FilenamePattern filename_pattern;
-	bool overwrite_or_ignore;
+	string file_extension;
+	CopyOverwriteMode overwrite_mode;
 	bool parallel;
 	bool per_thread_output;
+	optional_idx file_size_bytes;
+	bool rotate;
+	CopyFunctionReturnType return_type;
 
 	bool partition_output;
 	vector<idx_t> partition_columns;
@@ -50,9 +56,9 @@ public:
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          GlobalSinkState &gstate) const override;
+	                          OperatorSinkFinalizeInput &input) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
@@ -69,5 +75,12 @@ public:
 	}
 
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
+	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
+
+	string GetTrimmedPath(ClientContext &context) const;
+
+private:
+	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink,
+	                                               StorageLockKey &global_lock) const;
 };
 } // namespace duckdb

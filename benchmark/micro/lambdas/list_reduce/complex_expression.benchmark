@@ -1,0 +1,13 @@
+# name: benchmark/micro/lambdas/list_reduce/complex_expression.benchmark
+# description: list_reduce with a complex expression
+# group: [list_reduce]
+
+name list complex expression
+group micro
+subgroup lambdas
+
+load
+CREATE TABLE tbl AS SELECT range(i, i + 1) || range(i + 1, i + 2) || range(i + 2, i + 3) || range(i + 3, i + 4) || range(i, i + 1) || range(i + 1, i + 2) || range(i + 2, i + 3) || range(i + 3, i + 4) || range(i + 1, i + 2) || range(i + 2, i + 3) AS l FROM range(500000) t(i);
+
+run
+SELECT list_reduce(l, (x, y) -> list_reduce(l, (a, b) -> x + y + a + b)) FROM tbl;

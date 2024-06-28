@@ -22,7 +22,7 @@ struct PragmaStorageFunctionData : public TableFunctionData {
 	}
 
 	TableCatalogEntry &table_entry;
-	TableStorageInfo storage_info;
+	vector<ColumnSegmentInfo> column_segments_info;
 };
 
 struct PragmaStorageOperatorData : public GlobalTableFunctionState {
@@ -76,13 +76,16 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("block_offset");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("segment_info");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_uniq<PragmaStorageFunctionData>(table_entry);
-	result->storage_info = table_entry.GetStorageInfo(context);
+	result->column_segments_info = table_entry.GetColumnSegmentInfo();
 	return std::move(result);
 }
 
@@ -95,27 +98,27 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 	auto &data = data_p.global_state->Cast<PragmaStorageOperatorData>();
 	idx_t count = 0;
 	auto &columns = bind_data.table_entry.GetColumns();
-	while (data.offset < bind_data.storage_info.column_segments.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = bind_data.storage_info.column_segments[data.offset++];
+	while (data.offset < bind_data.column_segments_info.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &entry = bind_data.column_segments_info[data.offset++];
 
 		idx_t col_idx = 0;
 		// row_group_id
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.row_group_index));
+		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.row_group_index)));
 		// column_name
 		auto &col = columns.GetColumn(PhysicalIndex(entry.column_id));
 		output.SetValue(col_idx++, count, Value(col.Name()));
 		// column_id
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.column_id));
+		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.column_id)));
 		// column_path
 		output.SetValue(col_idx++, count, Value(entry.column_path));
 		// segment_id
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.segment_idx));
+		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.segment_idx)));
 		// segment_type
 		output.SetValue(col_idx++, count, Value(entry.segment_type));
 		// start
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.segment_start));
+		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.segment_start)));
 		// count
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.segment_count));
+		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.segment_count)));
 		// compression
 		output.SetValue(col_idx++, count, Value(entry.compression_type));
 		// stats
@@ -128,11 +131,13 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 		// block_offset
 		if (entry.persistent) {
 			output.SetValue(col_idx++, count, Value::BIGINT(entry.block_id));
-			output.SetValue(col_idx++, count, Value::BIGINT(entry.block_offset));
+			output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.block_offset)));
 		} else {
 			output.SetValue(col_idx++, count, Value());
 			output.SetValue(col_idx++, count, Value());
 		}
+		// segment_info
+		output.SetValue(col_idx++, count, Value(entry.segment_info));
 		count++;
 	}
 	output.SetCardinality(count);

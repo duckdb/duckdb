@@ -1,0 +1,76 @@
+# name: test/sql/join/external/simple_external_join.test_coverage
+# description: Test simple external join
+# group: [external]
+
+load __TEST_DIR__/simple_external_join.db
+
+statement ok
+create table t1 (i varchar)
+
+statement ok
+create table t2 (j varchar)
+
+# Create tables with large string values so that strings aren't inlined
+# The tables have some overlapping values to keep the join result small
+statement ok
+insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(1000000)
+
+statement ok
+insert into t2 select concat(range::VARCHAR, repeat('0', 50)) j from range(900000, 5000000)
+
+# we want tight memory settings for the external joins
+statement ok
+pragma verify_parallelism
+
+# with 1 thread we can do a tighter memory limit
+statement ok
+pragma threads=1
+
+statement ok
+pragma memory_limit='100mb'
+
+query I
+select count(*) from t1, t2 where i = j
+----
+100000
+
+# now with more threads
+statement ok
+pragma threads=4
+
+query I
+select count(*) from t1, t2 where i = j
+----
+100000
+
+# now trigger repartitioning
+statement ok
+pragma debug_force_external=true
+
+# we need more memory for repartitioning
+statement ok
+pragma memory_limit='250mb'
+
+query I
+select count(*) from t1, t2 where i = j
+----
+100000
+
+statement ok
+pragma debug_force_external=false
+
+# higher memory limit for this because the strings are so large
+statement ok
+pragma memory_limit='200mb'
+
+# add some strings that are longer than Storage::BLOCK_SIZE
+statement ok
+insert into t1 select concat(range::VARCHAR, repeat('0', 300000)) i from range(10)
+
+statement ok
+insert into t2 select concat(range::VARCHAR, repeat('0', 300000)) i from range(99, -1, -1)
+
+query T
+select count(*) from t1, t2 where i = j
+----
+100010

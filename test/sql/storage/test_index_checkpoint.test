@@ -4,31 +4,31 @@
 
 require skip_reload
 
-load __TEST_DIR__/test_index_checkpoint.db
+load __TEST_DIR__/index_checkpoint.db
 
-# Ensure we do not checkpoint early (which would throw off the total_blocks stat)
+# ensure we do not checkpoint early
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-create table t2 (i integer,  uid varchar);
+CREATE TABLE t2 (i INTEGER, uid VARCHAR);
 
 statement ok
-create unique index iu on t2(uid);
+INSERT INTO t2 SELECT i.range AS i, gen_random_uuid() AS uid FROM range(50000) AS i;
 
 statement ok
-insert into t2 select i.range as i, gen_random_uuid() as uid FROM range(10000) as i;
+CREATE UNIQUE INDEX iu ON t2(uid);
 
 statement ok
 CHECKPOINT;
 
-statement ok
-select * from pragma_database_size();
+# A prior version of index checkpointing caused index data to be written twice.
+# If a node type exists, then we write at least one block for it. The ART in this example has the
+# following node types: PREFIX, NODE4, NODE16. The expected total storage size including the table data
+# is around 5.8MiB (6291456 bytes) for 16KB blocks, and around 6.2 MiB for 256KB blocks,
+# and we allow a variation of 20% in storage size
 
-# A prior version of index checkpoint caused index data to be written twice,
-# which results in a database size of 2.8MB (11 blocks). When the data is not
-# duplicated, the size is just under 1.8MB (7 blocks). This verifies we do not regress.
 query I
-select total_blocks * block_size < 2100000 from pragma_database_size();
+SELECT total_blocks < 6291456 / get_block_size('index_checkpoint') * 1.2 FROM pragma_database_size();
 ----
-true
+1

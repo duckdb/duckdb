@@ -1,0 +1,11 @@
+# name: test/parquet/dbp_small_decimal.test
+# description: Test parquet file with a small decimal column (1,0) in dbp encoding
+# group: [parquet]
+
+require parquet
+
+query III
+select * from 'data/parquet-testing/dbp_small_decimal.parquet' ;
+----
+1	10.0	diez
+2	20.0	vente

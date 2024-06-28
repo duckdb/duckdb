@@ -1,0 +1,27 @@
+# name: test/sql/function/numeric/test_geomean.test
+# description: Test geometric mean (geomean) function
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE numbers(x DOUBLE)
+
+statement ok
+INSERT INTO numbers VALUES (NULL), (1), (2)
+
+query I
+SELECT geomean(x) FROM numbers
+----
+1.414213562373095
+
+query I
+SELECT geomean(x::integer) FROM numbers
+----
+1.414213562373095
+
+query I
+SELECT geomean(i) FROM generate_series(1000, 2000) tbl(i);
+----
+1471.459313166229

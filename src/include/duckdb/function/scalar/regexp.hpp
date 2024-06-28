@@ -44,13 +44,13 @@ struct RegexpExtractAll {
 struct RegexpBaseBindData : public FunctionData {
 	RegexpBaseBindData();
 	RegexpBaseBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern = true);
-	virtual ~RegexpBaseBindData();
+	~RegexpBaseBindData() override;
 
 	duckdb_re2::RE2::Options options;
 	string constant_string;
 	bool constant_pattern;
 
-	virtual bool Equals(const FunctionData &other_p) const override;
+	bool Equals(const FunctionData &other_p) const override;
 };
 
 struct RegexpMatchesBindData : public RegexpBaseBindData {
@@ -105,10 +105,13 @@ struct RegexStringPieceArgs {
 		}
 	}
 
-	RegexStringPieceArgs &operator=(RegexStringPieceArgs &&other) {
-		std::swap(this->size, other.size);
-		std::swap(this->capacity, other.capacity);
-		std::swap(this->group_buffer, other.group_buffer);
+	RegexStringPieceArgs &operator=(RegexStringPieceArgs &&other) noexcept {
+		this->size = other.size;
+		this->capacity = other.capacity;
+		this->group_buffer = other.group_buffer;
+		other.size = 0;
+		other.capacity = 0;
+		other.group_buffer = nullptr;
 		return *this;
 	}
 
@@ -140,7 +143,7 @@ struct RegexLocalState : public FunctionLocalState {
 		if (extract_all) {
 			auto group_count_p = constant_pattern.NumberOfCapturingGroups();
 			if (group_count_p != -1) {
-				group_buffer.Init(group_count_p);
+				group_buffer.Init(NumericCast<idx_t>(group_count_p));
 			}
 		}
 		D_ASSERT(info.constant_pattern);

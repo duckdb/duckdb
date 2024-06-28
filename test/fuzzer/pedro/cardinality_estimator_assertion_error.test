@@ -14,3 +14,6 @@ statement error
 SELECT (SELECT 1 WHERE INTERVAL '1' DAY HAVING EXISTS (SELECT 1));
 ----
 Conversion Error: Unimplemented type for cast (INTERVAL -> BOOLEAN)
+
+statement ok
+SELECT 1 FROM (SELECT 2) t0, (SELECT 3) t1 WHERE (SELECT 1 NOT IN (SELECT 2));

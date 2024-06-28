@@ -1,0 +1,111 @@
+[
+  {
+    "class": "Constraint",
+    "class_type": "type",
+    "includes": [
+      "duckdb/parser/constraints/list.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "ConstraintType"
+      }
+    ]
+  },
+  {
+    "class": "NotNullConstraint",
+    "base": "Constraint",
+    "enum": "NOT_NULL",
+    "members": [
+      {
+        "id": 200,
+        "name": "index",
+        "type": "LogicalIndex"
+      }
+    ],
+    "constructor": ["index"]
+  },
+  {
+    "class": "CheckConstraint",
+    "base": "Constraint",
+    "enum": "CHECK",
+    "members": [
+      {
+        "id": 200,
+        "name": "expression",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "constructor": ["expression"]
+  },
+  {
+    "class": "ForeignKeyConstraint",
+    "base": "Constraint",
+    "enum": "FOREIGN_KEY",
+    "members": [
+      {
+        "id": 200,
+        "name": "pk_columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 201,
+        "name": "fk_columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "fk_type",
+        "type": "ForeignKeyType",
+        "property": "info.type"
+      },
+      {
+        "id": 203,
+        "name": "schema",
+        "type": "string",
+        "property":  "info.schema"
+      },
+      {
+        "id": 204,
+        "name": "table",
+        "type": "string",
+        "property":  "info.table"
+      },
+      {
+        "id": 205,
+        "name": "pk_keys",
+        "type": "vector<PhysicalIndex>",
+        "property":  "info.pk_keys"
+      },
+      {
+        "id": 206,
+        "name": "fk_keys",
+        "type": "vector<PhysicalIndex>",
+        "property":  "info.fk_keys"
+      }
+    ]
+  },
+  {
+    "class": "UniqueConstraint",
+    "base": "Constraint",
+    "enum": "UNIQUE",
+    "members": [
+      {
+        "id": 200,
+        "name": "is_primary_key",
+        "type": "bool"
+      },
+      {
+        "id": 201,
+        "name": "index",
+        "type": "LogicalIndex"
+      },
+      {
+        "id": 202,
+        "name": "columns",
+        "type": "vector<string>"
+      }
+    ]
+  }
+]

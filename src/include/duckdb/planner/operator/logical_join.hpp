@@ -30,7 +30,7 @@ public:
 	//! The type of the join (INNER, OUTER, etc...)
 	JoinType join_type;
 	//! Table index used to refer to the MARK column (in case of a MARK join)
-	idx_t mark_index;
+	idx_t mark_index {};
 	//! The columns of the LHS that are output by the join
 	vector<idx_t> left_projection_map;
 	//! The columns of the RHS that are output by the join
@@ -40,8 +40,6 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
-	void Serialize(FieldWriter &writer) const override;
-	static void Deserialize(LogicalJoin &join, LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	void ResolveTypes() override;

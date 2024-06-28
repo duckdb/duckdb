@@ -9,51 +9,34 @@
 #pragma once
 
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/planner/bound_parameter_map.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
 struct BoundParameterData {
+public:
 	BoundParameterData() {
 	}
-	BoundParameterData(Value val) : value(std::move(val)), return_type(value.type()) {
+	explicit BoundParameterData(Value val) : value(std::move(val)), return_type(value.type()) {
 	}
 
+private:
 	Value value;
+
+public:
 	LogicalType return_type;
 
 public:
-	void Serialize(Serializer &serializer) const {
-		FieldWriter writer(serializer);
-		value.Serialize(writer.GetSerializer());
-		writer.WriteSerializable(return_type);
-		writer.Finalize();
+	void SetValue(Value val) {
+		value = std::move(val);
 	}
 
-	static shared_ptr<BoundParameterData> Deserialize(Deserializer &source) {
-		FieldReader reader(source);
-		auto value = Value::Deserialize(reader.GetSource());
-		auto result = make_shared<BoundParameterData>(std::move(value));
-		result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-		reader.Finalize();
-		return result;
-	}
-};
-
-struct BoundParameterMap {
-	BoundParameterMap(vector<BoundParameterData> &parameter_data) : parameter_data(parameter_data) {
+	const Value &GetValue() const {
+		return value;
 	}
 
-	bound_parameter_map_t parameters;
-	vector<BoundParameterData> &parameter_data;
-
-	LogicalType GetReturnType(idx_t index) {
-		if (index >= parameter_data.size()) {
-			return LogicalTypeId::UNKNOWN;
-		}
-		return parameter_data[index].return_type;
-	}
+	void Serialize(Serializer &serializer) const;
+	static shared_ptr<BoundParameterData> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

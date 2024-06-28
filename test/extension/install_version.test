@@ -1,0 +1,31 @@
+# name: test/extension/install_version.test
+# description: test installing extensions of specific versions
+# group: [extension]
+
+# This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+require notwindows
+
+# Ensure we have a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='__TEST_DIR__/install_version'
+
+statement ok
+set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
+
+# Confirm the version ends up in the url we search.
+# TODO: the script to create a local extension repo should be able to produce versioned extension paths then we can properly
+# test this
+statement error
+INSTALL quack FROM '${LOCAL_EXTENSION_REPO}' VERSION 'myversion';
+----
+/quack/myversion/
+
+# Using the default extension repository
+statement error
+INSTALL quack VERSION 'myversion';
+----
+/quack/myversion/
+

@@ -1,0 +1,67 @@
+# name: test/sql/table_function/information_schema_fkey_constraint_names.test
+# description: Test foreign key constraint names in information_schema
+# group: [table_function]
+
+statement ok
+create table t (i int primary key);
+
+statement ok
+create table u (i int references t);
+
+query I
+select constraint_name
+from information_schema.table_constraints
+where constraint_type like '%KEY'
+order by 1
+----
+t_i_pkey
+u_i_fkey
+
+query I
+select constraint_name
+from information_schema.key_column_usage
+order by 1
+----
+t_i_pkey
+u_i_fkey
+
+query II
+select constraint_name, unique_constraint_name
+from information_schema.referential_constraints;
+----
+u_i_fkey	t_i_pkey
+
+statement ok
+drop table u
+
+statement ok
+drop table t
+
+statement ok
+create table target_tbl (target_col int primary key);
+
+statement ok
+create table source_tbl(source_col int references target_tbl(target_col));
+
+query I
+select constraint_name
+from information_schema.table_constraints
+where constraint_type like '%KEY'
+order by 1
+----
+source_tbl_source_col_fkey
+target_tbl_target_col_pkey
+
+query I
+select constraint_name
+from information_schema.key_column_usage
+order by 1
+----
+source_tbl_source_col_fkey
+target_tbl_target_col_pkey
+
+query II
+select constraint_name, unique_constraint_name
+from information_schema.referential_constraints;
+----
+source_tbl_source_col_fkey	target_tbl_target_col_pkey

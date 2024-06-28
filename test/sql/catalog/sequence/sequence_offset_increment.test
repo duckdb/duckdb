@@ -1,0 +1,18 @@
+# name: test/sql/catalog/sequence/sequence_offset_increment.test
+# description: Issue #9252: Sequences defined with offset and custom increment always start with 1 instead of using the offset
+# group: [sequence]
+
+require skip_reload
+
+statement ok
+create sequence xx start 100 increment by 2;
+
+query I
+SELECT nextval('xx')
+----
+100
+
+query I
+SELECT nextval('xx')
+----
+102

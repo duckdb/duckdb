@@ -107,7 +107,7 @@ statement error
 WITH patterns AS (
 	SELECT 'rundate_(\d+-\d+-\d+)_pass_(\d+)' AS pattern FROM range(3)
 )
-SELECT regexp_extract(filename, patterns, ['rundate', 'pass']) AS groups
+SELECT regexp_extract(filename, pattern, ['rundate', 'pass']) AS groups
 FROM filenames, patterns
 ----
 constant pattern

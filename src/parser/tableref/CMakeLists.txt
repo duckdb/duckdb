@@ -4,8 +4,10 @@ add_library_unity(
   basetableref.cpp
   emptytableref.cpp
   expressionlistref.cpp
+  column_data_ref.cpp
   joinref.cpp
   pivotref.cpp
+  showref.cpp
   subqueryref.cpp
   table_function.cpp)
 set(ALL_OBJECT_FILES

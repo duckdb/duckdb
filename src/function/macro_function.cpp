@@ -92,46 +92,4 @@ string MacroFunction::ToSQL(const string &schema, const string &name) const {
 	return StringUtil::Format("CREATE MACRO %s.%s(%s) AS ", schema, name, StringUtil::Join(param_strings, ", "));
 }
 
-void MacroFunction::Serialize(Serializer &main_serializer) const {
-	FieldWriter writer(main_serializer);
-	writer.WriteField(type);
-	writer.WriteSerializableList(parameters);
-	writer.WriteField<uint32_t>((uint32_t)default_parameters.size());
-	auto &serializer = writer.GetSerializer();
-	for (auto &kv : default_parameters) {
-		serializer.WriteString(kv.first);
-		kv.second->Serialize(serializer);
-	}
-	SerializeInternal(writer);
-	writer.Finalize();
-}
-
-unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &main_source) {
-	FieldReader reader(main_source);
-	auto type = reader.ReadRequired<MacroType>();
-	auto parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
-	auto default_param_count = reader.ReadRequired<uint32_t>();
-	unordered_map<string, unique_ptr<ParsedExpression>> default_parameters;
-	auto &source = reader.GetSource();
-	for (idx_t i = 0; i < default_param_count; i++) {
-		auto name = source.Read<string>();
-		default_parameters[name] = ParsedExpression::Deserialize(source);
-	}
-	unique_ptr<MacroFunction> result;
-	switch (type) {
-	case MacroType::SCALAR_MACRO:
-		result = ScalarMacroFunction::Deserialize(reader);
-		break;
-	case MacroType::TABLE_MACRO:
-		result = TableMacroFunction::Deserialize(reader);
-		break;
-	default:
-		throw InternalException("Cannot deserialize macro type");
-	}
-	result->parameters = std::move(parameters);
-	result->default_parameters = std::move(default_parameters);
-	reader.Finalize();
-	return result;
-}
-
 } // namespace duckdb

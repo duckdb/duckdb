@@ -1,0 +1,53 @@
+# name: test/sql/table_function/read_text_and_blob.test
+# description: Test read_files function
+# group: [table_function]
+
+query I
+SELECT COUNT(*) FROM read_text('test/sql/table_function/files/*.txt');
+----
+3
+
+query I
+SELECT COUNT(*) FROM read_blob('test/sql/table_function/files/*');
+----
+4
+
+query IIII
+SELECT * FROM read_text('test/sql/table_function/files/nonexistentfile.txt') ORDER BY ALL;
+----
+
+query I
+SELECT parse_path(filename) FROM read_text('test/sql/table_function/files/nonexistentfile.txt') ORDER BY ALL;
+----
+
+query I
+SELECT parse_path(filename) FROM read_text(['test/sql/table_function/files/one.txt', 'test/sql/table_function/files/two.txt']) ORDER BY ALL;
+----
+[test, sql, table_function, files, one.txt]
+[test, sql, table_function, files, two.txt]
+
+query III
+SELECT parse_path(filename), size, content FROM read_blob('test/sql/table_function/files/four.blob');
+----
+[test, sql, table_function, files, four.blob]	178	PK\x03\x04\x0A\x00\x00\x00\x00\x00\xACi=X\x14t\xCE\xC7\x0A\x00\x00\x00\x0A\x00\x00\x00\x09\x00\x1C\x00four.blobUT\x09\x00\x03c\x96\xB7ee\x96\xB7eux\x0B\x00\x01\x04\xF5\x01\x00\x00\x04\x14\x00\x00\x00F\xC3\xB6\xC3\xB6 B\xC3\xA4rPK\x01\x02\x1E\x03\x0A\x00\x00\x00\x00\x00\xACi=X\x14t\xCE\xC7\x0A\x00\x00\x00\x0A\x00\x00\x00\x09\x00\x18\x00\x00\x00\x00\x00\x01\x00\x00\x00\xA4\x81\x00\x00\x00\x00four.blobUT\x05\x00\x03c\x96\xB7eux\x0B\x00\x01\x04\xF5\x01\x00\x00\x04\x14\x00\x00\x00PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00O\x00\x00\x00M\x00\x00\x00\x00\x00
+
+statement error
+SELECT parse_path(filename), size, content FROM read_text('test/sql/table_function/files/four.blob');
+----
+Invalid Input Error: read_text: could not read content of file 'test/sql/table_function/files/four.blob' as valid UTF-8 encoded text. You may want to use read_blob instead.
+
+query III
+SELECT size, parse_path(filename), content  FROM read_text('test/sql/table_function/files/*.txt') ORDER BY filename, size;
+----
+12	[test, sql, table_function, files, one.txt]	Hello World!
+2	[test, sql, table_function, files, three.txt]	42
+10	[test, sql, table_function, files, two.txt]	Föö Bär
+
+# Test that the last_modified timestamp is reasonably correct
+query I
+SELECT last_modified > '2024-01-01' AND last_modified < '2500-01-01' FROM read_blob('test/sql/table_function/files/*');
+----
+true
+true
+true
+true

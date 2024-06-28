@@ -17,10 +17,12 @@ INSERT INTO unit VALUES (4,5)
 # (ALTER) Generated columns can not be created with a DEFAULT constraint
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER DEFAULT 1 GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+----
 
 # Generated column failed to create
 statement error
 SELECT total_profit FROM unit;
+----
 
 # (CREATE) Generated columns can not be created with a DEFAULT constraint
 statement error
@@ -29,10 +31,12 @@ CREATE TABLE unit2 (
 	amount_sold INTEGER,
 	total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL DEFAULT 1
 );
+----
 
 # Table doesnt exist
 statement error
 select * from unit2
+----
 
 statement ok
 CREATE TABLE tbl (

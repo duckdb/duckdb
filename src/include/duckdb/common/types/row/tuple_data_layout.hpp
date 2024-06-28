@@ -50,6 +50,9 @@ public:
 	inline Aggregates &GetAggregates() {
 		return aggregates;
 	}
+	const inline Aggregates &GetAggregates() const {
+		return aggregates;
+	}
 	//! Returns a map from column id to the struct TupleDataLayout
 	const inline TupleDataLayout &GetStructLayout(idx_t col_idx) const {
 		D_ASSERT(struct_layouts->find(col_idx) != struct_layouts->end());
@@ -83,8 +86,17 @@ public:
 	inline bool AllConstant() const {
 		return all_constant;
 	}
+	//! Gets offset to where heap size is stored
 	inline idx_t GetHeapSizeOffset() const {
 		return heap_size_offset;
+	}
+	//! Returns whether any of the aggregates have a destructor
+	inline bool HasDestructor() const {
+		return !aggr_destructor_idxs.empty();
+	}
+	//! Returns the indices of the aggregates that have destructors
+	inline const vector<idx_t> &GetAggregateDestructorIndices() const {
+		return aggr_destructor_idxs;
 	}
 
 private:
@@ -108,6 +120,8 @@ private:
 	bool all_constant;
 	//! Offset to the heap size of every row
 	idx_t heap_size_offset;
+	//! Indices of aggregate functions that have a destructor
+	vector<idx_t> aggr_destructor_idxs;
 };
 
 } // namespace duckdb

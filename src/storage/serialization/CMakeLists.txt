@@ -1,0 +1,24 @@
+add_library_unity(
+  duckdb_storage_serialization
+  OBJECT
+  serialize_constraint.cpp
+  serialize_create_info.cpp
+  serialize_dependency.cpp
+  serialize_expression.cpp
+  serialize_extension_install_info.cpp
+  serialize_extra_drop_info.cpp
+  serialize_logical_operator.cpp
+  serialize_macro_function.cpp
+  serialize_nodes.cpp
+  serialize_parsed_expression.cpp
+  serialize_parse_info.cpp
+  serialize_query_node.cpp
+  serialize_result_modifier.cpp
+  serialize_statement.cpp
+  serialize_table_filter.cpp
+  serialize_tableref.cpp
+  serialize_types.cpp
+  serialize_storage.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_serialization>
+    PARENT_SCOPE)

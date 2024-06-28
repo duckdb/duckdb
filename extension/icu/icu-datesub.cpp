@@ -1,6 +1,7 @@
 #include "include/icu-datesub.hpp"
 #include "include/icu-datefunc.hpp"
 
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -96,7 +97,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 		auto &enddate_arg = args.data[2];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
 		if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -138,13 +139,10 @@ struct ICUCalendarSub : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateSubFunction<TA>, Bind);
 	}
 
-	static void AddFunctions(const string &name, ClientContext &context) {
+	static void AddFunctions(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		ExtensionUtil::AddFunctionOverload(db, set);
 	}
 };
 
@@ -171,6 +169,7 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		return ICUCalendarSub::SubtractDay;
 	case DatePartSpecifier::HOUR:
 		return ICUCalendarSub::SubtractHour;
@@ -218,7 +217,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		auto &enddate_arg = args.data[2];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -265,22 +264,19 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, Bind);
 	}
 
-	static void AddFunctions(const string &name, ClientContext &context) {
+	static void AddFunctions(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		ExtensionUtil::AddFunctionOverload(db, set);
 	}
 };
 
-void RegisterICUDateSubFunctions(ClientContext &context) {
-	ICUCalendarSub::AddFunctions("date_sub", context);
-	ICUCalendarSub::AddFunctions("datesub", context);
+void RegisterICUDateSubFunctions(DatabaseInstance &db) {
+	ICUCalendarSub::AddFunctions("date_sub", db);
+	ICUCalendarSub::AddFunctions("datesub", db);
 
-	ICUCalendarDiff::AddFunctions("date_diff", context);
-	ICUCalendarDiff::AddFunctions("datediff", context);
+	ICUCalendarDiff::AddFunctions("date_diff", db);
+	ICUCalendarDiff::AddFunctions("datediff", db);
 }
 
 } // namespace duckdb

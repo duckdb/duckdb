@@ -1,0 +1,74 @@
+# name: test/sql/attach/attach_s3_tpch.test_slow
+# description: Test running TPC-H over a database attached over S3
+# group: [attach]
+
+require skip_reload
+
+require httpfs
+
+require tpch
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env DUCKDB_S3_ENDPOINT
+
+require-env DUCKDB_S3_USE_SSL
+
+statement ok
+CREATE SECRET (
+    TYPE S3,
+    PROVIDER config,
+    KEY_ID '${AWS_ACCESS_KEY_ID}',
+    SECRET '${AWS_SECRET_ACCESS_KEY}',
+    REGION '${AWS_DEFAULT_REGION}',
+    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+    USE_SSL '${DUCKDB_S3_USE_SSL}'
+)
+
+# ATTACH a DuckDB database over HTTPFS
+statement ok
+ATTACH 's3://test-bucket/presigned/lineitem_sf1.db' AS db (READONLY 1);
+
+statement ok
+USE db
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+
+statement ok
+USE memory
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH 's3://test-bucket/presigned/lineitem_sf1.db' AS db (READONLY 1);
+
+statement ok
+USE db
+
+query IIIIIIIIIIIIIIII
+select count(distinct columns(*)) from lineitem;
+----
+1500000	200000	10000	7	50	933900	11	9	3	2	2526	2466	2554	4	7	3610733

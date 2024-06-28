@@ -72,3 +72,4 @@ restart
 # macro should be gone
 statement error
 select test(4, 2)
+----

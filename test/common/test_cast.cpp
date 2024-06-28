@@ -155,7 +155,7 @@ TEST_CASE("Test casting to int8_t", "[cast]") {
 	                                            "1e-",
 	                                            "1e100",
 	                                            "1e100000000",
-	                                            "1000e-1",
+	                                            "10000e-1",
 	                                            " 3 2",
 	                                            "+"};
 	TestStringCast<int8_t>(working_values_str, expected_values_str, broken_values_str);

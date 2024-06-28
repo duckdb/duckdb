@@ -8,8 +8,9 @@ statement ok
 PRAGMA enable_verification
 
 query III
-FROM read_csv_auto('data/csv/issue6764.csv', all_varchar=true, header=true, skip=1, null_padding=True)
+FROM read_csv_auto('data/csv/issue6764.csv', all_varchar=true, skip=1, null_padding=True)
 ----
+1	a	alice
 2	b	bob
 
 query III

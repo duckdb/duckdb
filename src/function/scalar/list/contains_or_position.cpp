@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -20,6 +21,9 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
                                                            vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 
+	// If the first argument is an array, cast it to a list
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+
 	const auto &list = arguments[0]->return_type; // change to list
 	const auto &value = arguments[1]->return_type;
 	if (list.id() == LogicalTypeId::UNKNOWN) {
@@ -37,7 +41,12 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
 		bound_function.return_type = RETURN_TYPE;
 	} else {
 		auto const &child_type = ListType::GetChildType(list);
-		auto max_child_type = LogicalType::MaxLogicalType(child_type, value);
+		LogicalType max_child_type;
+		if (!LogicalType::TryGetMaxLogicalType(context, child_type, value, max_child_type)) {
+			throw BinderException(
+			    "Cannot get list_position of element of type %s in a list of type %s[] - an explicit cast is required",
+			    value.ToString(), child_type.ToString());
+		}
 		auto list_type = LogicalType::LIST(max_child_type);
 
 		bound_function.arguments[0] = list_type;

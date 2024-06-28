@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -8,7 +9,7 @@ AggregateObject::AggregateObject(AggregateFunction function, FunctionData *bind_
                                  idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
                                  Expression *filter)
     : function(std::move(function)),
-      bind_data_wrapper(bind_data ? make_shared<FunctionDataWrapper>(bind_data->Copy()) : nullptr),
+      bind_data_wrapper(bind_data ? make_shared_ptr<FunctionDataWrapper>(bind_data->Copy()) : nullptr),
       child_count(child_count), payload_size(payload_size), aggr_type(aggr_type), return_type(return_type),
       filter(filter) {
 }
@@ -19,15 +20,16 @@ AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
                       aggr->filter.get()) {
 }
 
-AggregateObject::AggregateObject(BoundWindowExpression &window)
+AggregateObject::AggregateObject(const BoundWindowExpression &window)
     : AggregateObject(*window.aggregate, window.bind_info.get(), window.children.size(),
-                      AlignValue(window.aggregate->state_size()), AggregateType::NON_DISTINCT,
+                      AlignValue(window.aggregate->state_size()),
+                      window.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,
                       window.return_type.InternalType(), window.filter_expr.get()) {
 }
 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings) {
 	vector<AggregateObject> aggregates;
-	aggregates.reserve(aggregates.size());
+	aggregates.reserve(bindings.size());
 	for (auto &binding : bindings) {
 		aggregates.emplace_back(binding);
 	}

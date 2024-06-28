@@ -4,7 +4,10 @@
 
 # CREATE TABLE
 statement ok con1
-CREATE TABLE test(i INTEGER, j INTEGER)
+CREATE TABLE test(
+	i INTEGER,
+	j INTEGER
+)
 
 # start two transactions
 statement ok con1
@@ -20,6 +23,7 @@ ALTER TABLE test RENAME COLUMN i TO k
 # first transaction should see the new name
 statement error con1
 SELECT i FROM test
+----
 
 statement ok con1
 SELECT k FROM test
@@ -30,6 +34,7 @@ SELECT i FROM test
 
 statement error con2
 SELECT k FROM test
+----
 
 # now commit
 statement ok con1
@@ -41,6 +46,7 @@ SELECT i FROM test
 
 statement error con2
 SELECT k FROM test
+----
 
 # now rollback the second transasction
 # it should now see the new name
@@ -49,6 +55,7 @@ COMMIT
 
 statement error con1
 SELECT i FROM test
+----
 
 statement ok
 SELECT k FROM test

@@ -1,0 +1,144 @@
+# name: test/sql/types/nested/array/array_misc.test
+# group: [array]
+
+require json
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE arrays (a INTEGER[3])
+
+statement ok
+INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL), ([4, NULL, 2])
+
+query I
+SELECT a[3] FROM arrays
+----
+3
+4
+9
+-3
+NULL
+2
+
+query I
+SELECT DISTINCT a FROM arrays ORDER BY ALL
+----
+[-1, -2, -3]
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+NULL
+
+query I
+SELECT DISTINCT a FROM arrays WHERE a[1] > 0 ORDER BY ALL
+----
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+
+query I
+SELECT * FROM (
+    SELECT a FROM ARRAYS
+    UNION
+    SELECT a FROM ARRAYS
+)
+ORDER BY ALL
+----
+[-1, -2, -3]
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+NULL
+
+query I
+SELECT * FROM (
+    SELECT a FROM ARRAYS WHERE a[1] > 0
+    UNION
+    SELECT a FROM ARRAYS WHERE a[1] > 0
+)
+ORDER BY ALL
+----
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+
+query I
+SELECT first(DISTINCT a ORDER BY a) FROM arrays
+----
+[-1, -2, -3]
+
+query I
+SELECT a::VARCHAR FROM arrays ORDER BY ALL
+----
+[-1, -2, -3]
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+NULL
+
+query I
+SELECT TRY_CAST(a::INTEGER[] AS INTEGER[3]) FROM ARRAYS ORDER BY ALL
+----
+[-1, -2, -3]
+[1, 2, 3]
+[1, 2, 4]
+[4, NULL, 2]
+[7, 8, 9]
+NULL
+
+query I
+SELECT a[2:-1] FROM arrays
+----
+[2, 3]
+[2, 4]
+[8, 9]
+[-2, -3]
+NULL
+[NULL, 2]
+
+query I
+SELECT a[3:99] FROM arrays
+----
+[3]
+[4]
+[9]
+[-3]
+NULL
+[2]
+
+query IIIIII
+DESCRIBE SELECT * FROM arrays
+----
+a	INTEGER[3]	YES	NULL	NULL	NULL
+
+query I
+SELECT a.filter(x -> x > 0) FROM arrays
+----
+[1, 2, 3]
+[1, 2, 4]
+[7, 8, 9]
+[]
+NULL
+[4, 2]
+
+query I
+SELECT a.apply(x -> x + 1)::INTEGER[3] FROM arrays
+----
+[2, 3, 4]
+[2, 3, 5]
+[8, 9, 10]
+[0, -1, -2]
+NULL
+[5, NULL, 3]

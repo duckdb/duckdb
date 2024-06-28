@@ -2,6 +2,8 @@
 # description: Test duckdb_extensions function
 # group: [table_function]
 
+require no_extension_autoloading
+
 statement ok
 SELECT * FROM duckdb_extensions();
 

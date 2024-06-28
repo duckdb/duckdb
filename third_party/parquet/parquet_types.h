@@ -36,8 +36,6 @@ struct Type {
   };
 };
 
-extern const std::map<int, const char*> _Type_VALUES_TO_NAMES;
-
 std::ostream& operator<<(std::ostream& out, const Type::type& val);
 
 struct ConvertedType {
@@ -63,11 +61,10 @@ struct ConvertedType {
     INT_64 = 18,
     JSON = 19,
     BSON = 20,
-    INTERVAL = 21
+    INTERVAL = 21,
+    NULL_TYPE = 24
   };
 };
-
-extern const std::map<int, const char*> _ConvertedType_VALUES_TO_NAMES;
 
 std::ostream& operator<<(std::ostream& out, const ConvertedType::type& val);
 
@@ -78,8 +75,6 @@ struct FieldRepetitionType {
     REPEATED = 2
   };
 };
-
-extern const std::map<int, const char*> _FieldRepetitionType_VALUES_TO_NAMES;
 
 std::ostream& operator<<(std::ostream& out, const FieldRepetitionType::type& val);
 
@@ -92,27 +87,25 @@ struct Encoding {
     DELTA_BINARY_PACKED = 5,
     DELTA_LENGTH_BYTE_ARRAY = 6,
     DELTA_BYTE_ARRAY = 7,
-    RLE_DICTIONARY = 8
+    RLE_DICTIONARY = 8,
+    BYTE_STREAM_SPLIT = 9,
   };
 };
-
-extern const std::map<int, const char*> _Encoding_VALUES_TO_NAMES;
 
 std::ostream& operator<<(std::ostream& out, const Encoding::type& val);
 
 struct CompressionCodec {
-  enum type {
+  enum type : uint8_t {
     UNCOMPRESSED = 0,
     SNAPPY = 1,
     GZIP = 2,
     LZO = 3,
     BROTLI = 4,
     LZ4 = 5,
-    ZSTD = 6
+    ZSTD = 6,
+	LZ4_RAW = 7
   };
 };
-
-extern const std::map<int, const char*> _CompressionCodec_VALUES_TO_NAMES;
 
 std::ostream& operator<<(std::ostream& out, const CompressionCodec::type& val);
 
@@ -125,8 +118,6 @@ struct PageType {
   };
 };
 
-extern const std::map<int, const char*> _PageType_VALUES_TO_NAMES;
-
 std::ostream& operator<<(std::ostream& out, const PageType::type& val);
 
 struct BoundaryOrder {
@@ -136,8 +127,6 @@ struct BoundaryOrder {
     DESCENDING = 2
   };
 };
-
-extern const std::map<int, const char*> _BoundaryOrder_VALUES_TO_NAMES;
 
 std::ostream& operator<<(std::ostream& out, const BoundaryOrder::type& val);
 

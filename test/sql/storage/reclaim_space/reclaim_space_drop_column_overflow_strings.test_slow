@@ -1,0 +1,72 @@
+# name: test/sql/storage/reclaim_space/reclaim_space_drop_column_overflow_strings.test_slow
+# description: Test that we reclaim space when dropping columns containing overflow strings
+# group: [reclaim_space]
+
+load __TEST_DIR__/reclaim_space_drop_column_overflow_strings.db
+
+statement ok
+PRAGMA force_checkpoint;
+
+statement ok
+CREATE TABLE strings AS SELECT i, repeat('X', case when i%17=0 then 5000 else i%7 end) AS s FROM generate_series(0,150000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CHECKPOINT;
+
+query IIIIII
+SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1]), MAX(S[1]) FROM strings
+----
+296.955	0	5000	44543527	(empty)	X
+
+# For smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
+# therefore, we need to compare to a range of total block counts.
+statement ok
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+
+loop i 0 30
+
+statement ok
+ALTER TABLE strings DROP COLUMN s;
+
+statement ok
+ALTER TABLE strings ADD COLUMN s VARCHAR;
+
+statement ok
+UPDATE strings SET s=repeat('X', case when i%17=0 then 5000 else i%7 end);
+
+query IIIIII
+SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1]), MAX(S[1]) FROM strings
+----
+296.955	0	5000	44543527	(empty)	X
+
+statement ok
+CHECKPOINT;
+
+# Ensure that the total blocks don't exceed the total blocks by more than 1.2.
+
+query I
+SELECT CASE WHEN ${i} < 10 THEN True
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
+	ELSE False END
+FROM pragma_database_size() AS current, total_blocks_tbl;
+----
+1
+
+# Adjust total_blocks_tbl to the count after 10 warm-up iterations.
+
+statement ok
+UPDATE total_blocks_tbl SET total_blocks = (
+	SELECT CASE WHEN ${i} < 10 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		ELSE (total_blocks) END);
+
+restart
+
+query IIIIII
+SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1]), MAX(S[1]) FROM strings
+----
+296.955	0	5000	44543527	(empty)	X
+
+endloop

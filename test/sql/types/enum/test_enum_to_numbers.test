@@ -1,0 +1,275 @@
+# name: test/sql/types/enum/test_enum_to_numbers.test
+# description: ENUM types used in table tests
+# group: [enum]
+
+statement ok
+create type enum_numstrings as enum ('1', '2', '3', '4');
+
+statement ok
+create table t1 as select range as a from range(10);
+
+statement ok
+create table t2 (a enum_numstrings);
+
+statement ok
+insert into t2 values ('1'), ('2'), ('3');
+
+query II
+select t1.a, count(*) as num_matches from t1, t2 where t1.a != t2.a group by t1.a order by t1.a;
+----
+0	3
+1	2
+2	2
+3	2
+4	3
+5	3
+6	3
+7	3
+8	3
+9	3
+
+statement ok
+insert into t2 values ('1'), ('2');
+
+query II
+select * from t1, t2 where t1.a = t2.a order by t1.a;
+----
+1	1
+1	1
+2	2
+2	2
+3	3
+
+
+# null enum types cast to null varcahr
+statement ok
+delete from t2 where 1=1;
+
+statement ok
+insert into t2 values (NULL), ('1');
+
+query II
+select * from t1, t2 order by t1.a, t2.a NULLS FIRST;
+----
+0	NULL
+0	1
+1	NULL
+1	1
+2	NULL
+2	1
+3	NULL
+3	1
+4	NULL
+4	1
+5	NULL
+5	1
+6	NULL
+6	1
+7	NULL
+7	1
+8	NULL
+8	1
+9	NULL
+9	1
+
+statement ok
+insert into t2 values  ('2'), ('3'), ('4');
+
+# null to Varchar cast results in NULL
+# NULL != '2' results in NULL and is not included
+query II
+select * from t1, t2 where t2.a NOT IN ('2', '3', '4') order by t1.a, t2.a NULLS FIRST;
+----
+0	1
+1	1
+2	1
+3	1
+4	1
+5	1
+6	1
+7	1
+8	1
+9	1
+
+statement ok
+insert into t2 values ('1'), ('2'), ('3');
+
+# should not do a try cast
+# cast '2' to enum should be used, which is then pushed down
+# into the enum table filters
+query II
+EXPLAIN select * from t1, t2 where t2.a = '2' order by t1.a;
+----
+physical_plan	<!REGEX>:.*TRY_CAST\(.*
+
+statement ok
+drop table t1
+
+statement ok
+drop table t2
+
+statement ok
+create type enum_strings as enum ('hello', 'goodbye', 'mr duck');
+
+statement ok
+create table t1 as select range as a from range(500);
+
+statement ok
+create table t2 (a enum_strings);
+
+statement ok
+insert into t2 values ('hello'), ('goodbye'), ('mr duck'),  ('mr duck'), ('hello'), ('goodbye');
+
+# enums behave like strings so we first cast to varchar, then to int64 for 
+# integer comparison. This should error since 'hello' Cannot be converted to INT64
+statement error
+Select * from t1, t2 where t1.a = t2.a;
+----
+Conversion Error: Could not convert string 'hello' to INT64
+
+# no error because now we compare varchars
+query II
+Select * from t1, t2 where t1.a::VARCHAR = t2.a;
+----
+
+statement ok
+drop table t1; 
+
+statement ok
+drop table t2; 
+
+foreach type varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+
+statement ok
+create type new_type as enum ('1', '2', '3', '4', '5');
+
+statement ok
+create table t1 as select range::${type} as a from range(8);
+
+statement ok
+create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(8);
+
+query I rowsort
+select a from t1, t2 where t1.a = t2.b;
+----
+1
+1
+2
+2
+3
+3
+4
+4
+
+query I
+select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+----
+20
+
+query I
+select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+----
+28
+
+query I
+select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+----
+36
+
+query I
+select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+----
+44
+
+statement ok
+drop type new_type;
+
+statement ok
+drop table t1; 
+
+statement ok
+drop table t2; 
+
+endloop
+
+
+statement ok
+create type new_type as enum ('294247-01-10 04:00:54.775806', '83 years 3 months 999 days 00:16:39.999999', '1677-09-21 00:12:43.145225', 'other enum type', 'another 1', '~~~');
+
+statement ok
+create table t1 as select date, time, timestamp, timestamp_s, timestamp_ms, timestamp_ns, time_tz, timestamp_tz, interval, blob, bool from test_all_types();
+
+statement ok
+create table t2 as select * from VALUES ('294247-01-10 04:00:54.775806'::new_type), ('83 years 3 months 999 days 00:16:39.999999'::new_type), ('1677-09-21 00:12:43.145225'::new_type), ('other enum type'::new_type), ('another 1'::new_type), ('~~~'::new_type) t(b);
+
+statement error
+select count(*) from t1, t2 where t1.date = t2.b;
+----
+Conversion Error
+
+statement error
+select count(*) from t1, t2 where t1.time = t2.b;
+----
+Conversion Error
+
+statement error
+select count(*) from t1, t2 where t1.timestamp = t2.b;
+----
+Conversion Error
+
+statement error
+select count(*) from t1, t2 where t1.timestamp_s = t2.b;
+----
+Conversion Error
+
+statement error
+select count(*) from t1, t2 where t1.timestamp_ms = t2.b;
+----
+Conversion Error
+
+statement error
+select count(*) from t1, t2 where t1.timestamp_ns = t2.b;
+----
+Conversion Error
+
+# in types.hpp logical type of timestamp_tz, time_tz, interval, and blob are all higher 
+# than varchar, causing a direct cast from varchar to the type to happen. 
+
+statement error
+select count(*) from t1, t2 where t1.time_tz = t2.b;
+----
+Conversion Error
+
+statement error
+select count(*) from t1, t2 where t1.timestamp_tz = t2.b;
+----
+Conversion Error
+
+statement error
+select count(*) from t1, t2 where t1.interval = t2.b;
+----
+Conversion Error
+
+# enums can be cast to blobs
+statement ok
+select count(*) from t1, t2 where t1.blob = t2.b;
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+create type enum_bits as enum ('11001010110', '110', '0101001010101', 'some enum val that cannot be cast to bit');
+
+statement ok
+create table t1 as select * from values ('110010'::BIT), ('110'::BIT), ('110110110011'::BIT) t(a);
+
+statement ok
+create table t2 as select * from values ('11001010110'::enum_bits), ('110'::enum_bits), ('0101001010101'::enum_bits), ('some enum val that cannot be cast to bit'::enum_bits) t(b);
+
+statement error
+select count(*) from t1, t2 where t1.a = t2.b;
+----
+Conversion Error

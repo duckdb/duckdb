@@ -27,6 +27,7 @@ SELECT * FROM test;
 # Cant UPDATE a generated column
 statement error
 UPDATE test SET bar = 5
+----
 
 # Correctly formatted UPDATE statements work
 statement ok

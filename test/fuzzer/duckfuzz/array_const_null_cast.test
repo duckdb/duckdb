@@ -1,0 +1,17 @@
+# name: test/fuzzer/duckfuzz/array_const_null_cast.test
+# group: [duckfuzz]
+
+# Internal Issue #1420
+# Caused by not flattening constant null array vectors properly
+statement ok
+create table tbl(c8 UTINYINT);
+
+statement ok
+INSERT INTO tbl VALUES (0), (255), (NULL);
+
+query I
+SELECT CAST(TRY_CAST(c8 AS ENUM('DUCK_DUCK_ENUM', 'GOOSE')) AS VARCHAR[3]) FROM tbl;
+----
+NULL
+NULL
+NULL

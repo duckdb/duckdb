@@ -1,1 +1,0 @@
-%type <str> opt_extension_name

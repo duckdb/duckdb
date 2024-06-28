@@ -1,0 +1,201 @@
+[
+  {
+    "class": "ExtraTypeInfo",
+    "class_type": "type",
+    "includes": [
+      "duckdb/common/extra_type_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "ExtraTypeInfoType"
+      },
+      {
+        "id": 101,
+        "name": "alias",
+        "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "modifiers",
+        "type": "vector<Value>",
+        "default": "vector<Value>()"
+      }
+    ],
+    "pointer_type": "shared_ptr"
+  },
+  {
+    "class": "DecimalTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "DECIMAL_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "width",
+        "type": "uint8_t"
+      },
+      {
+        "id": 201,
+        "name": "scale",
+        "type": "uint8_t"
+      }
+    ]
+  },
+  {
+    "class": "StringTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "STRING_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "collation",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "ListTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "LIST_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "child_type",
+        "type": "LogicalType"
+      }
+    ]
+  },
+  {
+    "class": "StructTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "STRUCT_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "child_types",
+        "type": "child_list_t<LogicalType>"
+      }
+    ]
+  },
+  {
+    "class": "AggregateStateTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "AGGREGATE_STATE_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "function_name",
+        "type": "string",
+        "property": "state_type.function_name"
+      },
+      {
+        "id": 201,
+        "name": "return_type",
+        "type": "LogicalType",
+        "property": "state_type.return_type"
+      },
+      {
+        "id": 202,
+        "name": "bound_argument_types",
+        "type": "vector<LogicalType>",
+        "property": "state_type.bound_argument_types"
+      }
+    ]
+  },
+  {
+    "class": "ArrayTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ARRAY_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "child_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 201,
+        "name": "size",
+        "type": "uint32_t"
+      }
+    ],
+    "constructor": ["child_type", "size"]
+  },
+  {
+    "class": "UserTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "USER_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "user_type_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "catalog",
+        "type": "string",
+        "default": "string()"
+      },
+      {
+        "id": 202,
+        "name": "schema",
+        "type": "string",
+        "default": "string()"
+      },
+      {
+        "id": 203,
+        "name": "user_type_modifiers",
+        "type": "vector<Value>",
+        "default": "vector<Value>()"
+      }
+    ]
+  },
+  {
+    "class": "EnumTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ENUM_TYPE_INFO",
+    "custom_implementation": true
+  },
+  {
+    "class": "InvalidTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "INVALID_TYPE_INFO",
+    "custom_switch_code": "return nullptr;"
+  },
+  {
+    "class": "GenericTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "GENERIC_TYPE_INFO",
+    "custom_switch_code": "result = make_shared_ptr<ExtraTypeInfo>(type);\nbreak;"
+  },
+  {
+    "class": "AnyTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ANY_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "target_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 201,
+        "name": "cast_score",
+        "type": "idx_t"
+      }
+    ]
+  },
+  {
+    "class": "IntegerLiteralTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "INTEGER_LITERAL_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "constant_value",
+        "type": "Value"
+      }
+    ]
+  }
+]

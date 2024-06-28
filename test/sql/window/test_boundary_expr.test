@@ -67,6 +67,21 @@ SELECT sum(unique1) over (order by unique1 rows between unbounded preceding and 
 45.000000
 45.000000
 
+# Frame starts past partition end
+query R
+SELECT sum(unique1) over (order by unique1 rows between 5 following and 10 following) su FROM tenk1 order by unique1
+----
+35
+30
+24
+17
+9
+NULL
+NULL
+NULL
+NULL
+NULL
+
 # Issue 1472
 
 statement ok

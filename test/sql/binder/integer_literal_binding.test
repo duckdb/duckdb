@@ -1,0 +1,44 @@
+# name: test/sql/binder/integer_literal_binding.test
+# description: Test integer literal binding
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+# integer literal binding for arithmetic
+foreach type UTINYINT USMALLINT UINTEGER UBIGINT TINYINT SMALLINT INTEGER BIGINT
+
+query I
+SELECT typeof(100::${type} + 1) == '${type}';
+----
+true
+
+
+query I
+SELECT typeof(100 + 1::${type}) == '${type}';
+----
+true
+
+endloop
+
+# integer literals out of range for type
+query I
+SELECT typeof(1::TINYINT + 100);
+----
+TINYINT
+
+query I
+SELECT typeof(1::TINYINT + 10000);
+----
+INTEGER
+
+# integer literals with decimals
+query I
+SELECT typeof(1.05 + 1)
+----
+DECIMAL(13,2)
+
+query I
+SELECT typeof(1 + 1);
+----
+INTEGER

@@ -55,7 +55,7 @@ NULL	NULL	NULL
 5	[9, 10, 11]	[9, 10, 11]
 
 query III
-SELECT i, pk, fk FROM intlistdim FULL OUTER JOIN intlists ON intlistdim.pk=intlists.fk ORDER BY i
+SELECT i, pk, fk FROM intlistdim FULL OUTER JOIN intlists ON intlistdim.pk=intlists.fk ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	[13]
@@ -112,7 +112,7 @@ NULL	NULL	NULL
 5	[i, j, k]	[i, j, k]
 
 query III
-SELECT i, pk, fk FROM strlistdim FULL OUTER JOIN strlists ON strlistdim.pk=strlists.fk ORDER BY i
+SELECT i, pk, fk FROM strlistdim FULL OUTER JOIN strlists ON strlistdim.pk=strlists.fk ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	[Somateria mollissima]
@@ -169,7 +169,7 @@ NULL	NULL	NULL
 5	{'x': 9, 'y': i}	{'x': 9, 'y': i}
 
 query III
-SELECT i, pk, fk FROM structdim FULL OUTER JOIN structs ON structdim.pk=structs.fk ORDER BY i
+SELECT i, pk, fk FROM structdim FULL OUTER JOIN structs ON structdim.pk=structs.fk ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': 13, 'y': Somateria mollissima}
@@ -241,7 +241,7 @@ SELECT i, pk, fk
 FROM struct_lint_lstr_dim
 FULL OUTER JOIN struct_lint_lstr
 ON struct_lint_lstr_dim.pk=struct_lint_lstr.fk
-ORDER BY i
+ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': [13], 'y': [Somateria mollissima]}
@@ -314,7 +314,7 @@ SELECT i, pk, fk
 FROM r2l3r4l5i4i2l3v_dim
 FULL OUTER JOIN r2l3r4l5i4i2l3v
 ON r2l3r4l5i4i2l3v_dim.pk = r2l3r4l5i4i2l3v.fk
-ORDER BY i
+ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	{'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}

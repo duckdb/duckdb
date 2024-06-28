@@ -15,6 +15,6 @@ CREATE TABLE i_class_id AS
 	FROM range(1, 6, 1) t1(i_category_id);
 
 query II
-select argmin(i_category_id,i_category_id), argmax(i_category_id,i_category_id) from i_class_id;
+select argmin(i_category_id,i_category_id::VARCHAR), argmax(i_category_id, i_category_id::VARCHAR) from i_class_id;
 ----
 [1, 2, 3, 4, 5]	[1, 2, 3, 4, 5]

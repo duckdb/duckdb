@@ -1,0 +1,288 @@
+# name: test/sql/types/uuid/test_uuid.test_slow
+# description: Test UUID type
+# group: [uuid]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE IF NOT EXISTS uuid (u uuid);
+
+statement ok
+INSERT INTO uuid VALUES
+       ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'),
+       (NULL),
+       ('47183823-2574-4bfd-b411-99ed177d3e43'),
+       ('{10203040506070800102030405060708}'),
+       ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'),
+       (NULL),
+       ('47183823-2574-4bfd-b411-99ed177d3e43'),
+       ('{10203040506070800102030405060708}'),
+       ('00000000-0000-0000-0000-000000000000'),
+       ('00000000-0000-0000-0000-000000000001'),
+       ('00000000-0000-0000-8000-000000000001'),
+       ('80000000-0000-0000-0000-000000000000'),
+       ('80000000-0000-0000-8000-000000000000'),
+       ('80000000-0000-0000-8fff-ffffffffffff'),
+       ('80000000-0000-0000-ffff-ffffffffffff'),
+       ('8fffffff-ffff-ffff-0000-000000000000'),
+       ('8fffffff-ffff-ffff-8000-000000000000'),
+       ('8fffffff-ffff-ffff-8fff-ffffffffffff'),
+       ('8fffffff-ffff-ffff-ffff-ffffffffffff'),
+       ('ffffffff-ffff-ffff-ffff-ffffffffffff');
+
+# output is always in the standard form
+query I
+SELECT uuid 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11';
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11';
+----
+a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11
+
+query I
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11'::uuid;
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11'::uuid::varchar;
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11'::uuid::varchar::uuid;
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11'::uuid::varchar::uuid::varchar;
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# braces need to match
+statement error
+SELECT uuid '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+----
+
+# char length should be 32
+statement error
+SELECT uuid '47183823-2574-4bfd-b411-99ed177d3e4';
+----
+
+query I
+SELECT u FROM uuid ORDER BY u;
+----
+NULL
+NULL
+00000000-0000-0000-0000-000000000000
+00000000-0000-0000-0000-000000000001
+00000000-0000-0000-8000-000000000001
+10203040-5060-7080-0102-030405060708
+10203040-5060-7080-0102-030405060708
+47183823-2574-4bfd-b411-99ed177d3e43
+47183823-2574-4bfd-b411-99ed177d3e43
+80000000-0000-0000-0000-000000000000
+80000000-0000-0000-8000-000000000000
+80000000-0000-0000-8fff-ffffffffffff
+80000000-0000-0000-ffff-ffffffffffff
+8fffffff-ffff-ffff-0000-000000000000
+8fffffff-ffff-ffff-8000-000000000000
+8fffffff-ffff-ffff-8fff-ffffffffffff
+8fffffff-ffff-ffff-ffff-ffffffffffff
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+# need to convert to varchar to sort by the string format
+query I
+SELECT u FROM uuid ORDER BY u::varchar;
+----
+NULL
+NULL
+00000000-0000-0000-0000-000000000000
+00000000-0000-0000-0000-000000000001
+00000000-0000-0000-8000-000000000001
+10203040-5060-7080-0102-030405060708
+10203040-5060-7080-0102-030405060708
+47183823-2574-4bfd-b411-99ed177d3e43
+47183823-2574-4bfd-b411-99ed177d3e43
+80000000-0000-0000-0000-000000000000
+80000000-0000-0000-8000-000000000000
+80000000-0000-0000-8fff-ffffffffffff
+80000000-0000-0000-ffff-ffffffffffff
+8fffffff-ffff-ffff-0000-000000000000
+8fffffff-ffff-ffff-8000-000000000000
+8fffffff-ffff-ffff-8fff-ffffffffffff
+8fffffff-ffff-ffff-ffff-ffffffffffff
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT MIN(u) FROM uuid;
+----
+00000000-0000-0000-0000-000000000000
+
+query I
+SELECT MAX(u) FROM uuid;
+----
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT u FROM uuid WHERE u='8fffffff-ffff-ffff-ffff-ffffffffffff';
+----
+8fffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT u FROM uuid WHERE u<>'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' ORDER BY u;
+----
+00000000-0000-0000-0000-000000000000
+00000000-0000-0000-0000-000000000001
+00000000-0000-0000-8000-000000000001
+10203040-5060-7080-0102-030405060708
+10203040-5060-7080-0102-030405060708
+47183823-2574-4bfd-b411-99ed177d3e43
+47183823-2574-4bfd-b411-99ed177d3e43
+80000000-0000-0000-0000-000000000000
+80000000-0000-0000-8000-000000000000
+80000000-0000-0000-8fff-ffffffffffff
+80000000-0000-0000-ffff-ffffffffffff
+8fffffff-ffff-ffff-0000-000000000000
+8fffffff-ffff-ffff-8000-000000000000
+8fffffff-ffff-ffff-8fff-ffffffffffff
+8fffffff-ffff-ffff-ffff-ffffffffffff
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT u FROM uuid WHERE u>='80000000-0000-0000-0000-000000000000' ORDER BY u;
+----
+80000000-0000-0000-0000-000000000000
+80000000-0000-0000-8000-000000000000
+80000000-0000-0000-8fff-ffffffffffff
+80000000-0000-0000-ffff-ffffffffffff
+8fffffff-ffff-ffff-0000-000000000000
+8fffffff-ffff-ffff-8000-000000000000
+8fffffff-ffff-ffff-8fff-ffffffffffff
+8fffffff-ffff-ffff-ffff-ffffffffffff
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT u FROM uuid WHERE u<'80000000-0000-0000-0000-000000000000' ORDER BY u;
+----
+00000000-0000-0000-0000-000000000000
+00000000-0000-0000-0000-000000000001
+00000000-0000-0000-8000-000000000001
+10203040-5060-7080-0102-030405060708
+10203040-5060-7080-0102-030405060708
+47183823-2574-4bfd-b411-99ed177d3e43
+47183823-2574-4bfd-b411-99ed177d3e43
+
+query II
+SELECT u, count(1) FROM uuid WHERE u<'80000000-0000-0000-0000-000000000000' GROUP BY u ORDER BY u;
+----
+00000000-0000-0000-0000-000000000000	1
+00000000-0000-0000-0000-000000000001	1
+00000000-0000-0000-8000-000000000001	1
+10203040-5060-7080-0102-030405060708	2
+47183823-2574-4bfd-b411-99ed177d3e43	2
+
+# test UUID round-trippability and ordering with many generated UUIDs
+statement ok
+create function hex_char(i) as substr('0123456789abcdef', (i%16)::int+1, 1);
+
+statement ok
+create function hex_char_repeat(i, j, rep) as repeat(hex_char(i)||hex_char(j), rep);
+
+statement ok
+create function uuid_generate(i, j) as concat(hex_char_repeat(i, j, 4), '-', hex_char_repeat(i, j, 2), '-', hex_char_repeat(i, j, 2), '-', hex_char_repeat(i, j, 2), '-', hex_char_repeat(i, j, 6));
+
+# set up a view that generates a bunch of UUIDs
+statement ok
+CREATE VIEW uuid_generated AS select uuid_generate(i, j) uuid from range(0,16) tbl(i), range(0, 16) tbl2(j)
+
+# test that UUID sort order matches varchar sort order
+query I nosort order
+SELECT uuid::VARCHAR FROM uuid_generated ORDER BY 1
+
+query I nosort order
+SELECT uuid::UUID FROM uuid_generated ORDER BY 1
+
+# round-trippability of UUIDs
+query I nosort roundtrip
+SELECT uuid::UUID::VARCHAR=uuid FROM uuid_generated ORDER BY 1
+
+query I nosort roundtrip
+SELECT uuid=uuid FROM uuid_generated ORDER BY 1
+
+# Joins on UUID columns should match joins on varchar columns
+query I nosort uuid_ge_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::VARCHAR >= u2.uuid::VARCHAR;
+
+query I nosort uuid_ge_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::UUID >= u2.uuid::UUID;
+
+query I nosort uuid_le_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::VARCHAR <= u2.uuid::VARCHAR;
+
+query I nosort uuid_le_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::UUID <= u2.uuid::UUID;
+
+query I nosort uuid_eq_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::VARCHAR = u2.uuid::VARCHAR;
+
+query I nosort uuid_eq_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::UUID = u2.uuid::UUID;
+
+statement error
+SELECT SUM(u) FROM uuid
+----
+
+statement error
+SELECT AVG(u) FROM uuid
+----
+
+statement error
+SELECT u+u FROM uuid
+----
+
+statement error
+SELECT u*u FROM uuid
+----
+
+statement error
+SELECT u/u FROM uuid
+----
+
+statement error
+SELECT u%u FROM uuid
+----
+
+statement error
+SELECT u-u FROM uuid
+----
+
+statement error
+SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid::hugeint;
+----
+
+statement error
+SELECT ''::uuid
+----
+
+statement error
+SELECT 'aaaa'::uuid
+----
+
+statement error
+SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380Z11'::uuid
+----
+
+

@@ -1,0 +1,50 @@
+# name: test/issues/general/test_3821.test
+# description: Issue 3821: Setting default_collation=NOCASE modifies values of GROUP BY queries
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t AS (SELECT 'hello' AS x UNION ALL SELECT 'WORLD' AS x UNION ALL SELECT 'WoRlD' AS x);
+
+# 3 groups because no collation
+query I rowsort
+SELECT x FROM t GROUP BY 1;
+----
+WORLD
+WoRlD
+hello
+
+query I rowsort
+SELECT x COLLATE NOCASE FROM t GROUP BY 1;
+----
+WORLD
+hello
+
+query I
+SELECT COUNT(*) FROM t GROUP BY x COLLATE NOCASE ORDER BY ALL;
+----
+1
+2
+
+statement ok
+CREATE TABLE t_schema(x VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO t_schema VALUES ('hello'), ('WORLD'), ('WoRlD');
+
+query I rowsort
+SELECT x FROM t_schema GROUP BY x;
+----
+WORLD
+hello
+
+statement ok
+PRAGMA default_collation=NOCASE;
+
+query I rowsort
+SELECT x FROM t GROUP BY 1;
+----
+WORLD
+hello

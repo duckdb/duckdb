@@ -20,7 +20,6 @@ UPDATE t0 SET c0=true;
 
 # -- expected: {true}, actual: {}
 query T
-SELECT * FROM t0 WHERE t0.c0 = true;
+SELECT * FROM t0 WHERE t0.c0 = true::varchar;
 ----
 true
-

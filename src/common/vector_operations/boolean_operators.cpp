@@ -35,8 +35,8 @@ static void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result
 		right.ToUnifiedFormat(count, rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto left_data = (uint8_t *)ldata.data; // we use uint8 to avoid load of gunk bools
-		auto right_data = (uint8_t *)rdata.data;
+		auto left_data = UnifiedVectorFormat::GetData<uint8_t>(ldata); // we use uint8 to avoid load of gunk bools
+		auto right_data = UnifiedVectorFormat::GetData<uint8_t>(rdata);
 		auto result_data = FlatVector::GetData<bool>(result);
 		auto &result_mask = FlatVector::Validity(result);
 		if (!ldata.validity.AllValid() || !rdata.validity.AllValid()) {

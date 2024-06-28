@@ -1,25 +1,28 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
+
+#include "duckdb/common/file_buffer.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
-#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p)
-    : block_manager(block_manager), readers(0), block_id(block_id_p), buffer(nullptr), eviction_timestamp(0),
-      can_destroy(false), memory_charge(block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
-	eviction_timestamp = 0;
+BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag)
+    : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer(nullptr), eviction_seq_num(0),
+      can_destroy(false), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
+	eviction_seq_num = 0;
 	state = BlockState::BLOCK_UNLOADED;
-	memory_usage = Storage::BLOCK_ALLOC_SIZE;
+	memory_usage = block_manager.GetBlockAllocSize();
 }
 
-BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
-                         bool can_destroy_p, idx_t block_size, BufferPoolReservation &&reservation)
-    : block_manager(block_manager), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p),
-      memory_charge(block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
+BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag,
+                         unique_ptr<FileBuffer> buffer_p, bool can_destroy_p, idx_t block_size,
+                         BufferPoolReservation &&reservation)
+    : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), eviction_seq_num(0),
+      can_destroy(can_destroy_p), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()),
+      unswizzled(nullptr) {
 	buffer = std::move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
 	memory_usage = block_size;
@@ -29,7 +32,12 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, uni
 BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	// being destroyed, so any unswizzled pointers are just binary junk now.
 	unswizzled = nullptr;
-	auto &buffer_manager = block_manager.buffer_manager;
+	if (buffer && buffer->type != FileBufferType::TINY_BUFFER) {
+		// we kill the latest version in the eviction queue
+		auto &buffer_manager = block_manager.buffer_manager;
+		buffer_manager.GetBufferPool().IncrementDeadNodes(buffer->type);
+	}
+
 	// no references remain to this block: erase
 	if (buffer && state == BlockState::BLOCK_LOADED) {
 		D_ASSERT(memory_charge.size > 0);
@@ -39,7 +47,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	} else {
 		D_ASSERT(memory_charge.size == 0);
 	}
-	buffer_manager.GetBufferPool().PurgeQueue();
+
 	block_manager.UnregisterBlock(block_id, can_destroy);
 }
 
@@ -49,7 +57,7 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 		// re-usable buffer: re-use it
 		if (reusable_buffer->type == FileBufferType::BLOCK) {
 			// we can reuse the buffer entirely
-			auto &block = (Block &)*reusable_buffer;
+			auto &block = reinterpret_cast<Block &>(*reusable_buffer);
 			block.id = block_id;
 			return unique_ptr_cast<FileBuffer, Block>(std::move(reusable_buffer));
 		}
@@ -60,6 +68,17 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 		// no re-usable buffer: allocate a new block
 		return block_manager.CreateBlock(block_id, nullptr);
 	}
+}
+
+BufferHandle BlockHandle::LoadFromBuffer(shared_ptr<BlockHandle> &handle, data_ptr_t data,
+                                         unique_ptr<FileBuffer> reusable_buffer) {
+	D_ASSERT(handle->state != BlockState::BLOCK_LOADED);
+	// copy over the data into the block from the file buffer
+	auto block = AllocateBlock(handle->block_manager, std::move(reusable_buffer), handle->block_id);
+	memcpy(block->InternalBuffer(), data, block->AllocSize());
+	handle->buffer = std::move(block);
+	handle->state = BlockState::BLOCK_LOADED;
+	return BufferHandle(handle, handle->buffer.get());
 }
 
 BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {
@@ -78,8 +97,8 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 		if (handle->can_destroy) {
 			return BufferHandle();
 		} else {
-			handle->buffer =
-			    block_manager.buffer_manager.ReadTemporaryBuffer(handle->block_id, std::move(reusable_buffer));
+			handle->buffer = block_manager.buffer_manager.ReadTemporaryBuffer(handle->tag, handle->block_id,
+			                                                                  std::move(reusable_buffer));
 		}
 	}
 	handle->state = BlockState::BLOCK_LOADED;
@@ -96,7 +115,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
 		// temporary block that cannot be destroyed: write to temporary file
-		block_manager.buffer_manager.WriteTemporaryBuffer(block_id, *buffer);
+		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
 	}
 	memory_charge.Resize(0);
 	state = BlockState::BLOCK_UNLOADED;

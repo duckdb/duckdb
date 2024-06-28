@@ -85,7 +85,9 @@ SELECT * FROM constrainty
 # fail when column does not exist
 statement error
 ALTER TABLE test ALTER blabla SET DEFAULT 3
+----
 
 statement error
 ALTER TABLE test ALTER blabla DROP DEFAULT
+----
 

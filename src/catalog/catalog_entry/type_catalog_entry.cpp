@@ -1,73 +1,58 @@
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
-#include "duckdb/common/types/vector.hpp"
 #include <algorithm>
 #include <sstream>
 
 namespace duckdb {
 
 TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info)
-    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
+    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type),
+      bind_modifiers(info.bind_modifiers) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
+	this->dependencies = info.dependencies;
+	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
-void TypeCatalogEntry::Serialize(Serializer &serializer) const {
-	D_ASSERT(!internal);
-	FieldWriter writer(serializer);
-	writer.WriteString(schema.name);
-	writer.WriteString(name);
-	if (user_type.id() == LogicalTypeId::ENUM) {
-		// We have to serialize Enum Values
-		writer.AddField();
-		user_type.SerializeEnumType(writer.GetSerializer());
-	} else {
-		writer.WriteSerializable(user_type);
-	}
-	writer.Finalize();
+unique_ptr<CatalogEntry> TypeCatalogEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateTypeInfo>();
+	auto result = make_uniq<TypeCatalogEntry>(catalog, schema, cast_info);
+	return std::move(result);
 }
 
-unique_ptr<CreateTypeInfo> TypeCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_uniq<CreateTypeInfo>();
-
-	FieldReader reader(source);
-	info->schema = reader.ReadRequired<string>();
-	info->name = reader.ReadRequired<string>();
-	info->type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	reader.Finalize();
-
-	return info;
+unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
+	auto result = make_uniq<CreateTypeInfo>();
+	result->catalog = catalog.GetName();
+	result->schema = schema.name;
+	result->name = name;
+	result->type = user_type;
+	result->dependencies = dependencies;
+	result->comment = comment;
+	result->tags = tags;
+	result->bind_modifiers = bind_modifiers;
+	return std::move(result);
 }
 
 string TypeCatalogEntry::ToSQL() const {
 	std::stringstream ss;
-	switch (user_type.id()) {
-	case (LogicalTypeId::ENUM): {
-		auto &values_insert_order = EnumType::GetValuesInsertOrder(user_type);
-		idx_t size = EnumType::GetSize(user_type);
-		ss << "CREATE TYPE ";
-		ss << KeywordHelper::WriteOptionallyQuoted(name);
-		ss << " AS ENUM ( ";
+	ss << "CREATE TYPE ";
+	ss << KeywordHelper::WriteOptionallyQuoted(name);
+	ss << " AS ";
 
-		for (idx_t i = 0; i < size; i++) {
-			ss << "'" << values_insert_order.GetValue(i).ToString() << "'";
-			if (i != size - 1) {
-				ss << ", ";
-			}
-		}
-		ss << ");";
-		break;
-	}
-	default:
-		throw InternalException("Logical Type can't be used as a User Defined Type");
-	}
+	auto user_type_copy = user_type;
 
+	// Strip off the potential alias so ToString doesn't just output the alias
+	user_type_copy.SetAlias("");
+	D_ASSERT(user_type_copy.GetAlias().empty());
+
+	ss << user_type_copy.ToString();
+	ss << ";";
 	return ss.str();
 }
 

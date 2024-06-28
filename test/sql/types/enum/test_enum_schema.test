@@ -1,0 +1,25 @@
+# name: test/sql/types/enum/test_enum_schema.test
+# description: ENUM within schema
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE TYPE s1.mood AS ENUM ('sad', 'ok', 'happy');
+
+query I
+select 'happy'::s1.mood;
+----
+happy
+
+statement ok
+DROP TYPE s1.mood
+
+statement error
+select 'happy'::s1.mood;
+----
+does not exist

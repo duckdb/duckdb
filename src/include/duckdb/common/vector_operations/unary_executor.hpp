@@ -50,7 +50,7 @@ template <class OP>
 struct UnaryStringOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto vector = (Vector *)dataptr;
+		auto vector = reinterpret_cast<Vector *>(dataptr);
 		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, *vector);
 	}
 };
@@ -58,7 +58,7 @@ struct UnaryStringOperator {
 struct UnaryExecutor {
 private:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
-	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	static inline void ExecuteLoop(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               const SelectionVector *__restrict sel_vector, ValidityMask &mask,
 	                               ValidityMask &result_mask, void *dataptr, bool adds_nulls) {
 #ifdef DEBUG
@@ -72,7 +72,6 @@ private:
 #endif
 
 		if (!mask.AllValid()) {
-			result_mask.EnsureWritable();
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				if (mask.RowIsValidUnsafe(idx)) {
@@ -83,9 +82,6 @@ private:
 				}
 			}
 		} else {
-			if (adds_nulls) {
-				result_mask.EnsureWritable();
-			}
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				result_data[i] =
@@ -95,7 +91,7 @@ private:
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
-	static inline void ExecuteFlat(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               ValidityMask &mask, ValidityMask &result_mask, void *dataptr, bool adds_nulls) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
@@ -133,9 +129,6 @@ private:
 				}
 			}
 		} else {
-			if (adds_nulls) {
-				result_mask.EnsureWritable();
-			}
 			for (idx_t i = 0; i < count; i++) {
 				result_data[i] =
 				    OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(ldata[i], result_mask, i, dataptr);
@@ -175,7 +168,7 @@ private:
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-			auto ldata = (INPUT_TYPE *)vdata.data;
+			auto ldata = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel, vdata.validity,
 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
@@ -192,7 +185,8 @@ public:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
 	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count, (void *)&fun, false);
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count,
+		                                                                   reinterpret_cast<void *>(&fun), false);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>

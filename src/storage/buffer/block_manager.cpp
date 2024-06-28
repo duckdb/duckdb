@@ -2,10 +2,16 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
 
 namespace duckdb {
 
-shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, bool is_meta_block) {
+BlockManager::BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p)
+    : buffer_manager(buffer_manager), metadata_manager(make_uniq<MetadataManager>(*this, buffer_manager)),
+      block_alloc_size(block_alloc_size_p) {
+}
+
+shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	lock_guard<mutex> lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
@@ -18,18 +24,10 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, bool is
 		}
 	}
 	// create a new block pointer for this block
-	auto result = make_shared<BlockHandle>(*this, block_id);
-	// for meta block, cache the handle in meta_blocks
-	if (is_meta_block) {
-		meta_blocks[block_id] = result;
-	}
+	auto result = make_shared_ptr<BlockHandle>(*this, block_id, MemoryTag::BASE_TABLE);
 	// register the block pointer in the set of blocks as a weak pointer
 	blocks[block_id] = weak_ptr<BlockHandle>(result);
 	return result;
-}
-
-void BlockManager::ClearMetaBlockHandles() {
-	meta_blocks.clear();
 }
 
 shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
@@ -38,9 +36,9 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);
 	D_ASSERT(old_block->buffer);
 
-	// Temp buffers can be larger than the storage block size. But persistent buffers
-	// cannot.
-	D_ASSERT(old_block->buffer->AllocSize() <= Storage::BLOCK_ALLOC_SIZE);
+	// Temp buffers can be larger than the storage block size.
+	// But persistent buffers cannot.
+	D_ASSERT(old_block->buffer->AllocSize() <= GetBlockAllocSize());
 
 	// register a block with the new block id
 	auto new_block = RegisterBlock(block_id);
@@ -63,7 +61,11 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	// persist the new block to disk
 	Write(*new_block->buffer, block_id);
 
-	buffer_manager.GetBufferPool().AddToEvictionQueue(new_block);
+	// potentially purge the queue
+	auto purge_queue = buffer_manager.GetBufferPool().AddToEvictionQueue(new_block);
+	if (purge_queue) {
+		buffer_manager.GetBufferPool().PurgeQueue(new_block->buffer->type);
+	}
 
 	return new_block;
 }
@@ -77,6 +79,13 @@ void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 		// on-disk block: erase from list of blocks in manager
 		blocks.erase(block_id);
 	}
+}
+
+MetadataManager &BlockManager::GetMetadataManager() {
+	return *metadata_manager;
+}
+
+void BlockManager::Truncate() {
 }
 
 } // namespace duckdb

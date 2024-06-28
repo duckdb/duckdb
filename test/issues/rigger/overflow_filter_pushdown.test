@@ -1,0 +1,24 @@
+# name: test/issues/rigger/overflow_filter_pushdown.test
+# description: Issue #9806 - Unexpected Results when using IS NOT NULL
+# group: [rigger]
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0 VALUES (1);
+
+query I
+SELECT * FROM t0;
+----
+1
+
+query I
+SELECT c0>=(2147483647 + 1 IS NOT NULL) FROM t0;
+----
+true
+
+query I
+SELECT * FROM t0 WHERE c0>=(2147483647 + 1 IS NOT NULL);
+----
+1

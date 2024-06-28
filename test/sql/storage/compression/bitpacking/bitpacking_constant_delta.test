@@ -2,7 +2,10 @@
 # description: Test that will use the BitpackingMode::CONSTANT_DELTA compression mode
 # group: [bitpacking]
 
-# load the DB from disk
+# for small block sizes, this test will default to another compression function, as the bitpacking groups
+# no longer fit the blocks
+require block_size 262144
+
 load __TEST_DIR__/test_bitpacking.db
 
 statement ok
@@ -13,7 +16,7 @@ foreach bitpacking_mode delta_for for constant_delta constant
 statement ok
 PRAGMA force_bitpacking_mode='${bitpacking_mode}'
 
-foreach type int8 int16 int32 int64 uint8 uint16 uint32 uint64 decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+foreach type int8 int16 int32 int64 uint8 uint16 uint32 uint64 hugeint decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
 CREATE TABLE test (c ${type});

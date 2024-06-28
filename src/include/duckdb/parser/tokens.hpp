@@ -28,10 +28,10 @@ class InsertStatement;
 class SelectStatement;
 class TransactionStatement;
 class UpdateStatement;
+class UpdateExtensionsStatement;
 class PrepareStatement;
 class ExecuteStatement;
 class PragmaStatement;
-class ShowStatement;
 class ExplainStatement;
 class ExportStatement;
 class VacuumStatement;
@@ -42,6 +42,7 @@ class ResetVariableStatement;
 class LoadStatement;
 class LogicalPlanStatement;
 class MultiStatement;
+class CopyDatabaseStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -50,6 +51,7 @@ class QueryNode;
 class SelectNode;
 class SetOperationNode;
 class RecursiveCTENode;
+class CTENode;
 
 //===--------------------------------------------------------------------===//
 // Expressions
@@ -95,7 +97,9 @@ class SubqueryRef;
 class TableFunctionRef;
 class EmptyTableRef;
 class ExpressionListRef;
+class ColumnDataRef;
 class PivotRef;
+class ShowRef;
 
 //===--------------------------------------------------------------------===//
 // Other

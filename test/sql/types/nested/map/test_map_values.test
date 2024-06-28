@@ -34,15 +34,11 @@ select map_values(MAP(['a', 'b', 'c', 'd', 'e'], [NULL, 0, 1, NULL, 3]))
 ----
 [NULL, 0, 1, NULL, 3]
 
+statement ok
+CREATE TABLE t1 (list STRUCT(a INT, b VARCHAR)[]);
 
 statement ok
-CREATE TABLE t1 AS (
-	SELECT ARRAY[
-		(1, 'x'),
-		(2, 'y'),
-		(4, 's')
-	] AS list
-);
+INSERT INTO t1 VALUES (ARRAY[(1, 'x'), (2, 'y'), (4, 's')]);
 
 # Single row
 query I
@@ -147,3 +143,28 @@ select map_values(col) from filtered where idx % 2 != 0;
 ----
 [0, NULL, 5, NULL]
 [NULL, NULL, 4, 5, 6, 7]
+
+query I
+select MAP_VALUES(MAP([],[]))
+----
+[]
+
+query I
+select MAP_VALUES(MAP(NULL, NULL))
+----
+NULL
+
+query I
+select MAP_VALUES(NULL)
+----
+NULL
+
+query I
+select MAP_VALUES(NULL::MAP("NULL", "NULL"))
+----
+NULL
+
+query I
+select MAP_VALUES(NULL::MAP(INT, BIGINT))
+----
+NULL

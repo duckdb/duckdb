@@ -34,14 +34,18 @@ SELECT integers.* REPLACE (i+100 AS i) FROM integers
 # duplicate entry in replace list
 statement error
 SELECT * REPLACE (i+100 AS i, i+200 AS i) FROM integers
+----
 
 # replace name that does not exist
 statement error
 SELECT * REPLACE (i+100 AS blabla) FROM integers
+----
 
 statement error
 SELECT integers.* REPLACE (i+100 AS blabla) FROM integers
+----
 
 # column cannot occur in both exclude and replace list
 statement error
 SELECT * EXCLUDE (i) REPLACE (i+100 AS i) FROM integers
+----

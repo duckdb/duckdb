@@ -1,0 +1,391 @@
+# name: test/sql/catalog/comment_on.test
+# description: Test COMMENT ON to add comments to various catalog entries
+# group: [catalog]
+
+load __TEST_DIR__/comment_on.db
+
+### Generic tests
+
+# String literal or NULL only
+statement error
+COMMENT ON TABLE test IS 1337
+----
+Parser Error: syntax error
+
+# Catalog entry not found is error
+statement error
+COMMENT ON TABLE hahahoehoe IS 'blablabloebloe'
+----
+Catalog Error: Table with name hahahoehoe does not exist!
+
+statement error
+COMMENT ON FUNCTION add IS 'foobar'
+----
+Can not comment on System Catalog entries
+
+### Comment on Tables
+statement ok
+CREATE TABLE test_table as SELECT 1 as test_table_column
+
+query I
+select comment from duckdb_tables() where table_name='test_table';
+----
+NULL
+
+statement ok
+COMMENT ON TABLE test_table IS 'very gezellige table'
+
+query I
+select comment from duckdb_tables() where table_name='test_table';
+----
+very gezellige table
+
+# Apply a set of alters to the table to ensure it is not corrupted
+statement ok
+ALTER TABLE test_table ADD COLUMN new_col INTEGER
+
+statement ok
+ALTER TABLE test_table ALTER new_col SET DATA TYPE TINYINT
+
+statement ok
+ALTER TABLE test_table ALTER new_col SET DATA TYPE TINYINT
+
+statement ok
+ALTER TABLE test_table ALTER COLUMN new_col SET DEFAULT 1
+
+statement ok
+ALTER TABLE test_table ALTER COLUMN new_col DROP DEFAULT
+
+statement ok
+ALTER TABLE test_table ALTER new_col SET DATA TYPE TINYINT
+
+statement ok
+ALTER TABLE test_table RENAME COLUMN new_col TO new_col_2
+
+statement ok
+ALTER TABLE test_table DROP COLUMN new_col_2
+
+statement ok
+ALTER TABLE test_table RENAME TO test_table_2
+
+statement ok
+ALTER TABLE test_table_2 RENAME TO test_table
+
+restart
+
+query I
+select comment from duckdb_tables() where table_name='test_table';
+----
+very gezellige table
+
+# Reverting to null goes like dis
+statement ok
+COMMENT ON TABLE test_table IS NULL
+
+query I
+select comment from duckdb_tables() where table_name='test_table';
+----
+NULL
+
+# Check table is still functioning
+query I
+SELECT * FROM test_table
+----
+1
+
+### Comment on view
+statement ok
+CREATE VIEW test_view as SELECT 1 as test_view_column
+
+query I
+select comment from duckdb_views() where view_name='test_view';
+----
+NULL
+
+statement ok
+COMMENT ON VIEW test_view IS 'very gezellige view'
+
+query I
+select comment from duckdb_views() where view_name='test_view';
+----
+very gezellige view
+
+statement ok
+ALTER VIEW test_view RENAME TO test_view_2
+
+statement ok
+ALTER VIEW test_view_2 RENAME TO test_view
+
+restart
+
+query I
+select comment from duckdb_views() where view_name='test_view';
+----
+very gezellige view
+
+# Check view is still functioning
+query I
+SELECT * FROM test_view
+----
+1
+
+### Comment on view column
+
+query I
+select comment from duckdb_columns() where column_name='test_view_column';
+----
+NULL
+
+statement ok
+COMMENT ON COLUMN test_view.test_view_column IS 'very gezellige viewcolumn'
+
+query I
+select comment from duckdb_columns() where column_name='test_view_column';
+----
+very gezellige viewcolumn
+
+restart
+
+query I
+select comment from duckdb_columns() where column_name='test_view_column';
+----
+very gezellige viewcolumn
+
+statement ok
+DROP VIEW test_view
+
+### Comment on indices
+statement ok
+CREATE INDEX test_index ON test_table using art(test_table_column)
+
+query I
+select comment from duckdb_indexes() where index_name='test_index';
+----
+NULL
+
+statement ok
+COMMENT ON INDEX test_index IS 'very gezellige index'
+
+query I
+select comment from duckdb_indexes() where index_name='test_index';
+----
+very gezellige index
+
+restart
+
+query I
+select comment from duckdb_indexes() where index_name='test_index';
+----
+very gezellige index
+
+# Check index is still functioning
+query I
+SELECT * FROM test_table WHERE test_table_column=1
+----
+1
+
+statement ok
+DROP INDEX test_index;
+
+### Comment on sequences
+statement ok
+CREATE SEQUENCE test_sequence;
+
+query I
+select comment from duckdb_sequences() where sequence_name='test_sequence';
+----
+NULL
+
+statement ok
+COMMENT ON SEQUENCE test_sequence IS 'very gezellige sequence'
+
+query I
+select comment from duckdb_sequences() where sequence_name='test_sequence';
+----
+very gezellige sequence
+
+restart
+
+query I
+select comment from duckdb_sequences() where sequence_name='test_sequence';
+----
+very gezellige sequence
+
+# Check sequence is still functioning
+query I
+SELECT nextval('test_sequence')
+----
+1
+
+statement ok
+DROP SEQUENCE test_sequence
+
+### Comment on types
+statement ok
+CREATE TYPE test_type AS int32;
+
+query I
+select comment from duckdb_types() where type_name='test_type';
+----
+NULL
+
+statement ok
+COMMENT ON TYPE test_type IS 'very gezellige type'
+
+query I
+select comment from duckdb_types() where type_name='test_type';
+----
+very gezellige type
+
+restart
+
+query I
+select comment from duckdb_types() where type_name='test_type';
+----
+very gezellige type
+
+# Check type is still functioning
+query I
+SELECT 1::test_type as val;
+----
+1
+
+statement ok
+DROP TYPE test_type
+
+### Comment on table column
+
+query I
+select comment from duckdb_columns() where column_name='test_table_column';
+----
+NULL
+
+statement ok
+COMMENT ON COLUMN test_table.test_table_column IS 'very gezellige column'
+
+query I
+select comment from duckdb_columns() where column_name='test_table_column';
+----
+very gezellige column
+
+restart
+
+query I
+select comment from duckdb_columns() where column_name='test_table_column';
+----
+very gezellige column
+
+# Comment persists rename
+statement ok
+ALTER TABLE test_table RENAME COLUMN test_table_column TO test_table_column_renamed
+
+query I
+select comment from duckdb_columns() where column_name='test_table_column_renamed';
+----
+very gezellige column
+
+### Comment on Macro
+statement ok
+CREATE MACRO test_macro(a, b) AS a + b
+
+query I
+select comment from duckdb_functions() where function_name='test_macro';
+----
+NULL
+
+statement ok
+COMMENT ON MACRO test_macro IS 'very gezellige macro'
+
+query I
+select comment from duckdb_functions() where function_name='test_macro';
+----
+very gezellige macro
+
+restart
+
+query I
+select comment from duckdb_functions() where function_name='test_macro';
+----
+very gezellige macro
+
+# Check macro is still functioning
+query I
+SELECT test_macro(1,2);
+----
+3
+
+statement ok
+DROP MACRO test_macro
+
+### Comment on function (alias for scalar macro)
+statement ok
+CREATE FUNCTION test_function(a, b) AS a + b
+
+query I
+select comment from duckdb_functions() where function_name='test_function';
+----
+NULL
+
+statement ok
+COMMENT ON FUNCTION test_function IS 'very gezellige function'
+
+query I
+select comment from duckdb_functions() where function_name='test_function';
+----
+very gezellige function
+
+restart
+
+query I
+select comment from duckdb_functions() where function_name='test_function';
+----
+very gezellige function
+
+### Comment on TABLE MACRO
+statement ok
+CREATE MACRO test_table_macro(a,b) as TABLE select a,b;
+
+query I
+select comment from duckdb_functions() where function_name='test_table_macro';
+----
+NULL
+
+statement ok
+COMMENT ON MACRO TABLE test_table_macro IS 'very gezellige table macro'
+
+query I
+select comment from duckdb_functions() where function_name='test_table_macro';
+----
+very gezellige table macro
+
+restart
+
+query I
+select comment from duckdb_functions() where function_name='test_table_macro';
+----
+very gezellige table macro
+
+# Check table macro is still functioning
+query II
+from test_table_macro(1,2);
+----
+1	2
+
+statement ok
+DROP MACRO TABLE test_table_macro
+
+### Comment on DATABASE
+statement error
+COMMENT ON DATABASE blabla IS 'bloebloe'
+----
+Not implemented Error: Adding comments to databases is not implemented
+
+### Comment on schemas
+statement error
+COMMENT ON SCHEMA blabla IS 'bloebloe'
+----
+Not implemented Error: Adding comments to schemas is not implemented
+
+statement ok
+DROP TABLE test_table
+

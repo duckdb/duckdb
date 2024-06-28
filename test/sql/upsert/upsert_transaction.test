@@ -67,7 +67,7 @@ insert into tbl VALUES
 ON CONFLICT (a) DO UPDATE SET
 	b = excluded.b;
 ----
-ON CONFLICT DO UPDATE can not update the same row twice in the same command, Ensure that no rows proposed for insertion within the same command have duplicate constrained values
+ON CONFLICT DO UPDATE can not update the same row twice in the same command. Ensure that no rows proposed for insertion within the same command have duplicate constrained values
 
 statement ok
 COMMIT;

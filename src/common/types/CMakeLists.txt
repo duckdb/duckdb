@@ -13,7 +13,6 @@ add_library_unity(
   bit.cpp
   blob.cpp
   cast_helpers.cpp
-  chunk_collection.cpp
   conflict_manager.cpp
   conflict_info.cpp
   data_chunk.cpp
@@ -21,6 +20,7 @@ add_library_unity(
   decimal.cpp
   hash.cpp
   hugeint.cpp
+  uhugeint.cpp
   uuid.cpp
   hyperloglog.cpp
   interval.cpp

@@ -10,7 +10,12 @@ PRAGMA enable_verification
 
 statement ok
 CREATE TABLE timestamps(d TIMESTAMP);
-INSERT INTO timestamps VALUES ('1992-01-01 01:20:30'), ('1993-03-20 23:50:01'), ('2020-08-09 12:01:55'), ('2020-08-10 10:10:10'), (NULL);
+INSERT INTO timestamps VALUES 
+	('1992-01-01 01:20:30'), 
+	('1993-03-20 23:50:01.123'), 
+	('2020-08-09 12:01:55.123456'), 
+	('2020-08-10 10:10:10.123456789'), 
+	(NULL);
 
 # %a: Abbreviated weekday name
 query I
@@ -40,6 +45,16 @@ NULL
 3
 6
 0
+1
+
+# %u - ISO Weekday as a decimal number.
+query I
+SELECT strftime(d, '%u') FROM timestamps ORDER BY d;
+----
+NULL
+3
+6
+7
 1
 
 # %d - Day of the month as a zero-padded decimal.
@@ -147,6 +162,16 @@ NULL
 2020
 2020
 
+# %G - ISO Year with century as a decimal number.
+query I
+SELECT strftime(d, '%G') FROM timestamps ORDER BY d;
+----
+NULL
+1992
+1993
+2020
+2020
+
 # %H - Hour (24-hour clock) as a zero-padded decimal number.
 query I
 SELECT strftime(d, '%H') FROM timestamps ORDER BY d;
@@ -243,9 +268,33 @@ SELECT strftime(d, '%f') FROM timestamps ORDER BY d;
 ----
 NULL
 000000
-000000
-000000
-000000
+123000
+123456
+123456
+
+# %g - Millisecond as a decimal number, zero-padded on the left.
+query I
+SELECT strftime(d, '%g') 
+FROM timestamps 
+ORDER BY d;
+----
+NULL
+000
+123
+123
+123
+
+# %n - Nanosecond as a decimal number, zero-padded on the left.
+query I
+SELECT strftime(d, '%n') 
+FROM timestamps 
+ORDER BY d;
+----
+NULL
+000000000
+123000000
+123456000
+123456000
 
 # %z - UTC offset in the form +HHMM or -HHMM.
 query I
@@ -307,6 +356,16 @@ NULL
 11
 31
 32
+
+# %V - ISO Week number of the year (Week 1 contains Jan 4).
+query I
+SELECT strftime(d, '%V') FROM timestamps ORDER BY d;
+----
+NULL
+01
+11
+32
+33
 
 # %c - Locale’s appropriate date and time representation.
 query I

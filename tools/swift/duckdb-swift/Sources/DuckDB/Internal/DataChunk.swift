@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -25,15 +25,15 @@
 @_implementationOnly import Cduckdb
 import Foundation
 
-final class DataChunk {
+final class DataChunk: Sendable {
   
   var count: DBInt { duckdb_data_chunk_get_size(ptr.pointee) }
   var columnCount: DBInt { duckdb_data_chunk_get_column_count(ptr.pointee) }
   
   private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
   
-  init(result: ResultSet, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
+  init(cresult: duckdb_result, index: DBInt) {
+    self.ptr.pointee = duckdb_result_get_chunk(cresult, index)!
   }
   
   deinit {

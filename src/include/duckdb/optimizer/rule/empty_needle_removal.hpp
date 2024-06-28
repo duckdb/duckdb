@@ -13,7 +13,7 @@
 namespace duckdb {
 
 // The Empty_needle_removal Optimization rule folds some foldable ConstantExpression
-//(e.g.: PREFIX('xyz', '') is TRUE, PREFIX(NULL, '') is NULL, so rewrite PREFIX(x, '') to (CASE WHEN x IS NOT NULL THEN)
+//(e.g.: PREFIX('xyz', '') is TRUE, PREFIX(NULL, '') is NULL, so rewrite PREFIX(x, '') to TRUE_OR_NULL(x)
 class EmptyNeedleRemovalRule : public Rule {
 public:
 	explicit EmptyNeedleRemovalRule(ExpressionRewriter &rewriter);

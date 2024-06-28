@@ -15,23 +15,24 @@
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
-static py::list ConvertToSingleBatch(const string &timezone_config, vector<LogicalType> &types, vector<string> &names,
-                                     DataChunk &input) {
+static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> &names, DataChunk &input,
+                                     const ClientProperties &options) {
 	ArrowSchema schema;
-	ArrowConverter::ToArrowSchema(&schema, types, names, timezone_config);
+	ArrowConverter::ToArrowSchema(&schema, types, names, options);
 
 	py::list single_batch;
-	ArrowAppender appender(types, STANDARD_VECTOR_SIZE);
+	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options);
 	appender.Append(input, 0, input.size(), input.size());
 	auto array = appender.Finalize();
 	TransformDuckToArrowChunk(schema, array, single_batch);
 	return single_batch;
 }
 
-static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string &timezone_config) {
+static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientProperties &options) {
 	auto types = input.GetTypes();
 	vector<string> names;
 	names.reserve(types.size());
@@ -39,14 +40,13 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string 
 		names.push_back(StringUtil::Format("c%d", i));
 	}
 
-	return pyarrow::ToArrowTable(types, names, timezone_config,
-	                             ConvertToSingleBatch(timezone_config, types, names, input));
+	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options), options);
 }
 
 static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
 
 	// Create the stream factory from the Table object
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), context.config);
+	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), context.GetClientProperties());
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -59,14 +59,18 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	// Prepare the inputs for the bind
 	vector<Value> children;
 	children.reserve(3);
-	children.push_back(Value::POINTER((uintptr_t)stream_factory.get()));
-	children.push_back(Value::POINTER((uintptr_t)stream_factory_produce));
-	children.push_back(Value::POINTER((uintptr_t)stream_factory_get_schema));
+	children.push_back(Value::POINTER(CastPointerToValue(stream_factory.get())));
+	children.push_back(Value::POINTER(CastPointerToValue(stream_factory_produce)));
+	children.push_back(Value::POINTER(CastPointerToValue(stream_factory_get_schema)));
 	named_parameter_map_t named_params;
 	vector<LogicalType> input_types;
 	vector<string> input_names;
 
-	auto bind_input = TableFunctionBindInput(children, named_params, input_types, input_names, nullptr);
+	TableFunctionRef empty;
+	TableFunction dummy_table_function;
+	dummy_table_function.name = "ConvertPyArrowToDataChunk";
+	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
+	                                  dummy_table_function, empty);
 	vector<LogicalType> return_types;
 	vector<string> return_names;
 
@@ -108,20 +112,20 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		// owning references
 		py::object python_object;
 		// Convert the input datachunk to pyarrow
-		string timezone_config = "UTC";
+		ClientProperties options;
+
 		if (state.HasContext()) {
 			auto &context = state.GetContext();
-			auto client_properties = context.GetClientProperties();
-			timezone_config = client_properties.time_zone;
+			options = context.GetClientProperties();
 		}
-		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, timezone_config);
+
+		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
 		py::tuple column_list = pyarrow_table.attr("columns");
 
 		auto count = input.size();
 
 		// Call the function
-		PyObject *ret = nullptr;
-		ret = PyObject_CallObject(function, column_list.ptr());
+		auto ret = PyObject_CallObject(function, column_list.ptr());
 		if (ret == nullptr && PyErr_Occurred()) {
 			if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
 				auto exception = py::error_already_set();
@@ -142,29 +146,34 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 
 			single_array[0] = python_object;
 			single_name[0] = "c0";
-			python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
-			    single_array, py::arg("names") = single_name);
+			try {
+				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+				    single_array, py::arg("names") = single_name);
+			} catch (py::error_already_set &) {
+				throw InvalidInputException("Could not convert the result into an Arrow Table");
+			}
 		}
 		// Convert the pyarrow result back to a DuckDB datachunk
 		ConvertPyArrowToDataChunk(python_object, result, state.GetContext(), count);
 
-		if (input.AllConstant()) {
+		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	};
 	return func;
 }
 
-static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptionHandling exception_handling) {
+static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptionHandling exception_handling,
+                                              const ClientProperties &client_properties) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
-	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void { // NOLINT
 		py::gil_scoped_acquire gil;
 
 		// owning references
-		vector<py::handle> python_objects;
+		vector<py::object> python_objects;
 		vector<PyObject *> python_results;
-		python_results.reserve(input.size());
+		python_results.resize(input.size());
 		for (idx_t row = 0; row < input.size(); row++) {
 
 			auto bundled_parameters = py::tuple((int)input.ColumnCount());
@@ -172,12 +181,11 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 				// Fill the tuple with the arguments for this row
 				auto &column = input.data[i];
 				auto value = column.GetValue(row);
-				bundled_parameters[i] = PythonObject::FromValue(value, column.GetType());
+				bundled_parameters[i] = PythonObject::FromValue(value, column.GetType(), client_properties);
 			}
 
 			// Call the function
-			PyObject *ret = nullptr;
-			ret = PyObject_CallObject(function, bundled_parameters.ptr());
+			auto ret = PyObject_CallObject(function, bundled_parameters.ptr());
 			if (ret == nullptr && PyErr_Occurred()) {
 				if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
 					auto exception = py::error_already_set();
@@ -190,14 +198,12 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 					throw NotImplementedException("Exception handling type not implemented");
 				}
 			}
-			python_objects.push_back(py::handle(ret));
-			python_results.push_back(ret);
+			python_objects.push_back(py::reinterpret_steal<py::object>(ret));
+			python_results[row] = ret;
 		}
 
-		// Cast the resulting native python to DuckDB, using the return type
-		// result.Resize(input.size());
-		NumpyScan::ScanObjectColumn(python_results.data(), input.size(), 0, result);
-		if (input.AllConstant()) {
+		NumpyScan::ScanObjectColumn(python_results.data(), sizeof(PyObject *), input.size(), 0, result);
+		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	};
@@ -282,9 +288,20 @@ public:
 		}
 	}
 
-	void AnalyzeSignature(const py::object &udf) {
+	py::object GetSignature(const py::object &udf) {
+		const int32_t PYTHON_3_10_HEX = 0x030a00f0;
+		auto python_version = PY_VERSION_HEX;
+
 		auto signature_func = py::module_::import("inspect").attr("signature");
-		auto signature = signature_func(udf);
+		if (python_version >= PYTHON_3_10_HEX) {
+			return signature_func(udf, py::arg("eval_str") = true);
+		} else {
+			return signature_func(udf);
+		}
+	}
+
+	void AnalyzeSignature(const py::object &udf) {
+		auto signature = GetSignature(udf);
 		auto sig_params = signature.attr("parameters");
 		auto return_annotation = signature.attr("return_annotation");
 		if (!py::none().is(return_annotation)) {
@@ -312,15 +329,23 @@ public:
 		}
 	}
 
-	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling) {
+	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling, bool side_effects,
+	                           const ClientProperties &client_properties) {
+
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		// Import this module, because importing this from a non-main thread causes a segfault
+		(void)import_cache.numpy.core.multiarray();
+
 		scalar_function_t func;
 		if (vectorized) {
 			func = CreateVectorizedFunction(udf.ptr(), exception_handling);
 		} else {
-			func = CreateNativeFunction(udf.ptr(), exception_handling);
+			func = CreateNativeFunction(udf.ptr(), exception_handling, client_properties);
 		}
+		FunctionStability function_side_effects =
+		    side_effects ? FunctionStability::VOLATILE : FunctionStability::CONSISTENT;
 		ScalarFunction scalar_function(name, std::move(parameters), return_type, func, nullptr, nullptr, nullptr,
-		                               nullptr, varargs, FunctionSideEffects::NO_SIDE_EFFECTS, null_handling);
+		                               nullptr, varargs, function_side_effects, null_handling);
 		return scalar_function;
 	}
 };
@@ -331,15 +356,14 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py:
                                                    const py::object &parameters,
                                                    const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
                                                    FunctionNullHandling null_handling,
-                                                   PythonExceptionHandling exception_handling) {
+                                                   PythonExceptionHandling exception_handling, bool side_effects) {
 	PythonUDFData data(name, vectorized, null_handling);
 
 	data.AnalyzeSignature(udf);
 	data.OverrideParameters(parameters);
 	data.OverrideReturnType(return_type);
 	data.Verify();
-
-	return data.GetFunction(udf, exception_handling);
+	return data.GetFunction(udf, exception_handling, side_effects, connection->context->GetClientProperties());
 }
 
 } // namespace duckdb

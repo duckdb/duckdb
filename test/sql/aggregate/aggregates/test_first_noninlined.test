@@ -3,6 +3,9 @@
 # group: [aggregates]
 
 statement ok
+PRAGMA verify_external
+
+statement ok
 CREATE TABLE tbl(a INTEGER, b VARCHAR)
 
 statement ok

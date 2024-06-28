@@ -63,7 +63,7 @@ void OuterJoinMarker::ConstructLeftJoinResult(DataChunk &left, DataChunk &result
 }
 
 idx_t OuterJoinMarker::MaxThreads() const {
-	return count / (STANDARD_VECTOR_SIZE * 10);
+	return count / (STANDARD_VECTOR_SIZE * 10ULL);
 }
 
 void OuterJoinMarker::InitializeScan(ColumnDataCollection &data, OuterJoinGlobalScanState &gstate) {

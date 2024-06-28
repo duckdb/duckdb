@@ -1,0 +1,46 @@
+# name: test/extension/autoloading_current_setting.test
+# description: More tests for extension autoloading.
+# group: [extension]
+
+# This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+statement ok
+set extension_directory='__TEST_DIR__/autoloading_current_setting'
+
+### No autoloading: throw error with installation hint
+statement ok
+set autoload_known_extensions=false
+
+statement ok
+set autoinstall_known_extensions=false
+
+statement error
+select current_setting('s3_region');
+----
+Catalog Error: Setting with name "s3_region" is not in the catalog, but it exists in the httpfs extension.
+
+### Autoloading, but but not autoinstall
+statement ok
+set autoload_known_extensions=true
+
+statement ok
+set autoinstall_extension_repository='/tmp/non-existent-repo';
+
+# Error should inform the user on whats happening
+statement error
+select current_setting('s3_region');
+----
+Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
+Extension
+
+### Autoloading with autoinstall and correct extension repo
+statement ok
+set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+select current_setting('s3_region');

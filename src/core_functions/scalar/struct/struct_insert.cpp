@@ -40,15 +40,15 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 	case_insensitive_set_t name_collision_set;
 
 	if (arguments.empty()) {
-		throw Exception("Missing required arguments for struct_insert function.");
+		throw InvalidInputException("Missing required arguments for struct_insert function.");
 	}
 
 	if (LogicalTypeId::STRUCT != arguments[0]->return_type.id()) {
-		throw Exception("The first argument to struct_insert must be a STRUCT");
+		throw InvalidInputException("The first argument to struct_insert must be a STRUCT");
 	}
 
 	if (arguments.size() < 2) {
-		throw Exception("Can't insert nothing into a struct");
+		throw InvalidInputException("Can't insert nothing into a struct");
 	}
 
 	child_list_t<LogicalType> new_struct_children;

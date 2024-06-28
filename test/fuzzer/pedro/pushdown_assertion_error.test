@@ -11,10 +11,12 @@ CREATE TABLE t2 (c2 INT);
 statement ok
 CREATE SEQUENCE t0;
 
-query I
+statement error
 SELECT 1 FROM t2 WHERE currval('t0') BETWEEN TRY_CAST(0 AS TIMESTAMP WITH TIME ZONE) AND 1;
 ----
+explicit cast is required
 
-query I
+statement error
 SELECT 1 FROM t2 WHERE currval('t0') BETWEEN TRY_CAST(0 AS TIMESTAMP WITH TIME ZONE) AND -156587962151166338620429995158284936977;
 ----
+explicit cast is required

@@ -1,0 +1,41 @@
+# name: test/extension/autoloading_copy_function.test
+# description: Tests for autoloading with copy functions
+# group: [extension]
+
+# This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+# Ensure we have a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='__TEST_DIR__/autoloading_types'
+
+### No autoloading nor installing: throw error with installation hint
+statement ok
+set autoload_known_extensions=false
+
+statement ok
+set autoinstall_known_extensions=false
+
+statement error
+copy (select 1337 as edgy_hacker_number) TO '__TEST_DIR__/test1337.parquet'
+----
+Catalog Error: Copy Function with name "parquet" is not in the catalog, but it exists in the parquet extension.
+
+### With autoloading, install and correct repo
+statement ok
+set autoload_known_extensions=true
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
+
+statement ok
+copy (select 1337 as edgy_hacker_number) TO '__TEST_DIR__/test1337.parquet'
+
+query I
+select * from '__TEST_DIR__/test1337.parquet';
+----
+1337

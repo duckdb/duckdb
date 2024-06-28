@@ -10,6 +10,7 @@ CREATE TABLE tbl(t ROW(t INTEGER) CHECK(t.t=42));
 
 statement error
 INSERT INTO tbl VALUES ({'t': 43})
+----
 
 statement ok
 INSERT INTO tbl VALUES ({'t': 42})
@@ -23,6 +24,7 @@ CREATE TABLE tbl(t ROW(t INTEGER) CHECK(tbl.t.t=42));
 
 statement error
 INSERT INTO tbl VALUES ({'t': 43})
+----
 
 statement ok
 INSERT INTO tbl VALUES ({'t': 42})

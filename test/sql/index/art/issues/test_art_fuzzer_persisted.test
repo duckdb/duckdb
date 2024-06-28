@@ -1,0 +1,26 @@
+# name: test/sql/index/art/issues/test_art_fuzzer_persisted.test
+# description: Test ART fuzzer issue with persisted database
+# group: [issues]
+
+statement ok
+PRAGMA enable_verification
+
+# issue 5984, number 41
+
+# load the DB from disk
+load __TEST_DIR__/create_idx.db
+
+statement ok
+CREATE TABLE t1 AS (SELECT 1 c1, 'a' c2);
+
+statement ok
+CREATE INDEX i1 ON t1 (c1);
+
+statement ok
+PRAGMA MEMORY_LIMIT='2MB';
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t1(c2) (SELECT DISTINCT 'b');

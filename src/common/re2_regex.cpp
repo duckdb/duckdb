@@ -1,3 +1,4 @@
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/vector.hpp"
 #include <memory>
 
@@ -9,23 +10,24 @@ namespace duckdb_re2 {
 Regex::Regex(const std::string &pattern, RegexOptions options) {
 	RE2::Options o;
 	o.set_case_sensitive(options == RegexOptions::CASE_INSENSITIVE);
-	regex = std::make_shared<duckdb_re2::RE2>(StringPiece(pattern), o);
+	regex = duckdb::make_shared_ptr<duckdb_re2::RE2>(StringPiece(pattern), o);
 }
 
 bool RegexSearchInternal(const char *input, Match &match, const Regex &r, RE2::Anchor anchor, size_t start,
                          size_t end) {
 	auto &regex = r.GetRegex();
 	duckdb::vector<StringPiece> target_groups;
-	auto group_count = regex.NumberOfCapturingGroups() + 1;
+	auto group_count = duckdb::UnsafeNumericCast<size_t>(regex.NumberOfCapturingGroups() + 1);
 	target_groups.resize(group_count);
 	match.groups.clear();
-	if (!regex.Match(StringPiece(input), start, end, anchor, target_groups.data(), group_count)) {
+	if (!regex.Match(StringPiece(input), start, end, anchor, target_groups.data(),
+	                 duckdb::UnsafeNumericCast<int>(group_count))) {
 		return false;
 	}
 	for (auto &group : target_groups) {
 		GroupMatch group_match;
 		group_match.text = group.ToString();
-		group_match.position = group.data() - input;
+		group_match.position = group.data() != nullptr ? duckdb::NumericCast<uint32_t>(group.data() - input) : 0;
 		match.groups.emplace_back(group_match);
 	}
 	return true;
@@ -40,7 +42,8 @@ bool RegexMatch(const std::string &input, Match &match, const Regex &regex) {
 }
 
 bool RegexMatch(const char *start, const char *end, Match &match, const Regex &regex) {
-	return RegexSearchInternal(start, match, regex, RE2::ANCHOR_BOTH, 0, end - start);
+	return RegexSearchInternal(start, match, regex, RE2::ANCHOR_BOTH, 0,
+	                           duckdb::UnsafeNumericCast<size_t>(end - start));
 }
 
 bool RegexMatch(const std::string &input, const Regex &regex) {
@@ -54,7 +57,7 @@ duckdb::vector<Match> RegexFindAll(const std::string &input, const Regex &regex)
 	Match match;
 	while (RegexSearchInternal(input.c_str(), match, regex, RE2::UNANCHORED, position, input.size())) {
 		position += match.position(0) + match.length(0);
-		matches.emplace_back(std::move(match));
+		matches.emplace_back(match);
 	}
 	return matches;
 }

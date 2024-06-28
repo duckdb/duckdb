@@ -1,0 +1,10 @@
+# name: test/sql/function/table/sql_auto_complete.test
+# description: Test sql_auto_complete
+# group: [table]
+
+require autocomplete
+
+statement error
+FROM sql_auto_complete(NULL);
+----
+Binder Error: sql_auto_complete first parameter cannot be NULL

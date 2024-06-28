@@ -8,15 +8,16 @@
 
 #pragma once
 
-#include "duckdb/common/helper.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/enums/wal_type.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/common/enums/wal_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
@@ -24,7 +25,6 @@ namespace duckdb {
 struct AlterInfo;
 
 class AttachedDatabase;
-class BufferedSerializer;
 class Catalog;
 class DatabaseInstance;
 class SchemaCatalogEntry;
@@ -35,58 +35,7 @@ class TypeCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
-
-class ReplayState {
-public:
-	ReplayState(AttachedDatabase &db, ClientContext &context, Deserializer &source)
-	    : db(db), context(context), catalog(db.GetCatalog()), source(source), deserialize_only(false),
-	      checkpoint_id(INVALID_BLOCK) {
-	}
-
-	AttachedDatabase &db;
-	ClientContext &context;
-	Catalog &catalog;
-	Deserializer &source;
-	optional_ptr<TableCatalogEntry> current_table;
-	bool deserialize_only;
-	block_id_t checkpoint_id;
-
-public:
-	void ReplayEntry(WALType entry_type);
-
-protected:
-	virtual void ReplayCreateTable();
-	void ReplayDropTable();
-	void ReplayAlter();
-
-	void ReplayCreateView();
-	void ReplayDropView();
-
-	void ReplayCreateSchema();
-	void ReplayDropSchema();
-
-	void ReplayCreateType();
-	void ReplayDropType();
-
-	void ReplayCreateSequence();
-	void ReplayDropSequence();
-	void ReplaySequenceValue();
-
-	void ReplayCreateMacro();
-	void ReplayDropMacro();
-
-	void ReplayCreateTableMacro();
-	void ReplayDropTableMacro();
-
-	void ReplayCreateIndex();
-	void ReplayDropIndex();
-
-	void ReplayUseTable();
-	void ReplayInsert();
-	void ReplayDelete();
-	void ReplayUpdate();
-	void ReplayCheckpoint();
-};
+class WriteAheadLogDeserializer;
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -95,20 +44,26 @@ protected:
 class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
-	explicit WriteAheadLog(AttachedDatabase &database, const string &path);
+	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path);
 	virtual ~WriteAheadLog();
-
-	//! Skip writing to the WAL
-	bool skip_writing;
 
 public:
 	//! Replay the WAL
-	static bool Replay(AttachedDatabase &database, string &path);
+	static bool Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle);
 
-	//! Returns the current size of the WAL in bytes
-	int64_t GetWALSize();
+	//! Gets the total bytes written to the WAL since startup
+	idx_t GetWALSize();
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
+
+	//! A WAL is initialized, if a writer to a file exists.
+	bool Initialized() {
+		return initialized;
+	}
+	//! Initializes the file of the WAL by creating the file writer.
+	BufferedFileWriter &Initialize();
+
+	void WriteVersion();
 
 	virtual void WriteCreateTable(const TableCatalogEntry &entry);
 	void WriteDropTable(const TableCatalogEntry &entry);
@@ -121,7 +76,7 @@ public:
 
 	void WriteCreateSequence(const SequenceCatalogEntry &entry);
 	void WriteDropSequence(const SequenceCatalogEntry &entry);
-	void WriteSequenceValue(const SequenceCatalogEntry &entry, SequenceValue val);
+	void WriteSequenceValue(SequenceValue val);
 
 	void WriteCreateMacro(const ScalarMacroCatalogEntry &entry);
 	void WriteDropMacro(const ScalarMacroCatalogEntry &entry);
@@ -135,9 +90,9 @@ public:
 	void WriteCreateType(const TypeCatalogEntry &entry);
 	void WriteDropType(const TypeCatalogEntry &entry);
 	//! Sets the table used for subsequent insert/delete/update commands
-	void WriteSetTable(string &schema, string &table);
+	void WriteSetTable(const string &schema, const string &table);
 
-	void WriteAlter(data_ptr_t ptr, idx_t data_size);
+	void WriteAlter(const AlterInfo &info);
 
 	void WriteInsert(DataChunk &chunk);
 	void WriteDelete(DataChunk &chunk);
@@ -152,17 +107,19 @@ public:
 	void WriteUpdate(DataChunk &chunk, const vector<column_t> &column_path);
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
-	void Truncate(int64_t size);
+	void Truncate(idx_t size);
 	//! Delete the WAL file on disk. The WAL should not be used after this point.
 	void Delete();
 	void Flush();
 
-	void WriteCheckpoint(block_id_t meta_block);
+	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:
 	AttachedDatabase &database;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
+	atomic<idx_t> wal_size;
+	atomic<bool> initialized;
 };
 
 } // namespace duckdb

@@ -9,7 +9,7 @@ namespace duckdb {
 PartitionedColumnData::PartitionedColumnData(PartitionedColumnDataType type_p, ClientContext &context_p,
                                              vector<LogicalType> types_p)
     : type(type_p), context(context_p), types(std::move(types_p)),
-      allocators(make_shared<PartitionColumnDataAllocators>()) {
+      allocators(make_shared_ptr<PartitionColumnDataAllocators>()) {
 }
 
 PartitionedColumnData::PartitionedColumnData(const PartitionedColumnData &other)
@@ -19,9 +19,7 @@ PartitionedColumnData::PartitionedColumnData(const PartitionedColumnData &other)
 unique_ptr<PartitionedColumnData> PartitionedColumnData::CreateShared() {
 	switch (type) {
 	case PartitionedColumnDataType::RADIX:
-		return make_uniq<RadixPartitionedColumnData>((RadixPartitionedColumnData &)*this);
-	case PartitionedColumnDataType::HIVE:
-		return make_uniq<HivePartitionedColumnData>((HivePartitionedColumnData &)*this);
+		return make_uniq<RadixPartitionedColumnData>(Cast<RadixPartitionedColumnData>());
 	default:
 		throw NotImplementedException("CreateShared for this type of PartitionedColumnData");
 	}
@@ -32,13 +30,13 @@ PartitionedColumnData::~PartitionedColumnData() {
 
 void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendState &state) const {
 	state.partition_sel.Initialize();
-	state.slice_chunk.Initialize(context, types);
+	state.slice_chunk.Initialize(BufferAllocator::Get(context), types);
 	InitializeAppendStateInternal(state);
 }
 
 unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
 	auto result = make_uniq<DataChunk>();
-	result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), types, BufferSize());
+	result->Initialize(BufferAllocator::Get(context), types, BufferSize());
 	return result;
 }
 
@@ -92,7 +90,7 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 	for (idx_t i = 0; i < count; i++) {
 		const auto &partition_index = partition_indices[i];
 		auto &partition_offset = partition_entries[partition_index].offset;
-		all_partitions_sel[partition_offset++] = i;
+		all_partitions_sel[partition_offset++] = NumericCast<sel_t>(i);
 	}
 
 	// Loop through the partitions to append the new data to the partition buffers, and flush the buffers if necessary
@@ -136,6 +134,9 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 
 void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &state) {
 	for (idx_t i = 0; i < state.partition_buffers.size(); i++) {
+		if (!state.partition_buffers[i]) {
+			continue;
+		}
 		auto &partition_buffer = *state.partition_buffers[i];
 		if (partition_buffer.size() > 0) {
 			partitions[i]->Append(partition_buffer);
@@ -155,7 +156,14 @@ void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 		D_ASSERT(partitions.size() == other.partitions.size());
 		// Combine the append state's partitions into this PartitionedColumnData
 		for (idx_t i = 0; i < other.partitions.size(); i++) {
-			partitions[i]->Combine(*other.partitions[i]);
+			if (!other.partitions[i]) {
+				continue;
+			}
+			if (!partitions[i]) {
+				partitions[i] = std::move(other.partitions[i]);
+			} else {
+				partitions[i]->Combine(*other.partitions[i]);
+			}
 		}
 	}
 }
@@ -165,7 +173,7 @@ vector<unique_ptr<ColumnDataCollection>> &PartitionedColumnData::GetPartitions()
 }
 
 void PartitionedColumnData::CreateAllocator() {
-	allocators->allocators.emplace_back(make_shared<ColumnDataAllocator>(BufferManager::GetBufferManager(context)));
+	allocators->allocators.emplace_back(make_shared_ptr<ColumnDataAllocator>(BufferManager::GetBufferManager(context)));
 	allocators->allocators.back()->MakeShared();
 }
 

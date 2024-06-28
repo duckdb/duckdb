@@ -22,6 +22,7 @@ INSERT INTO integers SELECT i FROM range(2, 131068, 1) t1(i)
 # inserting the value "1" here fails
 statement error
 INSERT INTO integers VALUES (1)
+----
 
 # now we need to rollback
 statement ok

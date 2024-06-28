@@ -1,0 +1,621 @@
+# name: test/sql/json/scalar/test_json_valid.test
+# description: Test JSON valid
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# there was a bug with infinity handling in yyjson, therefore we have these tests
+# it has since been fixed
+query T
+select json_valid('{"bla": inf}')
+----
+true
+
+query T
+select json_valid('{"bla": infinity}')
+----
+true
+
+# some SQLite JSON valid tests
+statement ok
+CREATE TABLE j1(x varchar);
+
+statement ok
+INSERT INTO j1(x)
+   VALUES('true'),('false'),('null'),('123'),('-234'),('34.5e+6'),
+         ('""'),('"\""'),('"\\"'),('"abcdefghijlmnopqrstuvwxyz"'),
+         ('[]'),('{}'),('[true,false,null,123,-234,34.5e+6,{},[]]'),
+         ('{"a":true,"b":{"c":false}}');
+
+query T
+SELECT * FROM j1 WHERE NOT json_valid(x);
+----
+
+
+query T
+SELECT json_valid('{"a":55,"b":72,}');
+----
+true
+
+query T
+SELECT json_valid('{"a":55,"b":72}');
+----
+true
+
+query T
+SELECT json_valid('["a",55,"b",72,]');
+----
+true
+
+query T
+SELECT json_valid('["a",55,"b",72]');
+----
+true
+
+query T
+SELECT json_valid('" \  "');
+----
+false
+
+query T
+SELECT json_valid('" \! "');
+----
+0
+
+query T
+SELECT json_valid('" \" "');
+----
+1
+
+query T
+SELECT json_valid('" \# "');
+----
+0
+
+query T
+SELECT json_valid('" \$ "');
+----
+0
+
+query T
+SELECT json_valid('" \% "');
+----
+0
+
+query T
+SELECT json_valid('" \& "');
+----
+0
+
+query T
+SELECT json_valid('" \'' "');
+----
+0
+
+query T
+SELECT json_valid('" \( "');
+----
+0
+
+query T
+SELECT json_valid('" \) "');
+----
+0
+
+query T
+SELECT json_valid('" \* "');
+----
+0
+
+query T
+SELECT json_valid('" \+ "');
+----
+0
+
+query T
+SELECT json_valid('" \, "');
+----
+0
+
+query T
+SELECT json_valid('" \- "');
+----
+0
+
+query T
+SELECT json_valid('" \. "');
+----
+0
+
+query T
+SELECT json_valid('" \/ "');
+----
+1
+
+query T
+SELECT json_valid('" \0 "');
+----
+0
+
+query T
+SELECT json_valid('" \1 "');
+----
+0
+
+query T
+SELECT json_valid('" \2 "');
+----
+0
+
+query T
+SELECT json_valid('" \3 "');
+----
+0
+
+query T
+SELECT json_valid('" \4 "');
+----
+0
+
+query T
+SELECT json_valid('" \5 "');
+----
+0
+
+query T
+SELECT json_valid('" \6 "');
+----
+0
+
+query T
+SELECT json_valid('" \7 "');
+----
+0
+
+query T
+SELECT json_valid('" \8 "');
+----
+0
+
+query T
+SELECT json_valid('" \9 "');
+----
+0
+
+query T
+SELECT json_valid('" \: "');
+----
+0
+
+query T
+SELECT json_valid('" \; "');
+----
+0
+
+query T
+SELECT json_valid('" \< "');
+----
+0
+
+query T
+SELECT json_valid('" \= "');
+----
+0
+
+query T
+SELECT json_valid('" \> "');
+----
+0
+
+query T
+SELECT json_valid('" \? "');
+----
+0
+
+query T
+SELECT json_valid('" \@ "');
+----
+0
+
+query T
+SELECT json_valid('" \A "');
+----
+0
+
+query T
+SELECT json_valid('" \B "');
+----
+0
+
+query T
+SELECT json_valid('" \C "');
+----
+0
+
+query T
+SELECT json_valid('" \D "');
+----
+0
+
+query T
+SELECT json_valid('" \E "');
+----
+0
+
+query T
+SELECT json_valid('" \F "');
+----
+0
+
+query T
+SELECT json_valid('" \G "');
+----
+0
+
+query T
+SELECT json_valid('" \H "');
+----
+0
+
+query T
+SELECT json_valid('" \I "');
+----
+0
+
+query T
+SELECT json_valid('" \J "');
+----
+0
+
+query T
+SELECT json_valid('" \K "');
+----
+0
+
+query T
+SELECT json_valid('" \L "');
+----
+0
+
+query T
+SELECT json_valid('" \M "');
+----
+0
+
+query T
+SELECT json_valid('" \N "');
+----
+0
+
+query T
+SELECT json_valid('" \O "');
+----
+0
+
+query T
+SELECT json_valid('" \P "');
+----
+0
+
+query T
+SELECT json_valid('" \Q "');
+----
+0
+
+query T
+SELECT json_valid('" \R "');
+----
+0
+
+query T
+SELECT json_valid('" \S "');
+----
+0
+
+query T
+SELECT json_valid('" \T "');
+----
+0
+
+query T
+SELECT json_valid('" \U "');
+----
+0
+
+query T
+SELECT json_valid('" \V "');
+----
+0
+
+query T
+SELECT json_valid('" \W "');
+----
+0
+
+query T
+SELECT json_valid('" \X "');
+----
+0
+
+query T
+SELECT json_valid('" \Y "');
+----
+0
+
+query T
+SELECT json_valid('" \Z "');
+----
+0
+
+query T
+SELECT json_valid('" \[ "');
+----
+0
+
+query T
+SELECT json_valid('" \\ "');
+----
+1
+
+query T
+SELECT json_valid('" \] "');
+----
+0
+
+query T
+SELECT json_valid('" \^ "');
+----
+0
+
+query T
+SELECT json_valid('" \_ "');
+----
+0
+
+query T
+SELECT json_valid('" \` "');
+----
+0
+
+query T
+SELECT json_valid('" \a "');
+----
+0
+
+query T
+SELECT json_valid('" \b "');
+----
+1
+
+query T
+SELECT json_valid('" \c "');
+----
+0
+
+query T
+SELECT json_valid('" \d "');
+----
+0
+
+query T
+SELECT json_valid('" \e "');
+----
+0
+
+query T
+SELECT json_valid('" \f "');
+----
+1
+
+query T
+SELECT json_valid('" \g "');
+----
+0
+
+query T
+SELECT json_valid('" \h "');
+----
+0
+
+query T
+SELECT json_valid('" \i "');
+----
+0
+
+query T
+SELECT json_valid('" \j "');
+----
+0
+
+query T
+SELECT json_valid('" \k "');
+----
+0
+
+query T
+SELECT json_valid('" \l "');
+----
+0
+
+query T
+SELECT json_valid('" \m "');
+----
+0
+
+query T
+SELECT json_valid('" \n "');
+----
+1
+
+query T
+SELECT json_valid('" \o "');
+----
+0
+
+query T
+SELECT json_valid('" \p "');
+----
+0
+
+query T
+SELECT json_valid('" \q "');
+----
+0
+
+query T
+SELECT json_valid('" \r "');
+----
+1
+
+query T
+SELECT json_valid('" \s "');
+----
+0
+
+query T
+SELECT json_valid('" \t "');
+----
+1
+
+query T
+SELECT json_valid('" \u "');
+----
+0
+
+query T
+SELECT json_valid('" \ua "');
+----
+0
+
+query T
+SELECT json_valid('" \uab "');
+----
+0
+
+query T
+SELECT json_valid('" \uabc "');
+----
+0
+
+query T
+SELECT json_valid('" \uabcd "');
+----
+1
+
+query T
+SELECT json_valid('" \uFEDC "');
+----
+1
+
+query T
+SELECT json_valid('" \u1234 "');
+----
+1
+
+query T
+SELECT json_valid('" \v "');
+----
+0
+
+query T
+SELECT json_valid('" \w "');
+----
+0
+
+query T
+SELECT json_valid('" \x "');
+----
+0
+
+query T
+SELECT json_valid('" \y "');
+----
+0
+
+query T
+SELECT json_valid('" \z "');
+----
+0
+
+query T
+SELECT json_valid('" \{ "');
+----
+0
+
+query T
+SELECT json_valid('" \| "');
+----
+0
+
+query T
+SELECT json_valid('" \} "');
+----
+0
+
+query T
+SELECT json_valid('" \~ "');
+----
+0
+
+query T
+SELECT json_valid('{"x":01}')
+----
+0
+
+query T
+SELECT json_valid('{"x":-01}')
+----
+0
+
+query T
+SELECT json_valid('{"x":0}')
+----
+1
+
+query T
+SELECT json_valid('{"x":-0}')
+----
+1
+
+query T
+SELECT json_valid('{"x":0.1}')
+----
+1
+
+query T
+SELECT json_valid('{"x":-0.1}')
+----
+1
+
+query T
+SELECT json_valid('{"x":0.0000}')
+----
+1
+
+query T
+SELECT json_valid('{"x":-0.0000}')
+----
+1
+
+query T
+SELECT json_valid('{"x":01.5}')
+----
+0
+
+query T
+SELECT json_valid('{"x":-01.5}')
+----
+0
+
+query T
+SELECT json_valid('{"x":00}')
+----
+0
+
+query T
+SELECT json_valid('{"x":-00}')
+----
+0

@@ -30,13 +30,13 @@ physical_plan	<REGEX>:.*=5.*=5.*
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=3) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl2.i AND tbl1.k=tbl2.k
 ----
-physical_plan	<REGEX>:.*=5.*=3.*=5.*=3.*
+physical_plan	<REGEX>:(.*=5.*=3.*=5.*=3.*|.*=3.*=5.*=3.*=5.*)
 
 ## INNER JOIN: pull up two filters in cross product from RHS
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2 WHERE i=5 AND k=3) tbl2 WHERE tbl1.i=tbl2.i AND tbl1.k=tbl2.k
 ----
-physical_plan	<REGEX>:.*=5.*=3.*=5.*=3.*
+physical_plan	<REGEX>:(.*=5.*=3.*=5.*=3.*|.*=3.*=5.*=3.*=5.*)
 
 #### LEFT JOIN: pull up a single filter from LHS ####
 query II
@@ -54,7 +54,7 @@ physical_plan	<!REGEX>:.*=5.*=5.*
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=10) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k
 ----
-physical_plan	<REGEX>:.*=5.*=10.*=5.*=10.*
+physical_plan	<REGEX>:((.*=5.*=10.*=5.*=10.*)|(.*=10.*=5.*=10.*=5.*))
 
 ## INNER JOIN: pull up filter from LHS ####
 query II
@@ -72,11 +72,11 @@ physical_plan	<REGEX>:.*=5.*=5.*=5.*=5.*
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5 INTERSECT SELECT * FROM vals1, vals2) tbl1;
 ----
-physical_plan	<REGEX>:.*=3.*=5.*=3.*=5.*
+physical_plan	<REGEX>:((.*=3.*=5.*=3.*=5.*)|(.*=5.*=3.*=5.*=3.*))
 
 ## INTERSECT: pull up filters from RHS
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 INTERSECT SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl1;
 ----
-physical_plan	<REGEX>:.*=3.*=5.*=3.*=5.*
+physical_plan	<REGEX>:((.*=3.*=5.*=3.*=5.*)|(.*=5.*=3.*=5.*=3.*))
 

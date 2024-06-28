@@ -47,6 +47,8 @@ private:
 	//! Compares two struct values at the given pointers (recursive)
 	static int CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr,
 	                                   const child_list_t<LogicalType> &types, bool valid);
+	static int CompareArrayAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type, bool valid,
+	                                  idx_t array_size);
 	//! Compare two list values at the pointers (can be recursive if nested type)
 	static int CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type, bool valid);
 	//! Compares a list of fixed-size values

@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/parallel/test_7789.test
+# description: Test Read CSV Auto function on sample file from #7789
+# group: [parallel]
+
+# force parallelism of the queries
+
+# We need to run this test with sample-size set to all, since the different option shows up ~ line 3000, which is not
+# covered with vector_size = 2
+
+query I
+select count(*)
+from  read_csv_auto('data/csv/CrashStatistics.csv', SAMPLE_SIZE = -1)
+----
+4980

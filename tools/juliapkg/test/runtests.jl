@@ -1,4 +1,5 @@
 using DataFrames
+using Tables
 using DuckDB
 using Test
 using Dates
@@ -11,7 +12,7 @@ test_files = [
     "test_big_nested.jl",
     "test_config.jl",
     "test_connection.jl",
-    "test_df_scan.jl",
+    "test_tbl_scan.jl",
     "test_prepare.jl",
     "test_transaction.jl",
     "test_sqlite.jl",
@@ -27,7 +28,7 @@ test_files = [
     "test_stream_data_chunk.jl"
 ]
 
-if size(ARGS)[1] > 0
+if length(ARGS) > 0 && !isempty(ARGS[1])
     filtered_test_files = []
     for test_file in test_files
         if test_file == ARGS[1]

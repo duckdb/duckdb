@@ -1,0 +1,23 @@
+# name: test/sql/returning/returning_delete_list.test
+# description: Test returning with a nested integer list
+# group: [returning]
+
+statement ok
+CREATE TABLE all_types("varchar" VARCHAR, nested_int_array INTEGER[][]);;
+
+statement ok
+INSERT INTO all_types VALUES('🦆🦆🦆🦆🦆🦆',[]);
+
+statement ok
+INSERT INTO all_types VALUES('goo'||chr(0) || 'se' ,[[], [42, 999, NULL, NULL, -42], NULL, [], [42, 999, NULL, NULL, -42]]);
+
+statement ok
+INSERT INTO all_types VALUES(NULL,NULL);
+
+statement ok
+DELETE
+FROM all_types
+WHERE EXISTS
+    (SELECT all_types."varchar" AS c2
+     FROM all_types AS ref_0)
+RETURNING all_types.nested_int_array

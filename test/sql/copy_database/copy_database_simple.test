@@ -1,0 +1,36 @@
+# name: test/sql/copy_database/copy_database_simple.test
+# description: Test attach mixed with the COPY statement
+# group: [copy_database]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CREATE TABLE db1.test(a INTEGER, b INTEGER, c VARCHAR(10));
+
+statement ok
+INSERT INTO db1.test VALUES (42, 88, 'hello');
+
+statement ok
+COPY FROM DATABASE db1 TO memory
+
+query III
+SELECT * FROM memory.test;
+----
+42	88	hello
+
+# unrecognized database
+statement error
+COPY FROM DATABASE dbxx TO memory
+----
+dbxx
+
+statement error
+COPY FROM DATABASE db1 TO dbxx
+----
+dbxx

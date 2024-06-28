@@ -1,0 +1,30 @@
+# name: test/sql/attach/attach_concurrent_checkpoint.test_slow
+# description: Concurrently checkpoint the same database
+# group: [attach]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_checkpoint.db' AS db
+
+statement ok
+CREATE TABLE db.integers(i INTEGER);
+
+concurrentloop i 0 10
+
+statement ok
+INSERT INTO db.integers FROM range(1000000);
+
+statement maybe
+CHECKPOINT db
+----
+other write transactions active
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM db.integers
+----
+10000000	4999995000000

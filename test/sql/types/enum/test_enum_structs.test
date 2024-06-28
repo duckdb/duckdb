@@ -1,0 +1,128 @@
+# name: test/sql/types/enum/test_enum_structs.test
+# description: ENUM types used inside structs
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+# load the DB from disk
+load __TEST_DIR__/enum_types.db
+
+statement ok
+CREATE TYPE mood AS ENUM (
+	'sad',
+	'ok',
+	'happy'
+);
+
+statement ok
+CREATE TABLE person (
+	id INTEGER,
+	c STRUCT(
+		name text,
+		current_mood mood
+    )
+);
+
+statement ok
+INSERT INTO person VALUES (
+	1,
+	ROW('Mark', 'happy')
+);
+
+query II
+FROM person
+----
+1	{'name': Mark, 'current_mood': happy}
+
+# FIXME: dependencies between enums and tables are currently disabled
+mode skip
+
+statement error
+DROP TYPE mood
+----
+Dependency
+
+mode unskip
+
+restart
+
+query II
+FROM person
+----
+1	{'name': Mark, 'current_mood': happy}
+
+# after dropping the column we can drop the type
+statement ok
+ALTER TABLE person DROP COLUMN c
+
+statement ok
+DROP TYPE mood
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+ALTER TABLE person ADD COLUMN c STRUCT(
+		name text,
+		current_mood mood
+    )
+
+# FIXME: dependencies between enums and tables are currently disabled
+mode skip
+
+# we cannot drop the type after adding it back
+statement error
+DROP TYPE mood
+----
+Dependency
+
+mode unskip
+
+statement ok
+ALTER TABLE person DROP COLUMN c
+
+statement ok
+DROP TYPE mood
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+ALTER TABLE person ADD COLUMN c INT
+
+statement ok
+ALTER TABLE person ALTER c SET DATA TYPE STRUCT(
+		name text,
+		current_mood mood
+    )
+
+query II
+FROM person
+----
+1	NULL
+
+# FIXME: dependencies between enums and tables are currently disabled
+mode skip
+
+# we cannot drop the type after adding it using an alter type
+statement error
+DROP TYPE mood
+----
+Dependency
+
+mode unskip
+
+statement ok
+UPDATE person SET c=ROW('Mark', 'happy')
+
+query II
+FROM person
+----
+1	{'name': Mark, 'current_mood': happy}
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE mood

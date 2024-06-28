@@ -578,7 +578,7 @@ SQLITE_API int sqlite3_exec(
 
 // we need to somehow communicate this through open_v2
 #define DUCKDB_UNSIGNED_EXTENSIONS   0x10000000
-
+#define DUCKDB_UNREDACTED_SECRETS    0x20000000
 
 /*
 ** CAPI3REF: Device Characteristics

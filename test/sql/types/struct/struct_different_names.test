@@ -1,0 +1,87 @@
+# name: test/sql/types/struct/struct_different_names.test
+# description: Test inserting structs with different names and unnamed structs
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (s STRUCT(v VARCHAR)); 
+
+statement ok
+INSERT INTO t1 VALUES (ROW(NULL));
+
+statement ok
+CREATE TABLE foo (bar struct(pip int));
+
+statement error
+INSERT INTO foo VALUES ({'ignoreme': 3});
+----
+element "ignoreme" in source struct was not found in target struct
+
+statement error
+create table wrong as from (VALUES (ROW(3)));
+----
+Invalid Input Error: A table cannot be created from an unnamed struct
+
+statement ok
+INSERT INTO foo VALUES (ROW(42));
+
+query I
+SELECT * FROM foo;
+----
+{'pip': 42}
+
+statement ok
+CREATE OR REPLACE TABLE T AS SELECT [{'a': 'A', 'b':'B'}] as x, [{'b':'BB','a':'AA'}] as y;
+
+statement error
+SELECT x, y, ARRAY_CONCAT(x, y) FROM T;
+----
+an explicit cast is required
+
+statement error
+INSERT INTO t1 VALUES ({c: 34});
+----
+element "c" in source struct was not found in target struct
+
+statement ok
+CREATE OR REPLACE TABLE T (s STRUCT(a INT, b INT));
+
+statement error
+INSERT INTO T VALUES ({l: 1, m: 2}), ({x: 3, y: 4});
+----
+element "l" in source struct was not found in target struct
+
+# Can insert unnamed struct into named struct
+
+statement ok
+create table tbl (a STRUCT(a int, b varchar));
+
+statement ok
+insert into tbl VALUES(ROW(5, 'hello'));
+
+# Can insert named struct into unnamed struct
+statement error
+create table tbl2 as select ROW(42, 'world') a;
+----
+Invalid Input Error: A table cannot be created from an unnamed struct
+
+statement error
+SELECT [{'foo': True}, {'bar': False}, {'foobar': NULL}];
+----
+an explicit cast is required
+
+statement error
+select [(13,24), {'a': 42, 'b': 84}, (43, 85), {'b':10, 'a':123123}] as res;
+----
+an explicit cast is required
+
+statement ok
+PREPARE v1 as SELECT ROW(?);
+
+statement ok
+EXECUTE v1(42);
+
+statement ok
+CREATE VIEW v1 AS SELECT ROW(42);

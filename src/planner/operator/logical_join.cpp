@@ -2,7 +2,6 @@
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -16,6 +15,7 @@ vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 		// for SEMI and ANTI join we only project the left hand side
 		return left_bindings;
 	}
+
 	if (join_type == JoinType::MARK) {
 		// for MARK join we project the left hand side plus the MARK column
 		left_bindings.emplace_back(mark_index, 0);
@@ -23,6 +23,9 @@ vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 	}
 	// for other join types we project both the LHS and the RHS
 	auto right_bindings = MapBindings(children[1]->GetColumnBindings(), right_projection_map);
+	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {
+		return right_bindings;
+	}
 	left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
 	return left_bindings;
 }
@@ -40,6 +43,10 @@ void LogicalJoin::ResolveTypes() {
 	}
 	// for any other join we project both sides
 	auto right_types = MapTypes(children[1]->types, right_projection_map);
+	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {
+		types = right_types;
+		return;
+	}
 	types.insert(types.end(), right_types.begin(), right_types.end());
 }
 
@@ -57,22 +64,6 @@ void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<idx_t> &
 		bindings.insert(colref.binding.table_index);
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { GetExpressionBindings(child, bindings); });
-}
-
-void LogicalJoin::Serialize(FieldWriter &writer) const {
-	writer.WriteField<JoinType>(join_type);
-	writer.WriteField<idx_t>(mark_index);
-	writer.WriteList<idx_t>(left_projection_map);
-	writer.WriteList<idx_t>(right_projection_map);
-	//	writer.WriteSerializableList(join_stats);
-}
-
-void LogicalJoin::Deserialize(LogicalJoin &join, LogicalDeserializationState &state, FieldReader &reader) {
-	join.join_type = reader.ReadRequired<JoinType>();
-	join.mark_index = reader.ReadRequired<idx_t>();
-	join.left_projection_map = reader.ReadRequiredList<idx_t>();
-	join.right_projection_map = reader.ReadRequiredList<idx_t>();
-	//	join.join_stats = reader.ReadRequiredSerializableList<BaseStatistics>(reader.GetSource());
 }
 
 } // namespace duckdb

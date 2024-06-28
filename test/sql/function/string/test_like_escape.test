@@ -17,9 +17,11 @@ SELECT '%++' NOT LIKE '*%++' ESCAPE '*';
 # unterminated escapes
 statement error
 SELECT '%' LIKE '%' ESCAPE '%';
+----
 
 statement error
 SELECT '%' LIKE '*' ESCAPE '*';
+----
 
 # Default tests
 query T
@@ -60,9 +62,11 @@ SELECT '*%' NOT LIKE '*%' ESCAPE '*';
 # It should fail when more than one escape character is specified
 statement error
 SELECT '%_' LIKE '%_' ESCAPE '\\';
+----
 
 statement error
 SELECT '%_' LIKE '%_' ESCAPE '**';
+----
 
 # Test LIKE statement with ESCAPE in the middle of the pattern
 statement ok

@@ -1,12 +1,18 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
+
+static BoundCastInfo BindCastFunction(ClientContext &context, const LogicalType &source, const LogicalType &target) {
+	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
+	GetCastFunctionInput input(context);
+	return cast_functions.GetCastFunction(source, target, input);
+}
 
 BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p,
                                          BoundCastInfo bound_cast_p, bool try_cast_p)
@@ -14,9 +20,16 @@ BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, Logical
       child(std::move(child_p)), try_cast(try_cast_p), bound_cast(std::move(bound_cast_p)) {
 }
 
+BoundCastExpression::BoundCastExpression(ClientContext &context, unique_ptr<Expression> child_p,
+                                         LogicalType target_type_p)
+    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, std::move(target_type_p)),
+      child(std::move(child_p)), try_cast(false),
+      bound_cast(BindCastFunction(context, child->return_type, return_type)) {
+}
+
 unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
                                                  BoundCastInfo bound_cast, bool try_cast) {
-	if (expr->return_type == target_type) {
+	if (ExpressionBinder::GetExpressionReturnType(*expr) == target_type) {
 		return expr;
 	}
 	auto &expr_type = expr->return_type;
@@ -27,13 +40,9 @@ unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, co
 			return expr;
 		}
 	}
-	return make_uniq<BoundCastExpression>(std::move(expr), target_type, std::move(bound_cast), try_cast);
-}
-
-static BoundCastInfo BindCastFunction(ClientContext &context, const LogicalType &source, const LogicalType &target) {
-	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
-	GetCastFunctionInput input(context);
-	return cast_functions.GetCastFunction(source, target, input);
+	auto result = make_uniq<BoundCastExpression>(std::move(expr), target_type, std::move(bound_cast), try_cast);
+	result->query_location = result->child->query_location;
+	return std::move(result);
 }
 
 unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
@@ -86,6 +95,7 @@ unique_ptr<Expression> BoundCastExpression::AddDefaultCastToType(unique_ptr<Expr
                                                                  const LogicalType &target_type, bool try_cast) {
 	CastFunctionSet default_set;
 	GetCastFunctionInput get_input;
+	get_input.query_location = expr->query_location;
 	return AddCastToTypeInternal(std::move(expr), target_type, default_set, get_input, try_cast);
 }
 
@@ -93,7 +103,16 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context
                                                           const LogicalType &target_type, bool try_cast) {
 	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
 	GetCastFunctionInput get_input(context);
+	get_input.query_location = expr->query_location;
 	return AddCastToTypeInternal(std::move(expr), target_type, cast_functions, get_input, try_cast);
+}
+
+unique_ptr<Expression> BoundCastExpression::AddArrayCastToList(ClientContext &context, unique_ptr<Expression> expr) {
+	if (expr->return_type.id() != LogicalTypeId::ARRAY) {
+		return expr;
+	}
+	auto &child_type = ArrayType::GetChildType(expr->return_type);
+	return BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::LIST(child_type));
 }
 
 bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {
@@ -123,7 +142,12 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		}
 		return true;
 	}
-	if (source_type.id() == LogicalTypeId::TIMESTAMP || source_type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+	switch (source_type.id()) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
 		switch (target_type.id()) {
 		case LogicalTypeId::DATE:
 		case LogicalTypeId::TIME:
@@ -132,20 +156,11 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		default:
 			break;
 		}
-	}
-	if (source_type.id() == LogicalTypeId::VARCHAR) {
-		switch (target_type.id()) {
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::TIME_TZ:
-		case LogicalTypeId::TIMESTAMP_TZ:
-			return true;
-		default:
-			return false;
-		}
+		break;
+	case LogicalTypeId::VARCHAR:
+		return false;
+	default:
+		break;
 	}
 	if (target_type.id() == LogicalTypeId::VARCHAR) {
 		switch (source_type.id()) {
@@ -169,12 +184,12 @@ string BoundCastExpression::ToString() const {
 	return (try_cast ? "TRY_CAST(" : "CAST(") + child->GetName() + " AS " + return_type.ToString() + ")";
 }
 
-bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
+bool BoundCastExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundCastExpression>();
-	if (!Expression::Equals(child.get(), other.child.get())) {
+	auto &other = other_p.Cast<BoundCastExpression>();
+	if (!Expression::Equals(*child, *other.child)) {
 		return false;
 	}
 	if (try_cast != other.try_cast) {
@@ -187,20 +202,6 @@ unique_ptr<Expression> BoundCastExpression::Copy() {
 	auto copy = make_uniq<BoundCastExpression>(child->Copy(), return_type, bound_cast.Copy(), try_cast);
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void BoundCastExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*child);
-	writer.WriteSerializable(return_type);
-	writer.WriteField(try_cast);
-}
-
-unique_ptr<Expression> BoundCastExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
-	auto child = reader.ReadRequiredSerializable<Expression>(state.gstate);
-	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto try_cast = reader.ReadRequired<bool>();
-	auto cast_function = BindCastFunction(state.gstate.context, child->return_type, target_type);
-	return make_uniq<BoundCastExpression>(std::move(child), std::move(target_type), std::move(cast_function), try_cast);
 }
 
 } // namespace duckdb

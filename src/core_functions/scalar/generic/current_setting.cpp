@@ -19,7 +19,7 @@ public:
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const CurrentSettingBindData &)other_p;
+		auto &other = other_p.Cast<CurrentSettingBindData>();
 		return Value::NotDistinctFrom(value, other.value);
 	}
 };
@@ -43,15 +43,16 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
-	auto &key_str = StringValue::Get(key_val);
-	if (key_val.IsNull() || key_str.empty()) {
+	if (key_val.IsNull() || StringValue::Get(key_val).empty()) {
 		throw ParserException("Key name for current_setting needs to be neither NULL nor empty");
 	}
 
-	auto key = StringUtil::Lower(key_str);
+	auto key = StringUtil::Lower(StringValue::Get(key_val));
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
-		throw Catalog::UnrecognizedConfigurationError(context, key);
+		Catalog::AutoloadExtensionByConfigName(context, key);
+		// If autoloader didn't throw, the config is now available
+		context.TryGetCurrentSetting(key, val);
 	}
 
 	bound_function.return_type = val.type();

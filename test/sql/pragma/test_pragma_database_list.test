@@ -18,3 +18,4 @@ memory	NULL
 
 statement error
 PRAGMA database_list()
+----

@@ -102,7 +102,7 @@ idx_t VectorOperations::CountNotNull(Vector &input, const idx_t count) {
 	default:
 		for (idx_t i = 0; i < count; ++i) {
 			const auto row_idx = vdata.sel->get_index(i);
-			valid += int(vdata.validity.RowIsValid(row_idx));
+			valid += idx_t(vdata.validity.RowIsValid(row_idx));
 		}
 		break;
 	}

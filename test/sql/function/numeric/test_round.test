@@ -56,3 +56,12 @@ select round(a, b) from roundme
 ----
 42.123000
 
+query I
+SELECT round(1.0, (-2147483648)::INT);
+----
+0
+
+query I
+SELECT round(1.0::DOUBLE, (-2147483648)::INT);
+----
+0

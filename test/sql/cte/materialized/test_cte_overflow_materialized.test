@@ -1,0 +1,17 @@
+# name: test/sql/cte/materialized/test_cte_overflow_materialized.test
+# description: Ensure no stack overflow for CTE names that match existing tables
+# group: [materialized]
+
+statement ok
+create table a (id integer)
+
+statement ok
+insert into a values (1729)
+
+statement ok
+create view va as (with v as MATERIALIZED (select * from a) select * from v)
+
+query I
+with a as MATERIALIZED (select * from va) select * from a
+----
+1729

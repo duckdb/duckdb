@@ -8,129 +8,153 @@
 
 #pragma once
 
+#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
 namespace duckdb {
 
-class WindowAggregateState {
+class WindowAggregatorState {
 public:
-	WindowAggregateState(AggregateObject aggr, const LogicalType &result_type_p);
-	virtual ~WindowAggregateState();
+	WindowAggregatorState();
+	virtual ~WindowAggregatorState() {
+	}
 
-	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
-	virtual void Finalize();
-	virtual void Compute(Vector &result, idx_t rid, idx_t start, idx_t end);
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 
-protected:
-	void AggregateInit();
-	void AggegateFinal(Vector &result, idx_t rid);
+	//! Allocator for aggregates
+	ArenaAllocator allocator;
+};
 
-	AggregateObject aggr;
+class WindowAggregator {
+public:
+	WindowAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p, const LogicalType &result_type_p,
+	                 const WindowExcludeMode exclude_mode_p);
+	virtual ~WindowAggregator();
+
+	//	Build
+	virtual unique_ptr<WindowAggregatorState> GetGlobalState(idx_t group_count,
+	                                                         const ValidityMask &partition_mask) const;
+	virtual void Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered);
+	virtual void Finalize(WindowAggregatorState &gsink, const FrameStats &stats);
+
+	//	Probe
+	virtual unique_ptr<WindowAggregatorState> GetLocalState() const = 0;
+	virtual void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
+	                      Vector &result, idx_t count, idx_t row_idx) const = 0;
+
+	//! A description of the aggregator
+	const AggregateObject aggr;
+	//! The argument types for the function
+	const vector<LogicalType> arg_types;
 	//! The result type of the window function
-	LogicalType result_type;
-
-	//! Data pointer that contains a single state, used for intermediate window segment aggregation
-	vector<data_t> state;
-	//! Reused result state container for the window functions
-	Vector statev;
-	//! A vector of pointers to "state", used for intermediate window segment aggregation
-	Vector statep;
-	//! Input data chunk, used for intermediate window segment aggregation
-	DataChunk inputs;
+	const LogicalType result_type;
+	//! The size of a single aggregate state
+	const idx_t state_size;
+	//! The window exclusion clause
+	const WindowExcludeMode exclude_mode;
 };
 
-class WindowConstantAggregate : public WindowAggregateState {
+// Used for validation
+class WindowNaiveAggregator : public WindowAggregator {
 public:
-	static bool IsConstantAggregate(const BoundWindowExpression &wexpr);
+	WindowNaiveAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
+	                      const LogicalType &result_type_p, const WindowExcludeMode exclude_mode);
+	~WindowNaiveAggregator() override;
 
-	WindowConstantAggregate(AggregateObject aggr, const LogicalType &result_type_p, const ValidityMask &partition_mask,
-	                        const idx_t count);
-	~WindowConstantAggregate() override {
-	}
-
-	void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) override;
-	void Finalize() override;
-	void Compute(Vector &result, idx_t rid, idx_t start, idx_t end) override;
-
-private:
-	//! Partition starts
-	vector<idx_t> partition_offsets;
-	//! Aggregate results
-	unique_ptr<Vector> results;
-	//! The current result partition being built/read
-	idx_t partition;
-	//! The current input row being built/read
-	idx_t row;
+	unique_ptr<WindowAggregatorState> GetLocalState() const override;
+	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
+	              Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
-class WindowSegmentTree {
+class WindowConstantAggregator : public WindowAggregator {
 public:
-	using FrameBounds = std::pair<idx_t, idx_t>;
-
-	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, DataChunk *input,
-	                  const ValidityMask &filter_mask, WindowAggregationMode mode);
-	~WindowSegmentTree();
-
-	//! First row contains the result.
-	void Compute(Vector &result, idx_t rid, idx_t start, idx_t end);
-
-private:
-	void ConstructTree();
-	void ExtractFrame(idx_t begin, idx_t end);
-	void WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end);
-	void AggregateInit();
-	void AggegateFinal(Vector &result, idx_t rid);
-
-	//! Use the window API, if available
-	inline bool UseWindowAPI() const {
-		return mode < WindowAggregationMode::COMBINE;
+	WindowConstantAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
+	                         const LogicalType &result_type_p, WindowExcludeMode exclude_mode_p);
+	~WindowConstantAggregator() override {
 	}
+
+	unique_ptr<WindowAggregatorState> GetGlobalState(idx_t group_count,
+	                                                 const ValidityMask &partition_mask) const override;
+	void Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered) override;
+	void Finalize(WindowAggregatorState &gsink, const FrameStats &stats) override;
+
+	unique_ptr<WindowAggregatorState> GetLocalState() const override;
+	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
+	              Vector &result, idx_t count, idx_t row_idx) const override;
+};
+
+class WindowCustomAggregator : public WindowAggregator {
+public:
+	WindowCustomAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
+	                       const LogicalType &result_type_p, const WindowExcludeMode exclude_mode);
+	~WindowCustomAggregator() override;
+
+	unique_ptr<WindowAggregatorState> GetGlobalState(idx_t group_count,
+	                                                 const ValidityMask &partition_mask) const override;
+	void Finalize(WindowAggregatorState &gsink, const FrameStats &stats) override;
+
+	unique_ptr<WindowAggregatorState> GetLocalState() const override;
+	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
+	              Vector &result, idx_t count, idx_t row_idx) const override;
+};
+
+class WindowSegmentTree : public WindowAggregator {
+
+public:
+	WindowSegmentTree(AggregateObject aggr, const vector<LogicalType> &arg_types_p, const LogicalType &result_type_p,
+	                  WindowAggregationMode mode_p, const WindowExcludeMode exclude_mode);
+
+	unique_ptr<WindowAggregatorState> GetGlobalState(idx_t group_count,
+	                                                 const ValidityMask &partition_mask) const override;
+	void Finalize(WindowAggregatorState &gsink, const FrameStats &stats) override;
+
+	unique_ptr<WindowAggregatorState> GetLocalState() const override;
+	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
+	              Vector &result, idx_t count, idx_t row_idx) const override;
+
+public:
 	//! Use the combine API, if available
 	inline bool UseCombineAPI() const {
 		return mode < WindowAggregationMode::SEPARATE;
 	}
 
-	//! The aggregate that the window function is computed over
-	AggregateObject aggr;
-	//! The result type of the window function
-	LogicalType result_type;
-
-	//! Data pointer that contains a single state, used for intermediate window segment aggregation
-	vector<data_t> state;
-	//! Input data chunk, used for intermediate window segment aggregation
-	DataChunk inputs;
-	//! The filtered rows in inputs.
-	SelectionVector filter_sel;
-	//! A vector of pointers to "state", used for intermediate window segment aggregation
-	Vector statep;
-	//! The frame boundaries, used for the window functions
-	FrameBounds frame;
-	//! Reused result state container for the window functions
-	Vector statev;
-
-	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
-	unsafe_unique_array<data_t> levels_flat_native;
-	//! For each level, the starting location in the levels_flat_native array
-	vector<idx_t> levels_flat_start;
-
-	//! The total number of internal nodes of the tree, stored in levels_flat_native
-	idx_t internal_nodes;
-
-	//! The (sorted) input chunk collection on which the tree is built
-	DataChunk *input_ref;
-
-	//! The filtered rows in input_ref.
-	const ValidityMask &filter_mask;
-
-	//! Use the window API, if available
+	//! Use the combine API, if available
 	WindowAggregationMode mode;
+};
 
-	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
-	static constexpr idx_t TREE_FANOUT = 64;
+class WindowDistinctAggregator : public WindowAggregator {
+public:
+	WindowDistinctAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
+	                         const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
+	                         ClientContext &context);
+
+	//	Build
+	unique_ptr<WindowAggregatorState> GetGlobalState(idx_t group_count,
+	                                                 const ValidityMask &partition_mask) const override;
+	void Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered) override;
+	void Finalize(WindowAggregatorState &gsink, const FrameStats &stats) override;
+
+	//	Evaluate
+	unique_ptr<WindowAggregatorState> GetLocalState() const override;
+	void Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate, const DataChunk &bounds,
+	              Vector &result, idx_t count, idx_t row_idx) const override;
+
+	//! Context for sorting
+	ClientContext &context;
 };
 
 } // namespace duckdb

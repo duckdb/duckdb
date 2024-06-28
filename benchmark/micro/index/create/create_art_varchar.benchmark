@@ -1,0 +1,20 @@
+# name: benchmark/micro/index/create/create_art_varchar.benchmark
+# description: Create ART on 28.8M VARCHARs with 7.2M unique values
+# group: [create]
+
+name Create ART Varchar
+group art
+
+load
+CREATE TABLE art AS
+    SELECT rpad(((i * 95823983533) % 86000000)::VARCHAR, 10, '-') AS id
+        FROM range(7200000) tbl(i);
+INSERT INTO art (SELECT * FROM art);
+INSERT INTO art (SELECT * FROM art);
+SET memory_limit='8GB';
+
+run
+CREATE INDEX idx ON art USING ART(id);
+
+cleanup
+DROP INDEX idx;

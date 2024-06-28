@@ -1,0 +1,80 @@
+# name: test/sql/window/test_quantile_window.test_coverage
+# description: Moving QUANTILE coverage, fixed or variable 100 element frame for MEDIAN, IQR, and MAD
+# group: [window]
+
+# Common table
+statement ok
+create table rank100 as
+    select b % 100 as a, b from range(10000000) tbl(b)
+
+# window_median_fixed_100
+query I
+select sum(m)
+from (
+    select median(a) over (
+        order by b asc
+        rows between 100 preceding and current row) as m
+    from rank100
+    ) q;
+----
+494997500
+
+# window_median_variable_100
+query I
+select sum(m)
+from (
+    select median(a) over (
+        order by b asc
+        rows between mod(b * 47, 521) preceding and 100 - mod(b * 47, 521) following) as m
+    from rank100
+    ) q;
+----
+494989867
+
+# window_iqr_fixed_100
+query II
+select min(iqr), max(iqr)
+from (
+    select quantile_cont(a, [0.25, 0.5, 0.75]) over (
+        order by b asc
+        rows between 100 preceding and current row) as iqr
+    from rank100
+    ) q;
+----
+[0.0, 0.0, 0.0]	[25.0, 50.0, 75.0]
+
+# window_iqr_variable_100
+query II
+select min(iqr), max(iqr)
+from (
+    select quantile_cont(a, [0.25, 0.5, 0.75]) over (
+        order by b asc
+        rows between mod(b * 47, 521) preceding and 100 - mod(b * 47, 521) following) as iqr
+    from rank100
+    ) q;
+----
+[0.0, 0.0, 0.0]	[76.5, 84.0, 91.5]
+
+# window_mad_fixed_100
+query I
+select sum(m)
+from (
+    select mad(a) over (
+        order by b asc
+        rows between 100 preceding and current row) as m
+    from rank100
+    ) q;
+----
+249998762.5
+
+# 
+query I
+select sum(m)
+from (
+    select mad(a) over (
+        order by b asc
+        rows between mod(b * 47, 521) preceding and 100 - mod(b * 47, 521) following) as m
+    from rank100
+    ) q;
+----
+249994596.000000

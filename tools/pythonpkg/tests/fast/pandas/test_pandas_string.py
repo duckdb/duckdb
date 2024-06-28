@@ -2,14 +2,17 @@ import duckdb
 import pandas as pd
 import numpy
 
+
 class TestPandasString(object):
     def test_pandas_string(self, duckdb_cursor):
         strings = numpy.array(['foo', 'bar', 'baz'])
 
         # https://pandas.pydata.org/pandas-docs/stable/user_guide/text.html
-        df_in = pd.DataFrame({
-            'object': pd.Series(strings, dtype='object'),
-        })
+        df_in = pd.DataFrame(
+            {
+                'object': pd.Series(strings, dtype='object'),
+            }
+        )
         # Only available in pandas 1.0.0
         if hasattr(pd, 'StringDtype'):
             df_in['string'] = pd.Series(strings, dtype=pd.StringDtype())
@@ -27,10 +30,16 @@ class TestPandasString(object):
         # Copy Dataframe to DuckDB
         con = duckdb.connect()
         con.register("df", df)
-        con.execute(f"""
+        con.execute(
+            f"""
             CREATE TABLE t1 AS SELECT * FROM df
         """
         )
-        assert con.execute(f"""
+        assert (
+            con.execute(
+                f"""
             SELECT count(*) from t1
-        """).fetchall() == [(3000000,)]
+        """
+            ).fetchall()
+            == [(3000000,)]
+        )

@@ -1,0 +1,25 @@
+# name: test/sql/json/scalar/test_json_arrow_expr.test
+# description: Test subquery binding of partially bound arrow expressions
+# group: [scalar]
+
+require json
+
+statement ok
+CREATE TABLE testjson AS SELECT JSON '{ "key" : "value" }' AS example;
+
+query I
+SELECT (SELECT (example)->k AS v FROM (SELECT 'key' AS k) keys)
+FROM testjson;
+----
+"value"
+
+query I
+SELECT (SELECT json_extract(example, k) AS v FROM (SELECT 'key' AS k) keys)
+FROM testjson;
+----
+"value"
+
+query I
+SELECT (SELECT (JSON '{ "key" : "value" }')->k AS v FROM (SELECT 'key' AS k) keys);
+----
+"value"

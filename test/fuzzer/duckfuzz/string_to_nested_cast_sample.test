@@ -1,0 +1,14 @@
+# name: test/fuzzer/duckfuzz/string_to_nested_cast_sample.test
+# description: cast strings to lists with a sample
+# group: [duckfuzz]
+
+statement ok
+CREATE TABLE part AS SELECT concat('this is a long part name', i) AS p_name FROM range(20000) t(i);
+
+query I
+SELECT COUNT(*) FILTER (cast_part IS NULL)
+FROM (
+	SELECT TRY_CAST(p_name AS STRUCT(a INTEGER[], b VARCHAR[])) FROM part USING SAMPLE 81.0% (Reservoir)
+) t(cast_part)
+----
+16200

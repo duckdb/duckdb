@@ -1,0 +1,32 @@
+# name: test/sql/storage/compression/constant/constant_columns_updates.test_slow
+# description: Test storage of constant columns with updates
+# group: [constant]
+
+# load the DB from disk
+load __TEST_DIR__/constant_columns.db
+
+# simple constant
+statement ok
+CREATE TABLE integers AS SELECT i id, 1 i FROM range(1000000) tbl(i)
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM integers
+----
+1	1	1	1000000	1000000
+
+query I
+UPDATE integers SET i=i+1 WHERE id%2=0
+----
+500000
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM integers
+----
+1	2	1.5	1000000	1000000
+
+restart
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM integers
+----
+1	2	1.5	1000000	1000000

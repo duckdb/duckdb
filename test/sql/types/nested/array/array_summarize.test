@@ -1,0 +1,39 @@
+# name: test/sql/types/nested/array/array_summarize.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE arrays (a INTEGER[3])
+
+statement ok
+INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL), ([4, NULL, 2])
+
+query IIIIIIIIIIII
+SUMMARIZE arrays
+----
+a	INTEGER[3]	[-1, -2, -3]	[7, 8, 9]	5	NULL	NULL	NULL	NULL	NULL	6	16.67
+
+query I
+SELECT a FROM arrays ORDER BY a LIMIT 1
+----
+[-1, -2, -3]
+
+query I
+SELECT min(a) FROM arrays
+----
+[-1, -2, -3]
+
+query I
+SELECT max(a) FROM arrays
+----
+[7, 8, 9]
+
+statement ok
+INSERT INTO arrays VALUES ([-7, -8, -9]), ([-8, -9, -10])
+
+query I
+SELECT max(a) FROM arrays
+----
+[7, 8, 9]

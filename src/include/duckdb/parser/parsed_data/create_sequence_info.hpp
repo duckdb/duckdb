@@ -50,10 +50,10 @@ public:
 	unique_ptr<CreateInfo> Copy() const override;
 
 public:
-	DUCKDB_API static unique_ptr<CreateSequenceInfo> Deserialize(Deserializer &deserializer);
+	DUCKDB_API void Serialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
-protected:
-	void SerializeInternal(Serializer &) const override;
+	string ToString() const override;
 };
 
 } // namespace duckdb

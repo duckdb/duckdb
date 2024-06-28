@@ -15,19 +15,10 @@
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "json_enums.hpp"
 #include "json_transform.hpp"
 
 namespace duckdb {
-
-enum class JSONScanType : uint8_t {
-	INVALID = 0,
-	//! Read JSON straight to columnar data
-	READ_JSON = 1,
-	//! Read JSON values as strings
-	READ_JSON_OBJECTS = 2,
-	//! Sample run for schema detection
-	SAMPLE = 3,
-};
 
 struct JSONString {
 public:
@@ -101,8 +92,8 @@ public:
 	void InitializeFormats(bool auto_detect);
 	void SetCompression(const string &compression);
 
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(ClientContext &context, FieldReader &reader);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<JSONScanData> Deserialize(Deserializer &deserializer);
 
 public:
 	//! Scan type
@@ -131,6 +122,17 @@ public:
 	idx_t sample_size = idx_t(STANDARD_VECTOR_SIZE) * 10;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
+	//! We divide the number of appearances of each JSON field by the auto-detection sample size
+	//! If the average over the fields of an object is less than this threshold,
+	//! we default to the MAP type with value type of merged field types
+	double field_appearance_threshold = 0.1;
+	//! The maximum number of files we sample to sample sample_size rows
+	idx_t maximum_sample_files = 32;
+	//! Whether we auto-detect and convert JSON strings to integers
+	bool convert_strings_to_integers = false;
+	//! If a struct contains more fields than this threshold with at least 80% similar types,
+	//! we infer it as MAP type
+	idx_t map_inference_threshold = 25;
 
 	//! All column names (in order)
 	vector<string> names;
@@ -144,6 +146,12 @@ public:
 
 	//! The inferred avg tuple size
 	idx_t avg_tuple_size = 420;
+
+private:
+	JSONScanData(ClientContext &context, vector<string> files, string date_format, string timestamp_format);
+
+	string GetDateFormat() const;
+	string GetTimestampFormat() const;
 };
 
 struct JSONScanInfo : public TableFunctionInfo {
@@ -182,11 +190,13 @@ public:
 	//! One JSON reader per file
 	vector<optional_ptr<BufferedJSONReader>> json_readers;
 	//! Current file/batch index
-	idx_t file_index;
+	atomic<idx_t> file_index;
 	atomic<idx_t> batch_index;
 
 	//! Current number of threads active
 	idx_t system_threads;
+	//! Whether we enable parallel scans (only if less files than threads)
+	bool enable_parallel_scans;
 };
 
 struct JSONScanLocalState {
@@ -219,18 +229,27 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ReadNextBufferInternal(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                            bool &file_done);
+	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                        bool &file_done);
+	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                          bool &file_done);
+	AllocatedData AllocateBuffer(JSONScanGlobalState &gstate);
+	data_ptr_t GetReconstructBuffer(JSONScanGlobalState &gstate);
+
 	void SkipOverArrayStart();
 
-	bool ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &buffer_index, const bool already_incremented_file_idx);
-	void ReconstructFirstObject(JSONScanGlobalState &gstate);
-	void ParseNextChunk();
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index);
+	bool ReconstructFirstObject(JSONScanGlobalState &gstate);
+	void ParseNextChunk(JSONScanGlobalState &gstate);
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 	void ThrowObjectSizeError(const idx_t object_size);
-	void ThrowInvalidAtEndError();
+
+	//! Must hold the lock
+	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
+	bool IsParallel(JSONScanGlobalState &gstate) const;
 
 private:
 	//! Bind data
@@ -244,8 +263,14 @@ private:
 	//! Whether this is the last batch of the file
 	bool is_last;
 
+	//! The current main filesystem
+	FileSystem &fs;
+
+	//! For some filesystems (e.g. S3), using a filehandle per thread increases performance
+	unique_ptr<FileHandle> thread_local_filehandle;
+
 	//! Current buffer read info
-	const char *buffer_ptr;
+	char *buffer_ptr;
 	idx_t buffer_size;
 	idx_t buffer_offset;
 	idx_t prev_buffer_remainder;
@@ -289,8 +314,9 @@ public:
 	static void ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                  vector<unique_ptr<Expression>> &filters);
 
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function);
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader, TableFunction &function);
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                      const TableFunction &function);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, TableFunction &function);
 
 	static void TableFunctionDefaults(TableFunction &table_function);
 };

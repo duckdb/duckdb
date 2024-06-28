@@ -23,7 +23,14 @@ static unique_ptr<FunctionData> RepeatBind(ClientContext &context, TableFunction
 	auto &inputs = input.inputs;
 	return_types.push_back(inputs[0].type());
 	names.push_back(inputs[0].ToString());
-	return make_uniq<RepeatFunctionData>(inputs[0], inputs[1].GetValue<int64_t>());
+	if (inputs[1].IsNull()) {
+		throw BinderException("Repeat second parameter cannot be NULL");
+	}
+	auto repeat_count = inputs[1].GetValue<int64_t>();
+	if (repeat_count < 0) {
+		throw BinderException("Repeat second parameter cannot be be less than 0");
+	}
+	return make_uniq<RepeatFunctionData>(inputs[0], NumericCast<idx_t>(repeat_count));
 }
 
 static unique_ptr<GlobalTableFunctionState> RepeatInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -31,7 +38,7 @@ static unique_ptr<GlobalTableFunctionState> RepeatInit(ClientContext &context, T
 }
 
 static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (const RepeatFunctionData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<RepeatFunctionData>();
 	auto &state = data_p.global_state->Cast<RepeatOperatorData>();
 
 	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
@@ -41,7 +48,7 @@ static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, D
 }
 
 static unique_ptr<NodeStatistics> RepeatCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (const RepeatFunctionData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<RepeatFunctionData>();
 	return make_uniq<NodeStatistics>(bind_data.target_count, bind_data.target_count);
 }
 

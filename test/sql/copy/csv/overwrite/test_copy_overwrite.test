@@ -46,6 +46,7 @@ SELECT * FROM test ORDER BY 1;
 # test query returning error does not export to file
 statement error
 COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv';
+----
 
 statement ok
 DELETE FROM test;
@@ -65,6 +66,7 @@ SELECT * FROM test ORDER BY 1;
 # Test USE_TMP_FILE flag
 statement error
 COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' (USE_TMP_FILE FALSE);
+----
 
 query I
 SELECT * FROM '__TEST_DIR__/overwrite.csv';

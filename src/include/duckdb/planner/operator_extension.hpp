@@ -28,14 +28,13 @@ struct LogicalExtensionOperator;
 
 class OperatorExtension {
 public:
-	bind_function_t Bind;
+	bind_function_t Bind; // NOLINT: backwards compatibility
 
 	//! Additional info passed to the CreatePlan & Bind functions
 	shared_ptr<OperatorExtensionInfo> operator_info;
 
 	virtual std::string GetName() = 0;
-	virtual unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState &state,
-	                                                         FieldReader &reader) = 0;
+	virtual unique_ptr<LogicalExtensionOperator> Deserialize(Deserializer &deserializer) = 0;
 
 	virtual ~OperatorExtension() {
 	}

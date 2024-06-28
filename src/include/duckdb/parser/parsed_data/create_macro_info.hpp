@@ -14,18 +14,15 @@
 namespace duckdb {
 
 struct CreateMacroInfo : public CreateFunctionInfo {
-	CreateMacroInfo();
-	CreateMacroInfo(CatalogType type);
+	explicit CreateMacroInfo(CatalogType type);
 
 	unique_ptr<MacroFunction> function;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;
 
-	DUCKDB_API static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &deserializer);
-
-protected:
-	void SerializeInternal(Serializer &) const override;
+	DUCKDB_API void Serialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

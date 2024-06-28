@@ -1,4 +1,5 @@
 add_subdirectory(chimp)
+add_subdirectory(alp)
 
 add_library_unity(
   duckdb_storage_compression
@@ -11,7 +12,9 @@ add_library_unity(
   uncompressed.cpp
   validity_uncompressed.cpp
   bitpacking.cpp
+  bitpacking_hugeint.cpp
   patas.cpp
+  alprd.cpp
   fsst.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_compression>

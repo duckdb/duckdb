@@ -5,14 +5,17 @@ import pytest
 import duckdb
 import re
 
+
 def TestFile(name):
     import os
-    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data',name)
+
+    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', name)
     return filename
+
 
 class TestReadJSON(object):
     def test_read_json_columns(self):
-        rel = duckdb.read_json(TestFile('example.json'), columns={'id':'integer', 'name':'varchar'})
+        rel = duckdb.read_json(TestFile('example.json'), columns={'id': 'integer', 'name': 'varchar'})
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
@@ -34,7 +37,7 @@ class TestReadJSON(object):
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
-    
+
     def test_read_json_format(self):
         # Wrong option
         with pytest.raises(duckdb.BinderException, match="format must be one of .* not 'test'"):
@@ -43,8 +46,15 @@ class TestReadJSON(object):
         rel = duckdb.read_json(TestFile('example.json'), format='unstructured')
         res = rel.fetchone()
         print(res)
-        assert res == ([{'id': 1, 'name': 'O Brother, Where Art Thou?'}, {'id': 2, 'name': 'Home for the Holidays'}, {'id': 3, 'name': 'The Firm'}, {'id': 4, 'name': 'Broadcast News'}, {'id': 5, 'name': 'Raising Arizona'}],)
-
+        assert res == (
+            [
+                {'id': 1, 'name': 'O Brother, Where Art Thou?'},
+                {'id': 2, 'name': 'Home for the Holidays'},
+                {'id': 3, 'name': 'The Firm'},
+                {'id': 4, 'name': 'Broadcast News'},
+                {'id': 5, 'name': 'Raising Arizona'},
+            ],
+        )
 
     def test_read_json_records(self):
         # Wrong option
@@ -56,4 +66,46 @@ class TestReadJSON(object):
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
 
-
+    @pytest.mark.parametrize(
+        'option',
+        [
+            ('filename', True),
+            ('filename', 'test'),
+            ('date_format', '%m-%d-%Y'),
+            ('date_format', '%m-%d-%y'),
+            ('date_format', '%d-%m-%Y'),
+            ('date_format', '%d-%m-%y'),
+            ('date_format', '%Y-%m-%d'),
+            ('date_format', '%y-%m-%d'),
+            ('timestamp_format', '%H:%M:%S%y-%m-%d'),
+            ('compression', 'AUTO_DETECT'),
+            ('compression', 'UNCOMPRESSED'),
+            ('maximum_object_size', 5),
+            ('ignore_errors', False),
+            ('ignore_errors', True),
+            ('convert_strings_to_integers', False),
+            ('convert_strings_to_integers', True),
+            ('field_appearance_threshold', 0.534),
+            ('map_inference_threshold', 34234),
+            ('maximum_sample_files', 5),
+            ('hive_partitioning', True),
+            ('hive_partitioning', False),
+            ('union_by_name', True),
+            ('union_by_name', False),
+            ('hive_types_autocast', False),
+            ('hive_types_autocast', True),
+            ('hive_types', {'id': 'INTEGER', 'name': 'VARCHAR'}),
+        ],
+    )
+    def test_read_json_options(self, duckdb_cursor, option):
+        keyword_arguments = dict()
+        option_name, option_value = option
+        keyword_arguments[option_name] = option_value
+        if option_name == 'hive_types':
+            with pytest.raises(
+                duckdb.InvalidInputException, match=r'Unknown hive_type: "name" does not appear to be a partition'
+            ):
+                rel = duckdb_cursor.read_json(TestFile('example.json'), **keyword_arguments)
+        else:
+            rel = duckdb_cursor.read_json(TestFile('example.json'), **keyword_arguments)
+            res = rel.fetchall()

@@ -1,0 +1,38 @@
+# name: test/fuzzer/duckfuzz/array_group_by_sample.test
+# description: Test allocating enough dummy list_entry_t's during tuple format serialization.
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE array_tbl(c50 INTEGER[2][]);
+
+statement ok
+INSERT INTO array_tbl VALUES('[[1, 2], [1, 2]]');
+
+statement ok
+INSERT INTO array_tbl VALUES('[[3, 4], [3, 4]]');
+
+query I rowsort
+SELECT c50 FROM array_tbl GROUP BY ALL USING SAMPLE 3;
+----
+[[1, 2], [1, 2]]
+[[3, 4], [3, 4]]
+
+# Three-level nested ARRAY.
+
+statement ok
+CREATE TABLE array_tbl_three_level(c50 INTEGER[2][2][]);
+
+statement ok
+INSERT INTO array_tbl_three_level VALUES('[[[42, 43], [44, 45]], [[46, 47], [48, 49]]]');
+
+statement ok
+INSERT INTO array_tbl_three_level VALUES('[[[12, 13], [14, 15]], [[16, 17], [18, 19]]]');
+
+query I rowsort
+SELECT c50 FROM array_tbl_three_level GROUP BY ALL USING SAMPLE 3 ORDER BY ALL;
+----
+[[[12, 13], [14, 15]], [[16, 17], [18, 19]]]
+[[[42, 43], [44, 45]], [[46, 47], [48, 49]]]

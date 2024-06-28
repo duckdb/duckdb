@@ -1,0 +1,61 @@
+# name: test/sql/index/art/create_drop/test_art_single_value.test
+# description: Test an ART containing a single value
+# group: [create_drop]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+CREATE INDEX i_index ON integers using art(i)
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+query I
+SELECT * FROM integers WHERE i < 3
+----
+1
+
+query I
+SELECT * FROM integers WHERE i <= 1
+----
+1
+
+query I
+SELECT * FROM integers WHERE i > 0
+----
+1
+
+query I
+SELECT * FROM integers WHERE i >= 1
+----
+1
+
+query I
+SELECT * FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT * FROM integers WHERE i < 1
+----
+
+query I
+SELECT * FROM integers WHERE i <= 0
+----
+
+query I
+SELECT * FROM integers WHERE i > 1
+----
+
+query I
+SELECT * FROM integers WHERE i >= 2
+----
+
+query I
+SELECT * FROM integers WHERE i = 2
+----
+

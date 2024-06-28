@@ -1,0 +1,46 @@
+# name: test/sql/index/art/create_drop/test_art_invalid_create_index.test
+# description: Test triggering different exceptions
+# group: [create_drop]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i integer, j integer, k BOOLEAN)
+
+statement error
+CREATE INDEX ON integers(i)
+----
+
+statement error
+CREATE INDEX i_index ON integers(i COLLATE "NOCASE")
+----
+
+statement error
+CREATE INDEX i_index ON integers(i COLLATE "de_DE")
+----
+
+statement error
+CREATE INDEX i_index ON integers using blabla(i)
+----
+
+statement error
+CREATE INDEX i_index ON integers(f)
+----
+
+# index on list columns
+statement ok
+create table lists(id int, l int[]);
+
+statement error
+create index i_index on lists(l);
+----
+
+statement error
+create index i_index on lists(id, l);
+----
+
+# index on constant columns
+statement error
+create index i_index on integers(('hello'));
+----

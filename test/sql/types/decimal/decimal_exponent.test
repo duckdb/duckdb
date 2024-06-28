@@ -31,7 +31,7 @@ SELECT '1e-100'::DECIMAL
 
 # large negative exponent
 query I
-SELECT '1e-99999999'::DECIMAL
+SELECT '1e-9999'::DECIMAL
 ----
 0
 
@@ -58,41 +58,53 @@ SELECT '1e37'::DECIMAL(38,0)
 
 statement error
 SELECT '1e4'::DECIMAL(4,0)
+----
 
 statement error
 SELECT '1e9'::DECIMAL(9,0)
+----
 
 statement error
 SELECT '1e18'::DECIMAL(18,0)
+----
 
 statement error
 SELECT '1e38'::DECIMAL(38,0)
+----
 
 # overflow
 statement error
 SELECT '1e100'::DECIMAL
+----
 
 # multiple exponents
 statement error
 SELECT '1e100e100'::DECIMAL
+----
 
 # fractional exponent
 statement error
 SELECT '1e100.2'::DECIMAL
+----
 
 # very large exponents
 statement error
 SELECT '1e9999999999'::DECIMAL
+----
 
 statement error
 SELECT '1e-9999999999'::DECIMAL
+----
 
 statement error
 SELECT '1e-99999999999999999999999999999999'::DECIMAL
+----
 
 # not an exponent
 statement error
 SELECT '.1f3'::DECIMAL
+----
 
 statement error
 SELECT '1f3'::DECIMAL
+----

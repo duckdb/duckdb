@@ -7,10 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "parquet_types.h"
-#include "thrift_tools.hpp"
-#include "resizable_buffer.hpp"
 #include "decode_utils.hpp"
+#include "parquet_types.h"
+#include "resizable_buffer.hpp"
+#include "thrift_tools.hpp"
 
 namespace duckdb {
 
@@ -18,9 +18,8 @@ class RleBpDecoder {
 public:
 	/// Create a decoder object. buffer/buffer_len is the decoded data.
 	/// bit_width is the width of each value (before encoding).
-	RleBpDecoder(const uint8_t *buffer, uint32_t buffer_len, uint32_t bit_width)
-	    : buffer_((char *)buffer, buffer_len), bit_width_(bit_width), current_value_(0), repeat_count_(0),
-	      literal_count_(0) {
+	RleBpDecoder(data_ptr_t buffer, uint32_t buffer_len, uint32_t bit_width)
+	    : buffer_(buffer, buffer_len), bit_width_(bit_width), current_value_(0), repeat_count_(0), literal_count_(0) {
 		if (bit_width >= 64) {
 			throw std::runtime_error("Decode bit width too large");
 		}
@@ -29,14 +28,14 @@ public:
 	}
 
 	template <typename T>
-	void GetBatch(char *values_target_ptr, uint32_t batch_size) {
-		auto values = (T *)values_target_ptr;
+	void GetBatch(data_ptr_t values_target_ptr, uint32_t batch_size) {
+		auto values = reinterpret_cast<T *>(values_target_ptr);
 		uint32_t values_read = 0;
 
 		while (values_read < batch_size) {
 			if (repeat_count_ > 0) {
 				int repeat_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(repeat_count_));
-				std::fill(values + values_read, values + values_read + repeat_batch, static_cast<T>(current_value_));
+				std::fill_n(values + values_read, repeat_batch, static_cast<T>(current_value_));
 				repeat_count_ -= repeat_batch;
 				values_read += repeat_batch;
 			} else if (literal_count_ > 0) {

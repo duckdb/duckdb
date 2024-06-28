@@ -2,8 +2,6 @@
 # description: Test joins that would generate a perfect hashtable
 # group: [inner]
 
-require 64bit
-
 statement ok
 PRAGMA enable_verification
 
@@ -39,33 +37,3 @@ query I
 select test3.r, test4.r from test3,test4 where test3.r=test4.r order by test3.r, test4.r;
 ----
 204800 values hashing to 77cdae057078ab7ba8339275f564fac1
-
-#This is really slow on smaller vector sizes
-require vector_size 1024
-
-loop i 0 900
-
-statement ok
-INSERT INTO test4 SELECT * FROM test3;
-
-endloop
-
-
-query I
-select test3.r, test4.r from test3,test4 where test3.r=test4.r order by test3.r, test4.r;
-----
-2048000 values hashing to bccebf996dfc50af5dcf31a047785871
-
-loop i 0 9000
-
-statement ok
-INSERT INTO test4 SELECT * FROM test3;
-
-endloop
-
-
-
-query I
-select test3.r, test4.r from test3,test4 where test3.r=test4.r order by test3.r, test4.r;
-----
-20480000 values hashing to 7b4097bf858201ecb9231cf9c1578b12

@@ -16,8 +16,14 @@
 
 namespace duckdb {
 
+class QueryNode;
+
 struct CopyInfo : public ParseInfo {
-	CopyInfo() : catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA) {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::COPY_INFO;
+
+public:
+	CopyInfo() : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA) {
 	}
 
 	//! The catalog name to copy to/from
@@ -36,20 +42,19 @@ struct CopyInfo : public ParseInfo {
 	string file_path;
 	//! Set of (key, value) options
 	case_insensitive_map_t<vector<Value>> options;
+	// The SQL statement used instead of a table when copying data out to a file
+	unique_ptr<QueryNode> select_statement;
 
 public:
-	unique_ptr<CopyInfo> Copy() const {
-		auto result = make_uniq<CopyInfo>();
-		result->catalog = catalog;
-		result->schema = schema;
-		result->table = table;
-		result->select_list = select_list;
-		result->file_path = file_path;
-		result->is_from = is_from;
-		result->format = format;
-		result->options = options;
-		return result;
-	}
+	static string CopyOptionsToString(const string &format, const case_insensitive_map_t<vector<Value>> &options);
+
+public:
+	unique_ptr<CopyInfo> Copy() const;
+	string ToString() const;
+	string TablePartToString() const;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

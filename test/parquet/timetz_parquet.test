@@ -1,0 +1,38 @@
+# name: test/parquet/timetz_parquet.test
+# description: Test parquet file with time with time zone data
+# group: [parquet]
+
+require parquet
+
+query I
+select * from 'data/parquet-testing/timetz.parquet' ;
+----
+14:30:00+00
+11:35:00+00
+01:59:00+00
+
+query I
+select COL_TIME from 'data/parquet-testing/date-with-timezone-int64.parquet' ;
+----
+12:00:00+00
+
+query II
+select pruefbahn_id, arbeits_beginn 
+from 'data/parquet-testing/timetz-nanos.parquet' 
+where pruefbahn_id = '58981';
+----
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00
+58981	07:20:00+00

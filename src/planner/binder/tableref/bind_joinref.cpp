@@ -118,6 +118,13 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 	return result;
 }
 
+unique_ptr<BoundTableRef> Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
+	unnamed_subquery_index = parent_binder.unnamed_subquery_index;
+	auto result = Bind(ref);
+	parent_binder.unnamed_subquery_index = unnamed_subquery_index;
+	return result;
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
@@ -126,13 +133,23 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	auto &right_binder = *result->right_binder;
 
 	result->type = ref.type;
-	result->left = left_binder.Bind(*ref.left);
+	result->left = left_binder.BindJoin(*this, *ref.left);
 	{
 		LateralBinder binder(left_binder, context);
-		result->right = right_binder.Bind(*ref.right);
-		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
-
-		result->lateral = binder.HasCorrelatedColumns();
+		result->right = right_binder.BindJoin(*this, *ref.right);
+		bool is_lateral = false;
+		// Store the correlated columns in the right binder in bound ref for planning of LATERALs
+		// Ignore the correlated columns in the left binder, flattening handles those correlations
+		result->correlated_columns = right_binder.correlated_columns;
+		// Find correlations for the current join
+		for (auto &cor_col : result->correlated_columns) {
+			if (cor_col.depth == 1) {
+				// Depth 1 indicates columns binding from the left indicating a lateral join
+				is_lateral = true;
+				break;
+			}
+		}
+		result->lateral = is_lateral;
 		if (result->lateral) {
 			// lateral join: can only be an INNER or LEFT join
 			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
@@ -195,7 +212,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			}
 			error_msg += "\n   Left candidates: " + left_candidates;
 			error_msg += "\n   Right candidates: " + right_candidates;
-			throw BinderException(FormatError(ref, error_msg));
+			throw BinderException(ref, error_msg);
 		}
 		break;
 	}
@@ -210,6 +227,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	case JoinRefType::CROSS:
 	case JoinRefType::POSITIONAL:
+	case JoinRefType::DEPENDENT:
 		break;
 	}
 	extra_using_columns = RemoveDuplicateUsingColumns(extra_using_columns);
@@ -268,8 +286,24 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
-	MoveCorrelatedExpressions(left_binder);
-	MoveCorrelatedExpressions(right_binder);
+
+	// Update the correlated columns for the parent binder
+	// For the left binder, depth >= 1 indicates correlations from the parent binder
+	for (const auto &col : left_binder.correlated_columns) {
+		if (col.depth >= 1) {
+			AddCorrelatedColumn(col);
+		}
+	}
+	// For the right binder, depth > 1 indicates correlations from the parent binder
+	// (depth = 1 indicates correlations from the left side of the join)
+	for (auto col : right_binder.correlated_columns) {
+		if (col.depth > 1) {
+			// Decrement the depth to account for the effect of the lateral binder
+			col.depth--;
+			AddCorrelatedColumn(col);
+		}
+	}
+
 	for (auto &condition : extra_conditions) {
 		if (ref.condition) {
 			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
@@ -283,8 +317,15 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		result->condition = binder.Bind(ref.condition);
 	}
 
-	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI) {
+	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI || result->type == JoinType::MARK) {
 		bind_context.RemoveContext(right_bindings_list_copy);
+		if (result->type == JoinType::MARK) {
+			auto mark_join_idx = GenerateTableIndex();
+			string mark_join_alias = "__internal_mark_join_ref" + to_string(mark_join_idx);
+			bind_context.AddGenericBinding(mark_join_idx, mark_join_alias, {"__mark_index_column"},
+			                               {LogicalType::BOOLEAN});
+			result->mark_index = mark_join_idx;
+		}
 	}
 
 	return std::move(result);

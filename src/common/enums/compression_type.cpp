@@ -16,6 +16,12 @@ vector<string> ListCompressionTypes(void) {
 	return compression_types;
 }
 
+bool CompressionTypeIsDeprecated(CompressionType compression_type) {
+	const bool is_patas = compression_type == CompressionType::COMPRESSION_PATAS;
+	const bool is_chimp = compression_type == CompressionType::COMPRESSION_CHIMP;
+	return (is_patas || is_chimp);
+}
+
 CompressionType CompressionTypeFromString(const string &str) {
 	auto compression = StringUtil::Lower(str);
 	if (compression == "uncompressed") {
@@ -34,6 +40,10 @@ CompressionType CompressionTypeFromString(const string &str) {
 		return CompressionType::COMPRESSION_CHIMP;
 	} else if (compression == "patas") {
 		return CompressionType::COMPRESSION_PATAS;
+	} else if (compression == "alp") {
+		return CompressionType::COMPRESSION_ALP;
+	} else if (compression == "alprd") {
+		return CompressionType::COMPRESSION_ALPRD;
 	} else {
 		return CompressionType::COMPRESSION_AUTO;
 	}
@@ -61,6 +71,10 @@ string CompressionTypeToString(CompressionType type) {
 		return "Chimp";
 	case CompressionType::COMPRESSION_PATAS:
 		return "Patas";
+	case CompressionType::COMPRESSION_ALP:
+		return "ALP";
+	case CompressionType::COMPRESSION_ALPRD:
+		return "ALPRD";
 	default:
 		throw InternalException("Unrecognized compression type!");
 	}

@@ -42,3 +42,9 @@ SELECT typeof(${func}());
 TIMESTAMP WITH TIME ZONE
 
 endloop
+
+statement ok
+SELECT CURRENT_TIME AS TIME
+
+statement ok
+SELECT CURRENT_TIME + interval (1) second AS TIME

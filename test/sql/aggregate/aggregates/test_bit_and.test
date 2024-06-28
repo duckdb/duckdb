@@ -49,12 +49,15 @@ NULL
 # test incorrect usage
 statement error
 SELECT BIT_AND()
+----
 
 statement error
 SELECT BIT_AND(1, 2, 3)
+----
 
 statement error
 SELECT BIT_AND(BIT_AND(1))
+----
 
 #test on bit types
 statement ok

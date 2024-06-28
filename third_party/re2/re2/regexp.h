@@ -86,6 +86,7 @@
 // form accessible to clients, so that client code can analyze the
 // parsed regular expressions.
 
+#include <stddef.h>
 #include <stdint.h>
 #include <map>
 #include <set>
@@ -177,6 +178,7 @@ enum RegexpStatusCode {
   kRegexpBadCharRange,       // bad character class range
   kRegexpMissingBracket,     // missing closing ]
   kRegexpMissingParen,       // missing closing )
+  kRegexpUnexpectedParen,    // unexpected closing )
   kRegexpTrailingBackslash,  // at end of regexp
   kRegexpRepeatArgument,     // repeat argument missing, e.g. "*"
   kRegexpRepeatSize,         // bad repetition argument
@@ -252,13 +254,13 @@ class CharClass {
   bool full() { return nrunes_ == Runemax+1; }
   bool FoldsASCII() { return folds_ascii_; }
 
-  bool Contains(Rune r);
+  bool Contains(Rune r) const;
   CharClass* Negate();
 
  private:
   CharClass();  // not implemented
   ~CharClass();  // not implemented
-  static CharClass* New(int maxranges);
+  static CharClass* New(size_t maxranges);
 
   friend class CharClassBuilder;
 
@@ -269,29 +271,6 @@ class CharClass {
 
   CharClass(const CharClass&) = delete;
   CharClass& operator=(const CharClass&) = delete;
-};
-
-struct repeat_t {  // Repeat
-    int max_;
-    int min_;
-};
-
-struct capture_t {  // Capture
-    int cap_;
-    std::string* name_;
-};
-
-struct literal_string_t{  // LiteralString
-    int nrunes_;
-    Rune* runes_;
-};
-
-struct char_class_t {  // CharClass
-    // These two could be in separate union members,
-    // but it wouldn't save any space (there are other two-word structs)
-    // and keeping them separate avoids confusion during parsing.
-    CharClass* cc_;
-    CharClassBuilder* ccb_;
 };
 
 class Regexp {
@@ -354,15 +333,15 @@ class Regexp {
       return submany_;
   }
 
-  int min() { DCHECK_EQ(op_, kRegexpRepeat); return repeat_.min_; }
-  int max() { DCHECK_EQ(op_, kRegexpRepeat); return repeat_.max_; }
-  Rune rune() { DCHECK_EQ(op_, kRegexpLiteral); return rune_; }
-  CharClass* cc() { DCHECK_EQ(op_, kRegexpCharClass); return char_class_.cc_; }
-  int cap() { DCHECK_EQ(op_, kRegexpCapture); return capture_.cap_; }
-  const std::string* name() { DCHECK_EQ(op_, kRegexpCapture); return capture_.name_; }
-  Rune* runes() { DCHECK_EQ(op_, kRegexpLiteralString); return literal_string_.runes_; }
-  int nrunes() { DCHECK_EQ(op_, kRegexpLiteralString); return literal_string_.nrunes_; }
-  int match_id() { DCHECK_EQ(op_, kRegexpHaveMatch); return match_id_; }
+  int min() { DCHECK_EQ(op_, kRegexpRepeat); return arguments.repeat.min_; }
+  int max() { DCHECK_EQ(op_, kRegexpRepeat); return arguments.repeat.max_; }
+  Rune rune() { DCHECK_EQ(op_, kRegexpLiteral); return arguments.rune_; }
+  CharClass* cc() { DCHECK_EQ(op_, kRegexpCharClass); return arguments.char_class.cc_; }
+  int cap() { DCHECK_EQ(op_, kRegexpCapture); return arguments.capture.cap_; }
+  const std::string* name() { DCHECK_EQ(op_, kRegexpCapture); return arguments.capture.name_; }
+  Rune* runes() { DCHECK_EQ(op_, kRegexpLiteralString); return arguments.literal_string.runes_; }
+  int nrunes() { DCHECK_EQ(op_, kRegexpLiteralString); return arguments.literal_string.nrunes_; }
+  int match_id() { DCHECK_EQ(op_, kRegexpHaveMatch); return arguments.match_id_; }
 
   // Increments reference count, returns object as convenience.
   Regexp* Incref();
@@ -462,6 +441,17 @@ class Regexp {
   // regardless of the return value.
   bool RequiredPrefix(std::string* prefix, bool* foldcase,
                       Regexp** suffix);
+
+  // Whether every match of this regexp must be unanchored and
+  // begin with a non-empty fixed string (perhaps after ASCII
+  // case-folding).  If so, returns the prefix.
+  // Callers should expect *prefix and *foldcase to be "zeroed"
+  // regardless of the return value.
+  bool RequiredPrefixForAccel(std::string* prefix, bool* foldcase);
+
+  // Controls the maximum repeat count permitted by the parser.
+  // FOR FUZZING ONLY.
+  static void FUZZING_ONLY_set_maximum_repeat_count(int i);
 
  private:
   // Constructor allocates vectors as appropriate for operator.
@@ -581,14 +571,29 @@ class Regexp {
 
   // Arguments to operator.  See description of operators above.
   union {
-    repeat_t repeat_;
-    capture_t capture_;
-    literal_string_t literal_string_;
-    char_class_t char_class_;
+    struct {  // Repeat
+      int max_;
+      int min_;
+    } repeat;
+    struct {  // Capture
+      int cap_;
+      std::string* name_;
+    } capture;
+    struct {  // LiteralString
+      int nrunes_;
+      Rune* runes_;
+    } literal_string;
+    struct {  // CharClass
+      // These two could be in separate union members,
+      // but it wouldn't save any space (there are other two-word structs)
+      // and keeping them separate avoids confusion during parsing.
+      CharClass* cc_;
+      CharClassBuilder* ccb_;
+    } char_class;
     Rune rune_;  // Literal
     int match_id_;  // HaveMatch
     void *the_union_[2];  // as big as any other element, for memset
-  };
+  } arguments;
 
   Regexp(const Regexp&) = delete;
   Regexp& operator=(const Regexp&) = delete;
@@ -655,6 +660,6 @@ inline Regexp::ParseFlags operator~(Regexp::ParseFlags a) {
       ~static_cast<int>(a) & static_cast<int>(Regexp::AllParseFlags));
 }
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
 #endif  // RE2_REGEXP_H_

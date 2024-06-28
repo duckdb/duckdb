@@ -14,18 +14,23 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/helper.hpp"
+#include <memory>
 
 PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::unique_ptr<T>)
+PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::shared_ptr<T>)
 
 namespace pybind11 {
 
 namespace detail {
+
 template <typename Type, bool SAFE>
 struct type_caster<duckdb::vector<Type, SAFE>> : list_caster<duckdb::vector<Type, SAFE>, Type> {};
 } // namespace detail
 
 bool gil_check();
 void gil_assert();
+bool is_list_like(handle obj);
+bool is_dict_like(handle obj);
 
 } // namespace pybind11
 
@@ -74,7 +79,7 @@ template <class T>
 bool try_cast(const handle &object, T &result) {
 	try {
 		result = cast<T>(object);
-	} catch (cast_error &e) {
+	} catch (cast_error &) {
 		return false;
 	}
 	return true;

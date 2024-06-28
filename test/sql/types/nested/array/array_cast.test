@@ -1,0 +1,169 @@
+# name: test/sql/types/nested/array/array_cast.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+# Should be able to cast to varchar
+query I
+SELECT array_value(1, 2, 3)::VARCHAR
+----
+[1, 2, 3]
+
+# Should be able to cast to list
+query I
+SELECT array_value(1, 2, 3)::INT[]
+----
+[1, 2, 3]
+
+# Should be able to implicitly cast to list
+query I
+SELECT list_extract(array_value(1, 2, 3), 2)
+----
+2
+
+# Should not be able to implicitly cast to list with unnest
+statement error
+SELECT * FROM UNNEST(array_value(1, 2, 3))
+----
+
+# Should be able to cast to list with unnest
+query I
+SELECT unnest(array_value(1, 2, 3)::INT[])
+----
+1
+2
+3
+
+# Should be able to cast if the elements are castable
+query I
+SELECT array_value('1.0', '2.0', '3.0')::DOUBLE[3]
+----
+[1.0, 2.0, 3.0]
+
+# Should not be able to cast arrays of different lengths
+statement error
+SELECT array_value(1, 2, 3)::INT[2]
+----
+Conversion Error: Cannot cast array of size 3 to array of size 2
+
+# Should not be able to cast arrays of different lengths
+statement error
+SELECT array_value(1, 2, 3)::INT[4]
+----
+Conversion Error: Cannot cast array of size 3 to array of size 4
+
+# Should be able to cast from list to array
+query I
+SELECT [1,2,3]::INT[3]
+----
+[1, 2, 3]
+
+# Should be able to cast from list to array if child types are castable
+query I
+SELECT ['1.0', '2.0', '3.0']::DOUBLE[3]
+----
+[1.0, 2.0, 3.0]
+
+# Should not be able to cast from list to array if child types are not castable
+statement error
+SELECT [1, 2, 3]::BLOB[3]
+----
+
+# Should be able to cast from NULL
+query I
+SELECT NULL::INT[3]
+----
+NULL
+
+# Should be able to cast from list if all elements have the same length
+query I
+SELECT [[1, 2, 3], [4, 5, 6]]::INT[3][2]
+----
+[[1, 2, 3], [4, 5, 6]]
+
+# Should be able to null-cast from list
+query I
+SELECT (NULL::INT[])::INT[3]
+----
+NULL
+
+query I
+SELECT c::INT[3] FROM (VALUES ([1,2,3]), ([4,NULL,6]), (NULL), ([7,8,9])) as t(c);
+----
+[1, 2, 3]
+[4, NULL, 6]
+NULL
+[7, 8, 9]
+
+# Should not be able to cast from list if all elements do not have the same length
+statement error
+SELECT [1,2,3]::INT[2]
+----
+Conversion Error: Cannot cast list with length 3 to array with length 2
+
+
+statement error
+SELECT [[1, 2, 3], [4, 5, 6, 7]]::INT[3][2]
+----
+Conversion Error: Cannot cast list with length 4 to array with length 3
+
+
+# Should be able to implict cast arrays if the elements are castable
+statement ok
+CREATE OR REPLACE TABLE t1 AS SELECT [1, 2, 3]::INT[3];
+
+statement ok
+CREATE OR REPLACE TABLE t2 AS SELECT ['4', '5', '6']::VARCHAR[3];
+
+statement ok
+INSERT INTO t2 SELECT * FROM t1;
+
+
+# Should be able to cast with nulls
+query I
+SELECT ([1, NULL, 3]::INT[3])::VARCHAR[3]
+----
+[1, NULL, 3]
+
+query I
+SELECT (NULL::INT[3])::VARCHAR
+----
+NULL
+
+# Should not be able to cast if the elements are not castable
+statement error
+SELECT (['2', 'abc', '3']::VARCHAR[3])::INT[]
+----
+
+# Should not be able to cast to unrelated type
+statement error
+SELECT ([1,2,3]::INT[3])::INT;
+----
+
+# Should not be able to cast to list if child types fail
+query I
+SELECT TRY_CAST([42, 999, NULL, NULL, -42]::INT[5] AS TIMESTAMP WITH TIME ZONE[]);
+----
+[NULL, NULL, NULL, NULL, NULL]
+
+# Should be able to cast null arrays of different types
+query I
+select (NULL::INT[3])::VARCHAR[3];
+----
+NULL
+
+# Should be able to cast from varchar
+query I
+SELECT '[1, 2, 3]'::INTEGER[3]
+----
+[1, 2, 3]
+
+# Handle wonky try-casts
+query I
+SELECT TRY_CAST(l AS INTEGER[][3]) FROM VALUES (['foo']) as v(l);
+----
+NULL

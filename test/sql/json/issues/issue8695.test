@@ -1,0 +1,28 @@
+# name: test/sql/json/issues/issue8695.test
+# description: Test issue 8695 - INTERNAL Error: Attempted to dereference unique_ptr that is NULL
+# group: [issues]
+
+require json
+
+# these two succeeded
+statement ok
+SELECT MAX(JSON_ARRAY_LENGTH(filter_keystage))::int - 1 FROM read_json_auto('data/json/filter_keystage.ndjson');
+
+statement ok
+WITH RECURSIVE nums AS (
+    SELECT 0 AS n
+    UNION ALL
+    SELECT n + 1 FROM nums
+    WHERE n < 5
+)
+SELECT * FROM nums;
+
+# but combining them fails
+statement ok
+WITH RECURSIVE nums AS (
+    SELECT 0 AS n
+    UNION ALL
+    SELECT n + 1 FROM nums
+    WHERE n < (SELECT MAX(JSON_ARRAY_LENGTH(filter_keystage))::int - 1 FROM read_json_auto('data/json/filter_keystage.ndjson'))
+)
+SELECT * FROM nums;

@@ -48,6 +48,12 @@ SELECT * FROM t ORDER BY i;
 4	2019-06-05
 5	2019-06-05
 
+query I
+SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/date.csv')
+----
+2019-06-05
+
+
 # should also work if we use auto detect
 query II
 WITH RECURSIVE t(i) AS

@@ -23,10 +23,12 @@ CREATE VIEW v1 AS SELECT 42
 
 statement error
 PRAGMA storage_info('v1')
+----
 
 # non-existent table
 statement error
 PRAGMA storage_info('bla')
+----
 
 # different types
 statement ok

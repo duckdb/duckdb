@@ -26,6 +26,13 @@ SELECT EXTRACT(month FROM i) FROM dates
 8
 NULL
 
+# quarter
+query I
+SELECT EXTRACT(quarter FROM i) FROM dates
+----
+3
+NULL
+
 # day
 query I
 SELECT EXTRACT(day FROM i) FROM dates

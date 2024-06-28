@@ -23,6 +23,8 @@ string StatementTypeToString(StatementType type) {
 		return "TRANSACTION";
 	case StatementType::COPY_STATEMENT:
 		return "COPY";
+	case StatementType::COPY_DATABASE_STATEMENT:
+		return "COPY_DATABASE";
 	case StatementType::ANALYZE_STATEMENT:
 		return "ANALYZE";
 	case StatementType::VARIABLE_SET_STATEMENT:
@@ -37,8 +39,6 @@ string StatementTypeToString(StatementType type) {
 		return "DROP";
 	case StatementType::PRAGMA_STATEMENT:
 		return "PRAGMA";
-	case StatementType::SHOW_STATEMENT:
-		return "SHOW";
 	case StatementType::VACUUM_STATEMENT:
 		return "VACUUM";
 	case StatementType::RELATION_STATEMENT:
@@ -61,6 +61,8 @@ string StatementTypeToString(StatementType type) {
 		return "DETACH";
 	case StatementType::MULTI_STATEMENT:
 		return "MULTI";
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+		return "UPDATE_EXTENSIONS";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}

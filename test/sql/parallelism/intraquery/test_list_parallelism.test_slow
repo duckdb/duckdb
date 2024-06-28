@@ -1,0 +1,51 @@
+# name: test/sql/parallelism/intraquery/test_list_parallelism.test_slow
+# description: Test list aggregates on a small-ish tables in parallel(few thousand rows)
+# group: [intraquery]
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+PRAGMA enable_profiling
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/test.json'
+
+statement ok
+PRAGMA profiling_mode = detailed
+
+statement ok
+create  table t (a integer, b integer);
+
+loop i 0 2000
+
+statement ok
+insert into t values (${i},${i}%10);
+
+statement ok
+insert into t values (NULL,NULL);
+
+endloop
+
+query I
+select count(*) from (SELECT UNNEST(l1) as un FROM (SELECT LIST(a) l1 FROM t) t1) t2 where un is not null
+----
+2000
+
+query I
+select count(*) from (SELECT UNNEST(l1) as un FROM (SELECT LIST(a) l1 FROM t) t1) t2 where un is null
+----
+2000
+
+query I
+select count(*) from (SELECT UNNEST(l1) as un FROM (SELECT LIST(a) l1 FROM t) t1) t2
+----
+4000
+
+query I
+select count (*) from (SELECT LIST(b) l1 FROM t group by a) t1
+----
+2001

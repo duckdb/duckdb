@@ -129,4 +129,5 @@ SELECT DISTINCT ON (integers.i) integers.i, integers.j FROM integers ORDER BY i,
 # out of bounds
 statement error
 SELECT DISTINCT ON (2) i FROM integers
-
+----
+Binder Error: ORDER term out of range - should be between 1 and 1

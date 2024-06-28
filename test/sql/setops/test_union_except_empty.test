@@ -1,0 +1,28 @@
+# name: test/sql/setops/test_union_except_empty.test
+# description: Test order of UNION statements
+# group: [setops]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t (i int);
+
+statement ok
+insert into t values (1),(2),(3),(4),(4);
+
+query I
+select i from t union select 1 where false order by 1;
+----
+1
+2
+3
+4
+
+query I
+select i from t except select 1 where false order by 1;
+----
+1
+2
+3
+4

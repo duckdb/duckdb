@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/code_cov/csv_exact_buffer_size.test
+# description: Test with exact buffer size being the file size
+# group: [code_cov]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select count(*) from read_csv_auto('data/csv/small_file.csv', buffer_size = 7)
+----
+2

@@ -1,0 +1,259 @@
+# name: test/optimizer/statistics/statistics_filter.test_slow
+# description: Statistics propagation test with filters
+# group: [statistics]
+
+foreach type utinyint usmallint uinteger ubigint tinyint smallint integer bigint hugeint uhugeint float double
+
+statement ok
+CREATE TABLE integers AS SELECT i::${type} i FROM (VALUES (1), (2), (3)) tbl(i);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+PRAGMA enable_verification
+
+# = filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i=0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM integers WHERE i=4;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# = filter is in range
+query II
+EXPLAIN SELECT * FROM integers WHERE i=1;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# > filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i>3;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# > filter is in of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i>2;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# >= filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i>=4;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# >= filter is in of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i>=3;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# < filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i<1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# < filter is in of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i<2;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# <= filter is out of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i<=0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# <= filter is in of range
+query II
+EXPLAIN SELECT * FROM integers WHERE i<=1;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# verify that all these queries return correct results
+query I
+SELECT * FROM integers WHERE i=0;
+----
+
+query I
+SELECT * FROM integers WHERE i=4;
+----
+
+query I
+SELECT * FROM integers WHERE i=1;
+----
+1
+
+query I
+SELECT * FROM integers WHERE i>3;
+----
+
+query I
+SELECT * FROM integers WHERE i>2;
+----
+3
+
+query I
+SELECT * FROM integers WHERE i>=4;
+----
+
+
+query I
+SELECT * FROM integers WHERE i>=3;
+----
+3
+
+query I
+SELECT * FROM integers WHERE i<1;
+----
+
+
+query I
+SELECT * FROM integers WHERE i<2;
+----
+1
+
+query I
+SELECT * FROM integers WHERE i<=0;
+----
+
+
+query I
+SELECT * FROM integers WHERE i<=1;
+----
+1
+
+# we repeat everything we did above, but with a subquery with a limit
+# the limit prevents the filter from being pushed down into the scan
+# which causes these tests to test different behavior
+
+# = filter is out of range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i=0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i=4;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# = filter is in range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i=1;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# > filter is out of range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i>3;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# > filter is in of range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i>2;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# >= filter is out of range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i>=4;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# >= filter is in of range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i>=3;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# < filter is out of range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i<1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# < filter is in of range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i<2;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# <= filter is out of range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i<=0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# <= filter is in of range
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i<=1;
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# verify that all these queries return correct results
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i=0;
+----
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i=4;
+----
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i=1;
+----
+1
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i>3;
+----
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i>2;
+----
+3
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i>=4;
+----
+
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i>=3;
+----
+3
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i<1;
+----
+
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i<2;
+----
+1
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i<=0;
+----
+
+
+query I
+SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i<=1;
+----
+1
+
+statement ok
+DROP TABLE integers;
+
+endloop

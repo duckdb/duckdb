@@ -1,0 +1,38 @@
+# name: test/sql/storage/delete/drop_many_deletes.test_slow
+# description: Test dropping a table that has many deletes
+# group: [delete]
+
+load __TEST_DIR__/drop_many_deletes.db
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(0, 10000000) t(i);
+
+query I
+DELETE FROM integers WHERE i % 2 = 0
+----
+5000000
+
+restart
+
+query I
+SELECT COUNT(*) FROM integers
+----
+5000000
+
+# the metadata size is less than or euqal to 262144 bytes
+query I
+SELECT COUNT(*) * get_block_size('drop_many_deletes') <= 262144 FROM pragma_metadata_info()
+----
+1
+
+statement ok
+DROP TABLE integers
+
+restart
+
+# verify that the blocks are returned to the system and the metadata blocks are freed
+# by verifying that the metadata size is still less than or euqal to 262144 bytes
+query I
+SELECT COUNT(*) * get_block_size('drop_many_deletes') <= 262144 FROM pragma_metadata_info()
+----
+1

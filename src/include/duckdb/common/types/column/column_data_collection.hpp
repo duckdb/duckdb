@@ -28,7 +28,7 @@ public:
 	//! Constructs an in-memory column data collection from an allocator
 	DUCKDB_API ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
-	DUCKDB_API ColumnDataCollection(Allocator &allocator);
+	DUCKDB_API explicit ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
 	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
@@ -60,6 +60,11 @@ public:
 	idx_t ColumnCount() const {
 		return types.size();
 	}
+
+	//! The size (in bytes) of this ColumnDataCollection
+	idx_t SizeInBytes() const;
+	//! The allocation size (in bytes) of this ColumnDataCollection - this property is cached
+	idx_t AllocationSize() const;
 
 	//! Get the allocator
 	DUCKDB_API Allocator &GetAllocator() const;
@@ -143,8 +148,16 @@ public:
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
 
-	//! Get a vector of references to every chunk (segment, index in segment), and optionally sort by block id
+	//! Get references to the string heaps in this ColumnDataCollection
+	vector<shared_ptr<StringHeap>> GetHeapReferences();
+	//! Get the allocator type of this ColumnDataCollection
+	ColumnDataAllocatorType GetAllocatorType() const;
+
+	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<ColumnDataCollection> Deserialize(Deserializer &deserializer);
 
 private:
 	//! Creates a new segment within the ColumnDataCollection
@@ -170,39 +183,39 @@ private:
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
-	DUCKDB_API ColumnDataRowCollection(const ColumnDataCollection &collection);
+	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection);
 
 public:
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
 
 public:
 	// container API
-	bool empty() const {
+	bool empty() const { // NOLINT: match stl API
 		return rows.empty();
 	}
-	idx_t size() const {
+	idx_t size() const { // NOLINT: match stl API
 		return rows.size();
 	}
 
 	DUCKDB_API ColumnDataRow &operator[](idx_t i);
 	DUCKDB_API const ColumnDataRow &operator[](idx_t i) const;
 
-	vector<ColumnDataRow>::iterator begin() {
+	vector<ColumnDataRow>::iterator begin() { // NOLINT: match stl API
 		return rows.begin();
 	}
-	vector<ColumnDataRow>::iterator end() {
+	vector<ColumnDataRow>::iterator end() { // NOLINT: match stl API
 		return rows.end();
 	}
-	vector<ColumnDataRow>::const_iterator cbegin() const {
+	vector<ColumnDataRow>::const_iterator cbegin() const { // NOLINT: match stl API
 		return rows.cbegin();
 	}
-	vector<ColumnDataRow>::const_iterator cend() const {
+	vector<ColumnDataRow>::const_iterator cend() const { // NOLINT: match stl API
 		return rows.cend();
 	}
-	vector<ColumnDataRow>::const_iterator begin() const {
+	vector<ColumnDataRow>::const_iterator begin() const { // NOLINT: match stl API
 		return rows.begin();
 	}
-	vector<ColumnDataRow>::const_iterator end() const {
+	vector<ColumnDataRow>::const_iterator end() const { // NOLINT: match stl API
 		return rows.end();
 	}
 

@@ -1,0 +1,22 @@
+# name: test/sql/copy/csv/code_cov/buffer_manager_finalize.test
+# description: Test to reach Finalize call in the csv buffer manager for codecov
+# group: [code_cov]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 AS select i, (i+1) as j from range(0,3000) tbl(i)
+
+statement ok
+COPY t1 TO '__TEST_DIR__/t1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+query I
+select count(*) from '__TEST_DIR__/t1.csv'
+----
+3000
+
+query I
+select count(*) from read_csv('data/csv/empty.csv', columns=STRUCT_PACK(d := 'BIGINT'), header=0, auto_detect = false)
+----
+0

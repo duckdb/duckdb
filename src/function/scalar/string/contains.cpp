@@ -22,7 +22,7 @@ static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_siz
 	UNSIGNED haystack_entry = 0;
 	const UNSIGNED start = (sizeof(UNSIGNED) * 8) - 8;
 	const UNSIGNED shift = (sizeof(UNSIGNED) - NEEDLE_SIZE) * 8;
-	for (int i = 0; i < NEEDLE_SIZE; i++) {
+	for (idx_t i = 0; i < NEEDLE_SIZE; i++) {
 		needle_entry |= UNSIGNED(needle[i]) << UNSIGNED(start - i * 8);
 		haystack_entry |= UNSIGNED(haystack[i]) << UNSIGNED(start - i * 8);
 	}
@@ -106,9 +106,9 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 	if (location == nullptr) {
 		return DConstants::INVALID_INDEX;
 	}
-	idx_t base_offset = (const unsigned char *)location - haystack;
+	idx_t base_offset = UnsafeNumericCast<idx_t>(const_uchar_ptr_cast(location) - haystack);
 	haystack_size -= base_offset;
-	haystack = (const unsigned char *)location;
+	haystack = const_uchar_ptr_cast(location);
 	// switch algorithm depending on needle size
 	switch (needle_size) {
 	case 1:
@@ -133,9 +133,9 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 }
 
 idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
-	auto haystack = (const unsigned char *)haystack_s.GetData();
+	auto haystack = const_uchar_ptr_cast(haystack_s.GetData());
 	auto haystack_size = haystack_s.GetSize();
-	auto needle = (const unsigned char *)needle_s.GetData();
+	auto needle = const_uchar_ptr_cast(needle_s.GetData());
 	auto needle_size = needle_s.GetSize();
 	if (needle_size == 0) {
 		// empty needle: always true

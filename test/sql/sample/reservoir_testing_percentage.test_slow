@@ -1,0 +1,79 @@
+# name: test/sql/sample/reservoir_testing_percentage.test_slow
+# description: Test SAMPLE keyword
+# group: [sample]
+
+loop i 1 8
+
+statement ok
+pragma threads=${i};
+
+statement ok
+CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_time() c from range(1000);
+
+query I
+SELECT count(*) from t1 using sample 0 percent (reservoir);
+----
+0
+
+query I
+SELECT count(*) from t1 using sample 10 percent (reservoir);
+----
+100
+
+query I
+SELECT count(*) from t1 using sample 20 percent (reservoir);
+----
+200
+
+query I
+SELECT count(*) from t1 using sample 80 percent (reservoir);
+----
+800
+
+query I
+SELECT count(*) from t1 using sample 100 percent (reservoir);
+----
+1000
+
+statement ok
+CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_time() c from range(10000);
+
+query I
+select count(*) from t1 using sample 80 percent (reservoir);
+----
+8000
+
+statement ok
+CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_time() c from range(1000000);
+
+query I
+select count(*) from t1 using sample 20 percent (reservoir);
+----
+200000
+
+query I
+select count(*) from t1 using sample 30 percent (reservoir);
+----
+300000
+
+query I
+select count(*) from t1 using sample 40 percent (reservoir);
+----
+400000
+
+query I
+select count(*) from t1 using sample 50 percent (reservoir);
+----
+500000
+
+query I
+select count(*) from t1 using sample 60 percent (reservoir);
+----
+600000
+
+query I
+select count(*) from t1 using sample 70 percent (reservoir);
+----
+700000
+
+endloop

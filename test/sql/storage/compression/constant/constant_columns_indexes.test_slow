@@ -7,44 +7,45 @@ load __TEST_DIR__/constant_columns.db
 
 # simple constant
 statement ok
-CREATE TABLE integers AS SELECT i id, CASE WHEN i<500000 THEN 1 ELSE NULL END i FROM range(1000000) tbl(i)
+CREATE TABLE integers AS SELECT i id,
+CASE WHEN i < 500000 THEN 1 ELSE NULL END i FROM range(1000000) tbl(i);
 
 statement ok
-CREATE INDEX i_index ON integers(id)
+CREATE INDEX i_index ON integers(id);
 
 query IIIII
-SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM integers
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM integers;
 ----
 1	1	1	1000000	500000
 
 query II
-SELECT * FROM integers WHERE id=1
+SELECT * FROM integers WHERE id = 1;
 ----
 1	1
 
 query II
-SELECT * FROM integers WHERE id=2
+SELECT * FROM integers WHERE id = 2;
 ----
 2	1
 
 query II
-SELECT * FROM integers WHERE id=999999
+SELECT * FROM integers WHERE id = 999999;
 ----
 999999	NULL
 
 restart
 
 query II
-SELECT * FROM integers WHERE id=1
+SELECT * FROM integers WHERE id = 1;
 ----
 1	1
 
 query II
-SELECT * FROM integers WHERE id=2
+SELECT * FROM integers WHERE id = 2;
 ----
 2	1
 
 query II
-SELECT * FROM integers WHERE id=999999
+SELECT * FROM integers WHERE id = 999999;
 ----
 999999	NULL

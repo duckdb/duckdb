@@ -17,7 +17,7 @@ struct SegmentLock {
 public:
 	SegmentLock() {
 	}
-	SegmentLock(mutex &lock) : lock(lock) {
+	explicit SegmentLock(mutex &lock) : lock(lock) {
 	}
 	// disable copy constructors
 	SegmentLock(const SegmentLock &other) = delete;

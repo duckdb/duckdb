@@ -1,0 +1,28 @@
+# name: test/sql/attach/attach_issue7567.test
+# description: Issue #7567 - Setting the current schema should not change the current database
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+attach ':memory:' as test;
+
+statement ok
+use test;
+
+statement ok
+create schema schema1;
+
+statement ok
+create table schema1.table1 as select 1 as a;
+
+statement error
+set schema='schema2';
+----
+No catalog + schema named "schema2" found
+
+statement ok
+set schema='schema1';
+
+statement ok
+select * from table1;

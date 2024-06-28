@@ -1,0 +1,28 @@
+# name: test/sql/generated_columns/virtual/natural_join.test_slow
+# group: [virtual]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+CREATE TABLE t1(
+	c1 AS (8),
+	c0 INT
+);
+
+query I
+SELECT 1 FROM t1 NATURAL JOIN t1 t2 GROUP BY c1;
+
+statement ok
+CREATE TABLE t2(
+	c1 AS (j * 5),
+	j INT
+);
+
+statement ok
+insert into t2 VALUES(4);
+
+query I
+select 1 from t2 NATURAL JOIN t2 AS t3 GROUP BY c1;
+----
+1

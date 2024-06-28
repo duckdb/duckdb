@@ -1,0 +1,12 @@
+# name: test/sql/vacuum/vacuum_nested_types.test
+# description: Test ANALYZE statement for nested types, which do not use the HyperLogLog
+# group: [vacuum]
+
+statement ok
+CREATE TABLE test (x INT[], y AS (x || [100]));
+
+statement ok
+ANALYZE test(y, x);
+
+statement ok
+INSERT INTO test SELECT [range % 5000] FROM range(10000);

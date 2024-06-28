@@ -1,8 +1,10 @@
 import gc
-import duckdb
 import pytest
-import os, psutil
+import os
 import pandas as pd
+
+psutil = pytest.importorskip("psutil")
+
 
 @pytest.fixture
 def check_leaks():
@@ -17,10 +19,11 @@ def check_leaks():
     # Assert that the amount of used memory does not pass 5mb
     assert difference <= 5_000_000
 
+
 class TestMemoryLeaks(object):
-    def test_fetchmany(self, check_leaks):
+    def test_fetchmany(self, duckdb_cursor, check_leaks):
         datetimes = ['1985-01-30T16:41:43' for _ in range(10000)]
 
-        df = pd.DataFrame({'time' : pd.Series(data=datetimes)})
+        df = pd.DataFrame({'time': pd.Series(data=datetimes)})
         for _ in range(100):
-            duckdb.sql('select time::TIMESTAMP from df').fetchmany(10000)
+            duckdb_cursor.sql('select time::TIMESTAMP from df').fetchmany(10000)

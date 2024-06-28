@@ -12,6 +12,7 @@
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
+struct CastParameters;
 
 //! The Blob class is a static class that holds helper functions for the Blob type.
 class Blob {
@@ -35,13 +36,15 @@ public:
 	DUCKDB_API static string ToString(string_t blob);
 
 	//! Returns the blob size of a string -> blob conversion
-	DUCKDB_API static bool TryGetBlobSize(string_t str, idx_t &result_size, string *error_message);
+	DUCKDB_API static bool TryGetBlobSize(string_t str, idx_t &result_size, CastParameters &parameters);
 	DUCKDB_API static idx_t GetBlobSize(string_t str);
+	DUCKDB_API static idx_t GetBlobSize(string_t str, CastParameters &parameters);
 	//! Convert a string to a blob. This function should ONLY be called after calling GetBlobSize, since it does NOT
 	//! perform data validation.
 	DUCKDB_API static void ToBlob(string_t str, data_ptr_t output);
 	//! Convert a string object to a blob
 	DUCKDB_API static string ToBlob(string_t str);
+	DUCKDB_API static string ToBlob(string_t str, CastParameters &parameters);
 
 	// base 64 conversion functions
 	//! Returns the string size of a blob -> base64 conversion

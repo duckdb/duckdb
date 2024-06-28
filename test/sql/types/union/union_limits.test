@@ -90,8 +90,10 @@ CREATE TABLE tbl1 (u UNION(
     a241 INT, a242 INT, a243 INT, a244 INT, a245 INT, a246 INT, a247 INT, a248 INT,
     a249 INT, a250 INT, a251 INT, a252 INT, a253 INT, a254 INT, a255 INT, a256 INT, a257
 ))
+----
 
 
 # Need at least one column
 statement error
 CREATE TABLE tbl1 (u UNION())
+----

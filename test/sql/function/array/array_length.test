@@ -1,0 +1,62 @@
+# name: test/sql/function/array/array_length.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+# Array length
+query I
+SELECT length(array_value(1, 2, 3));
+----
+3
+
+# array length for NULL values
+statement ok
+create table arrays(a int[3]);
+
+statement ok
+insert into arrays values ([1, 2, 3]), ([4, 5, 6])
+
+query I
+select length(a) from arrays;
+----
+3
+3
+
+query I
+select length(NULL::int[3]) from arrays;
+----
+NULL
+NULL
+
+statement ok
+insert into arrays values (NULL);
+
+query I
+select length(a) from arrays;
+----
+3
+3
+NULL
+
+# Array length with dimension argument
+query I
+SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 1);
+----
+2
+
+query I
+SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 2);
+----
+3
+
+statement error
+SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 3);
+----
+Out of Range Error: array_length dimension '3' out of range (min: '1', max: '2')
+
+statement error
+SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 0);
+----
+Out of Range Error: array_length dimension '0' out of range (min: '1', max: '2')
+

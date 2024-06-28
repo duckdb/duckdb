@@ -14,11 +14,18 @@ static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op) {
 	if (op.IsSource()) {
 		return op.SourceOrder();
 	}
+
+	idx_t child_idx = 0;
 	for (auto &child : op.children) {
+		// Do not take the materialization phase of physical CTEs into account
+		if (op.type == PhysicalOperatorType::CTE && child_idx == 0) {
+			continue;
+		}
 		auto child_preservation = OrderPreservationRecursive(*child);
 		if (child_preservation != OrderPreservationType::INSERTION_ORDER) {
 			return child_preservation;
 		}
+		child_idx++;
 	}
 	return OrderPreservationType::INSERTION_ORDER;
 }
@@ -87,13 +94,14 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, Log
 	unique_ptr<PhysicalOperator> insert;
 	if (use_batch_index && !parallel_streaming_insert) {
 		insert = make_uniq<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
-		                                        op.estimated_cardinality);
+		                                        std::move(op.bound_constraints), op.estimated_cardinality);
 	} else {
 		insert = make_uniq<PhysicalInsert>(
-		    op.types, op.table, op.column_index_map, std::move(op.bound_defaults), std::move(op.expressions),
-		    std::move(op.set_columns), std::move(op.set_types), op.estimated_cardinality, op.return_chunk,
-		    parallel_streaming_insert && num_threads > 1, op.action_type, std::move(op.on_conflict_condition),
-		    std::move(op.do_update_condition), std::move(op.on_conflict_filter), std::move(op.columns_to_fetch));
+		    op.types, op.table, op.column_index_map, std::move(op.bound_defaults), std::move(op.bound_constraints),
+		    std::move(op.expressions), std::move(op.set_columns), std::move(op.set_types), op.estimated_cardinality,
+		    op.return_chunk, parallel_streaming_insert && num_threads > 1, op.action_type,
+		    std::move(op.on_conflict_condition), std::move(op.do_update_condition), std::move(op.on_conflict_filter),
+		    std::move(op.columns_to_fetch));
 	}
 	D_ASSERT(plan);
 	insert->children.push_back(std::move(plan));

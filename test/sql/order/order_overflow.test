@@ -1,0 +1,8 @@
+# name: test/sql/order/order_overflow.test
+# description: Test overflow in ORDER BY
+# group: [order]
+
+statement error
+SELECT 42 ORDER BY -9223372036854775808;
+----
+ORDER term out of range

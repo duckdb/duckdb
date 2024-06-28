@@ -145,3 +145,62 @@ ORDER BY ALL
 2023-03-21 21:00:00	3
 infinity	9
 NULL	-1
+
+#
+# Coverage
+#
+
+# rhs_sink.count == 0
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF LEFT JOIN (SELECT * FROM events0 WHERE log(value + 5) > 10) e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+2023-03-21 12:00:00	NULL
+2023-03-21 13:00:00	NULL
+2023-03-21 14:00:00	NULL
+2023-03-21 15:00:00	NULL
+2023-03-21 16:00:00	NULL
+2023-03-21 17:00:00	NULL
+2023-03-21 18:00:00	NULL
+2023-03-21 19:00:00	NULL
+2023-03-21 20:00:00	NULL
+2023-03-21 21:00:00	NULL
+infinity	NULL
+NULL	NULL
+
+# EmptyResultIfRHSIsEmpty
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN (SELECT * FROM events0 WHERE log(value + 5) > 10) e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+
+# SEMI JOIN
+query I
+SELECT p.begin
+FROM probe0 p ASOF SEMI JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+2023-03-21 13:00:00
+2023-03-21 14:00:00
+2023-03-21 15:00:00
+2023-03-21 16:00:00
+2023-03-21 17:00:00
+2023-03-21 18:00:00
+2023-03-21 19:00:00
+2023-03-21 20:00:00
+2023-03-21 21:00:00
+infinity
+
+# ANTI JOIN
+query I
+SELECT p.begin
+FROM probe0 p ASOF ANTI JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+2023-03-21 12:00:00

@@ -16,7 +16,7 @@ select * from lineitem order by all
 # create lineitem json table
 statement ok
 create table lineitem_j as
-    select json_quote(row(l_orderkey,l_partkey,l_suppkey,l_linenumber,l_quantity,l_extendedprice,l_discount,l_tax,l_returnflag,
+    select json_quote(struct_pack(l_orderkey,l_partkey,l_suppkey,l_linenumber,l_quantity,l_extendedprice,l_discount,l_tax,l_returnflag,
                           l_linestatus,l_shipdate,l_commitdate,l_receiptdate,l_shipinstruct,l_shipmode,l_comment)) as j
     from lineitem
 

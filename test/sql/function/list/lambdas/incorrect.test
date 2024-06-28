@@ -3,112 +3,152 @@
 # group: [lambdas]
 
 statement ok
-PRAGMA enable_verification
+PRAGMA enable_verification;
 
 statement ok
-CREATE TABLE incorrect_test (i integer);
+CREATE TABLE incorrect_test (i INTEGER);
 
-foreach func_name list_transform list_filter
-
-statement error
-SELECT ${func_name}()
+foreach func_name list_transform list_filter list_reduce
 
 statement error
-SELECT ${func_name}([])
+SELECT ${func_name}();
+----
 
 statement error
-SELECT ${func_name}([1], x -> x, 3)
+SELECT ${func_name}([]);
+----
 
 statement error
-SELECT ${func_name}(1, 2, 3)
+SELECT ${func_name}(1, 2, 3);
+----
 
 statement error
-SELECT ${func_name}(NULL, NULL)
+SELECT ${func_name}(NULL, NULL);
+----
+Binder Error: Invalid lambda expression!
 
 statement error
-SELECT ${func_name}(NULL, x)
+SELECT ${func_name}(NULL, x);
+----
+Binder Error: Referenced column "x" not found in FROM clause!
 
 statement error
-SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1)
+SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1);
+----
+Invalid lambda parameters
 
 statement error
-SELECT ${func_name}(NULL, i) FROM incorrect_test
+SELECT ${func_name}(NULL, i) FROM incorrect_test;
+----
+No function matches
 
 statement error
-SELECT ${func_name}(NULL, x -> y)
+SELECT ${func_name}(NULL, x -> y);
+----
+Binder Error: Referenced column "y" not found in FROM clause!
 
 statement error
-SELECT ${func_name}([1])
+SELECT ${func_name}([1]);
+----
+No function matches
 
 statement error
-SELECT ${func_name}([1], NULL)
+SELECT ${func_name}([1], NULL);
+----
+Binder Error: Invalid lambda expression!
 
 statement error
-SELECT ${func_name}(1, x -> x + 1)
+SELECT ${func_name}([[1]], x -> x + 1);
+----
 
 statement error
-SELECT ${func_name}([[1]], x -> x + 1)
+SELECT ${func_name}(1, 1);
+----
 
 statement error
-SELECT ${func_name}(1, 1)
+SELECT ${func_name}([1], x -> x, 3);
+----
+Binder Error: failed to bind function, either: Invalid number of function arguments!
+ or: Referenced column "x" not found in FROM clause!
 
 statement error
-SELECT ${func_name}([True], x -> x, x -> x)
+SELECT ${func_name}([True], x -> x, x -> x);
+----
+Binder Error: failed to bind function, either: Invalid number of function arguments!
+ or: Referenced column "x" not found in FROM clause!
+
+statement error
+SELECT ${func_name}(1, x -> x + 1);
+----
+Invalid LIST argument during lambda function binding!
 
 endloop
 
-# lambda parameter has the same name as a column
-statement ok
-CREATE TABLE l_test (l integer[])
+# list_transform specific tests
 
 statement error
-SELECT l, list_transform(l, l -> l + 1) FROM l_test
+SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
+----
+Binder Error: failed to bind function, either: This scalar function does not support lambdas!
+ or: Referenced column "x" not found in FROM clause!
 
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
+----
+Binder Error: Referenced column "zz" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 # lambda cannot be the root of a plan
-statement error
-select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
 
 statement error
-select i -> i + 1 from (values (list_value(1, 2, 3))) tbl(i);
+select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
+----
+Binder Error: Referenced column "x" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+Invalid lambda parameters
 
 statement error
-select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+SELECT list_apply(i, a.x -> x + 1) FROM (VALUES (list_value(1, 2, 3))) tbl(i);
+----
+Invalid lambda parameters
 
 statement error
 select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+Binder Error: Referenced column "y" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 statement ok
-CREATE TABLE l_filter_test (l integer[])
+CREATE TABLE l_filter_test (l integer[]);
 
 statement error
-SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test
+SELECT list_transform([1, 2], (x, y, z) -> x + y + z);
+----
+Binder Error: This lambda function only supports up to two lambda parameters!
 
 statement error
-SELECT list_transform([1, 2], (x, y) -> x + y)
-
-statement error
-SELECT list_transform([1, 2], (x, y, z) -> x + y + z)
-
-statement error
-SELECT list_filter([1, 2], (x, y) -> x >= y)
-
-statement error
-SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z)
+SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z);
+----
+Binder Error: This lambda function only supports up to two lambda parameters!
 
 # using lambdas in functions that do not support them
-statement error
-SELECT cos(x -> x + 1)
 
 statement error
-SELECT cos([1], x -> x + 1)
+SELECT cos(x -> x + 1);
+----
+Binder Error: failed to bind function, either: This scalar function does not support lambdas!
+ or: Referenced column "x" not found in FROM clause!
 
-# don't allow lambdas in check constraints
+statement error
+SELECT cos([1], x -> x + 1);
+----
+Binder Error: failed to bind function, either: This scalar function does not support lambdas!
+ or: Referenced column "x" not found in FROM clause!
+
 # FIXME: support lambdas in CHECK constraints
 
 statement error
@@ -118,14 +158,14 @@ create table lambda_check (i BIGINT[],
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
 statement error
-create table lambda_check (i BIGINT[],
+CREATE TABLE lambda_check (i BIGINT[],
     CHECK (list_transform(i, x -> x % 2) == []));
 ----
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
 statement error
-create table lambda_check (i BIGINT[],
-    CHECK ([x + 1 for x in i if i > 0] == []));
+CREATE TABLE lambda_check (i BIGINT[],
+    CHECK ([x + 1 FOR x IN i IF x > 0] == []));
 ----
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
@@ -137,7 +177,6 @@ create table lambda_check (
 ----
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
-# don't allow lambdas in check constraints
 # FIXME: allow lambdas in generated columns
 
 statement error
@@ -147,3 +186,13 @@ CREATE TABLE unit2(
 );
 ----
 Not implemented Error: Lambda functions are currently not supported in generated columns.
+
+# issue 9732
+
+statement ok
+CREATE TABLE tbl AS SELECT {'a': 10} AS s;
+
+statement error
+SELECT list_transform(UNNEST(s), x -> UNNEST(x)) FROM tbl;
+----
+failed to bind function

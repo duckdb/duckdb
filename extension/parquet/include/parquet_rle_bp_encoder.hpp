@@ -16,7 +16,7 @@ namespace duckdb {
 
 class RleBpEncoder {
 public:
-	RleBpEncoder(uint32_t bit_width);
+	explicit RleBpEncoder(uint32_t bit_width);
 
 public:
 	//! NOTE: Prepare is only required if a byte count is required BEFORE writing
@@ -26,9 +26,9 @@ public:
 	void PrepareValue(uint32_t value);
 	void FinishPrepare();
 
-	void BeginWrite(Serializer &writer, uint32_t first_value);
-	void WriteValue(Serializer &writer, uint32_t value);
-	void FinishWrite(Serializer &writer);
+	void BeginWrite(WriteStream &writer, uint32_t first_value);
+	void WriteValue(WriteStream &writer, uint32_t value);
+	void FinishWrite(WriteStream &writer);
 
 	idx_t GetByteCount();
 
@@ -43,7 +43,7 @@ private:
 
 private:
 	void FinishRun();
-	void WriteRun(Serializer &writer);
+	void WriteRun(WriteStream &writer);
 };
 
 } // namespace duckdb

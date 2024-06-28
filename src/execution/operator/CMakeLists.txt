@@ -1,4 +1,5 @@
 add_subdirectory(aggregate)
+add_subdirectory(csv_scanner)
 add_subdirectory(filter)
 add_subdirectory(helper)
 add_subdirectory(join)

@@ -14,10 +14,12 @@ INSERT INTO t0 SELECT 1 FROM RANGE(1024)
 # How to verify the error message?
 statement error
 INSERT INTO t0 VALUES(NULL)
+----
 
 # How to verify the error message?
 statement error
 UPDATE t0 SET c1 = NULL
+----
 
 query T
 SELECT column_name FROM PRAGMA_STORAGE_INFO('t0') LIMIT 2
@@ -34,10 +36,12 @@ INSERT INTO t1 SELECT 1 FROM RANGE(1024)
 # How to verify the error message?
 statement error
 INSERT INTO t1 VALUES(NULL)
+----
 
 # How to verify the error message?
 statement error
 UPDATE t1 SET c0 = NULL
+----
 
 query T
 SELECT column_name FROM PRAGMA_STORAGE_INFO('t1') LIMIT 2

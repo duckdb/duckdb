@@ -21,7 +21,7 @@ public:
 	LogicalDelimGet(idx_t table_index, vector<LogicalType> types)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELIM_GET), table_index(table_index) {
 		D_ASSERT(types.size() > 0);
-		chunk_types = types;
+		chunk_types = std::move(types);
 	}
 
 	//! The table index in the current bind context
@@ -33,8 +33,9 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, chunk_types.size());
 	}
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
 

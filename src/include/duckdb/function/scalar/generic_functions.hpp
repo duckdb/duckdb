@@ -11,6 +11,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 class BoundFunctionExpression;

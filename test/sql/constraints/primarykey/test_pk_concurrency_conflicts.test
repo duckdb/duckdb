@@ -18,13 +18,16 @@ UPDATE integers SET i=4 WHERE i=2
 # con2 can't update the second value
 statement error con2
 UPDATE integers SET i=4 WHERE i=2
+----
 
 statement error con2
 UPDATE integers SET i=5 WHERE i=2
+----
 
 # nor can it delete it
 statement error con2
 DELETE FROM integers WHERE i=2
+----
 
 # we tried to set i=5 in con2 but it failed, we can set it in con1 now though
 statement ok con1

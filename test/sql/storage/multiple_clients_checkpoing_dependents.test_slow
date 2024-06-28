@@ -40,17 +40,18 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 1	1000000	1000000
 
-# con2 now refers back to the undo buffer of con1, but we can still checkpoint
-statement ok con2
+# con2 now refers back to the undo buffer of con1, we cannot checkpoint
+statement error con2
 FORCE CHECKPOINT
+----
+the current transaction has been started for this database
 
 query III
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 1	1000000	1000000
 
-# force checkpoint has cleared our current transaction, so we can't rollback
-statement error con2
+statement ok con2
 ROLLBACK
 
 statement ok con2

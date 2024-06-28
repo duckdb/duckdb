@@ -16,14 +16,17 @@ INSERT INTO t VALUES (1, 1), (2, 2)
 statement ok
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
 
-statement error 
+statement error
 INSERT INTO t VALUES (3, NULL)
+----
+
 # SET again
 statement ok
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
 
 statement error 
 INSERT INTO t VALUES (3, NULL)
+----
 
 query II
 SELECT * FROM t
@@ -40,6 +43,7 @@ ALTER TABLE t ALTER COLUMN j SET NOT NULL
 
 statement error 
 INSERT INTO t VALUES (6, NULL)
+----
 
 query I
 SELECT COUNT(*) FROM t WHERE j IS NULL
@@ -61,6 +65,7 @@ INSERT INTO t SELECT 4,4 FROM RANGE(65536)
 
 statement error
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
+----
 
 statement ok
 INSERT INTO t VALUES (5, null)
@@ -88,6 +93,7 @@ ALTER TABLE t ALTER COLUMN j SET NOT NULL
 # Failed to insert before drop constraint
 statement error
 INSERT INTO t VALUES (2, null)
+----
 
 # Drop not null
 statement ok
@@ -123,6 +129,7 @@ INSERT INTO t SELECT 1 FROM RANGE(65536)
 # Set not null
 statement error
 ALTER TABLE t ALTER COLUMN i SET NOT NULL
+----
 
 # Set not null
 statement ok
@@ -131,6 +138,7 @@ ALTER TABLE t ALTER COLUMN j SET NOT NULL
 # Failed to insert before drop constraint
 statement error
 INSERT INTO t VALUES (null)
+----
 
 # Drop not null
 statement ok

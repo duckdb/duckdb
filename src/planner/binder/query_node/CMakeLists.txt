@@ -4,9 +4,11 @@ add_library_unity(
   bind_select_node.cpp
   bind_setop_node.cpp
   bind_recursive_cte_node.cpp
+  bind_cte_node.cpp
   bind_table_macro_node.cpp
   plan_query_node.cpp
   plan_recursive_cte_node.cpp
+  plan_cte_node.cpp
   plan_select_node.cpp
   plan_setop.cpp
   plan_subquery.cpp)

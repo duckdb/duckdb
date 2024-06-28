@@ -1,0 +1,71 @@
+# name: test/sql/storage/reclaim_space/test_reclaim_space_drop_column.test_slow
+# description: Test that we reclaim space when dropping and adding columns
+# group: [reclaim_space]
+
+load __TEST_DIR__/test_reclaim_space_drop_column.db
+
+statement ok
+PRAGMA force_checkpoint;
+
+statement ok
+CREATE TABLE integers AS SELECT i, i j FROM range(1000000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CHECKPOINT;
+
+query III
+SELECT MIN(j), MAX(j), COUNT(*) FROM integers
+----
+0	999999	1000000
+
+# for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
+# therefore, we need to compare to a range of total block counts
+statement ok
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+
+loop i 0 10
+
+statement ok
+ALTER TABLE integers DROP COLUMN j;
+
+statement ok
+ALTER TABLE integers ADD COLUMN j INTEGER;
+
+statement ok
+UPDATE integers SET j=i;
+
+query III
+SELECT MIN(j), MAX(j), COUNT(*) FROM integers
+----
+0	999999	1000000
+
+statement ok
+CHECKPOINT;
+
+# ensure that the total blocks don't exceed the total blocks after the first iteration
+# by more than 1.2
+
+query I
+SELECT CASE WHEN ${i} = 0 THEN True
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
+	ELSE False END
+FROM pragma_database_size() AS current, total_blocks_tbl;
+----
+1
+
+# adjust total_blocks_tbl once to the count after the first iteration
+
+statement ok
+UPDATE total_blocks_tbl SET total_blocks = (
+	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		ELSE (total_blocks) END);
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+----
+0	999999	1000000
+
+endloop

@@ -35,6 +35,7 @@ CREATE TABLE test (a INTEGER NOT NULL, b INTEGER);
 
 statement error
 INSERT INTO test (b) VALUES (3);
+----
 
 statement ok
 DROP TABLE test
@@ -106,6 +107,7 @@ SELECT * FROM test ORDER BY 1
 # cannot drop sequence now
 statement error
 DROP SEQUENCE seq
+----
 
 statement ok
 DROP TABLE test
@@ -135,18 +137,22 @@ SELECT * FROM test ORDER BY 1
 # cannot use subquery in DEFAULT expression
 statement error
 CREATE TABLE test (a INTEGER DEFAULT (SELECT 42), b INTEGER);
+----
 
 # aggregate functions are not allowed in DEFAULT expressions
 statement error
 CREATE TABLE test (a INTEGER DEFAULT SUM(42), b INTEGER);
+----
 
 # window functions are not allowed in DEFAULT expressions
 statement error
 CREATE TABLE test (a INTEGER DEFAULT row_number() OVER (), b INTEGER);
+----
 
 # default value must be scalar expression
 statement error
 CREATE TABLE test (a INTEGER DEFAULT b+1, b INTEGER);
+----
 
 # test default with random
 statement ok

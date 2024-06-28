@@ -28,9 +28,6 @@ struct CreateCollationInfo : public CreateInfo {
 	//! speeds up processing.
 	bool not_required_for_equality;
 
-protected:
-	void SerializeInternal(Serializer &) const override;
-
 public:
 	unique_ptr<CreateInfo> Copy() const override;
 };

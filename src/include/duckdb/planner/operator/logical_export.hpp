@@ -21,17 +21,21 @@ public:
 
 public:
 	LogicalExport(CopyFunction function, unique_ptr<CopyInfo> copy_info, BoundExportData exported_tables)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPORT), function(function), copy_info(std::move(copy_info)),
-	      exported_tables(std::move(exported_tables)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPORT), function(std::move(function)),
+	      copy_info(std::move(copy_info)), exported_tables(std::move(exported_tables)) {
 	}
 	CopyFunction function;
 	unique_ptr<CopyInfo> copy_info;
 	BoundExportData exported_tables;
 
-public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override {
+		throw NotImplementedException("FIXME: Serialize LogicalExport statement");
+	}
+	unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer) {
+		throw NotImplementedException("FIXME: Deserialize LogicalExport statement");
+	}
 
+public:
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BOOLEAN);

@@ -14,12 +14,13 @@
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
+struct SelectionVector;
 struct ValidityMask;
 
 template <typename V>
 struct TemplatedValidityData {
 	static constexpr const int BITS_PER_VALUE = sizeof(V) * 8;
-	static constexpr const V MAX_ENTRY = ~V(0);
+	static constexpr const V MAX_ENTRY = V(~V(0));
 
 public:
 	inline explicit TemplatedValidityData(idx_t count) {
@@ -65,12 +66,11 @@ public:
 	static constexpr const int STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(validity_t);
 
 public:
-	inline TemplatedValidityMask() : validity_mask(nullptr) {
+	inline TemplatedValidityMask() : validity_mask(nullptr), target_count(STANDARD_VECTOR_SIZE) {
 	}
-	inline explicit TemplatedValidityMask(idx_t max_count) {
-		Initialize(max_count);
+	inline explicit TemplatedValidityMask(idx_t target_count) : validity_mask(nullptr), target_count(target_count) {
 	}
-	inline explicit TemplatedValidityMask(V *ptr) : validity_mask(ptr) {
+	inline explicit TemplatedValidityMask(V *ptr) : validity_mask(ptr), target_count(STANDARD_VECTOR_SIZE) {
 	}
 	inline TemplatedValidityMask(const TemplatedValidityMask &original, idx_t count) {
 		Copy(original, count);
@@ -136,9 +136,10 @@ public:
 	inline V *GetData() const {
 		return validity_mask;
 	}
-	inline void Reset() {
+	inline void Reset(idx_t target_count_p = STANDARD_VECTOR_SIZE) {
 		validity_mask = nullptr;
 		validity_data.reset();
+		target_count = target_count_p;
 	}
 
 	static inline idx_t EntryCount(idx_t count) {
@@ -148,6 +149,9 @@ public:
 		if (!validity_mask) {
 			return ValidityBuffer::MAX_ENTRY;
 		}
+		return GetValidityEntryUnsafe(entry_idx);
+	}
+	inline V &GetValidityEntryUnsafe(idx_t entry_idx) const {
 		return validity_mask[entry_idx];
 	}
 	static inline bool AllValid(V entry) {
@@ -156,7 +160,7 @@ public:
 	static inline bool NoneValid(V entry) {
 		return entry == 0;
 	}
-	static inline bool RowIsValid(V entry, idx_t idx_in_entry) {
+	static inline bool RowIsValid(const V &entry, const idx_t &idx_in_entry) {
 		return entry & (V(1) << V(idx_in_entry));
 	}
 	static inline void GetEntryIndex(idx_t row_idx, idx_t &entry_idx, idx_t &idx_in_entry) {
@@ -226,8 +230,8 @@ public:
 	//! Marks the entry at the specified row index as invalid (i.e. null)
 	inline void SetInvalid(idx_t row_idx) {
 		if (!validity_mask) {
-			D_ASSERT(row_idx <= STANDARD_VECTOR_SIZE);
-			Initialize(STANDARD_VECTOR_SIZE);
+			D_ASSERT(row_idx <= target_count);
+			Initialize(target_count);
 		}
 		SetInvalidUnsafe(row_idx);
 	}
@@ -292,12 +296,18 @@ public:
 	inline void Initialize(const TemplatedValidityMask &other) {
 		validity_mask = other.validity_mask;
 		validity_data = other.validity_data;
+		target_count = other.target_count;
 	}
-	inline void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
+	inline void Initialize(idx_t count) {
+		target_count = count;
 		validity_data = make_buffer<ValidityBuffer>(count);
 		validity_mask = validity_data->owned_data.get();
 	}
+	inline void Initialize() {
+		Initialize(target_count);
+	}
 	inline void Copy(const TemplatedValidityMask &other, idx_t count) {
+		target_count = count;
 		if (other.AllValid()) {
 			validity_data = nullptr;
 			validity_mask = nullptr;
@@ -310,13 +320,15 @@ public:
 protected:
 	V *validity_mask;
 	buffer_ptr<ValidityBuffer> validity_data;
+	// The size to initialize the validity mask to when/if the mask is lazily initialized
+	idx_t target_count;
 };
 
 struct ValidityMask : public TemplatedValidityMask<validity_t> {
 public:
 	inline ValidityMask() : TemplatedValidityMask(nullptr) {
 	}
-	inline explicit ValidityMask(idx_t max_count) : TemplatedValidityMask(max_count) {
+	inline explicit ValidityMask(idx_t target_count) : TemplatedValidityMask(target_count) {
 	}
 	inline explicit ValidityMask(validity_t *ptr) : TemplatedValidityMask(ptr) {
 	}
@@ -325,13 +337,18 @@ public:
 
 public:
 	DUCKDB_API void Resize(idx_t old_size, idx_t new_size);
-
+	DUCKDB_API idx_t TargetCount();
 	DUCKDB_API void SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count);
 	DUCKDB_API void Slice(const ValidityMask &other, idx_t source_offset, idx_t count);
+	DUCKDB_API void CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,
+	                        idx_t target_offset, idx_t count);
 	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
 	DUCKDB_API string ToString(idx_t count) const;
 
 	DUCKDB_API static bool IsAligned(idx_t count);
+
+	void Write(WriteStream &writer, idx_t count);
+	void Read(ReadStream &reader, idx_t count);
 };
 
 } // namespace duckdb

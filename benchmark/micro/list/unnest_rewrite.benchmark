@@ -8,7 +8,7 @@ subgroup list
 
 run
 with stage1 as (
-  SELECT r, md5(r) as h, gen_random_uuid() as id
+  SELECT r, md5(r::VARCHAR) as h, gen_random_uuid() as id
   FROM (SELECT UNNEST(GENERATE_SERIES(1,100,1)) r ))
 , stage2 as (
   SELECT a.*, list({r:b.r, h:b.h, id: gen_random_uuid()}) as sub

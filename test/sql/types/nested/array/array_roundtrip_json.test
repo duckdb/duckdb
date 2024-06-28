@@ -1,0 +1,42 @@
+# name: test/sql/types/nested/array/array_roundtrip_json.test
+# group: [array]
+
+require json
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE arrays (a INTEGER[3])
+
+statement ok
+INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL), ([4, NULL, 2])
+
+query I
+SELECT a::JSON FROM arrays
+----
+[1,2,3]
+[1,2,4]
+[7,8,9]
+[-1,-2,-3]
+NULL
+[4,null,2]
+
+statement ok
+CREATE OR REPLACE TABLE arrays2 (a INTEGER[3])
+
+statement ok
+COPY (SELECT [range, range + 1, range + 2] a FROM range(3)) TO '__TEST_DIR__/arrays_parquet_test.json'
+
+statement ok
+COPY arrays2 FROM '__TEST_DIR__/arrays_parquet_test.json'
+
+query I
+SELECT * FROM arrays2
+----
+[0, 1, 2]
+[1, 2, 3]
+[2, 3, 4]

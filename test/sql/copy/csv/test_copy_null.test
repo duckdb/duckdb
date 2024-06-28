@@ -72,20 +72,25 @@ SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 # invalid parameter type
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL null);
+----
 
 # delimiter must not appear in the NULL specification
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'null,', DELIMITER ',');
+----
 
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (DELIMITER 'null', NULL 'null');
+----
 
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (DELIMITER 'null', NULL 'nu');
+----
 
 # no parameter type
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL);
+----
 
 # empty integer column with non-default NULL string
 statement ok
@@ -93,6 +98,7 @@ CREATE TABLE test_null_option_2 (col_a INTEGER, col_b INTEGER, col_c VARCHAR(10)
 
 statement error
 COPY test_null_option_2 FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'null');
+----
 
 # test COPY ... TO ...
 # implicitly using default NULL value

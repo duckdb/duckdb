@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/integer_exponent.test
+# description: Test exponents without decimal points
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+from 'data/csv/integer_exponent.csv'
+----
+1	2	3.0
+4	5	6.0
+7	8	1e-07

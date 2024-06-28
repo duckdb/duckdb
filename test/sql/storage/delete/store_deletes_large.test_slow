@@ -1,0 +1,54 @@
+# name: test/sql/storage/delete/store_deletes_large.test_slow
+# description: Test storing large deletes
+# group: [delete]
+
+# load the DB from disk
+load __TEST_DIR__/test_store_deletes.db
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test SELECT i, i+2 FROM range(0, 1000000) t(i)
+
+query I
+SELECT COUNT(*) FROM test
+----
+1000000
+
+statement ok
+DELETE FROM test WHERE a=2
+
+query I
+SELECT COUNT(*) FROM test
+----
+999999
+
+statement ok
+COMMIT
+
+restart
+
+query I
+SELECT COUNT(*) FROM test
+----
+999999
+
+statement ok
+INSERT INTO test VALUES (2, 4)
+
+query I
+SELECT COUNT(*) FROM test
+----
+1000000
+
+statement ok
+DELETE FROM test WHERE a%2=0
+
+query I
+SELECT COUNT(*) FROM test
+----
+500000

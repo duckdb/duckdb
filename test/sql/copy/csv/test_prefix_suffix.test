@@ -1,0 +1,18 @@
+# name: test/sql/copy/csv/test_prefix_suffix.test
+# description: Test prefix/suffix options
+# group: [csv]
+
+statement error
+copy (select 42) to '__TEST_DIR__/file.csv' (prefix 'a');
+----
+must have both PREFIX and SUFFIX
+
+statement error
+copy (select 42) to '__TEST_DIR__/file.csv' (prefix 'a', suffix 'b', header);
+----
+HEADER cannot be combined with PREFIX/SUFFIX
+
+statement error
+copy (select 42) to '__TEST_DIR__/file.csv' (escape 'null', null 'null');
+----
+The escape option cannot exceed a size of 1 byte.

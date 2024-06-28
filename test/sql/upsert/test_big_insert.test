@@ -44,7 +44,7 @@ SELECT COUNT(*) FILTER (WHERE j = 10) FROM integers
 statement error
 INSERT INTO integers(i,j) select i%5,i from range(5000) tbl(i) on conflict do update set j = excluded.j, k = excluded.i;
 ----
-Invalid Input Error: ON CONFLICT DO UPDATE can not update the same row twice in the same command, Ensure that no rows proposed for insertion within the same command have duplicate constrained values
+Invalid Input Error: ON CONFLICT DO UPDATE can not update the same row twice in the same command. Ensure that no rows proposed for insertion within the same command have duplicate constrained values
 
 statement ok
 INSERT INTO integers(i,j) select i%5,i from range(4995, 5000) tbl(i) on conflict do update set j = excluded.j, k = excluded.i;

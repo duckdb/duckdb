@@ -1,0 +1,584 @@
+{
+    "pyarrow": {
+        "type": "module",
+        "full_path": "pyarrow",
+        "name": "pyarrow",
+        "children": [
+            "pyarrow.dataset",
+            "pyarrow.Table",
+            "pyarrow.RecordBatchReader"
+        ]
+    },
+    "pyarrow.dataset": {
+        "type": "module",
+        "full_path": "pyarrow.dataset",
+        "name": "dataset",
+        "children": [
+            "pyarrow.dataset.Scanner",
+            "pyarrow.dataset.Dataset"
+        ]
+    },
+    "pyarrow.dataset.Scanner": {
+        "type": "attribute",
+        "full_path": "pyarrow.dataset.Scanner",
+        "name": "Scanner",
+        "children": []
+    },
+    "pyarrow.dataset.Dataset": {
+        "type": "attribute",
+        "full_path": "pyarrow.dataset.Dataset",
+        "name": "Dataset",
+        "children": []
+    },
+    "pyarrow.Table": {
+        "type": "attribute",
+        "full_path": "pyarrow.Table",
+        "name": "Table",
+        "children": []
+    },
+    "pyarrow.RecordBatchReader": {
+        "type": "attribute",
+        "full_path": "pyarrow.RecordBatchReader",
+        "name": "RecordBatchReader",
+        "children": []
+    },
+    "pandas": {
+        "type": "module",
+        "full_path": "pandas",
+        "name": "pandas",
+        "children": [
+            "pandas.DataFrame",
+            "pandas.isnull",
+            "pandas.ArrowDtype",
+            "pandas.NaT",
+            "pandas.NA"
+        ],
+        "required": false
+    },
+    "pandas.DataFrame": {
+        "type": "attribute",
+        "full_path": "pandas.DataFrame",
+        "name": "DataFrame",
+        "children": []
+    },
+    "pandas.NaT": {
+        "type": "attribute",
+        "full_path": "pandas.NaT",
+        "name": "NaT",
+        "children": []
+    },
+    "pandas.NA": {
+        "type": "attribute",
+        "full_path": "pandas.NA",
+        "name": "NA",
+        "children": []
+    },
+    "pandas.isnull": {
+        "type": "attribute",
+        "full_path": "pandas.isnull",
+        "name": "isnull",
+        "children": []
+    },
+    "pandas.ArrowDtype": {
+        "type": "attribute",
+        "full_path": "pandas.ArrowDtype",
+        "name": "ArrowDtype",
+        "children": []
+    },
+    "datetime": {
+        "type": "module",
+        "full_path": "datetime",
+        "name": "datetime",
+        "children": [
+            "datetime.date",
+            "datetime.time",
+            "datetime.timedelta",
+            "datetime.timezone",
+            "datetime.datetime"
+        ]
+    },
+    "datetime.date": {
+        "type": "attribute",
+        "full_path": "datetime.date",
+        "name": "date",
+        "children": [
+            "datetime.date.max",
+            "datetime.date.min"
+        ]
+    },
+    "datetime.date.max": {
+        "type": "attribute",
+        "full_path": "datetime.date.max",
+        "name": "max",
+        "children": []
+    },
+    "datetime.date.min": {
+        "type": "attribute",
+        "full_path": "datetime.date.min",
+        "name": "min",
+        "children": []
+    },
+    "datetime.time": {
+        "type": "attribute",
+        "full_path": "datetime.time",
+        "name": "time",
+        "children": []
+    },
+    "datetime.timedelta": {
+        "type": "attribute",
+        "full_path": "datetime.timedelta",
+        "name": "timedelta",
+        "children": []
+    },
+    "datetime.datetime": {
+        "type": "attribute",
+        "full_path": "datetime.datetime",
+        "name": "datetime",
+        "children": [
+            "datetime.datetime.min",
+            "datetime.datetime.max",
+            "datetime.datetime.combine"
+        ]
+    },
+    "datetime.datetime.min": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.min",
+        "name": "min",
+        "children": []
+    },
+    "datetime.datetime.max": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.max",
+        "name": "max",
+        "children": []
+    },
+    "datetime.datetime.combine": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.combine",
+        "name": "combine",
+        "children": []
+    },
+    "datetime.timezone": {
+        "type": "attribute",
+        "full_path": "datetime.timezone",
+        "name": "timezone",
+        "children": []
+    },
+    "decimal": {
+        "type": "module",
+        "full_path": "decimal",
+        "name": "decimal",
+        "children": [
+            "decimal.Decimal"
+        ]
+    },
+    "decimal.Decimal": {
+        "type": "attribute",
+        "full_path": "decimal.Decimal",
+        "name": "Decimal",
+        "children": []
+    },
+    "IPython": {
+        "type": "module",
+        "full_path": "IPython",
+        "name": "IPython",
+        "children": [
+            "IPython.get_ipython",
+            "IPython.display"
+        ],
+        "required": false
+    },
+    "IPython.get_ipython": {
+        "type": "attribute",
+        "full_path": "IPython.get_ipython",
+        "name": "get_ipython",
+        "children": []
+    },
+    "IPython.display": {
+        "type": "attribute",
+        "full_path": "IPython.display",
+        "name": "display",
+        "children": [
+            "IPython.display.display"
+        ]
+    },
+    "IPython.display.display": {
+        "type": "attribute",
+        "full_path": "IPython.display.display",
+        "name": "display",
+        "children": []
+    },
+    "ipywidgets": {
+        "type": "module",
+        "full_path": "ipywidgets",
+        "name": "ipywidgets",
+        "children": [
+            "ipywidgets.FloatProgress"
+        ],
+        "required": false
+    },
+    "ipywidgets.FloatProgress": {
+        "type": "attribute",
+        "full_path": "ipywidgets.FloatProgress",
+        "name": "FloatProgress",
+        "children": []
+    },
+    "numpy": {
+        "type": "module",
+        "full_path": "numpy",
+        "name": "numpy",
+        "children": [
+            "numpy.core",
+            "numpy.ma",
+            "numpy.ndarray",
+            "numpy.datetime64",
+            "numpy.generic",
+            "numpy.int64",
+            "numpy.bool_",
+            "numpy.byte",
+            "numpy.ubyte",
+            "numpy.short",
+            "numpy.ushort",
+            "numpy.intc",
+            "numpy.uintc",
+            "numpy.int_",
+            "numpy.uint",
+            "numpy.longlong",
+            "numpy.ulonglong",
+            "numpy.half",
+            "numpy.float16",
+            "numpy.single",
+            "numpy.longdouble",
+            "numpy.csingle",
+            "numpy.cdouble",
+            "numpy.clongdouble"
+        ],
+        "required": false
+    },
+    "numpy.core": {
+        "type": "attribute",
+        "full_path": "numpy.core",
+        "name": "core",
+        "children": [
+            "numpy.core.multiarray"
+        ]
+    },
+    "numpy.core.multiarray": {
+        "type": "attribute",
+        "full_path": "numpy.core.multiarray",
+        "name": "multiarray",
+        "children": []
+    },
+    "numpy.ma": {
+        "type": "attribute",
+        "full_path": "numpy.ma",
+        "name": "ma",
+        "children": [
+            "numpy.ma.masked"
+        ]
+    },
+    "numpy.ma.masked": {
+        "type": "attribute",
+        "full_path": "numpy.ma.masked",
+        "name": "masked",
+        "children": []
+    },
+    "numpy.ndarray": {
+        "type": "attribute",
+        "full_path": "numpy.ndarray",
+        "name": "ndarray",
+        "children": []
+    },
+    "numpy.datetime64": {
+        "type": "attribute",
+        "full_path": "numpy.datetime64",
+        "name": "datetime64",
+        "children": []
+    },
+    "numpy.generic": {
+        "type": "attribute",
+        "full_path": "numpy.generic",
+        "name": "generic",
+        "children": []
+    },
+    "numpy.int64": {
+        "type": "attribute",
+        "full_path": "numpy.int64",
+        "name": "int64",
+        "children": []
+    },
+    "numpy.bool_": {
+        "type": "attribute",
+        "full_path": "numpy.bool_",
+        "name": "bool_",
+        "children": []
+    },
+    "numpy.byte": {
+        "type": "attribute",
+        "full_path": "numpy.byte",
+        "name": "byte",
+        "children": []
+    },
+    "numpy.ubyte": {
+        "type": "attribute",
+        "full_path": "numpy.ubyte",
+        "name": "ubyte",
+        "children": []
+    },
+    "numpy.short": {
+        "type": "attribute",
+        "full_path": "numpy.short",
+        "name": "short",
+        "children": []
+    },
+    "numpy.ushort": {
+        "type": "attribute",
+        "full_path": "numpy.ushort",
+        "name": "ushort",
+        "children": []
+    },
+    "numpy.intc": {
+        "type": "attribute",
+        "full_path": "numpy.intc",
+        "name": "intc",
+        "children": []
+    },
+    "numpy.uintc": {
+        "type": "attribute",
+        "full_path": "numpy.uintc",
+        "name": "uintc",
+        "children": []
+    },
+    "numpy.int_": {
+        "type": "attribute",
+        "full_path": "numpy.int_",
+        "name": "int_",
+        "children": []
+    },
+    "numpy.uint": {
+        "type": "attribute",
+        "full_path": "numpy.uint",
+        "name": "uint",
+        "children": []
+    },
+    "numpy.longlong": {
+        "type": "attribute",
+        "full_path": "numpy.longlong",
+        "name": "longlong",
+        "children": []
+    },
+    "numpy.ulonglong": {
+        "type": "attribute",
+        "full_path": "numpy.ulonglong",
+        "name": "ulonglong",
+        "children": []
+    },
+    "numpy.half": {
+        "type": "attribute",
+        "full_path": "numpy.half",
+        "name": "half",
+        "children": []
+    },
+    "numpy.float16": {
+        "type": "attribute",
+        "full_path": "numpy.float16",
+        "name": "float16",
+        "children": []
+    },
+    "numpy.single": {
+        "type": "attribute",
+        "full_path": "numpy.single",
+        "name": "single",
+        "children": []
+    },
+    "numpy.longdouble": {
+        "type": "attribute",
+        "full_path": "numpy.longdouble",
+        "name": "longdouble",
+        "children": []
+    },
+    "numpy.csingle": {
+        "type": "attribute",
+        "full_path": "numpy.csingle",
+        "name": "csingle",
+        "children": []
+    },
+    "numpy.cdouble": {
+        "type": "attribute",
+        "full_path": "numpy.cdouble",
+        "name": "cdouble",
+        "children": []
+    },
+    "numpy.clongdouble": {
+        "type": "attribute",
+        "full_path": "numpy.clongdouble",
+        "name": "clongdouble",
+        "children": []
+    },
+    "pathlib": {
+        "type": "module",
+        "full_path": "pathlib",
+        "name": "pathlib",
+        "children": [
+            "pathlib.Path"
+        ],
+        "required": false
+    },
+    "pathlib.Path": {
+        "type": "attribute",
+        "full_path": "pathlib.Path",
+        "name": "Path",
+        "children": []
+    },
+    "polars": {
+        "type": "module",
+        "full_path": "polars",
+        "name": "polars",
+        "children": [
+            "polars.DataFrame",
+            "polars.LazyFrame"
+        ],
+        "required": false
+    },
+    "polars.DataFrame": {
+        "type": "attribute",
+        "full_path": "polars.DataFrame",
+        "name": "DataFrame",
+        "children": []
+    },
+    "polars.LazyFrame": {
+        "type": "attribute",
+        "full_path": "polars.LazyFrame",
+        "name": "LazyFrame",
+        "children": []
+    },
+    "duckdb": {
+        "type": "module",
+        "full_path": "duckdb",
+        "name": "duckdb",
+        "children": [
+            "duckdb.filesystem",
+            "duckdb.Value"
+        ]
+    },
+    "duckdb.filesystem": {
+        "type": "module",
+        "full_path": "duckdb.filesystem",
+        "name": "filesystem",
+        "children": [
+            "duckdb.filesystem.ModifiedMemoryFileSystem"
+        ],
+        "required": false
+    },
+    "duckdb.filesystem.ModifiedMemoryFileSystem": {
+        "type": "attribute",
+        "full_path": "duckdb.filesystem.ModifiedMemoryFileSystem",
+        "name": "ModifiedMemoryFileSystem",
+        "children": []
+    },
+    "duckdb.Value": {
+        "type": "attribute",
+        "full_path": "duckdb.Value",
+        "name": "Value",
+        "children": []
+    },
+    "pytz": {
+        "type": "module",
+        "full_path": "pytz",
+        "name": "pytz",
+        "children": [
+            "pytz.timezone"
+        ]
+    },
+    "pytz.timezone": {
+        "type": "attribute",
+        "full_path": "pytz.timezone",
+        "name": "timezone",
+        "children": []
+    },
+    "types": {
+        "type": "module",
+        "full_path": "types",
+        "name": "types",
+        "children": [
+            "types.UnionType",
+            "types.GenericAlias",
+            "types.BuiltinFunctionType"
+        ]
+    },
+    "types.UnionType": {
+        "type": "attribute",
+        "full_path": "types.UnionType",
+        "name": "UnionType",
+        "children": []
+    },
+    "types.GenericAlias": {
+        "type": "attribute",
+        "full_path": "types.GenericAlias",
+        "name": "GenericAlias",
+        "children": []
+    },
+    "types.BuiltinFunctionType": {
+        "type": "attribute",
+        "full_path": "types.BuiltinFunctionType",
+        "name": "BuiltinFunctionType",
+        "children": []
+    },
+    "typing": {
+        "type": "module",
+        "full_path": "typing",
+        "name": "typing",
+        "children": [
+            "typing._UnionGenericAlias"
+        ]
+    },
+    "typing._UnionGenericAlias": {
+        "type": "attribute",
+        "full_path": "typing._UnionGenericAlias",
+        "name": "_UnionGenericAlias",
+        "children": []
+    },
+    "uuid": {
+        "type": "module",
+        "full_path": "uuid",
+        "name": "uuid",
+        "children": [
+            "uuid.UUID"
+        ]
+    },
+    "uuid.UUID": {
+        "type": "attribute",
+        "full_path": "uuid.UUID",
+        "name": "UUID",
+        "children": []
+    },
+    "collections": {
+        "type": "module",
+        "full_path": "collections",
+        "name": "collections",
+        "children": [
+            "collections.abc"
+        ]
+    },
+    "collections.abc": {
+        "type": "module",
+        "full_path": "collections.abc",
+        "name": "abc",
+        "children": [
+            "collections.abc.Iterable",
+            "collections.abc.Mapping"
+        ]
+    },
+    "collections.abc.Iterable": {
+        "type": "attribute",
+        "full_path": "collections.abc.Iterable",
+        "name": "Iterable",
+        "children": []
+    },
+    "collections.abc.Mapping": {
+        "type": "attribute",
+        "full_path": "collections.abc.Mapping",
+        "name": "Mapping",
+        "children": []
+    }
+}

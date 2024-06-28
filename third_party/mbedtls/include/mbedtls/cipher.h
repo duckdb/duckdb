@@ -440,14 +440,14 @@ const mbedtls_cipher_info_t *mbedtls_cipher_info_from_values( const mbedtls_ciph
  * \return              The full cipher identifier (\c MBEDTLS_CIPHER_xxx).
  * \return              #MBEDTLS_CIPHER_NONE if \p info is \c NULL.
  */
-static inline mbedtls_cipher_type_t mbedtls_cipher_info_get_type(
-    const mbedtls_cipher_info_t *info )
-{
-    if( info == NULL )
-        return( MBEDTLS_CIPHER_NONE );
-    else
-        return( info->MBEDTLS_PRIVATE(type) );
-}
+//static inline mbedtls_cipher_type_t mbedtls_cipher_info_get_type(
+//    const mbedtls_cipher_info_t *info )
+//{
+//    if( info == NULL )
+//        return( MBEDTLS_CIPHER_NONE );
+//    else
+//        return( info->MBEDTLS_PRIVATE(type) );
+//}
 
 /**
  * \brief               Retrieve the operation mode for a cipher info structure.
@@ -458,14 +458,14 @@ static inline mbedtls_cipher_type_t mbedtls_cipher_info_get_type(
  * \return              The cipher mode (\c MBEDTLS_MODE_xxx).
  * \return              #MBEDTLS_MODE_NONE if \p info is \c NULL.
  */
-static inline mbedtls_cipher_mode_t mbedtls_cipher_info_get_mode(
-    const mbedtls_cipher_info_t *info )
-{
-    if( info == NULL )
-        return( MBEDTLS_MODE_NONE );
-    else
-        return( info->MBEDTLS_PRIVATE(mode) );
-}
+//static inline mbedtls_cipher_mode_t mbedtls_cipher_info_get_mode(
+//    const mbedtls_cipher_info_t *info )
+//{
+//    if( info == NULL )
+//        return( MBEDTLS_MODE_NONE );
+//    else
+//        return( info->MBEDTLS_PRIVATE(mode) );
+//}
 
 /**
  * \brief               Retrieve the key size for a cipher info structure.
@@ -478,14 +478,14 @@ static inline mbedtls_cipher_mode_t mbedtls_cipher_info_get_mode(
  *                      For DES, this includes the parity bits.
  * \return              \c 0 if \p info is \c NULL.
  */
-static inline size_t mbedtls_cipher_info_get_key_bitlen(
-    const mbedtls_cipher_info_t *info )
-{
-    if( info == NULL )
-        return( 0 );
-    else
-        return( info->MBEDTLS_PRIVATE(key_bitlen) );
-}
+//static inline size_t mbedtls_cipher_info_get_key_bitlen(
+//    const mbedtls_cipher_info_t *info )
+//{
+//    if( info == NULL )
+//        return( 0 );
+//    else
+//        return( info->MBEDTLS_PRIVATE(key_bitlen) );
+//}
 
 /**
  * \brief               Retrieve the human-readable name for a
@@ -498,14 +498,14 @@ static inline size_t mbedtls_cipher_info_get_key_bitlen(
  *                      with static storage duration.
  * \return              \c NULL if \c info is \p NULL.
  */
-static inline const char *mbedtls_cipher_info_get_name(
-    const mbedtls_cipher_info_t *info )
-{
-    if( info == NULL )
-        return( NULL );
-    else
-        return( info->MBEDTLS_PRIVATE(name) );
-}
+//static inline const char *mbedtls_cipher_info_get_name(
+//    const mbedtls_cipher_info_t *info )
+//{
+//    if( info == NULL )
+//        return( NULL );
+//    else
+//        return( info->MBEDTLS_PRIVATE(name) );
+//}
 
 /**
  * \brief       This function returns the size of the IV or nonce
@@ -517,14 +517,14 @@ static inline const char *mbedtls_cipher_info_get_name(
  * \return      \c 0 for ciphers not using an IV or a nonce.
  * \return      \c 0 if \p info is \c NULL.
  */
-static inline size_t mbedtls_cipher_info_get_iv_size(
-    const mbedtls_cipher_info_t *info )
-{
-    if( info == NULL )
-        return( 0 );
-
-    return( (size_t) info->MBEDTLS_PRIVATE(iv_size) );
-}
+//static inline size_t mbedtls_cipher_info_get_iv_size(
+//    const mbedtls_cipher_info_t *info )
+//{
+//    if( info == NULL )
+//        return( 0 );
+//
+//    return( (size_t) info->MBEDTLS_PRIVATE(iv_size) );
+//}
 
 /**
  * \brief        This function returns the block size of the given
@@ -536,14 +536,14 @@ static inline size_t mbedtls_cipher_info_get_iv_size(
  * \return       \c 1 if the cipher is a stream cipher.
  * \return       \c 0 if \p info is \c NULL.
  */
-static inline size_t mbedtls_cipher_info_get_block_size(
-    const mbedtls_cipher_info_t *info )
-{
-    if( info == NULL )
-        return( 0 );
-
-    return( (size_t) info->MBEDTLS_PRIVATE(block_size) );
-}
+//static inline size_t mbedtls_cipher_info_get_block_size(
+//    const mbedtls_cipher_info_t *info )
+//{
+//    if( info == NULL )
+//        return( 0 );
+//
+//    return( (size_t) info->MBEDTLS_PRIVATE(block_size) );
+//}
 
 /**
  * \brief        This function returns a non-zero value if the key length for
@@ -554,14 +554,14 @@ static inline size_t mbedtls_cipher_info_get_block_size(
  * \return       Non-zero if the key length is variable, \c 0 otherwise.
  * \return       \c 0 if the given pointer is \c NULL.
  */
-static inline int mbedtls_cipher_info_has_variable_key_bitlen(
-    const mbedtls_cipher_info_t *info )
-{
-    if( info == NULL )
-        return( 0 );
-
-    return( info->MBEDTLS_PRIVATE(flags) & MBEDTLS_CIPHER_VARIABLE_KEY_LEN );
-}
+//static inline int mbedtls_cipher_info_has_variable_key_bitlen(
+//    const mbedtls_cipher_info_t *info )
+//{
+//    if( info == NULL )
+//        return( 0 );
+//
+//    return( info->MBEDTLS_PRIVATE(flags) & MBEDTLS_CIPHER_VARIABLE_KEY_LEN );
+//}
 
 /**
  * \brief        This function returns a non-zero value if the IV size for
@@ -572,14 +572,14 @@ static inline int mbedtls_cipher_info_has_variable_key_bitlen(
  * \return       Non-zero if the IV size is variable, \c 0 otherwise.
  * \return       \c 0 if the given pointer is \c NULL.
  */
-static inline int mbedtls_cipher_info_has_variable_iv_size(
-    const mbedtls_cipher_info_t *info )
-{
-    if( info == NULL )
-        return( 0 );
-
-    return( info->MBEDTLS_PRIVATE(flags) & MBEDTLS_CIPHER_VARIABLE_IV_LEN );
-}
+//static inline int mbedtls_cipher_info_has_variable_iv_size(
+//    const mbedtls_cipher_info_t *info )
+//{
+//    if( info == NULL )
+//        return( 0 );
+//
+//    return( info->MBEDTLS_PRIVATE(flags) & MBEDTLS_CIPHER_VARIABLE_IV_LEN );
+//}
 
 /**
  * \brief               This function initializes a \p cipher_context as NONE.
@@ -685,15 +685,15 @@ static inline unsigned int mbedtls_cipher_get_block_size(
  * \return       The mode of operation.
  * \return       #MBEDTLS_MODE_NONE if \p ctx has not been initialized.
  */
-static inline mbedtls_cipher_mode_t mbedtls_cipher_get_cipher_mode(
-    const mbedtls_cipher_context_t *ctx )
-{
-    MBEDTLS_INTERNAL_VALIDATE_RET( ctx != NULL, MBEDTLS_MODE_NONE );
-    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
-        return MBEDTLS_MODE_NONE;
-
-    return ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(mode);
-}
+//static inline mbedtls_cipher_mode_t mbedtls_cipher_get_cipher_mode(
+//    const mbedtls_cipher_context_t *ctx )
+//{
+//    MBEDTLS_INTERNAL_VALIDATE_RET( ctx != NULL, MBEDTLS_MODE_NONE );
+//    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
+//        return MBEDTLS_MODE_NONE;
+//
+//    return ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(mode);
+//}
 
 /**
  * \brief       This function returns the size of the IV or nonce
@@ -705,18 +705,18 @@ static inline mbedtls_cipher_mode_t mbedtls_cipher_get_cipher_mode(
  * \return      \c 0 for ciphers not using an IV or a nonce.
  * \return      The actual size if an IV has been set.
  */
-static inline int mbedtls_cipher_get_iv_size(
-    const mbedtls_cipher_context_t *ctx )
-{
-    MBEDTLS_INTERNAL_VALIDATE_RET( ctx != NULL, 0 );
-    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
-        return 0;
-
-    if( ctx->MBEDTLS_PRIVATE(iv_size) != 0 )
-        return (int) ctx->MBEDTLS_PRIVATE(iv_size);
-
-    return (int) ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(iv_size);
-}
+//static inline int mbedtls_cipher_get_iv_size(
+//    const mbedtls_cipher_context_t *ctx )
+//{
+//    MBEDTLS_INTERNAL_VALIDATE_RET( ctx != NULL, 0 );
+//    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
+//        return 0;
+//
+//    if( ctx->MBEDTLS_PRIVATE(iv_size) != 0 )
+//        return (int) ctx->MBEDTLS_PRIVATE(iv_size);
+//
+//    return (int) ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(iv_size);
+//}
 
 /**
  * \brief               This function returns the type of the given cipher.
@@ -726,16 +726,16 @@ static inline int mbedtls_cipher_get_iv_size(
  * \return              The type of the cipher.
  * \return              #MBEDTLS_CIPHER_NONE if \p ctx has not been initialized.
  */
-static inline mbedtls_cipher_type_t mbedtls_cipher_get_type(
-    const mbedtls_cipher_context_t *ctx )
-{
-    MBEDTLS_INTERNAL_VALIDATE_RET(
-        ctx != NULL, MBEDTLS_CIPHER_NONE );
-    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
-        return MBEDTLS_CIPHER_NONE;
-
-    return ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(type);
-}
+//static inline mbedtls_cipher_type_t mbedtls_cipher_get_type(
+//    const mbedtls_cipher_context_t *ctx )
+//{
+//    MBEDTLS_INTERNAL_VALIDATE_RET(
+//        ctx != NULL, MBEDTLS_CIPHER_NONE );
+//    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
+//        return MBEDTLS_CIPHER_NONE;
+//
+//    return ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(type);
+//}
 
 /**
  * \brief               This function returns the name of the given cipher
@@ -746,15 +746,15 @@ static inline mbedtls_cipher_type_t mbedtls_cipher_get_type(
  * \return              The name of the cipher.
  * \return              NULL if \p ctx has not been not initialized.
  */
-static inline const char *mbedtls_cipher_get_name(
-    const mbedtls_cipher_context_t *ctx )
-{
-    MBEDTLS_INTERNAL_VALIDATE_RET( ctx != NULL, 0 );
-    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
-        return 0;
-
-    return ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(name);
-}
+//static inline const char *mbedtls_cipher_get_name(
+//    const mbedtls_cipher_context_t *ctx )
+//{
+//    MBEDTLS_INTERNAL_VALIDATE_RET( ctx != NULL, 0 );
+//    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
+//        return 0;
+//
+//    return ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(name);
+//}
 
 /**
  * \brief               This function returns the key length of the cipher.
@@ -765,16 +765,16 @@ static inline const char *mbedtls_cipher_get_name(
  * \return              #MBEDTLS_KEY_LENGTH_NONE if ctx \p has not been
  *                      initialized.
  */
-static inline int mbedtls_cipher_get_key_bitlen(
-    const mbedtls_cipher_context_t *ctx )
-{
-    MBEDTLS_INTERNAL_VALIDATE_RET(
-        ctx != NULL, MBEDTLS_KEY_LENGTH_NONE );
-    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
-        return MBEDTLS_KEY_LENGTH_NONE;
-
-    return (int) ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(key_bitlen);
-}
+//static inline int mbedtls_cipher_get_key_bitlen(
+//    const mbedtls_cipher_context_t *ctx )
+//{
+//    MBEDTLS_INTERNAL_VALIDATE_RET(
+//        ctx != NULL, MBEDTLS_KEY_LENGTH_NONE );
+//    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
+//        return MBEDTLS_KEY_LENGTH_NONE;
+//
+//    return (int) ctx->MBEDTLS_PRIVATE(cipher_info)->MBEDTLS_PRIVATE(key_bitlen);
+//}
 
 /**
  * \brief          This function returns the operation of the given cipher.
@@ -784,16 +784,16 @@ static inline int mbedtls_cipher_get_key_bitlen(
  * \return         The type of operation: #MBEDTLS_ENCRYPT or #MBEDTLS_DECRYPT.
  * \return         #MBEDTLS_OPERATION_NONE if \p ctx has not been initialized.
  */
-static inline mbedtls_operation_t mbedtls_cipher_get_operation(
-    const mbedtls_cipher_context_t *ctx )
-{
-    MBEDTLS_INTERNAL_VALIDATE_RET(
-        ctx != NULL, MBEDTLS_OPERATION_NONE );
-    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
-        return MBEDTLS_OPERATION_NONE;
-
-    return ctx->MBEDTLS_PRIVATE(operation);
-}
+//static inline mbedtls_operation_t mbedtls_cipher_get_operation(
+//    const mbedtls_cipher_context_t *ctx )
+//{
+//    MBEDTLS_INTERNAL_VALIDATE_RET(
+//        ctx != NULL, MBEDTLS_OPERATION_NONE );
+//    if( ctx->MBEDTLS_PRIVATE(cipher_info) == NULL )
+//        return MBEDTLS_OPERATION_NONE;
+//
+//    return ctx->MBEDTLS_PRIVATE(operation);
+//}
 
 /**
  * \brief               This function sets the key to use with the given context.

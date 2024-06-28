@@ -28,6 +28,7 @@ CREATE TABLE "ABC"(i integer);
 
 statement error
 CREATE TABLE "AbC"(i integer);
+----
 
 statement ok
 SELECT * FROM "ABC";
@@ -40,6 +41,7 @@ ALTER TABLE abc ADD COLUMN j INTEGER;
 
 statement error
 ALTER TABLE "ABC" ADD COLUMN "J" INTEGER;
+----
 
 statement ok
 DROP TABLE abc

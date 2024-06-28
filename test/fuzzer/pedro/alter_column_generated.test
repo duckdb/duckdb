@@ -16,9 +16,11 @@ ALTER TABLE t0 ALTER c1 SET NOT NULL;
 
 statement error
 ALTER TABLE t0 ALTER c0 SET NOT NULL;
+----
 
 statement error
 INSERT INTO t0 VALUES (NULL);
+----
 
 statement ok
 DROP TABLE t0;
@@ -31,4 +33,5 @@ INSERT INTO t0 VALUES (NULL);
 
 statement error
 ALTER TABLE t0 ALTER c1 SET NOT NULL;
+----
 

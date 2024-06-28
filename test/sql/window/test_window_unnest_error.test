@@ -1,0 +1,53 @@
+# name: test/sql/window/test_window_unnest_error.test
+# description: Test window functions with UNNEST expressions
+# group: [window]
+
+statement ok
+CREATE TABLE tbl AS SELECT 42 AS i;
+
+# START_EXPR
+statement error
+SELECT SUM(i) OVER (ROWS BETWEEN UNNEST([1]) PRECEDING AND 1 FOLLOWING) FROM tbl;
+----
+UNNEST not supported here
+
+# END_EXPR
+statement error
+SELECT SUM(i) OVER (ROWS BETWEEN 1 PRECEDING AND UNNEST([1]) FOLLOWING) FROM tbl;
+----
+UNNEST not supported here
+
+# OFFSET_EXPR
+statement error
+SELECT lead(c0, UNNEST([1])) OVER (ROWS BETWEEN 2 PRECEDING AND 4 PRECEDING)
+FROM (VALUES (1, 2)) a(c0);
+----
+UNNEST not supported here
+
+# FILTER_EXPR
+statement error
+SELECT x, count(x) FILTER (WHERE x % 2 = UNNEST([2])) OVER (ORDER BY x ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING)
+FROM generate_series(0, 10) tbl(x);
+----
+UNNEST not supported here
+
+# DEFAULT_EXPR
+statement error
+SELECT lead(c0, 0, UNNEST([1])) OVER (ROWS BETWEEN 2 PRECEDING AND 4 PRECEDING)
+FROM (VALUES (1, 2)) a(c0);
+----
+UNNEST not supported here
+
+# We allow UNNEST in subqueries.
+
+query I
+SELECT SUM(i) OVER (ROWS BETWEEN (SELECT UNNEST([1])) PRECEDING AND 1 FOLLOWING) FROM tbl;
+----
+42
+
+query I
+SELECT lead(c0, (SELECT UNNEST([0])), (SELECT UNNEST([1]))) OVER (ROWS BETWEEN 2 PRECEDING AND 4 PRECEDING)
+FROM (VALUES (1, 2)) a(c0);
+----
+1
+

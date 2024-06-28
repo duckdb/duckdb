@@ -14,6 +14,7 @@ namespace duckdb {
 BoundStatement Binder::Bind(DropStatement &stmt) {
 	BoundStatement result;
 
+	auto &properties = GetStatementProperties();
 	switch (stmt.info->type) {
 	case CatalogType::PREPARED_STATEMENT:
 		// dropping prepared statements is always possible
@@ -35,49 +36,33 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TYPE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 		auto entry = Catalog::GetEntry(context, stmt.info->type, stmt.info->catalog, stmt.info->schema, stmt.info->name,
-		                               OnEntryNotFound::RETURN_NULL);
+		                               stmt.info->if_not_found);
 		if (!entry) {
 			break;
 		}
+		if (entry->internal) {
+			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name);
+		}
 		stmt.info->catalog = entry->ParentCatalog().GetName();
 		if (!entry->temporary) {
-			// we can only drop temporary tables in read-only mode
+			// we can only drop temporary schema entries in read-only mode
 			properties.modified_databases.insert(stmt.info->catalog);
 		}
 		stmt.info->schema = entry->ParentSchema().name;
 		break;
 	}
-	case CatalogType::DATABASE_ENTRY: {
-		auto &base = (DropInfo &)*stmt.info;
-		string database_name = base.name;
-
-		auto &config = DBConfig::GetConfig(context);
-		// for now assume only one storage extension provides the custom drop_database impl
-		for (auto &extension_entry : config.storage_extensions) {
-			if (extension_entry.second->drop_database == nullptr) {
-				continue;
-			}
-			auto &storage_extension = extension_entry.second;
-			auto drop_database_function_ref =
-			    storage_extension->drop_database(storage_extension->storage_info.get(), context, database_name);
-			if (drop_database_function_ref) {
-				auto bound_drop_database_func = Bind(*drop_database_function_ref);
-				result.plan = CreatePlan(*bound_drop_database_func);
-				result.names = {"Success"};
-				result.types = {LogicalType::BIGINT};
-				properties.allow_stream_result = false;
-				properties.return_type = StatementReturnType::NOTHING;
-				return result;
-			}
-		}
-		throw BinderException("Drop is not supported for this database!");
+	case CatalogType::SECRET_ENTRY: {
+		//! Secrets are stored in the secret manager; they can always be dropped
+		properties.requires_valid_transaction = false;
+		break;
 	}
 	default:
-		throw BinderException("Unknown catalog type for drop statement!");
+		throw BinderException("Unknown catalog type for drop statement: '%s'", CatalogTypeToString(stmt.info->type));
 	}
 	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, std::move(stmt.info));
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

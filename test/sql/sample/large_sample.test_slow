@@ -5,6 +5,30 @@
 statement ok
 PRAGMA enable_verification;
 
+# sample on a larger data set
+query I
+SELECT COUNT(*) FROM range(10000) USING SAMPLE 5
+----
+5
+
+# test sample with multiple columns
+# we insert the same data in the entire column
+statement ok
+CREATE TABLE test2 AS SELECT i a, i::VARCHAR b, CONCAT(i, ' - ', i) c FROM repeat(1, 1000) tbl(i)
+
+query III
+SELECT a, b, c FROM test2 USING SAMPLE 3;
+----
+1	1	1 - 1
+1	1	1 - 1
+1	1	1 - 1
+
+# reservoir sample from a larger dataset
+query I
+select count(*) from range(200000) tablesample reservoir(90%);
+----
+180000
+
 loop i 0 3
 
 # sample_size sampling with a large reservoir
@@ -13,3 +37,4 @@ select count(*) from (select * from range(200000) tbl(i) where i % 997 != 0) tbl
 ----
 
 endloop
+

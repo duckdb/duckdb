@@ -1,0 +1,21 @@
+# name: test/sql/storage/issue3789_node_segment_tree.test
+# description: Test for issue #3789, INTERNAL Error: Could not find node in column segment tree
+# group: [storage]
+
+statement ok
+CREATE TABLE table1 (column1 integer, column2 integer)
+
+statement ok
+INSERT INTO table1(column1, column2) values(1, 1)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO table1(column1, column2) values(1, 2)
+
+statement ok
+UPDATE table1 SET column2 = 3 FROM table1 s WHERE s.column1 = 1
+
+statement ok
+COMMIT

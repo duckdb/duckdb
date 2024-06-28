@@ -1,15 +1,19 @@
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/main/query_profiler.hpp"
-#include "duckdb/common/serializer.hpp"
+
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -45,50 +49,51 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
-	} catch (const ParameterNotResolvedException &ex) {
-		// parameter types could not be resolved
-		this->names = {"unknown"};
-		this->types = {LogicalTypeId::UNKNOWN};
+	} catch (const std::exception &ex) {
+		ErrorData error(ex);
 		this->plan = nullptr;
-		parameters_resolved = false;
-	} catch (const Exception &ex) {
-		auto &config = DBConfig::GetConfig(context);
-
-		this->plan = nullptr;
-		for (auto &extension_op : config.operator_extensions) {
-			auto bound_statement =
-			    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
-			if (bound_statement.plan != nullptr) {
-				this->names = bound_statement.names;
-				this->types = bound_statement.types;
-				this->plan = std::move(bound_statement.plan);
-				break;
+		if (error.Type() == ExceptionType::PARAMETER_NOT_RESOLVED) {
+			// parameter types could not be resolved
+			this->names = {"unknown"};
+			this->types = {LogicalTypeId::UNKNOWN};
+			parameters_resolved = false;
+		} else if (error.Type() != ExceptionType::INVALID) {
+			// different exception type - try operator_extensions
+			auto &config = DBConfig::GetConfig(context);
+			for (auto &extension_op : config.operator_extensions) {
+				auto bound_statement =
+				    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
+				if (bound_statement.plan != nullptr) {
+					this->names = bound_statement.names;
+					this->types = bound_statement.types;
+					this->plan = std::move(bound_statement.plan);
+					break;
+				}
 			}
-		}
-
-		if (!this->plan) {
+			if (!this->plan) {
+				throw;
+			}
+		} else {
 			throw;
 		}
-	} catch (std::exception &ex) {
-		throw;
 	}
-	this->properties = binder->properties;
+	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
-	properties.bound_all_parameters = parameters_resolved;
+	properties.bound_all_parameters = !bound_parameters.rebind && parameters_resolved;
 
-	Planner::VerifyPlan(context, plan, &bound_parameters.parameters);
+	Planner::VerifyPlan(context, plan, bound_parameters.GetParametersPtr());
 
 	// set up a map of parameter number -> value entries
-	for (auto &kv : bound_parameters.parameters) {
-		auto parameter_index = kv.first;
-		auto &parameter_data = kv.second;
+	for (auto &kv : bound_parameters.GetParameters()) {
+		auto &identifier = kv.first;
+		auto &param = kv.second;
 		// check if the type of the parameter could be resolved
-		if (!parameter_data->return_type.IsValid()) {
+		if (!param->return_type.IsValid()) {
 			properties.bound_all_parameters = false;
 			continue;
 		}
-		parameter_data->value = Value(parameter_data->return_type);
-		value_map[parameter_index] = parameter_data;
+		param->SetValue(Value(param->return_type));
+		value_map[identifier] = param;
 	}
 }
 
@@ -97,7 +102,7 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	// create a plan of the underlying statement
 	CreatePlan(std::move(statement));
 	// now create the logical prepare
-	auto prepared_data = make_shared<PreparedStatementData>(copied_statement->type);
+	auto prepared_data = make_shared_ptr<PreparedStatementData>(copied_statement->type);
 	prepared_data->unbound_statement = std::move(copied_statement);
 	prepared_data->names = names;
 	prepared_data->types = types;
@@ -125,7 +130,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::CALL_STATEMENT:
 	case StatementType::EXPORT_STATEMENT:
 	case StatementType::PRAGMA_STATEMENT:
-	case StatementType::SHOW_STATEMENT:
 	case StatementType::SET_STATEMENT:
 	case StatementType::LOAD_STATEMENT:
 	case StatementType::EXTENSION_STATEMENT:
@@ -134,6 +138,8 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::LOGICAL_PLAN_STATEMENT:
 	case StatementType::ATTACH_STATEMENT:
 	case StatementType::DETACH_STATEMENT:
+	case StatementType::COPY_DATABASE_STATEMENT:
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -142,29 +148,30 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 }
 
 static bool OperatorSupportsSerialization(LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_PREPARE:
-	case LogicalOperatorType::LOGICAL_EXECUTE:
-	case LogicalOperatorType::LOGICAL_PRAGMA:
-	case LogicalOperatorType::LOGICAL_EXPLAIN:
-	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
-		// unsupported (for now)
-		return false;
-	default:
-		break;
-	}
 	for (auto &child : op.children) {
 		if (!OperatorSupportsSerialization(*child)) {
 			return false;
 		}
 	}
-	return true;
+	return op.SupportSerialization();
 }
 
-void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
+void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
+                         optional_ptr<bound_parameter_map_t> map) {
+	auto &config = DBConfig::GetConfig(context);
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-	// if alternate verification is enabled we run the original operator
-	return;
+	{
+		auto &serialize_comp = config.options.serialization_compatibility;
+		auto latest_version = SerializationCompatibility::Latest();
+		if (serialize_comp.manually_set &&
+		    serialize_comp.serialization_version != latest_version.serialization_version) {
+			// Serialization should not be skipped, this test relies on the serialization to remove certain fields for
+			// compatibility with older versions. This might change behavior, not doing this might make this test fail.
+		} else {
+			// if alternate verification is enabled we run the original operator
+			return;
+		}
+	}
 #endif
 	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
 		return;
@@ -173,24 +180,39 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	if (!OperatorSupportsSerialization(*op)) {
 		return;
 	}
+	// verify the column bindings of the plan
+	ColumnBindingResolver::Verify(*op);
 
-	BufferedSerializer serializer;
-	serializer.is_query_plan = true;
+	// format (de)serialization of this operator
 	try {
-		op->Serialize(serializer);
-	} catch (NotImplementedException &ex) {
-		// ignore for now (FIXME)
-		return;
-	}
-	auto data = serializer.GetData();
-	auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
+		MemoryStream stream;
 
-	PlanDeserializationState state(context);
-	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
-	if (map) {
-		*map = std::move(state.parameter_data);
+		SerializationOptions options;
+		if (config.options.serialization_compatibility.manually_set) {
+			// Override the default of 'latest' if this was manually set (for testing, mostly)
+			options.serialization_compatibility = config.options.serialization_compatibility;
+		} else {
+			options.serialization_compatibility = SerializationCompatibility::Latest();
+		}
+
+		BinarySerializer::Serialize(*op, stream, options);
+		stream.Rewind();
+		bound_parameter_map_t parameters;
+		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+
+		if (map) {
+			*map = std::move(parameters);
+		}
+		op = std::move(new_plan);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		switch (error.Type()) {
+		case ExceptionType::NOT_IMPLEMENTED: // NOLINT: explicitly allowing these errors (for now)
+			break;                           // pass
+		default:
+			throw;
+		}
 	}
-	op = std::move(new_plan);
 }
 
 } // namespace duckdb

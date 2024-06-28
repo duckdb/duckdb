@@ -10,13 +10,15 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
 template <class T, class INDEX_TYPE>
 class IndexVector {
 public:
-	void push_back(T element) {
+	void push_back(T element) { // NOLINT: match stl API
 		internal_vector.push_back(std::move(element));
 	}
 
@@ -28,35 +30,45 @@ public:
 		return internal_vector[idx.index];
 	}
 
-	idx_t size() const {
+	idx_t size() const { // NOLINT: match stl API
 		return internal_vector.size();
 	}
 
-	bool empty() const {
+	bool empty() const { // NOLINT: match stl API
 		return internal_vector.empty();
 	}
 
-	void reserve(idx_t size) {
+	void reserve(idx_t size) { // NOLINT: match stl API
 		internal_vector.reserve(size);
 	}
 
-	typename vector<T>::iterator begin() {
+	typename vector<T>::iterator begin() { // NOLINT: match stl API
 		return internal_vector.begin();
 	}
-	typename vector<T>::iterator end() {
+	typename vector<T>::iterator end() { // NOLINT: match stl API
 		return internal_vector.end();
 	}
-	typename vector<T>::const_iterator cbegin() {
+	typename vector<T>::const_iterator cbegin() { // NOLINT: match stl API
 		return internal_vector.cbegin();
 	}
-	typename vector<T>::const_iterator cend() {
+	typename vector<T>::const_iterator cend() { // NOLINT: match stl API
 		return internal_vector.cend();
 	}
-	typename vector<T>::const_iterator begin() const {
+	typename vector<T>::const_iterator begin() const { // NOLINT: match stl API
 		return internal_vector.begin();
 	}
-	typename vector<T>::const_iterator end() const {
+	typename vector<T>::const_iterator end() const { // NOLINT: match stl API
 		return internal_vector.end();
+	}
+
+	void Serialize(Serializer &serializer) const {
+		serializer.WriteProperty(100, "internal_vector", internal_vector);
+	}
+
+	static IndexVector<T, INDEX_TYPE> Deserialize(Deserializer &deserializer) {
+		IndexVector<T, INDEX_TYPE> result;
+		deserializer.ReadProperty(100, "internal_vector", result.internal_vector);
+		return result;
 	}
 
 private:

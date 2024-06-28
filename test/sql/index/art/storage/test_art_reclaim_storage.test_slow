@@ -1,0 +1,145 @@
+# name: test/sql/index/art/storage/test_art_reclaim_storage.test_slow
+# description: Test that the block manager reclaims index memory
+# group: [storage]
+
+load __TEST_DIR__/test_reclaim_space.db
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM range(1000000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+# save the block count and the used block count before index creation
+
+statement ok
+CREATE TABLE blocks_tbl AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+
+# index creation
+
+statement ok
+CREATE INDEX idx ON integers(i);
+
+query I
+SELECT i FROM integers WHERE i = 500000;
+----
+500000
+
+statement ok
+CHECKPOINT;
+
+# save the total block count and the used block count after creating an index
+statement ok
+CREATE TABLE blocks_idx AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+
+# dropping the index
+
+statement ok
+DROP INDEX idx;
+
+statement ok
+CHECKPOINT;
+
+# save the total block count after dropping the index
+statement ok
+CREATE TABLE blocks_drop_idx AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+
+statement ok
+CREATE INDEX idx ON integers(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT i FROM integers WHERE i = 500000;
+----
+500000
+
+# now loop and always DROP INDEX, then recreate (reusing the same blocks)
+
+loop i 0 4
+
+statement ok
+DROP INDEX idx;
+
+statement ok
+CHECKPOINT;
+
+# we added another table, but dropping the index should get us back
+# to more or less the block count that we had before creating the index
+query I
+SELECT current.total_blocks < blocks_drop_idx.total_blocks + 4
+FROM pragma_database_size() AS current, blocks_drop_idx;
+----
+1
+
+statement ok
+CREATE INDEX idx ON integers(i);
+
+statement ok
+CHECKPOINT;
+
+# we reclaim blocks, so we stay within some +4 blocks of our previous block count
+query I
+SELECT current.total_blocks < blocks_idx.total_blocks + 5
+FROM pragma_database_size() current, blocks_idx;
+----
+1
+
+query I
+SELECT i FROM integers WHERE i = 500000;
+----
+500000
+
+endloop
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CREATE TABLE prev_delete_tbl AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+
+statement ok
+DELETE FROM integers WHERE i > 100000;
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT current.used_blocks < prev_delete_tbl.total_blocks
+FROM pragma_database_size() current, prev_delete_tbl;
+----
+1
+
+statement ok
+CHECKPOINT;
+
+# now insert a bunch of values again
+statement ok
+INSERT INTO integers SELECT i FROM range(1000000) tbl(i);
+
+# and make sure that we do not exceed/hit twice the original size
+
+query I
+SELECT current.total_blocks > blocks_idx.total_blocks
+AND current.total_blocks < blocks_idx.total_blocks * 2
+FROM pragma_database_size() current, blocks_idx;
+----
+1
+
+statement ok
+CHECKPOINT;
+
+# now delete everything, but don't drop the index
+
+statement ok
+DELETE FROM integers;
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT current.used_blocks < blocks_idx.total_blocks
+FROM pragma_database_size() current, blocks_idx;
+----
+1

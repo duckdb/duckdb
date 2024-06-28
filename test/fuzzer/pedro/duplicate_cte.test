@@ -8,6 +8,8 @@ pragma enable_verification
 statement ok
 CREATE TABLE t0(c0 INT);
 
+require noalternativeverify
+
 statement ok
 WITH t0 AS (SELECT 2) INSERT INTO t0 (WITH t0 AS (SELECT 2) SELECT 2);
 

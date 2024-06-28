@@ -15,7 +15,7 @@ namespace duckdb {
 //! A PipelineEvent is responsible for scheduling a pipeline
 class PipelineEvent : public BasePipelineEvent {
 public:
-	PipelineEvent(shared_ptr<Pipeline> pipeline);
+	explicit PipelineEvent(shared_ptr<Pipeline> pipeline);
 
 public:
 	void Schedule() override;

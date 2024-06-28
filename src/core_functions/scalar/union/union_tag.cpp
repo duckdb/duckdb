@@ -39,7 +39,7 @@ static unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunct
 		FlatVector::GetData<string_t>(varchar_vector)[i] =
 		    str.IsInlined() ? str : StringVector::AddString(varchar_vector, str);
 	}
-	auto enum_type = LogicalType::ENUM("", varchar_vector, member_count);
+	auto enum_type = LogicalType::ENUM(varchar_vector, member_count);
 	bound_function.return_type = enum_type;
 
 	return nullptr;

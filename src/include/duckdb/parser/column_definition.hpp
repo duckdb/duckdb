@@ -29,12 +29,10 @@ public:
 	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> expression,
 	                            TableColumnType category);
 
-	//! The default value of the column (if any)
-	unique_ptr<ParsedExpression> default_value;
-
 public:
 	//! default_value
-	const unique_ptr<ParsedExpression> &DefaultValue() const;
+	const ParsedExpression &DefaultValue() const;
+	bool HasDefaultValue() const;
 	void SetDefaultValue(unique_ptr<ParsedExpression> default_value);
 
 	//! type
@@ -45,6 +43,10 @@ public:
 	//! name
 	DUCKDB_API const string &Name() const;
 	void SetName(const string &name);
+
+	//! comment
+	DUCKDB_API const Value &Comment() const;
+	void SetComment(const Value &comment);
 
 	//! compression_type
 	const duckdb::CompressionType &CompressionType() const;
@@ -68,7 +70,7 @@ public:
 	DUCKDB_API ColumnDefinition Copy() const;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &source);
+	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &deserializer);
 
 	//===--------------------------------------------------------------------===//
 	// Generated Columns (VIRTUAL)
@@ -97,8 +99,13 @@ private:
 	idx_t oid = DConstants::INVALID_INDEX;
 	//! The category of the column
 	TableColumnType category = TableColumnType::STANDARD;
-	//! Used by Generated Columns
-	unique_ptr<ParsedExpression> generated_expression;
+	//! The default value of the column (for non-generated columns)
+	//! The generated column expression (for generated columns)
+	unique_ptr<ParsedExpression> expression;
+	//! Comment on this column
+	Value comment;
+	//! Tags on this column
+	unordered_map<string, string> tags;
 };
 
 } // namespace duckdb

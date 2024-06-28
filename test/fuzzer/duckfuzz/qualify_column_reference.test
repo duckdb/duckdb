@@ -1,0 +1,18 @@
+# name: test/fuzzer/duckfuzz/qualify_column_reference.test
+# description: Qualify column reference
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table tbl(c1 int, c2 int);
+
+statement error
+SELECT c1 FROM tbl GROUP BY c1 QUALIFY cume_dist() OVER (ROWS BETWEEN c2 PRECEDING AND CURRENT ROW);
+----
+column "c2" must appear in the GROUP BY clause
+
+query I
+SELECT c1 FROM tbl GROUP BY c1 QUALIFY cume_dist() OVER (ROWS BETWEEN c1 PRECEDING AND CURRENT ROW);
+----

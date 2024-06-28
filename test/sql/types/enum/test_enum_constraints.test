@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+# FIXME: dependencies between enums and tables are currently disabled
+mode skip
+
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
@@ -17,6 +20,7 @@ CREATE TABLE person (
 # We can't drop mood because person depends on it
 statement error
 drop type mood
+----
 
 # But if we drop person
 statement ok
@@ -92,6 +96,7 @@ ALTER TABLE person ADD COLUMN current_mood mood
 
 statement error
 DROP TYPE mood
+----
 
 #Dropping the table and type in the same transaction
 statement ok
@@ -122,6 +127,7 @@ ALTER TABLE person DROP COLUMN current_mood
 
 statement error
 DROP TYPE mood
+----
 
 statement ok
 ALTER TABLE person ALTER past_mood SET DATA TYPE VARCHAR
@@ -137,6 +143,7 @@ ALTER TABLE person ADD COLUMN current_mood mood
 
 statement error
 DROP TYPE mood
+----
 
 # Clean-up
 statement ok
@@ -168,6 +175,7 @@ ROLLBACK;
 #Fails, mood should still be dependent on by the table
 statement error
 DROP TYPE mood;
+----
 
 
 #CLEANUP
@@ -200,6 +208,7 @@ ROLLBACK;
 #Fails, mood should still be dependent on by the table
 statement error
 DROP TYPE mood;
+----
 
 #CLEANUP
 statement ok
@@ -247,6 +256,7 @@ ALTER TABLE person RENAME COLUMN current_mood TO past_mood
 # Check if constraint still there
 statement error
 DROP TYPE mood
+----
 
 statement ok
 DROP TABLE person
@@ -270,12 +280,14 @@ CREATE TABLE person (
 # Check if constraint still there
 statement error
 DROP TYPE mood
+----
 
 statement ok
 ALTER TABLE person DROP COLUMN current_mood
 
 statement error
 DROP TYPE mood
+----
 
 statement ok
 DROP TABLE person

@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -19,7 +18,8 @@ public:
 	class ColumnListIterator;
 
 public:
-	DUCKDB_API ColumnList(bool allow_duplicate_names = false);
+	DUCKDB_API explicit ColumnList(bool allow_duplicate_names = false);
+	DUCKDB_API explicit ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_names = false);
 
 	DUCKDB_API void AddColumn(ColumnDefinition column);
 	void Finalize();
@@ -45,13 +45,13 @@ public:
 	idx_t PhysicalColumnCount() const {
 		return physical_columns.size();
 	}
-	bool empty() const {
+	bool empty() const { // NOLINT: match stl API
 		return columns.empty();
 	}
 
 	ColumnList Copy() const;
-	void Serialize(FieldWriter &writer) const;
-	static ColumnList Deserialize(FieldReader &reader);
+	void Serialize(Serializer &serializer) const;
+	static ColumnList Deserialize(Deserializer &deserializer);
 
 	DUCKDB_API ColumnListIterator Logical() const;
 	DUCKDB_API ColumnListIterator Physical() const;
@@ -117,10 +117,10 @@ public:
 			return physical ? list.PhysicalColumnCount() : list.LogicalColumnCount();
 		}
 
-		ColumnLogicalIteratorInternal begin() {
+		ColumnLogicalIteratorInternal begin() { // NOLINT: match stl API
 			return ColumnLogicalIteratorInternal(list, physical, 0, Size());
 		}
-		ColumnLogicalIteratorInternal end() {
+		ColumnLogicalIteratorInternal end() { // NOLINT: match stl API
 			return ColumnLogicalIteratorInternal(list, physical, Size(), Size());
 		}
 	};

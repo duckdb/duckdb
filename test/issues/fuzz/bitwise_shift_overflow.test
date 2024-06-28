@@ -8,9 +8,11 @@ PRAGMA enable_verification
 # issue tests
 statement error
 SELECT 1000::bigint<<55;
+----
 
 statement error
 SELECT 256::bigint<<55;
+----
 
 query I
 SELECT 255::bigint<<55;
@@ -26,6 +28,7 @@ SELECT 0::bigint<<999;
 # tinyint
 statement error
 SELECT 10::tinyint<<4::tinyint;
+----
 
 query I
 SELECT 10::tinyint<<3::tinyint;
@@ -35,16 +38,20 @@ SELECT 10::tinyint<<3::tinyint;
 # cannot left shift negative numbers
 statement error
 SELECT (-128)::tinyint<<0::tinyint;
+----
 
 statement error
 SELECT (-10)::tinyint<<4::tinyint;
+----
 
 statement error
 SELECT (-10)::tinyint<<3::tinyint;
+----
 
 # smallint
 statement error
 SELECT 1000::smallint<<6::smallint;
+----
 
 query I
 SELECT 1000::smallint<<5::smallint;
@@ -54,6 +61,7 @@ SELECT 1000::smallint<<5::smallint;
 # integer
 statement error
 SELECT 1000::integer<<22::integer;
+----
 
 query I
 SELECT 1000::integer<<21::integer;
@@ -63,6 +71,7 @@ SELECT 1000::integer<<21::integer;
 # bigint
 statement error
 SELECT 1000::bigint<<54::bigint;
+----
 
 query I
 SELECT 1000::bigint<<53::bigint;
@@ -72,6 +81,7 @@ SELECT 1000::bigint<<53::bigint;
 # hugeint
 statement error
 SELECT 1000::hugeint<<118::hugeint;
+----
 
 query I
 SELECT 1000::hugeint<<117::hugeint;

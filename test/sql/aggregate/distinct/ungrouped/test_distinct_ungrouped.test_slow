@@ -1,0 +1,64 @@
+# name: test/sql/aggregate/distinct/ungrouped/test_distinct_ungrouped.test_slow
+# description: DISTINCT aggregations, without GROUP BY
+# group: [ungrouped]
+
+statement ok
+SET default_null_order='nulls_first';
+
+# Since these tests are made to test the ungrouped operator, and not necessarily the functions themselves
+# This test will mostly focus on the order and mixing of distinct and non-distinct aggregates
+# And not on variation between types and functions
+
+#Recursive CTE
+
+query I
+with recursive t as (select 1 as x union select sum(distinct x+1) from t where x < 3) select * from t order by x;
+----
+NULL
+1
+2
+3
+
+# Prepared statement
+
+statement ok
+CREATE TABLE tbl AS SELECT * FROM range(1000000) tbl(i);
+
+statement ok
+PREPARE v1 AS SELECT SUM(DISTINCT i%5+?::INT) FROM tbl;
+
+query I
+EXECUTE v1(1);
+----
+15
+
+query I
+EXECUTE v1(2);
+----
+20
+
+query I
+EXECUTE v1(3);
+----
+25
+
+# DISTINCT aggregate parameter as expression
+
+query I
+SELECT COUNT(distinct i % 5) from tbl;
+----
+5
+
+# Correlated subquery
+
+query I
+SELECT COUNT(distinct (SELECT i%5)) from tbl;
+----
+5
+
+## Aggregate with multiple parameters
+
+query I
+SELECT ARG_MIN(distinct i%5, i) from tbl;
+----
+0

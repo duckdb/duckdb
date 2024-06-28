@@ -12,19 +12,21 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
+class Catalog;
 class DataTable;
 class Transaction;
 class WriteAheadLog;
 struct LocalAppendState;
 struct TableAppendState;
 
-class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
+class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
-	explicit LocalTableStorage(DataTable &table);
+	explicit LocalTableStorage(ClientContext &context, DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
 	                  const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
@@ -32,7 +34,7 @@ public:
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
-	                  optional_ptr<Expression> default_value);
+	                  ExpressionExecutor &default_executor);
 	~LocalTableStorage();
 
 	reference<DataTable> table_ref;
@@ -50,6 +52,8 @@ public:
 	vector<unique_ptr<OptimisticDataWriter>> optimistic_writers;
 	//! Whether or not storage was merged
 	bool merged_storage = false;
+	//! Whether or not the storage was dropped
+	bool is_dropped = false;
 
 public:
 	void InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters = nullptr);
@@ -61,8 +65,8 @@ public:
 
 	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, idx_t append_count,
 	                     bool append_to_table);
-	PreservedError AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
-	                               const vector<LogicalType> &table_types, row_t &start_row);
+	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
+	                          const vector<LogicalType> &table_types, row_t &start_row);
 
 	//! Creates an optimistic writer for this table
 	OptimisticDataWriter &CreateOptimisticWriter();
@@ -74,7 +78,7 @@ public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
 	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
-	LocalTableStorage &GetOrCreateStorage(DataTable &table);
+	LocalTableStorage &GetOrCreateStorage(ClientContext &context, DataTable &table);
 	idx_t EstimatedSize();
 	bool IsEmpty();
 	void InsertEntry(DataTable &table, shared_ptr<LocalTableStorage> entry);
@@ -88,7 +92,7 @@ private:
 class LocalStorage {
 public:
 	// Threshold to merge row groups instead of appending
-	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE;
+	static constexpr const idx_t MERGE_THRESHOLD = Storage::ROW_GROUP_SIZE;
 
 public:
 	struct CommitState {
@@ -132,19 +136,20 @@ public:
 	void Update(DataTable &table, Vector &row_ids, const vector<PhysicalIndex> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction);
+	void Commit();
 	//! Rollback the local storage
 	void Rollback();
 
 	bool ChangesMade() noexcept;
 	idx_t EstimatedSize();
 
+	void DropTable(DataTable &table);
 	bool Find(DataTable &table);
 
 	idx_t AddedRows(DataTable &table);
 
 	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
-	               optional_ptr<Expression> default_value);
+	               ExpressionExecutor &default_executor);
 	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);

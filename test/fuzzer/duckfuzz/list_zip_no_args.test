@@ -1,0 +1,15 @@
+# name: test/fuzzer/duckfuzz/list_zip_no_args.test
+# description: Test List Zip with no arguments.
+# group: [duckfuzz]
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/1361
+statement error
+SELECT array_zip() AS c0;
+----
+Binder Error
+
+statement error
+SELECT list_zip()
+----
+Binder Error
+

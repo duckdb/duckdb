@@ -10,6 +10,7 @@ SET max_expression_depth TO 3;
 
 statement error
 SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
+----
 
 statement ok
 SET max_expression_depth TO 1000;

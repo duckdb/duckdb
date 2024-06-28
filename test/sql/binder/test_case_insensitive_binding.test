@@ -74,6 +74,7 @@ DROP TABLE test
 # this counts as a duplicate column error
 statement error
 CREATE TABLE test("HeLlO" INTEGER, "HELLO" INTEGER)
+----
 
 # conflicts can come from different sources!
 statement ok
@@ -84,18 +85,23 @@ CREATE TABLE test2("HELLO" INTEGER)
 
 statement error
 SELECT HeLlO FROM test1, test2
+----
 
 statement error
 SELECT hello FROM test1, test2
+----
 
 statement error
 SELECT "HeLlO" FROM test1, test2
+----
 
 statement error
 SELECT "HELLO" FROM test1, test2
+----
 
 statement error
 SELECT "HELLo" FROM test1, test2
+----
 
 # in this case we can eliminate the conflict by specifically selecting the source
 statement ok

@@ -1,0 +1,19 @@
+# name: test/sql/copy/csv/test_11403.test
+# description: Test CSV Sniffing detects correct quote for issue 11403
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# requires notwindows for windows-style path backslash reasons
+require notwindows
+
+query I
+SELECT COUNT(*) FROM 'data/csv/quoted_newline.csv'
+----
+1
+
+query I
+SELECT quote FROM sniff_csv('data/csv/quoted_newline.csv')
+----
+"

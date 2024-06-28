@@ -1,0 +1,58 @@
+# name: test/sql/attach/attach_s3.test
+# description: Test attach using httpfs
+# group: [attach]
+
+require skip_reload
+
+require httpfs
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env DUCKDB_S3_ENDPOINT
+
+require-env DUCKDB_S3_USE_SSL
+
+require-env S3_ATTACH_DB
+
+statement ok
+CREATE SECRET (
+    TYPE S3,
+    PROVIDER config,
+    KEY_ID '${AWS_ACCESS_KEY_ID}',
+    SECRET '${AWS_SECRET_ACCESS_KEY}',
+    REGION '${AWS_DEFAULT_REGION}',
+    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+    USE_SSL '${DUCKDB_S3_USE_SSL}'
+)
+
+# ATTACH a DuckDB database over HTTPFS
+statement ok
+ATTACH '${S3_ATTACH_DB}' AS db (READONLY 1);
+
+query IIIII
+SELECT * FROM db.integral_values
+----
+1	2	3	4	5
+NULL	NULL	NULL	NULL	NULL
+
+statement error
+CREATE TABLE db.integers(i INTEGER);
+----
+read-only
+
+statement ok
+SELECT * FROM db.all_types
+
+statement error
+SELECT * FROM db.all_typez
+----
+all_types
+
+statement ok
+DETACH db

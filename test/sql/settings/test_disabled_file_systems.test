@@ -1,0 +1,50 @@
+# name: test/sql/settings/test_disabled_file_systems.test
+# description: Test disabled file systems
+# group: [settings]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT current_setting('disabled_filesystems')
+----
+(empty)
+
+# nop
+statement ok
+RESET disabled_filesystems;
+
+statement ok
+RESET disabled_filesystems;
+
+statement ok
+SET disabled_filesystems='';
+
+# we can read from the local file system
+statement ok
+SELECT * FROM read_csv_auto('test/sql/copy/csv/data/auto/skip_row.csv')
+
+statement ok
+SET disabled_filesystems='LocalFileSystem';
+
+statement error
+RESET disabled_filesystems;
+----
+File system "LocalFileSystem" has been disabled previously
+
+statement error
+SELECT * FROM read_csv_auto('test/sql/copy/csv/data/auto/skip_row.csv')
+----
+File system LocalFileSystem has been disabled by configuration
+
+statement error
+SET disabled_filesystems='LocalFileSystem,LocalFileSystem';
+----
+Duplicate disabled file system
+
+statement error
+SET disabled_filesystems='';
+----
+has been disabled previously

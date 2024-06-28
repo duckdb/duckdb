@@ -1,0 +1,13 @@
+# name: benchmark/micro/lambdas/list_reduce/list_length_5000.benchmark
+# description: list_reduce with lists that have a length of 5000 benchmark
+# group: [list_reduce]
+
+name list length 5000
+group micro
+subgroup lambdas
+
+load
+CREATE TABLE t2 AS SELECT range(5000) as l FROM range(10000);
+
+run
+SELECT list_reduce(l, (x, y) -> x + y) FROM t2;

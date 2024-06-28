@@ -49,12 +49,15 @@ NULL
 # test incorrect usage
 statement error
 SELECT BIT_XOR()
+----
 
 statement error
 SELECT BIT_XOR(1, 2, 3)
+----
 
 statement error
 SELECT BIT_XOR(BIT_XOR(1))
+----
 
 #test on bit types
 statement ok

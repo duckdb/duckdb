@@ -16,6 +16,7 @@ ALTER TABLE test RENAME COLUMN i TO k
 # now we should see the new name
 statement error
 SELECT i FROM test
+----
 
 statement ok
 SELECT k FROM test
@@ -30,4 +31,5 @@ SELECT i FROM test
 
 statement error
 SELECT k FROM test
+----
 

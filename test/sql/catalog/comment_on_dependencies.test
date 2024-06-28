@@ -1,0 +1,57 @@
+# name: test/sql/catalog/comment_on_dependencies.test
+# description: Test COMMENT ON a catalog entry with dependencies
+# group: [catalog]
+
+### Create some test data
+statement ok
+CREATE TABLE t1 AS SELECT 1 as c1
+
+statement ok
+CREATE INDEX test_index ON t1 using art(c1)
+
+statement ok
+COMMENT ON TABLE t1 IS 'very niceee'
+
+# Create a table
+statement ok
+CREATE TABLE a (i INTEGER)
+
+# Create a view that depends on the table
+statement ok
+CREATE VIEW b AS SELECT i::STRING AS j FROM a
+
+# Comment on the table
+statement ok
+COMMENT ON TABLE a IS 'a table'
+
+# Comment on the table's column
+statement ok
+COMMENT ON COLUMN a.i IS 'a column'
+
+# Comment on the view
+statement ok
+COMMENT ON VIEW b IS 'a view'
+
+# Comment on the view's column
+statement ok
+COMMENT ON COLUMN b.j IS 'a column'
+
+query I
+select comment from duckdb_columns() where column_name='i';
+----
+a column
+
+query I
+select comment from duckdb_tables() where table_name='a';
+----
+a table
+
+query I
+select comment from duckdb_views() where view_name='b';
+----
+a view
+
+query I
+select comment from duckdb_columns() where column_name='j';
+----
+a column

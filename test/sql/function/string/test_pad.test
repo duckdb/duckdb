@@ -72,31 +72,41 @@ RÄcMotörHead	MotörHeadRÄc	MOTÖRHEAD	motörhead
 # test incorrect usage
 statement error
 select LPAD()
+----
 
 statement error
 select LPAD(1)
+----
 
 statement error
 select LPAD(1, 2)
+----
 
 statement error
 select LPAD('Hello', 10, '')
+----
 
 statement error
 select LPAD('a', 100000000000000000, 0)
+----
 
 statement error
 select RPAD()
+----
 
 statement error
 select RPAD(1)
+----
 
 statement error
 select RPAD(1, 2)
+----
 
 statement error
 select RPAD('Hello', 10, '')
+----
 
 statement error
 select RPAD('a', 100000000000000000, 0)
+----
 

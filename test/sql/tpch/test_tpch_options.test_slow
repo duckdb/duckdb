@@ -151,3 +151,23 @@ select count (*) from (SELECT * FROM db1.${tpch_tbl} EXCEPT SELECT * FROM ${tpch
 0
 
 endloop
+
+statement ok
+CREATE SCHEMA db1.test_schema
+
+statement ok
+CALL dbgen(sf=1, catalog='db1', schema='test_schema');
+
+foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
+
+query I
+select count(*) from (SELECT * FROM ${tpch_tbl} EXCEPT SELECT * FROM db1.test_schema.${tpch_tbl});
+----
+0
+
+query I
+select count (*) from (SELECT * FROM db1.test_schema.${tpch_tbl} EXCEPT SELECT * FROM ${tpch_tbl});
+----
+0
+
+endloop

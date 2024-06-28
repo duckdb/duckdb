@@ -25,7 +25,7 @@ SELECT * FROM strings
 NULL
 
 statement ok
-UPDATE strings SET a=13 WHERE a=3
+UPDATE strings SET a=13 WHERE a='3'
 
 query T
 SELECT * FROM strings ORDER BY cast(a AS INTEGER)

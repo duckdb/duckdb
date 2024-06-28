@@ -13,6 +13,30 @@ ATTACH '__TEST_DIR__/attach_enums.db' AS db1
 statement ok
 CREATE TYPE db1.mood AS ENUM ('sad', 'ok', 'happy');
 
+query I
+SELECT enum_range(NULL::db1.mood) AS my_enum_range;
+----
+[sad, ok, happy]
+
+query I
+SELECT enum_range(NULL::db1.main.mood) AS my_enum_range;
+----
+[sad, ok, happy]
+
+statement error
+SELECT enum_range(NULL::xx.db1.main.mood) AS my_enum_range;
+----
+Too many qualifications for type name
+
+statement ok
+DROP TYPE db1.mood
+
+statement ok
+DROP TYPE IF EXISTS db1.main.mood
+
+statement ok
+CREATE TYPE db1.mood AS ENUM ('sad', 'ok', 'happy');
+
 statement ok
 CREATE TABLE db1.person (
     name text,

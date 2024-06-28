@@ -33,6 +33,19 @@ select abs(median(row_group_num_rows)-${tgt_size})<2048 from parquet_metadata('_
 ----
 true
 
+# verify the groups are actually written in the same order and contain the same data
+query III
+SELECT *, row_number() OVER () FROM integers
+EXCEPT
+SELECT *, row_number() OVER () FROM '__TEST_DIR__/src_size.parquet'
+----
+
+query III
+SELECT *, row_number() OVER () FROM '__TEST_DIR__/src_size.parquet'
+EXCEPT
+SELECT *, row_number() OVER () FROM '__TEST_DIR__/tgt_size.parquet'
+----
+
 endloop
 
 endloop

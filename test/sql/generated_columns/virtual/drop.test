@@ -22,3 +22,4 @@ ALTER TABLE unit DROP COLUMN total_profit;
 # We can now no longer select it
 statement error
 SELECT total_profit FROM unit;
+----

@@ -1,0 +1,25 @@
+# name: test/sql/types/nested/map/map_from_entries/dictionary_vector.test
+# group: [map_from_entries]
+
+statement ok
+create table t1 as select
+	id,
+	[{'key': 0, 'value': id}] as entry
+from range(1000) t(id)
+
+statement ok
+create table t2 as
+	select 0 id
+from range(5);
+
+query II
+select
+	t1.id,
+	map_from_entries(entry)
+from t1 join t2 using (id);
+----
+0	{0=0}
+0	{0=0}
+0	{0=0}
+0	{0=0}
+0	{0=0}

@@ -38,8 +38,8 @@ void CommonAggregateOptimizer::ExtractCommonAggregates(LogicalAggregate &aggr) {
 			// aggregate does not exist yet: add it to the map
 			aggregate_remap[*aggr.expressions[i]] = i;
 			if (i != original_index) {
-				// this aggregate is not erased, however an agregate BEFORE it has been erased
-				// so we need to remap this aggregaet
+				// this aggregate is not erased, however an aggregate BEFORE it has been erased
+				// so we need to remap this aggregate
 				ColumnBinding original_binding(aggr.aggregate_index, original_index);
 				ColumnBinding new_binding(aggr.aggregate_index, i);
 				aggregate_map[original_binding] = new_binding;
@@ -47,7 +47,7 @@ void CommonAggregateOptimizer::ExtractCommonAggregates(LogicalAggregate &aggr) {
 		} else {
 			// aggregate already exists! we can remove this entry
 			total_erased++;
-			aggr.expressions.erase(aggr.expressions.begin() + i);
+			aggr.expressions.erase_at(i);
 			i--;
 			// we need to remap any references to this aggregate so they point to the other aggregate
 			ColumnBinding original_binding(aggr.aggregate_index, original_index);

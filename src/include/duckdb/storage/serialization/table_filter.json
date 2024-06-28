@@ -1,0 +1,107 @@
+[
+  {
+    "class": "TableFilter",
+    "class_type": "filter_type",
+    "includes": [
+      "duckdb/planner/table_filter.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "filter_type",
+        "type": "TableFilterType"
+      }
+    ]
+  },
+  {
+    "class": "IsNullFilter",
+    "base": "TableFilter",
+    "includes": [
+      "duckdb/planner/filter/null_filter.hpp"
+    ],
+    "enum": "IS_NULL",
+    "members": [
+    ]
+  },
+  {
+    "class": "IsNotNullFilter",
+    "base": "TableFilter",
+    "enum": "IS_NOT_NULL",
+    "members": [
+    ]
+  },
+  {
+    "class": "ConstantFilter",
+    "base": "TableFilter",
+    "includes": [
+      "duckdb/planner/filter/constant_filter.hpp"
+    ],
+    "enum": "CONSTANT_COMPARISON",
+    "members": [
+      {
+        "id": 200,
+        "name": "comparison_type",
+        "type": "ExpressionType"
+      },
+      {
+        "id": 201,
+        "name": "constant",
+        "type": "Value"
+      }
+    ],
+    "constructor": ["comparison_type", "constant"]
+  },
+  {
+    "class": "ConjunctionOrFilter",
+    "base": "TableFilter",
+    "includes": [
+      "duckdb/planner/filter/conjunction_filter.hpp"
+    ],
+    "enum": "CONJUNCTION_OR",
+    "members": [
+      {
+        "id": 200,
+        "name": "child_filters",
+        "type": "vector<TableFilter*>"
+      }
+    ]
+  },
+  {
+    "class": "ConjunctionAndFilter",
+    "base": "TableFilter",
+    "enum": "CONJUNCTION_AND",
+    "members": [
+      {
+        "id": 200,
+        "name": "child_filters",
+        "type": "vector<TableFilter*>"
+      }
+    ]
+  },
+  {
+    "class": "StructFilter",
+    "base": "TableFilter",
+    "enum": "STRUCT_EXTRACT",
+    "includes": [
+      "duckdb/planner/filter/struct_filter.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "child_idx",
+        "type": "idx_t"
+      },
+      {
+        "id": 201,
+        "name": "child_name",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "child_filter",
+        "type": "unique_ptr<TableFilter>"
+      }
+    ],
+    "constructor": ["child_idx", "child_name", "child_filter"]
+  }
+]

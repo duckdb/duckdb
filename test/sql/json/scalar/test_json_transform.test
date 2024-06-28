@@ -1,0 +1,514 @@
+# name: test/sql/json/scalar/test_json_transform.test
+# description: Test json_transform function
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# aliases
+query T
+select from_json('42', '"UBIGINT"')
+----
+42
+
+query T
+select from_json_strict('42', '"UBIGINT"')
+----
+42
+
+statement error
+select from_json_strict('42', '"DATE"')
+----
+
+# singletons
+statement error
+select json_transform('42', '42')
+----
+Binder Error
+
+query T
+select json_transform('42', '"UBIGINT"')
+----
+42
+
+query T
+select json_transform('4.2', '"DOUBLE"')
+----
+4.2
+
+query T
+select json_transform('null', '"NULL"')
+----
+NULL
+
+query T
+select json_transform('true', '"BOOLEAN"')
+----
+True
+
+query T
+select json_transform('"duck"', '"VARCHAR"')
+----
+duck
+
+query T
+select json_transform('"duuuuuuuuuuuuuuuuck"', '"VARCHAR"')
+----
+duuuuuuuuuuuuuuuuck
+
+# simple structs
+query T
+select json_transform('{"a": 42}', '{"a":"UBIGINT"}')
+----
+{'a': 42}
+
+statement error
+select json_transform_strict('{"a": 42, "a":43}', '{"a":"UBIGINT"}')
+----
+Invalid Input Error
+
+statement error
+select json_transform_strict('{}', '{"a":"UBIGINT"}')
+----
+Invalid Input Error
+
+statement error
+select json_transform_strict('{}', '["UBIGINT"]')
+----
+Invalid Input Error
+
+query T
+select json_transform('[{}, [42]]', '[["UBIGINT"]]')
+----
+[NULL, [42]]
+
+query T
+select json_transform('{"a": null}', '{"a":"UBIGINT"}')
+----
+{'a': NULL}
+
+query T
+select json_transform('{"a": 42}', '{"a":"NULL"}')
+----
+{'a': NULL}
+
+statement error
+select json_transform('{"a": 42}', '{"a":"ARRAY"}')
+----
+
+# arrays
+statement error
+select json_transform('[1,2,3]', '["UBIGINT", "BIGINT"]')
+----
+Binder Error
+
+query T
+select list_sum(json_transform(range(5000)::JSON, '["UBIGINT"]'))::UBIGINT s
+----
+12497500
+
+query T
+select json_transform('[1,2,3]', '["UBIGINT"]')
+----
+[1, 2, 3]
+
+query T
+select json_transform('[1,2,3]', '["NULL"]')
+----
+[NULL, NULL, NULL]
+
+query T
+select json_transform('[{"a": 42}, {"a": null}, {"a": 7}]', '[{"a": "UBIGINT"}]')
+----
+[{'a': 42}, {'a': NULL}, {'a': 7}]
+
+# we can have missing keys, these become NULL
+query T
+select json_transform('[{"a": 42}, {"a": null, "b": 33}, {"b": 7}]', '[{"a": "UBIGINT", "b": "UBIGINT"}]')
+----
+[{'a': 42, 'b': NULL}, {'a': NULL, 'b': 33}, {'a': NULL, 'b': 7}]
+
+statement ok
+create table test (j json);
+
+statement ok
+insert into test values
+    ('{"family": "anatidae", "species": ["duck", "goose", "swan", null], "coolness": 1000}'),
+    ('{"family": "canidae", "species": ["labrador", null, "bulldog", "shepherd"], "hair": true, "coolness": 999}'),
+    (NULL),
+    ('{"family": null, "species": null, "hair": null, "coolness": null}'),
+    ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}')
+
+query T
+select json_transform(j, '{"family": "VARCHAR", "coolness": "UBIGINT", "species": ["VARCHAR"]}') from test
+----
+{'family': anatidae, 'coolness': 1000, 'species': [duck, goose, swan, NULL]}
+{'family': canidae, 'coolness': 999, 'species': [labrador, NULL, bulldog, shepherd]}
+NULL
+{'family': NULL, 'coolness': NULL, 'species': NULL}
+{'family': felidae, 'coolness': 999, 'species': [tiger, lion, NULL, british shorthair]}
+
+# conflicting names
+statement error
+select json_transform('{"a": 4, "a": 2}', '{"a": "UBIGINT", "a": "UBIGINT"}')
+----
+
+# can actually get parts of the JSON back as string
+query T
+select json_transform('{"a": {"duck": 42, "goose": 7}}', '{"a": "JSON"}')
+----
+{'a': {"duck":42,"goose":7}}
+
+# loops over all types for coverage
+
+# all integer types
+foreach type <integral>
+
+query T
+select json_transform('42', '"${type}"')
+----
+42
+
+query T
+select json_transform('42.42', '"${type}"')
+----
+42
+
+query T
+select json_transform('"42"', '"${type}"')
+----
+42
+
+query T
+select json_transform('true', '"${type}"')
+----
+1
+
+query T
+select json_transform('false', '"${type}"')
+----
+0
+
+query T
+select json_transform('[]', '"${type}"')
+----
+NULL
+
+query T
+select json_transform('{}', '"${type}"')
+----
+NULL
+
+statement error
+select json_transform_strict('[]', '"${type}"')
+----
+
+statement error
+select json_transform_strict('{}', '"${type}"')
+----
+
+query T
+select json_transform('null', '"${type}"')
+----
+NULL
+
+endloop
+
+query T
+select json_transform('-42', '"INTEGER"')
+----
+-42
+
+query T
+select json_transform('-42', '"UINTEGER"')
+----
+NULL
+
+statement error
+select json_transform_strict('-42', '"UINTEGER"')
+----
+
+# varchar
+query T
+select json_transform('42', '"VARCHAR"')
+----
+42
+
+query T
+select json_transform('42', '"JSON"')
+----
+42
+
+query T
+select json_transform('42', '"BLOB"')
+----
+42
+
+query T
+select json_transform('-42', '"VARCHAR"')
+----
+-42
+
+query T
+select json_transform('42.42', '"VARCHAR"')
+----
+42.42
+
+query T
+select json_transform('true', '"VARCHAR"')
+----
+true
+
+query T
+select json_transform('[]', '"VARCHAR"')
+----
+[]
+
+query T
+select json_transform('{}', '"VARCHAR"')
+----
+{}
+
+query T
+select json_transform('null', '"VARCHAR"')
+----
+NULL
+
+# decimal
+query T
+select json_transform('42', '"DECIMAL"')
+----
+42.000
+
+query T
+select json_transform('42', '"DECIMAL(2)"')
+----
+42
+
+query T
+select json_transform('42', '"DECIMAL(3,1)"')
+----
+42.0
+
+query T
+select json_transform('-42', '"DECIMAL(3,1)"')
+----
+-42.0
+
+query T
+select json_transform('"42"', '"DECIMAL(3,1)"')
+----
+42.0
+
+query T
+select json_transform('42.42', '"DECIMAL(4,2)"')
+----
+42.42
+
+query T
+select json_transform('42.42', '"DECIMAL(10,2)"')
+----
+42.42
+
+query T
+select json_transform('42.42', '"DECIMAL(20,2)"')
+----
+42.42
+
+query T
+select json_transform('42.42', '"DECIMAL(38,2)"')
+----
+42.42
+
+query T
+select json_transform('42.42', '"DECIMAL(38,17)"')
+----
+42.42000000000000000
+
+query T
+select json_transform('true', '"DECIMAL(3,1)"')
+----
+1.0
+
+query T
+select json_transform('false', '"DECIMAL(3,1)"')
+----
+0.0
+
+query T
+select json_transform('null', '"DECIMAL(3,1)"')
+----
+NULL
+
+query T
+select json_transform('42', '"DECIMAL(2,1)"')
+----
+NULL
+
+query T
+select json_transform('[]', '"DECIMAL(2,1)"')
+----
+NULL
+
+query T
+select json_transform('{}', '"DECIMAL(2,1)"')
+----
+NULL
+
+statement error
+select json_transform_strict('42', '"DECIMAL(2,1)"')
+----
+
+statement error
+select json_transform('42', '"DECIMAL(39)"')
+----
+
+statement error
+select json_transform('42', '"DECIMAL(2,4)"')
+----
+
+statement error
+select json_transform('42', '"DECIMAL(5,1,1)"')
+----
+
+# uuid
+query T
+select json_transform('"A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"', '"UUID"')
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query T
+select json_transform('42', '"UUID"')
+----
+NULL
+
+statement error
+select json_transform_strict('42', '"UUID"')
+----
+Invalid Input Error
+
+query T
+select json_transform('-42', '"UUID"')
+----
+NULL
+
+query T
+select json_transform('42.42', '"UUID"')
+----
+NULL
+
+query T
+select json_transform('true', '"UUID"')
+----
+NULL
+
+query T
+select json_transform('false', '"UUID"')
+----
+NULL
+
+query T
+select json_transform('null', '"UUID"')
+----
+NULL
+
+statement error
+select json_transform_strict('42', '"UUID"')
+----
+
+# date / time
+query T
+select json_transform('"1996-03-27"', '"DATE"')
+----
+1996-03-27
+
+query T
+select json_transform('"11:59:59"', '"TIME"')
+----
+11:59:59
+
+query T
+select json_transform('42', '"DATE"')
+----
+NULL
+
+query T
+select json_transform('-42', '"DATE"')
+----
+NULL
+
+query T
+select json_transform('42.42', '"DATE"')
+----
+NULL
+
+query T
+select json_transform('"42"', '"DATE"')
+----
+NULL
+
+query T
+select json_transform('null', '"DATE"')
+----
+NULL
+
+query T
+select json_transform('true', '"DATE"')
+----
+NULL
+
+query T
+select json_transform('false', '"DATE"')
+----
+NULL
+
+query T
+select json_transform('[]', '"DATE"')
+----
+NULL
+
+query T
+select json_transform('{}', '"DATE"')
+----
+NULL
+
+statement error
+select json_transform_strict('false', '"DATE"')
+----
+
+# timestamp
+query T
+select json_transform('"1996-03-27 11:59:59"', '"TIMESTAMP"')
+----
+1996-03-27 11:59:59
+
+query T
+select json_transform('"1996-03-27 11:59:59"', '"TIMESTAMP_MS"')
+----
+1996-03-27 11:59:59
+
+query T
+select json_transform('"1996-03-27 11:59:59"', '"TIMESTAMP_NS"')
+----
+1996-03-27 11:59:59
+
+query T
+select json_transform('"1996-03-27 11:59:59"', '"TIMESTAMP_S"')
+----
+1996-03-27 11:59:59
+
+query T
+select json_transform('null', '"TIMESTAMP"')
+----
+NULL
+
+query T
+select json_transform('42', '"TIMESTAMP"')
+----
+NULL
+
+statement error
+select json_transform_strict('42', '"TIMESTAMP"')
+----

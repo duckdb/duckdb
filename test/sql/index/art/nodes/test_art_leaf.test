@@ -1,0 +1,275 @@
+# name: test/sql/index/art/nodes/test_art_leaf.test
+# description: Test ART leaf containing duplicates on multi column table
+# group: [nodes]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT range a, 1 AS b, 1 AS c FROM range(1024)
+
+statement ok
+CREATE INDEX b_index ON integers(b)
+
+# verify counts
+
+query I
+SELECT sum(b) FROM integers
+----
+1024
+
+query I
+SELECT sum(b) FROM integers WHERE b = 1
+----
+1024
+
+query I
+SELECT sum(b) FROM integers
+----
+1024
+
+# now delete some elements
+
+statement ok
+DELETE FROM integers WHERE a < 100
+
+# verify counts
+
+query I
+SELECT COUNT(b) FROM integers
+----
+924
+
+query I
+SELECT COUNT(b) FROM integers WHERE b = 1
+----
+924
+
+query I
+SELECT sum(b) FROM integers
+----
+924
+
+# now delete more elements
+
+statement ok
+DELETE FROM integers WHERE a < 600
+
+# verify counts
+
+query I
+SELECT COUNT(b) FROM integers
+----
+424
+
+query I
+SELECT COUNT(b) FROM integers WHERE b = 1
+----
+424
+
+query I
+SELECT sum(b) FROM integers
+----
+424
+
+# now delete all elements
+
+statement ok
+DELETE FROM integers WHERE a < 1024
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE b = 1
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0
+
+statement ok
+DROP INDEX b_index
+
+statement ok
+DROP TABLE integers
+
+# test insertion after matching prefixes
+
+# load the DB from disk
+load __TEST_DIR__/test_index.db
+
+statement ok
+CREATE TABLE tbl_leaf_cov (id INTEGER);
+
+statement ok
+CREATE INDEX idx_leaf_cov ON tbl_leaf_cov(id);
+
+statement ok
+INSERT INTO tbl_leaf_cov VALUES (1), (1);
+
+# testing growing/shrinking leaves
+
+statement ok
+CREATE TABLE tbl_grow_shrink (id_var VARCHAR, id_int INTEGER, id_point BIGINT);
+
+statement ok
+CREATE INDEX idx_var ON tbl_grow_shrink(id_var);
+
+statement ok
+CREATE INDEX idx_int ON tbl_grow_shrink(id_int);
+
+statement ok
+CREATE INDEX idx_both ON tbl_grow_shrink(id_var, id_int, id_point);
+
+statement ok
+CREATE INDEX idx_point ON tbl_grow_shrink(id_point);
+
+# growing
+
+loop i 0 29
+
+statement ok
+INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, ${i});
+
+query I
+SELECT id_var FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+hello there stranger! :sunshine:
+
+query I
+SELECT id_int FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+2
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = ${i};
+----
+1
+
+restart
+
+query I
+SELECT id_var FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+hello there stranger! :sunshine:
+
+query I
+SELECT id_int FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+2
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = ${i};
+----
+1
+
+endloop
+
+# some more queries
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink;
+----
+29
+
+query I
+SELECT sum(id_int) FROM tbl_grow_shrink;
+----
+58
+
+restart
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink;
+----
+29
+
+query I
+SELECT sum(id_int) FROM tbl_grow_shrink;
+----
+58
+
+# shrinking
+
+loop i 0 29
+
+query I
+SELECT id_var FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+hello there stranger! :sunshine:
+
+query I
+SELECT id_int FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+2
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = ${i};
+----
+1
+
+statement ok
+DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+restart
+
+endloop
+
+# some final checking
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink;
+----
+0
+
+query I
+SELECT sum(id_int) FROM tbl_grow_shrink;
+----
+NULL
+
+# merging leaves
+
+statement ok
+CREATE TABLE merge_leaf_tbl (id int);
+
+statement ok
+INSERT INTO merge_leaf_tbl SELECT range FROM range(2048);
+
+statement ok
+INSERT INTO merge_leaf_tbl VALUES (2047);
+
+statement ok
+CREATE INDEX idx_merge_leaf_tbl ON merge_leaf_tbl(id);
+
+statement ok
+DROP INDEX idx_merge_leaf_tbl;
+
+statement ok
+INSERT INTO merge_leaf_tbl VALUES (2047);
+
+statement ok
+INSERT INTO merge_leaf_tbl SELECT range + 10000 FROM range(2048);
+
+statement ok
+INSERT INTO merge_leaf_tbl SELECT range + 10000 FROM range(2048);
+
+statement ok
+CREATE INDEX idx_merge_leaf_tbl ON merge_leaf_tbl(id);
+
+# code coverage of ART consisting of a single leaf
+
+statement ok
+CREATE TABLE tbl (i TINYINT);
+
+statement ok
+CREATE INDEX idx ON tbl(i);
+
+statement ok
+INSERT INTO tbl VALUES (1), (1), (1);

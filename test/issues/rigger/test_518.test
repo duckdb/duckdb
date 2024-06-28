@@ -24,5 +24,6 @@ SELECT LN(t1.c0) FROM t0, t1 WHERE LN(t1.c0) < t0.c0;
 
 statement error
 SELECT t1.c0, LN(t1.c0) FROM t1 ORDER BY t1.c0;
+----
 
 

@@ -18,7 +18,7 @@ public:
 
 public:
 	explicit BoundDefaultExpression(LogicalType type = LogicalType())
-	    : Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, type) {
+	    : Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, std::move(type)) {
 	}
 
 public:
@@ -37,7 +37,7 @@ public:
 		return make_uniq<BoundDefaultExpression>(return_type);
 	}
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

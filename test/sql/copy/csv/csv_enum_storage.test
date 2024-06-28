@@ -1,0 +1,45 @@
+# name: test/sql/copy/csv/csv_enum_storage.test
+# description: Read a CSV with enum types
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+
+# load the DB from disk
+load __TEST_DIR__/test_csv_enum.db
+
+statement ok
+CREATE TYPE bla AS ENUM ('Y', 'N');
+
+restart
+
+query I
+select * from read_csv_auto('data/csv/response.csv', header = 0)
+----
+Y
+Y
+N
+Null
+
+query I
+FROM read_csv('data/csv/response.csv', columns={'response': 'bla'}, nullstr = 'Null');
+----
+Y
+Y
+N
+NULL
+
+
+query I
+FROM read_csv_auto('data/csv/response.csv', types={'column0': 'bla'}, nullstr = 'Null', header = 0);
+----
+Y
+Y
+N
+NULL
+
+statement error
+FROM read_csv_auto('data/csv/response.csv', auto_type_candidates=['bla'], nullstr = 'Null');
+----
+Auto Type Candidate of type ENUM is not accepted as a valid input

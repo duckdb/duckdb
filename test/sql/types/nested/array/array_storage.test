@@ -1,0 +1,128 @@
+# name: test/sql/types/nested/array/array_storage.test
+# group: [array]
+
+load __TEST_DIR__/temp_array_storage.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1(i INT, a INT[3]);
+
+statement ok
+checkpoint;
+
+statement ok
+INSERT INTO t1 VALUES(1, [1, 2, 3]::INT[3]);
+
+statement ok
+checkpoint;
+
+query IIIIIIIIIIIIIII rowsort
+SELECT * FROM pragma_storage_info('t1');
+----
+0	a	1	[1, 0]		0	VALIDITY	0	1	Constant		[Has Null: false, Has No Null: true]					false	true	-1	0	(empty)
+0	a	1	[1, 1, 0]	0	VALIDITY	0	3	Constant		[Has Null: false, Has No Null: true]					false	true	-1	0	(empty)
+0	a	1	[1, 1]		0	INTEGER		0	3	Uncompressed	[Min: 1, Max: 3][Has Null: false, Has No Null: true]	false	true	1	0	(empty)
+0	i	0	[0, 0]		0	VALIDITY	0	1	Constant		[Has Null: false, Has No Null: true]					false	true	-1	0	(empty)
+0	i	0	[0]			0	INTEGER		0	1	Constant		[Min: 1, Max: 1][Has Null: false, Has No Null: true]	false	true	-1	0	(empty)
+
+
+statement ok
+INSERT INTO t1 SELECT * FROM (VALUES(2, [4, NULL, 6]::INT[3]));
+
+statement ok
+INSERT INTO t1 VALUES(3, NULL);
+
+statement ok
+INSERT INTO t1 VALUES(4, [7, 8, 9]::INT[3]);
+
+statement ok
+checkpoint;
+
+restart
+
+query II rowsort
+SELECT * FROM t1 ORDER BY i;
+----
+1	[1, 2, 3]
+2	[4, NULL, 6]
+3	NULL
+4	[7, 8, 9]
+
+
+query IIII rowsort
+SELECT * FROM t1 as a JOIN t1 as b ON (a.a IS DISTINCT FROM b.a) ORDER BY a.i, b.i;
+----
+1	[1, 2, 3]	2	[4, NULL, 6]
+1	[1, 2, 3]	3	NULL
+1	[1, 2, 3]	4	[7, 8, 9]
+2	[4, NULL, 6]	1	[1, 2, 3]
+2	[4, NULL, 6]	3	NULL
+2	[4, NULL, 6]	4	[7, 8, 9]
+3	NULL	1	[1, 2, 3]
+3	NULL	2	[4, NULL, 6]
+3	NULL	4	[7, 8, 9]
+4	[7, 8, 9]	1	[1, 2, 3]
+4	[7, 8, 9]	2	[4, NULL, 6]
+4	[7, 8, 9]	3	NULL
+
+
+query II
+SELECT * FROM t1 WHERE a = array_value(1,2,3);
+----
+1	[1, 2, 3]
+
+query II
+SELECT * FROM t1 WHERE a[1] = 4;
+----
+2	[4, NULL, 6]
+
+
+query II
+SELECT * FROM t1 LIMIT 1 OFFSET 1;
+----
+2	[4, NULL, 6]
+
+
+# Now try with > than vector size elements
+
+statement ok
+CREATE TABLE t2(i INT, a INT[3]);
+
+# First 1500 elements
+statement ok
+INSERT INTO t2 SELECT i, array_value(i, i + 1, i + 2) FROM range(0,1501) AS t(i);
+
+# Next 1500 elements
+statement ok
+INSERT INTO t2 SELECT
+	i, array_value(i, i + 1, i + 2)
+FROM range(1501,3001) AS t(i);
+
+statement ok
+checkpoint;
+
+restart
+
+query II rowsort
+SELECT * FROM t2 WHERE i = 5;
+----
+5	[5, 6, 7]
+
+query II rowsort
+SELECT * FROM t2 WHERE i = 3000;
+----
+3000	[3000, 3001, 3002]
+
+query II rowsort
+SELECT * FROM t2 WHERE i = 1200;
+----
+1200	[1200, 1201, 1202]
+
+statement ok
+CREATE TABLE t4 (i INT[3]);
+
+statement ok
+INSERT INTO t4 SELECT array_value(a::VARCHAR,b::VARCHAR,c::VARCHAR) FROM range(1,100) AS r1(a), range(1,100) AS r2(b), range(1,50) AS r3(c);
+

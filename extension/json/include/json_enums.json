@@ -1,0 +1,55 @@
+[
+  {
+    "name": "JSONScanType",
+    "values": [
+      "INVALID",
+      {
+        "name": "READ_JSON",
+        "comment": "Read JSON straight to columnar data"
+      },
+      {
+        "name": "READ_JSON_OBJECTS",
+        "comment": "Read JSON values as strings"
+      },
+      {
+        "name": "SAMPLE",
+        "comment": "Sample run for schema detection"
+      }
+    ]
+  },
+  {
+    "name": "JSONRecordType",
+    "values": [
+      "AUTO_DETECT",
+      {
+        "name": "RECORDS",
+        "comment": "Sequential objects that are unpacked"
+      },
+      {
+        "name": "VALUES",
+        "comment": "Any other JSON type, e.g., ARRAY"
+      }
+    ]
+  },
+  {
+    "name": "JSONFormat",
+    "values": [
+      {
+        "name": "AUTO_DETECT",
+        "comment": "Auto-detect format (UNSTRUCTURED / NEWLINE_DELIMITED)"
+      },
+      {
+        "name": "UNSTRUCTURED",
+        "comment": "One unit after another, newlines can be anywhere"
+      },
+      {
+        "name": "NEWLINE_DELIMITED",
+        "comment": "Units are separated by newlines, newlines do not occur within Units (NDJSON)"
+      },
+      {
+        "name": "ARRAY",
+        "comment": "File is one big array of units"
+      }
+    ]
+  }
+]

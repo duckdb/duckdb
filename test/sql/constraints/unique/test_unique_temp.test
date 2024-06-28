@@ -26,6 +26,7 @@ SELECT * FROM integers
 # insert a duplicate value as part of a chain of values, this should fail
 statement error
 INSERT INTO integers VALUES (6, 6), (3, 4);
+----
 
 statement ok
 INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
@@ -33,6 +34,7 @@ INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
 # but if we try to replace them like this it's going to fail
 statement error
 UPDATE integers SET i=77 WHERE i IS NULL
+----
 
 query II
 SELECT * FROM integers ORDER BY i, j
@@ -86,6 +88,7 @@ INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
 
 statement error
 INSERT INTO integers VALUES (NULL, 6), (3, 7)
+----
 
 statement ok
 DROP TABLE integers

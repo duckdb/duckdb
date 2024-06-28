@@ -18,7 +18,7 @@ statement ok
 INSERT INTO integers2 VALUES (1, 10), (2, 20)
 
 query IIII
-SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k LIMIT 2
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k ORDER BY ALL LIMIT 2
 ----
 1	1	1	10
 3	3	NULL	NULL

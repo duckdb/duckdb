@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/code_cov/csv_type_refinement.test
+# description: Tests to enforce codecov in csv type refinement sniffing
+# group: [code_cov]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select count(*) from read_csv_auto('data/csv/borked_date.csv', header = 0)
+----
+2070
+
+query I
+select count(*) from read_csv_auto('data/csv/big_not_bool.csv', header = 0)
+----
+2450

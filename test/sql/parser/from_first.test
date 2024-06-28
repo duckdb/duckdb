@@ -60,7 +60,7 @@ FROM integers SELECT i%2 AS g, SUM(i) sum GROUP BY g HAVING sum IS NOT NULL ORDE
 0	2
 1	4
 
-query I
+query I rowsort
 FROM integers JOIN integers i2 USING (i)
 ----
 1

@@ -2,6 +2,7 @@ import duckdb
 import os
 import pytest
 
+
 def get_tables(con):
     tbls = con.execute("SHOW TABLES").fetchall()
     tbls = [x[0] for x in tbls]
@@ -32,6 +33,7 @@ def test_multiple_writes():
     except:
         pass
 
+
 def test_multiple_writes_memory():
     con1 = duckdb.connect()
     con2 = duckdb.connect()
@@ -48,6 +50,7 @@ def test_multiple_writes_memory():
     del con2
     del con3
 
+
 def test_multiple_writes_named_memory():
     con1 = duckdb.connect(":memory:1")
     con2 = duckdb.connect(":memory:1")
@@ -60,10 +63,13 @@ def test_multiple_writes_named_memory():
     del con2
     del con3
 
+
 def test_diff_config():
-    con1 = duckdb.connect("test.db",False)
-    with pytest.raises(duckdb.ConnectionException, match="Can't open a connection to same database file with a different configuration than existing connections"):
-        con2 = duckdb.connect("test.db",True)
+    con1 = duckdb.connect("test.db", False)
+    with pytest.raises(
+        duckdb.ConnectionException,
+        match="Can't open a connection to same database file with a different configuration than existing connections",
+    ):
+        con2 = duckdb.connect("test.db", True)
     con1.close()
     del con1
-

@@ -1,0 +1,94 @@
+# name: test/sql/copy/csv/test_csv_error_message_type.test
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE venue (
+    venueid          SMALLINT        NOT NULL /*PRIMARY KEY*/
+    , venuename      VARCHAR (100)
+    , venuecity      VARCHAR (30)
+    , venuestate     CHAR (2)
+    , venueseats     INTEGER
+);
+
+statement error
+copy venue from 'data/csv/venue_pipe.csv'
+----
+This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
+
+statement error
+SELECT * FROM read_csv('data/csv/venue_pipe.csv', types=['SMALLINT','VARCHAR','VARCHAR','VARCHAR','INTEGER']);
+----
+This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
+
+statement error
+SELECT * FROM read_csv('data/csv/venue_pipe.csv', types=['SMALLINT','VARCHAR','VARCHAR','VARCHAR','INTEGER']);
+----
+This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
+
+statement error
+SELECT * FROM read_csv('data/csv/venue_pipe.csv', types={'venueseats':'INTEGER'});
+----
+This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
+
+statement error
+SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
+----
+This type was auto-detected from the CSV file.
+
+statement ok
+CREATE TABLE venue_2 (
+    venueid          SMALLINT        NOT NULL /*PRIMARY KEY*/
+    , venuename      VARCHAR (100)
+    , venuecity      VARCHAR (30)
+    , venuestate     CHAR (2)
+    , venueseats     VARCHAR
+);
+
+statement ok
+INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
+
+query I
+SELECT COUNT(*) from venue_2
+----
+2662
+
+statement ok
+DROP TABLE venue_2
+
+statement ok
+CREATE TABLE venue_2 (
+    venueid          SMALLINT        NOT NULL /*PRIMARY KEY*/
+    , venuename      VARCHAR (100)
+    , venuecity      VARCHAR (30)
+    , venuestate     CHAR (2)
+    , venueseats     VARCHAR
+);
+
+
+
+# Check our  possible solutions:
+#* Override the type for this column manually by setting the type explicitly, e.g. types={'venueseats': 'VARCHAR'}
+statement ok
+INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1, types={'venueseats': 'VARCHAR'});
+
+#* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g. sample_size=-1
+statement ok
+INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = -1);
+
+#* Use a COPY statement to automatically derive types from an existing table.
+statement ok
+copy venue_2 from 'data/csv/venue_pipe_big.csv'
+
+statement error
+SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
+----
+This type was auto-detected from the CSV file.
+
+# This cast happens from the CSV -> To the table so there is not much we can easily do
+statement error
+INSERT INTO venue SELECT * FROM read_csv('data/csv/venue_pipe.csv');
+----
+Could not convert string "\N" to 'INTEGER'

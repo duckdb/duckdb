@@ -1,0 +1,24 @@
+# name: test/sql/copy/csv/code_cov/csv_disk_reload.test
+# description: Test to reach Disk Reaload call in the csv buffer manager for codecov
+# group: [code_cov]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 AS select i, (i+1) as j from range(0,300000) tbl(i)
+
+statement ok
+COPY t1 TO '__TEST_DIR__/t1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+# Let's set a memory limit
+statement ok
+PRAGMA memory_limit='2M'
+
+statement ok
+PRAGMA threads=2
+
+query I
+select count(*) from read_csv_auto('__TEST_DIR__/t1.csv',buffer_size = 262144, sample_size=-1)
+----
+300000

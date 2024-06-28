@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -26,7 +25,9 @@ public:
 
 	//! The projection list of the WINDOW statement (may contain aggregates)
 	vector<unique_ptr<Expression>> select_list;
-	//! Whether or not the window is order dependent (only true if all window functions contain neither an order nor a
+	//! The window expression with the order clause
+	idx_t order_idx;
+	//! Whether or not the window is order dependent (only true if ANY window function contains neither an order nor a
 	//! partition clause)
 	bool is_order_dependent;
 
@@ -36,6 +37,8 @@ public:
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                    LocalSourceState &lstate) const override;
 
 	bool IsSource() const override {
 		return true;
@@ -44,16 +47,17 @@ public:
 		return true;
 	}
 
-	OrderPreservationType SourceOrder() const override {
-		return OrderPreservationType::NO_ORDER;
-	}
+	bool SupportsBatchIndex() const override;
+	OrderPreservationType SourceOrder() const override;
+
+	double GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const override;
 
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          GlobalSinkState &gstate) const override;
+	                          OperatorSinkFinalizeInput &input) const override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;

@@ -3,24 +3,27 @@
 namespace duckdb {
 
 static void EnumFirstFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.GetTypes().size() == 1);
-	auto &enum_vector = EnumType::GetValuesInsertOrder(input.GetTypes()[0]);
+	auto types = input.GetTypes();
+	D_ASSERT(types.size() == 1);
+	auto &enum_vector = EnumType::GetValuesInsertOrder(types[0]);
 	auto val = Value(enum_vector.GetValue(0));
 	result.Reference(val);
 }
 
 static void EnumLastFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.GetTypes().size() == 1);
-	auto enum_size = EnumType::GetSize(input.GetTypes()[0]);
-	auto &enum_vector = EnumType::GetValuesInsertOrder(input.GetTypes()[0]);
+	auto types = input.GetTypes();
+	D_ASSERT(types.size() == 1);
+	auto enum_size = EnumType::GetSize(types[0]);
+	auto &enum_vector = EnumType::GetValuesInsertOrder(types[0]);
 	auto val = Value(enum_vector.GetValue(enum_size - 1));
 	result.Reference(val);
 }
 
 static void EnumRangeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.GetTypes().size() == 1);
-	auto enum_size = EnumType::GetSize(input.GetTypes()[0]);
-	auto &enum_vector = EnumType::GetValuesInsertOrder(input.GetTypes()[0]);
+	auto types = input.GetTypes();
+	D_ASSERT(types.size() == 1);
+	auto enum_size = EnumType::GetSize(types[0]);
+	auto &enum_vector = EnumType::GetValuesInsertOrder(types[0]);
 	vector<Value> enum_values;
 	for (idx_t i = 0; i < enum_size; i++) {
 		enum_values.emplace_back(enum_vector.GetValue(i));
@@ -30,13 +33,14 @@ static void EnumRangeFunction(DataChunk &input, ExpressionState &state, Vector &
 }
 
 static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.GetTypes().size() == 2);
+	auto types = input.GetTypes();
+	D_ASSERT(types.size() == 2);
 	idx_t start, end;
 	auto first_param = input.GetValue(0, 0);
 	auto second_param = input.GetValue(1, 0);
 
-	auto &enum_vector = first_param.IsNull() ? EnumType::GetValuesInsertOrder(input.GetTypes()[1])
-	                                         : EnumType::GetValuesInsertOrder(input.GetTypes()[0]);
+	auto &enum_vector =
+	    first_param.IsNull() ? EnumType::GetValuesInsertOrder(types[1]) : EnumType::GetValuesInsertOrder(types[0]);
 
 	if (first_param.IsNull()) {
 		start = 0;
@@ -44,7 +48,7 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 		start = first_param.GetValue<uint32_t>();
 	}
 	if (second_param.IsNull()) {
-		end = EnumType::GetSize(input.GetTypes()[0]);
+		end = EnumType::GetSize(types[0]);
 	} else {
 		end = second_param.GetValue<uint32_t>() + 1;
 	}

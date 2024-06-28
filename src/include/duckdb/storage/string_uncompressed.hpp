@@ -1,5 +1,14 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/storage/string_uncompressed.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
+#include "duckdb/common/likely.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
@@ -9,17 +18,16 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/likely.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 struct StringDictionaryContainer {
 	//! The size of the dictionary
 	uint32_t size;
-	//! The end of the dictionary (typically Storage::BLOCK_SIZE)
+	//! The end of the dictionary, which defaults to the block size.
 	uint32_t end;
 
 	void Verify() {
@@ -43,8 +51,6 @@ public:
 	static constexpr idx_t BIG_STRING_MARKER_BASE_SIZE = sizeof(block_id_t) + sizeof(int32_t);
 	//! The marker size of the big string
 	static constexpr idx_t BIG_STRING_MARKER_SIZE = BIG_STRING_MARKER_BASE_SIZE;
-	//! The size below which the segment is compacted on flushing
-	static constexpr size_t COMPACTION_FLUSH_LIMIT = (size_t)Storage::BLOCK_SIZE / 5 * 4;
 
 public:
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
@@ -56,10 +62,12 @@ public:
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
-	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
+	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id,
+	                                                            optional_ptr<ColumnSegmentState> segment_state);
 
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		// This block was initialized in StringInitSegment
 		auto handle = buffer_manager.Pin(segment.block);
 		return make_uniq<CompressionAppendState>(std::move(handle));
 	}
@@ -80,10 +88,10 @@ public:
 	                              UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 		D_ASSERT(segment.GetBlockOffset() == 0);
 		auto handle_ptr = handle.Ptr();
-		auto source_data = (string_t *)data.data;
-		auto result_data = (int32_t *)(handle_ptr + DICTIONARY_HEADER_SIZE);
-		uint32_t *dictionary_size = (uint32_t *)handle_ptr;
-		uint32_t *dictionary_end = (uint32_t *)(handle_ptr + sizeof(uint32_t));
+		auto source_data = UnifiedVectorFormat::GetData<string_t>(data);
+		auto result_data = reinterpret_cast<int32_t *>(handle_ptr + DICTIONARY_HEADER_SIZE);
+		auto dictionary_size = reinterpret_cast<uint32_t *>(handle_ptr);
+		auto dictionary_end = reinterpret_cast<uint32_t *>(handle_ptr + sizeof(uint32_t));
 
 		idx_t remaining_space = RemainingSpace(segment, handle);
 		auto base_count = segment.count.load();
@@ -118,7 +126,8 @@ public:
 			// determine whether or not we have space in the block for this string
 			bool use_overflow_block = false;
 			idx_t required_space = string_length;
-			if (DUCKDB_UNLIKELY(required_space >= StringUncompressed::STRING_BLOCK_LIMIT)) {
+			if (DUCKDB_UNLIKELY(required_space >=
+			                    StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()))) {
 				// string exceeds block limit, store in overflow block and only write a marker here
 				required_space = BIG_STRING_MARKER_SIZE;
 				use_overflow_block = true;
@@ -135,19 +144,22 @@ public:
 			if (DUCKDB_UNLIKELY(use_overflow_block)) {
 				// write to overflow blocks
 				block_id_t block;
-				int32_t offset;
+				int32_t current_offset;
 				// write the string into the current string block
-				WriteString(segment, source_data[source_idx], block, offset);
+				WriteString(segment, source_data[source_idx], block, current_offset);
 				*dictionary_size += BIG_STRING_MARKER_SIZE;
 				remaining_space -= BIG_STRING_MARKER_SIZE;
 				auto dict_pos = end - *dictionary_size;
 
 				// write a big string marker into the dictionary
-				WriteStringMarker(dict_pos, block, offset);
+				WriteStringMarker(dict_pos, block, current_offset);
 
 				// place the dictionary offset into the set of vectors
 				// note: for overflow strings we write negative value
-				result_data[target_idx] = -(*dictionary_size);
+
+				// dictionary_size is an uint32_t value, so we can cast up.
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= Storage::BLOCK_SIZE);
+				result_data[target_idx] = -NumericCast<int32_t>((*dictionary_size));
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
 				D_ASSERT(string_length < NumericLimits<uint16_t>::Maximum());
@@ -157,8 +169,10 @@ public:
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
-				// place the dictionary offset into the set of vectors
-				result_data[target_idx] = *dictionary_size;
+				// dictionary_size is an uint32_t value, so we can cast up.
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= Storage::BLOCK_SIZE);
+				// Place the dictionary offset into the set of vectors.
+				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
 			D_ASSERT(RemainingSpace(segment, handle) <= Storage::BLOCK_SIZE);
 #ifdef DEBUG
@@ -188,11 +202,15 @@ public:
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
-	static string_location_t FetchStringLocation(StringDictionaryContainer dict, data_ptr_t baseptr,
-	                                             int32_t dict_offset);
+	static string_location_t FetchStringLocation(StringDictionaryContainer dict, data_ptr_t base_ptr,
+	                                             int32_t dict_offset, const idx_t block_size);
 	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                                    data_ptr_t baseptr, int32_t dict_offset, uint32_t string_length);
+	                                    data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length);
 	static string_t FetchString(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
 	                            data_ptr_t baseptr, string_location_t location, uint32_t string_length);
+
+	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
+	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
+	static void CleanupState(ColumnSegment &segment);
 };
 } // namespace duckdb

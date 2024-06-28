@@ -1,0 +1,132 @@
+# name: test/sql/storage/mix/large_updates_deletes_persistent_segment.test_slow
+# description: Test large updates/deletes/insertions on persistent segments
+# group: [mix]
+
+# load the DB from disk
+load __TEST_DIR__/updates_deletes_persistent_segments.db
+
+statement ok
+CREATE TABLE test(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test SELECT a,b FROM (VALUES (1, 3), (NULL, NULL)) tbl1(a,b), repeat(0,1000)
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+1	3	1000
+NULL	NULL	1000
+
+# reload the database from disk
+restart
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+1	3	1000
+NULL	NULL	1000
+
+statement ok
+INSERT INTO test SELECT a,b FROM (VALUES (2, 2)) tbl1(a,b), repeat(0,347)
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+1	3	1000
+2	2	347
+NULL	NULL	1000
+
+restart
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+1	3	1000
+2	2	347
+NULL	NULL	1000
+
+statement ok
+INSERT INTO test SELECT a,b FROM (VALUES (3, 3)) tbl1(a,b), repeat(0,1987)
+
+statement ok
+UPDATE test SET b=4 WHERE a=1
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+1	4	1000
+2	2	347
+3	3	1987
+NULL	NULL	1000
+
+restart
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+1	4	1000
+2	2	347
+3	3	1987
+NULL	NULL	1000
+
+statement ok
+UPDATE test SET a=4, b=4 WHERE a=1
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+2	2	347
+3	3	1987
+4	4	1000
+NULL	NULL	1000
+
+restart
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+2	2	347
+3	3	1987
+4	4	1000
+NULL	NULL	1000
+
+statement ok
+UPDATE test SET b=5, a=6 WHERE a=4
+
+statement ok
+DELETE FROM test WHERE a=2
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+3	3	1987
+6	5	1000
+NULL	NULL	1000
+
+restart
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+3	3	1987
+6	5	1000
+NULL	NULL	1000
+
+statement ok
+UPDATE test SET b=7 WHERE a=3
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+3	7	1987
+6	5	1000
+NULL	NULL	1000
+
+restart
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a
+----
+3	7	1987
+6	5	1000
+NULL	NULL	1000

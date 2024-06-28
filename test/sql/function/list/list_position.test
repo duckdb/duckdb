@@ -64,7 +64,7 @@ SELECT i, list_position(i,'aaaaaaaaaaaaaaaaaaaaaaaa') from STR_TEST;
 [aaaaaaaaaaaaaaaaaaaaaaaa]	1
 
 query TT
-SELECT i, list_position(i,0) from STR_TEST;
+SELECT i, list_position(i, '0') from STR_TEST;
 ----
 [a, b, c]	0
 [d, a, e]	0
@@ -118,14 +118,21 @@ SELECT list_position([1.0,2.0,3.0],4)
 0
 
 
-query T
+statement error
 SELECT list_position([1.0,2.0,3.0], 'a')
+----
+an explicit cast is required
+
+query I
+SELECT list_position([1.0,2.0,3.0]::varchar[], 'a')
 ----
 0
 
 # Not a list as input
 statement error
 SELECT list_position('a', 'a')
+----
+No function matches
 
 query T
 SELECT list_position(NULL,NULL)
@@ -222,15 +229,19 @@ SELECT list_position([NULL,7], 7)
 
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3])
+----
 
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3]])
+----
 
 statement error
 SELECT list_position(1)
+----
 
 statement error
 SELECT list_position(1,1)
+----
 
 statement ok
 PRAGMA debug_force_external=true
@@ -247,7 +258,7 @@ statement ok
 INSERT INTO test0 VALUES ([2]), ([1]), ([1, 2]), ([]), ([2, 2]), ([NULL]), ([2, 3])
 
 query T
-SELECT list_position(i,1) from test0
+SELECT list_position(i,1::${type}) from test0
 ----
 0
 1

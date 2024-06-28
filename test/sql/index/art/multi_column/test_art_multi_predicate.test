@@ -1,0 +1,21 @@
+# name: test/sql/index/art/multi_column/test_art_multi_predicate.test
+# description: Test a point lookup with multiple predicates
+# group: [multi_column]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+CREATE INDEX i_index ON integers using art(i)
+
+statement ok
+INSERT INTO integers VALUES (1, 2), (1, 3)
+
+query II
+SELECT * FROM integers WHERE i = 1 AND j = 2
+----
+1	2
+

@@ -1,9 +1,8 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -28,6 +27,9 @@ string JoinRef::ToString() const {
 	case JoinRefType::POSITIONAL:
 		result += "POSITIONAL JOIN ";
 		break;
+	case JoinRefType::DEPENDENT:
+		result += "DEPENDENT JOIN ";
+		break;
 	}
 	result += right->ToString();
 	if (condition) {
@@ -48,21 +50,21 @@ string JoinRef::ToString() const {
 	return result;
 }
 
-bool JoinRef::Equals(const TableRef *other_p) const {
+bool JoinRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (JoinRef *)other_p;
-	if (using_columns.size() != other->using_columns.size()) {
+	auto &other = other_p.Cast<JoinRef>();
+	if (using_columns.size() != other.using_columns.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < using_columns.size(); i++) {
-		if (using_columns[i] != other->using_columns[i]) {
+		if (using_columns[i] != other.using_columns[i]) {
 			return false;
 		}
 	}
-	return left->Equals(other->left.get()) && right->Equals(other->right.get()) &&
-	       BaseExpression::Equals(condition.get(), other->condition.get()) && type == other->type;
+	return left->Equals(*other.left) && right->Equals(*other.right) &&
+	       ParsedExpression::Equals(condition, other.condition) && type == other.type;
 }
 
 unique_ptr<TableRef> JoinRef::Copy() {
@@ -77,49 +79,6 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	copy->alias = alias;
 	copy->using_columns = using_columns;
 	return std::move(copy);
-}
-
-void JoinRef::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*left);
-	writer.WriteSerializable(*right);
-	writer.WriteOptional(condition);
-	writer.WriteField<JoinType>(type);
-	writer.WriteField<JoinRefType>(ref_type);
-	writer.WriteList<string>(using_columns);
-}
-
-void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("left", *left);
-	serializer.WriteProperty("right", *right);
-	serializer.WriteOptionalProperty("condition", condition);
-	serializer.WriteProperty("join_type", type);
-	serializer.WriteProperty("ref_type", ref_type);
-	serializer.WriteProperty("using_columns", using_columns);
-}
-
-unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
-
-	source.ReadProperty("left", result->left);
-	source.ReadProperty("right", result->right);
-	source.ReadOptionalProperty("condition", result->condition);
-	source.ReadProperty("join_type", result->type);
-	source.ReadProperty("ref_type", result->ref_type);
-	source.ReadProperty("using_columns", result->using_columns);
-
-	return std::move(result);
-}
-
-unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader) {
-	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
-	result->left = reader.ReadRequiredSerializable<TableRef>();
-	result->right = reader.ReadRequiredSerializable<TableRef>();
-	result->condition = reader.ReadOptional<ParsedExpression>(nullptr);
-	result->type = reader.ReadRequired<JoinType>();
-	result->ref_type = reader.ReadRequired<JoinRefType>();
-	result->using_columns = reader.ReadRequiredList<string>();
-	return std::move(result);
 }
 
 } // namespace duckdb

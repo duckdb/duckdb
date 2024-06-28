@@ -74,14 +74,7 @@
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #ifdef __APPLE__
-#  include <TargetConditionals.h>
-#  if (defined(TARGET_OS_OSX) && TARGET_OS_OSX == 1) || \
-      (defined(TARGET_OS_MAC) && TARGET_OS_MAC == 1)
-#    define CATCH_PLATFORM_MAC
-#  elif (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
-#    define CATCH_PLATFORM_IPHONE
-#  endif
-
+#  define CATCH_PLATFORM_MAC
 #elif defined(linux) || defined(__linux) || defined(__linux__)
 #  define CATCH_PLATFORM_LINUX
 
@@ -2481,6 +2474,12 @@ namespace Catch {
 
         virtual void emplaceUnscopedMessage( MessageBuilder const& builder ) = 0;
 
+        virtual void onTestBegin() {}
+        virtual void skipTestDuringRun( std::string message ) {}
+        virtual bool skippedTest() {
+            return false;
+        }
+
         virtual void handleFatalErrorCondition( StringRef message ) = 0;
 
         virtual void handleExpr
@@ -2806,6 +2805,10 @@ namespace Catch {
     Catch::getResultCapture().emplaceUnscopedMessage( Catch::MessageBuilder( macroName##_catch_sr, CATCH_INTERNAL_LINEINFO, Catch::ResultWas::Info ) << log )
 
 ///////////////////////////////////////////////////////////////////////////////
+#define INTERNAL_CATCH_SKIP_TEST( reason ) \
+    Catch::getResultCapture().skipTestDuringRun( reason )
+
+///////////////////////////////////////////////////////////////////////////////
 // Although this is matcher-based, it can be used with just a string
 #define INTERNAL_CATCH_THROWS_STR_MATCHES( macroName, resultDisposition, matcher, ... ) \
     do { \
@@ -2833,6 +2836,7 @@ namespace Catch {
 // start catch_totals.h
 
 #include <cstddef>
+#include <map>
 
 namespace Catch {
 
@@ -2857,8 +2861,10 @@ namespace Catch {
         Totals delta( Totals const& prevTotals ) const;
 
         int error = 0;
+        std::size_t skippedTests = 0;
         Counts assertions;
         Counts testCases;
+        std::map<std::string, std::size_t> skippedTestReasons;
     };
 }
 
@@ -5493,7 +5499,6 @@ namespace Catch {
 
 #include <string>
 #include <iosfwd>
-#include <map>
 #include <set>
 #include <memory>
 #include <algorithm>
@@ -8143,6 +8148,10 @@ namespace Catch {
 
         void emplaceUnscopedMessage( MessageBuilder const& builder ) override;
 
+        void onTestBegin() override;
+        void skipTestDuringRun( std::string message ) override;
+        bool skippedTest() override;
+
         std::string getCurrentTestName() const override;
 
         const AssertionResult* getLastResult() const override;
@@ -8199,6 +8208,7 @@ namespace Catch {
         bool m_lastAssertionPassed = false;
         bool m_shouldReportUnexpected = true;
         bool m_includeSuccessfulResults;
+        std::string m_skippedTestReason;
     };
 
     void seedRng(IConfig const& config);
@@ -11308,12 +11318,28 @@ namespace Catch {
         Catch::cout() << "name\tgroup" << std::endl;
 
         auto matchedTestCases = filterTests( getAllTestCasesSorted( config ), testSpec, config );
-        for( auto const& testCaseInfo : matchedTestCases ) {
+        auto total_tests_run = matchedTestCases.size();
+        int start_offset = 0;
+        int end_offset = total_tests_run;
+        if (config.startOffset() >= 0) {
+            start_offset = config.startOffset();
+        } else if (config.startOffsetPercentage() >= 0) {
+            start_offset = int((config.startOffsetPercentage() / 100.0) * total_tests_run);
+        }
+        auto it = matchedTestCases.begin();
+        for(int current_test = 0; it != matchedTestCases.end(); current_test++) {
+            if (current_test < start_offset || current_test >= end_offset) {
+                // skip this test
+                it++;
+                continue;
+            }
+            auto &testCaseInfo = *it;
             Catch::cout() << testCaseInfo.name << "\t";
             if( !testCaseInfo.tags.empty() ) {
                 Catch::cout() << testCaseInfo.tagsAsString();
             }
             Catch::cout() << std::endl;
+            it++;
         }
         return matchedTestCases.size();
     }
@@ -12779,6 +12805,7 @@ namespace Catch {
 
         auto const& testInfo = testCase.getTestCaseInfo();
 
+        onTestBegin();
         m_reporter->testCaseStarting(testInfo);
 
         m_activeTestCase = &testCase;
@@ -12792,6 +12819,10 @@ namespace Catch {
             runCurrentTest(redirectedCout, redirectedCerr);
         } while (!m_testCaseTracker->isSuccessfullyCompleted() && !aborting());
 
+        if (skippedTest()) {
+            m_totals.skippedTests++;
+            m_totals.skippedTestReasons[m_skippedTestReason]++;
+        }
         Totals deltaTotals = m_totals.delta(prevTotals);
         if (testInfo.expectedToFail() && deltaTotals.testCases.passed > 0) {
             deltaTotals.assertions.failed++;
@@ -12933,6 +12964,18 @@ namespace Catch {
 
     void RunContext::emplaceUnscopedMessage( MessageBuilder const& builder ) {
         m_messageScopes.emplace_back( builder );
+    }
+
+    void RunContext::onTestBegin() {
+        m_skippedTestReason = std::string();
+    }
+
+    void RunContext::skipTestDuringRun( std::string message ) {
+        m_skippedTestReason = std::move(message);
+    }
+
+    bool RunContext::skippedTest() {
+        return !m_skippedTestReason.empty();
     }
 
     std::string RunContext::getCurrentTestName() const {
@@ -15354,12 +15397,17 @@ namespace Catch {
         Totals diff;
         diff.assertions = assertions - other.assertions;
         diff.testCases = testCases - other.testCases;
+        diff.skippedTests = skippedTests - other.skippedTests;
         return diff;
     }
 
     Totals& Totals::operator += ( Totals const& other ) {
         assertions += other.assertions;
         testCases += other.testCases;
+        skippedTests += other.skippedTests;
+        for(auto &entry : other.skippedTestReasons) {
+            skippedTestReasons[entry.first] += entry.second;
+        }
         return *this;
     }
 
@@ -16776,16 +16824,22 @@ struct SummaryColumn {
 };
 
 void ConsoleReporter::printTotals( Totals const& totals ) {
-    if (totals.testCases.total() == 0) {
+    if (totals.testCases.total()  == 0) {
         stream << Colour(Colour::Warning) << "No tests ran\n";
+    } else if (totals.skippedTests >= totals.testCases.total()) {
+        stream << Colour(Colour::ResultError) << "All tests were skipped (total skipped " << totals.skippedTests <<  ")" << "\n";
     } else if (totals.assertions.total() > 0 && totals.testCases.allPassed()) {
         stream << Colour(Colour::ResultSuccess) << "All tests passed";
-        stream << " ("
+        stream << " (";
+        if (totals.skippedTests > 0) {
+            stream << Colour(Colour::Warning) <<  pluralise(totals.skippedTests, "skipped test") << ", ";
+        }
+        stream
             << pluralise(totals.assertions.passed, "assertion") << " in "
-            << pluralise(totals.testCases.passed, "test case") << ')'
-            << '\n';
+            << pluralise(totals.testCases.passed - totals.skippedTests, "test case");
+        stream
+            << ')' << '\n';
     } else {
-
         std::vector<SummaryColumn> columns;
         columns.push_back(SummaryColumn("", Colour::None)
                           .addRow(totals.testCases.total())
@@ -16796,12 +16850,19 @@ void ConsoleReporter::printTotals( Totals const& totals ) {
         columns.push_back(SummaryColumn("failed", Colour::ResultError)
                           .addRow(totals.testCases.failed)
                           .addRow(totals.assertions.failed));
-        columns.push_back(SummaryColumn("failed as expected", Colour::ResultExpectedFailure)
-                          .addRow(totals.testCases.failedButOk)
-                          .addRow(totals.assertions.failedButOk));
+        columns.push_back(SummaryColumn("skipped", Colour::ResultExpectedFailure)
+                          .addRow(totals.testCases.failedButOk + totals.skippedTests)
+                          .addRow(totals.assertions.failedButOk + totals.skippedTests));
 
         printSummaryRow("test cases", columns, 0);
         printSummaryRow("assertions", columns, 1);
+    }
+    if (!totals.skippedTestReasons.empty()) {
+        stream << '\n';
+        stream << Colour(Colour::Warning) << "Skipped tests for the following reasons:" << '\n';
+        for(auto &entry : totals.skippedTestReasons) {
+            stream << Colour(Colour::Warning) << entry.first << ": " << entry.second << '\n';
+        }
     }
 }
 void ConsoleReporter::printSummaryRow(std::string const& label, std::vector<SummaryColumn> const& cols, std::size_t row) {
@@ -16825,8 +16886,8 @@ void ConsoleReporter::printSummaryRow(std::string const& label, std::vector<Summ
 void ConsoleReporter::printTotalsDivider(Totals const& totals) {
     if (totals.testCases.total() > 0) {
         std::size_t failedRatio = makeRatio(totals.testCases.failed, totals.testCases.total());
-        std::size_t failedButOkRatio = makeRatio(totals.testCases.failedButOk, totals.testCases.total());
-        std::size_t passedRatio = makeRatio(totals.testCases.passed, totals.testCases.total());
+        std::size_t failedButOkRatio = makeRatio(totals.testCases.failedButOk + totals.skippedTests, totals.testCases.total());
+        std::size_t passedRatio = makeRatio(totals.testCases.passed - totals.skippedTests, totals.testCases.total());
         while (failedRatio + failedButOkRatio + passedRatio < CATCH_CONFIG_CONSOLE_WIDTH - 1)
             findMax(failedRatio, failedButOkRatio, passedRatio)++;
         while (failedRatio + failedButOkRatio + passedRatio > CATCH_CONFIG_CONSOLE_WIDTH - 1)
@@ -17770,6 +17831,7 @@ int main (int argc, char * const argv[]) {
 #define UNSCOPED_INFO( msg ) INTERNAL_CATCH_UNSCOPED_INFO( "UNSCOPED_INFO", msg )
 #define WARN( msg ) INTERNAL_CATCH_MSG( "WARN", Catch::ResultWas::Warning, Catch::ResultDisposition::ContinueOnFailure, msg )
 #define CAPTURE( ... ) INTERNAL_CATCH_CAPTURE( INTERNAL_CATCH_UNIQUE_NAME(capturer), "CAPTURE",__VA_ARGS__ )
+#define SKIP_TEST( reason ) INTERNAL_CATCH_SKIP_TEST( reason )
 
 #define TEST_CASE( ... ) INTERNAL_CATCH_TESTCASE( __VA_ARGS__ )
 #define TEST_CASE_METHOD( className, ... ) INTERNAL_CATCH_TEST_CASE_METHOD( className, __VA_ARGS__ )

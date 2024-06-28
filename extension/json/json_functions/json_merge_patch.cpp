@@ -11,8 +11,7 @@ static unique_ptr<FunctionData> JSONMergePatchBind(ClientContext &context, Scala
 	bound_function.arguments.reserve(arguments.size());
 	for (auto &arg : arguments) {
 		const auto &arg_type = arg->return_type;
-		if (arg_type == LogicalTypeId::SQLNULL || arg_type == LogicalType::VARCHAR ||
-		    JSONCommon::LogicalTypeIsJSON(arg_type)) {
+		if (arg_type == LogicalTypeId::SQLNULL || arg_type == LogicalType::VARCHAR || arg_type.IsJSONType()) {
 			bound_function.arguments.push_back(arg_type);
 		} else {
 			throw InvalidInputException("Arguments to json_merge_patch must be of type VARCHAR or JSON");
@@ -36,7 +35,7 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 	UnifiedVectorFormat input_data;
 	auto &input_vector = input;
 	input_vector.ToUnifiedFormat(count, input_data);
-	auto inputs = (string_t *)input_data.data;
+	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// Read the documents
 	for (idx_t i = 0; i < count; i++) {
@@ -59,11 +58,11 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 	const auto count = args.size();
 
 	// Read the first json arg
-	auto origs = (yyjson_mut_val **)alc->malloc(alc->ctx, sizeof(yyjson_mut_val *) * count);
+	auto origs = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	ReadObjects(doc, args.data[0], origs, count);
 
 	// Read the next json args one by one and merge them into the first json arg
-	auto patches = (yyjson_mut_val **)alc->malloc(alc->ctx, sizeof(yyjson_mut_val *) * count);
+	auto patches = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
 		ReadObjects(doc, args.data[arg_idx], patches, count);
 		for (idx_t i = 0; i < count; i++) {
@@ -97,7 +96,7 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {
-	ScalarFunction fun("json_merge_patch", {}, JSONCommon::JSONType(), MergePatchFunction, JSONMergePatchBind, nullptr,
+	ScalarFunction fun("json_merge_patch", {}, LogicalType::JSON(), MergePatchFunction, JSONMergePatchBind, nullptr,
 	                   nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;

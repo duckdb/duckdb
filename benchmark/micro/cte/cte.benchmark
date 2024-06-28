@@ -1,0 +1,17 @@
+# name: benchmark/micro/cte/cte.benchmark
+# description: Benchmark of CTEs
+# group: [cte]
+
+name CTE
+group micro
+subgroup cte
+
+run
+WITH RECURSIVE t(x) AS (
+  SELECT 1
+    UNION ALL
+  SELECT x+1
+  FROM   t
+  WHERE  x < 200000
+)
+SELECT count(t1), count(t2) FROM t AS t1, t AS t2 WHERE t1.x=t2.x;

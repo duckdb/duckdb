@@ -1,0 +1,25 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_flush_cast.test
+# description: Test that Flush Cast functions properly for the rejects tables
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+query IIIII
+SELECT first(a), first(b), typeof(first(a)), typeof(first(b)), COUNT(*) FROM read_csv(
+    'data/csv/error/flush_cast.csv',
+    columns = {'a': 'DATE', 'b': 'VARCHAR'},
+    store_rejects = true,
+    delim = ',',
+    dateformat = '%d-%m-%Y');
+----
+2001-09-25	 bla	DATE	VARCHAR	2811
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	439	6997	6997	1	a	CAST	B, bla	Error when converting column "a". Could not convert string "B" to 'DATE'
+0	2813	44972	44972	1	a	CAST	c, bla	Error when converting column "a". Could not convert string "c" to 'DATE'
+

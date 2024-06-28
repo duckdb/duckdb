@@ -6,7 +6,7 @@ name Zonemaps
 group zonemaps
 
 load
-create table t as select range a, length(range) b, mod(range,10000) c, 5 d, 10000 e from range(100000000);
+create table t as select range a, length(range::VARCHAR) b, mod(range,10000) c, 5 d, 10000 e from range(100000000);
 
 run
 select count(*) from t where b in (1,2,4) ;

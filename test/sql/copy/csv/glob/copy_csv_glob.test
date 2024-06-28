@@ -25,4 +25,5 @@ SELECT * FROM dates ORDER BY 1
 # nothing matches the glob
 statement error
 COPY dates FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv', auto_detect=1)
+----
 

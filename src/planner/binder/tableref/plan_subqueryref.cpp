@@ -6,10 +6,10 @@ namespace duckdb {
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSubqueryRef &ref) {
 	// generate the logical plan for the subquery
 	// this happens separately from the current LogicalPlan generation
-	ref.binder->plan_subquery = plan_subquery;
+	ref.binder->is_outside_flattened = is_outside_flattened;
 	auto subquery = ref.binder->CreatePlan(*ref.subquery);
-	if (ref.binder->has_unplanned_subqueries) {
-		has_unplanned_subqueries = true;
+	if (ref.binder->has_unplanned_dependent_joins) {
+		has_unplanned_dependent_joins = true;
 	}
 	return subquery;
 }

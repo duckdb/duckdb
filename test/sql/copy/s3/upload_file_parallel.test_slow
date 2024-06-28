@@ -28,6 +28,13 @@ set ignore_error_messages
 statement ok
 CALL DBGEN(sf=1)
 
+statement ok
+set http_timeout=120000;
+
+# More retries (longest wait will be 25600ms)
+statement ok
+set http_retries=6;
+
 query I
 SELECT
     sum(l_extendedprice * l_discount) AS revenue

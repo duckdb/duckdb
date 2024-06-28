@@ -44,11 +44,13 @@ INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 # HAVING clause can only contain aggregates
 statement error
 SELECT a FROM test WHERE a=13 HAVING a > 11
+----
 
 # HAVING clause also turns the rest of the query into an aggregate
 # thus column references in SELECT clause also produce errors
 statement error
 SELECT a FROM test WHERE a=13 HAVING SUM(a) > 11
+----
 
 # once we produce a sum this works though
 query R

@@ -1,0 +1,31 @@
+# name: test/sql/index/art/storage/test_art_readonly.test
+# description: Test that index creation is disabled in readonly mode
+# group: [storage]
+
+load __TEST_DIR__/test_index.db
+
+statement ok
+CREATE TABLE tbl (i INTEGER);
+
+statement ok
+CREATE INDEX idx_drop ON tbl(i);
+
+# try index creation in readonly
+
+load __TEST_DIR__/test_index.db readonly
+
+statement error
+CREATE INDEX idx ON tbl (i);
+----
+read-only mode
+
+statement error
+DROP INDEX idx_drop
+----
+read-only mode
+
+# ensure that we did not create another index
+query I
+SELECT index_name FROM duckdb_indexes();
+----
+idx_drop

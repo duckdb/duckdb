@@ -26,7 +26,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
                                                            bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant = bindings[1].get().Cast<BoundConstantExpression>();
-	int constant_child = root.children[0].get() == &constant ? 0 : 1;
+	idx_t constant_child = root.children[0].get() == &constant ? 0 : 1;
 	D_ASSERT(root.children.size() == 2);
 	(void)root;
 	// any arithmetic operator involving NULL is always NULL

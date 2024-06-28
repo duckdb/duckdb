@@ -61,7 +61,19 @@ struct RegularAdd {
 
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
-		state.value += input * count;
+		state.value += input * int64_t(count);
+	}
+};
+
+struct HugeintAdd {
+	template <class STATE, class T>
+	static void AddNumber(STATE &state, T input) {
+		state.value = Hugeint::Add(state.value, input);
+	}
+
+	template <class STATE, class T>
+	static void AddConstant(STATE &state, T input, idx_t count) {
+		AddNumber(state, Hugeint::Multiply(input, UnsafeNumericCast<int64_t>(count)));
 	}
 };
 
@@ -77,7 +89,7 @@ struct KahanAdd {
 	}
 };
 
-struct HugeintAdd {
+struct AddToHugeint {
 	static void AddValue(hugeint_t &result, uint64_t value, int positive) {
 		// integer summation taken from Tim Gubner et al. - Efficient Query Processing
 		// with Optimistically Compressed Hash Tables & Strings in the USSR
@@ -123,7 +135,7 @@ struct HugeintAdd {
 					AddValue(state.value, uint64_t(input), input >= 0);
 				}
 			} else {
-				hugeint_t addition = hugeint_t(input) * count;
+				hugeint_t addition = hugeint_t(input) * Hugeint::Convert(count);
 				state.value += addition;
 			}
 		}
@@ -133,27 +145,26 @@ struct HugeintAdd {
 template <class STATEOP, class ADDOP>
 struct BaseSumOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->value = 0;
+	static void Initialize(STATE &state) {
+		state.value = 0;
 		STATEOP::template Initialize<STATE>(state);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		STATEOP::template Combine<STATE>(source, target, aggr_input_data);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		STATEOP::template AddValues<STATE>(state, 1);
-		ADDOP::template AddNumber<STATE, INPUT_TYPE>(*state, input[idx]);
+		ADDOP::template AddNumber<STATE, INPUT_TYPE>(state, input);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
 		STATEOP::template AddValues<STATE>(state, count);
-		ADDOP::template AddConstant<STATE, INPUT_TYPE>(*state, *input, count);
+		ADDOP::template AddConstant<STATE, INPUT_TYPE>(state, input, count);
 	}
 
 	static bool IgnoreNull() {

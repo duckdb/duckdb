@@ -1,7 +1,9 @@
 #include "duckdb/common/operator/multiply.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
@@ -27,8 +29,9 @@ double MultiplyOperator::Operation(double left, double right) {
 
 template <>
 interval_t MultiplyOperator::Operation(interval_t left, int64_t right) {
-	left.months = MultiplyOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.months, right);
-	left.days = MultiplyOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.days, right);
+	const auto right32 = Cast::Operation<int64_t, int32_t>(right);
+	left.months = MultiplyOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.months, right32);
+	left.days = MultiplyOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.days, right32);
 	left.micros = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(left.micros, right);
 	return left;
 }
@@ -183,6 +186,11 @@ bool TryMultiplyOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &
 	return Hugeint::TryMultiply(left, right, result);
 }
 
+template <>
+bool TryMultiplyOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result) {
+	return Uhugeint::TryMultiply(left, right, result);
+}
+
 //===--------------------------------------------------------------------===//
 // multiply  decimal with overflow check
 //===--------------------------------------------------------------------===//
@@ -211,7 +219,9 @@ bool TryDecimalMultiply::Operation(int64_t left, int64_t right, int64_t &result)
 
 template <>
 bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	result = left * right;
+	if (!TryMultiplyOperator::Operation(left, right, result)) {
+		return false;
+	}
 	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
 	}

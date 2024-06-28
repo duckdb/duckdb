@@ -1,0 +1,12 @@
+# name: test/fuzzer/duckfuzz/filter_combiner_assert.test
+# description: Test filter combiner assert
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE partsupp(ps_partkey INTEGER, ps_suppkey INTEGER, ps_availqty INTEGER, ps_supplycost DECIMAL(15,2), ps_comment VARCHAR);
+
+statement ok
+SELECT NULL FROM partsupp AS t6(c1, c2, c3, c4, c5) WHERE (c4 = COLUMNS(* REPLACE (3947 AS c3)))

@@ -26,9 +26,10 @@ struct NumericValueUnion {
 		uint32_t uinteger;
 		uint64_t ubigint;
 		hugeint_t hugeint;
-		float float_;
-		double double_;
-	} value_;
+		uhugeint_t uhugeint;
+		float float_;   // NOLINT
+		double double_; // NOLINT
+	} value_;           // NOLINT
 
 	template <class T>
 	T &GetReferenceUnsafe();
@@ -46,6 +47,8 @@ template <>
 DUCKDB_API int64_t &NumericValueUnion::GetReferenceUnsafe();
 template <>
 DUCKDB_API hugeint_t &NumericValueUnion::GetReferenceUnsafe();
+template <>
+DUCKDB_API uhugeint_t &NumericValueUnion::GetReferenceUnsafe();
 template <>
 DUCKDB_API uint8_t &NumericValueUnion::GetReferenceUnsafe();
 template <>

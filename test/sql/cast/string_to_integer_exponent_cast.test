@@ -1,0 +1,289 @@
+# name: test/sql/cast/string_to_integer_exponent_cast.test
+# description: String to Integer casts with Decimals and Exponents
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+# Positive numbers (includes unsigned)
+foreach type <integral>
+
+# Positive Number - Positive Exponent
+
+query I
+select '1e2'::${type};
+----
+100
+
+query I
+select '1.23e2'::${type};
+----
+123
+
+query I
+select '1.234e2'::${type};
+----
+123
+
+query I
+select '1.235e2'::${type};
+----
+124
+
+# Positive Number - Negative Exponent
+
+query I
+select '1e-2'::${type};
+----
+0
+
+query I
+select '123.456e-2'::${type};
+----
+1
+
+query I
+select '1584.92e-2'::${type};
+----
+16
+
+query I
+select '1214.235e-2'::${type};
+----
+12
+
+# Out of range
+
+statement error
+select '10e40'::${type};
+----
+Conversion Error
+
+endloop
+
+# Negative numbers (excludes unsigned)
+foreach type <signed>
+
+# Negative Number - Positive Exponent
+
+query I
+select '-1e2'::${type};
+----
+-100
+
+query I
+select '-1.23456e2'::${type};
+----
+-123
+
+query I
+select '-0.158492e2'::${type};
+----
+-16
+
+query I
+select '-1.235e2'::${type};
+----
+-124
+
+# Negative Number - Negative Exponent
+
+query I
+select '-100e-2'::${type};
+----
+-1
+
+query I
+select '-50.23456e-2'::${type};
+----
+-1
+
+query I
+select '-1584.92e-2'::${type};
+----
+-16
+
+query I
+select '-1.235e-2'::${type};
+----
+0
+
+statement error
+select '-10e40'::${type};
+----
+Conversion Error
+
+endloop
+
+# Check limits (signed)
+
+query II
+select '12.7e1'::TINYINT, '-12.8e1'::TINYINT;
+----
+127	-128
+
+query II
+select '3276.7e1'::SMALLINT, '-3276.8e1'::SMALLINT;
+----
+32767	-32768
+
+query II
+select '214748364.7e1'::INTEGER, '-214748364.8e1'::INTEGER;
+----
+2147483647	-2147483648
+
+query II
+select '922337203685477580.7e1'::BIGINT, '-922337203685477580.8e1'::BIGINT;
+----
+9223372036854775807	-9223372036854775808
+
+query II
+select '17014118346046923173168730371588410572.7e1'::HUGEINT, '-17014118346046923173168730371588410572.8e1'::HUGEINT;
+----
+170141183460469231731687303715884105727	-170141183460469231731687303715884105728
+
+# Check limits (unsigned)
+
+query I
+select '25.5e1'::UTINYINT;
+----
+255
+
+query I
+select '6553.5e1'::USMALLINT;
+----
+65535
+
+query I
+select '429496729.5e1'::UINTEGER;
+----
+4294967295
+
+query I
+select '1844674407370955161.5e1'::UBIGINT;
+----
+18446744073709551615
+
+query I
+select '34028236692093846346337460743176821145.5e1'::UHUGEINT;
+----
+340282366920938463463374607431768211455
+
+# going over limit should error (signed)
+
+statement error
+select '12.8e1'::TINYINT;
+----
+Conversion Error
+
+statement error
+select '3276.8e1'::SMALLINT;
+----
+Conversion Error
+
+statement error
+select '214748364.8e1'::INTEGER;
+----
+Conversion Error
+
+statement error
+select '922337203685477580.8e1'::BIGINT;
+----
+Conversion Error
+
+statement error
+select '17014118346046923173168730371588410572.8e1'::HUGEINT;
+----
+Conversion Error
+
+statement error
+select '-12.9e1'::TINYINT;
+----
+Conversion Error
+
+statement error
+select '-3276.9e1'::SMALLINT;
+----
+Conversion Error
+
+statement error
+select '-214748364.9e1'::INTEGER;
+----
+Conversion Error
+
+statement error
+select '-922337203685477580.9e1'::BIGINT;
+----
+Conversion Error
+
+statement error
+select '-17014118346046923173168730371588410572.9e1'::HUGEINT;
+----
+Conversion Error
+
+# going over limit should error (unsigned)
+
+statement error
+select '25.6e1'::UTINYINT;
+----
+Conversion Error
+
+statement error
+select '6553.6e1'::USMALLINT;
+----
+Conversion Error
+
+statement error
+select '429496729.6e1'::UINTEGER;
+----
+Conversion Error
+
+statement error
+select '1844674407370955161.6e1'::UBIGINT;
+----
+Conversion Error
+
+# exponent limit
+
+statement error
+select '1e100000'::int;
+----
+Conversion Error
+
+statement error
+select '1e-100000'::int;
+----
+Conversion Error
+
+# some more "extreme" cases
+
+query I
+select '0.00000000000000000000000000000009223372036854775807e50'::BIGINT;
+----
+9223372036854775807
+
+query I
+select '-0.00000000000000000000000000000009223372036854775807e50'::BIGINT;
+----
+-9223372036854775807
+
+query I
+select '0.00000000000170141183460469231731687303715884105727e50'::HUGEINT;
+----
+170141183460469231731687303715884105727
+
+query I
+select '-0.00000000000170141183460469231731687303715884105727e50'::HUGEINT;
+----
+-170141183460469231731687303715884105727
+
+query I
+select '15123456789e-32768'::int;
+----
+0
+
+query I
+select '0e32767'::int;
+----
+0
+

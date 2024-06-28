@@ -36,6 +36,11 @@ statement ok
 INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
 
 statement ok
+SET pivot_filter_threshold=99
+
+loop i 0 2
+
+statement ok
 PIVOT Cities ON Country, Name IN ('xx') USING SUM(Population);
 
 query IIIII rowsort
@@ -79,33 +84,6 @@ PIVOT Cities ON Year USING SUM(Population) GROUP BY Country;
 ----
 NL	1005	1065	1158
 US	8579	8783	9510
-
-# unpivot
-statement ok
-CREATE TABLE PivotedCities AS PIVOT Cities ON Year USING SUM(Population);
-
-query IIII nosort unpivot
-UNPIVOT PivotedCities ON 2000, 2010, 2020 INTO NAME Year VALUE Population;
-----
-
-query IIII nosort unpivot
-FROM PivotedCities UNPIVOT(Population FOR Year IN (2000, 2010, 2020));
-----
-
-query IIII nosort unpivot
-UNPIVOT PivotedCities ON 2000, 2010, 2020;
-----
-
-query IIII nosort unpivot
-UNPIVOT PivotedCities ON COLUMNS('\d+');
-----
-
-query IIII nosort unpivot
-UNPIVOT PivotedCities ON * EXCLUDE (Country, Name)
-----
-
-query IIII nosort unpivot
-PIVOT_LONGER PivotedCities ON 2000, 2010, 2020;
 
 # use pivots in a set operation
 statement ok
@@ -178,6 +156,38 @@ PIVOT Cities ON Year USING SUM(Population) GROUP BY country ORDER BY ALL
 ----
 NL	1005	1065	1158
 US	8579	8783	9510
+
+statement ok
+SET pivot_filter_threshold=0
+
+endloop
+
+# unpivot
+statement ok
+CREATE TABLE PivotedCities AS PIVOT Cities ON Year USING SUM(Population);
+
+query IIII nosort unpivot
+UNPIVOT PivotedCities ON 2000, 2010, 2020 INTO NAME Year VALUE Population;
+----
+
+query IIII nosort unpivot
+FROM PivotedCities UNPIVOT(Population FOR Year IN (2000, 2010, 2020));
+----
+
+query IIII nosort unpivot
+UNPIVOT PivotedCities ON 2000, 2010, 2020;
+----
+
+query IIII nosort unpivot
+UNPIVOT PivotedCities ON COLUMNS('\d+');
+----
+
+query IIII nosort unpivot
+UNPIVOT PivotedCities ON * EXCLUDE (Country, Name)
+----
+
+query IIII nosort unpivot
+PIVOT_LONGER PivotedCities ON 2000, 2010, 2020;
 
 # unpivot order by/limit
 query IIII

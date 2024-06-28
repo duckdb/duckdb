@@ -1,0 +1,55 @@
+# name: test/sql/function/string/regexp_unicode_literal.test
+# description: Issue #10058: Regex match turns non-breakable space into regular space
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE data(wsc INT, zipcode VARCHAR)
+
+statement ok
+INSERT INTO data VALUES (32, '00' || chr(32) || '001'), (160, '00' || chr(160) || '001'), (0, '00🦆001');
+
+query II
+from data
+where regexp_matches(zipcode, '^00\x{0020}001$')
+----
+32	00 001
+
+query II
+from data
+where regexp_matches(zipcode, '^00\x{00A0}001$')
+----
+160	00 001
+
+query II
+from data
+where regexp_matches(zipcode, '\x{00A0}001$')
+----
+160	00 001
+
+query II
+from data
+where regexp_matches(zipcode, '^00\x{1F986}001$')
+----
+0	00🦆001
+
+query II
+from data
+where regexp_matches(zipcode, '\x{1F986}')
+----
+0	00🦆001
+
+query II
+select *
+from data
+where regexp_matches(zipcode, '^00\x{00A0}001$')
+and regexp_matches(zipcode, '^00\x{0020}001$')
+----
+
+
+statement error
+select regexp_matches(zipcode, '^00\x{FFFFFFFF}001$') from data
+----
+invalid escape sequence

@@ -77,18 +77,23 @@ NULL
 
 statement error
 SELECT EXTRACT(dayofweek FROM i) FROM intervals
+----
 
 statement error
 SELECT EXTRACT(isodow FROM i) FROM intervals
+----
 
 statement error
 SELECT EXTRACT(dayofyear FROM i) FROM intervals
+----
 
 statement error
 SELECT EXTRACT(week FROM i) FROM intervals
+----
 
 statement error
 SELECT EXTRACT(yearweek FROM i) FROM intervals
+----
 
 query I
 SELECT EXTRACT(epoch FROM i) FROM intervals
@@ -192,6 +197,8 @@ SELECT EXTRACT(epoch FROM interval '6 months ago')
 
 statement error
 SELECT EXTRACT(doy FROM interval '6 months ago')
+----
 
 statement error
 SELECT EXTRACT(dow FROM interval '6 months ago')
+----

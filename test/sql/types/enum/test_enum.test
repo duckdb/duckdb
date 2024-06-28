@@ -17,10 +17,12 @@ happy
 # Casts should fail if not in the enum
 statement error
 select 'awesome-bro'::mood;
+----
 
 # Non-String keys should fail
 statement error
 select 0::mood;
+----
 
 # Postgres accept empty ENUMs
 statement ok
@@ -29,6 +31,7 @@ CREATE TYPE bla AS ENUM ();
 #Enums with the same name shouldn't work
 statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+----
 
 statement ok
 DROP TYPE bla;
@@ -36,14 +39,17 @@ DROP TYPE bla;
 # We should only accept strings
 statement error
 CREATE TYPE bla AS ENUM (1,2,3);
+----
 
 # Shouldn't accept NULL
 statement error
 CREATE TYPE bla AS ENUM ('sad',NULL);
+----
 
 # We don't accept repeated elements?
 statement error
 CREATE TYPE bla AS ENUM ('sad','sad');
+----
 
 # This should be case sensitive
 statement ok
@@ -69,6 +75,7 @@ DROP TYPE mood_2;
 #This won't work because mood was already deleted
 statement error
 DROP TYPE mood;
+----
 
 # We can create mood again
 statement ok
@@ -92,6 +99,7 @@ DROP TYPE IF EXISTS mood;
 # We shouldn't be able to add NULL values to ENUMs
 statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);
+----
 
 mode skip
 
@@ -122,9 +130,11 @@ select ['happy','ok','ok']::mood[]
 
 statement error
 select ['bla']::mood[]
+----
 
 statement error
 select [1]::mood[]
+----
 
 query I
 select []::mood[]
@@ -153,9 +163,11 @@ select {'a': 'happy'::mood, 'b': 1, 'c': 'ok'::mood};
 
 statement error
 select {'a': 'happy'::mood, 'b': 'bla'::mood};
+----
 
 statement error
 select {'a': 'bla'::mood};
+----
 
 query I
 select MAP([1,2,3,4],['happy','ok','ok','sad']::mood[])
@@ -164,3 +176,4 @@ select MAP([1,2,3,4],['happy','ok','ok','sad']::mood[])
 
 statement error
 select MAP([1,2,3,4],['bla','ok','ok','sad']::mood[])
+----

@@ -1,0 +1,57 @@
+# name: test/issues/general/test_11280.test_slow
+# description: Issue 11280: Table size COUNT(*) for VIEWs is larger than that for TABLE created using the same VIEW from partitioned parquet dataset on s3
+# group: [general]
+
+require parquet
+
+require tpch
+
+statement ok
+set threads=1;
+
+statement ok
+pragma disable_optimizer;
+
+statement ok
+call dbgen(sf=0.001);
+
+statement ok
+copy (select date_trunc('month', l_shipdate) as partition_shipdate, [l_returnflag, l_linestatus] as string_list, * from lineitem) to '__TEST_DIR__/lineitem_partitioned_test' (format parquet, partition_by(partition_shipdate, l_returnflag));
+
+statement ok
+CREATE TABLE unique_strings(string_list VARCHAR[], l_returnflag VARCHAR);
+
+statement ok
+INSERT INTO unique_strings VALUES('[R, F]','R');
+
+statement ok
+INSERT INTO unique_strings VALUES('[N, F]','N');
+
+statement ok
+INSERT INTO unique_strings VALUES('[A, F]','A');
+
+statement ok
+INSERT INTO unique_strings VALUES('[N, O]','N');
+
+statement ok
+CREATE VIEW parquet_view AS FROM read_parquet('__TEST_DIR__/lineitem_partitioned_test/partition_shipdate=*/l_returnflag=*/*.parquet');
+
+# works!
+# after probing 6, the scan structure still has 6 for this one
+query I
+SELECT
+COUNT(*)
+FROM parquet_view
+INNER JOIN unique_strings USING (string_list, l_returnflag);
+----
+6005
+
+# doesn't work
+# after probing 6, the scan structure goes to 0 for this one
+query I
+SELECT
+COUNT(*)
+FROM parquet_view
+INNER JOIN unique_strings USING (l_returnflag, string_list);
+----
+6005

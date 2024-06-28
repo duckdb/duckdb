@@ -14,7 +14,8 @@
 namespace duckdb {
 
 struct CreateFunctionInfo : public CreateInfo {
-	explicit CreateFunctionInfo(CatalogType type, string schema = DEFAULT_SCHEMA) : CreateInfo(type, schema) {
+	explicit CreateFunctionInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
+	    : CreateInfo(type, std::move(schema)) {
 		D_ASSERT(type == CatalogType::SCALAR_FUNCTION_ENTRY || type == CatalogType::AGGREGATE_FUNCTION_ENTRY ||
 		         type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY ||
 		         type == CatalogType::MACRO_ENTRY || type == CatalogType::TABLE_MACRO_ENTRY);
@@ -28,11 +29,6 @@ struct CreateFunctionInfo : public CreateInfo {
 	vector<string> parameter_names;
 	//! The example (if any)
 	string example;
-
-protected:
-	void SerializeInternal(Serializer &serializer) const override {
-		serializer.WriteString(name);
-	}
 };
 
 } // namespace duckdb

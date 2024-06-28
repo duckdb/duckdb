@@ -1,0 +1,92 @@
+# name: test/sql/function/array/array_list_functions.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+# Just test that arrays are propely cast to lists when calling some list functions with special binding logic
+# Aggregate example
+query I
+SELECT list_distinct(array_value(1,1,2,3,3)) = list_distinct([1,1,2,3,3]);
+----
+true
+
+# Sort example:
+query I
+SELECT list_sort(array_value(3,2,1)) = list_sort([3,2,1]);
+----
+true
+
+# Slice example:
+query I
+SELECT list_slice(array_value(1,2,3,4,5), 1, 3) = list_slice([1,2,3,4,5], 1, 3);
+----
+true
+
+# Transform example
+query I
+SELECT list_transform(array_value(3,2,1), x -> x + 1) = list_transform([3,2,1], x -> x + 1);
+----
+true
+
+# Filter example
+query I
+SELECT list_filter(array_value(3,2,1), x -> x > 1) = list_filter([3,2,1], x -> x > 1);
+----
+true
+
+# Concat example(s)
+query I
+SELECT list_concat(array_value(1,2,3), array_value(4,5,6));
+----
+[1, 2, 3, 4, 5, 6]
+
+query II
+SELECT list_concat(array_value(1,2,3), NULL), list_concat(NULL, array_value(4,5,6));
+----
+[1, 2, 3]	[4, 5, 6]
+
+query I
+SELECT list_resize(array_value(1,2), 3);
+----
+[1, 2, NULL]
+
+query I
+SELECT list_resize(array_value(1,2), 1);
+----
+[1]
+
+query I
+SELECT list_resize(array_value(1,2), 0);
+----
+[]
+
+query I
+SELECT list_position(array_value(1,2,3), 2);
+----
+2
+
+query I
+SELECT list_position(array_value(1,2,3), 4);
+----
+0
+
+query I
+SELECT list_contains(array_value(1,2,3), 2);
+----
+true
+
+query I
+SELECT list_contains(array_value(1,2,3), 4);
+----
+false
+
+query I
+SELECT list_extract(array_value(4,5,6), 2);
+----
+5
+
+query I
+SELECT list_extract(array_value(4,5,6), 4);
+----
+NULL

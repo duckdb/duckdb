@@ -1,0 +1,9 @@
+[
+    {
+        "name": "vector_type",
+        "parameters": "col",
+        "description": "Returns the VectorType of a given column",
+        "example": "vector_type(col)",
+        "type": "scalar_function"
+    }
+]

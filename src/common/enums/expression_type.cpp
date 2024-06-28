@@ -99,6 +99,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "PLACEHOLDER";
 	case ExpressionType::COLUMN_REF:
 		return "COLUMN_REF";
+	case ExpressionType::LAMBDA_REF:
+		return "LAMBDA_REF";
 	case ExpressionType::FUNCTION_REF:
 		return "FUNCTION_REF";
 	case ExpressionType::TABLE_REF:
@@ -139,6 +141,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "LAMBDA";
 	case ExpressionType::ARROW:
 		return "ARROW";
+	case ExpressionType::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	case ExpressionType::INVALID:
 		break;
 	}
@@ -156,6 +160,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "CAST";
 	case ExpressionClass::COLUMN_REF:
 		return "COLUMN_REF";
+	case ExpressionClass::LAMBDA_REF:
+		return "LAMBDA_REF";
 	case ExpressionClass::COMPARISON:
 		return "COMPARISON";
 	case ExpressionClass::CONJUNCTION:
@@ -220,6 +226,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_LAMBDA";
 	case ExpressionClass::BOUND_EXPRESSION:
 		return "BOUND_EXPRESSION";
+	case ExpressionClass::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	default:
 		return "ExpressionClass::!!UNIMPLEMENTED_CASE!!";
 	}

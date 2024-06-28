@@ -1,0 +1,35 @@
+# name: test/sql/copy/csv/read_csv_subquery.test
+# description: Issue #7599 - read_json/auto with SELECT output as source parameter raises INTERNAL Error
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+WITH urls AS (
+	SELECT 'a.csv' AS url UNION ALL SELECT 'b.csv'
+)
+SELECT *
+FROM read_csv_auto((SELECT url FROM urls LIMIT 3), delim=',')
+WHERE properties.height > -1.0
+LIMIT 10
+----
+subqueries
+
+statement error
+SELECT *
+FROM read_csv_auto(sum(a) over ())
+----
+Table function cannot contain window functions
+
+statement error
+SELECT *
+FROM read_csv_auto(sum(a))
+----
+Table function cannot contain aggregates
+
+statement error
+SELECT *
+FROM read_csv_auto('a.csv', delim=',', 42)
+----
+Unnamed parameters cannot come after named parameters

@@ -44,14 +44,15 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 
-	// if this is a lambda parameters, then we temporarily add a BoundLambdaRef,
-	// which we capture and remove later
-	if (lambda_bindings) {
-		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
-			if (colref.GetColumnName() == (*lambda_bindings)[i].dummy_name) {
-				// FIXME: support lambdas in CHECK constraints
-				// FIXME: like so: return (*lambda_bindings)[i].Bind(colref, i, depth);
-				throw NotImplementedException("Lambda functions are currently not supported in CHECK constraints.");
+	if (!colref.IsQualified()) {
+		if (lambda_bindings) {
+			for (idx_t i = lambda_bindings->size(); i > 0; i--) {
+				if ((*lambda_bindings)[i - 1].HasMatchingBinding(colref.GetName())) {
+					// FIXME: support lambdas in CHECK constraints
+					// FIXME: like so: return (*lambda_bindings)[i - 1].Bind(colref, i, depth);
+					// FIXME: and move this to LambdaRefExpression::FindMatchingBinding
+					throw NotImplementedException("Lambda functions are currently not supported in CHECK constraints.");
+				}
 			}
 		}
 	}

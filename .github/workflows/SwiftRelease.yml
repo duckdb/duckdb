@@ -7,7 +7,7 @@ on:
       - '**'
 
 env:
-  SOURCE_REF: ${{ github.event_name == 'release' && github.ref_name || 'master' }}
+  SOURCE_REF: ${{ github.event_name == 'release' && github.ref_name || 'main' }}
   TARGET_REPO: 'duckdb/duckdb-swift'
   TARGET_REF: 'main'
   GH_TOKEN: ${{ secrets.GH_TOKEN }}

@@ -1,0 +1,27 @@
+# name: test/fuzzer/afl/issue_7551.test
+# description: Issue #7551 - Segmentation fault on SELECT
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+# FIXME - internal exception is thrown
+mode skip
+
+statement ok
+CREATE TABLE t0(c0 VARCHAR);
+
+statement ok
+CREATE TABLE t1(c0 DATE);
+
+statement ok
+INSERT INTO t1(c0) VALUES ((TIMESTAMP '1970-01-25 15:59:18'));
+
+statement ok
+INSERT INTO t0(c0) VALUES ((DATE '1969-12-20')), ((TIMESTAMP '1970-01-11 21:25:45')), (DEFAULT), (('1')), (('')), ((TIMESTAMP '1969-12-15 21:35:22'));
+
+statement ok
+CREATE VIEW v0(c0) AS SELECT t1.c0 FROM t1, t0;
+
+statement ok
+SELECT t0.rowid FROM t0, t1 LEFT JOIN v0 ON (1) WHERE t0.c0 >= v0.c0 AND t0.c0 <= v0.c0;

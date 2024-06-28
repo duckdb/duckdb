@@ -1,0 +1,36 @@
+# name: test/sql/window/window_partition_paging.test_slow
+# description: test paging in constrained memory
+# group: [window]
+
+require 64bit
+
+statement ok
+CREATE or replace TABLE big_table AS
+    SELECT
+    (i % 500)::int16 AS "Pid",
+    (i % 5000)::int16 AS "Planid",
+    left(uuid()::VARCHAR, 10) AS "Claimid",
+    FROM range(2e7::int) tbl(i);
+
+statement ok
+PRAGMA temp_directory='__TEST_DIR__/window_paging'
+
+# This query would take ~2.5GB of memory
+statement ok
+PRAGMA memory_limit='1GB'
+
+statement ok
+PRAGMA verify_external
+
+query II
+WITH new_table as (SELECT
+        Pid,
+        Planid,
+        Claimid,
+        'CLAIM' || dense_rank() OVER(PARTITION BY Pid, Planid ORDER BY Claimid) AS Fake_Claimid
+    FROM big_table
+)
+SELECT MAX(Fake_Claimid), COUNT(*)
+FROM new_table
+----
+CLAIM999	20000000

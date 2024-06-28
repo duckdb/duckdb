@@ -2,7 +2,7 @@
 # group: [map]
 
 statement ok
-pragma enable_verification;
+PRAGMA enable_verification;
 
 # Empty
 query I
@@ -29,15 +29,11 @@ select map_keys(NULL)
 NULL
 
 # Map keys can not be NULL, so more extensive tests for NULL are not possible
+statement ok
+CREATE TABLE t1 (list STRUCT(a INT, b VARCHAR)[]);
 
 statement ok
-CREATE TABLE t1 AS (
-	SELECT ARRAY[
-		(1, 'x'),
-		(2, 'y'),
-		(4, 's')
-	] AS list
-);
+INSERT INTO t1 VALUES (ARRAY[(1, 'x'), (2, 'y'), (4, 's')]);
 
 # Single row
 query I
@@ -142,3 +138,28 @@ select map_keys(col) from filtered where idx % 2 != 0;
 ----
 [6, 3, 87, 2]
 [9, 2, 7, 5, 8, 1]
+
+query I
+select MAP_KEYS(MAP([],[]))
+----
+[]
+
+query I
+select MAP_KEYS(MAP(NULL, NULL))
+----
+NULL
+
+query I
+select MAP_KEYS(NULL)
+----
+NULL
+
+query I
+select MAP_KEYS(NULL::MAP("NULL", "NULL"))
+----
+NULL
+
+query I
+select MAP_KEYS(NULL::MAP(INT, BIGINT))
+----
+NULL

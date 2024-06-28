@@ -8,17 +8,18 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/parser/group_by_node.hpp"
-#include "duckdb/execution/radix_partitioned_hashtable.hpp"
-#include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
+#include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/radix_partitioned_hashtable.hpp"
+#include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
 class ClientContext;
 class BufferManager;
+class PhysicalHashAggregate;
 
 struct HashAggregateGroupingData {
 public:
@@ -92,6 +93,8 @@ public:
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
+	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+
 	bool IsSource() const override {
 		return true;
 	}
@@ -106,9 +109,9 @@ public:
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          GlobalSinkState &gstate) const override;
+	                          OperatorSinkFinalizeInput &input) const override;
 	SinkFinalizeType FinalizeInternal(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate,
 	                                  bool check_distinct) const;
 
@@ -141,7 +144,7 @@ private:
 	SinkFinalizeType FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  GlobalSinkState &gstate) const;
 	//! Combine the distinct aggregates
-	void CombineDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
+	void CombineDistinct(ExecutionContext &context, OperatorSinkCombineInput &input) const;
 	//! Sink the distinct aggregates for a single grouping
 	void SinkDistinctGrouping(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
 	                          idx_t grouping_idx) const;

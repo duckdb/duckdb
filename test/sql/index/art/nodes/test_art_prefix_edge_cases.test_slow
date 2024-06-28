@@ -1,0 +1,959 @@
+# name: test/sql/index/art/nodes/test_art_prefix_edge_cases.test_slow
+# description: Test ART prefix edge cases
+# group: [nodes]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i BIGINT)
+
+statement ok
+CREATE INDEX i_index ON integers using art(i)
+
+# a bunch of values with different prefixes
+statement ok
+INSERT INTO integers VALUES (9312908412824241)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+0
+
+statement ok
+INSERT INTO integers VALUES (-2092042498432234)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+2
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+2
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+1
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+3
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+3
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+2
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+1
+
+statement ok
+INSERT INTO integers VALUES (-100)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+4
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+4
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+2
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+2
+
+statement ok
+INSERT INTO integers VALUES (0)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+5
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+5
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+3
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+2
+
+statement ok
+INSERT INTO integers VALUES (-598538523852390852)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+6
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+6
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+3
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+3
+
+statement ok
+INSERT INTO integers VALUES (4298421)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298421
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+7
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+7
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+4
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+3
+
+statement ok
+INSERT INTO integers VALUES (-498249)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298421
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -498249
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+8
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+8
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+4
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+4
+
+statement ok
+INSERT INTO integers VALUES (9312908412824240)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298421
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -498249
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824240
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+9
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+9
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+5
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+4
+
+statement ok
+INSERT INTO integers VALUES (-2092042498432235)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298421
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -498249
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824240
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432235
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+10
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+10
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+5
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+5
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298421
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -498249
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824240
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432235
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 2
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+11
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+11
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+6
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+5
+
+statement ok
+INSERT INTO integers VALUES (-101)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298421
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -498249
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824240
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432235
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 2
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -101
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+12
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+12
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+6
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+6
+
+statement ok
+INSERT INTO integers VALUES (-598538523852390853)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298421
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -498249
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824240
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432235
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 2
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -101
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390853
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+13
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+13
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+6
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+7
+
+statement ok
+INSERT INTO integers VALUES (4298422)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298421
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -498249
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824240
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432235
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 2
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -101
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390853
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298422
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+14
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+14
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+7
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+7
+
+statement ok
+INSERT INTO integers VALUES (-498261)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432234
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -100
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390852
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298421
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -498249
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 9312908412824240
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -2092042498432235
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 2
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -101
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -598538523852390853
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 4298422
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = -498261
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers
+----
+15
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 9223372036854775808
+----
+15
+
+query I
+SELECT COUNT(*) FROM integers WHERE i >= 0
+----
+7
+
+query I
+SELECT COUNT(*) FROM integers WHERE i < 0
+----
+8
+

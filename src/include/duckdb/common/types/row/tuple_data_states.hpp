@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
 
 namespace duckdb {
 
@@ -26,21 +28,30 @@ enum class TupleDataPinProperties : uint8_t {
 };
 
 struct TupleDataPinState {
-	unordered_map<uint32_t, BufferHandle> row_handles;
-	unordered_map<uint32_t, BufferHandle> heap_handles;
+	perfect_map_t<BufferHandle> row_handles;
+	perfect_map_t<BufferHandle> heap_handles;
 	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
 };
 
 struct CombinedListData {
+	CombinedListData() : combined_validity(STANDARD_VECTOR_SIZE) {
+	}
 	UnifiedVectorFormat combined_data;
-	list_entry_t combined_list_entries[STANDARD_VECTOR_SIZE];
 	buffer_ptr<SelectionData> selection_data;
+	list_entry_t combined_list_entries[STANDARD_VECTOR_SIZE];
+	ValidityMask combined_validity;
 };
 
 struct TupleDataVectorFormat {
-	UnifiedVectorFormat data;
-	vector<TupleDataVectorFormat> child_formats;
+	const SelectionVector *original_sel;
+	SelectionVector original_owned_sel;
+
+	UnifiedVectorFormat unified;
+	vector<TupleDataVectorFormat> children;
 	unique_ptr<CombinedListData> combined_list_data;
+
+	// Optional: only used for ArrayVector to fake being a list vector
+	unique_array<list_entry_t> array_list_entries;
 };
 
 struct TupleDataChunkState {
@@ -50,6 +61,9 @@ struct TupleDataChunkState {
 	Vector row_locations = Vector(LogicalType::POINTER);
 	Vector heap_locations = Vector(LogicalType::POINTER);
 	Vector heap_sizes = Vector(LogicalType::UBIGINT);
+
+	vector<unique_ptr<Vector>> cached_cast_vectors;
+	vector<unique_ptr<VectorCache>> cached_cast_vector_cache;
 };
 
 struct TupleDataAppendState {

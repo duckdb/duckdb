@@ -1,0 +1,81 @@
+# name: test/sql/join/asof/test_asof_join_pushdown.test
+# description: Test prericate pushdown for ASOF joins
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE right_pushdown(time INTEGER, value FLOAT);
+
+statement ok
+INSERT INTO right_pushdown VALUES
+    (0, 0), 
+    (1, NULL), 
+;
+
+query IIII
+SELECT 
+	d1.time,
+	d2.time,
+	d1.value, 
+	d2.value
+FROM right_pushdown d1 
+ASOF JOIN (
+	SELECT * FROM right_pushdown WHERE value is not NULL
+	) d2
+	ON d1.time >= d2.time;
+----
+0 	0	0.0	0.0
+1 	0	NULL	0.0
+
+query IIII
+SELECT 
+	d1.time,
+	d2.time,
+	d1.value, 
+	d2.value
+FROM right_pushdown d1 
+ASOF LEFT JOIN (
+	SELECT * FROM right_pushdown WHERE value is not NULL
+	) d2
+	ON d1.time >= d2.time;
+----
+0 	0	0.0	0.0
+1 	0	NULL	0.0
+
+query II
+WITH t as (
+    SELECT
+        t1.col0 AS left_val,
+        t2.col0 AS right_val,
+    FROM
+        (VALUES (0), (5), (10), (15)) AS t1
+        ASOF JOIN (VALUES (1), (6), (11), (16)) AS t2
+        ON t2.col0 > t1.col0
+)
+SELECT *
+FROM t
+WHERE right_val BETWEEN 3 AND 12
+ORDER BY ALL
+----
+5	6
+10	11
+
+query II
+WITH t as (
+    SELECT
+        t1.col0 AS left_val,
+        t2.col0 AS right_val,
+    FROM
+        (VALUES (0), (5), (10), (15)) AS t1
+        ASOF LEFT JOIN (VALUES (1), (6), (11), (16)) AS t2
+        ON t2.col0 > t1.col0
+)
+SELECT *
+FROM t
+WHERE right_val BETWEEN 3 AND 12
+ORDER BY ALL
+----
+5	6
+10	11

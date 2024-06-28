@@ -1,0 +1,46 @@
+# name: test/sql/cte/test_issue_5673.test
+# description: Issue #5673 and #4987: CTE and Table name are name shadowing
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create or replace table orders(ordered_at int);
+
+statement ok
+create or replace table stg_orders(ordered_at int);
+
+statement ok
+insert into orders values (1);
+
+statement ok
+insert into stg_orders values (1);
+
+statement error
+with
+orders as (
+    select * from stg_orders
+    where ordered_at >= (select max(ordered_at) from orders)
+),
+some_more_logic as (
+    select *
+    from orders
+)
+select * from some_more_logic;
+----
+Binder Error: Circular reference to CTE "orders", There are two possible solutions.
+
+query I
+with
+orders as (
+    select * from main.stg_orders
+    where ordered_at >= (select max(ordered_at) from main.orders)
+),
+some_more_logic as (
+    select *
+    from orders
+)
+select * from some_more_logic;
+----
+1

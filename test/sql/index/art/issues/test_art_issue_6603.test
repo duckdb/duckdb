@@ -1,0 +1,47 @@
+# name: test/sql/index/art/issues/test_art_issue_6603.test
+# description: Test index join issue 6603
+# group: [issues]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN;
+
+statement ok
+CREATE TABLE path (
+    it  INTEGER,
+    x0  TEXT NOT NULL,
+    x1  TEXT NOT NULL
+);
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE edge (
+  id  INTEGER DEFAULT nextval('seq'),
+  it  INTEGER DEFAULT 0,
+  x0  TEXT,
+  x1  TEXT
+);
+
+statement ok
+CREATE INDEX edge1_idx ON edge (x1);
+
+statement ok
+INSERT INTO edge (x0, x1) VALUES ('n2880','n3966');
+
+statement ok
+COMMIT;
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO path SELECT 1, y0, y1 FROM (SELECT DISTINCT edge0.x0 AS y0, edge0.x1 AS y1 FROM edge AS edge0 WHERE edge0.it = 0 AND true AND NOT EXISTS (SELECT * from path AS pre WHERE pre.x0 = edge0.x0 AND pre.x1 = edge0.x1));
+
+query III
+SELECT 1, y0, y1 FROM (SELECT DISTINCT edge0.x0 AS y0, path1.x1 AS y1 FROM edge AS edge0,path AS path1 WHERE edge0.it = 0 AND edge0.x1 = path1.x0 AND NOT EXISTS (SELECT * from path AS pre WHERE pre.x0 = edge0.x0 AND pre.x1 = path1.x1));
+----
+

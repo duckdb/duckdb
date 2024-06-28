@@ -26,8 +26,18 @@ DEALLOCATE s3
 # can't run a query with a param without PREPARE
 statement error
 SELECT * FROM a WHERE i=$1
+----
 
 # also can't run a query with a param when casting
 statement error
 SELECT * FROM a WHERE i=CAST($1 AS VARCHAR)
+----
+
+# issue that swallows an UNKNOWN type, if not explicitly setting the rebind-flag
+
+statement ok
+PREPARE s1 AS SELECT to_years($1), CAST(list_value($1) AS BIGINT[]);
+
+statement ok
+EXECUTE s1(1);
 

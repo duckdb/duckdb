@@ -1,0 +1,129 @@
+# name: test/sql/storage/compression/alprd/alprd_nulls_simple.test
+# group: [alprd]
+
+# load the DB from disk
+load __TEST_DIR__/test_alprd_nulls.db
+
+foreach compression uncompressed alprd
+
+# Set the compression algorithm
+
+statement ok
+pragma force_compression='${compression}'
+
+# Create tables
+
+statement ok
+create table tbl1_${compression}(
+	a INTEGER DEFAULT 5,
+	b VARCHAR DEFAULT 'test',
+	c BOOL DEFAULT false,
+	d DOUBLE,
+	e TEXT default 'null',
+	f FLOAT
+);
+
+# Populate tables
+
+# Mixed NULLs
+statement ok
+insert into tbl1_${compression}(d,f) VALUES
+(NULL, 1.2314234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(NULL, 1.2314234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(NULL, 1.2314234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(NULL, 1.2314234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(NULL, 1.2314234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(NULL, 1.2314234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(324213.23123, NULL),
+(NULL, NULL),
+(21312.23412, 12.123234),
+(NULL, NULL);
+
+# Force a checkpoint
+
+statement ok
+checkpoint
+
+endloop
+
+# Assert that the scanned results are the same
+
+#tbl1
+
+query II nosort r1
+select d, f from tbl1_uncompressed;
+----
+
+query II nosort r1
+select d, f from tbl1_alprd;
+----
+

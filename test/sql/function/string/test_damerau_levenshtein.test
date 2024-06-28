@@ -150,12 +150,15 @@ NULL
 
 statement error
 SELECT damerau_levenshtein('one', 'two', 'three')
+----
 
 statement error
 SELECT damerau_levenshtein('one')
+----
 
 statement error
 SELECT damerau_levenshtein()
+----
 
 
 statement ok

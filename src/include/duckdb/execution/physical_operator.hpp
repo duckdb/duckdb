@@ -31,9 +31,11 @@ class MetaPipeline;
 //! execution plan
 class PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INVALID;
+
+public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
 	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
-		estimated_props = make_uniq<EstimatedProperties>(estimated_cardinality, 0);
 	}
 
 	virtual ~PhysicalOperator() {
@@ -47,7 +49,6 @@ public:
 	vector<LogicalType> types;
 	//! The estimated cardinality of this physical operator
 	idx_t estimated_cardinality;
-	unique_ptr<EstimatedProperties> estimated_props;
 
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;
@@ -128,30 +129,39 @@ public:
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual double GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
+	//! Returns the current progress percentage, or a negative value if progress bars are not supported
+	virtual double GetSinkProgress(ClientContext &context, GlobalSinkState &gstate, double source_progress) const {
+		return source_progress;
+	}
+
 public:
 	// Sink interface
 
 	//! The sink method is called constantly with new input, as long as new input is available. Note that this method
-	//! CAN be called in parallel, proper locking is needed when accessing data inside the GlobalSinkState.
+	//! CAN be called in parallel, proper locking is needed when accessing dat
+	//! a inside the GlobalSinkState.
 	virtual SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
 	// Combine() calls are active on the same GlobalSinkState.
-	virtual void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
+	virtual SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
 	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished
 	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                                  GlobalSinkState &gstate) const;
+	                                  OperatorSinkFinalizeInput &input) const;
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
 	//! This allows flushing of the current batch (e.g. to disk)
-	virtual void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const;
+	virtual SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
 
 	//! The maximum amount of memory the operator should use per thread.
 	static idx_t GetMaxThreadMemory(ClientContext &context);
+
+	//! Whether operator caching is allowed in the current execution context
+	static bool OperatorCachingAllowed(ExecutionContext &context);
 
 	virtual bool IsSink() const {
 		return false;
@@ -184,7 +194,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -192,7 +202,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

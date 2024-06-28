@@ -1,0 +1,45 @@
+# name: test/sql/copy/csv/write_header_default.test
+# description: CSV Writer writes the header as default
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t (a integer)
+
+statement ok
+insert into t values (1),(2),(NULL)
+
+statement ok
+COPY t TO '__TEST_DIR__/t_default.tsv' WITH (DELIMITER '\t');
+
+query I
+select * from read_csv_auto('__TEST_DIR__/t_default.tsv', header = 0)
+----
+a
+1
+2
+NULL
+
+statement ok
+COPY t TO '__TEST_DIR__/t_default.tsv' WITH (DELIMITER '\t');
+
+query I
+select * from read_csv_auto('__TEST_DIR__/t_default.tsv', header = 0)
+----
+a
+1
+2
+NULL
+
+statement ok
+COPY t TO '__TEST_DIR__/t_default.tsv' WITH (DELIMITER '\t', HEADER 0);
+
+query I
+select * from read_csv_auto('__TEST_DIR__/t_default.tsv', header = 0)
+----
+1
+2
+NULL
+

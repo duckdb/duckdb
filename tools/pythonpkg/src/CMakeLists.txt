@@ -6,6 +6,7 @@ include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 add_subdirectory(pyrelation)
+add_subdirectory(pyexpression)
 add_subdirectory(pybind11)
 add_subdirectory(numpy)
 add_subdirectory(native)
@@ -15,14 +16,19 @@ add_subdirectory(functional)
 add_subdirectory(pyconnection)
 add_subdirectory(common)
 add_subdirectory(pandas)
+add_subdirectory(arrow)
 
 add_library(
   python_src OBJECT
   path_like.cpp
   python_udf.cpp
   pyconnection.cpp
+  pystatement.cpp
   python_import_cache.cpp
+  python_replacement_scan.cpp
+  python_dependency.cpp
   pyrelation.cpp
+  pyexpression.cpp
   dataframe.cpp
   pyresult.cpp
   pyfilesystem.cpp

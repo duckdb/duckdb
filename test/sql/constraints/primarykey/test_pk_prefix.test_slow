@@ -19,6 +19,7 @@ loop i 1 300
 
 statement error
 INSERT INTO test VALUES (${i}, 'hello');
+----
 
 endloop
 
@@ -37,11 +38,13 @@ endloop
 # This update should fail and stress test the deletes on hello_ prefixes
 statement error
 UPDATE test SET a=a+1000;
+----
 
 # Should fail for same reason as above, just checking element per element to see if no one is escaping
 loop i 1 300
 
 statement error
 INSERT INTO test VALUES (1000+${i}, 'hello');
+----
 
 endloop

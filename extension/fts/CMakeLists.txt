@@ -1,10 +1,10 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(FTSExtension)
 
 include_directories(include ../../third_party/snowball/libstemmer)
 set(FTS_SOURCES
-    fts-extension.cpp
+    fts_extension.cpp
     fts_indexing.cpp
     ../../third_party/snowball/libstemmer/libstemmer.cpp
     ../../third_party/snowball/runtime/utilities.cpp
@@ -40,7 +40,7 @@ set(FTS_SOURCES
     ../../third_party/snowball/src_c/stem_UTF_8_tamil.cpp
     ../../third_party/snowball/src_c/stem_UTF_8_turkish.cpp)
 
-add_library(fts_extension STATIC ${FTS_SOURCES})
+build_static_extension(fts ${FTS_SOURCES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(fts ${PARAMETERS} ${FTS_SOURCES})
 

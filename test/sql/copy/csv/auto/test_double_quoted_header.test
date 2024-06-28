@@ -1,0 +1,17 @@
+# name: test/sql/copy/csv/auto/test_double_quoted_header.test
+# group: [auto]
+
+statement ok
+PRAGMA enable_verification
+
+query IIIIII
+describe from 'data/csv/double_quoted_header.csv';
+----
+foo "bar	BIGINT	YES	NULL	NULL	NULL
+name	VARCHAR	YES	NULL	NULL	NULL
+
+query II
+from 'data/csv/double_quoted_header.csv';
+----
+1	rob
+2	sally

@@ -1,42 +1,54 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+
+#include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
+
+optional_idx AttachInfo::GetBlockAllocSize() const {
+
+	for (auto &entry : options) {
+		if (entry.first == "block_size") {
+			// Extract the block allocation size. This is NOT the actual memory available on a block (block_size),
+			// even though the corresponding option we expose to the user is called "block_size".
+			idx_t block_alloc_size = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
+			Storage::VerifyBlockAllocSize(block_alloc_size);
+			return block_alloc_size;
+		}
+	}
+	return optional_idx();
+}
 
 unique_ptr<AttachInfo> AttachInfo::Copy() const {
 	auto result = make_uniq<AttachInfo>();
 	result->name = name;
 	result->path = path;
 	result->options = options;
+	result->on_conflict = on_conflict;
 	return result;
 }
 
-void AttachInfo::Serialize(Serializer &main_serializer) const {
-	FieldWriter writer(main_serializer);
-	writer.WriteString(name);
-	writer.WriteString(path);
-	writer.WriteField<uint32_t>(options.size());
-	auto &serializer = writer.GetSerializer();
-	for (auto &kv : options) {
-		serializer.WriteString(kv.first);
-		kv.second.Serialize(serializer);
+string AttachInfo::ToString() const {
+	string result = "";
+	result += "ATTACH";
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		result += " IF NOT EXISTS";
 	}
-	writer.Finalize();
-}
-
-unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
-	FieldReader reader(deserializer);
-	auto attach_info = make_uniq<AttachInfo>();
-	attach_info->name = reader.ReadRequired<string>();
-	attach_info->path = reader.ReadRequired<string>();
-	auto default_attach_count = reader.ReadRequired<uint32_t>();
-	auto &source = reader.GetSource();
-	for (idx_t i = 0; i < default_attach_count; i++) {
-		auto name = source.Read<string>();
-		attach_info->options[name] = Value::Deserialize(source);
+	result += " DATABASE";
+	result += StringUtil::Format(" '%s'", path);
+	if (!name.empty()) {
+		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
 	}
-	reader.Finalize();
-	return std::move(attach_info);
+	if (!options.empty()) {
+		vector<string> stringified;
+		for (auto &opt : options) {
+			stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second.ToSQLString()));
+		}
+		result += " (" + StringUtil::Join(stringified, ", ") + ")";
+	}
+	result += ";";
+	return result;
 }
 
 } // namespace duckdb

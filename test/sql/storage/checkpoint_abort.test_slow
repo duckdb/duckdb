@@ -45,6 +45,7 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 
 statement error
 CHECKPOINT;
+----
 
 restart
 
@@ -73,6 +74,7 @@ UPDATE integers SET i=i;
 
 statement error
 CHECKPOINT;
+----
 
 restart
 

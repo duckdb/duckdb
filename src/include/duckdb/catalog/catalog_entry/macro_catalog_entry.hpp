@@ -24,10 +24,7 @@ public:
 	unique_ptr<MacroFunction> function;
 
 public:
-	virtual unique_ptr<CreateMacroInfo> GetInfoForSerialization() const;
-	//! Serialize the meta information
-	virtual void Serialize(Serializer &serializer) const;
-	static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &main_source, ClientContext &context);
+	unique_ptr<CreateInfo> GetInfo() const override;
 
 	string ToSQL() const override {
 		return function->ToSQL(schema.name, name);

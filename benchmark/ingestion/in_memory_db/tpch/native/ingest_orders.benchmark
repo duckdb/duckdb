@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/in_memory_db/tpch/native/ingest_orders.benchmark
+# description: benchmark ingestion of orders
+# group: [native]
+
+template benchmark/ingestion/in_memory_db/tpch/native/tpch_ingest_native.benchmark.in
+table_name=orders
+format=native

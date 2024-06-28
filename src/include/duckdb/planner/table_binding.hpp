@@ -52,12 +52,32 @@ public:
 	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
 	column_t GetBindingIndex(const string &column_name);
 	bool HasMatchingBinding(const string &column_name);
-	virtual string ColumnNotFoundError(const string &column_name) const;
+	virtual ErrorData ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (binding_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast binding to type - binding type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (binding_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast binding to type - binding type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct EntryBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::CATALOG_ENTRY;
+
 public:
 	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index,
 	             StandardEntry &entry);
@@ -70,6 +90,10 @@ public:
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::TABLE;
+
+public:
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
 	             vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
 	             bool add_row_id = false);
@@ -83,7 +107,7 @@ public:
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	optional_ptr<StandardEntry> GetStandardEntry() override;
-	string ColumnNotFoundError(const string &column_name) const override;
+	ErrorData ColumnNotFoundError(const string &column_name) const override;
 	// These are columns that are present in the name_map, appearing in the order that they're bound
 	const vector<column_t> &GetBoundColumnIds() const;
 
@@ -91,26 +115,30 @@ protected:
 	ColumnBinding GetColumnBinding(column_t column_index);
 };
 
-//! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro
-//! parameters.
+//! DummyBinding is like the Binding, except the alias and index are set by default.
+//! Used for binding lambdas and macro parameters.
 struct DummyBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::DUMMY;
 	// NOTE: changing this string conflicts with the storage version
 	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 
 public:
-	DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p);
+	DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name);
 
-	//! Arguments
+	//! Arguments (for macros)
 	vector<unique_ptr<ParsedExpression>> *arguments;
 	//! The name of the dummy binding
 	string dummy_name;
 
 public:
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
-	BindResult Bind(ColumnRefExpression &colref, idx_t lambda_index, idx_t depth);
+	//! Binding macros
+	BindResult Bind(ColumnRefExpression &col_ref, idx_t depth) override;
+	//! Binding lambdas
+	BindResult Bind(LambdaRefExpression &lambda_ref, idx_t depth);
 
-	//! Given the parameter colref, returns a copy of the argument that was supplied for this parameter
-	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);
+	//! Returns a copy of the col_ref parameter as a parsed expression
+	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &col_ref);
 };
 
 } // namespace duckdb

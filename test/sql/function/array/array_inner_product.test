@@ -1,0 +1,63 @@
+# name: test/sql/function/array/array_inner_product.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+# Error message coverage test
+statement error
+SELECT array_inner_product('foo', 'bar');
+----
+Could not choose a best candidate function
+
+statement error
+SELECT array_inner_product([1,2,3]::INT[3], ['a','b','c']::VARCHAR[3]);
+----
+Binder Error: No function matches the given name and argument types
+
+statement error
+SELECT array_distance(['a','b']::VARCHAR[2],['foo','bar']::VARCHAR[2]);
+----
+Binder Error: No function matches the given name and argument types
+
+# Tests for supported types
+foreach type FLOAT DOUBLE
+
+query I
+SELECT array_inner_product([1, 1, 1]::${type}[3], [1, 1, 1]::${type}[3]);
+----
+3.0
+
+statement ok
+CREATE OR REPLACE TABLE arrays (l ${type}[3]);
+
+statement ok
+INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
+
+query I
+SELECT array_inner_product(l, [1, 2, 3]::${type}[3]) FROM arrays;
+----
+14.0
+17.0
+50.0
+-14.0
+NULL
+
+
+statement error
+SELECT array_inner_product([1, NULL, 3]::${type}[3], [1, 2, 3]::${type}[3]);
+----
+left argument can not contain NULL values
+
+statement error
+SELECT array_inner_product([1, 2, 3]::${type}[3], [1, NULL, 3]::${type}[3]);
+----
+right argument can not contain NULL values
+
+statement error
+SELECT array_inner_product([1, 2, 3]::${type}[3], [1, 2, 3, 4]::${type}[4]);
+----
+array_inner_product: Array arguments must be of the same size
+
+
+endloop

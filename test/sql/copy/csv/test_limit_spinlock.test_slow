@@ -1,0 +1,18 @@
+# name: test/sql/copy/csv/test_limit_spinlock.test_slow
+# description: Test that we can read file that was causing spinlock issues when used with the limit operator
+# group: [csv]
+
+require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+# This may or may not work, depending if we encounter a value that breaks the quote on the thread set
+# But this will finish
+statement maybe
+from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/title.principals.tsv', quote='"') limit 10
+----
+
+# This works, because we use \0 as a quote
+statement ok
+from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/title.principals.tsv' limit 10

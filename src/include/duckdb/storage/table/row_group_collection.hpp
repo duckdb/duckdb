@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
+
 struct ParallelTableScanState;
 struct ParallelCollectionScanState;
 class CreateIndexScanState;
@@ -26,6 +27,10 @@ struct TableAppendState;
 class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
+struct ColumnSegmentInfo;
+class MetadataManager;
+struct VacuumState;
+struct CollectionCheckpointState;
 
 class RowGroupCollection {
 public:
@@ -44,7 +49,6 @@ public:
 	void AppendRowGroup(SegmentLock &l, idx_t start_row);
 	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
 	RowGroup *GetRowGroup(int64_t index);
-	idx_t RowGroupCount();
 	void Verify();
 
 	void InitializeScan(CollectionScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters);
@@ -65,14 +69,15 @@ public:
 
 	//! Initialize an append of a variable number of rows. FinalizeAppend must be called after appending is done.
 	void InitializeAppend(TableAppendState &state);
-	//! Initialize an append with a known number of rows. FinalizeAppend should not be called after appending is done.
-	void InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count);
+	//! Initialize an append with a variable number of rows. FinalizeAppend should not be called after appending is
+	//! done.
+	void InitializeAppend(TransactionData transaction, TableAppendState &state);
 	//! Appends to the row group collection. Returns true if a new row group has been created to append to
 	bool Append(DataChunk &chunk, TableAppendState &state);
 	//! FinalizeAppend flushes an append with a variable number of rows.
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
-	void RevertAppendInternal(idx_t start_row, idx_t count);
+	void RevertAppendInternal(idx_t start_row);
 
 	void MergeStorage(RowGroupCollection &data);
 
@@ -85,14 +90,19 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
+	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+	                           vector<SegmentNode<RowGroup>> &segments);
+	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx);
+	void ScheduleCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
+
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
 
-	void GetStorageInfo(TableStorageInfo &result);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
-	                                         Expression *default_value);
+	                                         ExpressionExecutor &default_executor);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<column_t> bound_columns, Expression &cast_expr);
@@ -103,12 +113,16 @@ public:
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
 	AttachedDatabase &GetAttached();
-	DatabaseInstance &GetDatabase();
 	BlockManager &GetBlockManager() {
 		return block_manager;
 	}
+	MetadataManager &GetMetadataManager();
 	DataTableInfo &GetTableInfo() {
 		return *info;
+	}
+
+	idx_t GetAllocationSize() const {
+		return allocation_size;
 	}
 
 private:
@@ -128,6 +142,8 @@ private:
 	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! Table statistics
 	TableStatistics stats;
+	//! Allocation size, only tracked for appends
+	idx_t allocation_size;
 };
 
 } // namespace duckdb

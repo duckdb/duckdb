@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
 class LogicalExplain : public LogicalOperator {
-	LogicalExplain(ExplainType explain_type)
+	explicit LogicalExplain(ExplainType explain_type)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {};
 
 public:
@@ -32,10 +32,15 @@ public:
 	string logical_plan_opt;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
 	idx_t EstimateCardinality(ClientContext &context) override {
 		return 3;
+	}
+	//! Skips the serialization check in VerifyPlan
+	bool SupportSerialization() const override {
+		return false;
 	}
 
 protected:

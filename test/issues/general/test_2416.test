@@ -142,6 +142,7 @@ NULL
 
 statement error
 SELECT my_list_or_string_extract_2({a: 1, b: 2, c: 3, d: 4})
+----
 
 statement ok
 CREATE MACRO my_struct_extract_c(my_struct) AS my_struct['c']
@@ -153,6 +154,7 @@ SELECT my_struct_extract_c({a: 1, b: 2, c: 3, d: 4})
 
 statement error
 SELECT my_struct_extract_c({a: 1, b: 2, d: 4})
+----
 
 statement ok
 CREATE MACRO my_specific_struct_extract(field) AS struct_pack(a:= 1, b:= 2, c:= 3, d:= 4)[field]
@@ -164,6 +166,7 @@ SELECT my_specific_struct_extract('c')
 
 statement error
 SELECT my_specific_struct_extract(2)
+----
 
 statement ok
 CREATE MACRO my_specific_list_extract(index) AS list_value(1, 2, 3, 4)[index]
@@ -175,6 +178,7 @@ SELECT my_specific_list_extract(2)
 
 statement error
 SELECT my_specific_list_extract('c')
+----
 
 statement ok
 CREATE MACRO my_specific_string_extract(index) AS '1234'[index]
@@ -186,3 +190,4 @@ SELECT my_specific_string_extract(2)
 
 statement error
 SELECT my_specific_string_extract('c')
+----

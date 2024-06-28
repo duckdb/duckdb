@@ -38,7 +38,7 @@ NULL
 
 # exists with multiple correlated columns
 query IIT
-SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c);
+SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c) order by b;
 ----
 12	2	b
 13	3	c

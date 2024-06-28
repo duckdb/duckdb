@@ -24,33 +24,26 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 	return std::move(result);
 }
 
-void CreateSequenceInfo::SerializeInternal(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(name);
-	writer.WriteField(usage_count);
-	writer.WriteField(increment);
-	writer.WriteField(min_value);
-	writer.WriteField(max_value);
-	writer.WriteField(start_value);
-	writer.WriteField(cycle);
-	writer.Finalize();
-}
-
-unique_ptr<CreateSequenceInfo> CreateSequenceInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_uniq<CreateSequenceInfo>();
-	result->DeserializeBase(deserializer);
-
-	FieldReader reader(deserializer);
-	result->name = reader.ReadRequired<string>();
-	result->usage_count = reader.ReadRequired<uint64_t>();
-	result->increment = reader.ReadRequired<int64_t>();
-	result->min_value = reader.ReadRequired<int64_t>();
-	result->max_value = reader.ReadRequired<int64_t>();
-	result->start_value = reader.ReadRequired<int64_t>();
-	result->cycle = reader.ReadRequired<bool>();
-	reader.Finalize();
-
-	return result;
+string CreateSequenceInfo::ToString() const {
+	std::stringstream ss;
+	ss << "CREATE";
+	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		ss << " OR REPLACE";
+	}
+	if (temporary) {
+		ss << " TEMPORARY";
+	}
+	ss << " SEQUENCE ";
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		ss << " IF NOT EXISTS ";
+	}
+	ss << QualifierToString(temporary ? "" : catalog, schema, name);
+	ss << " INCREMENT BY " << increment;
+	ss << " MINVALUE " << min_value;
+	ss << " MAXVALUE " << max_value;
+	ss << " START " << start_value;
+	ss << " " << (cycle ? "CYCLE" : "NO CYCLE") << ";";
+	return ss.str();
 }
 
 } // namespace duckdb

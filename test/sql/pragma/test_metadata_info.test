@@ -1,0 +1,40 @@
+# name: test/sql/pragma/test_metadata_info.test
+# description: Test metadata info
+# group: [pragma]
+
+# skip reload because of attach
+require skip_reload
+
+load __TEST_DIR__/test_metadata_info.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+CHECKPOINT
+
+statement ok
+PRAGMA metadata_info;
+
+statement ok
+FROM pragma_metadata_info();
+
+statement ok
+ATTACH '__TEST_DIR__/test_metadata_info_attach.db' AS db1
+
+statement ok
+CREATE TABLE db1.integers(i INTEGER, j INTEGER)
+
+statement ok
+CHECKPOINT db1
+
+statement ok
+FROM pragma_metadata_info('db1');
+
+statement error
+FROM pragma_metadata_info(NULL)
+----
+cannot be NULL

@@ -7,6 +7,9 @@ require skip_reload
 statement ok
 PRAGMA threads=4
 
+statement ok
+PRAGMA verify_external
+
 # small number of groups (100)
 statement ok
 create temporary table d as select mod(range, 100) g, 42 p from range(10000000);

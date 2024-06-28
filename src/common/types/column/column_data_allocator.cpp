@@ -1,8 +1,8 @@
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -19,6 +19,7 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
     : type(allocator_type) {
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+	case ColumnDataAllocatorType::HYBRID:
 		alloc.buffer_manager = &BufferManager::GetBufferManager(context);
 		break;
 	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
@@ -33,6 +34,7 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 	type = other.GetType();
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+	case ColumnDataAllocatorType::HYBRID:
 		alloc.allocator = other.alloc.allocator;
 		break;
 	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
@@ -44,7 +46,7 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 }
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
-	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
 	shared_ptr<BlockHandle> handle;
 	if (shared) {
 		// we only need to grab the lock when accessing the vector, because vector access is not thread-safe:
@@ -58,29 +60,31 @@ BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 }
 
 BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
-	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
 	auto block_size = MaxValue<idx_t>(size, Storage::BLOCK_SIZE);
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = block_size;
-	auto pin = alloc.buffer_manager->Allocate(block_size, false, &data.handle);
+	data.capacity = NumericCast<uint32_t>(block_size);
+	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, block_size, false, &data.handle);
 	blocks.push_back(std::move(data));
+	allocated_size += block_size;
 	return pin;
 }
 
 void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
 	auto allocation_amount = MaxValue<idx_t>(NextPowerOfTwo(size), 4096);
 	if (!blocks.empty()) {
-		auto last_capacity = blocks.back().capacity;
+		idx_t last_capacity = blocks.back().capacity;
 		auto next_capacity = MinValue<idx_t>(last_capacity * 2, last_capacity + Storage::BLOCK_SIZE);
 		allocation_amount = MaxValue<idx_t>(next_capacity, allocation_amount);
 	}
 	D_ASSERT(type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = allocation_amount;
+	data.capacity = NumericCast<uint32_t>(allocation_amount);
 	data.handle = nullptr;
 	blocks.push_back(std::move(data));
+	allocated_size += allocation_amount;
 }
 
 void ColumnDataAllocator::AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer) {
@@ -108,7 +112,7 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
 	}
 	auto &block = blocks.back();
 	D_ASSERT(size <= block.capacity - block.size);
-	block_id = blocks.size() - 1;
+	block_id = NumericCast<uint32_t>(blocks.size() - 1);
 	if (chunk_state && chunk_state->handles.find(block_id) == chunk_state->handles.end()) {
 		// not guaranteed to be pinned already by this thread (if shared allocator)
 		chunk_state->handles[block_id] = alloc.buffer_manager->Pin(blocks[block_id].handle);
@@ -136,6 +140,7 @@ void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t 
                                        ChunkManagementState *chunk_state) {
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+	case ColumnDataAllocatorType::HYBRID:
 		if (shared) {
 			lock_guard<mutex> guard(lock);
 			AllocateBuffer(size, block_id, offset, chunk_state);
@@ -162,10 +167,10 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 		// in-memory allocator: construct pointer from block_id and offset
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
 			uintptr_t pointer_value = uintptr_t(block_id);
-			return (data_ptr_t)pointer_value;
+			return (data_ptr_t)pointer_value; // NOLINT - convert from pointer value back to pointer
 		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
 			uintptr_t pointer_value = (uintptr_t(offset) << 32) | uintptr_t(block_id);
-			return (data_ptr_t)pointer_value;
+			return (data_ptr_t)pointer_value; // NOLINT - convert from pointer value back to pointer
 		} else {
 			throw InternalException("ColumnDataCollection: Architecture not supported!?");
 		}
@@ -174,8 +179,8 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	return state.handles[block_id].Ptr() + offset;
 }
 
-void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result, uint16_t v_offset,
-                                            uint16_t count, uint32_t block_id, uint32_t offset) {
+void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result, idx_t v_offset, uint16_t count,
+                                            uint32_t block_id, uint32_t offset) {
 	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 	lock_guard<mutex> guard(lock);
 
@@ -183,8 +188,8 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	auto strings = FlatVector::GetData<string_t>(result);
 
 	// find first non-inlined string
-	uint32_t i = v_offset;
-	const uint32_t end = v_offset + count;
+	auto i = NumericCast<uint32_t>(v_offset);
+	const uint32_t end = NumericCast<uint32_t>(v_offset + count);
 	for (; i < end; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;
@@ -196,7 +201,7 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	// at least one string must be non-inlined, otherwise this function should not be called
 	D_ASSERT(i < end);
 
-	auto base_ptr = (char *)GetDataPointer(state, block_id, offset);
+	auto base_ptr = char_ptr_cast(GetDataPointer(state, block_id, offset));
 	if (strings[i].GetData() == base_ptr) {
 		// pointers are still valid
 		return;
@@ -225,7 +230,7 @@ Allocator &ColumnDataAllocator::GetAllocator() {
 }
 
 void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, ChunkMetaData &chunk) {
-	if (type != ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+	if (type != ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR && type != ColumnDataAllocatorType::HYBRID) {
 		// nothing to pin
 		return;
 	}
@@ -234,7 +239,7 @@ void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, Chun
 	do {
 		found_handle = false;
 		for (auto it = state.handles.begin(); it != state.handles.end(); it++) {
-			if (chunk.block_ids.find(it->first) != chunk.block_ids.end()) {
+			if (chunk.block_ids.find(NumericCast<uint32_t>(it->first)) != chunk.block_ids.end()) {
 				// still required: do not release
 				continue;
 			}

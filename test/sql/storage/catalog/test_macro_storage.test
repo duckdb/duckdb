@@ -34,6 +34,7 @@ restart
 
 statement error
 SELECT plus1(2)
+----
 
 # after recreating the macro we can use it again
 statement ok

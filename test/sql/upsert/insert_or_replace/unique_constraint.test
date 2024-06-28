@@ -1,0 +1,33 @@
+# name: test/sql/upsert/insert_or_replace/unique_constraint.test
+# group: [insert_or_replace]
+
+# Single UNIQUE CONSTRAINT
+statement ok
+create table tbl(
+	a int unique,
+	b int
+);
+
+statement ok
+insert or replace into tbl values(1, 2);
+
+statement ok
+insert or replace into tbl values(1, 2);
+
+query II
+select * from tbl;
+----
+1	2
+
+# Multiple UNIQUE CONSTRAINTs
+statement ok
+create table multiple_unique(
+	a int unique,
+	b int unique,
+	c int
+);
+
+statement error
+insert or replace into multiple_unique values(1, 2, 3);
+----
+Binder Error: Conflict target has to be provided for a DO UPDATE operation when the table has multiple UNIQUE/PRIMARY KEY constraints

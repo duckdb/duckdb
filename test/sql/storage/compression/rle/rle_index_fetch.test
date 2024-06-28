@@ -17,13 +17,13 @@ INSERT INTO test SELECT i::VARCHAR id, 1 b FROM range(5000) tbl(i)
 statement ok
 INSERT INTO test SELECT (5000 + i)::VARCHAR id, 2 b FROM range(5000) tbl(i)
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
 ----
 RLE
-
-statement ok
-CHECKPOINT
 
 query IIIIII
 SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'

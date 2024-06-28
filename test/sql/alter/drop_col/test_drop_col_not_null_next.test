@@ -23,6 +23,7 @@ ALTER TABLE test DROP COLUMN j
 
 statement error
 INSERT INTO test VALUES (3, NULL)
+----
 
 statement ok
 INSERT INTO test VALUES (3, 13)

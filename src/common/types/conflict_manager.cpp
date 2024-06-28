@@ -159,7 +159,7 @@ bool ConflictManager::AddNull(idx_t chunk_index) {
 	if (!IsConflict(LookupResultType::LOOKUP_NULL)) {
 		return false;
 	}
-	return AddHit(chunk_index, DConstants::INVALID_INDEX);
+	return AddHit(chunk_index, static_cast<row_t>(DConstants::INVALID_INDEX));
 }
 
 bool ConflictManager::SingleIndexTarget() const {

@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_load.hpp"
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
 #include "duckdb/execution/operator/helper/physical_vacuum.hpp"
+#include "duckdb/execution/operator/helper/physical_update_extensions.hpp"
 #include "duckdb/execution/operator/schema/physical_alter.hpp"
 #include "duckdb/execution/operator/schema/physical_attach.hpp"
 #include "duckdb/execution/operator/schema/physical_create_schema.hpp"
@@ -25,15 +26,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		return make_uniq<PhysicalTransaction>(unique_ptr_cast<ParseInfo, TransactionInfo>(std::move(op.info)),
 		                                      op.estimated_cardinality);
-	case LogicalOperatorType::LOGICAL_VACUUM: {
-		auto result = make_uniq<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(std::move(op.info)),
-		                                        op.estimated_cardinality);
-		if (!op.children.empty()) {
-			auto child = CreatePlan(*op.children[0]);
-			result->children.push_back(std::move(child));
-		}
-		return std::move(result);
-	}
 	case LogicalOperatorType::LOGICAL_LOAD:
 		return make_uniq<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(std::move(op.info)),
 		                               op.estimated_cardinality);
@@ -43,6 +35,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 	case LogicalOperatorType::LOGICAL_DETACH:
 		return make_uniq<PhysicalDetach>(unique_ptr_cast<ParseInfo, DetachInfo>(std::move(op.info)),
 		                                 op.estimated_cardinality);
+	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
+		return make_uniq<PhysicalUpdateExtensions>(unique_ptr_cast<ParseInfo, UpdateExtensionsInfo>(std::move(op.info)),
+		                                           op.estimated_cardinality);
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple operator");
 	}

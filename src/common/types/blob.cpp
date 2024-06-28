@@ -2,6 +2,7 @@
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
@@ -24,7 +25,7 @@ bool IsRegularCharacter(data_t c) {
 }
 
 idx_t Blob::GetStringSize(string_t blob) {
-	auto data = (const_data_ptr_t)blob.GetData();
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto len = blob.GetSize();
 	idx_t str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -40,13 +41,13 @@ idx_t Blob::GetStringSize(string_t blob) {
 }
 
 void Blob::ToString(string_t blob, char *output) {
-	auto data = (const_data_ptr_t)blob.GetData();
+	auto data = const_data_ptr_cast(blob.GetData());
 	auto len = blob.GetSize();
 	idx_t str_idx = 0;
 	for (idx_t i = 0; i < len; i++) {
 		if (IsRegularCharacter(data[i])) {
 			// ascii characters are rendered as-is
-			output[str_idx++] = data[i];
+			output[str_idx++] = UnsafeNumericCast<char>(data[i]);
 		} else {
 			auto byte_a = data[i] >> 4;
 			auto byte_b = data[i] & 0x0F;
@@ -69,23 +70,24 @@ string Blob::ToString(string_t blob) {
 	return string(buffer.get(), str_len);
 }
 
-bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
-	auto data = (const_data_ptr_t)str.GetData();
+bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, CastParameters &parameters) {
+	auto data = const_data_ptr_cast(str.GetData());
 	auto len = str.GetSize();
 	str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
 		if (data[i] == '\\') {
 			if (i + 3 >= len) {
-				string error = "Invalid hex escape code encountered in string -> blob conversion: "
-				               "unterminated escape code at end of blob";
-				HandleCastError::AssignError(error, error_message);
+				string error = StringUtil::Format("Invalid hex escape code encountered in string -> blob conversion of "
+				                                  "string \"%s\": unterminated escape code at end of blob",
+				                                  str.GetString());
+				HandleCastError::AssignError(error, parameters);
 				return false;
 			}
 			if (data[i + 1] != 'x' || Blob::HEX_MAP[data[i + 2]] < 0 || Blob::HEX_MAP[data[i + 3]] < 0) {
-				string error =
-				    StringUtil::Format("Invalid hex escape code encountered in string -> blob conversion: %s",
-				                       string((char *)data + i, 4));
-				HandleCastError::AssignError(error, error_message);
+				string error = StringUtil::Format(
+				    "Invalid hex escape code encountered in string -> blob conversion of string \"%s\": %s",
+				    str.GetString(), string(const_char_ptr_cast(data) + i, 4));
+				HandleCastError::AssignError(error, parameters);
 				return false;
 			}
 			str_len++;
@@ -93,9 +95,11 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 		} else if (data[i] <= 127) {
 			str_len++;
 		} else {
-			string error = "Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
-			               "must be escaped with hex codes (e.g. \\xAA)";
-			HandleCastError::AssignError(error, error_message);
+			string error = StringUtil::Format(
+			    "Invalid byte encountered in STRING -> BLOB conversion of string \"%s\". All non-ascii characters "
+			    "must be escaped with hex codes (e.g. \\xAA)",
+			    str.GetString());
+			HandleCastError::AssignError(error, parameters);
 			return false;
 		}
 	}
@@ -103,16 +107,21 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 }
 
 idx_t Blob::GetBlobSize(string_t str) {
-	string error_message;
+	CastParameters parameters;
+	return GetBlobSize(str, parameters);
+}
+
+idx_t Blob::GetBlobSize(string_t str, CastParameters &parameters) {
 	idx_t str_len;
-	if (!Blob::TryGetBlobSize(str, str_len, &error_message)) {
-		throw ConversionException(error_message);
+	auto result = Blob::TryGetBlobSize(str, str_len, parameters);
+	if (!result) {
+		throw InternalException("Blob::TryGetBlobSize failed but no exception was thrown!?");
 	}
 	return str_len;
 }
 
 void Blob::ToBlob(string_t str, data_ptr_t output) {
-	auto data = (const_data_ptr_t)str.GetData();
+	auto data = const_data_ptr_cast(str.GetData());
 	auto len = str.GetSize();
 	idx_t blob_idx = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -122,7 +131,7 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 			D_ASSERT(i + 3 < len);
 			D_ASSERT(byte_a >= 0 && byte_b >= 0);
 			D_ASSERT(data[i + 1] == 'x');
-			output[blob_idx++] = (byte_a << 4) + byte_b;
+			output[blob_idx++] = UnsafeNumericCast<data_t>((byte_a << 4) + byte_b);
 			i += 3;
 		} else if (data[i] <= 127) {
 			output[blob_idx++] = data_t(data[i]);
@@ -135,9 +144,14 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 }
 
 string Blob::ToBlob(string_t str) {
-	auto blob_len = GetBlobSize(str);
+	CastParameters parameters;
+	return Blob::ToBlob(str, parameters);
+}
+
+string Blob::ToBlob(string_t str, CastParameters &parameters) {
+	auto blob_len = GetBlobSize(str, parameters);
 	auto buffer = make_unsafe_uniq_array<char>(blob_len);
-	Blob::ToBlob(str, (data_ptr_t)buffer.get());
+	Blob::ToBlob(str, data_ptr_cast(buffer.get()));
 	return string(buffer.get(), blob_len);
 }
 
@@ -149,7 +163,7 @@ idx_t Blob::ToBase64Size(string_t blob) {
 }
 
 void Blob::ToBase64(string_t blob, char *output) {
-	auto input_data = (const_data_ptr_t)blob.GetData();
+	auto input_data = const_data_ptr_cast(blob.GetData());
 	auto input_size = blob.GetSize();
 	idx_t out_idx = 0;
 	idx_t i;
@@ -233,13 +247,13 @@ uint32_t DecodeBase64Bytes(const string_t &str, const_data_ptr_t input_data, idx
 			    input_data[base_idx + decode_idx], base_idx + decode_idx);
 		}
 	}
-	return (decoded_bytes[0] << 3 * 6) + (decoded_bytes[1] << 2 * 6) + (decoded_bytes[2] << 1 * 6) +
-	       (decoded_bytes[3] << 0 * 6);
+	return UnsafeNumericCast<uint32_t>((decoded_bytes[0] << 3 * 6) + (decoded_bytes[1] << 2 * 6) +
+	                                   (decoded_bytes[2] << 1 * 6) + (decoded_bytes[3] << 0 * 6));
 }
 
 void Blob::FromBase64(string_t str, data_ptr_t output, idx_t output_size) {
 	D_ASSERT(output_size == FromBase64Size(str));
-	auto input_data = (const_data_ptr_t)str.GetData();
+	auto input_data = const_data_ptr_cast(str.GetData());
 	auto input_size = str.GetSize();
 	if (input_size == 0) {
 		return;

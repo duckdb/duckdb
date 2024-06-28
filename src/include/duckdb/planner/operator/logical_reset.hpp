@@ -21,15 +21,16 @@ public:
 
 public:
 	LogicalReset(std::string name_p, SetScope scope_p)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_RESET), name(name_p), scope(scope_p) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_RESET), name(std::move(name_p)), scope(scope_p) {
 	}
 
 	std::string name;
 	SetScope scope;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
 	idx_t EstimateCardinality(ClientContext &context) override;
 
 protected:

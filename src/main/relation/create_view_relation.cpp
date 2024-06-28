@@ -9,6 +9,9 @@ CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view
                                        bool temporary_p)
     : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(std::move(child_p)),
       view_name(std::move(view_name_p)), replace(replace_p), temporary(temporary_p) {
+	if (child->type == RelationType::MATERIALIZED_RELATION) {
+		throw NotImplementedException("Creating a VIEW from a MaterializedRelation is not supported");
+	}
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
@@ -17,6 +20,9 @@ CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string sche
     : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(std::move(child_p)),
       schema_name(std::move(schema_name_p)), view_name(std::move(view_name_p)), replace(replace_p),
       temporary(temporary_p) {
+	if (child->type == RelationType::MATERIALIZED_RELATION) {
+		throw NotImplementedException("Creating a VIEW from a MaterializedRelation is not supported");
+	}
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
@@ -32,7 +38,7 @@ BoundStatement CreateViewRelation::Bind(Binder &binder) {
 	info->schema = schema_name;
 	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = std::move(info);
-	return binder.Bind((SQLStatement &)stmt);
+	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &CreateViewRelation::Columns() {

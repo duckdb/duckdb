@@ -12,4 +12,4 @@ jobs:
 
     - name: Trigger Substrait Extension
       run: |
-        curl -XPOST -u "${{secrets.PAT_USERNAME}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdblabs/substrait/dispatches --data '{"event_type": "build_application"}'
+        curl -XPOST -u "${{secrets.PAT_USERNAME}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/substrait/dispatches --data '{"event_type": "build_application"}'

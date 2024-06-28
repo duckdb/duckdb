@@ -1,0 +1,186 @@
+# name: test/sql/json/scalar/test_json_structure.test
+# description: Test json_structure() function
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# singletons
+query T
+select json_structure('42')
+----
+"UBIGINT"
+
+query T
+select json_structure('4.2')
+----
+"DOUBLE"
+
+query T
+select json_structure('null')
+----
+"NULL"
+
+query T
+select json_structure('true')
+----
+"BOOLEAN"
+
+query T
+select json_structure('"duck"')
+----
+"VARCHAR"
+
+# simple values
+query T
+select json_structure('{"a": 42}')
+----
+{"a":"UBIGINT"}
+
+query T
+select json_structure('{"a": 4.2}')
+----
+{"a":"DOUBLE"}
+
+query T
+select json_structure('{"a": "42"}')
+----
+{"a":"VARCHAR"}
+
+query T
+select json_structure('{"a": "looooooooooooooooong"}')
+----
+{"a":"VARCHAR"}
+
+query T
+select json_structure('{"a": null}')
+----
+{"a":"NULL"}
+
+query T
+select json_structure('{"a": true}')
+----
+{"a":"BOOLEAN"}
+
+query T
+select json_structure('{"a": []}')
+----
+{"a":["NULL"]}
+
+query T
+select json_structure('{"a": [42]}')
+----
+{"a":["UBIGINT"]}
+
+query T
+select json_structure('{"a": {"b": 42}}')
+----
+{"a":{"b":"UBIGINT"}}
+
+# we want strong typing for JSON arrays. If we find inconsistent types, we just set the type to JSON
+query T
+select json_structure('[null,null]')
+----
+["NULL"]
+
+query T
+select json_structure('[true,null,false]')
+----
+["BOOLEAN"]
+
+query T
+select json_structure('[true,null,false,1]')
+----
+["JSON"]
+
+query T
+select json_structure('[true,null,false,1,-1]')
+----
+["JSON"]
+
+query T
+select json_structure('[true,null,false,1,-1,0.42]')
+----
+["JSON"]
+
+query T
+select json_structure('[true,null,false,1,-1,0.42,"42"]')
+----
+["JSON"]
+
+# nested stuff
+query T
+select json_structure('[{"a": 42}, {"a": null}]')
+----
+[{"a":"UBIGINT"}]
+
+query T
+select json_structure('[{"a": 42}, {"b": 4.2}]')
+----
+[{"a":"UBIGINT","b":"DOUBLE"}]
+
+query T
+select json_structure('[{"a": [42, null]}, {"a": [7]}]')
+----
+[{"a":["UBIGINT"]}]
+
+query T
+select json_structure('[{"a": [{"b": 42}, {"b": null}]}, {"a": [{"b": 7}]}]')
+----
+[{"a":[{"b":"UBIGINT"}]}]
+
+query T
+select json_structure('[{"a": [{"b": 42}, {"b": null}]}, {"a": [{"c": 7}]}]')
+----
+[{"a":[{"b":"UBIGINT","c":"UBIGINT"}]}]
+
+# inconsistent types
+query T
+select json_structure('[1, [1]]')
+----
+["JSON"]
+
+query T
+select json_structure('[1, {"a": 1}]')
+----
+["JSON"]
+
+query T
+select json_structure('[[1], {"a": 1}]')
+----
+["JSON"]
+
+# duplicate key, used to throw an error, now the error is ignored
+query I
+select json_structure('{"a": 42, "a": 7}')
+----
+{"a":"UBIGINT"}
+
+# from a table
+statement ok
+create table test (j json);
+
+statement ok
+insert into test values
+    ('{"family": "anatidae", "species": ["duck", "goose", "swan", null], "coolness": 1000}'),
+    ('{"family": "canidae", "species": ["labrador", null, "bulldog", "shepherd"], "hair": true, "coolness": 999}'),
+    (NULL),
+    ('{"family": null, "species": null, "hair": null, "coolness": null}'),
+    ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}')
+
+query T
+select json_structure(j) from test
+----
+{"family":"VARCHAR","species":["VARCHAR"],"coolness":"UBIGINT"}
+{"family":"VARCHAR","species":["VARCHAR"],"hair":"BOOLEAN","coolness":"UBIGINT"}
+NULL
+{"family":"NULL","species":"NULL","hair":"NULL","coolness":"NULL"}
+{"family":"VARCHAR","species":["VARCHAR"],"hair":"BOOLEAN","coolness":"UBIGINT"}
+
+# issue 11886
+query I
+select json_structure('{"a": 1, "A": 1}');
+----
+{"a":"UBIGINT","A":"UBIGINT"}

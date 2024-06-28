@@ -1,0 +1,7 @@
+%type <range>	qualified_name
+%type <str>		Sconst  ColId   ColLabel    ColIdOrString
+%type <keyword> unreserved_keyword  reserved_keyword other_keyword
+%type <list> indirection
+%type <keyword> col_name_keyword
+%type <node>    indirection_el
+%type <str>	    attr_name

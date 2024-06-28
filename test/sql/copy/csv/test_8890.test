@@ -1,0 +1,34 @@
+# name: test/sql/copy/csv/test_8890.test
+# description: Test CSV works for #8890
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+select
+    field1,
+    field2,
+    min(datum) as firstseen,
+    max(datum) as lastseen
+from read_csv('data/csv/hebere.csv.gz',
+        delim='\t',
+        header=0,
+        columns={field1: varchar, field2: varchar, datum: varchar},
+        compression='gzip',
+        ignore_errors=0,
+        auto_detect = false)
+group by field1, field2
+order by all
+limit 10;
+----
+1190535873	1367352239001470763008	2020-12-31	2020-12-31
+1190535873	1367352239001586106368	2020-12-31	2020-12-31
+1190535873	1367352239001587154944	2020-12-31	2020-12-31
+1190535873	1367352239002244349952	2020-12-31	2020-12-31
+1190535873	1367352239002269515776	2020-12-31	2020-12-31
+1190535873	1367352239003128299520	2020-12-31	2020-12-31
+1190535873	1367352239003131969536	2020-12-31	2020-12-31
+1190535873	1367352239003155038208	2020-12-31	2020-12-31
+1190535873	1367352239003188592640	2020-12-31	2020-12-31
+1190535873	1367352239003242856448	2020-12-31	2020-12-31

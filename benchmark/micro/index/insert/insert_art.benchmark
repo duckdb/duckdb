@@ -1,0 +1,17 @@
+# name: benchmark/micro/index/insert/insert_art.benchmark
+# description: Insert 10M integers into an ART
+# group: [insert]
+
+name Insert ART
+group art
+
+load
+CREATE TABLE temp AS SELECT (range * 9876983769044::INT128 % 10000000)::INT64 AS id FROM range(10000000);
+CREATE TABLE art (id INTEGER);
+CREATE INDEX idx ON art USING ART(id);
+
+run
+INSERT INTO art (SELECT id FROM temp);
+
+cleanup
+DELETE FROM art;

@@ -8,6 +8,9 @@
 
 #pragma once
 
+#ifdef __MVS__
+#include <time.h>
+#endif
 #include <mutex>
 
 namespace duckdb {

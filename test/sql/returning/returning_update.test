@@ -68,6 +68,7 @@ WHERE a=7 AND b=-2 AND c=-3 RETURNING c as aliasc, a as aliasa, b as aliasb;
 # returning expression with aggregate function at top level is not allowed
 statement error
 UPDATE table1 SET c=1, b=5, a=7 WHERE a > 5 RETURNING SUM(a);
+----
 
 # returning * while only updating a subset of columns
 # this test is why we use delete insert logics
@@ -194,6 +195,7 @@ RETURNING *;
 # subquery not allowed in returning statement
 statement error
 UPDATE table1 SET a = 0, b = 0, c = 0 WHERE a = 10 RETURNING a IN (SELECT a FROM table1);
+----
 
 # updating using empty subquery returns nothing
 query III
@@ -264,7 +266,7 @@ query I
 UPDATE table2
 SET b=98
 WHERE b=99
-RETURNING [a, b];
+RETURNING [a, b::VARCHAR];
 ----
 [Mr.Duck, 98]
 

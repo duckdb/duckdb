@@ -1,5 +1,4 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
-#include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
@@ -21,10 +20,10 @@ OnConflictAction TransformOnConflictAction(duckdb_libpgquery::PGOnConflictClause
 	}
 }
 
-vector<string> TransformConflictTarget(duckdb_libpgquery::PGList *list) {
+vector<string> Transformer::TransformConflictTarget(duckdb_libpgquery::PGList &list) {
 	vector<string> columns;
-	for (auto cell = list->head; cell != nullptr; cell = cell->next) {
-		auto index_element = (duckdb_libpgquery::PGIndexElem *)cell->data.ptr_value;
+	for (auto cell = list.head; cell != nullptr; cell = cell->next) {
+		auto index_element = PGPointerCast<duckdb_libpgquery::PGIndexElem>(cell->data.ptr_value);
 		if (index_element->collation) {
 			throw NotImplementedException("Index with collation not supported yet!");
 		}
@@ -67,22 +66,22 @@ unique_ptr<OnConflictInfo> Transformer::DummyOnConflictClause(duckdb_libpgquery:
 }
 
 unique_ptr<OnConflictInfo> Transformer::TransformOnConflictClause(duckdb_libpgquery::PGOnConflictClause *node,
-                                                                  const string &relname) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGOnConflictClause *>(node);
+                                                                  const string &) {
+
+	auto stmt = PGPointerCast<duckdb_libpgquery::PGOnConflictClause>(node);
 	D_ASSERT(stmt);
 
 	auto result = make_uniq<OnConflictInfo>();
-	result->action_type = TransformOnConflictAction(stmt);
+	result->action_type = TransformOnConflictAction(stmt.get());
+
 	if (stmt->infer) {
-		// A filter for the ON CONFLICT ... is specified
-		if (stmt->infer->indexElems) {
-			// Columns are specified
-			result->indexed_columns = TransformConflictTarget(stmt->infer->indexElems);
-			if (stmt->infer->whereClause) {
-				result->condition = TransformExpression(stmt->infer->whereClause);
-			}
-		} else {
+		// A filter for the ON CONFLICT ... is specified.
+		if (!stmt->infer->indexElems) {
 			throw NotImplementedException("ON CONSTRAINT conflict target is not supported yet");
+		}
+		result->indexed_columns = TransformConflictTarget(*stmt->infer->indexElems);
+		if (stmt->infer->whereClause) {
+			result->condition = TransformExpression(stmt->infer->whereClause);
 		}
 	}
 

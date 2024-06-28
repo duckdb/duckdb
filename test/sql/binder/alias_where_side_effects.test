@@ -1,0 +1,11 @@
+# name: test/sql/binder/alias_where_side_effects.test
+# description: Issue #10099: Incorrect query result when using random value in where clause
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select count(*) from (select random() as num from range(20) where num > 0.9) where num <= 0.9
+----
+expression has side effects

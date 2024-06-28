@@ -4,22 +4,22 @@
 
 namespace duckdb {
 
-unique_ptr<TableRef> Transformer::TransformTableRefNode(duckdb_libpgquery::PGNode *n) {
+unique_ptr<TableRef> Transformer::TransformTableRefNode(duckdb_libpgquery::PGNode &n) {
 	auto stack_checker = StackCheck();
 
-	switch (n->type) {
+	switch (n.type) {
 	case duckdb_libpgquery::T_PGRangeVar:
-		return TransformRangeVar(reinterpret_cast<duckdb_libpgquery::PGRangeVar *>(n));
+		return TransformRangeVar(PGCast<duckdb_libpgquery::PGRangeVar>(n));
 	case duckdb_libpgquery::T_PGJoinExpr:
-		return TransformJoin(reinterpret_cast<duckdb_libpgquery::PGJoinExpr *>(n));
+		return TransformJoin(PGCast<duckdb_libpgquery::PGJoinExpr>(n));
 	case duckdb_libpgquery::T_PGRangeSubselect:
-		return TransformRangeSubselect(reinterpret_cast<duckdb_libpgquery::PGRangeSubselect *>(n));
+		return TransformRangeSubselect(PGCast<duckdb_libpgquery::PGRangeSubselect>(n));
 	case duckdb_libpgquery::T_PGRangeFunction:
-		return TransformRangeFunction(reinterpret_cast<duckdb_libpgquery::PGRangeFunction *>(n));
+		return TransformRangeFunction(PGCast<duckdb_libpgquery::PGRangeFunction>(n));
 	case duckdb_libpgquery::T_PGPivotExpr:
-		return TransformPivot(reinterpret_cast<duckdb_libpgquery::PGPivotExpr *>(n));
+		return TransformPivot(PGCast<duckdb_libpgquery::PGPivotExpr>(n));
 	default:
-		throw NotImplementedException("From Type %d not supported", n->type);
+		throw NotImplementedException("From Type %d not supported", n.type);
 	}
 }
 

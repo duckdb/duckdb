@@ -1,0 +1,872 @@
+# name: test/sql/window/test_window_exclude.test
+# description: Windows with EXCLUDE clause
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tenk1d (
+        unique1	        int4,
+		four		int4,
+        col             int4
+);
+
+statement ok
+INSERT INTO tenk1d (unique1, four, col) VALUES 
+  (0, 0, NULL),
+  (1, 1, 1),
+  (2, 2, NULL),
+  (3, 3, 3),
+  (4, 0, NULL),
+  (5, 1, 1),
+  (6, 2, NULL),
+  (7, 3, 3),
+  (8, 0, NULL),
+  (9, 1, 1);
+
+statement ok
+CREATE TABLE empsalary (
+depname varchar,
+empno bigint,
+salary int,
+enroll_date date
+);
+
+statement ok
+INSERT INTO empsalary VALUES
+('develop', 10, 5200, '2007-08-01'),
+('sales', 1, 5000, '2006-10-01'),
+('personnel', 5, 3500, '2007-12-10'),
+('sales', 4, 4800, '2007-08-08'),
+('personnel', 2, 3900, '2006-12-23'),
+('develop', 7, 4200, '2008-01-01'),
+('develop', 9, 4500, '2008-01-01'),
+('sales', 3, 4800, '2007-08-01'),
+('develop', 8, 6000, '2006-10-01'),
+('develop', 11, 5200, '2007-08-15');
+
+# RANGE + CURRENT ROW
+query III
+SELECT sum(unique1) over (w range between unbounded preceding and current row exclude current row),
+	unique1, four
+FROM tenk1d  WINDOW w AS (order by four) ORDER BY four, unique1;
+----
+12	0	0
+8	4	0
+4	8	0
+26	1	1
+22	5	1
+18	9	1
+33	2	2
+29	6	2
+42	3	3
+38	7	3
+
+# RANGE + GROUP
+query III
+SELECT sum(unique1) over (w range between unbounded preceding and current row exclude group),
+	unique1, four
+FROM tenk1d  WINDOW w AS (order by four) ORDER BY four, unique1;
+----
+NULL	0	0
+NULL	4	0
+NULL	8	0
+12	1	1
+12	5	1
+12	9	1
+27	2	2
+27	6	2
+35	3	3
+35	7	3
+
+# RANGE + TIES
+query III
+SELECT sum(unique1) over (w range between unbounded preceding and current row exclude ties),
+	unique1, four
+FROM tenk1d  WINDOW w AS (order by four) ORDER BY four, unique1;
+----
+0	0	0
+4	4	0
+8	8	0
+13	1	1
+17	5	1
+21	9	1
+29	2	2
+33	6	2
+38	3	3
+42	7	3
+
+# with PARTITION BY
+query III
+SELECT sum(unique1) over (partition by four order by unique1 range between 5::int8 preceding and 6::int2 following
+	exclude current row),unique1, four
+FROM tenk1d  ORDER BY four, unique1;
+----
+4	0	0
+8	4	0
+4	8	0
+5	1	1
+10	5	1
+5	9	1
+6	2	2
+2	6	2
+7	3	3
+3	7	3
+
+# with FILTER
+query III
+SELECT sum(unique1) filter (where four > 1)over (order by unique1 rows between unbounded preceding and current row
+	exclude current row),unique1, four
+FROM tenk1d  ORDER BY unique1, four;
+----
+NULL	0	0
+NULL	1	1
+NULL	2	2
+2	3	3
+5	4	0
+5	5	1
+5	6	2
+11	7	3
+18	8	0
+18	9	1
+
+# with FILTER and PARTITION BY
+query III
+SELECT sum(unique1) filter (where four > 0) over (partition by four order by unique1 rows between unbounded preceding
+        and current row exclude current row),unique1, four
+FROM tenk1d  ORDER BY unique1, four;
+----
+NULL	0	0
+NULL	1	1
+NULL	2	2
+NULL	3	3
+NULL	4	0
+1	5	1
+2	6	2
+3	7	3
+NULL	8	0
+6	9	1
+
+# first_value
+query II
+SELECT first_value(four) over (order by four rows between unbounded preceding
+        and current row exclude group), four
+FROM tenk1d ORDER BY four;
+----
+NULL	0
+NULL	0
+NULL	0
+0	1
+0	1
+0	1
+0	2
+0	2
+0	3
+0	3
+
+
+# last_value
+query II
+SELECT last_value(four) over (order by four rows between current row
+        and unbounded following exclude current row), four
+FROM tenk1d ORDER BY four;
+----
+3	0
+3	0
+3	0
+3	1
+3	1
+3	1
+3	2
+3	2
+3	3
+NULL	3
+
+
+# nth_value
+query II
+SELECT nth_value(four, 5) over (order by four rows between unbounded preceding
+        and unbounded following exclude ties), four
+FROM tenk1d ORDER BY four;
+----
+2	0
+2	0
+2	0
+2	1
+2	1
+2	1
+1	2
+1	2
+1	3
+1	3
+
+
+
+# IGNORE NULLS
+query III
+SELECT nth_value(col, 3 ignore nulls) over (order by four rows between unbounded preceding                                               
+       and unbounded following exclude current row),four, col
+FROM tenk1d ORDER BY four, col;
+----
+1	0	NULL
+1	0	NULL
+1	0	NULL
+3	1	1
+3	1	1
+3	1	1
+1	2	NULL
+1	2	NULL
+1	3	3
+1	3	3 
+
+
+# IGNORE NULLS with input > STANDARD_VECTOR_SIZE
+query I
+SELECT DISTINCT first_value(col IGNORE NULLS) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW)
+FROM (  SELECT * 
+        FROM generate_series(1,3000) AS _(i), (SELECT NULL::integer)
+          UNION ALL
+        SELECT 3001, 1
+     ) AS _(i, col)
+ORDER BY ALL NULLS FIRST;
+----
+NULL
+1
+
+
+# without ORDER BY: EXCLUDE CURRENT ROW / constant aggregate otherwise
+query II
+SELECT sum(unique1) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW), unique1
+FROM tenk1d ORDER BY unique1;
+----
+45	0
+44	1
+43	2
+42	3
+41	4
+40	5
+39	6
+38	7
+37	8
+36	9
+
+
+# without ORDER BY: EXCLUDE GROUP / constant aggregate otherwise
+query II
+SELECT sum(unique1) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE GROUP), unique1
+FROM tenk1d ORDER BY unique1;
+----
+NULL	0
+NULL	1
+NULL	2
+NULL	3
+NULL	4
+NULL	5
+NULL	6
+NULL	7
+NULL	8
+NULL	9
+
+
+# without ORDER BY: EXCLUDE TIES / constant aggregate otherwise
+query II
+SELECT sum(unique1) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE TIES), unique1
+FROM tenk1d ORDER BY unique1;
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+
+# input larger than standard vector size (with EXCLUDE GROUP and vector-crossing peer boundary)
+query II
+SELECT DISTINCT j,sum(j) OVER (ORDER BY j ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE GROUP) FROM generate_series(1,300), generate_series(1,10) AS __(j) ORDER BY j;
+----
+1	16200
+2	15900
+3	15600
+4	15300
+5	15000
+6	14700
+7	14400
+8	14100
+9	13800
+10	13500
+
+
+# with WHERE clause
+query II
+SELECT i, last_value(i) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW) FROM generate_series(1,10) AS _(i)
+WHERE i <> 10
+ORDER BY i;
+----
+1	9
+2	9
+3	9
+4	9
+5	9
+6	9
+7	9
+8	9
+9	8
+
+
+# regression test
+query II
+SELECT DISTINCT j,sum(j) OVER (ORDER BY j ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE TIES) FROM generate_series(1,300), generate_series(1,10) AS __(j) ORDER BY j;
+----
+1	16201
+2	15902
+3	15603
+4	15304
+5	15005
+6	14706
+7	14407
+8	14108
+9	13809
+10	13510
+
+# regression test
+query II
+SELECT DISTINCT j,sum(j) FILTER (where i <> 3) OVER (ORDER BY j ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE TIES) AS sum FROM generate_series(1,300) _(i), generate_series(1,10) AS __(j) ORDER BY j, sum;
+----
+1	16146
+1	16147
+2	15847
+2	15849
+3	15548
+3	15551
+4	15249
+4	15253
+5	14950
+5	14955
+6	14651
+6	14657
+7	14352
+7	14359
+8	14053
+8	14061
+9	13754
+9	13763
+10	13455
+10	13465
+
+# regression test
+query II
+SELECT j, sum(j) OVER (ORDER BY j ROWS BETWEEN UNBOUNDED PRECEDING AND 30 FOLLOWING EXCLUDE CURRENT ROW) FROM generate_series(1,40) AS _(j) ORDER BY j;
+----
+1	495
+2	526
+3	558
+4	591
+5	625
+6	660
+7	696
+8	733
+9	771
+10	810
+11	809
+12	808
+13	807
+14	806
+15	805
+16	804
+17	803
+18	802
+19	801
+20	800
+21	799
+22	798
+23	797
+24	796
+25	795
+26	794
+27	793
+28	792
+29	791
+30	790
+31	789
+32	788
+33	787
+34	786
+35	785
+36	784
+37	783
+38	782
+39	781
+40	780
+
+# Query otherwise handled by STREAMING WINDOW
+query TT
+EXPLAIN
+SELECT unique1, COUNT(*) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW) FROM tenk1d;
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+
+
+# PARTITION BY without ORDER BY
+query III
+SELECT unique1, four, sum(unique1) OVER (PARTITION BY four ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW) FROM tenk1d ORDER BY four, unique1;
+----
+0 	0 	12
+4 	0 	8
+8 	0 	4
+1 	1 	14
+5 	1 	10
+9 	1 	6
+2 	2 	6
+6 	2 	2
+3 	3 	7
+7 	3 	3
+
+# PARTITION BY without ORDER BY
+query III
+SELECT unique1, four, sum(unique1) OVER (PARTITION BY four ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE GROUP) FROM tenk1d ORDER BY four, unique1;
+----
+0 	0 	NULL
+4 	0 	NULL
+8 	0 	NULL
+1 	1 	NULL
+5 	1 	NULL
+9 	1 	NULL
+2 	2 	NULL
+6 	2 	NULL
+3 	3 	NULL
+7 	3 	NULL
+
+
+# PARTITION BY without ORDER BY
+query III
+SELECT unique1, four, sum(unique1) OVER (PARTITION BY four ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE TIES) FROM tenk1d ORDER BY four, unique1;
+----
+0 	0 	0
+4 	0 	4
+8 	0 	8
+1 	1 	1
+5 	1 	5
+9 	1 	9
+2 	2 	2
+6 	2 	6
+3 	3 	3
+7 	3 	7
+
+
+#
+# Custom aggregates (not implemented yet)
+#
+
+## COUNT(*) and CURRENT ROW
+query II
+SELECT i, COUNT(*) OVER (ORDER BY i ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING EXCLUDE CURRENT ROW) 
+FROM generate_series(1,10) AS _(i) 
+ORDER BY i;
+----
+1 	3
+2 	4
+3 	5
+4 	6
+5 	6
+6 	6
+7 	6
+8 	5
+9 	4
+10 	3
+
+## COUNT(*) and GROUP
+query II
+SELECT i, COUNT(*) OVER (ORDER BY i ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING EXCLUDE GROUP) 
+FROM (
+	SELECT * FROM generate_series(1,5) 
+	UNION ALL 
+	SELECT * FROM generate_series(1,5)
+) AS _(i) 
+ORDER BY i;
+----
+1 	2
+1 	3
+2 	4
+2 	5
+3 	5
+3 	5
+4 	5
+4 	4
+5 	3
+5 	2
+
+
+## COUNT(*) and TIES
+query II
+SELECT i, COUNT(*) OVER (ORDER BY i ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING EXCLUDE TIES) 
+FROM (
+	SELECT *  FROM generate_series(1,5) 
+	UNION ALL 
+	SELECT *  FROM generate_series(1,5)) 
+	AS _(i) 
+ORDER BY i;
+----
+1 	3
+1 	4
+2 	5
+2 	6
+3 	6
+3 	6
+4 	6
+4 	5
+5 	4
+5 	3
+
+## ARRAY_AGG and CURRENT ROW
+query II
+SELECT i, array_agg(i) OVER w
+FROM (
+	SELECT * FROM generate_series(1,5)
+    UNION ALL
+    SELECT * FROM generate_series(1,5) 
+) AS _(i)
+WINDOW w AS (ORDER BY i ROWS UNBOUNDED PRECEDING EXCLUDE CURRENT ROW)
+ORDER BY i;
+----
+1	NULL
+1	[1]
+2	[1, 1]
+2	[1, 1, 2]
+3	[1, 1, 2, 2]
+3	[1, 1, 2, 2, 3]
+4	[1, 1, 2, 2, 3, 3]
+4	[1, 1, 2, 2, 3, 3, 4]
+5	[1, 1, 2, 2, 3, 3, 4, 4]
+5	[1, 1, 2, 2, 3, 3, 4, 4, 5]
+
+## ARRAY_AGG and GROUP
+query II
+SELECT i, array_agg(i) OVER w
+FROM (
+	SELECT * FROM generate_series(1,5)
+    UNION ALL
+    SELECT * FROM generate_series(1,5) 
+) AS _(i)
+WINDOW w AS (ORDER BY i ROWS UNBOUNDED PRECEDING EXCLUDE GROUP)
+ORDER BY i;
+----
+1	NULL
+1	NULL
+2	[1, 1]
+2	[1, 1]
+3	[1, 1, 2, 2]
+3	[1, 1, 2, 2]
+4	[1, 1, 2, 2, 3, 3]
+4	[1, 1, 2, 2, 3, 3]
+5	[1, 1, 2, 2, 3, 3, 4, 4]
+5	[1, 1, 2, 2, 3, 3, 4, 4]
+
+## ARRAY_AGG and TIES
+query II
+SELECT i, array_agg(i) OVER w
+FROM (
+	SELECT * FROM generate_series(1,5)
+    UNION ALL
+    SELECT * FROM generate_series(1,5) 
+) AS _(i)
+WINDOW w AS (ORDER BY i ROWS UNBOUNDED PRECEDING EXCLUDE TIES)
+ORDER BY i;
+----
+1	[1]
+1	[1]
+2	[1, 1, 2]
+2	[1, 1, 2]
+3	[1, 1, 2, 2, 3]
+3	[1, 1, 2, 2, 3]
+4	[1, 1, 2, 2, 3, 3, 4]
+4	[1, 1, 2, 2, 3, 3, 4]
+5	[1, 1, 2, 2, 3, 3, 4, 4, 5]
+5	[1, 1, 2, 2, 3, 3, 4, 4, 5]
+
+# MODE and CURRENT ROW
+query II
+SELECT i, mode(i) OVER  w
+FROM (
+	SELECT * FROM generate_series(1,5)
+    UNION ALL
+    SELECT * FROM generate_series(1,5) 
+) AS _(i)
+WINDOW w AS (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE CURRENT ROW)
+ORDER BY i;
+----
+1	1
+1	2
+2	1
+2	3
+3	2
+3	4
+4	3
+4	5
+5	4
+5	5
+
+# MODE and GROUP
+query II
+SELECT i, mode(i) OVER  w
+FROM (
+	SELECT * FROM generate_series(1,5)
+    UNION ALL
+    SELECT * FROM generate_series(1,5) 
+) AS _(i)
+WINDOW w AS (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE GROUP)
+ORDER BY i;
+----
+1	2
+1	2
+2	1
+2	3
+3	2
+3	4
+4	3
+4	5
+5	4
+5	NULL
+
+# MODE and TIES
+query II
+SELECT i, mode(i) OVER w 
+FROM (
+	SELECT * FROM generate_series(1,5)
+    UNION ALL
+    SELECT * FROM generate_series(1,5) 
+) AS _(i)
+WINDOW w AS (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE TIES)
+ORDER BY i;
+----
+1	1
+1	2
+2	1
+2	3
+3	2
+3	4
+4	3
+4	5
+5	4
+5	5
+
+# MEDIAN and CURRENT ROW
+query II
+SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE CURRENT ROW) 
+FROM generate_series(1,10) AS _(i) ORDER BY i;
+----
+1	2.5
+2	3.0
+3	4.0
+4	5.0
+5	6.0
+6	7.0
+7	8.0
+8	9.0
+9	9.0
+10	9.0
+
+# MEDIAN and GROUP
+query II
+SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE GROUP) 
+FROM generate_series(1,5) AS _(i), 
+	generate_series(1,2) 
+ORDER BY i;
+----
+1	2.0
+1	2.0
+2	2.0
+2	3.0
+3	3.0
+3	4.0
+4	4.0
+4	5.0
+5	4.0
+5	NULL
+
+# MEDIAN and TIES
+query II
+SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE TIES) 
+FROM generate_series(1,5) AS _(i), 
+	generate_series(1,2) 
+ORDER BY i;
+----
+1	1.5
+1	2.0
+2	2.0
+2	3.0
+3	3.0
+3	4.0
+4	4.0
+4	5.0
+5	4.5
+5	5.0
+
+# Test Merge Sort Trees with exclusions
+query III
+WITH t1(x, y) AS (VALUES
+ ( 1, 3 ),
+ ( 2, 2 ),
+ ( 3, 1 )
+)
+SELECT x, y, QUANTILE_DISC(y, 0) OVER (
+	ORDER BY x 
+	ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+	EXCLUDE CURRENT ROW)
+FROM t1;
+----
+1	3	NULL
+2	2	3
+3	1	2
+
+query III
+WITH t1(x, y) AS (VALUES
+ ( 1, 3 ),
+ ( 2, 2 ),
+ ( 3, 1 )
+)
+SELECT x, y, QUANTILE_DISC(y, 0) OVER (
+	ORDER BY x 
+	ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+	EXCLUDE CURRENT ROW)
+FROM t1;
+----
+1	3	1
+2	2	1
+3	1	2
+
+
+# PG test
+query III
+select sum(salary) over (order by enroll_date range between '1 year'::interval preceding and '1 year'::interval following
+	exclude current row), salary, enroll_date from empsalary ORDER BY enroll_date, salary;
+----
+29900	5000	2006-10-01
+28900	6000	2006-10-01
+34500	3900	2006-12-23
+42300	4800	2007-08-01
+41900	5200	2007-08-01
+42300	4800	2007-08-08
+41900	5200	2007-08-15
+32600	3500	2007-12-10
+28000	4200	2008-01-01
+27700	4500	2008-01-01
+
+# PG test
+query III
+select sum(salary) over (order by enroll_date range between '1 year'::interval preceding and '1 year'::interval following
+	exclude group), salary, enroll_date from empsalary ORDER BY enroll_date, salary;
+----
+23900	5000	2006-10-01
+23900	6000	2006-10-01
+34500	3900	2006-12-23
+37100	4800	2007-08-01
+37100	5200	2007-08-01
+42300	4800	2007-08-08
+41900	5200	2007-08-15
+32600	3500	2007-12-10
+23500	4200	2008-01-01
+23500	4500	2008-01-01
+
+# PG test
+query III
+select sum(salary) over (order by enroll_date range between '1 year'::interval preceding and '1 year'::interval following
+	exclude ties), salary, enroll_date from empsalary ORDER BY enroll_date, salary;
+----
+28900	5000	2006-10-01
+29900	6000	2006-10-01
+38400	3900	2006-12-23
+41900	4800	2007-08-01
+42300	5200	2007-08-01
+47100	4800	2007-08-08
+47100	5200	2007-08-15
+36100	3500	2007-12-10
+27700	4200	2008-01-01
+28000	4500	2008-01-01
+
+# PG test
+query IIII
+select first_value(salary) over(order by salary range between 1000 preceding and 1000 following) AS first_value,
+	lead(salary) over(order by salary range between 1000 preceding and 1000 following) AS lead,
+	nth_value(salary, 1) over(order by salary range between 1000 preceding and 1000 following),
+	salary from empsalary ORDER BY first_value, lead;
+----
+3500	3900	3500	3500
+3500	4200	3500	3900
+3500	4500	3500	4200
+3500	4800	3500	4500
+3900	4800	3900	4800
+3900	5000	3900	4800
+4200	5200	4200	5000
+4200	5200	4200	5200
+4200	6000	4200	5200
+5000	NULL	5000	6000
+
+# PG test
+query III
+select last_value(salary) over(order by salary range between 1000 preceding and 1000 following) AS last_value,
+	lag(salary) over(order by salary range between 1000 preceding and 1000 following) AS lag,
+	salary from empsalary ORDER BY last_value, lag;
+----
+4500	NULL	3500
+4800	3500	3900
+5200	3900	4200
+5200	4200	4500
+5200	4500	4800
+5200	4800	4800
+6000	4800	5000
+6000	5000	5200
+6000	5200	5200
+6000	5200	6000
+
+# PG test
+query IIII
+select first_value(salary) over(order by salary range between 1000 following and 3000 following
+	exclude current row) AS first_value,
+	lead(salary) over(order by salary range between 1000 following and 3000 following exclude ties) AS lead,
+	nth_value(salary, 1) over(order by salary range between 1000 following and 3000 following
+	exclude ties),
+	salary from empsalary ORDER BY first_value, lead;
+----
+4500	3900	4500	3500
+5000	4200	5000	3900
+5200	4500	5200	4200
+6000	4800	6000	4500
+6000	4800	6000	4800
+6000	5000	6000	4800
+6000	5200	6000	5000
+NULL	5200	NULL	5200
+NULL	6000	NULL	5200
+NULL	NULL	NULL	6000
+
+# PG test
+query III
+select last_value(salary) over(order by salary range between 1000 following and 3000 following
+	exclude group) AS last_value,
+	lag(salary) over(order by salary range between 1000 following and 3000 following exclude group) AS lag,
+	salary from empsalary ORDER BY last_value, lag;
+----
+6000	3500	3900
+6000	3900	4200
+6000	4200	4500
+6000	4500	4800
+6000	4800	4800
+6000	4800	5000
+6000	NULL	3500
+NULL	5000	5200
+NULL	5200	5200
+NULL	5200	6000
+
+
+statement error
+SELECT sum(i) OVER (EXCLUDE CURRENT ROW) FROM generate_series(1,10) AS _(i);
+----
+
+statement error
+SELECT sum(i) OVER (ROWS UNBOUNDED PRECEDING EXCLUDE GROUPS) FROM generate_series(1,10) AS _(i);
+----

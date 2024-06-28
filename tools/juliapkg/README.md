@@ -82,7 +82,11 @@ Specific test files can be run by adding the name of the file as an argument:
 ./test.sh test_connection.jl
 ```
 
-In order to run against a locally compiled version of DuckDB, you will can set the `JULIA_DUCKDB_LIBRARY` environment variable, e.g.:
+### Development
+
+Build using `DISABLE_SANITIZER=1 make debug`
+
+To run against a locally compiled version of duckdb, you'll need to set the `JULIA_DUCKDB_LIBRARY` environment variable, e.g.:
 
 ```bash
 export JULIA_DUCKDB_LIBRARY="`pwd`/../../build/debug/src/libduckdb.dylib"
@@ -93,6 +97,42 @@ Note that Julia pre-compilation caching might get in the way of changes to this 
 ```bash
 rm -rf ~/.julia/compiled
 ```
+
+For development a few packages are required, these live in a Project.toml in the `test` directory, installed like so:
+
+```bash
+cd tools/juliapkg
+```
+
+```julia
+using Pkg
+Pkg.activate("./test")
+Pkg.instantiate()
+```
+
+#### Debugging using LLDB
+
+Julia's builtin version management system `juliaup` can get in the way of starting a process with lldb attached as it provides a shim for the `julia` binary.
+The actual `julia` binaries live in `~/.julia/juliaup/<version>/bin/julia`
+
+`lldb -- julia ...` will likely not work and you'll need to provide the absolute path of the julia binary, e.g:
+```bash
+lldb -- ~/.julia/juliaup/julia-1.10.0+0.aarch64.apple.darwin14/bin/julia ...
+```
+
+#### Testing
+
+To run the test suite in it's entirety:
+```bash
+julia -e "import Pkg; Pkg.activate(\".\"); include(\"test/runtests.jl\")"
+```
+
+To run a specific test listed in `test/runtests.jl`, you can provide the name, e.g:
+```bash
+julia -e "import Pkg; Pkg.activate(\".\"); include(\"test/runtests.jl\")" "test_basic_queries.jl"
+```
+
+Just as mentioned before, to attach lldb to this, you'll have to replace the `julia` part with the absolute path.
 
 ### Submitting a New Package
 The DuckDB Julia package depends on the [DuckDB_jll package](https://github.com/JuliaBinaryWrappers/DuckDB_jll.jl), which can be updated by sending a PR to [Yggdrassil](https://github.com/JuliaPackaging/Yggdrasil/pull/5049).

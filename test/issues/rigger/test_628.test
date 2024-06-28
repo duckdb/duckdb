@@ -11,4 +11,5 @@ CREATE TABLE t0(c0 INT, c1 INT UNIQUE);
 
 statement error
 ALTER TABLE t0 DROP c1;
+----
 

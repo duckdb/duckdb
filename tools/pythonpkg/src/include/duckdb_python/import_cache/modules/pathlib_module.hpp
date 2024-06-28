@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -12,18 +13,17 @@
 
 namespace duckdb {
 
-struct PathLibCacheItem : public PythonImportCacheItem {
+struct PathlibCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "pathlib";
 
 public:
-	~PathLibCacheItem() override {
+	PathlibCacheItem() : PythonImportCacheItem("pathlib"), Path("Path", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		Path.LoadAttribute("Path", cache, *this);
+	~PathlibCacheItem() override {
 	}
 
-public:
 	PythonImportCacheItem Path;
 
 protected:

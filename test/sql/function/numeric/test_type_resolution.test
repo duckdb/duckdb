@@ -37,6 +37,7 @@ SELECT 1::TINYINT + 1::DOUBLE
 
 statement error
 SELECT 1::TINYINT + 1::VARCHAR
+----
 
 query I
 SELECT 1::SMALLINT + 1::TINYINT
@@ -70,6 +71,7 @@ SELECT 1::SMALLINT + 1::DOUBLE
 
 statement error
 SELECT 1::SMALLINT + 1::VARCHAR
+----
 
 query I
 SELECT 1::INTEGER + 1::TINYINT
@@ -103,6 +105,7 @@ SELECT 1::INTEGER + 1::DOUBLE
 
 statement error
 SELECT 1::INTEGER + 1::VARCHAR
+----
 
 query I
 SELECT 1::BIGINT + 1::TINYINT
@@ -136,6 +139,7 @@ SELECT 1::BIGINT + 1::DOUBLE
 
 statement error
 SELECT 1::BIGINT + 1::VARCHAR
+----
 
 query R
 SELECT 1::REAL + 1::TINYINT
@@ -169,6 +173,7 @@ SELECT 1::REAL + 1::DOUBLE
 
 statement error
 SELECT 1::REAL + 1::VARCHAR
+----
 
 query R
 SELECT 1::DOUBLE + 1::TINYINT
@@ -202,4 +207,5 @@ SELECT 1::DOUBLE + 1::DOUBLE
 
 statement error
 SELECT 1::DOUBLE + 1::VARCHAR
+----
 

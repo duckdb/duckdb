@@ -91,3 +91,8 @@ NULL	[]
 1	[1, 1]
 2	[2, 2]
 3	[3, 3]
+
+# should only allow one column in array subquery
+statement error
+select array(select 1,2)
+----

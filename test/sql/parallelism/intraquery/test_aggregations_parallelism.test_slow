@@ -1,0 +1,161 @@
+# name: test/sql/parallelism/intraquery/test_aggregations_parallelism.test_slow
+# description: Test parallel aggregations
+# group: [intraquery]
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+PRAGMA enable_profiling
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/test.json'
+
+statement ok
+PRAGMA profiling_mode = detailed
+
+statement ok
+create  table t as select range a, range%10 b from range(100000);
+
+statement ok
+create table bool (a bool);
+
+statement ok
+insert into bool select i from (values (True),(False)) tbl(i), range(5000);
+
+query I rowsort
+select regr_avgx(a, b) from t group by b%2;
+----
+4
+5
+
+query I rowsort
+select regr_avgy(a, b) from t group by b%2;
+----
+49999
+50000
+
+query I
+select regr_count(a, b) from t group by b%2;
+----
+50000
+50000
+
+query I
+select regr_slope(a, b) from t group by b%2;
+----
+1
+1
+
+query I
+select regr_r2(a, b) from t group by b%2;
+----
+0
+0
+
+query I
+select regr_sxx(a, b) from t group by b%2;
+----
+400000
+400000
+
+query I
+select regr_syy(a, b) from t group by b%2;
+----
+41666666650000
+41666666650000
+
+query I
+select regr_sxy(a, b) from t group by b%2;
+----
+400000
+400000
+
+query I
+select regr_intercept(a, b) from t group by b%2;
+----
+49995
+49995
+
+query II
+select bool_or(a) AS or_result,
+       bool_and(a) AS and_result
+from bool;
+----
+1	0
+
+query II rowsort
+select approx_count_distinct(a), approx_count_distinct(b) from t group by b%2;
+----
+41234	5
+50630	5
+
+query II
+select arg_min(b,a), arg_max(b,a) from t;
+----
+0	9
+
+query I
+select corr(a,b) from t group by b%2;
+----
+0.000098
+0.000098
+
+query I
+select entropy(a) from t;
+----
+16.609640
+
+query I
+select product(b) from t where a < 2000 group by b ORDER BY ALL;
+----
+0.000000
+1.000000
+1606938044258990275541962092341162602522202993782792835301376.000000
+265613988875874780598610418785575466612106726486464451918226939374088579537852722003778744614912.000000
+2582249878086908589655919172003011874329705792829223512830659356540647622016841194629645353280137831435903171972747493376.000000
+62230152778611436341719212978715912065845640340255171677509352007186090271914090005514397667938156624558634630421732454813630518023306608640.000000
+426825223812027418890822638940363656845648276125323888998923834808612716932857614130884809238924869437532348038131987282955125485318424988074770692583718912.000000
+10461838291314366330317127670141550737702465658592295023670588778589393524795407978164871712859217601822699210766850846310566017409265619375066400522840981934981110562816.000000
+4149515568880992958512407863691161151012446232242436899995657329690652811412908146399707048947103794288197886611300789182395151075411775307886874834113963687061181803401509523685376.000000
+70550791086553342048730135009513303838175056420995588227179312780658581221418811410649818193340747718196946609062859227923187761346197139563553410502493292326451779794675743751622116224532480.000000
+
+
+query II
+select kurtosis(a),kurtosis(b) from t where a < 5000
+----
+-1.200000	-1.224267
+
+query I
+select skewness(skw_c) from (select case when a %2=0 then 1 else a end as skw_c from t) as skw_tbl
+----
+0.9295
+
+statement ok
+insert into t values (1,1),(2,2)
+
+query II
+select mode(a), mode(b) from t group by b%2 order by all;
+----
+1	1
+2	2
+
+query I
+select histogram(b) from t;
+----
+{0=10000, 1=10001, 2=10001, 3=10000, 4=10000, 5=10000, 6=10000, 7=10000, 8=10000, 9=10000}
+
+query I
+select string_split(string_agg('a', ','), ',')[100] from t group by b%2;
+----
+a
+a
+
+query I
+select string_split(string_agg(NULL, ','), ',')[100] from t group by b%2;
+----
+NULL
+NULL

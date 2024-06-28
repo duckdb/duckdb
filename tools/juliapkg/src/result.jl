@@ -4,7 +4,7 @@ mutable struct QueryResult
     handle::Ref{duckdb_result}
     names::Vector{Symbol}
     types::Vector{Type}
-    df::Union{Missing, DataFrame}
+    tbl::Union{Missing, NamedTuple}
     chunk_index::UInt64
 
     function QueryResult(handle::Ref{duckdb_result})
@@ -40,8 +40,8 @@ function _close_result(result::QueryResult)
     return
 end
 
-mutable struct ColumnConversionData
-    chunks::Vector{DataChunk}
+mutable struct ColumnConversionData{ChunksT <: Union{Vector{DataChunk}, Tuple{DataChunk}}}
+    chunks::ChunksT
     col_idx::Int64
     logical_type::LogicalType
     conversion_data::Any
@@ -61,9 +61,7 @@ mutable struct StructConversionData
     child_conversion_data::Vector{ListConversionData}
 end
 
-function nop_convert(column_data::ColumnConversionData, val)
-    return val
-end
+nop_convert(column_data::ColumnConversionData, val) = val
 
 function convert_string(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)
     base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
@@ -91,6 +89,18 @@ function convert_time(column_data::ColumnConversionData, val::Int64)::Time
     return Dates.Time(Dates.Nanosecond(val * 1000))
 end
 
+function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
+    time_tz = duckdb_from_time_tz(val)
+    # TODO: how to preserve the offset?
+    return Dates.Time(
+        time_tz.time.hour,
+        time_tz.time.min,
+        time_tz.time.sec,
+        time_tz.time.micros ÷ 1000,
+        time_tz.time.micros % 1000
+    )
+end
+
 function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime
     return Dates.epochms2datetime((val ÷ 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
 end
@@ -115,11 +125,15 @@ function convert_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint)
     return Int128(val.lower) + Int128(val.upper) << 64
 end
 
+function convert_uhugeint(column_data::ColumnConversionData, val::duckdb_uhugeint)::UInt128
+    return UInt128(val.lower) + UInt128(val.upper) << 64
+end
+
 function convert_uuid(column_data::ColumnConversionData, val::duckdb_hugeint)::UUID
     hugeint = convert_hugeint(column_data, val)
     base_value = Int128(170141183460469231731687303715884105727)
     if hugeint < 0
-        return UUID(UInt128(hugeint + base_value) + 1)
+        return UUID(UInt128(hugeint + base_value + 1))
     else
         return UUID(UInt128(hugeint) + base_value + 1)
     end
@@ -496,7 +510,9 @@ function get_conversion_function(logical_type::LogicalType)::Function
         return convert_date
     elseif type == DUCKDB_TYPE_TIME
         return convert_time
-    elseif type == DUCKDB_TYPE_TIMESTAMP
+    elseif type == DUCKDB_TYPE_TIME_TZ
+        return convert_time_tz
+    elseif type == DUCKDB_TYPE_TIMESTAMP || type == DUCKDB_TYPE_TIMESTAMP_TZ
         return convert_timestamp
     elseif type == DUCKDB_TYPE_TIMESTAMP_S
         return convert_timestamp_s
@@ -508,6 +524,8 @@ function get_conversion_function(logical_type::LogicalType)::Function
         return convert_interval
     elseif type == DUCKDB_TYPE_HUGEINT
         return convert_hugeint
+    elseif type == DUCKDB_TYPE_UHUGEINT
+        return convert_uhugeint
     elseif type == DUCKDB_TYPE_UUID
         return convert_uuid
     elseif type == DUCKDB_TYPE_DECIMAL
@@ -553,10 +571,14 @@ function convert_column(column_data::ColumnConversionData)
     return convert_column_loop(column_data, conversion_func, internal_type, target_type, conversion_loop_func)
 end
 
-function toDataFrame(q::QueryResult)::DataFrame
-    if q.df === missing
+function Tables.columns(q::QueryResult)
+    if q.tbl === missing
         if q.chunk_index != 1
-            throw(NotImplementedException("Converting to a DataFrame is not supported after calling nextDataChunk"))
+            throw(
+                NotImplementedException(
+                    "Materializing into a Julia table is not supported after calling nextDataChunk"
+                )
+            )
         end
         # gather all the data chunks
         column_count = duckdb_column_count(q.handle)
@@ -571,16 +593,13 @@ function toDataFrame(q::QueryResult)::DataFrame
             push!(chunks, chunk)
         end
 
-        df = DataFrame()
-        for i in 1:column_count
-            name = q.names[i]
+        q.tbl = NamedTuple{Tuple(q.names)}(ntuple(column_count) do i
             logical_type = LogicalType(duckdb_column_logical_type(q.handle, i))
             column_data = ColumnConversionData(chunks, i, logical_type, nothing)
-            df[!, name] = convert_column(column_data)
-        end
-        q.df = df
+            return convert_column(column_data)
+        end)
     end
-    return q.df
+    return Tables.CopiedColumns(q.tbl)
 end
 
 mutable struct PendingQueryResult
@@ -621,17 +640,17 @@ function _close_pending_result(pending::PendingQueryResult)
     return
 end
 
-function fetch_error(stmt::Stmt, error_ptr)
+function fetch_error(sql::AbstractString, error_ptr)
     if error_ptr == C_NULL
-        return string("Execute of query \"", stmt.sql, "\" failed: unknown error")
+        return string("Execute of query \"", sql, "\" failed: unknown error")
     else
-        return string("Execute of query \"", stmt.sql, "\" failed: ", unsafe_string(error_ptr))
+        return string("Execute of query \"", sql, "\" failed: ", unsafe_string(error_ptr))
     end
 end
 
 function get_error(stmt::Stmt, pending::PendingQueryResult)
     error_ptr = duckdb_pending_error(pending.handle)
-    error_message = fetch_error(stmt, error_ptr)
+    error_message = fetch_error(stmt.sql, error_ptr)
     _close_pending_result(pending)
     return error_message
 end
@@ -639,18 +658,24 @@ end
 # execute tasks from a pending query result in a loop
 function pending_execute_tasks(pending::PendingQueryResult)::Bool
     ret = DUCKDB_PENDING_RESULT_NOT_READY
-    while ret == DUCKDB_PENDING_RESULT_NOT_READY
+    while !duckdb_pending_execution_is_finished(ret)
         GC.safepoint()
         ret = duckdb_pending_execute_task(pending.handle)
     end
     return ret != DUCKDB_PENDING_ERROR
 end
 
+function pending_execute_check_state(pending::PendingQueryResult)::duckdb_pending_state
+    ret = duckdb_pending_execute_check_state(pending.handle)
+    return ret
+end
+
 # execute background tasks in a loop, until task execution is finished
 function execute_tasks(state::duckdb_task_state, con::Connection)
     while !duckdb_task_state_is_finished(state)
-        GC.safepoint()
         duckdb_execute_n_tasks_state(state, 1)
+        GC.safepoint()
+        Base.yield()
         if duckdb_execution_is_finished(con.handle)
             break
         end
@@ -682,6 +707,42 @@ function cleanup_tasks(tasks, state)
     return
 end
 
+function execute_singlethreaded(pending::PendingQueryResult)::Bool
+    # Only when there are no additional threads, use the main thread to execute
+    success = true
+    try
+        # now start executing tasks of the pending result in a loop
+        success = pending_execute_tasks(pending)
+    catch ex
+        throw(ex)
+    end
+    return success
+end
+
+function execute_multithreaded(stmt::Stmt, pending::PendingQueryResult)
+    # if multi-threading is enabled, launch background tasks
+    task_state = duckdb_create_task_state(stmt.con.db.handle)
+
+    tasks = []
+    for _ in 1:Threads.nthreads()
+        task_val = @spawn execute_tasks(task_state, stmt.con)
+        push!(tasks, task_val)
+    end
+
+    # When we have additional worker threads, don't execute using the main thread
+    while duckdb_execution_is_finished(stmt.con.handle) == false
+        ret = pending_execute_check_state(pending)
+        if ret == DUCKDB_PENDING_RESULT_READY || ret == DUCKDB_PENDING_ERROR
+            break
+        end
+        Base.yield()
+        GC.safepoint()
+    end
+
+    # we finished execution of all tasks, cleanup the tasks
+    return cleanup_tasks(tasks, task_state)
+end
+
 # this function is responsible for executing a statement and returning a result
 function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     bind_parameters(stmt, params)
@@ -691,44 +752,23 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     if !pending.success
         throw(QueryException(get_error(stmt, pending)))
     end
-    # if multi-threading is enabled, launch background tasks
-    task_state = duckdb_create_task_state(stmt.con.db.handle)
 
-    # We can't use all of the additional threads, or the main thread would halt
-    tasks = []
-    for _ in 2:Threads.nthreads()
-        task_val = @spawn execute_tasks(task_state, stmt.con)
-        push!(tasks, task_val)
-    end
     success = true
-    if Threads.nthreads() != 1
-        # When we have additional worker threads, don't execute using the main thread
-        while duckdb_execution_is_finished(stmt.con.handle) == false
-            GC.safepoint()
+    if Threads.nthreads() == 1
+        success = execute_singlethreaded(pending)
+        # check if an error was thrown
+        if !success
+            throw(QueryException(get_error(stmt, pending)))
         end
     else
-        # Only when there are no additional threads, use the main thread to execute
-        try
-            # now start executing tasks of the pending result in a loop
-            success = pending_execute_tasks(pending)
-        catch ex
-            cleanup_tasks(tasks, task_state)
-            throw(ex)
-        end
+        execute_multithreaded(stmt, pending)
     end
 
-    # we finished execution of all tasks, cleanup the tasks
-    cleanup_tasks(tasks, task_state)
-
-    # check if an error was thrown
-    if !success
-        throw(QueryException(get_error(stmt, pending)))
-    end
     handle = Ref{duckdb_result}()
     ret = duckdb_execute_pending(pending.handle, handle)
     if ret != DuckDBSuccess
         error_ptr = duckdb_result_error(handle)
-        error_message = fetch_error(stmt, error_ptr)
+        error_message = fetch_error(stmt.sql, error_ptr)
         duckdb_destroy_result(handle)
         throw(QueryException(error_message))
     end
@@ -736,9 +776,7 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
 end
 
 # explicitly close prepared statement
-function DBInterface.close!(stmt::Stmt)
-    return _close_stmt(stmt)
-end
+DBInterface.close!(stmt::Stmt) = _close_stmt(stmt)
 
 function execute(con::Connection, sql::AbstractString, params::DBInterface.StatementParams)
     stmt = Stmt(con, sql, MaterializedResult)
@@ -753,26 +791,76 @@ execute(con::Connection, sql::AbstractString; kwargs...) = execute(con, sql, val
 execute(db::DB, sql::AbstractString, params::DBInterface.StatementParams) = execute(db.main_connection, sql, params)
 execute(db::DB, sql::AbstractString; kwargs...) = execute(db.main_connection, sql, values(kwargs))
 
+
+Tables.istable(::Type{QueryResult}) = true
 Tables.isrowtable(::Type{QueryResult}) = true
-Tables.columnnames(q::QueryResult) = q.names
-
-function Tables.schema(q::QueryResult)
-    return Tables.Schema(q.names, q.types)
-end
-
+Tables.columnaccess(::Type{QueryResult}) = true
+Tables.schema(q::QueryResult) = Tables.Schema(q.names, q.types)
 Base.IteratorSize(::Type{QueryResult}) = Base.SizeUnknown()
 Base.eltype(q::QueryResult) = Any
 
-function DBInterface.close!(q::QueryResult)
-    return _close_result(q)
+DBInterface.close!(q::QueryResult) = _close_result(q)
+
+Base.iterate(q::QueryResult) = iterate(Tables.rows(Tables.columns(q)))
+Base.iterate(q::QueryResult, state) = iterate(Tables.rows(Tables.columns(q)), state)
+
+struct QueryResultChunk
+    tbl::NamedTuple
 end
 
-function Base.iterate(q::QueryResult)
-    return Base.iterate(eachrow(toDataFrame(q)))
+function Tables.columns(chunk::QueryResultChunk)
+    return Tables.CopiedColumns(chunk.tbl)
 end
 
-function Base.iterate(q::QueryResult, state)
-    return Base.iterate(eachrow(toDataFrame(q)), state)
+Tables.istable(::Type{QueryResultChunk}) = true
+Tables.isrowtable(::Type{QueryResultChunk}) = true
+Tables.columnaccess(::Type{QueryResultChunk}) = true
+Tables.schema(chunk::QueryResultChunk) = Tables.Schema(chunk.q.names, chunk.q.types)
+
+struct QueryResultChunkIterator
+    q::QueryResult
+    column_count::UInt64
+end
+
+function next_chunk(iter::QueryResultChunkIterator)
+    chunk = DuckDB.nextDataChunk(iter.q)
+    if chunk === missing
+        return nothing
+    end
+
+    return QueryResultChunk(
+        NamedTuple{Tuple(iter.q.names)}(ntuple(iter.column_count) do i
+            logical_type = LogicalType(duckdb_column_logical_type(iter.q.handle, i))
+            column_data = ColumnConversionData((chunk,), i, logical_type, nothing)
+            return convert_column(column_data)
+        end)
+    )
+end
+
+Base.iterate(iter::QueryResultChunkIterator) = iterate(iter, 0x0000000000000001)
+
+function Base.iterate(iter::QueryResultChunkIterator, state)
+    if iter.q.chunk_index != state
+        throw(
+            NotImplementedException(
+                "Iterating chunks more than once is not supported. " *
+                "(Did you iterate the result of Tables.partitions() once already, call nextDataChunk or materialise QueryResult?)"
+            )
+        )
+    end
+    chunk = next_chunk(iter)
+    if chunk === nothing
+        return nothing
+    end
+    return (chunk, state + 1)
+end
+
+Base.IteratorSize(::Type{QueryResultChunkIterator}) = Base.SizeUnknown()
+Base.eltype(iter::QueryResultChunkIterator) = Any
+
+function Tables.partitions(q::QueryResult)
+    column_count = duckdb_column_count(q.handle)
+    return QueryResultChunkIterator(q, column_count)
 end
 
 function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
@@ -797,13 +885,8 @@ function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
     return chunk
 end
 
-DataFrames.DataFrame(q::QueryResult) = toDataFrame(q)
-
 "Return the last row insert id from the executed statement"
-function DBInterface.lastrowid(con::Connection)
-    throw(NotImplementedException("Unimplemented: lastrowid"))
-end
-
+DBInterface.lastrowid(con::Connection) = throw(NotImplementedException("Unimplemented: lastrowid"))
 DBInterface.lastrowid(db::DB) = DBInterface.lastrowid(db.main_connection)
 
 """
@@ -832,16 +915,28 @@ Calling `SQLite.reset!(result)` will re-execute the query and reset the iterator
 The resultset iterator supports the [Tables.jl](https://github.com/JuliaData/Tables.jl) interface, so results can be collected in any Tables.jl-compatible sink,
 like `DataFrame(results)`, `CSV.write("results.csv", results)`, etc.
 """
-function DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams)
-    return execute(stmt, params)
-end
-
-function DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type)
-    return execute(Stmt(con, sql, result_type))
-end
-
+DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams) = execute(stmt, params)
+DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type) = execute(Stmt(con, sql, result_type))
 DBInterface.execute(con::Connection, sql::AbstractString) = DBInterface.execute(con, sql, MaterializedResult)
 DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
     DBInterface.execute(db.main_connection, sql, result_type)
 
-Base.show(io::IO, result::DuckDB.QueryResult) = print(io, toDataFrame(result))
+Base.show(io::IO, result::DuckDB.QueryResult) = print(io, Tables.columntable(result))
+
+"""
+Executes a SQL query within a connection and returns the full (materialized) result. 
+
+The query function is able to run queries with multiple statements, unlike `DBInterface.execute`(@ref) which is only able to prepare a single statement.
+"""
+function query(con::DuckDB.Connection, sql::AbstractString)
+    handle = Ref{duckdb_result}()
+    ret = duckdb_query(con.handle, sql, handle)
+    if ret != DuckDBSuccess
+        error_ptr = duckdb_result_error(handle)
+        error_message = fetch_error(sql, error_ptr)
+        duckdb_destroy_result(handle)
+        throw(QueryException(error_message))
+    end
+    return QueryResult(handle)
+end
+query(db::DuckDB.DB, sql::AbstractString) = query(db.main_connection, sql)

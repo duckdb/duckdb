@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
@@ -20,12 +21,15 @@ public:
 
 public:
 	PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type, idx_t estimated_cardinality,
-	                       unique_ptr<ColumnDataCollection> owned_collection = nullptr);
+	                       optionally_owned_ptr<ColumnDataCollection> collection);
 
-	// the column data collection to scan
-	optional_ptr<ColumnDataCollection> collection;
-	//! Owned column data collection, if any
-	unique_ptr<ColumnDataCollection> owned_collection;
+	PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type, idx_t estimated_cardinality,
+	                       idx_t cte_index);
+
+	//! (optionally owned) column data collection to scan
+	optionally_owned_ptr<ColumnDataCollection> collection;
+
+	idx_t cte_index;
 
 public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
@@ -34,6 +38,8 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
+	string ParamsToString() const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;

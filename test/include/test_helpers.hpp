@@ -45,6 +45,8 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 void SetTestDirectory(string path);
 void SetDebugInitialize(int value);
 void SetSingleThreaded();
+void AddRequire(string require);
+bool IsRequired(string require);
 string GetTestDirectory();
 string GetCSVPath();
 void WriteCSV(string path, const char *csv);
@@ -59,6 +61,13 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 #define COMPARE_CSV(result, csv, header)                                                                               \
 	{                                                                                                                  \
 		auto res = compare_csv(*result, csv, header);                                                                  \
+		if (!res.empty())                                                                                              \
+			FAIL(res);                                                                                                 \
+	}
+
+#define COMPARE_CSV_COLLECTION(collection, csv, header)                                                                \
+	{                                                                                                                  \
+		auto res = compare_csv_collection(collection, csv, header);                                                    \
 		if (!res.empty())                                                                                              \
 			FAIL(res);                                                                                                 \
 	}

@@ -1,0 +1,24 @@
+# name: test/sql/settings/errors_as_json.test
+# description: Test errors_as_json setting
+# group: [settings]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET errors_as_json=true
+
+statement error
+SELECT * FROM nonexistent_table
+----
+MISSING_ENTRY
+
+statement error
+SELECT cbl FROM (VALUES (42)) t(col)
+----
+COLUMN_NOT_FOUND
+
+statement error
+select corr('hello', 'world')
+----
+NO_MATCHING_FUNCTION

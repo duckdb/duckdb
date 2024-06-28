@@ -11,6 +11,9 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#ifndef DUCKDB_NO_THREADS
+#include "duckdb/common/thread.hpp"
+#endif
 #endif
 
 #define DECLARER /* EXTERN references get defined here */
@@ -30,8 +33,12 @@ struct tpch_append_information {
 	duckdb::unique_ptr<InternalAppender> appender;
 };
 
-void append_value(tpch_append_information &info, int32_t value) {
+void append_int32(tpch_append_information &info, int32_t value) {
 	info.appender->Append<int32_t>(value);
+}
+
+void append_int64(tpch_append_information &info, int64_t value) {
+	info.appender->Append<int64_t>(value);
 }
 
 void append_string(tpch_append_information &info, const char *value) {
@@ -59,9 +66,9 @@ static void append_order(order_t *o, tpch_append_information *info) {
 	// fill the current row with the order information
 	append_info.appender->BeginRow();
 	// o_orderkey
-	append_value(append_info, o->okey);
+	append_int64(append_info, o->okey);
 	// o_custkey
-	append_value(append_info, o->custkey);
+	append_int64(append_info, o->custkey);
 	// o_orderstatus
 	append_char(append_info, o->orderstatus);
 	// o_totalprice
@@ -73,7 +80,7 @@ static void append_order(order_t *o, tpch_append_information *info) {
 	// o_clerk
 	append_string(append_info, o->clerk);
 	// o_shippriority
-	append_value(append_info, o->spriority);
+	append_int32(append_info, o->spriority);
 	// o_comment
 	append_string(append_info, o->comment);
 	append_info.appender->EndRow();
@@ -86,13 +93,13 @@ static void append_line(order_t *o, tpch_append_information *info) {
 	for (DSS_HUGE i = 0; i < o->lines; i++) {
 		append_info.appender->BeginRow();
 		// l_orderkey
-		append_value(append_info, o->l[i].okey);
+		append_int64(append_info, o->l[i].okey);
 		// l_partkey
-		append_value(append_info, o->l[i].partkey);
+		append_int64(append_info, o->l[i].partkey);
 		// l_suppkey
-		append_value(append_info, o->l[i].suppkey);
+		append_int64(append_info, o->l[i].suppkey);
 		// l_linenumber
-		append_value(append_info, o->l[i].lcnt);
+		append_int64(append_info, o->l[i].lcnt);
 		// l_quantity
 		append_decimal(append_info, o->l[i].quantity);
 		// l_extendedprice
@@ -131,13 +138,13 @@ static void append_supp(supplier_t *supp, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// s_suppkey
-	append_value(append_info, supp->suppkey);
+	append_int64(append_info, supp->suppkey);
 	// s_name
 	append_string(append_info, supp->name);
 	// s_address
 	append_string(append_info, supp->address);
 	// s_nationkey
-	append_value(append_info, supp->nation_code);
+	append_int32(append_info, supp->nation_code);
 	// s_phone
 	append_string(append_info, supp->phone);
 	// s_acctbal
@@ -152,13 +159,13 @@ static void append_cust(customer_t *c, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// c_custkey
-	append_value(append_info, c->custkey);
+	append_int64(append_info, c->custkey);
 	// c_name
 	append_string(append_info, c->name);
 	// c_address
 	append_string(append_info, c->address);
 	// c_nationkey
-	append_value(append_info, c->nation_code);
+	append_int32(append_info, c->nation_code);
 	// c_phone
 	append_string(append_info, c->phone);
 	// c_acctbal
@@ -175,7 +182,7 @@ static void append_part(part_t *part, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// p_partkey
-	append_value(append_info, part->partkey);
+	append_int64(append_info, part->partkey);
 	// p_name
 	append_string(append_info, part->name);
 	// p_mfgr
@@ -185,7 +192,7 @@ static void append_part(part_t *part, tpch_append_information *info) {
 	// p_type
 	append_string(append_info, part->type);
 	// p_size
-	append_value(append_info, part->size);
+	append_int32(append_info, part->size);
 	// p_container
 	append_string(append_info, part->container);
 	// p_retailprice
@@ -200,11 +207,11 @@ static void append_psupp(part_t *part, tpch_append_information *info) {
 	for (size_t i = 0; i < SUPP_PER_PART; i++) {
 		append_info.appender->BeginRow();
 		// ps_partkey
-		append_value(append_info, part->s[i].partkey);
+		append_int64(append_info, part->s[i].partkey);
 		// ps_suppkey
-		append_value(append_info, part->s[i].suppkey);
+		append_int64(append_info, part->s[i].suppkey);
 		// ps_availqty
-		append_value(append_info, part->s[i].qty);
+		append_int64(append_info, part->s[i].qty);
 		// ps_supplycost
 		append_decimal(append_info, part->s[i].scost);
 		// ps_comment
@@ -223,11 +230,11 @@ static void append_nation(code_t *c, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// n_nationkey
-	append_value(append_info, c->code);
+	append_int32(append_info, c->code);
 	// n_name
 	append_string(append_info, c->text);
 	// n_regionkey
-	append_value(append_info, c->join);
+	append_int32(append_info, c->join);
 	// n_comment
 	append_string(append_info, c->comment);
 	append_info.appender->EndRow();
@@ -238,7 +245,7 @@ static void append_region(code_t *c, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// r_regionkey
-	append_value(append_info, c->code);
+	append_int32(append_info, c->code);
 	// r_name
 	append_string(append_info, c->text);
 	// r_comment
@@ -246,7 +253,7 @@ static void append_region(code_t *c, tpch_append_information *info) {
 	append_info.appender->EndRow();
 }
 
-static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx,
+static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx,
                     idx_t offset = 0) {
 	order_t o;
 	supplier_t supp;
@@ -255,6 +262,9 @@ static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info, DBG
 	code_t code;
 
 	for (DSS_HUGE i = offset + 1; count; count--, i++) {
+		if (count % 1000 == 0 && context.interrupted) {
+			throw InterruptException();
+		}
 		row_start(tnum, dbgen_ctx);
 		switch (tnum) {
 		case LINE:
@@ -341,7 +351,7 @@ struct SupplierInfo {
 };
 const char *SupplierInfo::Columns[] = {"s_suppkey", "s_name",    "s_address", "s_nationkey",
                                        "s_phone",   "s_acctbal", "s_comment"};
-const LogicalType SupplierInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+const LogicalType SupplierInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR)};
@@ -354,7 +364,7 @@ struct CustomerInfo {
 };
 const char *CustomerInfo::Columns[] = {"c_custkey", "c_name",    "c_address",    "c_nationkey",
                                        "c_phone",   "c_acctbal", "c_mktsegment", "c_comment"};
-const LogicalType CustomerInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+const LogicalType CustomerInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR)};
@@ -368,7 +378,7 @@ struct PartInfo {
 const char *PartInfo::Columns[] = {"p_partkey", "p_name",      "p_mfgr",        "p_brand",  "p_type",
                                    "p_size",    "p_container", "p_retailprice", "p_comment"};
 const LogicalType PartInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR)};
 
@@ -379,8 +389,8 @@ struct PartsuppInfo {
 	static const LogicalType Types[];
 };
 const char *PartsuppInfo::Columns[] = {"ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
-const LogicalType PartsuppInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-                                           LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),
+const LogicalType PartsuppInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT), 
+                                           LogicalType(LogicalTypeId::BIGINT),  LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR)};
 
 struct OrdersInfo {
@@ -392,7 +402,7 @@ struct OrdersInfo {
 const char *OrdersInfo::Columns[] = {"o_orderkey",      "o_custkey", "o_orderstatus",  "o_totalprice", "o_orderdate",
                                      "o_orderpriority", "o_clerk",   "o_shippriority", "o_comment"};
 const LogicalType OrdersInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
     LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR)};
 
@@ -407,8 +417,8 @@ const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_su
                                        "l_returnflag",  "l_linestatus",    "l_shipdate", "l_commitdate",
                                        "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
 const LogicalType LineitemInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),
+    LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT), 
+    LogicalType(LogicalTypeId::BIGINT),  LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),
     LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::DATE),
     LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
@@ -417,6 +427,7 @@ const LogicalType LineitemInfo::Types[] = {
 template <class T>
 static void CreateTPCHTable(ClientContext &context, string catalog_name, string schema, string suffix) {
 	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = catalog_name;
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
@@ -465,16 +476,97 @@ void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx) {
 	}
 }
 
+struct TPCHDBgenParameters {
+	TPCHDBgenParameters(ClientContext &context, Catalog &catalog, const string &schema, const string &suffix) {
+		tables.resize(REGION + 1);
+		for (size_t i = PART; i <= REGION; i++) {
+			auto tname = get_table_name(i);
+			if (!tname.empty()) {
+				string full_tname = string(tname) + string(suffix);
+				auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
+				tables[i] = &tbl_catalog;
+			}
+		}
+
+	}
+
+	vector<optional_ptr<TableCatalogEntry>> tables;
+};
+
+class TPCHDataAppender {
+public:
+	TPCHDataAppender(ClientContext &context, TPCHDBgenParameters &parameters, DBGenContext base_context, idx_t flush_count) :
+		context(context), parameters(parameters) {
+		dbgen_ctx = base_context;
+		append_info = duckdb::unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
+		memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
+		for (size_t i = PART; i <= REGION; i++) {
+			if (parameters.tables[i]) {
+				auto &tbl_catalog = *parameters.tables[i];
+				append_info[i].appender = make_uniq<InternalAppender>(context, tbl_catalog, flush_count);
+			}
+		}
+	}
+
+	void GenerateTableData(int table_index, idx_t row_count, idx_t offset) {
+		gen_tbl(context, table_index, static_cast<DSS_HUGE>(row_count), append_info.get(), &dbgen_ctx, offset);
+	}
+
+	void AppendData(int children, int current_step) {
+		DSS_HUGE i;
+		DSS_HUGE rowcnt = 0;
+		for (i = PART; i <= REGION; i++) {
+			if (table & (1 << i)) {
+				if (i < NATION) {
+					rowcnt = dbgen_ctx.tdefs[i].base * dbgen_ctx.scale_factor;
+				} else {
+					rowcnt = dbgen_ctx.tdefs[i].base;
+				}
+				if (children > 1 && current_step != -1) {
+					size_t part_size = std::ceil((double)rowcnt / (double)children);
+					auto part_offset = part_size * current_step;
+					auto part_end = part_offset + part_size;
+					rowcnt = part_end > rowcnt ? rowcnt - part_offset : part_size;
+					skip(i, children, part_offset, dbgen_ctx);
+					if (rowcnt > 0) {
+						// generate part of the table
+						GenerateTableData((int) i, rowcnt, part_offset);
+					}
+				} else {
+					// generate full table
+					GenerateTableData((int) i, rowcnt, 0);
+				}
+			}
+		}
+	}
+
+	void Flush() {
+		// flush any incomplete chunks
+		for (idx_t i = PART; i <= REGION; i++) {
+			if (append_info[i].appender) {
+				append_info[i].appender->Flush();
+				append_info[i].appender.reset();
+			}
+		}
+	}
+
+private:
+	ClientContext &context;
+	TPCHDBgenParameters &parameters;
+	unique_ptr<tpch_append_information[]> append_info;
+	DBGenContext dbgen_ctx;
+};
+
+static void ParallelTPCHAppend(TPCHDataAppender *appender, int children, int current_step) {
+	appender->AppendData(children, current_step);
+}
+
 void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string catalog_name, string schema,
-                                string suffix, int children_p, int current_step) {
+                                string suffix, int children, int current_step) {
 	if (flt_scale == 0) {
 		return;
 	}
 
-	// generate the actual data
-	DSS_HUGE rowcnt = 0;
-	DSS_HUGE extra;
-	DSS_HUGE i;
 	// all tables
 	table = (1 << CUST) | (1 << SUPP) | (1 << NATION) | (1 << REGION) | (1 << PART_PSUPP) | (1 << ORDER_LINE);
 	force = 0;
@@ -487,9 +579,10 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	set_seeds = 0;
 	updates = 0;
 
-	DBGenContext dbgen_ctx;
+	d_path = NULL;
 
-	tdef *tdefs = dbgen_ctx.tdefs;
+	DBGenContext base_context;
+	tdef *tdefs = base_context.tdefs;
 	tdefs[PART].base = 200000;
 	tdefs[PSUPP].base = 200000;
 	tdefs[SUPP].base = 10000;
@@ -501,18 +594,11 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	tdefs[NATION].base = NATIONS_MAX;
 	tdefs[REGION].base = NATIONS_MAX;
 
-	children = children_p;
-	d_path = NULL;
-
-	if (current_step >= children) {
-		return;
-	}
-
 	if (flt_scale < MIN_SCALE) {
 		int i;
 		int int_scale;
 
-		dbgen_ctx.scale_factor = 1;
+		base_context.scale_factor = 1;
 		int_scale = (int)(1000 * flt_scale);
 		for (i = PART; i < REGION; i++) {
 			tdefs[i].base = (DSS_HUGE)(int_scale * tdefs[i].base) / 1000;
@@ -521,58 +607,76 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			}
 		}
 	} else {
-		dbgen_ctx.scale_factor = (long)flt_scale;
+		base_context.scale_factor = (long)flt_scale;
 	}
-	load_dists(10 * 1024 * 1024, &dbgen_ctx); // 10MiB
 
+	if (current_step >= children) {
+		return;
+	}
+
+	load_dists(10 * 1024 * 1024, &base_context); // 10MiB
 	/* have to do this after init */
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
 
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
-	auto append_info = duckdb::unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
-	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
-	for (size_t i = PART; i <= REGION; i++) {
-		auto tname = get_table_name(i);
-		if (!tname.empty()) {
-			string full_tname = string(tname) + string(suffix);
-			auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
-			append_info[i].appender = make_uniq<InternalAppender>(context, tbl_catalog);
+	TPCHDBgenParameters parameters(context, catalog, schema, suffix);
+#ifndef DUCKDB_NO_THREADS
+	bool explicit_partial_generation = children > 1 && current_step != -1;
+	auto thread_count = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	if (explicit_partial_generation || thread_count <= 1) {
+#endif
+		// if we are doing explicit partial generation the parallelism is managed outside of dbgen
+		// only generate the chunk we are interested in
+		TPCHDataAppender appender(context, parameters, base_context, BaseAppender::DEFAULT_FLUSH_COUNT);
+		appender.AppendData(children, current_step);
+		appender.Flush();
+#ifndef DUCKDB_NO_THREADS
+	} else {
+		// we split into 20 children per scale factor by default
+		static constexpr idx_t CHILDREN_PER_SCALE_FACTOR = 20;
+		idx_t child_count;
+		if (flt_scale < 1) {
+			child_count = 1;
+		} else {
+			child_count = MinValue<idx_t>(static_cast<idx_t>(CHILDREN_PER_SCALE_FACTOR * flt_scale), MAX_CHILDREN);
 		}
-	}
-
-	for (i = PART; i <= REGION; i++) {
-		if (table & (1 << i)) {
-			if (i < NATION) {
-				rowcnt = tdefs[i].base * dbgen_ctx.scale_factor;
-			} else {
-				rowcnt = tdefs[i].base;
+		idx_t step = 0;
+		vector<TPCHDataAppender> finished_appenders;
+		while(step < child_count) {
+			// launch N threads
+			vector<TPCHDataAppender> new_appenders;
+			vector<std::thread> threads;
+			idx_t launched_step = step;
+			// initialize the appenders for each thread
+			// note we prevent the threads themselves from flushing the appenders by specifying a very high flush count here
+			for(idx_t thr_idx = 0; thr_idx < thread_count && launched_step < child_count; thr_idx++, launched_step++) {
+				new_appenders.emplace_back(context, parameters, base_context, NumericLimits<int64_t>::Maximum());
 			}
-			if (children > 1 && current_step != -1) {
-				size_t part_size = std::ceil((double)rowcnt / (double)children);
-				auto part_offset = part_size * current_step;
-				auto part_end = part_offset + part_size;
-				rowcnt = part_end > rowcnt ? rowcnt - part_offset : part_size;
-				skip(i, children, part_offset, dbgen_ctx);
-				if (rowcnt > 0) {
-					// generate part of the table
-					gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx, part_offset);
-				}
-			} else {
-				// generate full table
-				gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx);
+			// launch the threads
+			for(idx_t thr_idx = 0; thr_idx < new_appenders.size(); thr_idx++) {
+				threads.emplace_back(ParallelTPCHAppend, &new_appenders[thr_idx], child_count, step);
+				step++;
 			}
+			// flush the previous batch of appenders while waiting (if any are there)
+			// now flush the appenders in-order
+			for(auto &appender : finished_appenders) {
+				appender.Flush();
+			}
+			finished_appenders.clear();
+			// wait for all threads to finish
+			for(auto &thread : threads) {
+				thread.join();
+			}
+			finished_appenders = std::move(new_appenders);
+		}
+		// flush the final batch of appenders
+		for(auto &appender : finished_appenders) {
+			appender.Flush();
 		}
 	}
-	// flush any incomplete chunks
-	for (size_t i = PART; i <= REGION; i++) {
-		if (append_info[i].appender) {
-			append_info[i].appender->Flush();
-			append_info[i].appender.reset();
-		}
-	}
-
+#endif
 	cleanup_dists();
 }
 

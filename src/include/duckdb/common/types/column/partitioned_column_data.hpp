@@ -108,6 +108,18 @@ protected:
 	mutex lock;
 	shared_ptr<PartitionColumnDataAllocators> allocators;
 	vector<unique_ptr<ColumnDataCollection>> partitions;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 } // namespace duckdb

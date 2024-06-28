@@ -13,7 +13,9 @@
 
 namespace duckdb {
 
-//! PhysicalReservoirSample represents a sample taken using reservoir sampling, which is a blocking sampling method
+//! PhysicalReservoirSample represents a sample taken using reservoir sampling,
+//! which is a blocking sampling method
+
 class PhysicalReservoirSample : public PhysicalOperator {
 public:
 	PhysicalReservoirSample(vector<LogicalType> types, unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
@@ -35,7 +37,9 @@ public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
+	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                          OperatorSinkFinalizeInput &input) const override;
 	bool ParallelSink() const override {
 		return true;
 	}

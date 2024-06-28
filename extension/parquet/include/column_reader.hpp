@@ -8,21 +8,19 @@
 
 #pragma once
 
-#include "parquet_types.h"
-#include "thrift_tools.hpp"
-#include "resizable_buffer.hpp"
-
-#include "parquet_rle_bp_decoder.hpp"
-#include "parquet_dbp_decoder.hpp"
-#include "parquet_statistics.hpp"
-
 #include "duckdb.hpp"
+#include "parquet_bss_decoder.hpp"
+#include "parquet_dbp_decoder.hpp"
+#include "parquet_rle_bp_decoder.hpp"
+#include "parquet_statistics.hpp"
+#include "parquet_types.h"
+#include "resizable_buffer.hpp"
+#include "thrift_tools.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/types/string_type.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #endif
 
@@ -51,7 +49,7 @@ public:
 	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
 	                                             idx_t max_repeat);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
-	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
 	                   Vector &result_out);
 
 	virtual void Skip(idx_t num_values);
@@ -75,18 +73,43 @@ public:
 	template <class VALUE_TYPE, class CONVERSION>
 	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values,
 	                    parquet_filter_t &filter, idx_t result_offset, Vector &result) {
-		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
-		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (HasDefines() && defines[row_idx + result_offset] != max_define) {
-				result_mask.SetInvalid(row_idx + result_offset);
-				continue;
+		if (HasDefines()) {
+			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, true>(*plain_data, defines, num_values, filter,
+				                                                           result_offset, result);
+			} else {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, false>(*plain_data, defines, num_values, filter,
+				                                                            result_offset, result);
 			}
-			if (filter[row_idx + result_offset]) {
-				VALUE_TYPE val = CONVERSION::PlainRead(*plain_data, *this);
-				result_ptr[row_idx + result_offset] = val;
+		} else {
+			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, true>(*plain_data, defines, num_values, filter,
+				                                                            result_offset, result);
+			} else {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, false>(*plain_data, defines, num_values, filter,
+				                                                             result_offset, result);
+			}
+		}
+	}
+
+private:
+	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
+	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
+	                            const parquet_filter_t &filter, const idx_t result_offset, Vector &result) {
+		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		auto &result_mask = FlatVector::Validity(result);
+		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
+			if (HAS_DEFINES && defines[row_idx] != max_define) {
+				result_mask.SetInvalid(row_idx);
+			} else if (filter.test(row_idx)) {
+				result_ptr[row_idx] =
+				    UNSAFE ? CONVERSION::UnsafePlainRead(plain_data, *this) : CONVERSION::PlainRead(plain_data, *this);
 			} else { // there is still some data there that we have to skip over
-				CONVERSION::PlainSkip(*plain_data, *this);
+				if (UNSAFE) {
+					CONVERSION::UnsafePlainSkip(plain_data, *this);
+				} else {
+					CONVERSION::PlainSkip(plain_data, *this);
+				}
 			}
 		}
 	}
@@ -112,11 +135,11 @@ protected:
 	// applies any skips that were registered using Skip()
 	virtual void ApplyPendingSkips(idx_t num_values);
 
-	bool HasDefines() {
+	bool HasDefines() const {
 		return max_define > 0;
 	}
 
-	bool HasRepeats() {
+	bool HasRepeats() const {
 		return max_repeat > 0;
 	}
 
@@ -129,7 +152,7 @@ protected:
 
 	ParquetReader &reader;
 	LogicalType type;
-	duckdb::unique_ptr<Vector> byte_array_data;
+	unique_ptr<Vector> byte_array_data;
 	idx_t byte_array_count = 0;
 
 	idx_t pending_skips = 0;
@@ -143,7 +166,8 @@ private:
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
-	void DecompressInternal(CompressionCodec::type codec, const char *src, idx_t src_size, char *dst, idx_t dst_size);
+	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
+	                        idx_t dst_size);
 
 	const duckdb_parquet::format::ColumnChunk *chunk = nullptr;
 
@@ -157,11 +181,12 @@ private:
 	ResizeableBuffer compressed_buffer;
 	ResizeableBuffer offset_buffer;
 
-	duckdb::unique_ptr<RleBpDecoder> dict_decoder;
-	duckdb::unique_ptr<RleBpDecoder> defined_decoder;
-	duckdb::unique_ptr<RleBpDecoder> repeated_decoder;
-	duckdb::unique_ptr<DbpDecoder> dbp_decoder;
-	duckdb::unique_ptr<RleBpDecoder> rle_decoder;
+	unique_ptr<RleBpDecoder> dict_decoder;
+	unique_ptr<RleBpDecoder> defined_decoder;
+	unique_ptr<RleBpDecoder> repeated_decoder;
+	unique_ptr<DbpDecoder> dbp_decoder;
+	unique_ptr<RleBpDecoder> rle_decoder;
+	unique_ptr<BssDecoder> bss_decoder;
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;
@@ -174,7 +199,7 @@ public:
 		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast column reader to type - type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -182,7 +207,7 @@ public:
 		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast column reader to type - type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

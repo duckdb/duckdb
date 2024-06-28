@@ -22,7 +22,9 @@ enum class AlterType : uint8_t {
 	ALTER_SEQUENCE = 3,
 	CHANGE_OWNERSHIP = 4,
 	ALTER_SCALAR_FUNCTION = 5,
-	ALTER_TABLE_FUNCTION = 6
+	ALTER_TABLE_FUNCTION = 6,
+	SET_COMMENT = 7,
+	SET_COLUMN_COMMENT = 8
 };
 
 struct AlterEntryData {
@@ -40,8 +42,12 @@ struct AlterEntryData {
 };
 
 struct AlterInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
+
+public:
 	AlterInfo(AlterType type, string catalog, string schema, string name, OnEntryNotFound if_not_found);
-	virtual ~AlterInfo() override;
+	~AlterInfo() override;
 
 	AlterType type;
 	//! if exists
@@ -58,14 +64,19 @@ struct AlterInfo : public ParseInfo {
 public:
 	virtual CatalogType GetCatalogType() const = 0;
 	virtual unique_ptr<AlterInfo> Copy() const = 0;
-	void Serialize(Serializer &serializer) const;
-	virtual void Serialize(FieldWriter &writer) const = 0;
-	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
+	virtual string ToString() const = 0;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+
 	virtual string GetColumnName() const {
 		return "";
 	};
 
 	AlterEntryData GetAlterEntryData() const;
+
+protected:
+	explicit AlterInfo(AlterType type);
 };
 
 } // namespace duckdb

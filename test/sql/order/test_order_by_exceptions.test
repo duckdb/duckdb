@@ -14,6 +14,7 @@ INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
 # ORDER BY index out of range
 statement error
 SELECT a FROM test ORDER BY 2
+----
 
 # ORDER BY constant works, but does nothing
 # CONTROVERSIAL: works in SQLite but not in Postgres
@@ -24,11 +25,13 @@ SELECT a FROM test ORDER BY 'hello', a
 12
 13
 
-# ambiguous reference in union alias
-statement error
+query II
 SELECT a AS k, b FROM test UNION SELECT a, b AS k FROM test ORDER BY k
+----
+11	22
+12	21
+13	22
 
-# but works if not ambiguous
 query II
 SELECT a AS k, b FROM test UNION SELECT a AS k, b FROM test ORDER BY k
 ----
@@ -39,6 +42,7 @@ SELECT a AS k, b FROM test UNION SELECT a AS k, b FROM test ORDER BY k
 # ambiguous reference in union parameter
 statement error
 SELECT a % 2, b FROM test UNION SELECT b, a % 2 AS k ORDER BY a % 2
+----
 
 # but works if not ambiguous
 query II
@@ -50,11 +54,14 @@ SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY a % 2
 # out of range order also happens for unions
 statement error
 SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY 3
+----
 
 statement error
 SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY -1
+----
 
 # and union itself fails if amount of entries is wrong
 statement error
 SELECT a % 2, b FROM test UNION SELECT a % 2 AS k FROM test ORDER BY -1
+----
 

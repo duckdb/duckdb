@@ -1,0 +1,486 @@
+# name: test/issues/monetdb/analytics13.test_slow
+# description: MonetDB Test for grouping sets
+# group: [monetdb]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl_ProductSales (ColID int, Product_Category  varchar(64), Product_Name  varchar(64), TotalSales int);
+
+statement ok
+CREATE TABLE another_T (col1 INT, col2 INT, col3 INT, col4 INT, col5 INT, col6 INT, col7 INT, col8 INT);
+
+statement ok
+INSERT INTO tbl_ProductSales VALUES (1,'Game','Mobo Game',200),(2,'Game','PKO Game',400),(3,'Fashion','Shirt',500),(4,'Fashion','Shorts',100);
+
+statement ok
+INSERT INTO another_T VALUES (1,2,3,4,5,6,7,8), (11,22,33,44,55,66,77,88), (111,222,333,444,555,666,777,888), (1111,2222,3333,4444,5555,6666,7777,8888);
+
+statement error
+SELECT
+    (SELECT GROUPING(colID) FROM tbl_ProductSales)
+FROM another_T t1
+----
+
+query I rowsort
+SELECT
+    col1 IN (SELECT ColID FROM tbl_ProductSales)
+FROM another_T
+GROUP BY ROLLUP(col1)
+----
+0
+0
+0
+1
+NULL
+
+query I rowsort
+SELECT
+    col1 IN (SELECT ColID + col1 FROM tbl_ProductSales)
+FROM another_T
+GROUP BY ROLLUP(col1)
+----
+0
+0
+0
+0
+NULL
+
+query I rowsort
+SELECT
+    col1 IN (SELECT SUM(ColID + col1) FROM tbl_ProductSales)
+FROM another_T
+GROUP BY ROLLUP(col1)
+----
+0
+0
+0
+0
+NULL
+
+query I rowsort
+SELECT
+    col3 > ALL (SELECT 1 FROM tbl_ProductSales HAVING MIN(col4) > 30)
+FROM another_T
+GROUP BY ROLLUP(col3, col4)
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+query I rowsort
+SELECT
+    col1 = ALL (SELECT 1 FROM tbl_ProductSales HAVING MIN(col2) IS NULL)
+FROM another_T
+GROUP BY CUBE(col1, col2)
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+query I rowsort
+SELECT
+    SUM(col1) IN (SELECT DISTINCT col2 FROM another_T GROUP BY col2)
+FROM another_T
+GROUP BY CUBE(col4)
+----
+0
+0
+0
+0
+0
+
+query I rowsort
+SELECT
+    1 IN (SELECT 1 FROM tbl_ProductSales GROUP BY CUBE(t1.col1, tbl_ProductSales.ColID))
+FROM another_T t1
+----
+1
+1
+1
+1
+
+query I rowsort
+SELECT
+    t1.col1 IN (SELECT ColID FROM tbl_ProductSales GROUP BY CUBE(t1.col1, tbl_ProductSales.ColID))
+FROM another_T t1
+GROUP BY CUBE(col1, col2)
+----
+1
+1
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query IIIIIII rowsort
+SELECT
+    NOT GROUPING(t1.col6) IN (SELECT SUM(t1.col6) FROM tbl_ProductSales tp HAVING MAX(t1.col1) > MIN(tp.colID)),
+    GROUPING(t1.col6) IN (SELECT SUM(t1.col7) HAVING GROUPING(t1.col7) < SUM(t1.col4)),
+    GROUPING(t1.col6) = ALL (SELECT 1),
+    GROUPING(t1.col6) = ALL (SELECT SUM(t1.col7)),
+    SUM(t1.col6) = ALL (SELECT GROUPING(t1.col7)),
+    GROUPING(t1.col6) = ALL (SELECT GROUPING(t1.col7)),
+    GROUPING(t1.col6) = ALL (SELECT GROUPING(t1.col7) FROM tbl_ProductSales)
+FROM another_T t1
+GROUP BY CUBE(t1.col6, t1.col7)
+----
+1
+0
+0
+0
+0
+0
+0
+1
+0
+0
+0
+0
+0
+0
+1
+0
+0
+0
+0
+0
+0
+1
+0
+0
+0
+0
+0
+0
+1
+0
+0
+0
+0
+1
+1
+1
+0
+0
+0
+0
+1
+1
+1
+0
+0
+0
+0
+1
+1
+1
+0
+0
+0
+0
+1
+1
+1
+0
+1
+0
+0
+0
+0
+1
+0
+1
+0
+0
+0
+0
+1
+0
+1
+0
+0
+0
+0
+1
+0
+1
+0
+0
+0
+0
+1
+0
+1
+0
+0
+1
+1
+
+query IIIIIII rowsort
+SELECT
+    DISTINCT
+    NOT GROUPING(t1.col6) IN (SELECT SUM(t1.col6) FROM tbl_ProductSales tp HAVING MAX(t1.col1) > MIN(tp.colID)),
+    GROUPING(t1.col6) IN (SELECT SUM(t1.col7) HAVING GROUPING(t1.col7) < SUM(t1.col4)),
+    GROUPING(t1.col6) = ALL (SELECT 1),
+    GROUPING(t1.col6) = ALL (SELECT SUM(t1.col7)),
+    SUM(t1.col6) = ALL (SELECT GROUPING(t1.col7)),
+    GROUPING(t1.col6) = ALL (SELECT GROUPING(t1.col7)),
+    GROUPING(t1.col6) = ALL (SELECT GROUPING(t1.col7) FROM tbl_ProductSales)
+FROM another_T t1
+GROUP BY CUBE(t1.col6, t1.col7)
+----
+1
+0
+0
+0
+0
+0
+0
+1
+0
+0
+0
+0
+1
+1
+1
+0
+1
+0
+0
+0
+0
+1
+0
+1
+0
+0
+1
+1
+
+query IIIII rowsort
+SELECT
+    NOT col1 * col5 = ALL (SELECT 1 FROM tbl_ProductSales HAVING MAX(col2) > 2),
+    NOT AVG(col2) * col1 <> ANY (SELECT 20 FROM tbl_ProductSales HAVING MAX(col1) IS NULL),
+    NOT EXISTS (SELECT ColID - 12 FROM tbl_ProductSales GROUP BY ColID HAVING MAX(col1) IS NOT NULL OR MIN(col1) < MIN(col2)),
+    CAST (NOT col1 IN (SELECT col2 FROM another_T GROUP BY col2) AS INTEGER) | CAST (col2 IN (SELECT col2 FROM another_T GROUP BY col2) AS INTEGER),
+    CAST (EXISTS (SELECT MAX(col5) * MAX(col4) FROM another_T GROUP BY col5, col4) AS INTEGER) & CAST (GROUPING(col1, col5) IN (SELECT DISTINCT col2 FROM another_T GROUP BY col2) AS INTEGER)
+FROM another_T
+GROUP BY CUBE(col1, col2, col5)
+----
+145 values hashing to 2180373d9debdb69ad704a767deb2e0a
+
+query IIIII rowsort
+SELECT
+    NOT col1 * col5 = ALL (SELECT 1 FROM tbl_ProductSales HAVING MAX(col2) > 2) AS a1,
+    NOT AVG(col2) * col1 <> ANY (SELECT 20 FROM tbl_ProductSales HAVING MAX(col1) IS NULL) AS a2,
+    NOT EXISTS (SELECT ColID - 12 FROM tbl_ProductSales GROUP BY ColID HAVING MAX(col1) IS NOT NULL OR MIN(col1) < MIN(col2)) AS a3,
+    CAST (NOT col1 IN (SELECT col2 FROM another_T GROUP BY col2) AS INTEGER) | CAST (col2 IN (SELECT col2 FROM another_T GROUP BY col2) AS INTEGER) AS a4,
+    CAST (EXISTS (SELECT MAX(col5) * MAX(col4) FROM another_T GROUP BY col5, col4) AS INTEGER) & CAST (GROUPING(col1, col5) IN (SELECT DISTINCT col2 FROM another_T GROUP BY col2) AS INTEGER) AS a5
+FROM another_T
+GROUP BY CUBE(col1, col2, col5)
+ORDER BY a1 NULLS FIRST, a2 NULLS FIRST, a3 NULLS FIRST, a4 NULLS FIRST, a5 NULLS FIRST
+----
+145 values hashing to 2180373d9debdb69ad704a767deb2e0a
+
+query IRIIIIII
+SELECT
+    GROUPING(col1, col2, col3, col4, col5, col6, col7, col8), AVG(col1), CAST(SUM(col2) * 3 AS BIGINT), col3 + col4,
+    CAST(MAX(col5) * MIN(col6) AS BIGINT), col7, col1 IN (SELECT ColID FROM tbl_ProductSales), col2 IN (SELECT ColID + col3 FROM tbl_ProductSales)
+FROM another_T
+GROUP BY ROLLUP(col1, col2, col3, col4, col5, col6, col7, col8)
+ORDER BY GROUPING(col1, col2, col3, col4, col5, col6, col7, col8), 2, 3, 4
+----
+0	1.00000000000000000000	6	7	30	7	True	False
+0	11.0000000000000000	66	77	3630	77	False	False
+0	111.0000000000000000	666	777	369630	777	False	False
+0	1111.0000000000000000	6666	7777	37029630	7777	False	False
+1	1.00000000000000000000	6	7	30	7	True	False
+1	11.0000000000000000	66	77	3630	77	False	False
+1	111.0000000000000000	666	777	369630	777	False	False
+1	1111.0000000000000000	6666	7777	37029630	7777	False	False
+3	1.00000000000000000000	6	7	30	NULL	True	False
+3	11.0000000000000000	66	77	3630	NULL	False	False
+3	111.0000000000000000	666	777	369630	NULL	False	False
+3	1111.0000000000000000	6666	7777	37029630	NULL	False	False
+7	1.00000000000000000000	6	7	30	NULL	True	False
+7	11.0000000000000000	66	77	3630	NULL	False	False
+7	111.0000000000000000	666	777	369630	NULL	False	False
+7	1111.0000000000000000	6666	7777	37029630	NULL	False	False
+15	1.00000000000000000000	6	7	30	NULL	True	False
+15	11.0000000000000000	66	77	3630	NULL	False	False
+15	111.0000000000000000	666	777	369630	NULL	False	False
+15	1111.0000000000000000	6666	7777	37029630	NULL	False	False
+31	1.00000000000000000000	6	NULL	30	NULL	True	False
+31	11.0000000000000000	66	NULL	3630	NULL	False	False
+31	111.0000000000000000	666	NULL	369630	NULL	False	False
+31	1111.0000000000000000	6666	NULL	37029630	NULL	False	False
+63	1.00000000000000000000	6	NULL	30	NULL	True	NULL
+63	11.0000000000000000	66	NULL	3630	NULL	False	NULL
+63	111.0000000000000000	666	NULL	369630	NULL	False	NULL
+63	1111.0000000000000000	6666	NULL	37029630	NULL	False	NULL
+127	1.00000000000000000000	6	NULL	30	NULL	True	NULL
+127	11.0000000000000000	66	NULL	3630	NULL	False	NULL
+127	111.0000000000000000	666	NULL	369630	NULL	False	NULL
+127	1111.0000000000000000	6666	NULL	37029630	NULL	False	NULL
+255	308.5000000000000000	7404	NULL	33330	NULL	NULL	NULL
+
+query I rowsort
+SELECT
+    DISTINCT
+    NOT col1 IN (SELECT col2 FROM another_T GROUP BY col2)
+FROM another_T
+GROUP BY ROLLUP(col1)
+----
+1
+NULL
+
+query IIIII rowsort
+SELECT
+    DISTINCT
+    NOT col1 * col5 = ALL (SELECT 1 FROM tbl_ProductSales HAVING MAX(col2) > 2),
+    NOT AVG(col2) * col1 <> ANY (SELECT 20 FROM tbl_ProductSales HAVING MAX(col1) IS NULL),
+    NOT EXISTS (SELECT ColID - 12 FROM tbl_ProductSales GROUP BY ColID HAVING MAX(col1) IS NOT NULL OR MIN(col1) < MIN(col2)),
+    CAST (NOT col1 IN (SELECT col2 FROM another_T GROUP BY col2) AS INTEGER) | CAST (col2 IN (SELECT col2 FROM another_T GROUP BY col2) AS INTEGER),
+    CAST (EXISTS (SELECT MAX(col5) * MAX(col4) FROM another_T GROUP BY col5, col4) AS INTEGER) & CAST (GROUPING(col1, col5) IN (SELECT DISTINCT col2 FROM another_T GROUP BY col2) AS INTEGER)
+FROM another_T
+GROUP BY CUBE(col1, col2, col5)
+----
+0
+1
+0
+1
+0
+0
+1
+0
+NULL
+0
+0
+1
+0
+NULL
+1
+1
+1
+0
+1
+0
+1
+1
+0
+NULL
+0
+NULL
+1
+0
+1
+0
+NULL
+1
+0
+NULL
+0
+NULL
+1
+0
+NULL
+1
+
+query IIIII rowsort
+SELECT
+    DISTINCT
+    NOT col1 * col5 = ALL (SELECT 1 FROM tbl_ProductSales HAVING MAX(col2) > 2) AS a1,
+    NOT AVG(col2) * col1 <> ANY (SELECT 20 FROM tbl_ProductSales HAVING MAX(col1) IS NULL) AS a2,
+    NOT EXISTS (SELECT ColID - 12 FROM tbl_ProductSales GROUP BY ColID HAVING MAX(col1) IS NOT NULL OR MIN(col1) < MIN(col2)) AS a3,
+    CAST (NOT col1 IN (SELECT col2 FROM another_T GROUP BY col2) AS INTEGER) | CAST (col2 IN (SELECT col2 FROM another_T GROUP BY col2) AS INTEGER) AS a4,
+    CAST (EXISTS (SELECT MAX(col5) * MAX(col4) FROM another_T GROUP BY col5, col4) AS INTEGER) & CAST (GROUPING(col1, col5) IN (SELECT DISTINCT col2 FROM another_T GROUP BY col2) AS INTEGER) AS a5
+FROM another_T
+GROUP BY CUBE(col1, col2, col5)
+ORDER BY a1 NULLS FIRST, a2 NULLS FIRST, a3 NULLS FIRST, a4 NULLS FIRST, a5 NULLS FIRST
+----
+0
+1
+0
+1
+0
+0
+1
+0
+NULL
+0
+0
+1
+0
+NULL
+1
+1
+1
+0
+1
+0
+1
+1
+0
+NULL
+0
+NULL
+1
+0
+1
+0
+NULL
+1
+0
+NULL
+0
+NULL
+1
+0
+NULL
+1
+
+query I rowsort
+SELECT
+    NOT GROUPING(t1.col2, t1.col4) <> ALL (SELECT t1.col2 FROM tbl_ProductSales tp WHERE tp.colID = 1) a1
+FROM another_T t1
+GROUP BY ROLLUP(t1.col1, t1.col2), GROUPING SETS ((t1.col4))
+HAVING (t1.col1 = ANY (SELECT MAX(ColID + col2) FROM tbl_ProductSales)) NOT IN
+    ((SELECT NOT EXISTS (SELECT t1.col2 FROM tbl_ProductSales WHERE tbl_ProductSales.ColID = t1.col1)) UNION ALL
+     (SELECT NOT GROUPING(t1.col1) BETWEEN (SELECT MAX(t1.col7) EXCEPT SELECT tp.ColID FROM tbl_ProductSales tp) AND (SELECT MIN(t1.col5) EXCEPT SELECT t1.col2)))
+ORDER BY a1 DESC NULLS FIRST
+----
+0
+0
+0
+
+statement ok
+DROP TABLE tbl_ProductSales
+
+statement ok
+DROP TABLE another_T

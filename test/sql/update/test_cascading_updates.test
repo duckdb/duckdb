@@ -1,0 +1,71 @@
+# name: test/sql/update/test_cascading_updates.test
+# description: Test many different updates
+# group: [update]
+
+load __TEST_DIR__/cascading_updates.db
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok con1
+BEGIN
+
+statement ok
+CREATE TABLE integers(id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO integers SELECT i, i FROM range(10000) t(i)
+
+statement ok
+PRAGMA checkpoint_threshold='1GB'
+
+statement ok
+UPDATE integers SET val=val+1000000 WHERE id=1
+
+statement ok con2
+BEGIN
+
+statement ok
+UPDATE integers SET val=val+1000000 WHERE id=2
+
+statement ok con3
+BEGIN
+
+statement ok
+UPDATE integers SET val=val+1000000 WHERE id=3
+
+statement ok con1
+COMMIT
+
+query I
+SELECT COUNT(*) FROM integers WHERE val>1000000
+----
+3
+
+# we cannot checkpoint because con2/con3 rely on older changes
+statement error
+CHECKPOINT
+----
+Cannot CHECKPOINT
+
+# after committing, we can checkpoint
+statement ok con2
+COMMIT
+
+statement ok con3
+COMMIT
+
+# even if con2 is active, we can still checkpoint
+statement ok con2
+BEGIN
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM integers WHERE val>1000000
+----
+3

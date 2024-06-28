@@ -51,3 +51,4 @@ ALTER TABLE test ALTER i TYPE VARCHAR USING i::VARCHAR
 # this now results in an error when rebinding
 statement error
 EXECUTE v2
+----

@@ -55,6 +55,8 @@ public:
 	TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
+	//! Get the buffer manager
+	BufferManager &GetBufferManager();
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
 	//! Get the layout
@@ -83,16 +85,16 @@ public:
 private:
 	//! Builds out a single part (grabs the lock)
 	TupleDataChunkPart BuildChunkPart(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
-	                                  const idx_t append_offset, const idx_t append_count);
+	                                  const idx_t append_offset, const idx_t append_count, TupleDataChunk &chunk);
 	//! Internal function for InitializeChunkState
 	void InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
 	                                  bool recompute, bool init_heap_pointers, bool init_heap_sizes,
-	                                  vector<TupleDataChunkPart *> &parts);
+	                                  unsafe_vector<reference<TupleDataChunkPart>> &parts);
 	//! Internal function for ReleaseOrStoreHandles
-	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment, vector<BufferHandle> &pinned_row_handles,
-	                                          unordered_map<uint32_t, BufferHandle> &handles,
-	                                          const unordered_set<uint32_t> &block_ids, vector<TupleDataBlock> &blocks,
-	                                          TupleDataPinProperties properties);
+	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
+	                                          unsafe_vector<BufferHandle> &pinned_row_handles,
+	                                          perfect_map_t<BufferHandle> &handles, const perfect_set_t &block_ids,
+	                                          unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties);
 	//! Pins the given row block
 	BufferHandle &PinRowBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
 	//! Pins the given heap block
@@ -108,9 +110,13 @@ private:
 	//! The layout of the data
 	const TupleDataLayout layout;
 	//! Blocks storing the fixed-size rows
-	vector<TupleDataBlock> row_blocks;
+	unsafe_vector<TupleDataBlock> row_blocks;
 	//! Blocks storing the variable-size data of the fixed-size rows (e.g., string, list)
-	vector<TupleDataBlock> heap_blocks;
+	unsafe_vector<TupleDataBlock> heap_blocks;
+
+	//! Re-usable arrays used while building buffer space
+	unsafe_vector<reference<TupleDataChunkPart>> chunk_parts;
+	unsafe_vector<pair<idx_t, idx_t>> chunk_part_indices;
 };
 
 } // namespace duckdb

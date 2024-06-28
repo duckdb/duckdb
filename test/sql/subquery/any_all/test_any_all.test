@@ -80,3 +80,13 @@ SELECT NULL > ALL(SELECT * FROM integers)
 ----
 NULL
 
+# unsupported comparisons
+statement error
+SELECT 2 ^ ANY(SELECT * FROM integers)
+----
+comparisons
+
+statement error
+SELECT 2 ^ ANY([1, 2, 3])
+----
+Unsupported comparison

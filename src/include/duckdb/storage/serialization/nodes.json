@@ -1,0 +1,913 @@
+[
+  {
+    "class": "LogicalType",
+    "includes": [
+      "duckdb/common/types.hpp",
+      "duckdb/common/extra_type_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "id",
+        "type": "LogicalTypeId",
+        "serialize_property": "id_"
+      },
+      {
+        "id": 101,
+        "name": "type_info",
+        "type": "shared_ptr<ExtraTypeInfo>",
+        "serialize_property": "type_info_"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["id", "type_info"]
+  },
+  {
+    "class": "CommonTableExpressionInfo",
+    "includes": [
+      "duckdb/parser/common_table_expression_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "aliases",
+        "type": "vector<string>"
+      },
+      {
+        "id": 101,
+        "name": "query",
+        "type": "SelectStatement*"
+      },
+      {
+        "id": 102,
+        "name": "materialized",
+        "type": "CTEMaterialize"
+      }
+    ]
+  },
+  {
+    "class": "CommonTableExpressionMap",
+    "includes": [
+      "duckdb/parser/query_node.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "map",
+        "type": "InsertionOrderPreservingMap<CommonTableExpressionInfo*>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "OrderByNode",
+    "includes": [
+      "duckdb/parser/result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "OrderType"
+      },
+      {
+        "id": 101,
+        "name": "null_order",
+        "type": "OrderByNullType"
+      },
+      {
+        "id": 102,
+        "name": "expression",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["type", "null_order", "expression"]
+  },
+  {
+    "class": "BoundOrderByNode",
+    "includes": [
+      "duckdb/planner/bound_result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "OrderType"
+      },
+      {
+        "id": 101,
+        "name": "null_order",
+        "type": "OrderByNullType"
+      },
+      {
+        "id": 102,
+        "name": "expression",
+        "type": "Expression*"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["type", "null_order", "expression"]
+  },
+  {
+    "class": "BoundLimitNode",
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "LimitNodeType"
+      },
+      {
+        "id": 101,
+        "name": "constant_integer",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "constant_percentage",
+        "type": "double"
+      },
+      {
+        "id": 103,
+        "name": "expression",
+        "type": "Expression*"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["type", "constant_integer", "constant_percentage", "expression"]
+  },
+  {
+    "class": "CaseCheck",
+    "includes": [
+      "duckdb/parser/expression/case_expression.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "when_expr",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 101,
+        "name": "then_expr",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "BoundCaseCheck",
+    "includes": [
+      "duckdb/planner/expression/bound_case_expression.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "when_expr",
+        "type": "Expression*"
+      },
+      {
+        "id": 101,
+        "name": "then_expr",
+        "type": "Expression*"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "SampleOptions",
+    "includes": [
+      "duckdb/parser/parsed_data/sample_options.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "sample_size",
+        "type": "Value"
+      },
+      {
+        "id": 101,
+        "name": "is_percentage",
+        "type": "bool"
+      },
+      {
+        "id": 102,
+        "name": "method",
+        "type": "SampleMethod"
+      },
+      {
+        "id": 103,
+        "name": "seed",
+        "type": "int64_t"
+      }
+    ]
+  },
+  {
+    "class": "BaseReservoirSampling",
+    "includes": [
+      "duckdb/execution/reservoir_sample.hpp",
+      "duckdb/common/queue.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "next_index_to_sample",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "min_weight_threshold",
+        "type": "double"
+      },
+      {
+        "id": 102,
+        "name": "min_weighted_entry_index",
+        "type": "idx_t"
+      },
+      {
+        "id": 103,
+        "name": "num_entries_to_skip_b4_next_sample",
+        "type": "idx_t"
+      },
+      {
+        "id": 104,
+        "name": "num_entries_seen_total",
+        "type": "idx_t"
+      },
+      {
+        "id": 105,
+        "name": "reservoir_weights",
+        "type": "std::priority_queue<std::pair<double, idx_t>>"
+      }
+    ]
+  },
+  {
+    "class": "BlockingSample",
+    "class_type": "type",
+    "members": [
+      {
+        "id" : 100,
+        "name" : "base_reservoir_sample",
+        "type" : "unique_ptr<BaseReservoirSampling>"
+      },
+      {
+        "id" : 101,
+        "name": "type",
+        "type": "SampleType"
+      },
+      {
+        "id": 102,
+        "name": "destroyed",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "ReservoirSample",
+    "base": "BlockingSample",
+    "enum": "RESERVOIR_SAMPLE",
+    "includes": [],
+    "members": [
+      {
+        "id": 200,
+        "name": "sample_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 201,
+        "name": "reservoir_chunk",
+        "type": "unique_ptr<ReservoirChunk>"
+      }
+    ],
+    "constructor": ["sample_count"]
+  },
+  {
+    "class": "ReservoirSamplePercentage",
+    "base": "BlockingSample",
+    "enum": "RESERVOIR_PERCENTAGE_SAMPLE",
+    "includes": [],
+    "members": [
+      {
+        "id": 200,
+        "name": "sample_percentage",
+        "type": "double"
+      },
+      {
+        "id": 201,
+        "name": "reservoir_sample_size",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["sample_percentage"]
+  },
+  {
+    "class": "PivotColumn",
+    "includes": [
+      "duckdb/parser/tableref/pivotref.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "pivot_expressions",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 101,
+        "name": "unpivot_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 102,
+        "name": "entries",
+        "type": "vector<PivotColumnEntry>"
+      },
+      {
+        "id": 103,
+        "name": "pivot_enum",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none"
+  },
+
+  {
+    "class": "PivotColumnEntry",
+    "members": [
+      {
+        "id": 100,
+        "name": "values",
+        "type": "vector<Value>"
+      },
+      {
+        "id": 101,
+        "name": "star_expr",
+        "type": "ParsedExpression*",
+        "property": "expr"
+      },
+      {
+        "id": 102,
+        "name": "alias",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "BoundPivotInfo",
+    "includes": [
+      "duckdb/planner/tableref/bound_pivotref.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "group_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 102,
+        "name": "pivot_values",
+        "type": "vector<string>"
+      },
+      {
+        "id": 103,
+        "name": "aggregates",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ColumnDefinition",
+    "includes": [
+      "duckdb/parser/column_definition.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 102,
+        "name": "expression",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 103,
+        "name": "category",
+        "type": "TableColumnType"
+      },
+      {
+        "id": 104,
+        "name": "compression_type",
+        "type": "duckdb::CompressionType"
+      },
+      {
+        "id": 105,
+        "name": "comment",
+        "type": "Value",
+        "default": "Value()"
+      },
+      {
+        "id": 106,
+        "name": "tags",
+        "type": "unordered_map<string, string>",
+        "default": "unordered_map<string, string>()"
+      }
+    ],
+    "constructor": ["name", "type", "expression", "category"],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ColumnList",
+    "includes": [
+      "duckdb/parser/column_list.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "columns",
+        "type": "vector<ColumnDefinition>"
+      }
+    ],
+    "constructor": ["columns"],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ColumnBinding",
+    "includes": [
+      "duckdb/planner/column_binding.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "column_index",
+        "type": "idx_t"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "BoundParameterData",
+    "includes": [
+      "duckdb/planner/expression/bound_parameter_data.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "value",
+        "type": "Value"
+      },
+      {
+        "id": 101,
+        "name": "return_type",
+        "type": "LogicalType"
+      }
+    ],
+    "constructor": ["value"],
+    "pointer_type": "shared_ptr"
+  },
+  {
+    "class": "JoinCondition",
+    "includes": [
+      "duckdb/planner/joinside.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "left",
+        "type": "Expression*"
+      },
+      {
+        "id": 101,
+        "name": "right",
+        "type": "Expression*"
+      },
+      {
+        "id": 102,
+        "name": "comparison",
+        "type": "ExpressionType"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "VacuumOptions",
+    "includes": [
+      "duckdb/parser/parsed_data/vacuum_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "vacuum",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "analyze",
+        "type": "bool"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "TableFilterSet",
+    "includes": [
+      "duckdb/planner/table_filter.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "filters",
+        "type": "unordered_map<idx_t, TableFilter*>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "MultiFileReaderOptions",
+    "includes": [
+      "duckdb/common/multi_file_reader_options.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "filename",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "hive_partitioning",
+        "type": "bool"
+      },
+      {
+        "id": 102,
+        "name": "auto_detect_hive_partitioning",
+        "type": "bool"
+      },
+      {
+        "id": 103,
+        "name": "union_by_name",
+        "type": "bool"
+      },
+      {
+        "id": 104,
+        "name": "hive_types_autocast",
+        "type": "bool"
+      },
+      {
+        "id": 105,
+        "name": "hive_types_schema",
+        "type": "case_insensitive_map_t<LogicalType>"
+      },
+      {
+        "id": 106,
+        "name": "filename_column",
+        "type": "string",
+        "default": "MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "MultiFileReaderBindData",
+    "includes": [
+      "duckdb/common/multi_file_reader.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "filename_idx",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "hive_partitioning_indexes",
+        "type": "vector<HivePartitioningIndex>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "HivePartitioningIndex",
+    "members": [
+      {
+        "id": 100,
+        "name": "value",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "index",
+        "type": "idx_t"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["value", "index"]
+  },
+  {
+    "class": "CSVOption<T>",
+    "includes": [
+      "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "set_by_user",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "value",
+        "type": "T"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "CSVReaderOptions",
+    "includes": [
+      "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+    ],
+    "members": [
+      {"id": 100,
+        "name": "ignore_errors",
+        "type": "bool",
+        "default": "false"
+      },
+      {"id": 101,
+        "name": "buffer_sample_size",
+        "type": "idx_t"
+      },
+      {"id": 102,
+        "name": "null_str",
+        "type": "vector<string>"
+      },
+      {"id": 103,
+        "name": "compression",
+        "type": "FileCompressionType"
+      },
+      {"id": 104,
+        "name": "allow_quoted_nulls",
+        "type": "bool"
+      },
+      {"id": 105,
+        "name": "maximum_line_size",
+        "type": "idx_t"
+      },
+      {"id": 106,
+        "name": "normalize_names",
+        "type": "bool"
+      },
+      {"id": 107,
+        "name": "force_not_null",
+        "type": "vector<bool>"
+      },
+      {"id": 108,
+        "name": "all_varchar",
+        "type": "bool"
+      },
+      {"id": 109,
+        "name": "sample_size_chunks",
+        "type": "idx_t"
+      },
+      {"id": 110,
+        "name": "auto_detect",
+        "type": "bool"
+      },
+      {"id": 111,
+        "name": "file_path",
+        "type": "string"
+      },
+      {"id": 112,
+        "name": "decimal_separator",
+        "type": "string"
+      },
+      {"id": 113,
+        "name": "null_padding",
+        "type": "bool"
+      },
+      {"id": 114,
+        "name": "buffer_size",
+        "type": "idx_t"
+      },
+      {"id": 115,
+        "name": "file_options",
+        "type": "MultiFileReaderOptions"
+      },
+      {"id": 116,
+        "name": "force_quote",
+        "type": "vector<bool>"
+      },
+      {"id": 117,
+        "name": "rejects_table_name",
+        "type": "string",
+        "default": "\"reject_errors\""
+      },
+      {"id": 118,
+        "name": "rejects_limit",
+        "type": "idx_t"
+      },
+      {"id": 119,
+        "name": "rejects_recovery_columns",
+        "type": "vector<string>",
+        "deleted": true
+      },
+      {"id": 120,
+        "name": "rejects_recovery_column_ids",
+        "type": "vector<idx_t>",
+        "deleted": true
+      },
+      {"id": 121,
+        "name": "dialect_options.state_machine_options.delimiter",
+        "type": "CSVOption<char>"
+      },
+      {"id": 122,
+        "name": "dialect_options.state_machine_options.quote",
+        "type": "CSVOption<char>"
+      },
+      {"id": 123,
+        "name": "dialect_options.state_machine_options.escape",
+        "type": "CSVOption<char>"
+      },
+      {"id": 124,
+        "name": "dialect_options.header",
+        "type": "CSVOption<bool>"
+      },
+      {"id": 125,
+        "name": "dialect_options.num_cols",
+        "type": "idx_t"
+      },
+      {"id": 126,
+        "name": "dialect_options.state_machine_options.new_line",
+        "type": "CSVOption<NewLineIdentifier>"
+      },
+      {"id": 127,
+        "name": "dialect_options.skip_rows",
+        "type": "CSVOption<idx_t>"
+      },
+      {"id": 128,
+        "name": "dialect_options.date_format",
+        "type": "map<LogicalTypeId, CSVOption<StrpTimeFormat>>"
+      },
+      {"id": 129,
+        "name": "sniffer_user_mismatch_error",
+        "type": "string"
+      },
+      {"id": 130,
+        "name": "parallel",
+        "type": "bool"
+      },
+      {"id": 131,
+        "name": "was_type_manually_set",
+        "type": "vector<bool>"
+      },
+      {"id": 132,
+        "name": "rejects_scan_name",
+        "type": "CSVOption<string>",
+        "default": "{\"reject_scans\"}"
+      },
+      {"id": 133,
+        "name": "name_list",
+        "type": "vector<string>"
+      },
+      {"id": 134,
+        "name": "sql_type_list",
+        "type": "vector<LogicalType>"
+      },
+      {"id": 135,
+        "name": "sql_types_per_column",
+        "type": "case_insensitive_map_t<idx_t>"
+      },
+      {"id": 136,
+        "name": "columns_set",
+        "type": "bool",
+        "default": "false"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "StrpTimeFormat",
+    "includes": [
+      "duckdb/function/scalar/strftime_format.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "format_specifier",
+        "type": "string"
+      }
+    ],
+    "constructor": ["format_specifier&"],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ReadCSVData",
+    "includes": [
+      "duckdb/function/table/read_csv.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "files",
+        "type": "vector<string>"
+      },
+      {
+        "id": 101,
+        "name": "csv_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 102,
+        "name": "csv_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 103,
+        "name": "return_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 104,
+        "name": "return_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 105,
+        "name": "filename_col_idx",
+        "type": "idx_t"
+      },
+      {
+        "id": 106,
+        "name": "options",
+        "type": "CSVReaderOptions"
+      },
+      {
+        "id": 107,
+        "name": "reader_bind",
+        "type": "MultiFileReaderBindData"
+      },
+      {
+        "id": 108,
+        "name": "column_info",
+        "type": "vector<ColumnInfo>"
+      }
+    ]
+  },
+  {
+    "class": "ColumnInfo",
+    "members": [
+      {
+        "id": 100,
+        "name": "names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 101,
+        "name": "types",
+        "type": "vector<LogicalType>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "interval_t",
+    "includes": [
+      "duckdb/common/types/interval.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "months",
+        "type": "int32_t"
+      },
+      {
+        "id": 2,
+        "name": "days",
+        "type": "int32_t"
+      },
+      {
+        "id": 3,
+        "name": "micros",
+        "type": "int64_t"
+      }
+    ],
+    "pointer_type": "none"
+  }
+]

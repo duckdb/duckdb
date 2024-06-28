@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
@@ -18,14 +19,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::STREAMING_LIMIT;
 
 public:
-	PhysicalStreamingLimit(vector<LogicalType> types, idx_t limit, idx_t offset,
-	                       unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
+	PhysicalStreamingLimit(vector<LogicalType> types, BoundLimitNode limit_val_p, BoundLimitNode offset_val_p,
 	                       idx_t estimated_cardinality, bool parallel);
 
-	idx_t limit_value;
-	idx_t offset_value;
-	unique_ptr<Expression> limit_expression;
-	unique_ptr<Expression> offset_expression;
+	BoundLimitNode limit_val;
+	BoundLimitNode offset_val;
 	bool parallel;
 
 public:

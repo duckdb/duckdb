@@ -1,0 +1,39 @@
+# name: test/sql/optimizer/expression/test_comparison_simplification.test
+# description: Test ComparisonSimplificationRule
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+# VARCHAR => TIME is not invertible.
+query I
+WITH results AS (     
+	SELECT '2023-08-17T23:00:08.539Z' as timestamp 
+	) 
+SELECT * 
+FROM results 
+WHERE timestamp::TIME BETWEEN '22:00:00'::TIME AND '23:59:59'::TIME ;
+----
+2023-08-17T23:00:08.539Z
+
+# CAST(TIMESTAMP AS TIME) can't use statistics
+statement ok
+CREATE TABLE issue8316 (dt TIMESTAMP);
+
+statement ok
+INSERT INTO issue8316 VALUES
+	('2016-02-14 18:00:05'),
+	('2016-02-15 10:04:25'),
+	('2016-02-16 10:04:25'),
+	('2016-02-16 23:59:55'),
+;
+
+query I
+SELECT dt
+FROM issue8316
+WHERE CAST(dt as TIME) = CAST('10:04:25' as TIME)
+ORDER BY 1
+;
+----
+2016-02-15 10:04:25
+2016-02-16 10:04:25

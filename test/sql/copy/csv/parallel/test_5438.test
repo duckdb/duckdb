@@ -9,7 +9,7 @@ statement ok
 PRAGMA verify_parallelism
 
 query I
-SELECT j->>'duck' FROM read_csv_auto('test/sql/copy/csv/data/test/5438.csv', delim='', columns={'j': 'JSON'})
+SELECT j->>'duck' FROM read_csv_auto('test/sql/copy/csv/data/test/5438.csv', delim='', columns={'j': 'JSON'}, auto_detect = false)
 ----
 1
 2

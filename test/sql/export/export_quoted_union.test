@@ -1,0 +1,45 @@
+# name: test/sql/export/export_quoted_union.test
+# description: Test export database
+# group: [export]
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+create table a (
+	u UNION(
+		"member name 1" VARCHAR,
+		"member name 2" BOOL
+	)
+);
+
+statement ok
+insert into a values (
+	union_value("member name 1" := 'hello')
+);
+
+query I
+select * from a
+----
+hello
+
+# now export the db
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT CSV)
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_test'
+
+# Verify that the import was succesful
+query I
+select * from a
+----
+hello
+
+query I
+select union_tag(COLUMNS(*)) from a;
+----
+member name 1

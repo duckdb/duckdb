@@ -1,0 +1,75 @@
+# name: test/sql/types/uhugeint/test_uhugeint_ops.test
+# description: Test various huge integer ops
+# group: [uhugeint]
+
+statement ok
+PRAGMA enable_verification
+
+# test storage of the UHUGEINT type
+statement ok
+CREATE TABLE uhugeints(h UHUGEINT);
+
+statement ok
+INSERT INTO uhugeints VALUES (42::UHUGEINT), ('1267650600228229401496703205376'::UHUGEINT);
+
+# out of range conversion
+# statement error
+# SELECT h::UINTEGER FROM uhugeints
+
+# filter before cast works
+query I
+SELECT h::UINTEGER FROM uhugeints WHERE h < 100::UINTEGER
+----
+42
+
+# test different comparison ops
+query I
+SELECT COUNT(*) FROM uhugeints WHERE h = 42::UHUGEINT
+----
+1
+
+query I
+SELECT COUNT(*) FROM uhugeints WHERE h <> '1267650600228229401496703205376'::UHUGEINT
+----
+1
+
+query I
+SELECT COUNT(*) FROM uhugeints WHERE h < '1267650600228229401496703205376'::UHUGEINT
+----
+1
+
+query I
+SELECT COUNT(*) FROM uhugeints WHERE h <= '1267650600228229401496703205376'::UHUGEINT
+----
+2
+
+query I
+SELECT COUNT(*) FROM uhugeints WHERE h > '1267650600228229401496703205375'::UHUGEINT
+----
+1
+
+query I
+SELECT COUNT(*) FROM uhugeints WHERE h >= 42::UHUGEINT
+----
+2
+
+# joins
+statement ok
+CREATE TABLE uhugeints2(h UHUGEINT);
+INSERT INTO uhugeints2 VALUES (42::UHUGEINT);
+
+query I
+SELECT * FROM uhugeints JOIN uhugeints2 USING (h);
+----
+42
+
+query II
+SELECT * FROM uhugeints t1 JOIN uhugeints2 t2 ON t1.h <> t2.h
+----
+1267650600228229401496703205376	42
+
+query II
+SELECT * FROM uhugeints t1 JOIN uhugeints2 t2 ON t1.h >= t2.h ORDER BY 1 LIMIT 2
+----
+42	42
+1267650600228229401496703205376	42

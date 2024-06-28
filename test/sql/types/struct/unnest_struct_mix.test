@@ -1,0 +1,89 @@
+# name: test/sql/types/struct/unnest_struct_mix.test
+# description: Test UNNEST of struct mixed with other constructs
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+# unnest of struct in set operation
+statement ok
+CREATE TABLE tbl_structs AS SELECT {'a': 1, 'b': 2, 'c': 3} AS s;
+
+statement ok
+INSERT INTO tbl_structs VALUES ({'a': 2, 'b': 3, 'c': 1});
+
+statement ok
+INSERT INTO tbl_structs VALUES ({'a': 3, 'b': 1, 'c': 2});
+
+query III
+SELECT UNNEST(s) FROM tbl_structs UNION ALL SELECT s.a, s.b, s.c FROM tbl_structs ORDER BY s.a, s.b, s.c;
+----
+1	2	3
+1	2	3
+2	3	1
+2	3	1
+3	1	2
+3	1	2
+
+# order by unnest of struct
+statement error
+SELECT * FROM tbl_structs ORDER BY UNNEST(s);
+----
+cannot be used
+
+# order by all
+statement ok
+CREATE OR REPLACE TABLE tbl_structs AS SELECT {'a': 1, 'b': 2, 'c': 3} AS s;
+
+statement ok
+INSERT INTO tbl_structs VALUES ({'a': 1, 'b': 3, 'c': 1});
+
+statement ok
+INSERT INTO tbl_structs VALUES ({'a': 1, 'b': 1, 'c': 2});
+
+query III
+select unnest(s) from tbl_structs order by all;
+----
+1	1	2
+1	2	3
+1	3	1
+
+# order by index with collate
+statement error
+select unnest(s) from tbl_structs order by 2 collate nocase;
+----
+COLLATE can only be applied to varchar columns
+
+statement ok
+CREATE OR REPLACE TABLE tbl_structs AS SELECT {'a': 'hello'} s;
+
+statement ok
+INSERT INTO tbl_structs VALUES ({'a': 'WORLD'});
+
+query I
+SELECT UNNEST(s) FROM tbl_structs ORDER BY 1 COLLATE NOCASE;
+----
+hello
+WORLD
+
+statement ok
+CREATE OR REPLACE TABLE tbl_structs AS SELECT {'a': 'hello', 'b': 1} s;
+
+statement ok
+INSERT INTO tbl_structs VALUES ({'a': 'WORLD', 'b': 2});
+
+query II
+SELECT UNNEST(s) FROM tbl_structs UNION ALL SELECT s.a, s.b FROM tbl_structs ORDER BY 1 COLLATE NOCASE;
+----
+hello	1
+hello	1
+WORLD	2
+WORLD	2
+
+query III
+SELECT UNNEST(s), -s.b AS id FROM tbl_structs UNION ALL SELECT s.a, s.b, s.b FROM tbl_structs ORDER BY id;
+----
+WORLD	2	-2
+hello	1	-1
+hello	1	1
+WORLD	2	2

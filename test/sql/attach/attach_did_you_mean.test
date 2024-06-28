@@ -55,7 +55,7 @@ SELECT * FROM memory.hello
 
 # what if we switch default database AND default schema?
 statement ok
-USE "db1.myschema"
+USE db1.myschema
 
 statement ok
 SELECT * FROM blablabla

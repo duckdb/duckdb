@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/test_9005.test
+# description: Test CSV works for #9005
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# requires notwindows for windows-style path backslash reasons
+require notwindows
+
+query IIII
+SELECT * FROM read_csv_auto('data/csv/bug_9005/teste*.csv',filename=true,union_by_name=True) where filename='data/csv/bug_9005/teste1.csv';
+----
+1	Ricardo	1.5	data/csv/bug_9005/teste1.csv
+2	Jose	2.0	data/csv/bug_9005/teste1.csv
+

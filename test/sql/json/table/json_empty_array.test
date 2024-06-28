@@ -1,0 +1,49 @@
+# name: test/sql/json/table/json_empty_array.test
+# description: Read json files with empty arrays
+# group: [table]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# empty file
+query I
+select * from 'data/json/empty.ndjson'
+----
+
+query I
+select * from 'data/json/whitespace_only.json'
+----
+
+# empty array
+query I
+SELECT * FROM read_json_auto('data/json/empty_array.json')
+----
+
+query I
+SELECT * FROM read_json_auto('data/json/empty_no_newline.json')
+----
+
+# malformed files
+statement error
+SELECT * FROM read_json_auto('data/json/malformed/empty_array_malformed.json')
+----
+Missing closing brace
+
+statement error
+SELECT * FROM read_json_auto('data/json/malformed/empty_array_trailing.json', format='array')
+----
+Empty array with trailing data when parsing JSON array
+
+statement error
+SELECT * FROM read_json_auto('data/json/malformed/array_comma_malformed.json', format='array')
+----
+Malformed JSON
+
+query I
+SELECT * FROM read_json_auto('data/json/array_of_empty_arrays.json', format='array')
+----
+[]
+[]
+[]

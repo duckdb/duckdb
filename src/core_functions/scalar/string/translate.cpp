@@ -37,10 +37,10 @@ static string_t TranslateScalarFunction(const string_t &haystack, const string_t
 	while (i < size_needle && j < size_thread) {
 		auto codepoint_needle = Utf8Proc::UTF8ToCodepoint(input_needle, sz);
 		input_needle += sz;
-		i += sz;
+		i += UnsafeNumericCast<idx_t>(sz);
 		auto codepoint_thread = Utf8Proc::UTF8ToCodepoint(input_thread, sz);
 		input_thread += sz;
-		j += sz;
+		j += UnsafeNumericCast<idx_t>(sz);
 		// Ignore unicode character that is existed in to_replace
 		if (to_replace.count(codepoint_needle) == 0) {
 			to_replace[codepoint_needle] = codepoint_thread;
@@ -52,7 +52,7 @@ static string_t TranslateScalarFunction(const string_t &haystack, const string_t
 	while (i < size_needle) {
 		auto codepoint_needle = Utf8Proc::UTF8ToCodepoint(input_needle, sz);
 		input_needle += sz;
-		i += sz;
+		i += UnsafeNumericCast<idx_t>(sz);
 		// Add unicode character that will be deleted
 		if (to_replace.count(codepoint_needle) == 0) {
 			to_delete.insert(codepoint_needle);
@@ -60,7 +60,7 @@ static string_t TranslateScalarFunction(const string_t &haystack, const string_t
 	}
 
 	char c[5] = {'\0', '\0', '\0', '\0', '\0'};
-	for (i = 0; i < size_haystack; i += sz) {
+	for (i = 0; i < size_haystack; i += UnsafeNumericCast<idx_t>(sz)) {
 		auto codepoint_haystack = Utf8Proc::UTF8ToCodepoint(input_haystack, sz);
 		if (to_replace.count(codepoint_haystack) != 0) {
 			Utf8Proc::CodepointToUtf8(to_replace[codepoint_haystack], c_sz, c);
@@ -71,7 +71,7 @@ static string_t TranslateScalarFunction(const string_t &haystack, const string_t
 		input_haystack += sz;
 	}
 
-	return string_t(result.data(), result.size());
+	return string_t(result.data(), UnsafeNumericCast<uint32_t>(result.size()));
 }
 
 static void TranslateFunction(DataChunk &args, ExpressionState &state, Vector &result) {

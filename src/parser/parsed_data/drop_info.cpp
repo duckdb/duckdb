@@ -1,46 +1,40 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 
 namespace duckdb {
 
-DropInfo::DropInfo() : catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), cascade(false) {
+DropInfo::DropInfo() : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), cascade(false) {
+}
+
+DropInfo::DropInfo(const DropInfo &info)
+    : ParseInfo(info.info_type), type(info.type), catalog(info.catalog), schema(info.schema), name(info.name),
+      if_not_found(info.if_not_found), cascade(info.cascade), allow_drop_internal(info.allow_drop_internal),
+      extra_drop_info(info.extra_drop_info ? info.extra_drop_info->Copy() : nullptr) {
 }
 
 unique_ptr<DropInfo> DropInfo::Copy() const {
-	auto result = make_uniq<DropInfo>();
-	result->type = type;
-	result->catalog = catalog;
-	result->schema = schema;
-	result->name = name;
-	result->if_not_found = if_not_found;
-	result->cascade = cascade;
-	result->allow_drop_internal = allow_drop_internal;
+	return make_uniq<DropInfo>(*this);
+}
+
+string DropInfo::ToString() const {
+	string result = "";
+	if (type == CatalogType::PREPARED_STATEMENT) {
+		result += "DEALLOCATE PREPARE ";
+		result += KeywordHelper::WriteOptionallyQuoted(name);
+	} else {
+		result += "DROP";
+		result += " " + ParseInfo::TypeToString(type);
+		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+			result += " IF EXISTS";
+		}
+		result += " ";
+		result += QualifierToString(catalog, schema, name);
+		if (cascade) {
+			result += " CASCADE";
+		}
+	}
+	result += ";";
 	return result;
-}
-
-void DropInfo::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<CatalogType>(type);
-	writer.WriteString(catalog);
-	writer.WriteString(schema);
-	writer.WriteString(name);
-	writer.WriteField(if_not_found);
-	writer.WriteField(cascade);
-	writer.WriteField(allow_drop_internal);
-	writer.Finalize();
-}
-
-unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
-	FieldReader reader(deserializer);
-	auto drop_info = make_uniq<DropInfo>();
-	drop_info->type = reader.ReadRequired<CatalogType>();
-	drop_info->catalog = reader.ReadRequired<string>();
-	drop_info->schema = reader.ReadRequired<string>();
-	drop_info->name = reader.ReadRequired<string>();
-	drop_info->if_not_found = reader.ReadRequired<OnEntryNotFound>();
-	drop_info->cascade = reader.ReadRequired<bool>();
-	drop_info->allow_drop_internal = reader.ReadRequired<bool>();
-	reader.Finalize();
-	return std::move(drop_info);
 }
 
 } // namespace duckdb

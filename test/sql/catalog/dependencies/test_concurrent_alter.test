@@ -1,0 +1,36 @@
+# name: test/sql/catalog/dependencies/test_concurrent_alter.test
+# group: [dependencies]
+
+require skip_reload
+
+# Create the table
+statement ok
+CREATE TABLE t2 AS (SELECT 42);
+
+# Create a sequence
+statement ok
+create sequence seq;
+
+# Let the table own the sequence
+statement ok
+alter sequence seq owned by t2;
+
+concurrentloop i 1 100
+
+loop j 1 10
+
+statement maybe
+alter table t2 rename to t3;
+----
+Catalog
+
+statement maybe
+alter table t3 rename to t2;
+----
+Catalog
+
+# j
+endloop
+
+# i
+endloop

@@ -12,27 +12,31 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_wrapper.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-
-#include <memory>
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 struct BoundStatement;
 
-class ClientContextWrapper;
 class Binder;
 class LogicalOperator;
 class QueryNode;
 class TableRef;
 
-class Relation : public std::enable_shared_from_this<Relation> {
+class Relation : public enable_shared_from_this<Relation> {
 public:
-	Relation(const std::shared_ptr<ClientContext> &context, RelationType type) : context(context), type(type) {
+	Relation(const shared_ptr<ClientContext> &context, RelationType type) : context(context), type(type) {
 	}
 	Relation(ClientContextWrapper &context, RelationType type) : context(context.GetContext()), type(type) {
 	}
@@ -40,10 +44,8 @@ public:
 	}
 
 	ClientContextWrapper context;
-
 	RelationType type;
-
-	shared_ptr<ExternalDependency> extra_dependencies;
+	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
 public:
 	DUCKDB_API virtual const vector<ColumnDefinition> &Columns() = 0;
@@ -80,9 +82,12 @@ public:
 	DUCKDB_API shared_ptr<Relation> Project(const string &select_list, const vector<string> &aliases);
 	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions);
 	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions, const vector<string> &aliases);
+	DUCKDB_API shared_ptr<Relation> Project(vector<unique_ptr<ParsedExpression>> expressions,
+	                                        const vector<string> &aliases);
 
 	// FILTER
 	DUCKDB_API shared_ptr<Relation> Filter(const string &expression);
+	DUCKDB_API shared_ptr<Relation> Filter(unique_ptr<ParsedExpression> expression);
 	DUCKDB_API shared_ptr<Relation> Filter(const vector<string> &expressions);
 
 	// LIMIT
@@ -91,13 +96,17 @@ public:
 	// ORDER
 	DUCKDB_API shared_ptr<Relation> Order(const string &expression);
 	DUCKDB_API shared_ptr<Relation> Order(const vector<string> &expressions);
+	DUCKDB_API shared_ptr<Relation> Order(vector<OrderByNode> expressions);
 
 	// JOIN operation
 	DUCKDB_API shared_ptr<Relation> Join(const shared_ptr<Relation> &other, const string &condition,
-	                                     JoinType type = JoinType::INNER);
+	                                     JoinType type = JoinType::INNER, JoinRefType ref_type = JoinRefType::REGULAR);
+	shared_ptr<Relation> Join(const shared_ptr<Relation> &other, vector<unique_ptr<ParsedExpression>> condition,
+	                          JoinType type = JoinType::INNER, JoinRefType ref_type = JoinRefType::REGULAR);
 
 	// CROSS PRODUCT operation
-	DUCKDB_API shared_ptr<Relation> CrossProduct(const shared_ptr<Relation> &other);
+	DUCKDB_API shared_ptr<Relation> CrossProduct(const shared_ptr<Relation> &other,
+	                                             JoinRefType join_ref_type = JoinRefType::CROSS);
 
 	// SET operations
 	DUCKDB_API shared_ptr<Relation> Union(const shared_ptr<Relation> &other);
@@ -112,6 +121,8 @@ public:
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const string &aggregate_list, const string &group_list);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates, const vector<string> &groups);
+	DUCKDB_API shared_ptr<Relation> Aggregate(vector<unique_ptr<ParsedExpression>> expressions,
+	                                          const string &group_list);
 
 	// ALIAS
 	DUCKDB_API shared_ptr<Relation> Alias(const string &alias);
@@ -159,10 +170,23 @@ public:
 	virtual Relation *ChildRelation() {
 		return nullptr;
 	}
+	void AddExternalDependency(shared_ptr<ExternalDependency> dependency);
 	DUCKDB_API vector<shared_ptr<ExternalDependency>> GetAllDependencies();
 
 protected:
 	DUCKDB_API string RenderWhitespace(idx_t depth);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 } // namespace duckdb

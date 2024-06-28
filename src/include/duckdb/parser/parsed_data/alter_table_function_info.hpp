@@ -21,14 +21,12 @@ enum class AlterTableFunctionType : uint8_t { INVALID = 0, ADD_FUNCTION_OVERLOAD
 
 struct AlterTableFunctionInfo : public AlterInfo {
 	AlterTableFunctionInfo(AlterTableFunctionType type, AlterEntryData data);
-	virtual ~AlterTableFunctionInfo() override;
+	~AlterTableFunctionInfo() override;
 
 	AlterTableFunctionType alter_table_function_type;
 
 public:
 	CatalogType GetCatalogType() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader);
 };
 
 //===--------------------------------------------------------------------===//
@@ -42,6 +40,7 @@ struct AddTableFunctionOverloadInfo : public AlterTableFunctionInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
 };
 
 } // namespace duckdb

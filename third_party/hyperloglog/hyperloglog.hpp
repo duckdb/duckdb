@@ -13,13 +13,15 @@
 
 namespace duckdb_hll {
 
+// NOLINTBEGIN
+
 /* Error codes */
 #define HLL_C_OK  0
 #define HLL_C_ERR -1
 
-typedef struct {
+struct robj {
 	void *ptr;
-} robj;
+};
 
 //! Create a new empty HyperLogLog object
 robj *hll_create(void);
@@ -38,7 +40,13 @@ robj *hll_merge(robj **hlls, size_t hll_count);
 //! Get size (in bytes) of the HLL
 uint64_t get_size();
 
+//! Helper Functions
+double hllSigma(double x);
+double hllTau(double x);
+
 uint64_t MurmurHash64A(const void *key, int len, unsigned int seed);
+
+// NOLINTEND
 
 } // namespace duckdb_hll
 

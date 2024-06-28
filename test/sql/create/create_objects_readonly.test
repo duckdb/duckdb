@@ -1,0 +1,47 @@
+# name: test/sql/create/create_objects_readonly.test
+# description: Test that creating objects fails on readonly database
+# group: [create]
+
+# load the DB from disk and make some test data
+load __TEST_DIR__/create_objects_readonly.db
+
+statement ok
+create table t1 as select 'c1' as c1
+
+load __TEST_DIR__/create_objects_readonly.db readonly
+
+# cannot create a schema - database is opened in read-only mode
+statement error
+CREATE schema s2;
+----
+read-only
+
+# cannot create a table - database is opened in read-only mode
+statement error
+CREATE TABLE test AS SELECT * FROM range(10) t(i);
+----
+read-only
+
+# cannot create a view - database is opened in read-only mode
+statement error
+CREATE view v1 AS SELECT * FROM range(10) t(i);
+----
+read-only
+
+# cannot create a macro - database is opened in read-only mode
+statement error
+CREATE macro add(a, b) AS a + b;
+----
+read-only
+
+# cannot create a type - database is opened in read-only mode
+statement error
+CREATE TYPE mood AS ENUM ('happy', 'sad', 'curious');
+----
+read-only
+
+# cannot create a sequence - database is opened in read-only mode
+statement error
+CREATE SEQUENCE serial START 101;
+----
+read-only

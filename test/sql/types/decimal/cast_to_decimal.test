@@ -19,18 +19,23 @@ SELECT 100::TINYINT::DECIMAL(38,35), 100::TINYINT::DECIMAL(9,6)
 # overflow
 statement error
 SELECT 100::TINYINT::DECIMAL(3,1)
+----
 
 statement error
 SELECT 1::TINYINT::DECIMAL(3,3)
+----
 
 statement error
 SELECT 100::TINYINT::DECIMAL(18,17)
+----
 
 statement error
 SELECT 100::TINYINT::DECIMAL(9,7)
+----
 
 statement error
 SELECT 100::TINYINT::DECIMAL(38,37)
+----
 
 # smallint
 query IIII
@@ -46,18 +51,23 @@ SELECT 100::SMALLINT::DECIMAL(38,35), 100::SMALLINT::DECIMAL(9,6)
 # overflow
 statement error
 SELECT 100::SMALLINT::DECIMAL(3,1)
+----
 
 statement error
 SELECT 1::SMALLINT::DECIMAL(3,3)
+----
 
 statement error
 SELECT 100::SMALLINT::DECIMAL(18,17)
+----
 
 statement error
 SELECT 100::SMALLINT::DECIMAL(9,7)
+----
 
 statement error
 SELECT 100::SMALLINT::DECIMAL(38,37)
+----
 
 # integer
 query IIII
@@ -73,24 +83,31 @@ SELECT 100::INTEGER::DECIMAL(38,35), 100::INTEGER::DECIMAL(9,6), 2147483647::INT
 # overflow
 statement error
 SELECT 100::INTEGER::DECIMAL(3,1)
+----
 
 statement error
 SELECT 10000000::INTEGER::DECIMAL(3,1)
+----
 
 statement error
 SELECT -10000000::INTEGER::DECIMAL(3,1)
+----
 
 statement error
 SELECT 1::INTEGER::DECIMAL(3,3)
+----
 
 statement error
 SELECT 100::INTEGER::DECIMAL(18,17)
+----
 
 statement error
 SELECT 100::INTEGER::DECIMAL(9,7)
+----
 
 statement error
 SELECT 100::INTEGER::DECIMAL(38,37)
+----
 
 # bigint
 query IIII
@@ -111,24 +128,31 @@ SELECT 922337203685477580::BIGINT::DECIMAL(18,0), (-922337203685477580)::BIGINT:
 # overflow
 statement error
 SELECT 100::BIGINT::DECIMAL(3,1)
+----
 
 statement error
 SELECT 10000000::BIGINT::DECIMAL(3,1)
+----
 
 statement error
 SELECT -10000000::BIGINT::DECIMAL(3,1)
+----
 
 statement error
 SELECT 1::BIGINT::DECIMAL(3,3)
+----
 
 statement error
 SELECT 100::BIGINT::DECIMAL(18,17)
+----
 
 statement error
 SELECT 100::BIGINT::DECIMAL(9,7)
+----
 
 statement error
 SELECT 100::BIGINT::DECIMAL(38,37)
+----
 
 # hugeint
 query IIII
@@ -144,39 +168,51 @@ SELECT 100::HUGEINT::DECIMAL(38,35), 100::HUGEINT::DECIMAL(9,6), 170141183460469
 # overflow
 statement error
 SELECT 100::HUGEINT::DECIMAL(3,1)
+----
 
 statement error
 SELECT 10000000::HUGEINT::DECIMAL(3,1)
+----
 
 statement error
 SELECT -10000000::HUGEINT::DECIMAL(3,1)
+----
 
 statement error
 SELECT 1::HUGEINT::DECIMAL(3,3)
+----
 
 statement error
 SELECT 100::HUGEINT::DECIMAL(18,17)
+----
 
 statement error
 SELECT 100::HUGEINT::DECIMAL(9,7)
+----
 
 statement error
 SELECT 100::HUGEINT::DECIMAL(38,37)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(38,1)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(37,0)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(18,0)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(9,0)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(4,0)
+----
 
 # float
 query IIII
@@ -197,39 +233,51 @@ SELECT 1.25::FLOAT::DECIMAL(3,2)
 # overflow
 statement error
 SELECT 100::FLOAT::DECIMAL(3,1)
+----
 
 statement error
 SELECT 10000000::FLOAT::DECIMAL(3,1)
+----
 
 statement error
 SELECT -10000000::FLOAT::DECIMAL(3,1)
+----
 
 statement error
 SELECT 1::FLOAT::DECIMAL(3,3)
+----
 
 statement error
 SELECT 100::FLOAT::DECIMAL(18,17)
+----
 
 statement error
 SELECT 100::FLOAT::DECIMAL(9,7)
+----
 
 statement error
 SELECT 100::FLOAT::DECIMAL(38,37)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(38,1)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(37,0)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(18,0)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(9,0)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(4,0)
+----
 
 # double
 query IIII
@@ -250,37 +298,49 @@ SELECT 1.25::DOUBLE::DECIMAL(3,2)
 # overflow
 statement error
 SELECT 100::DOUBLE::DECIMAL(3,1)
+----
 
 statement error
 SELECT 10000000::DOUBLE::DECIMAL(3,1)
+----
 
 statement error
 SELECT -10000000::DOUBLE::DECIMAL(3,1)
+----
 
 statement error
 SELECT 1::DOUBLE::DECIMAL(3,3)
+----
 
 statement error
 SELECT 100::DOUBLE::DECIMAL(18,17)
+----
 
 statement error
 SELECT 100::DOUBLE::DECIMAL(9,7)
+----
 
 statement error
 SELECT 100::DOUBLE::DECIMAL(38,37)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(38,1)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(37,0)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(18,0)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(9,0)
+----
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(4,0)
+----
 

@@ -64,6 +64,7 @@ e
 # test substrings with constant nulls in different places
 statement error
 SELECT NULL::VARCHAR[off] FROM strings
+----
 
 query T
 SELECT 'hello'[NULL] FROM strings
@@ -75,12 +76,15 @@ NULL
 
 statement error
 SELECT NULL::VARCHAR[NULL] FROM strings
+----
 
 statement error
 SELECT NULL::VARCHAR[off] FROM strings
+----
 
 statement error
 SELECT NULL::VARCHAR[NULL] FROM strings
+----
 
 # negative offset
 query T

@@ -4,6 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -13,6 +14,10 @@
 #include <stdarg.h>
 #include <string.h>
 #include <random>
+
+#include "yyjson.hpp"
+
+using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
@@ -43,13 +48,13 @@ void StringUtil::LTrim(string &str) {
 
 // Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
 void StringUtil::RTrim(string &str) {
-	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
+	str.erase(find_if(str.rbegin(), str.rend(), [](char ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
 	          str.end());
 }
 
 void StringUtil::RTrim(string &str, const string &chars_to_trim) {
 	str.erase(find_if(str.rbegin(), str.rend(),
-	                  [&chars_to_trim](int ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
+	                  [&chars_to_trim](char ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
 	              .base(),
 	          str.end());
 }
@@ -154,31 +159,44 @@ string StringUtil::Join(const vector<string> &input, const string &separator) {
 	return StringUtil::Join(input, input.size(), separator, [](const string &s) { return s; });
 }
 
-string StringUtil::BytesToHumanReadableString(idx_t bytes) {
-	string db_size;
-	auto kilobytes = bytes / 1000;
-	auto megabytes = kilobytes / 1000;
-	kilobytes -= megabytes * 1000;
-	auto gigabytes = megabytes / 1000;
-	megabytes -= gigabytes * 1000;
-	auto terabytes = gigabytes / 1000;
-	gigabytes -= terabytes * 1000;
-	auto petabytes = terabytes / 1000;
-	terabytes -= petabytes * 1000;
-	if (petabytes > 0) {
-		return to_string(petabytes) + "." + to_string(terabytes / 100) + "PB";
+string StringUtil::Join(const set<string> &input, const string &separator) {
+	// The result
+	std::string result;
+
+	auto it = input.begin();
+	while (it != input.end()) {
+		result += *it;
+		it++;
+		if (it == input.end()) {
+			break;
+		}
+		result += separator;
 	}
-	if (terabytes > 0) {
-		return to_string(terabytes) + "." + to_string(gigabytes / 100) + "TB";
-	} else if (gigabytes > 0) {
-		return to_string(gigabytes) + "." + to_string(megabytes / 100) + "GB";
-	} else if (megabytes > 0) {
-		return to_string(megabytes) + "." + to_string(kilobytes / 100) + "MB";
-	} else if (kilobytes > 0) {
-		return to_string(kilobytes) + "KB";
-	} else {
-		return to_string(bytes) + (bytes == 1 ? " byte" : " bytes");
+	return result;
+}
+
+string StringUtil::BytesToHumanReadableString(idx_t bytes, idx_t multiplier) {
+	D_ASSERT(multiplier == 1000 || multiplier == 1024);
+	idx_t array[6] = {};
+	const char *unit[2][6] = {{"bytes", "KiB", "MiB", "GiB", "TiB", "PiB"}, {"bytes", "kB", "MB", "GB", "TB", "PB"}};
+
+	const int sel = (multiplier == 1000);
+
+	array[0] = bytes;
+	for (idx_t i = 1; i < 6; i++) {
+		array[i] = array[i - 1] / multiplier;
+		array[i - 1] %= multiplier;
 	}
+
+	for (idx_t i = 5; i >= 1; i--) {
+		if (array[i]) {
+			// Map 0 -> 0 and (multiplier-1) -> 9
+			idx_t fractional_part = (array[i - 1] * 10) / multiplier;
+			return to_string(array[i]) + "." + to_string(fractional_part) + " " + unit[sel][i];
+		}
+	}
+
+	return to_string(array[0]) + (bytes == 1 ? " byte" : " bytes");
 }
 
 string StringUtil::Upper(const string &str) {
@@ -189,7 +207,8 @@ string StringUtil::Upper(const string &str) {
 
 string StringUtil::Lower(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return StringUtil::CharacterToLower(c); });
+	transform(copy.begin(), copy.end(), copy.begin(),
+	          [](unsigned char c) { return StringUtil::CharacterToLower(static_cast<char>(c)); });
 	return (copy);
 }
 
@@ -201,7 +220,7 @@ bool StringUtil::IsLower(const string &str) {
 uint64_t StringUtil::CIHash(const string &str) {
 	uint32_t hash = 0;
 	for (auto c : str) {
-		hash += StringUtil::CharacterToLower(c);
+		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(c)));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}
@@ -215,12 +234,40 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	if (l1.size() != l2.size()) {
 		return false;
 	}
+	const auto charmap = LowerFun::ASCII_TO_LOWER_MAP;
 	for (idx_t c = 0; c < l1.size(); c++) {
-		if (StringUtil::CharacterToLower(l1[c]) != StringUtil::CharacterToLower(l2[c])) {
+		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
 		}
 	}
 	return true;
+}
+
+bool StringUtil::CILessThan(const string &s1, const string &s2) {
+	const auto charmap = UpperFun::ASCII_TO_UPPER_MAP;
+
+	unsigned char u1 {}, u2 {};
+
+	idx_t length = MinValue<idx_t>(s1.length(), s2.length());
+	length += s1.length() != s2.length();
+	for (idx_t i = 0; i < length; i++) {
+		u1 = (unsigned char)s1[i];
+		u2 = (unsigned char)s2[i];
+		if (charmap[u1] != charmap[u2]) {
+			break;
+		}
+	}
+	return (charmap[u1] - charmap[u2]) < 0;
+}
+
+idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
+	for (idx_t i = 0; i < vector.size(); i++) {
+		const auto &string = vector[i];
+		if (CIEquals(string, search_string)) {
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {
@@ -322,7 +369,7 @@ idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p, id
 			// d[i][j] = std::min({ d[i - 1][j] + 1,
 			//                      d[i][j - 1] + 1,
 			//                      d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1) });
-			int equal = s1[i - 1] == s2[j - 1] ? 0 : not_equal_penalty;
+			auto equal = s1[i - 1] == s2[j - 1] ? 0 : not_equal_penalty;
 			idx_t adjacent_score1 = array.Score(i - 1, j) + 1;
 			idx_t adjacent_score2 = array.Score(i, j - 1) + 1;
 			idx_t adjacent_score3 = array.Score(i - 1, j - 1) + equal;
@@ -370,6 +417,143 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
                                           const string &message_prefix, idx_t n) {
 	auto closest_strings = StringUtil::TopNLevenshtein(strings, target, n);
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
+}
+
+unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
+	unordered_map<string, string> result;
+	if (json.empty()) {
+		return result;
+	}
+	yyjson_read_flag flags = YYJSON_READ_ALLOW_INVALID_UNICODE;
+	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), flags);
+	if (!doc) {
+		throw SerializationException("Failed to parse JSON string: %s", json);
+	}
+	yyjson_val *root = yyjson_doc_get_root(doc);
+	if (!root || yyjson_get_type(root) != YYJSON_TYPE_OBJ) {
+		yyjson_doc_free(doc);
+		throw SerializationException("Failed to parse JSON string: %s", json);
+	}
+	yyjson_obj_iter iter;
+	yyjson_obj_iter_init(root, &iter);
+	yyjson_val *key, *value;
+	while ((key = yyjson_obj_iter_next(&iter))) {
+		value = yyjson_obj_iter_get_val(key);
+		if (yyjson_get_type(value) != YYJSON_TYPE_STR) {
+			yyjson_doc_free(doc);
+			throw SerializationException("Failed to parse JSON string: %s", json);
+		}
+		auto key_val = yyjson_get_str(key);
+		auto key_len = yyjson_get_len(key);
+		auto value_val = yyjson_get_str(value);
+		auto value_len = yyjson_get_len(value);
+		result.emplace(string(key_val, key_len), string(value_val, value_len));
+	}
+	yyjson_doc_free(doc);
+	return result;
+}
+
+string StringUtil::ToJSONMap(ExceptionType type, const string &message, const unordered_map<string, string> &map) {
+	D_ASSERT(map.find("exception_type") == map.end());
+	D_ASSERT(map.find("exception_message") == map.end());
+
+	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	yyjson_mut_val *root = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, root);
+
+	auto except_str = Exception::ExceptionTypeToString(type);
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
+	for (auto &entry : map) {
+		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
+		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
+		yyjson_mut_obj_add(root, key, value);
+	}
+
+	yyjson_write_err err;
+	size_t len;
+	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
+	char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
+	if (!json) {
+		yyjson_mut_doc_free(doc);
+		throw SerializationException("Failed to write JSON string: %s", err.msg);
+	}
+	// Create a string from the JSON
+	string result(json, len);
+
+	// Free the JSON and the document
+	free(json);
+	yyjson_mut_doc_free(doc);
+
+	// Return the result
+	return result;
+}
+
+string StringUtil::GetFileName(const string &file_path) {
+
+	idx_t pos = file_path.find_last_of("/\\");
+	if (pos == string::npos) {
+		return file_path;
+	}
+	auto end = file_path.size() - 1;
+
+	// If the rest of the string is just slashes or dots, trim them
+	if (file_path.find_first_not_of("/\\.", pos) == string::npos) {
+		// Trim the trailing slashes and dots
+		while (end > 0 && (file_path[end] == '/' || file_path[end] == '.' || file_path[end] == '\\')) {
+			end--;
+		}
+
+		// Now find the next slash
+		pos = file_path.find_last_of("/\\", end);
+		if (pos == string::npos) {
+			return file_path.substr(0, end + 1);
+		}
+	}
+
+	return file_path.substr(pos + 1, end - pos);
+}
+
+string StringUtil::GetFileExtension(const string &file_name) {
+	auto name = GetFileName(file_name);
+	idx_t pos = name.find_last_of('.');
+	// We dont consider e.g. `.gitignore` to have an extension
+	if (pos == string::npos || pos == 0) {
+		return "";
+	}
+	return name.substr(pos + 1);
+}
+
+string StringUtil::GetFileStem(const string &file_name) {
+	auto name = GetFileName(file_name);
+	if (name.size() > 1 && name[0] == '.') {
+		return name;
+	}
+	idx_t pos = name.find_last_of('.');
+	if (pos == string::npos) {
+		return name;
+	}
+	return name.substr(0, pos);
+}
+
+string StringUtil::GetFilePath(const string &file_path) {
+
+	// Trim the trailing slashes
+	auto end = file_path.size() - 1;
+	while (end > 0 && (file_path[end] == '/' || file_path[end] == '\\')) {
+		end--;
+	}
+
+	auto pos = file_path.find_last_of("/\\", end);
+	if (pos == string::npos) {
+		return "";
+	}
+
+	while (pos > 0 && (file_path[pos] == '/' || file_path[pos] == '\\')) {
+		pos--;
+	}
+
+	return file_path.substr(0, pos + 1);
 }
 
 } // namespace duckdb

@@ -1,0 +1,41 @@
+# name: test/sql/storage/storage_exceeds_single_block_types.test
+# description: Test storage that exceeds a single block with different types
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/exceed_single_block_types.db
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+CREATE TABLE test (a INTEGER, b BIGINT);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)
+
+loop i 0 16
+
+statement ok
+INSERT INTO test FROM test
+
+endloop
+
+query I
+SELECT SUM(a) + SUM(b) FROM test
+----
+6619136
+
+restart
+
+query I
+SELECT SUM(a) + SUM(b) FROM test
+----
+6619136
+
+restart
+
+query I
+SELECT SUM(a) + SUM(b) FROM test
+----
+6619136

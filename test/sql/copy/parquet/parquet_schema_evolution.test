@@ -34,9 +34,11 @@ SELECT a FROM parquet_scan(['__TEST_DIR__/evolution_2.parquet', '__TEST_DIR__/ev
 # reading either b or c results in an error, since the name is not present in both files
 statement error
 SELECT b FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
+----
 
 statement error
 SELECT c FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
+----
 
 # we can also do this with COPY
 statement ok
@@ -71,6 +73,7 @@ SELECT a FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
 # reading either b results in an error, however, since we can't cast from 'hello' to integer
 statement error
 SELECT b FROM parquet_scan(['__TEST_DIR__/evolution_1.parquet', '__TEST_DIR__/evolution_2.parquet']) ORDER BY 1
+----
 
 # if we flip the order of the reads we can read b
 query I
@@ -95,6 +98,7 @@ SELECT a FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
 # reading either b results in an error, however, since we can't cast from 'hello' to integer
 statement error
 SELECT b FROM parquet_scan(['__TEST_DIR__/evolution_1.parquet', '__TEST_DIR__/evolution_2.parquet']) ORDER BY 1
+----
 
 # if we flip the order of the reads we can read b
 query I

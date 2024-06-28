@@ -86,7 +86,9 @@ select from_base64('AAAA');
 # must be multiple of 4
 statement error
 SELECT from_base64('ab');
+----
 
 # unknown bytes
 statement error
 SELECT from_base64('üab');
+----

@@ -26,7 +26,7 @@ struct ReplaceBinding {
 
 struct LHSBinding {
 	LHSBinding() {};
-	LHSBinding(ColumnBinding binding, LogicalType type) : binding(binding), type(type) {
+	LHSBinding(ColumnBinding binding, LogicalType type_p) : binding(binding), type(std::move(type_p)) {
 	}
 	ColumnBinding binding;
 	LogicalType type;
@@ -45,6 +45,8 @@ public:
 
 	//! Contains all bindings that need to be updated
 	vector<ReplaceBinding> replace_bindings;
+	//! Stores the table index of the former child of the LOGICAL_UNNEST
+	idx_t overwritten_tbl_idx;
 };
 
 //! The UnnestRewriter optimizer traverses the logical operator tree and rewrites duplicate
@@ -79,6 +81,8 @@ private:
 	vector<LHSBinding> lhs_bindings;
 	//! Stores the table index of the former child of the LOGICAL_UNNEST
 	idx_t overwritten_tbl_idx;
+	//! The number of distinct columns to unnest
+	idx_t distinct_unnest_count;
 };
 
 } // namespace duckdb

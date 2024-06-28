@@ -16,7 +16,6 @@ add_library_unity(
   column_definition.cpp
   column_list.cpp
   constraint.cpp
-  common_table_expression_info.cpp
   expression_util.cpp
   keyword_helper.cpp
   parsed_expression.cpp

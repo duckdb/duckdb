@@ -9,6 +9,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA verify_external
+
+statement ok
 create table quantiles as select range r from range(10) union all values (NULL), (NULL), (NULL);
 
 query III

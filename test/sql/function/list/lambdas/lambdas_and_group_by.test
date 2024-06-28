@@ -1,0 +1,48 @@
+# name: test/sql/function/list/lambdas/lambdas_and_group_by.test
+# description: Test lambdas with aggregations
+# group: [lambdas]
+
+statement ok
+CREATE TABLE tbl (tag_product VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES ('milk chickpeas apples'), ('chocolate pepper');
+
+query II
+SELECT tag_product, list_aggr(list_transform(
+	string_split(tag_product, ' '), word -> lower(word)),
+    'string_agg', ',') AS tag_material,
+FROM tbl GROUP BY tag_product
+ORDER BY ALL;
+----
+chocolate pepper	chocolate,pepper
+milk chickpeas apples	milk,chickpeas,apples
+
+query II
+SELECT 1, list_transform([5, 4, 3], x -> x + 1) AS lst GROUP BY 1;
+----
+1	[6, 5, 4]
+
+statement ok
+CREATE TABLE uniform_purchase_forecast AS
+SELECT 'gold' AS color, 10 AS forecast
+UNION ALL SELECT 'blue', 15
+UNION ALL SELECT 'red', 300;
+
+query I
+FROM uniform_purchase_forecast SELECT list(forecast).list_transform(x -> x + 10);
+----
+[20, 25, 310]
+
+# HAVING binder issues.
+
+query I
+FROM (SELECT 1) GROUP BY ALL HAVING list_filter(NULL, x -> x);
+----
+
+statement ok
+FROM test_all_types() GROUP BY ALL HAVING array_intersect(NULL, NULL);
+
+query I
+SELECT x FROM (VALUES (42)) t(x) GROUP BY x HAVING list_filter(NULL, lambda_param -> lambda_param = 1);
+----

@@ -23,7 +23,7 @@ BoundStatement CreateTableRelation::Bind(Binder &binder) {
 	info->query = std::move(select);
 	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = std::move(info);
-	return binder.Bind((SQLStatement &)stmt);
+	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &CreateTableRelation::Columns() {

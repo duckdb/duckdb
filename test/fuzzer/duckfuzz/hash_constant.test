@@ -1,0 +1,9 @@
+# name: test/fuzzer/duckfuzz/hash_constant.test
+# description: Hashing constants should yield a constant vector (duckdb-fuzzer #290)
+# group: [duckfuzz]
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+
+statement ok
+SELECT hash(main.list_value(main.list_value(), main.list_value(42, 999, NULL, NULL, -42), NULL, main.list_value(), main.list_value(42, 999, NULL, NULL, -42))) FROM all_types;

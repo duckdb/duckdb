@@ -1,0 +1,68 @@
+# name: test/sql/index/art/vacuum/test_art_vacuum_rollback.test
+# description: Test rolling back writes to many tables
+# group: [vacuum]
+
+# load the DB from disk
+load __TEST_DIR__/art_vacuum_rollback.db
+
+statement ok
+PRAGMA enable_verification
+
+loop i 0 10
+
+statement ok
+CREATE TABLE t${i}(i INTEGER UNIQUE);
+
+endloop
+
+statement ok con1
+BEGIN
+
+loop i 0 10
+
+statement ok con1
+INSERT INTO t${i} SELECT CASE WHEN i%2<>0 THEN NULL ELSE i END FROM range(10000) t(i);
+
+endloop
+
+loop i 0 10
+
+statement ok
+INSERT INTO t${i} FROM range(10000, 10077);
+
+endloop
+
+statement ok
+INSERT INTO t7 VALUES (42);
+
+statement error con1
+COMMIT
+----
+42
+
+loop i 0 10
+
+query I con1
+SELECT COUNT(i) - (CASE WHEN ${i}==7 THEN 1 ELSE 0 END) FROM t${i}
+----
+77
+
+endloop
+
+# insert actual values
+
+loop i 0 10
+
+statement ok
+INSERT INTO t${i} FROM range(20000, 30000);
+
+endloop
+
+loop i 0 10
+
+query I con1
+SELECT COUNT(i) - (CASE WHEN ${i}==7 THEN 1 ELSE 0 END) FROM t${i}
+----
+10077
+
+endloop

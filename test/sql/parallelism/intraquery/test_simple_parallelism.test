@@ -42,6 +42,7 @@ CREATE VIEW v1(i) AS SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM in
 # errors in separate pipelines
 statement error
 SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i::DATE) FROM integers UNION ALL SELECT MAX(i::DATE) FROM integers;
+----
 
 # errors are properly cleared
 query R sort

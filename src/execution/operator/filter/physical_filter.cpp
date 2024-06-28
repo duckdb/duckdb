@@ -41,7 +41,7 @@ unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &con
 
 OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (FilterState &)state_p;
+	auto &state = state_p.Cast<FilterState>();
 	idx_t result_count = state.executor.SelectExpression(input, state.sel);
 	if (result_count == input.size()) {
 		// nothing was filtered: skip adding any selection vectors
@@ -55,7 +55,7 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 string PhysicalFilter::ParamsToString() const {
 	auto result = expression->GetName();
 	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu", estimated_props->GetCardinality<idx_t>());
+	result += StringUtil::Format("EC: %llu", estimated_cardinality);
 	return result;
 }
 

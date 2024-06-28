@@ -22,12 +22,13 @@ public:
 	ExecuteStatement();
 
 	string name;
-	vector<unique_ptr<ParsedExpression>> values;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> named_values;
 
 protected:
 	ExecuteStatement(const ExecuteStatement &other);
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;
+	string ToString() const override;
 };
 } // namespace duckdb

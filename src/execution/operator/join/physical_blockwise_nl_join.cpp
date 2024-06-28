@@ -34,7 +34,7 @@ public:
 class BlockwiseNLJoinGlobalState : public GlobalSinkState {
 public:
 	explicit BlockwiseNLJoinGlobalState(ClientContext &context, const PhysicalBlockwiseNLJoin &op)
-	    : right_chunks(context, op.children[1]->GetTypes()), right_outer(IsRightOuterJoin(op.join_type)) {
+	    : right_chunks(context, op.children[1]->GetTypes()), right_outer(PropagatesBuildSide(op.join_type)) {
 	}
 
 	mutex lock;
@@ -62,8 +62,8 @@ SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, DataChun
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                   GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BlockwiseNLJoinGlobalState>();
+                                                   OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<BlockwiseNLJoinGlobalState>();
 	gstate.right_outer.Initialize(gstate.right_chunks.Count());
 
 	if (gstate.right_chunks.Count() == 0 && EmptyResultIfRHSIsEmpty()) {
@@ -104,6 +104,9 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionCon
 		}
 		result->intermediate_chunk.Initialize(Allocator::DefaultAllocator(), intermediate_types);
 	}
+	if (join_type == JoinType::RIGHT_ANTI || join_type == JoinType::RIGHT_SEMI) {
+		throw NotImplementedException("physical blockwise RIGHT_SEMI/RIGHT_ANTI join not yet implemented");
+	}
 	return std::move(result);
 }
 
@@ -111,7 +114,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
                                                             DataChunk &chunk, GlobalOperatorState &gstate_p,
                                                             OperatorState &state_p) const {
 	D_ASSERT(input.size() > 0);
-	auto &state = (BlockwiseNLJoinState &)state_p;
+	auto &state = state_p.Cast<BlockwiseNLJoinState>();
 	auto &gstate = sink_state->Cast<BlockwiseNLJoinGlobalState>();
 
 	if (gstate.right_chunks.Count() == 0) {
@@ -244,16 +247,16 @@ unique_ptr<GlobalSourceState> PhysicalBlockwiseNLJoin::GetGlobalSourceState(Clie
 
 unique_ptr<LocalSourceState> PhysicalBlockwiseNLJoin::GetLocalSourceState(ExecutionContext &context,
                                                                           GlobalSourceState &gstate) const {
-	return make_uniq<BlockwiseNLJoinLocalScanState>(*this, (BlockwiseNLJoinGlobalScanState &)gstate);
+	return make_uniq<BlockwiseNLJoinLocalScanState>(*this, gstate.Cast<BlockwiseNLJoinGlobalScanState>());
 }
 
 SourceResultType PhysicalBlockwiseNLJoin::GetData(ExecutionContext &context, DataChunk &chunk,
                                                   OperatorSourceInput &input) const {
-	D_ASSERT(IsRightOuterJoin(join_type));
+	D_ASSERT(PropagatesBuildSide(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<BlockwiseNLJoinGlobalState>();
-	auto &gstate = (BlockwiseNLJoinGlobalScanState &)input.global_state;
-	auto &lstate = (BlockwiseNLJoinLocalScanState &)input.local_state;
+	auto &gstate = input.global_state.Cast<BlockwiseNLJoinGlobalScanState>();
+	auto &lstate = input.local_state.Cast<BlockwiseNLJoinLocalScanState>();
 
 	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan chunks we still need to output
 	sink.right_outer.Scan(gstate.scan_state, lstate.scan_state, chunk);

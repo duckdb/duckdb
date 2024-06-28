@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
@@ -19,18 +20,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::LIMIT_PERCENT;
 
 public:
-	PhysicalLimitPercent(vector<LogicalType> types, double limit_percent, idx_t offset,
-	                     unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
-	                     idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT_PERCENT, std::move(types), estimated_cardinality),
-	      limit_percent(limit_percent), offset_value(offset), limit_expression(std::move(limit_expression)),
-	      offset_expression(std::move(offset_expression)) {
-	}
+	PhysicalLimitPercent(vector<LogicalType> types, BoundLimitNode limit_val_p, BoundLimitNode offset_val_p,
+	                     idx_t estimated_cardinality);
 
-	double limit_percent;
-	idx_t offset_value;
-	unique_ptr<Expression> limit_expression;
-	unique_ptr<Expression> offset_expression;
+	BoundLimitNode limit_val;
+	BoundLimitNode offset_val;
 
 public:
 	bool SinkOrderDependent() const override {

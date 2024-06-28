@@ -97,3 +97,75 @@ select sign(3)
 ----
 1
 
+query I
+select log(2, 64)
+----
+6
+
+statement error
+select log(0, 64)
+----
+
+statement error
+select log(2, 0)
+----
+
+statement error
+select log(-1, 64)
+----
+
+statement error
+select log(2, -1)
+----
+
+statement error
+select log(1, 64)
+----
+
+query I
+select log(2, 1)
+----
+0
+
+query I
+select log(0.5, 64)
+----
+-6
+
+
+query I
+select log(0.5, 64)
+----
+-6
+
+query I
+select log('Inf'::DOUBLE, 64)
+----
+0
+
+query I
+select log(64, 'Inf'::DOUBLE)
+----
+Inf
+
+query I
+select log(64, 'NaN'::DOUBLE)
+----
+NaN
+
+query I
+select log('NaN'::DOUBLE, 64)
+----
+NaN
+
+statement error
+select log('-Inf'::DOUBLE, 64)
+----
+
+statement error
+select log(64, '-Inf'::DOUBLE)
+----
+
+statement error
+select log(2, -1)
+----

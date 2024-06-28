@@ -1,0 +1,26 @@
+call dsdgen(sf=1);
+
+create view call_center_native as select * from call_center;
+create view household_demographics_native as select * from household_demographics;
+create view store_returns_native as select * from store_returns;
+create view catalog_page_native as select * from catalog_page;
+create view income_band_native as select * from income_band;
+create view store_sales_native as select * from store_sales;
+create view catalog_returns_native as select * from catalog_returns;
+create view inventory_native as select * from inventory;
+create view time_dim_native as select * from time_dim;
+create view catalog_sales_native as select * from catalog_sales;
+create view item_native as select * from item;
+create view warehouse_native as select * from warehouse;
+create view customer_native as select * from customer;
+create view promotion_native as select * from promotion;
+create view web_page_native as select * from web_page;
+create view customer_address_native as select * from customer_address;
+create view reason_native as select * from reason;
+create view web_returns_native as select * from web_returns;
+create view customer_demographics_native as select * from customer_demographics;
+create view ship_mode_native as select * from ship_mode;
+create view web_sales_native as select * from web_sales;
+create view date_dim_native as select * from date_dim;
+create view store_native as select * from store;
+create view web_site_native as select * from web_site;

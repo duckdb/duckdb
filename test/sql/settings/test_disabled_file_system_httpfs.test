@@ -1,0 +1,28 @@
+# name: test/sql/settings/test_disabled_file_system_httpfs.test
+# description: Test disabled file systems with HTTPFS
+# group: [settings]
+
+require skip_reload
+
+require no_extension_autoloading
+
+statement ok
+PRAGMA enable_verification
+
+require httpfs
+
+statement ok
+SET disabled_filesystems='LocalFileSystem';
+
+# httpfs works
+statement ok
+from read_csv_auto('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv');
+
+statement ok
+SET disabled_filesystems='LocalFileSystem,HTTPFileSystem';
+
+# not if we disable it
+statement error
+from read_csv_auto('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv');
+----
+File system HTTPFileSystem has been disabled by configuration

@@ -107,6 +107,7 @@ SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a <> right_table.a
 ----
 42	1	1
 
+
 # range joins
 query III
 SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a > right_table.a);
@@ -153,3 +154,4 @@ SELECT a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) 
 ----
 43	20
 2000	20
+

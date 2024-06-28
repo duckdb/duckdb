@@ -13,8 +13,6 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
 
 //! A type catalog entry
 class TypeCatalogEntry : public StandardEntry {
@@ -28,11 +26,11 @@ public:
 
 	LogicalType user_type;
 
+	bind_type_modifiers_function_t bind_modifiers;
+
 public:
-	//! Serialize the meta information of the TypeCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer) const;
-	//! Deserializes to a TypeCatalogEntry
-	static unique_ptr<CreateTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<CreateInfo> GetInfo() const override;
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	string ToSQL() const override;
 };

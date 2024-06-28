@@ -51,6 +51,13 @@ typedef enum PGSortByDir {
 	SORTBY_USING /* not allowed in CREATE INDEX ... */
 } PGSortByDir;
 
+/* PGFuncCall options RESPECT/IGNORE NULLS */
+typedef enum PGIgnoreNulls {
+	PG_DEFAULT_NULLS,
+	PG_RESPECT_NULLS,
+	PG_IGNORE_NULLS
+} PGIgnoreNulls;
+
 typedef enum PGSortByNulls { PG_SORTBY_NULLS_DEFAULT, PG_SORTBY_NULLS_FIRST, PG_SORTBY_NULLS_LAST } PGSortByNulls;
 
 /*****************************************************************************
@@ -292,7 +299,7 @@ typedef struct PGFuncCall {
 	bool agg_within_group;    /* ORDER BY appeared in WITHIN GROUP */
 	bool agg_star;            /* argument was really '*' */
 	bool agg_distinct;        /* arguments were labeled DISTINCT */
-	bool agg_ignore_nulls;    /* arguments were labeled IGNORE NULLS */
+	PGIgnoreNulls agg_ignore_nulls; /* arguments were labeled IGNORE NULLS */
 	bool func_variadic;       /* last argument was labeled VARIADIC */
 	struct PGWindowDef *over; /* OVER clause, if any */
 	int location;             /* token location, or -1 if unknown */
@@ -311,6 +318,7 @@ typedef struct PGAStar {
 	PGList *except_list;  /* optional: EXCLUDE list */
 	PGList *replace_list; /* optional: REPLACE list */
 	bool columns;         /* whether or not this is a columns list */
+	bool unpacked;        /* whether or not the columns list is unpacked */
 	int location;
 } PGAStar;
 
@@ -325,6 +333,7 @@ typedef struct PGAIndices {
 	bool is_slice; /* true if slice (i.e., colon present) */
 	PGNode *lidx;  /* slice lower bound, if any */
 	PGNode *uidx;  /* subscript, or slice upper bound if any */
+	PGNode *step;  /* slice step, if any */
 } PGAIndices;
 
 /*
@@ -437,27 +446,37 @@ typedef struct PGWindowDef {
  * which were defaulted; the correct behavioral bits must be set either way.
  * The START_foo and END_foo options must come in pairs of adjacent bits for
  * the convenience of gram.y, even though some of them are useless/invalid.
- * We will need more bits (and fields) to cover the full SQL:2008 option set.
  */
-#define FRAMEOPTION_NONDEFAULT 0x00001 /* any specified? */
-#define FRAMEOPTION_RANGE 0x00002 /* RANGE behavior */
-#define FRAMEOPTION_ROWS 0x00004 /* ROWS behavior */
-#define FRAMEOPTION_BETWEEN 0x00008 /* BETWEEN given? */
-#define FRAMEOPTION_START_UNBOUNDED_PRECEDING 0x00010 /* start is U. P. */
-#define FRAMEOPTION_END_UNBOUNDED_PRECEDING 0x00020 /* (disallowed) */
-#define FRAMEOPTION_START_UNBOUNDED_FOLLOWING 0x00040 /* (disallowed) */
-#define FRAMEOPTION_END_UNBOUNDED_FOLLOWING 0x00080 /* end is U. F. */
-#define FRAMEOPTION_START_CURRENT_ROW 0x00100 /* start is C. R. */
-#define FRAMEOPTION_END_CURRENT_ROW 0x00200 /* end is C. R. */
-#define FRAMEOPTION_START_VALUE_PRECEDING 0x00400 /* start is V. P. */
-#define FRAMEOPTION_END_VALUE_PRECEDING 0x00800 /* end is V. P. */
-#define FRAMEOPTION_START_VALUE_FOLLOWING 0x01000 /* start is V. F. */
-#define FRAMEOPTION_END_VALUE_FOLLOWING 0x02000 /* end is V. F. */
+#define FRAMEOPTION_NONDEFAULT					0x00001 /* any specified? */
+#define FRAMEOPTION_RANGE						0x00002 /* RANGE behavior */
+#define FRAMEOPTION_ROWS						0x00004 /* ROWS behavior */
+#define FRAMEOPTION_GROUPS						0x00008 /* GROUPS behavior */
+#define FRAMEOPTION_BETWEEN						0x00010 /* BETWEEN given? */
+#define FRAMEOPTION_START_UNBOUNDED_PRECEDING	0x00020 /* start is U. P. */
+#define FRAMEOPTION_END_UNBOUNDED_PRECEDING		0x00040 /* (disallowed) */
+#define FRAMEOPTION_START_UNBOUNDED_FOLLOWING	0x00080 /* (disallowed) */
+#define FRAMEOPTION_END_UNBOUNDED_FOLLOWING		0x00100 /* end is U. F. */
+#define FRAMEOPTION_START_CURRENT_ROW			0x00200 /* start is C. R. */
+#define FRAMEOPTION_END_CURRENT_ROW				0x00400 /* end is C. R. */
+#define FRAMEOPTION_START_OFFSET_PRECEDING		0x00800 /* start is O. P. */
+#define FRAMEOPTION_END_OFFSET_PRECEDING		0x01000 /* end is O. P. */
+#define FRAMEOPTION_START_OFFSET_FOLLOWING		0x02000 /* start is O. F. */
+#define FRAMEOPTION_END_OFFSET_FOLLOWING		0x04000 /* end is O. F. */
+#define FRAMEOPTION_EXCLUDE_CURRENT_ROW			0x08000 /* omit C.R. */
+#define FRAMEOPTION_EXCLUDE_GROUP				0x10000 /* omit C.R. & peers */
+#define FRAMEOPTION_EXCLUDE_TIES				0x20000 /* omit C.R.'s peers */
 
-#define FRAMEOPTION_START_VALUE (FRAMEOPTION_START_VALUE_PRECEDING | FRAMEOPTION_START_VALUE_FOLLOWING)
-#define FRAMEOPTION_END_VALUE (FRAMEOPTION_END_VALUE_PRECEDING | FRAMEOPTION_END_VALUE_FOLLOWING)
+#define FRAMEOPTION_START_OFFSET \
+	(FRAMEOPTION_START_OFFSET_PRECEDING | FRAMEOPTION_START_OFFSET_FOLLOWING)
+#define FRAMEOPTION_END_OFFSET \
+	(FRAMEOPTION_END_OFFSET_PRECEDING | FRAMEOPTION_END_OFFSET_FOLLOWING)
+#define FRAMEOPTION_EXCLUSION \
+	(FRAMEOPTION_EXCLUDE_CURRENT_ROW | FRAMEOPTION_EXCLUDE_GROUP | \
+	 FRAMEOPTION_EXCLUDE_TIES)
 
-#define FRAMEOPTION_DEFAULTS (FRAMEOPTION_RANGE | FRAMEOPTION_START_UNBOUNDED_PRECEDING | FRAMEOPTION_END_CURRENT_ROW)
+#define FRAMEOPTION_DEFAULTS \
+	(FRAMEOPTION_RANGE | FRAMEOPTION_START_UNBOUNDED_PRECEDING | \
+	 FRAMEOPTION_END_CURRENT_ROW)
 
 /*
  * PGRangeSubselect - subquery appearing in a FROM clause
@@ -1058,10 +1077,19 @@ typedef struct PGOnConflictClause {
  *
  * We don't currently support the SEARCH or CYCLE clause.
  */
+
+typedef enum PGCTEMaterialize
+{
+	PGCTEMaterializeDefault,		/* no option specified */
+	PGCTEMaterializeAlways,		/* MATERIALIZED */
+	PGCTEMaterializeNever			/* NOT MATERIALIZED */
+} PGCTEMaterialize;
+
 typedef struct PGCommonTableExpr {
 	PGNodeTag type;
 	char *ctename;         /* query name (never qualified) */
 	PGList *aliascolnames; /* optional list of column names */
+	PGCTEMaterialize ctematerialized; /* is this an optimization fence? */
 	/* SelectStmt/InsertStmt/etc before parse analysis, PGQuery afterwards: */
 	PGNode *ctequery; /* the CTE's subquery */
 	int location;     /* token location, or -1 if unknown */
@@ -1185,6 +1213,7 @@ typedef struct PGPivotExpr {
 	PGList *groups;      /* The set of groups to pivot over (if any) */
 	PGAlias *alias;      /* table alias & optional column aliases */
 	bool include_nulls;  /* Whether or not to include NULL values (UNPIVOT only */
+	int location;        /* token location, or -1 if unknown */
 } PGPivotExpr;
 
 typedef struct PGPivotStmt {
@@ -1194,6 +1223,7 @@ typedef struct PGPivotStmt {
 	PGList *unpivots;    /* The names to unpivot over (UNPIVOT only) */
 	PGList *columns;     /* The set of columns to pivot over */
 	PGList *groups;      /* The set of groups to pivot over (if any) */
+	int location;        /* token location, or -1 if unknown */
 } PGPivotStmt;
 
 /* ----------------------
@@ -1828,11 +1858,18 @@ typedef enum PGTransactionStmtKind {
 	TRANS_STMT_ROLLBACK_PREPARED
 } PGTransactionStmtKind;
 
+typedef enum PGTransactionStmtType {
+	PG_TRANS_TYPE_DEFAULT,
+	PG_TRANS_TYPE_READ_ONLY, // explicit READ ONLY
+	PG_TRANS_TYPE_READ_WRITE // explicit READ WRITE
+} PGTransactionStmtType;
+
 typedef struct PGTransactionStmt {
 	PGNodeTag type;
-	PGTransactionStmtKind kind; /* see above */
-	PGList *options;            /* for BEGIN/START and savepoint commands */
-	char *gid;                  /* for two-phase-commit related commands */
+	PGTransactionStmtKind kind;             /* see above */
+	PGList *options;                        /* for BEGIN/START and savepoint commands */
+	char *gid;                              /* for two-phase-commit related commands */
+	PGTransactionStmtType transaction_type; /* read only or read write */
 } PGTransactionStmt;
 
 /* ----------------------
@@ -1862,8 +1899,21 @@ typedef enum PGLoadInstallType { PG_LOAD_TYPE_LOAD,  PG_LOAD_TYPE_INSTALL, PG_LO
 typedef struct PGLoadStmt {
 	PGNodeTag type;
 	const char *filename; /* file to load */
+	const char *repository; /* optionally, the repository to load from */
+	bool repo_is_alias; /* whether the repository was passed as an alias or a raw path */
+	const char *version; /* optionally, the version of the extension to be loaded */
 	PGLoadInstallType load_type;
 } PGLoadStmt;
+
+/* ----------------------
+ *		Update Extensions Statement
+ * ----------------------
+ */
+
+typedef struct PGUpdateExtensionsStmt {
+	PGNodeTag type;
+	PGList * extensions;
+} PGUpdateExtensionsStmt;
 
 /* ----------------------
  *		Vacuum and Analyze Statements
@@ -2014,6 +2064,17 @@ typedef struct PGImportStmt {
 } PGImportStmt;
 
 /* ----------------------
+ *		Copy Database Statement
+ * ----------------------
+ */
+typedef struct PGCopyDatabaseStmt {
+	PGNodeTag type;
+	const char *from_database;
+	const char *to_database;
+	const char *copy_database_flag;
+} PGCopyDatabaseStmt;
+
+/* ----------------------
  *		Interval Constant
  * ----------------------
  */
@@ -2105,6 +2166,7 @@ typedef struct PGAttachStmt
 	char *name;			/* The name of the attached database */
 	PGList *options;      /* PGList of PGDefElem nodes */
     PGNode *query;
+	PGOnCreateConflict onconflict;        /* what to do on attach conflict */
 } PGAttachStmt;
 
 /* ----------------------
@@ -2119,20 +2181,6 @@ typedef struct PGDetachStmt
 	bool missing_ok;
 } PGDetachStmt;
 
-
-
-/* ----------------------
- *		CREATE DATABASE Statement
- * ----------------------
- */
-typedef struct PGCreateDatabaseStmt
-{
-	PGNodeTag	type;
-	PGRangeVar *name;			/* The name of the created database */
-	char *extension;			/* The name of the extension which will create the database */
-	char *path;					/* The file path of the to-be-created database */
-} PGCreateDatabaseStmt;
-
 /* ----------------------
  *		Use Statement
  * ----------------------
@@ -2143,5 +2191,44 @@ typedef struct PGUseStmt {
 	PGRangeVar *name;    /* variable to be set */
 } PGUseStmt;
 
+
+/* ----------------------
+ *		Create Secret Statement
+ * ----------------------
+ */
+typedef struct PGCreateSecretStmt {
+	PGNodeTag type;
+	char *persist_type;                   /* the requested persist mode */
+	char *secret_name;                    /* name of the secret */
+	char *secret_storage;                 /* the optional storage type of the secret */
+	PGList *scope;                        /* optionally the scopes of the secret */
+	PGList *options;                      /* Secret options */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
+} PGCreateSecretStmt;
+
+
+/* ----------------------
+ *		Drop Secret Statement
+ * ----------------------
+ */
+typedef struct PGDropSecretStmt {
+	PGNodeTag type;
+	char *persist_type;                   /* the requested persist mode */
+	char *secret_name;                    /* name of the secret */
+	char *secret_storage;
+	bool missing_ok;
+} PGDropSecretStmt;
+
+/* ----------------------
+ *		Comment On Statement
+ * ----------------------
+ */
+typedef struct PGCommentOnStmt {
+	PGNodeTag type;
+	PGObjectType object_type; 	/* object type */
+	PGRangeVar *name;         /* the object to comment on */
+	PGNode *value;				/* the comment: a string or NULL*/
+	PGNode *column_expr;
+} PGCommentOnStmt;
 
 }

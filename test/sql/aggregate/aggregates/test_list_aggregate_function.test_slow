@@ -1,0 +1,231 @@
+# name: test/sql/aggregate/aggregates/test_list_aggregate_function.test_slow
+# description: Test the list aggregate function for all data types
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+# INTEGER types
+
+foreach type tinyint smallint integer bigint utinyint usmallint uinteger ubigint
+
+statement ok
+CREATE TABLE test (g INTEGER, i ${type})
+
+query I
+SELECT LIST(i) FROM test GROUP BY g ORDER BY g
+----
+
+statement ok
+INSERT INTO test VALUES (1, 2), (1, 3), (2, 4)
+
+query I
+SELECT LIST(i) FROM test GROUP BY g ORDER BY g
+----
+[2, 3]
+[4]
+
+statement ok
+DROP TABLE test
+
+endloop
+
+# FLOAT, DOUBLE
+
+foreach type float double
+
+statement ok
+CREATE TABLE test (g INTEGER, i ${type})
+
+statement ok
+INSERT INTO test VALUES (1, 2), (1, 3), (2, 4)
+
+query I
+SELECT LIST(i) FROM test GROUP BY g ORDER BY g
+----
+[2.0, 3.0]
+[4.0]
+
+statement ok
+DROP TABLE test
+
+endloop
+
+# VARCHAR
+
+statement ok
+CREATE TABLE varch (g integer, str varchar)
+
+statement ok
+INSERT INTO varch VALUES (1, 'hello'), (1, 'was'), (2, 'geht')
+
+query I
+SELECT LIST(str) FROM varch GROUP BY g ORDER BY g
+----
+[hello, was]
+[geht]
+
+# LIST
+# one level nested LIST
+
+statement ok
+CREATE TABLE nested_lists (g INTEGER, i INTEGER[])
+
+statement ok
+INSERT INTO nested_lists VALUES (1, [2]), (1, [3]), (2, [4])
+
+query I
+SELECT LIST(i) FROM nested_lists GROUP BY g ORDER BY g
+----
+[[2], [3]]
+[[4]]
+
+# bigger lists than standard vector size
+
+statement ok
+CREATE TABLE bigger_lists AS SELECT range % 4 g, range i FROM range(100000)
+
+query I
+SELECT list_count(LIST(i)) FROM bigger_lists GROUP BY g ORDER BY g
+----
+25000
+25000
+25000
+25000
+
+# many groups with small lists
+
+statement ok
+CREATE TABLE lists AS SELECT range % 10000 g, range i FROM range(100000);
+
+query I
+SELECT list_count(LIST(i)) FROM lists GROUP BY g ORDER BY g LIMIT 2;
+----
+10
+10
+
+# STRUCTS
+
+statement ok
+CREATE TABLE structs AS SELECT 1 AS g, {'x': 3, 'b': 2} AS s
+
+statement ok
+INSERT INTO structs VALUES (1, {'x': 5, 'b': 4}), (2, {'x': 50, 'b': 40})
+
+query I
+SELECT LIST(s) FROM structs GROUP BY g ORDER BY g
+----
+[{'x': 3, 'b': 2}, {'x': 5, 'b': 4}]
+[{'x': 50, 'b': 40}]
+
+statement ok
+CREATE TABLE structs_list_strings AS SELECT 1 AS g, {'a': ['strr', 'strrr']} AS s
+
+statement ok
+INSERT INTO structs_list_strings VALUES (1, {'a': ['str1', 'str2']}), (1, {'a': ['str3', 'str4']}), (2, {'a': ['str1', 'str2']})
+
+query I
+SELECT LIST(s) FROM structs_list_strings GROUP BY g ORDER BY g
+----
+[{'a': [strr, strrr]}, {'a': [str1, str2]}, {'a': [str3, str4]}]
+[{'a': [str1, str2]}]
+
+statement ok
+CREATE TABLE structs_ints AS SELECT 1 AS g, {'a': [1, 2]} AS s
+
+statement ok
+INSERT INTO structs_ints VALUES (1, {'a': [3, 4]}), (1, {'a': [5, 6]}), (2, {'a': [1, 2]})
+
+query I
+SELECT LIST(s) FROM structs_ints GROUP BY g ORDER BY g
+----
+[{'a': [1, 2]}, {'a': [3, 4]}, {'a': [5, 6]}]
+[{'a': [1, 2]}]
+
+statement ok
+CREATE TABLE structs_strings AS SELECT 1 AS g, {'n': 'nm1588970'} AS s
+
+statement ok
+INSERT INTO structs_strings VALUES (1, {'n': 'nm0005690'})
+
+query I
+SELECT LIST(s) FROM structs_strings GROUP BY g ORDER BY g
+----
+[{'n': nm1588970}, {'n': nm0005690}]
+
+# ISSUE 3734
+
+require parquet
+
+statement ok
+SELECT tconst, list(principals) as principals FROM parquet_scan('data/parquet-testing/bug3734.parquet') GROUP BY 1 limit 10;
+
+# test all data types
+
+foreach type bool tinyint smallint int bigint hugeint uhugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
+
+statement ok
+CREATE TABLE t1 AS SELECT ${type} AS c1 FROM test_all_types();
+
+statement ok
+CREATE TABLE t2 AS SELECT UNNEST(LIST(${type})) AS c2 FROM test_all_types();
+
+query I
+SELECT * FROM t1 EXCEPT SELECT * FROM t2;
+----
+
+query I
+SELECT * FROM t2 EXCEPT SELECT * FROM t1;
+----
+
+query I
+SELECT t1.c1 IS NOT DISTINCT FROM t2.c2 
+FROM t1, t2 
+WHERE t1.rowid = t2.rowid;
+----
+True
+True
+True
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t2;
+
+endloop
+
+# testing really long strings
+
+statement ok
+CREATE TABLE long_str AS SELECT range % 4 g, repeat(range::VARCHAR, 10000) i FROM range (10);
+
+query II
+SELECT g, list_count(LIST(i)) FROM long_str GROUP BY g ORDER BY g
+----
+0	3
+1	3
+2	2
+3	2
+
+# fix issue 5523
+statement ok
+SELECT LIST(i) OVER (PARTITION BY i % 10 ORDER BY i) FROM range(10000) t(i);
+
+# test linked list capacity of 0
+
+statement ok
+CREATE TABLE list_extract_test(i INTEGER, g INTEGER);
+
+statement ok
+INSERT INTO list_extract_test VALUES (1, 1), (2, 1), (3, 2), (NULL, 3), (42, 3);
+
+query II
+SELECT g, LIST(i ORDER BY i ASC) FILTER (WHERE i <> 3) FROM list_extract_test GROUP BY g ORDER BY ALL;
+----
+1	[1, 2]
+2	NULL
+3	[42]

@@ -72,12 +72,15 @@ SELECT * FROM range(0, -5, -1)
 
 statement error
 SELECT * FROM range(0, 10, 0)
+----
 
 statement error
 SELECT * FROM range(0, 10, -1)
+----
 
 statement error
 SELECT * FROM range(10, 0, 1)
+----
 
 # overloads
 # only one parameter defaults to start=0, interval=1
@@ -127,12 +130,15 @@ SELECT * FROM range(10) t1(j) WHERE j=3
 
 statement error
 SELECT * FROM range('hello')
+----
 
 statement error
 SELECT * FROM range(10, 'hello')
+----
 
 statement error
 SELECT * FROM range(10, 10, 'hello')
+----
 
 # range with big numbers
 query I

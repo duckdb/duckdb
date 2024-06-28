@@ -1,0 +1,28 @@
+# name: test/optimizer/joins/no_duplicate_elimination_join.test
+# description: In the join order optimizer queries need to have the correct bindings
+# group: [joins]
+
+statement ok
+pragma debug_force_no_cross_product=true;
+
+statement ok
+Create table test0 as select * from range(1000);
+
+statement ok
+Create table test1 as select * from range(1000);
+
+statement ok
+Create table test2 as select * from range(1000);
+
+statement ok
+Create table test3 as select * from range(100);
+
+statement ok
+Create table test4 as select * from range(400);
+
+statement ok
+SELECT * FROM  test0, test1, test2,test3, test4
+WHERE test1.range + test4.range = test2.range AND test1.range + test4.range = test3.range AND test1.range = test4.range AND test1.range = test0.range;
+
+statement ok
+SELECT * FROM test0, test1, test2, test3, test4 WHERE test1.range + test4.range = test2.range AND test1.range + test4.range = test3.range AND test1.range = test4.range AND test1.range = test0.range AND test1.range + test3.range = test0.range;

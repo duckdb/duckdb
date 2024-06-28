@@ -17,8 +17,6 @@
 
 namespace duckdb {
 class BaseStatistics;
-class FieldWriter;
-class FieldReader;
 struct SelectionVector;
 class Vector;
 
@@ -48,14 +46,18 @@ struct StringStats {
 	DUCKDB_API static uint32_t MaxStringLength(const BaseStatistics &stats);
 	//! Whether or not the strings can contain unicode
 	DUCKDB_API static bool CanContainUnicode(const BaseStatistics &stats);
+	//! Returns the min value (up to a length of StringStatsData::MAX_STRING_MINMAX_SIZE)
+	DUCKDB_API static string Min(const BaseStatistics &stats);
+	//! Returns the max value (up to a length of StringStatsData::MAX_STRING_MINMAX_SIZE)
+	DUCKDB_API static string Max(const BaseStatistics &stats);
 
 	//! Resets the max string length so HasMaxStringLength() is false
 	DUCKDB_API static void ResetMaxStringLength(BaseStatistics &stats);
 	//! FIXME: make this part of Set on statistics
 	DUCKDB_API static void SetContainsUnicode(BaseStatistics &stats);
 
-	DUCKDB_API static void Serialize(const BaseStatistics &stats, FieldWriter &writer);
-	DUCKDB_API static BaseStatistics Deserialize(FieldReader &reader, LogicalType type);
+	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
+	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &base);
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 

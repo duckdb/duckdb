@@ -90,3 +90,17 @@ query I
 SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='scheme'
 ----
 0
+
+query IIII
+SELECT character_set_name, character_repertoire, form_of_use, default_collate_name FROM information_schema.character_sets
+----
+UTF8	UCS	UTF8	ucs_basic
+
+statement ok
+SELECT * FROM information_schema.referential_constraints
+
+statement ok
+SELECT * FROM information_schema.key_column_usage
+
+statement ok
+SELECT * FROM information_schema.table_constraints

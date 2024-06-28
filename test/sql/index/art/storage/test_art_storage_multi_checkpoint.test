@@ -1,0 +1,24 @@
+# name: test/sql/index/art/storage/test_art_storage_multi_checkpoint.test
+# description: Test that serialized blocks are not corrupted in between checkpoints
+# group: [storage]
+
+load __TEST_DIR__/test_art_multi_checkpoint.db
+
+statement ok
+CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk_integers VALUES (1)
+
+statement ok
+CREATE TABLE pk_integers2(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk_integers2 VALUES (1)
+
+restart
+
+query I
+SELECT i FROM pk_integers WHERE i = 1;
+----
+1

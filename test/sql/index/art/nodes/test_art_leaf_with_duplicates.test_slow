@@ -1,0 +1,154 @@
+# name: test/sql/index/art/nodes/test_art_leaf_with_duplicates.test_slow
+# description: Test ART leaf containing duplicates
+# group: [nodes]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i integer)
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+# insert 4 elements
+statement ok
+INSERT INTO integers SELECT 1 FROM range(4)
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+4
+
+# verify sums
+
+query I
+SELECT sum(i) FROM integers WHERE i <= 2
+----
+4
+
+# now delete all elements
+
+statement ok
+DELETE FROM integers WHERE i = 1
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0
+
+# insert 1024 elements
+statement ok
+INSERT INTO integers SELECT 1 FROM range(1024);
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+1024
+
+# verify sums
+
+query I
+SELECT sum(i) FROM integers WHERE i <= 2
+----
+1024
+
+# now delete all elements
+
+statement ok
+DELETE FROM integers WHERE i = 1
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0
+
+# insert 3000 elements: 1
+statement ok
+INSERT INTO integers SELECT 1 FROM range(3000);
+
+# insert 1024 elements: 2
+statement ok
+INSERT INTO integers SELECT 2 FROM range(1024);
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+3000
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 2
+----
+1024
+
+query I
+SELECT COUNT(*) FROM integers WHERE i <= 2
+----
+4024
+
+# verify sums
+
+query I
+SELECT sum(i) FROM integers WHERE i <= 2
+----
+5048
+
+# now delete all elements: 2
+
+statement ok
+DELETE FROM integers WHERE i = 2
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+3000
+
+query I
+SELECT COUNT(*) FROM integers
+----
+3000
+
+# now delete all elements: 1
+
+statement ok
+DELETE FROM integers WHERE i = 1
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0
+
+statement ok
+DROP INDEX i_index
+
+statement ok
+DROP TABLE integers

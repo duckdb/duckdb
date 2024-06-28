@@ -21,9 +21,6 @@ struct CreateCopyFunctionInfo : public CreateInfo {
 	//! The table function
 	CopyFunction function;
 
-protected:
-	void SerializeInternal(Serializer &) const override;
-
 public:
 	unique_ptr<CreateInfo> Copy() const override;
 };

@@ -10,28 +10,22 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
-#include "duckdb/planner/expression.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 class RowLayout {
 public:
 	friend class TupleDataLayout;
-
-	using Aggregates = vector<AggregateObject>;
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
 	//! Creates an empty RowLayout
 	RowLayout();
 
 public:
-	//! Initializes the RowLayout with the specified types and aggregates to an empty RowLayout
-	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align = true);
 	//! Initializes the RowLayout with the specified types to an empty RowLayout
 	void Initialize(vector<LogicalType> types, bool align = true);
-	//! Initializes the RowLayout with the specified aggregates to an empty RowLayout
-	void Initialize(Aggregates aggregates_p, bool align = true);
 	//! Returns the number of data columns
 	inline idx_t ColumnCount() const {
 		return types.size();
@@ -39,14 +33,6 @@ public:
 	//! Returns a list of the column types for this data chunk
 	inline const vector<LogicalType> &GetTypes() const {
 		return types;
-	}
-	//! Returns the number of aggregates
-	inline idx_t AggregateCount() const {
-		return aggregates.size();
-	}
-	//! Returns a list of the aggregates for this data chunk
-	inline Aggregates &GetAggregates() {
-		return aggregates;
 	}
 	//! Returns the total width required for each row, including padding
 	inline idx_t GetRowWidth() const {
@@ -64,10 +50,6 @@ public:
 	inline idx_t GetAggrOffset() const {
 		return flag_width + data_width;
 	}
-	//! Returns the total width required for the aggregates, including padding
-	inline idx_t GetAggrWidth() const {
-		return aggr_width;
-	}
 	//! Returns the column offsets into each row
 	inline const vector<idx_t> &GetOffsets() const {
 		return offsets;
@@ -83,14 +65,10 @@ public:
 private:
 	//! The types of the data columns
 	vector<LogicalType> types;
-	//! The aggregate functions
-	Aggregates aggregates;
 	//! The width of the validity header
 	idx_t flag_width;
 	//! The width of the data portion
 	idx_t data_width;
-	//! The width of the aggregate state portion
-	idx_t aggr_width;
 	//! The width of the entire row
 	idx_t row_width;
 	//! The offsets to the columns and aggregate data in each row

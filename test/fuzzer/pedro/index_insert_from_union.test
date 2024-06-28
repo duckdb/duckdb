@@ -10,12 +10,15 @@ CREATE TABLE t2 (c1 INT, PRIMARY KEY (c1));
 
 statement error
 INSERT INTO t2 SELECT * FROM (VALUES (2), (2))
+----
 
 statement error
 INSERT INTO t2 SELECT 2 FROM range(10);
+----
 
 statement error
 INSERT INTO t2 SELECT 2 UNION ALL SELECT 2;
+----
 
 statement ok
 BEGIN TRANSACTION

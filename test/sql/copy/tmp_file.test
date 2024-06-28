@@ -1,0 +1,25 @@
+# name: test/sql/copy/tmp_file.test
+# group: [copy]
+
+statement ok
+copy (select 42 as x) to '__TEST_DIR__/foo';
+
+statement ok
+copy (select 42 as x) to '__TEST_DIR__/foo';
+
+statement ok
+COPY (SELECT 36) TO '__TEST_DIR__/.a.b';
+
+statement ok
+COPY (SELECT 37 as x) TO '__TEST_DIR__/.a.b';
+
+query I
+FROM read_csv('__TEST_DIR__/.a.b');
+----
+37
+
+statement ok
+COPY (SELECT 50) TO '__TEST_DIR__/.a.b.c.d.e..';
+
+statement ok
+COPY (SELECT 51) TO '__TEST_DIR__/.a.b.c.d.e..';

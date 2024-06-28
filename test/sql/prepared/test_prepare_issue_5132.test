@@ -1,0 +1,14 @@
+# name: test/sql/prepared/test_prepare_issue_5132.test
+# description: Test reproducible example in #5132
+# group: [prepared]
+
+statement ok
+create table test as select 42 i
+
+statement ok
+prepare q1 as SELECT cast(? AS VARCHAR) FROM test
+
+query T
+execute q1('oops')
+----
+oops

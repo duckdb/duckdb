@@ -15,7 +15,7 @@ public:
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StatsBindData &)other_p;
+		auto &other = other_p.Cast<StatsBindData>();
 		return stats == other.stats;
 	}
 };
@@ -47,7 +47,7 @@ ScalarFunction StatsFun::GetFunction() {
 	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, nullptr,
 	                     StatsPropagateStats);
 	stats.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	stats.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	stats.stability = FunctionStability::VOLATILE;
 	return stats;
 }
 

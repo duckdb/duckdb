@@ -20,6 +20,7 @@ SELECT * FROM test ORDER BY a;
 
 statement error
 UPDATE test SET a=a+1;
+----
 
 query IT
 SELECT * FROM test ORDER BY a;
@@ -30,9 +31,11 @@ SELECT * FROM test ORDER BY a;
 
 statement error
 UPDATE test SET a=13 WHERE a=12;
+----
 
 statement error
 UPDATE test SET a=4;
+----
 
 query IT
 SELECT * FROM test ORDER BY a;
@@ -49,6 +52,7 @@ INSERT INTO test VALUES (12, 'pandas');
 
 statement error
 INSERT INTO test VALUES (12, 'pandas');
+----
 
 statement ok
 DELETE FROM test WHERE a=12
@@ -68,4 +72,5 @@ SELECT * FROM test ORDER BY a;
 
 statement error
 UPDATE test SET b=NULL WHERE a=13;
+----
 

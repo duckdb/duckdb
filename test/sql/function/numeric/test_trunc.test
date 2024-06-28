@@ -69,7 +69,7 @@ select trunc(b::${signed}) from truncme
 endloop
 
 # Unsigned integers should be a NOP
-foreach unsigned UTINYINT USMALLINT UINTEGER UBIGINT
+foreach unsigned UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT
 
 query R
 select trunc(15::${unsigned})

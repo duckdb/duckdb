@@ -16,12 +16,12 @@ struct BoundCreateTableInfo;
 //! The table data reader is responsible for reading the data of a table from the block manager
 class TableDataReader {
 public:
-	TableDataReader(MetaBlockReader &reader, BoundCreateTableInfo &info);
+	TableDataReader(MetadataReader &reader, BoundCreateTableInfo &info);
 
 	void ReadTableData();
 
 private:
-	MetaBlockReader &reader;
+	MetadataReader &reader;
 	BoundCreateTableInfo &info;
 };
 

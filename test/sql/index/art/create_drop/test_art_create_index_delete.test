@@ -1,0 +1,54 @@
+# name: test/sql/index/art/create_drop/test_art_create_index_delete.test
+# description: Test ART creation with deletions and multiple connections
+# group: [create_drop]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(10)
+
+statement ok con1
+BEGIN
+
+statement ok
+DELETE FROM integers WHERE i=2 OR i=7
+
+query I con1
+SELECT * FROM integers WHERE i=1;
+----
+1
+
+query I con1
+SELECT * FROM integers WHERE i=2;
+----
+2
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+query I
+SELECT * FROM integers WHERE i=1;
+----
+1
+
+query I
+SELECT * FROM integers WHERE i=2;
+----
+
+# connection 1 still sees the old state
+query I con1
+SELECT * FROM integers WHERE i=1;
+----
+1
+
+query I con1
+SELECT * FROM integers WHERE i=2;
+----
+2

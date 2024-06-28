@@ -1,0 +1,173 @@
+# name: test/sql/function/string/parse_path_windows.test
+# description: test parse path functions in windows
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+require windows
+
+# all separators option
+query T
+SELECT * FROM (VALUES (parse_path('path\to\file.csv/file2.csv', 'system')), (parse_path('path/to/file.csv\file2.csv', 'both_slash')), (parse_path('path/to/file.csv', 'forward_slash')), (parse_path('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);
+----
+[path, to, file.csv/file2.csv]
+[path, to, file.csv, file2.csv]
+[path, to, file.csv]
+[path, to, file.csv/file2.csv]
+
+# default separator
+query T
+SELECT parse_path('home/user/documents/file.csv\file2.csv');
+----
+[home, user, documents, file.csv, file2.csv]
+
+# no separators in path
+query T
+SELECT parse_path('file.csv', 'both_slash');
+----
+[file.csv]
+
+# start with & have consecutive separators
+query T
+SELECT parse_path('//path/to///file.csv', 'forward_slash');
+----
+[/, path, to, file.csv]
+
+query T
+SELECT parse_path(NULL, NULL);
+----
+NULL
+
+query T
+SELECT parse_path('');
+----
+[]
+
+# test incorrect usage
+statement error
+SELECT parse_path();
+----
+Binder Error: No function matches the given name and argument types 'parse_path()'. You might need to add explicit type casts.
+
+
+# test parse_dirname
+# all separators option
+query T
+SELECT * FROM (VALUES (parse_dirname('path\to\file.csv/file2.csv', 'system')), (parse_dirname('path/to/file.csv\file2.csv', 'both_slash')), (parse_dirname('path/to/file.csv', 'forward_slash')), (parse_dirname('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);
+----
+path
+path
+path
+path
+
+# default separator
+query T
+SELECT parse_dirname('path/to/file.csv\file2.csv');
+----
+path
+
+# start with & have consecutive separators 
+query T
+SELECT parse_dirname('///path/to//file.csv', 'forward_slash');
+----
+/
+
+query T
+select parse_dirname('file.csv');
+----
+(empty)
+
+query T
+SELECT parse_dirname('');
+----
+(empty)
+
+# test incorrect usage
+statement error
+SELECT parse_dirname();
+----
+Binder Error: No function matches the given name and argument types 'parse_dirname()'.
+
+
+# test parse_dirpath
+# all separators option
+query T
+SELECT * FROM (VALUES (parse_dirpath('path\to\file.csv/file2.csv', 'system')), (parse_dirpath('path/to/file.csv\file2.csv', 'both_slash')), (parse_dirpath('path/to/file.csv', 'forward_slash')), (parse_dirpath('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);
+----
+path\to
+path/to/file.csv
+path/to
+path\to
+
+# default separator
+query T
+SELECT parse_dirpath('path/to/file.csv\file2.csv');
+----
+path/to/file.csv
+
+# start with & have consecutive separators 
+query T
+SELECT parse_dirpath('///path/to//file.csv', 'forward_slash');
+----
+///path/to/
+
+query T
+select parse_dirpath('file.csv');
+----
+(empty)
+
+query T
+SELECT parse_dirpath('');
+----
+(empty)
+
+# test incorrect usage
+statement error
+SELECT parse_dirpath();
+----
+Binder Error: No function matches the given name and argument types 'parse_dirpath()'.
+
+
+# test parse_filename
+# all separators option
+query T
+SELECT * FROM (VALUES (parse_filename('path\to\file.csv/file2.csv', 'system')), (parse_filename('path/to/file.csv\file2.csv', 'both_slash')), (parse_filename('path/to/file.csv', 'forward_slash')), (parse_filename('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);
+----
+file.csv/file2.csv
+file2.csv
+file.csv
+file.csv/file2.csv
+
+# end with separator
+query T
+SELECT parse_filename('file2.csv/', 'forward_slash');
+----
+(empty)
+
+# default args
+query T
+SELECT parse_filename('path/to/file.csv\file2.csv');
+----
+file2.csv
+
+query T
+SELECT parse_filename('path/to/file.csv\file2', true, 'backslash');
+----
+file2
+
+query T
+SELECT parse_filename('/path/to/file.csv\file2.csv', true, 'forward_slash');
+----
+file.csv\file2
+
+query T
+SELECT parse_filename('');
+----
+(empty)
+
+# test incorrect usage
+statement error
+SELECT parse_filename();
+----
+Binder Error: No function matches the given name and argument types 'parse_filename()'.

@@ -6,11 +6,10 @@ statement ok
 CREATE TABLE test(s VARCHAR);
 
 statement ok
-INSERT INTO test VALUES ('aaa');
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
+statement ok
+INSERT INTO test VALUES ('aaa');
 
 # contains optimization: /aaa/ -> contains(aaa)
 query I nosort regexconstantpattern
@@ -42,3 +41,190 @@ SELECT regexp_matches(s, 'a') FROM test
 query I nosort correct_result
 SELECT contains(s, 'aaa') FROM test
 ----
+
+
+query I nosort correct_result
+SELECT regexp_matches(s, '^a') FROM TEST;
+----
+aaa
+
+query I nosort correct_result
+SELECT regexp_matches(s, '^aa') FROM TEST;
+----
+aaa
+
+statement ok
+DELETE FROM test;
+
+statement ok
+INSERT INTO test VALUES ('aaa'), ('a.a'), ('baba'), ('abba'), ('a\.a'), ('a_a');
+
+query II
+explain analyze select regexp_matches(s, 'a.a', 's'), s from test;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '%a_a%'\).*
+
+query I nosort
+select s from test where regexp_matches(s, 'a.a', 's');
+----
+aaa
+a.a
+baba
+a_a
+
+
+query II
+explain analyze SELECT regexp_matches(s, 'a.*a', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '%a%a%'\).*
+
+query I nosort
+SELECT s FROM TEST where regexp_matches(s, 'a.*a', 's');
+----
+aaa
+a.a
+baba
+abba
+a\.a
+a_a
+
+query II
+explain analyze SELECT regexp_matches(s, '^a.*b$', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, 'a%b'\).*
+
+query I
+SELECT s FROM TEST where regexp_matches(s, '^a.*b$', 's');
+----
+
+query II
+explain analyze select regexp_matches(s, 'a_a'), s from test;
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'a_a'\).*
+
+query II
+explain analyze select regexp_matches(s, 'a%a'), s from test;
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'a%a'\).*
+
+query II
+explain analyze select regexp_matches(s, 'a\\a'), s from test;
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'a\\a'\).*
+
+query I
+select s from test where regexp_matches(s, 'a_a');
+----
+a_a
+
+query II
+explain analyze select regexp_matches(s, 'a\.a'), s from test;
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'a.a'\).*
+
+query I
+select s from test where regexp_matches(s, 'a\.a');
+----
+a.a
+
+query II
+explain analyze SELECT regexp_matches(s, '^a'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*prefix\(s, 'a'\).*
+
+query I nosort
+SELECT s FROM TEST where regexp_matches(s, '^a');
+----
+aaa
+a.a
+abba
+a\.a
+a_a
+
+query II
+explain analyze SELECT regexp_matches(s, 'a$'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*suffix\(s, 'a'\).*
+
+query I nosort
+SELECT s FROM TEST where regexp_matches(s, 'a$');
+----
+aaa
+a.a
+baba
+abba
+a\.a
+a_a
+
+query II
+explain analyze SELECT regexp_matches(s, 'aaa.'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*regexp_matches\(s, 'aaa.'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, 'aaa.', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '%aaa_%'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, '.aaa', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '%_aaa%'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, '^.aaa', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '_aaa%'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, '.aaa$', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '%_aaa'\).*
+
+query II
+explain analyze select regexp_matches(s, '.*green.*', 's'), s, from test;
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'green'\).*
+
+query II
+explain analyze select regexp_matches(s, '.*special.*requests.*', 's'), s from test;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '%special%requests%'\).*
+
+statement ok
+DELETE from test;
+
+# Test matching newlines with and without 's' option
+
+# inserts 'aaa\naaa'
+statement ok
+insert into test values (concat('aaa', chr(10), 'aaa'));
+
+query I
+select count(s) from test where regexp_matches(s, 'aaa');
+----
+1
+
+# no matches since 's' option not passed
+query I
+select count(s) from test where regexp_matches(s, 'aaa.');
+----
+0
+
+# 's' option passed, so we match the string aaa\naaa
+query I
+select count(s) from test where regexp_matches(s, 'aaa.', 's');
+----
+1 
+
+# when regexp_matches arguments are incorrect, an error is produced
+statement error
+select count(s) from test where regexp_matches(s);
+----
+Binder Error
+
+# when regexp_matches arguments are incorrect, an error is produced
+statement error
+select count(s) from test where regexp_matches('aaa');
+----
+Binder Error

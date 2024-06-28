@@ -1,0 +1,351 @@
+# name: test/sql/function/blob/create_sort_key.test
+# description: Test create_sort_key function
+# group: [blob]
+
+statement ok
+PRAGMA enable_verification
+
+# test integer types with all modifiers
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+query I
+SELECT * FROM integers ORDER BY create_sort_key(i, 'ASC NULLS LAST')
+----
+1
+2
+3
+NULL
+
+query I
+SELECT * FROM integers ORDER BY create_sort_key(i, 'ASC NULLS FIRST')
+----
+NULL
+1
+2
+3
+
+query I
+SELECT * FROM integers ORDER BY create_sort_key(i, 'DESC NULLS LAST')
+----
+3
+2
+1
+NULL
+
+query I
+SELECT * FROM integers ORDER BY create_sort_key(i, 'DESC NULLS FIRST')
+----
+NULL
+3
+2
+1
+
+# test varchar types
+statement ok
+CREATE TABLE varchars(v VARCHAR);
+
+statement ok
+INSERT INTO varchars VALUES ('hello'), ('hello' || chr(0) || chr(0)), ('world'), (''), (NULL)
+
+query I
+SELECT * FROM varchars ORDER BY create_sort_key(v, 'ASC NULLS LAST')
+----
+(empty)
+hello
+hello\0\0
+world
+NULL
+
+query I
+SELECT * FROM varchars ORDER BY create_sort_key(v, 'ASC NULLS FIRST')
+----
+NULL
+(empty)
+hello
+hello\0\0
+world
+
+query I
+SELECT * FROM varchars ORDER BY create_sort_key(v, 'DESC NULLS LAST')
+----
+world
+hello\0\0
+hello
+(empty)
+NULL
+
+query I
+SELECT * FROM varchars ORDER BY create_sort_key(v, 'DESC NULLS FIRST')
+----
+NULL
+world
+hello\0\0
+hello
+(empty)
+
+# test list types
+statement ok
+CREATE TABLE int_list(l INT[]);
+
+statement ok
+INSERT INTO int_list VALUES ([1, 2, 3]), ([]), ([1]), ([2]), ([NULL]), (NULL);
+
+query I
+SELECT l FROM int_list ORDER BY create_sort_key(l, 'ASC NULLS LAST')
+----
+[]
+[1]
+[1, 2, 3]
+[2]
+[NULL]
+NULL
+
+query I
+SELECT l FROM int_list ORDER BY create_sort_key(l, 'DESC NULLS LAST')
+----
+[NULL]
+[2]
+[1, 2, 3]
+[1]
+[]
+NULL
+
+query I
+SELECT l FROM int_list ORDER BY create_sort_key(l, 'ASC NULLS FIRST')
+----
+NULL
+[]
+[1]
+[1, 2, 3]
+[2]
+[NULL]
+
+query I
+SELECT l FROM int_list ORDER BY create_sort_key(l, 'DESC NULLS FIRST')
+----
+NULL
+[NULL]
+[2]
+[1, 2, 3]
+[1]
+[]
+
+
+# test struct types
+statement ok
+CREATE TABLE structs(s ROW(i INT, v VARCHAR));
+
+statement ok
+INSERT INTO structs VALUES ({'i': 42, v: 'hello'}), ({'i': 42, v: 'hello' || chr(0)}), ({'i': 43, v: ''}), (NULL), ({'i': 42, v: NULL}), ({'i': NULL, v: ''})
+
+query I
+SELECT * FROM structs ORDER BY create_sort_key(s, 'ASC NULLS LAST')
+----
+{'i': 42, 'v': hello}
+{'i': 42, 'v': hello\0}
+{'i': 42, 'v': NULL}
+{'i': 43, 'v': }
+{'i': NULL, 'v': }
+NULL
+
+query II
+SELECT s.i, s.v FROM structs ORDER BY create_sort_key(s.i, 'ASC NULLS LAST', s.v, 'ASC NULLS LAST')
+----
+42	hello
+42	hello\0
+42	NULL
+43	(empty)
+NULL	(empty)
+NULL	NULL
+
+query I
+SELECT * FROM structs ORDER BY create_sort_key(s, 'DESC NULLS FIRST')
+----
+NULL
+{'i': NULL, 'v': }
+{'i': 43, 'v': }
+{'i': 42, 'v': NULL}
+{'i': 42, 'v': hello\0}
+{'i': 42, 'v': hello}
+
+query II
+SELECT s.i, s.v FROM structs ORDER BY create_sort_key(s.i, 'DESC NULLS FIRST', s.v, 'DESC NULLS FIRST')
+----
+NULL	NULL
+NULL	(empty)
+43	(empty)
+42	NULL
+42	hello\0
+42	hello
+
+# test struct types
+statement ok
+CREATE TABLE list_of_structs(s ROW(i INT, v VARCHAR)[]);
+
+statement ok
+INSERT INTO list_of_structs VALUES
+([{'i': 42, v: 'hello'}]),
+([]),
+([{'i': 42, v: 'hello'}, {'i': 84, v: ''}]),
+([{'i': 43, v: ''}]),
+(NULL),
+([NULL]),
+([{'i': 42, v: NULL}]),
+([{'i': NULL, v: ''}]),
+([{'i': 42, v: 'hello'}, {'i': 84, v: chr(0)}]),
+([{'i': 42, v: 'hello'}, NULL, {'i': 84, v: ''}])
+
+query I
+SELECT * FROM list_of_structs ORDER BY create_sort_key(s, 'ASC NULLS LAST')
+----
+[]
+[{'i': 42, 'v': hello}]
+[{'i': 42, 'v': hello}, {'i': 84, 'v': }]
+[{'i': 42, 'v': hello}, {'i': 84, 'v': \0}]
+[{'i': 42, 'v': hello}, NULL, {'i': 84, 'v': }]
+[{'i': 42, 'v': NULL}]
+[{'i': 43, 'v': }]
+[{'i': NULL, 'v': }]
+[NULL]
+NULL
+
+query I
+SELECT * FROM list_of_structs ORDER BY create_sort_key(s, 'DESC NULLS FIRST')
+----
+NULL
+[NULL]
+[{'i': NULL, 'v': }]
+[{'i': 43, 'v': }]
+[{'i': 42, 'v': NULL}]
+[{'i': 42, 'v': hello}, NULL, {'i': 84, 'v': }]
+[{'i': 42, 'v': hello}, {'i': 84, 'v': \0}]
+[{'i': 42, 'v': hello}, {'i': 84, 'v': }]
+[{'i': 42, 'v': hello}]
+[]
+
+
+# test nested lists
+statement ok
+CREATE TABLE nested_lists(s INT[][]);
+
+statement ok
+INSERT INTO nested_lists VALUES
+([]),
+([[], []]),
+(NULL),
+([NULL]),
+([[NULL]]),
+([[42, 84]]),
+([[42], [84]]),
+([[42], NULL, [84]]),
+([[42], [NULL], [84]]),
+([[1, 2, 3, 4, 5, 6, 7, 8, 9]])
+
+query I
+SELECT * FROM nested_lists ORDER BY create_sort_key(s, 'ASC NULLS LAST')
+----
+[]
+[[], []]
+[[1, 2, 3, 4, 5, 6, 7, 8, 9]]
+[[42], [84]]
+[[42], [NULL], [84]]
+[[42], NULL, [84]]
+[[42, 84]]
+[[NULL]]
+[NULL]
+NULL
+
+query I
+SELECT * FROM nested_lists ORDER BY create_sort_key(s, 'DESC NULLS FIRST')
+----
+NULL
+[NULL]
+[[NULL]]
+[[42, 84]]
+[[42], NULL, [84]]
+[[42], [NULL], [84]]
+[[42], [84]]
+[[1, 2, 3, 4, 5, 6, 7, 8, 9]]
+[[], []]
+[]
+
+
+# test blobs
+statement ok
+CREATE TABLE blobs(b BLOB, c BLOB);
+
+statement ok
+INSERT INTO blobs VALUES (NULL, NULL), ('hello\x00\x00\x00\x00\x00', NULL), ('hello', 'world'), ('hello\x01\x01\x01', 'world'), ('', ''), ('hello\x00\x00\x00\x00\x00', 'world'), ('hello\x00', NULL)
+
+query I
+SELECT b FROM blobs ORDER BY create_sort_key(b, 'ASC NULLS LAST')
+----
+(empty)
+hello
+hello\x00
+hello\x00\x00\x00\x00\x00
+hello\x00\x00\x00\x00\x00
+hello\x01\x01\x01
+NULL
+
+query I
+SELECT b FROM blobs ORDER BY create_sort_key(b, 'DESC NULLS FIRST')
+----
+NULL
+hello\x01\x01\x01
+hello\x00\x00\x00\x00\x00
+hello\x00\x00\x00\x00\x00
+hello\x00
+hello
+(empty)
+
+query II
+SELECT * FROM blobs ORDER BY create_sort_key(b, 'ASC NULLS LAST', c, 'ASC NULLS LAST')
+----
+(empty)	(empty)
+hello	world
+hello\x00	NULL
+hello\x00\x00\x00\x00\x00	world
+hello\x00\x00\x00\x00\x00	NULL
+hello\x01\x01\x01	world
+NULL	NULL
+
+query II
+SELECT * FROM blobs ORDER BY create_sort_key(b, 'DESC NULLS FIRST', c, 'DESC NULLS FIRST')
+----
+NULL	NULL
+hello\x01\x01\x01	world
+hello\x00\x00\x00\x00\x00	NULL
+hello\x00\x00\x00\x00\x00	world
+hello\x00	NULL
+hello	world
+(empty)	(empty)
+
+# test array type
+statement ok
+CREATE TABLE arrays(l INT[3]);
+
+statement ok
+INSERT INTO arrays VALUES ([1, 2, 3]), (NULL), ([NULL, NULL, NULL]), ([1, NULL, 3]), ([2, 3, 4]);
+
+query I
+SELECT l FROM arrays ORDER BY create_sort_key(l, 'ASC NULLS LAST')
+----
+[1, 2, 3]
+[1, NULL, 3]
+[2, 3, 4]
+[NULL, NULL, NULL]
+NULL
+
+query I
+SELECT l FROM arrays ORDER BY create_sort_key(l, 'DESC NULLS FIRST')
+----
+NULL
+[NULL, NULL, NULL]
+[2, 3, 4]
+[1, NULL, 3]
+[1, 2, 3]

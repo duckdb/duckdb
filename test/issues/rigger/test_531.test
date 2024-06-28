@@ -11,7 +11,9 @@ CREATE TABLE t0(c0 DATE);
 
 statement error
 INSERT INTO t0 VALUES (-10000000);
+----
 
 statement error
 SELECT (-10000000)::DATE;
+----
 

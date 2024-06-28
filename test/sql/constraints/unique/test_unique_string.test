@@ -21,12 +21,14 @@ SELECT * FROM integers
 
 statement error
 INSERT INTO integers VALUES (6, '6'), (3, '4');
+----
 
 statement ok
 INSERT INTO integers VALUES (6,NULL), (7,NULL)
 
 statement error
 UPDATE integers SET j='77' WHERE j IS NULL
+----
 
 query IT
 SELECT * FROM integers ORDER BY i, j
@@ -72,9 +74,11 @@ INSERT INTO integers VALUES (6,NULL), (7,NULL)
 
 statement error
 INSERT INTO integers VALUES  (3, '4')
+----
 
 statement error
 INSERT INTO integers VALUES  (3, '4')
+----
 
 statement ok
 DROP TABLE integers

@@ -159,6 +159,7 @@ SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY l;
 # computations with aliases are not allowed though
 statement error
 SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY 1-k;
+----
 
 # but ordering on computation elements should work
 query I
@@ -175,4 +176,3 @@ SELECT a-10 AS k FROM test UNION SELECT a-11 AS l FROM test ORDER BY a-11;
 1
 2
 3
-

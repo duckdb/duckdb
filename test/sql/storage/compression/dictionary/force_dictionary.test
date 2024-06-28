@@ -1,0 +1,24 @@
+# name: test/sql/storage/compression/dictionary/force_dictionary.test
+# description: Test forcing dictionary encoding as the compression scheme
+# group: [dictionary]
+
+require vector_size 2048
+
+load __TEST_DIR__/force_dictionary.db
+
+statement ok
+PRAGMA force_compression = 'dictionary'
+
+statement ok
+CREATE TABLE test_dict (a VARCHAR);
+
+statement ok
+INSERT INTO test_dict SELECT i::VARCHAR FROM range(0, 2000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test_dict') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+Dictionary

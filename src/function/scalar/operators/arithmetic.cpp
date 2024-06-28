@@ -1,4 +1,4 @@
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
@@ -10,10 +10,10 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/enum_util.hpp"
-#include "duckdb/function/scalar/operators.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/operators.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include <limits>
 
@@ -35,6 +35,9 @@ static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 	case PhysicalType::INT64:
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		break;
+	case PhysicalType::INT128:
+		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
+		break;
 	case PhysicalType::UINT8:
 		function = &ScalarFunction::BinaryFunction<uint8_t, uint8_t, uint8_t, OP>;
 		break;
@@ -47,8 +50,11 @@ static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 	case PhysicalType::UINT64:
 		function = &ScalarFunction::BinaryFunction<uint64_t, uint64_t, uint64_t, OP>;
 		break;
+	case PhysicalType::UINT128:
+		function = &ScalarFunction::BinaryFunction<uhugeint_t, uhugeint_t, uhugeint_t, OP>;
+		break;
 	default:
-		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
+		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction: %s", TypeIdToString(type));
 	}
 	return function;
 }
@@ -57,9 +63,6 @@ template <class OP>
 static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 	scalar_function_t function;
 	switch (type) {
-	case PhysicalType::INT128:
-		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
-		break;
 	case PhysicalType::FLOAT:
 		function = &ScalarFunction::BinaryFunction<float, float, float, OP>;
 		break;
@@ -113,7 +116,7 @@ struct SubtractPropagateStatistics {
 };
 
 struct DecimalArithmeticBindData : public FunctionData {
-	DecimalArithmeticBindData() : check_overflow(true) {
+	DecimalArithmeticBindData() : check_overflow(false) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -180,10 +183,9 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	return result.ToUnique();
 }
 
-template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
-
+template <bool IS_MODULO = false>
+unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(ClientContext &context, ScalarFunction &bound_function,
+                                                            vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	// get the max width and scale of the input arguments
@@ -202,12 +204,15 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 		max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 	}
 	D_ASSERT(max_width > 0);
-	// for addition/subtraction, we add 1 to the width to ensure we don't overflow
-	auto required_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width) + 1;
-	if (required_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
-		// we don't automatically promote past the hugeint boundary to avoid the large hugeint performance penalty
-		bind_data->check_overflow = true;
-		required_width = Decimal::MAX_WIDTH_INT64;
+	uint8_t required_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width);
+	if (!IS_MODULO) {
+		// for addition/subtraction, we add 1 to the width to ensure we don't overflow
+		required_width = NumericCast<uint8_t>(required_width + 1);
+		if (required_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
+			// we don't automatically promote past the hugeint boundary to avoid the large hugeint performance penalty
+			bind_data->check_overflow = true;
+			required_width = Decimal::MAX_WIDTH_INT64;
+		}
 	}
 	if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
 		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
@@ -230,13 +235,22 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 		}
 	}
 	bound_function.return_type = result_type;
+	return bind_data;
+}
+
+template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
+unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFunction &bound_function,
+                                                vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = BindDecimalArithmetic(context, bound_function, arguments);
+
 	// now select the physical function to execute
+	auto &result_type = bound_function.return_type;
 	if (bind_data->check_overflow) {
 		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType());
 	} else {
 		bound_function.function = GetScalarBinaryFunction<OP>(result_type.InternalType());
 	}
-	if (result_type.InternalType() != PhysicalType::INT128) {
+	if (result_type.InternalType() != PhysicalType::INT128 && result_type.InternalType() != PhysicalType::UINT128) {
 		if (IS_SUBTRACT) {
 			bound_function.statistics =
 			    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>;
@@ -247,24 +261,22 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 	return std::move(bind_data);
 }
 
-static void SerializeDecimalArithmetic(FieldWriter &writer, const FunctionData *bind_data_p,
+static void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                        const ScalarFunction &function) {
-	D_ASSERT(bind_data_p);
-	auto bind_data = (DecimalArithmeticBindData *)bind_data_p;
-	writer.WriteField(bind_data->check_overflow);
-	writer.WriteSerializable(function.return_type);
-	writer.WriteRegularSerializableList(function.arguments);
+	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
+	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
+	serializer.WriteProperty(101, "return_type", function.return_type);
+	serializer.WriteProperty(102, "arguments", function.arguments);
 }
 
 // TODO this is partially duplicated from the bind
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> DeserializeDecimalArithmetic(ClientContext &context, FieldReader &reader,
-                                                      ScalarFunction &bound_function) {
-	// re-change the function pointers
-	auto check_overflow = reader.ReadRequired<bool>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
+unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, ScalarFunction &bound_function) {
 
+	//	// re-change the function pointers
+	auto check_overflow = deserializer.ReadProperty<bool>(100, "check_overflow");
+	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
+	auto arguments = deserializer.ReadProperty<vector<LogicalType>>(102, "arguments");
 	if (check_overflow) {
 		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType());
 	} else {
@@ -303,7 +315,7 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>;
 			return function;
-		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+		} else if (left_type.IsIntegral()) {
 			return ScalarFunction("+", {left_type, right_type}, left_type,
 			                      GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			                      nullptr, PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
@@ -319,11 +331,14 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<date_t, int32_t, date_t, AddOperator>);
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return ScalarFunction("+", {left_type, right_type}, LogicalType::DATE,
-			                      ScalarFunction::BinaryFunction<date_t, interval_t, date_t, AddOperator>);
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<date_t, interval_t, timestamp_t, AddOperator>);
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<date_t, dtime_t, timestamp_t, AddOperator>);
+		} else if (right_type.id() == LogicalTypeId::TIME_TZ) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
+			                      ScalarFunction::BinaryFunction<date_t, dtime_tz_t, timestamp_t, AddOperator>);
 		}
 		break;
 	case LogicalTypeId::INTEGER:
@@ -337,11 +352,14 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::INTERVAL,
 			                      ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, AddOperator>);
 		} else if (right_type.id() == LogicalTypeId::DATE) {
-			return ScalarFunction("+", {left_type, right_type}, LogicalType::DATE,
-			                      ScalarFunction::BinaryFunction<interval_t, date_t, date_t, AddOperator>);
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<interval_t, date_t, timestamp_t, AddOperator>);
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME,
 			                      ScalarFunction::BinaryFunction<interval_t, dtime_t, dtime_t, AddTimeOperator>);
+		} else if (right_type.id() == LogicalTypeId::TIME_TZ) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME_TZ,
+			                      ScalarFunction::BinaryFunction<interval_t, dtime_tz_t, dtime_tz_t, AddTimeOperator>);
 		} else if (right_type.id() == LogicalTypeId::TIMESTAMP) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>);
@@ -354,6 +372,15 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		} else if (right_type.id() == LogicalTypeId::DATE) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<dtime_t, date_t, timestamp_t, AddOperator>);
+		}
+		break;
+	case LogicalTypeId::TIME_TZ:
+		if (right_type.id() == LogicalTypeId::DATE) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
+			                      ScalarFunction::BinaryFunction<dtime_tz_t, date_t, timestamp_t, AddOperator>);
+		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME_TZ,
+			                      ScalarFunction::BinaryFunction<dtime_tz_t, interval_t, dtime_tz_t, AddTimeOperator>);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -394,9 +421,16 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
 
+	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
+	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIME_TZ));
+
 	// we can add times to dates
 	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::DATE));
 	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME));
+
+	// we can add times with time zones (offsets) to dates
+	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::DATE));
+	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME_TZ));
 
 	// we can add lists together
 	functions.AddFunction(ListConcatFun::GetFunction());
@@ -413,8 +447,8 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 struct NegateOperator {
 	template <class T>
 	static bool CanNegate(T input) {
-		using Limits = std::numeric_limits<T>;
-		return !(Limits::is_integer && Limits::is_signed && Limits::lowest() == input);
+		using Limits = NumericLimits<T>;
+		return !(Limits::IsSigned() && Limits::Minimum() == input);
 	}
 
 	template <class TA, class TR>
@@ -565,7 +599,7 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>;
 			return function;
-		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+		} else if (left_type.IsIntegral()) {
 			return ScalarFunction(
 			    "-", {left_type, right_type}, left_type,
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
@@ -587,8 +621,8 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			return ScalarFunction("-", {left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>);
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return ScalarFunction("-", {left_type, right_type}, LogicalType::DATE,
-			                      ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SubtractOperator>);
+			return ScalarFunction("-", {left_type, right_type}, LogicalType::TIMESTAMP,
+			                      ScalarFunction::BinaryFunction<date_t, interval_t, timestamp_t, SubtractOperator>);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -612,6 +646,13 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction("-", {left_type, right_type}, LogicalType::TIME,
 			                      ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SubtractTimeOperator>);
+		}
+		break;
+	case LogicalTypeId::TIME_TZ:
+		if (right_type.id() == LogicalTypeId::INTERVAL) {
+			return ScalarFunction(
+			    "-", {left_type, right_type}, LogicalType::TIME_TZ,
+			    ScalarFunction::BinaryFunction<dtime_tz_t, interval_t, dtime_tz_t, SubtractTimeOperator>);
 		}
 		break;
 	default:
@@ -643,6 +684,7 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
+	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
 	// we can negate intervals
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL));
 	set.AddFunction(functions);
@@ -769,7 +811,7 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>;
 			functions.AddFunction(function);
-		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
+		} else if (TypeIsIntegral(type.InternalType())) {
 			functions.AddFunction(ScalarFunction(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, nullptr,
@@ -856,10 +898,12 @@ struct BinaryZeroIsNullWrapper {
 	}
 };
 
-struct BinaryZeroIsNullHugeintWrapper {
+struct BinaryNumericDivideHugeintWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
-		if (right.upper == 0 && right.lower == 0) {
+		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
+			throw OutOfRangeException("Overflow in division of %s / %s", left.ToString(), right.ToString());
+		} else if (right == 0) {
 			mask.SetInvalid(idx);
 			return left;
 		} else {
@@ -878,29 +922,31 @@ static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &st
 }
 
 template <class OP>
-static scalar_function_t GetBinaryFunctionIgnoreZero(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::TINYINT:
+static scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT8:
 		return BinaryScalarFunctionIgnoreZero<int8_t, int8_t, int8_t, OP, BinaryNumericDivideWrapper>;
-	case LogicalTypeId::SMALLINT:
+	case PhysicalType::INT16:
 		return BinaryScalarFunctionIgnoreZero<int16_t, int16_t, int16_t, OP, BinaryNumericDivideWrapper>;
-	case LogicalTypeId::INTEGER:
+	case PhysicalType::INT32:
 		return BinaryScalarFunctionIgnoreZero<int32_t, int32_t, int32_t, OP, BinaryNumericDivideWrapper>;
-	case LogicalTypeId::BIGINT:
+	case PhysicalType::INT64:
 		return BinaryScalarFunctionIgnoreZero<int64_t, int64_t, int64_t, OP, BinaryNumericDivideWrapper>;
-	case LogicalTypeId::UTINYINT:
+	case PhysicalType::UINT8:
 		return BinaryScalarFunctionIgnoreZero<uint8_t, uint8_t, uint8_t, OP>;
-	case LogicalTypeId::USMALLINT:
+	case PhysicalType::UINT16:
 		return BinaryScalarFunctionIgnoreZero<uint16_t, uint16_t, uint16_t, OP>;
-	case LogicalTypeId::UINTEGER:
+	case PhysicalType::UINT32:
 		return BinaryScalarFunctionIgnoreZero<uint32_t, uint32_t, uint32_t, OP>;
-	case LogicalTypeId::UBIGINT:
+	case PhysicalType::UINT64:
 		return BinaryScalarFunctionIgnoreZero<uint64_t, uint64_t, uint64_t, OP>;
-	case LogicalTypeId::HUGEINT:
-		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP, BinaryZeroIsNullHugeintWrapper>;
-	case LogicalTypeId::FLOAT:
+	case PhysicalType::INT128:
+		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP, BinaryNumericDivideHugeintWrapper>;
+	case PhysicalType::UINT128:
+		return BinaryScalarFunctionIgnoreZero<uhugeint_t, uhugeint_t, uhugeint_t, OP>;
+	case PhysicalType::FLOAT:
 		return BinaryScalarFunctionIgnoreZero<float, float, float, OP>;
-	case LogicalTypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return BinaryScalarFunctionIgnoreZero<double, double, double, OP>;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");
@@ -910,9 +956,9 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(const LogicalType &type) {
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet fp_divide("/");
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
-	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::FLOAT)));
+	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(PhysicalType::FLOAT)));
 	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::DOUBLE)));
+	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(PhysicalType::DOUBLE)));
 	fp_divide.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
@@ -924,7 +970,7 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 			continue;
 		} else {
 			full_divide.AddFunction(
-			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
+			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType())));
 		}
 	}
 	set.AddFunction(full_divide);
@@ -936,6 +982,23 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // % [modulo]
 //===--------------------------------------------------------------------===//
+template <class OP>
+unique_ptr<FunctionData> BindDecimalModulo(ClientContext &context, ScalarFunction &bound_function,
+                                           vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = BindDecimalArithmetic<true>(context, bound_function, arguments);
+	// now select the physical function to execute
+	if (bind_data->check_overflow) {
+		// fallback to DOUBLE if the decimal type is not guaranteed to fit within the max decimal width
+		for (auto &arg : bound_function.arguments) {
+			arg = LogicalType::DOUBLE;
+		}
+		bound_function.return_type = LogicalType::DOUBLE;
+	}
+	auto &result_type = bound_function.return_type;
+	bound_function.function = GetBinaryFunctionIgnoreZero<OP>(result_type.InternalType());
+	return std::move(bind_data);
+}
+
 template <>
 float ModuloOperator::Operation(float left, float right) {
 	D_ASSERT(right != 0);
@@ -962,10 +1025,10 @@ void ModFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("%");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
-			continue;
+			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>));
 		} else {
 			functions.AddFunction(
-			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type)));
+			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type.InternalType())));
 		}
 	}
 	set.AddFunction(functions);

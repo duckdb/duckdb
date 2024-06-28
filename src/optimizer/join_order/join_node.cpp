@@ -6,63 +6,12 @@
 
 namespace duckdb {
 
-JoinNode::JoinNode(JoinRelationSet &set, const double base_cardinality)
-    : set(set), info(nullptr), has_filter(false), left(nullptr), right(nullptr), base_cardinality(base_cardinality) {
-	estimated_props = make_uniq<EstimatedProperties>(base_cardinality, 0);
+DPJoinNode::DPJoinNode(JoinRelationSet &set) : set(set), info(nullptr), is_leaf(true), left_set(set), right_set(set) {
 }
 
-JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right,
-                   const double base_cardinality, double cost)
-    : set(set), info(info), has_filter(false), left(&left), right(&right), base_cardinality(base_cardinality) {
-	estimated_props = make_uniq<EstimatedProperties>(base_cardinality, cost);
+DPJoinNode::DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left,
+                       JoinRelationSet &right, double cost)
+    : set(set), info(info), is_leaf(false), left_set(left), right_set(right), cost(cost) {
 }
 
-unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
-	auto result = make_uniq<EstimatedProperties>(cardinality, cost);
-	return result;
-}
-
-double JoinNode::GetCost() {
-	return estimated_props->GetCost();
-}
-
-void JoinNode::SetCost(double cost) {
-	estimated_props->SetCost(cost);
-}
-
-double JoinNode::GetBaseTableCardinality() {
-	if (set.count > 1) {
-		throw InvalidInputException("Cannot call get base table cardinality on intermediate join node");
-	}
-	return base_cardinality;
-}
-
-void JoinNode::SetBaseTableCardinality(double base_card) {
-	base_cardinality = base_card;
-}
-
-void JoinNode::SetEstimatedCardinality(double estimated_card) {
-	estimated_props->SetCardinality(estimated_card);
-}
-
-string JoinNode::ToString() {
-	string result = "-------------------------------\n";
-	result += set.ToString() + "\n";
-	result += "card = " + to_string(GetCardinality<double>()) + "\n";
-	bool is_cartesian = false;
-	if (left && right) {
-		is_cartesian = (GetCardinality<double>() == left->GetCardinality<double>() * right->GetCardinality<double>());
-	}
-	result += "cartesian = " + to_string(is_cartesian) + "\n";
-	result += "cost = " + to_string(estimated_props->GetCost()) + "\n";
-	result += "left = \n";
-	if (left) {
-		result += left->ToString();
-	}
-	result += "right = \n";
-	if (right) {
-		result += right->ToString();
-	}
-	return result;
-}
 } // namespace duckdb

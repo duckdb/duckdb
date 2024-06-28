@@ -3,11 +3,11 @@
 // Description: This file contains the vectorized hash implementations
 //===--------------------------------------------------------------------===//
 
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -25,7 +25,7 @@ static inline hash_t CombineHashScalar(hash_t a, hash_t b) {
 }
 
 template <bool HAS_RSEL, class T>
-static inline void TightLoopHash(T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel,
+static inline void TightLoopHash(const T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel,
                                  idx_t count, const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -56,8 +56,8 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
 
-		TightLoopHash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(result), rsel, count, idata.sel,
-		                           idata.validity);
+		TightLoopHash<HAS_RSEL, T>(UnifiedVectorFormat::GetData<T>(idata), FlatVector::GetData<hash_t>(result), rsel,
+		                           count, idata.sel, idata.validity);
 	}
 }
 
@@ -90,11 +90,13 @@ static inline void StructLoopHash(Vector &input, Vector &hashes, const Selection
 
 template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	// FIXME: if we want to be more efficient we shouldn't flatten, but the logic here currently requires it
+	hashes.Flatten(count);
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
-	const auto ldata = (const list_entry_t *)idata.data;
+	const auto ldata = UnifiedVectorFormat::GetData<list_entry_t>(idata);
 
 	// Hash the children into a temporary
 	auto &child = ListVector::GetEntry(input);
@@ -103,6 +105,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	Vector child_hashes(LogicalType::HASH, child_count);
 	if (child_count > 0) {
 		VectorOperations::Hash(child, child_hashes, child_count);
+		child_hashes.Flatten(child_count);
 	}
 	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
 
@@ -176,6 +179,73 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	}
 }
 
+template <bool HAS_RSEL, bool FIRST_HASH>
+static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	hashes.Flatten(count);
+	auto hdata = FlatVector::GetData<hash_t>(hashes);
+
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
+
+	// Hash the children into a temporary
+	auto &child = ArrayVector::GetEntry(input);
+	auto array_size = ArrayType::GetSize(input.GetType());
+
+	auto is_flat = input.GetVectorType() == VectorType::FLAT_VECTOR;
+	auto is_constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
+
+	if (!HAS_RSEL && (is_flat || is_constant)) {
+		// Fast path for contiguous vectors with no selection vector
+		auto child_count = array_size * (is_constant ? 1 : count);
+
+		Vector child_hashes(LogicalType::HASH, child_count);
+		VectorOperations::Hash(child, child_hashes, child_count);
+		child_hashes.Flatten(child_count);
+		auto chdata = FlatVector::GetData<hash_t>(child_hashes);
+
+		for (idx_t i = 0; i < count; i++) {
+			auto lidx = idata.sel->get_index(i);
+			if (idata.validity.RowIsValid(lidx)) {
+				for (idx_t j = 0; j < array_size; j++) {
+					auto offset = lidx * array_size + j;
+					hdata[i] = CombineHashScalar(hdata[i], chdata[offset]);
+				}
+			} else if (FIRST_HASH) {
+				hdata[i] = HashOp::NULL_HASH;
+			}
+		}
+	} else {
+		// Hash the arrays one-by-one
+		SelectionVector array_sel(array_size);
+		Vector array_hashes(LogicalType::HASH, array_size);
+		for (idx_t i = 0; i < count; i++) {
+			const auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
+			const auto lidx = idata.sel->get_index(ridx);
+
+			if (idata.validity.RowIsValid(lidx)) {
+				// Create a selection vector for the array
+				for (idx_t j = 0; j < array_size; j++) {
+					array_sel.set_index(j, lidx * array_size + j);
+				}
+
+				// Hash the array slice
+				Vector dict_vec(child, array_sel, array_size);
+				VectorOperations::Hash(dict_vec, array_hashes, array_size);
+				auto ahdata = FlatVector::GetData<hash_t>(array_hashes);
+
+				// Combine the hashes of the array
+				for (idx_t j = 0; j < array_size; j++) {
+					hdata[ridx] = CombineHashScalar(hdata[ridx], ahdata[j]);
+					// Clear the hash for the next iteration
+					ahdata[j] = 0;
+				}
+			} else if (FIRST_HASH) {
+				hdata[ridx] = HashOp::NULL_HASH;
+			}
+		}
+	}
+}
+
 template <bool HAS_RSEL>
 static inline void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
@@ -208,6 +278,9 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 	case PhysicalType::INT128:
 		TemplatedLoopHash<HAS_RSEL, hugeint_t>(input, result, rsel, count);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedLoopHash<HAS_RSEL, uhugeint_t>(input, result, rsel, count);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedLoopHash<HAS_RSEL, float>(input, result, rsel, count);
 		break;
@@ -226,6 +299,9 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 	case PhysicalType::LIST:
 		ListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
+	case PhysicalType::ARRAY:
+		ArrayLoopHash<HAS_RSEL, true>(input, result, rsel, count);
+		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
 	}
@@ -240,8 +316,8 @@ void VectorOperations::Hash(Vector &input, Vector &result, const SelectionVector
 }
 
 template <bool HAS_RSEL, class T>
-static inline void TightLoopCombineHashConstant(T *__restrict ldata, hash_t constant_hash, hash_t *__restrict hash_data,
-                                                const SelectionVector *rsel, idx_t count,
+static inline void TightLoopCombineHashConstant(const T *__restrict ldata, hash_t constant_hash,
+                                                hash_t *__restrict hash_data, const SelectionVector *rsel, idx_t count,
                                                 const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -261,8 +337,9 @@ static inline void TightLoopCombineHashConstant(T *__restrict ldata, hash_t cons
 }
 
 template <bool HAS_RSEL, class T>
-static inline void TightLoopCombineHash(T *__restrict ldata, hash_t *__restrict hash_data, const SelectionVector *rsel,
-                                        idx_t count, const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
+static inline void TightLoopCombineHash(const T *__restrict ldata, hash_t *__restrict hash_data,
+                                        const SelectionVector *rsel, idx_t count,
+                                        const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
@@ -296,13 +373,14 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 			auto constant_hash = *ConstantVector::GetData<hash_t>(hashes);
 			// now re-initialize the hashes vector to an empty flat vector
 			hashes.SetVectorType(VectorType::FLAT_VECTOR);
-			TightLoopCombineHashConstant<HAS_RSEL, T>((T *)idata.data, constant_hash,
+			TightLoopCombineHashConstant<HAS_RSEL, T>(UnifiedVectorFormat::GetData<T>(idata), constant_hash,
 			                                          FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
 			                                          idata.validity);
 		} else {
 			D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
-			TightLoopCombineHash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(hashes), rsel, count,
-			                                  idata.sel, idata.validity);
+			TightLoopCombineHash<HAS_RSEL, T>(UnifiedVectorFormat::GetData<T>(idata),
+			                                  FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
+			                                  idata.validity);
 		}
 	}
 }
@@ -339,6 +417,9 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 	case PhysicalType::INT128:
 		TemplatedLoopCombineHash<HAS_RSEL, hugeint_t>(input, hashes, rsel, count);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedLoopCombineHash<HAS_RSEL, uhugeint_t>(input, hashes, rsel, count);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedLoopCombineHash<HAS_RSEL, float>(input, hashes, rsel, count);
 		break;
@@ -356,6 +437,9 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 		break;
 	case PhysicalType::LIST:
 		ListLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::ARRAY:
+		ArrayLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");

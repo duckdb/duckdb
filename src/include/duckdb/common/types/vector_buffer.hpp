@@ -29,7 +29,8 @@ enum class VectorBufferType : uint8_t {
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
-	OPAQUE_BUFFER        // opaque buffer, can be created for example by the parquet reader
+	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
+	ARRAY_BUFFER         // array buffer, holds a single flatvector child
 };
 
 enum class VectorAuxiliaryDataType : uint8_t {
@@ -52,7 +53,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -60,7 +61,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -121,6 +122,18 @@ protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
 	unsafe_unique_array<data_t> data;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! The DictionaryBuffer holds a selection vector
@@ -154,7 +167,7 @@ private:
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
-	VectorStringBuffer(VectorBufferType type);
+	explicit VectorStringBuffer(VectorBufferType type);
 
 public:
 	string_t AddString(const char *data, idx_t len) {
@@ -186,11 +199,15 @@ public:
 	VectorFSSTStringBuffer();
 
 public:
-	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p) {
+	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p, const idx_t string_block_limit) {
 		duckdb_fsst_decoder = duckdb_fsst_decoder_p;
+		decompress_buffer.resize(string_block_limit + 1);
 	}
 	void *GetDecoder() {
 		return duckdb_fsst_decoder.get();
+	}
+	vector<unsigned char> &GetDecompressBuffer() {
+		return decompress_buffer;
 	}
 	void SetCount(idx_t count) {
 		total_string_count = count;
@@ -202,12 +219,13 @@ public:
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
 	idx_t total_string_count = 0;
+	vector<unsigned char> decompress_buffer;
 };
 
 class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
-	VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count);
 	~VectorStructBuffer() override;
 
@@ -226,8 +244,8 @@ private:
 
 class VectorListBuffer : public VectorBuffer {
 public:
-	VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
-	VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
 	~VectorListBuffer() override;
 
 public:
@@ -256,6 +274,26 @@ private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 	idx_t capacity = 0;
+	idx_t size = 0;
+};
+
+class VectorArrayBuffer : public VectorBuffer {
+public:
+	explicit VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity);
+	explicit VectorArrayBuffer(const LogicalType &array, idx_t initial = STANDARD_VECTOR_SIZE);
+	~VectorArrayBuffer() override;
+
+public:
+	Vector &GetChild();
+	idx_t GetArraySize();
+	idx_t GetChildSize();
+
+private:
+	unique_ptr<Vector> child;
+	// The size of each array in this buffer
+	idx_t array_size = 0;
+	// How many arrays are currently stored in this buffer
+	// The child vector has size (array_size * size)
 	idx_t size = 0;
 };
 

@@ -101,7 +101,7 @@ typedef struct mbedtls_ccm_context
 mbedtls_ccm_context;
 
 #else  /* MBEDTLS_CCM_ALT */
-#include "ccm_alt.h"
+#include "mbedtls/ccm_alt.h"
 #endif /* MBEDTLS_CCM_ALT */
 
 /**

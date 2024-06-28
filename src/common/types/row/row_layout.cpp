@@ -12,11 +12,10 @@
 
 namespace duckdb {
 
-RowLayout::RowLayout()
-    : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_pointer_offset(0) {
+RowLayout::RowLayout() : flag_width(0), data_width(0), row_width(0), all_constant(true), heap_pointer_offset(0) {
 }
 
-void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align) {
+void RowLayout::Initialize(vector<LogicalType> types_p, bool align) {
 	offsets.clear();
 	types = std::move(types_p);
 
@@ -31,7 +30,7 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p,
 
 	// This enables pointer swizzling for out-of-core computation.
 	if (!all_constant) {
-		// When unswizzled the pointer lives here.
+		// When unswizzled, the pointer lives here.
 		// When swizzled, the pointer is replaced by an offset.
 		heap_pointer_offset = row_width;
 		// The 8 byte pointer will be replaced with an 8 byte idx_t when swizzled.
@@ -52,39 +51,12 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p,
 		}
 	}
 
-	// Alignment padding for aggregates
-#ifndef DUCKDB_ALLOW_UNDEFINED
-	if (align) {
-		row_width = AlignValue(row_width);
-	}
-#endif
 	data_width = row_width - flag_width;
 
-	// Aggregate fields.
-	aggregates = std::move(aggregates_p);
-	for (auto &aggregate : aggregates) {
-		offsets.push_back(row_width);
-		row_width += aggregate.payload_size;
-#ifndef DUCKDB_ALLOW_UNDEFINED
-		D_ASSERT(aggregate.payload_size == AlignValue(aggregate.payload_size));
-#endif
-	}
-	aggr_width = row_width - data_width - flag_width;
-
 	// Alignment padding for the next row
-#ifndef DUCKDB_ALLOW_UNDEFINED
 	if (align) {
 		row_width = AlignValue(row_width);
 	}
-#endif
-}
-
-void RowLayout::Initialize(vector<LogicalType> types_p, bool align) {
-	Initialize(std::move(types_p), Aggregates(), align);
-}
-
-void RowLayout::Initialize(Aggregates aggregates_p, bool align) {
-	Initialize(vector<LogicalType>(), std::move(aggregates_p), align);
 }
 
 } // namespace duckdb

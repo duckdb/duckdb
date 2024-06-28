@@ -1,8 +1,9 @@
 import duckdb
 import pytest
 import datetime
-class TestPythonResult(object):
 
+
+class TestPythonResult(object):
     def test_result_closed(self, duckdb_cursor):
         connection = duckdb.connect('')
         cursor = connection.cursor()
@@ -29,16 +30,31 @@ class TestPythonResult(object):
         cursor.execute("INSERT INTO test VALUES (TRUE, '01:01:01', 'bla' )")
         rel = connection.table("test")
         res = rel.execute()
-        assert res.description == [('i', 'bool', None, None, None, None, None), ('j', 'Time', None, None, None, None, None), ('k', 'STRING', None, None, None, None, None)]
+        assert res.description == [
+            ('i', 'bool', None, None, None, None, None),
+            ('j', 'Time', None, None, None, None, None),
+            ('k', 'STRING', None, None, None, None, None),
+        ]
 
     def test_result_timestamps(self, duckdb_cursor):
         connection = duckdb.connect('')
         cursor = connection.cursor()
-        cursor.execute('CREATE TABLE IF NOT EXISTS timestamps (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro TIMESTAMP_US, nano TIMESTAMP_NS );')
-        cursor.execute("INSERT INTO timestamps VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2008-01-01 00:00:01.98926','2008-01-01 00:00:01.899268321' )")
+        cursor.execute(
+            'CREATE TABLE IF NOT EXISTS timestamps (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro TIMESTAMP_US, nano TIMESTAMP_NS );'
+        )
+        cursor.execute(
+            "INSERT INTO timestamps VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2008-01-01 00:00:01.98926','2008-01-01 00:00:01.899268321' )"
+        )
 
         rel = connection.table("timestamps")
-        assert rel.execute().fetchall() == [(datetime.datetime(2008, 1, 1, 0, 0, 11), datetime.datetime(2008, 1, 1, 0, 0, 1, 794000), datetime.datetime(2008, 1, 1, 0, 0, 1, 989260), datetime.datetime(2008, 1, 1, 0, 0, 1, 899268))]
+        assert rel.execute().fetchall() == [
+            (
+                datetime.datetime(2008, 1, 1, 0, 0, 11),
+                datetime.datetime(2008, 1, 1, 0, 0, 1, 794000),
+                datetime.datetime(2008, 1, 1, 0, 0, 1, 989260),
+                datetime.datetime(2008, 1, 1, 0, 0, 1, 899268),
+            )
+        ]
 
     def test_result_interval(self):
         connection = duckdb.connect()
@@ -49,7 +65,11 @@ class TestPythonResult(object):
         rel = connection.table("intervals")
         res = rel.execute()
         assert res.description == [('ivals', 'TIMEDELTA', None, None, None, None, None)]
-        assert res.fetchall() == [(datetime.timedelta(days=1.0),), (datetime.timedelta(seconds=2.0),), (datetime.timedelta(microseconds=1.0),)]
+        assert res.fetchall() == [
+            (datetime.timedelta(days=1.0),),
+            (datetime.timedelta(seconds=2.0),),
+            (datetime.timedelta(microseconds=1.0),),
+        ]
 
     def test_description_uuid(self):
         connection = duckdb.connect()

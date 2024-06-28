@@ -1,0 +1,65 @@
+# name: test/optimizer/pushdown/filter_cannot_pushdown.test
+# description: Test Filter Can Not Push Down
+# group: [pushdown]
+
+# test some expressions which have side effects can not push down
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II
+explain select rnd from (select random()) as t(rnd) where rnd < 0.5;
+----
+logical_opt	<REGEX>:.*rnd < 0.5.*
+
+query II
+explain select * from (select rnd from (select random()) as t(rnd) where rnd < 0.5);
+----
+logical_opt	<REGEX>:.*rnd < 0.5.*
+
+statement ok
+CREATE TABLE t(a integer, b integer, c integer);
+
+query II
+explain select rnd, a from (select random() as rnd, a from t) where rnd < 0.3 and a > 1;
+----
+logical_opt	<REGEX>:.*rnd < 0.3.*
+
+query II
+explain select * from (select rnd, a from (select random() as rnd, a from t) where rnd < 0.3 and a > 1);
+----
+logical_opt	<REGEX>:.*rnd < 0.3.*
+
+query II
+explain select rnd, a from (select random() as rnd, a from t) where rnd < 0.3 and a > 1;
+----
+logical_opt	<!REGEX>:.*a > 1.*
+
+query II
+explain select rnd, a from (select random(), 2 as 'a') as t(rnd, a) where rnd < 1 and a > 0;
+----
+logical_opt	<REGEX>:.*rnd < 1.0.*
+
+statement ok
+create table t1 as select range as a, random() as b from range(10);
+
+query II
+explain select a, b from (select random(), a, b from t1) as t(rnd, a, b) where rnd < 1 and a > 0;
+----
+logical_opt	<REGEX>:.*rnd < 1.0.*
+
+loop i 1 100
+
+query I
+WITH combined_results AS (
+    SELECT rnd > 0.5 as result FROM (SELECT random()) AS t(rnd) WHERE rnd < 0.5
+    UNION ALL
+    SELECT false
+)
+SELECT result
+FROM combined_results
+GROUP BY result;
+----
+False
+
+endloop

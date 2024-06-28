@@ -1,0 +1,213 @@
+# name: test/sql/window/test_dense_rank.test
+# description: Test DENSE_RANK state computations
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+# Multiple chunks, single partition
+query IIIII
+WITH t AS (
+	SELECT i, DENSE_RANK() OVER (ORDER BY i % 50) AS d
+	FROM range(3000) tbl(i)
+), w AS (
+	SELECT d, COUNT(*) as c
+	FROM t
+	GROUP BY ALL
+)
+SELECT COUNT(*), MIN(d), MAX(d), MIN(c), MAX(c)
+FROM w
+----
+50	1	50	60	60
+
+# Multiple chunks, multiple partitions
+query IIIII
+WITH t AS (
+	SELECT i, DENSE_RANK() OVER (PARTITION BY i // 3000 ORDER BY i % 50) AS d
+	FROM range(9000) tbl(i)
+), w AS (
+	SELECT d, COUNT(*) as c
+	FROM t
+	GROUP BY ALL
+)
+SELECT COUNT(*), MIN(d), MAX(d), MIN(c), MAX(c)
+FROM w
+----
+50	1	50	180	180
+
+statement ok
+CREATE TABLE issue9416(idx VARCHAR, source VARCHAR, project VARCHAR, specimen VARCHAR, sample_id VARCHAR);
+
+statement ok
+INSERT INTO issue9416 VALUES
+	('197bc9528efbc76a523d796b749a69f6','json','0bf0b46fb9c01829c55e','e4de2878',NULL),
+	('0f62e5fa923495012f3863e7ea05f566','json','d98171d6fe06b3','440ce2bf','9fc93ee404d6bccb69'),
+	('9b15a709814582ecbec00d8397852865','json','24ed1657','c3d1f46c','06c234e260a7484'),
+	('8569d67b0ccbbf316b360be3bb4fe418','json','d98171d6fe06b3','14875a37','3416100f300c7bd'),
+	('d2f02b24d59696079e3d649b403fbb22','json','82e092e750a','e7deeb7f','6d8dded6f044'),
+	('60a2b8898440b2f4531268e27b7d3495','json','f657d34b6','46afa8e7','7bb186ce013b'),
+	('5aa1982136f3991ad5ed537793d40a0f','json','d58e2b351518','a98b2b0c','ac594941b5d9'),
+	('cc70cc91af828c833b5bf20785b91918','json','4953ff4b','8450467c','d1509d0abde0'),
+	('7cf99d6372183aab6a9a22205e1b0e96','json','14b5b262c52400','e7deeb7f','6d8dded6f044'),
+	('3cf6f7ec6609c6456f6587c441310ace','json','0c155a1ba5','e984dd5b','d374014b756d'),
+	('e1223eb2cc51161d32495ff0ad8b34ae','json','f05964c5c4','4f3354c3','10eebe991cf9'),
+	('7b8b64bac7c7dc692d1fe76f6eeff2bb','json','6bd9ce7f1d8','492f260c','314d3e061be7'),
+	('7b8b64bac7c7dc692d1fe76f6eeff2bb','json','249f40c5d97','492f260c','314d3e061be7'),
+	('cd29186ef73b658079d848fca1ebe839','json','6bd9ce7f1d8','492f260c','314d3e061be7'),
+	('d67a74eb29392e06b97161d9f3121705','json','0bf0b46fb9c01829c55e','2d28e9ee','0deb6a6b189d309'),
+	('9dcc686429408e3319161c39b008f705','json','24ed1657','8450467c','d1509d0abde0'),
+	('11788bb5a0477c1bfb31a9f33af80c40','json','4ea4e97b39c4b','4f3354c3','10eebe991cf9'),
+	('59bceab687b4004dbeed6291f07af37d','json','6d00cb7409','4f3354c3','10eebe991cf9'),
+	('76b23210847e653b6060104da0e86d5b','json','24ed1657','22f4528f','7632cf8f4849404'),
+	('2605143ff05ae1ce66b1cc70f80fe53d','json','249f40c5d97','b93c50ce','be70d8b88fff'),
+	('1a1864b5f4ed27acfbbf6e5069348a5a','json','6bd9ce7f1d8','6c082f61','ee109745d498'),
+	('92200c3306e18e53a41550c6306a3ee4','json','8271fea91bc236c','d6f24fd5',NULL),
+	('dd39e08b282cf4a6429bcfefaa2af071','json','249f40c5d97','1396d8b6','3826343264acc9'),
+	('3afcae2318313f112b62536fa160678d','json','24ed1657','5311f290','129c0a0fd3e82a8'),
+	('3afcae2318313f112b62536fa160678d','json','24ed1657','08b8de7c543d','129c0a0fd3e82a8'),
+	('3afcae2318313f112b62536fa160678d','json','24ed1657','ce001fa3a2a4','129c0a0fd3e82a8'),
+	('79acd6669071e95a5b2fe5456216ab32','json','24ed1657','5311f290','129c0a0fd3e82a8'),
+	('79acd6669071e95a5b2fe5456216ab32','json','24ed1657','08b8de7c543d','129c0a0fd3e82a8'),
+	('79acd6669071e95a5b2fe5456216ab32','json','24ed1657','ce001fa3a2a4','129c0a0fd3e82a8'),
+	('d0a7e9d3eda115120021a895a81db8be','json','24ed1657','5311f290','129c0a0fd3e82a8'),
+	('d0a7e9d3eda115120021a895a81db8be','json','24ed1657','08b8de7c543d','129c0a0fd3e82a8'),
+	('d0a7e9d3eda115120021a895a81db8be','json','24ed1657','ce001fa3a2a4','129c0a0fd3e82a8'),
+	('a59a3a4ad8d2ab867c9b830974588645','json','24ed1657','5311f290','129c0a0fd3e82a8'),
+	('a59a3a4ad8d2ab867c9b830974588645','json','24ed1657','08b8de7c543d','129c0a0fd3e82a8'),
+	('a59a3a4ad8d2ab867c9b830974588645','json','24ed1657','ce001fa3a2a4','129c0a0fd3e82a8'),
+	('6193ffd18b0da96e80e2a38baac9a7e4','json','14b5b262c52400','3c03d64c34','1b5cfdd6a5de'),
+	('6193ffd18b0da96e80e2a38baac9a7e4','rprt','1a5cf3833',NULL,'1b5cfdd6a5de'),
+	('ecf1739fed72151784dab88dbe2f2aa9','json','14b5b262c52400','3c03d64c34','1b5cfdd6a5de'),
+	('ecf1739fed72151784dab88dbe2f2aa9','rprt','1a5cf3833',NULL,'1b5cfdd6a5de'),
+	('204cd9b011e2cab64bcdf1b3d668a9ef','json','7d9a79908fcc','8274fbb94a','5a928f187ed19b2'),
+	('c8360bd0e28ea5bbffd66e76886bbccb','json','d6b3921920','a63d8','0e06e1f9f6580fb'),
+	('c8360bd0e28ea5bbffd66e76886bbccb','rprt','d6b3921920',NULL,'0e06e1f9f6580fb'),
+	('c6eb00fb5a023557439a9b898c7cc3ea','json','d6b3921920','a63d8','f891b965f2561d9'),
+	('c6eb00fb5a023557439a9b898c7cc3ea','rprt','d6b3921920',NULL,'f891b965f2561d9'),
+	('f2dacff642ad3f805229d7e976810f1d','rprt','d6b3921920',NULL,'6817ec9d3b7b726'),
+	('8def2cd0450b56c3e0c9bb6da67b842b','rprt','d6b3921920',NULL,'6817ec9d3b7b726'),
+	('6db7ef8b4a9e41bb41971dced546131b','rprt','d6b3921920',NULL,'bc32d9059dde8ba'),
+	('4524efca2bf1aa0565f03a9aaf9771d2','json','14b5b262c52400','cf3b1945e2','5c0157ef5367'),
+	('6f63a84401944c32b9a329af08d6473c','json','8b736466c7adc6','d0acb13cd9','d734a9d755ef6276'),
+	('8ef4bc6ac39585b2ec45218ad1d06464','rprt','67b7fd541ae7e','c117f7db3b','cf94993616ef'),
+	('01899ea72c60bd5e614132c99fffd48e','json','14b5b262c52400','2a50feb98b','eead79cf6ef0'),
+	('b1407bdda20fad91cb9072c08c5c23a8','json','3608008ba4c9','e4840a8e75','139e04ae890beb8'),
+	('2091d4939af33d3911b057ed446367f1','rprt','6522e2c00f5b87d5b','f2b8d4d02d','23de2ff19778'),
+	('81f36975a777a353b0861874e03d0f95','rprt','14b5b262c52400','e05f1a1ec2','acf577df3840'),
+	('5b3961bf4255e83ee1e7e795e14c8119','rprt','b9cbf09f3366297','1109e52066','47afce7dacb5'),
+	('0b53312f91b22db1bf7c18251a199d36','json','14b5b262c52400','c8561fe22f','6e30638eaaf6'),
+	('e277322f26cd477bae52240c46678286','json','14b5b262c52400','d185c22b68','42a062d827c'),
+	('71150d87b4e7852448a524e03817efc4','json','bb87c32c765d1','3e60145162','8e072527a7cf82d'),
+	('1039fc7de3c12dad1e7d3bd9e73827de','json','d6b3921920','65c0a3e2a9','9ff56f55c850390'),
+	('3c67c976516f8a5a1044ad9a8935cf02','rprt','bdc5a7fd6ca','dfc9fd824b','bfbef96674e73829'),
+	('56ab3e25a40913b6e961cff217a83750','json','24ed1657','724e7df1','fc81c8a39465'),
+	('5f726fff8b638d0ac1ba9dcb9a4037be','json','14b5b262c52400','b1bddeb160','1e2b4afd36f'),
+	('4448f84ff7496b6d1a0d311838be238d','json','14b5b262c52400','50a45c4db0','83ef23a7f827'),
+	('216414a29307f00aecfc9e5cba7ac821','json','c05bced980e6381','949ae57ce4','05f77bf546f'),
+	('5327f9ec2dc334bde0222b52de4d65ef','json','67b7fd541ae7e','8aea85ada0','c0048c2b539e'),
+	('d3c9b836ce61a53daf39d813c97a36b9','json','249f40c5d97','35d05d68','db4853c8a41'),
+	('6d4affc7041c65d0f56551f4d4370a7d','rprt','d6b3921920',NULL,'84624aa9753a681'),
+	('caab5b21770a321067fb2052c2eea792','rprt','14b5b262c52400','8b8da80085','d427763bd611'),
+	('eecdf1e7e87c04c56328b0d37fb06349','json','14b5b262c52400','3bfabeb9d9','7c613b2d73cc'),
+	('b533aa0c674433a09cee8555b35b7ca6','json','9c3b3335f959','f9d8c52aa2','d082926c94a8a60'),
+	('6dfe749835d6a895a3a116580dc4217a','rprt','14b5b262c52400','6dd9b2d650','b3d88f29e3e5'),
+	('6150133032c53a35ce28c6308931137d','rprt','b04a2a75f0c4a9','9f3026e2','a1bcb7232a50'),
+	('47e77fd2d027114df5ac9daa17237934','json','b04a2a75f0c4a9','6e07291b','564347d748e0'),
+	('0d66c06fd2a29247b4bc798591f15cbc','rprt','093a316f6c9c0856b','ebcca53e20','4c767b833785b25b072e'),
+	('997371252646aed7ac3fa43da1f69ef2','rprt','d6b3921920','5be2b052','612fc8691ec7852'),
+	('e963d96d34e35ba06cea05ff78e84e41','json','33debfe262d7','114a0c85','f6d1ea3976b0a03'),
+	('f50959f1079cd24b7dcb6370d8e63344','rprt','1a5cf3833',NULL,'a1b77be48d05'),
+	('4e44d4c96d3d26290d13e5f9bc14d8dd','rprt','67b7fd541ae7e','c117f7db3b','18d653ec3c0'),
+	('797c887ce1edab55fefaa7a690065843','rprt','14b5b262c52400','22efccc05e','7a9348e1538f'),
+	('ffbc9337bb6f6c7d43ab32a9398474da','rprt','b04a2a75f0c4a9','6e07291b','564347d748e0'),
+	('3ac840afe9d088e5c490ed4cd48d2269','json','67b7fd541ae7e','ffaa35275c','c58867f82d10'),
+	('72cedda51ecfb6678f4e3a3956066311','json','402423768220bca1f','9a28c664','eed0f9697609'),
+	('92488464899a3b31ea1bc61a2ebc2013','json','14b5b262c52400','1a10cdadd7','ee4cacc7ce10'),
+	('c85e95cfec9f42fff138d498101cd7ea','json','14b5b262c52400','f1b4cf931e','3b4f71a3ddde'),
+	('399edac903f69ac760fa36a8b68cdfb0','rprt','67b7fd541ae7e','a539fb31c3','4c920da298bd'),
+	('a223c0e6017570f5a1039003e767e692','json','67b7fd541ae7e','7bfb6b3721','5ae5c617d126'),
+	('1503860c3c6391385807ab9b6cdd1934','json','67b7fd541ae7e','4936ad40b0','94fbcb7cd167'),
+	('6f269d7f6cf850a9cd0d4d804eef24a0','rprt','14b5b262c52400','943c04e54b','cc79fc503d80'),
+	('732a12aa44489aeef05b614a1e8dbd2d','rprt','14b5b262c52400','a2335b4159','45e7e30aa621'),
+	('b876617f4b7bdb3abc694da31b09d838','rprt','14b5b262c52400','93a91bf863','b824ed7a5f67'),
+	('fd63b4bf7ee546b2c0c55200ae968872','rprt','67b7fd541ae7e','62cd05887b','9c1940a4032a'),
+	('50a00a903778fb65ef92a736bd9fe262','json','67b7fd541ae7e','7e81c8b2f3','00eb98252668113'),
+	('053891bc9d52d48986302c5e13adf276','json','67b7fd541ae7e','a1762f3d79','e06b767a6ed2'),
+	('f537b4d753bb441436ff8d73af423691','json','efdfcef7da0','98c6db64','4c9b34c566ae'),
+	('8dc4f5e5bb2663f09218b369be5bf524','rprt','03b000865c98e','f31af55c63','a02983ae108ced0449cb4'),
+	('d69d899aba162c4f14593f9c6a062bdd','rprt','67b7fd541ae7e','7bfb6b3721','c32aa62b7207'),
+	('88b784ce065a5cf2360e7616c4b3f7f6','json','62769691cd4e','ebdf919e','37e16f2e5319832f'),
+	('cdda71f56ad05dae20b1e22ee19b227b','rprt','67b7fd541ae7e','17d7c8f29a','21c1f8fadde3'),
+	('5e1d22685085f0d85553eb2b7b4155a6','rprt','14b5b262c52400','737542af23','092dcc6fdef7'),
+	('7f387dad4f9bef7c2301977590cec0f2','json','67b7fd541ae7e','09591aea45','ab584388528d'),
+	('a83145a960baebcf1bff9c462f8489e5','json','14b5b262c52400','2ea6e3e6fb','4fe26b0e2203'),
+	('4d7a36c58267592481297676d57c9e84','json','581d813a840d3d6391','54239e1a8e','232d99055474'),
+	('31f0b71e67e64d42079098a53374e094','json','14b5b262c52400','a43ad72889','7d702f310fbe'),
+	('6ddc75b9771136d9a6366aaa5d951f1a','rprt','14b5b262c52400','75263a6f0c','7309f2e8695a'),
+	('4595e59a1225042680842f63736481d4','json','14b5b262c52400','44f5fdb8b1','9c2c14ec6924'),
+	('66c1f24117ee34a1b3d587a22047fad1','rprt','14b5b262c52400','bfe39ca56f','b49aa5fad4d5'),
+	('37027bc152a681b87d5ffb9a37c325a5','rprt','efdfcef7da0','9f1668a8','682ff39acb86'),
+	('c3b46edd87eb14842b6444c001ae6456','json','3608008ba4c9','f650844d13','5326d2a94e28825'),
+	('82beaa8e1c8c482d792f601b37a40b8a','rprt','14b5b262c52400','c86e0093c2','5ae33221b17'),
+	('333aa3a45ab3f01ad95b2a312870aa1e','json','14b5b262c52400','57f7ec0030','8545146eeba5'),
+	('16b64ffcb514bf69c6936eaf4e86889e','rprt','14b5b262c52400','2a50feb98b','64bb80701037'),
+	('01d42ee5515c3b500018e723278e27c1','json','67b7fd541ae7e','958967a48a','97453818ba51'),
+	('2a031d3176c7d4f19c532e5d2e7b411e','rprt','14b5b262c52400','164c3bb214','3389fe2776be'),
+	('8d3b5d415e43df82b6b560effeb6ee80','json','67b7fd541ae7e','9205577d7c','bc96b93082c6'),
+	('339690825234f32fd7da02fd567d5109','rprt','b04a2a75f0c4a9','9f3026e2','a1bcb7232a50'),
+	('13c6d4555db02b653d8f2b5ce06bb143','json','402423768220bca1f','49d58dba','59b0906f7fcb'),
+	('39a39a7e3c48c1b3b262e8653b1a3ec4','rprt','14b5b262c52400','7b34590a85','eec88226d871'),
+	('fdd9d71a087b9048b8ac7dd29186cedf','rprt','315316c7af745a97','8a7c0917d4','743680a0303171bbd'),
+	('f37e684c9ec0d0690a3c6feeaf6b1301','json','14b5b262c52400','0059c84703','8426f8984729'),
+	('3787d0c9ead3866324d7586044747d65','rprt','b9cbf09f3366297','3822b4212e','611f4b0f498e')
+;
+
+#  dup	n_dup	n_spcmn	idx	source	project	specimen	sample_id    
+query IIIIIIII
+WITH dups AS (
+  SELECT ROW_NUMBER() OVER same_idx AS dup
+  , COUNT(*) OVER same_idx AS n_dup
+  , (DENSE_RANK() OVER asc_spcmn) + (DENSE_RANK() OVER desc_spcmn) - 1 AS n_spcmn
+  , *
+  FROM issue9416
+  WINDOW same_idx AS (
+    PARTITION BY idx
+    ORDER BY source, project, specimen
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+  )
+  , asc_spcmn AS (
+    PARTITION BY idx
+    ORDER BY specimen ASC NULLS FIRST
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+  )
+  , desc_spcmn AS (
+    PARTITION BY idx
+    ORDER BY specimen DESC NULLS LAST
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+  )
+)
+SELECT *
+FROM dups
+WHERE n_spcmn > 1
+ORDER BY idx, dup;
+----
+1	3	3	3afcae2318313f112b62536fa160678d	json	24ed1657	08b8de7c543d	129c0a0fd3e82a8
+2	3	3	3afcae2318313f112b62536fa160678d	json	24ed1657	5311f290	129c0a0fd3e82a8
+3	3	3	3afcae2318313f112b62536fa160678d	json	24ed1657	ce001fa3a2a4	129c0a0fd3e82a8
+1	2	2	6193ffd18b0da96e80e2a38baac9a7e4	json	14b5b262c52400	3c03d64c34	1b5cfdd6a5de
+2	2	2	6193ffd18b0da96e80e2a38baac9a7e4	rprt	1a5cf3833	NULL	1b5cfdd6a5de
+1	3	3	79acd6669071e95a5b2fe5456216ab32	json	24ed1657	08b8de7c543d	129c0a0fd3e82a8
+2	3	3	79acd6669071e95a5b2fe5456216ab32	json	24ed1657	5311f290	129c0a0fd3e82a8
+3	3	3	79acd6669071e95a5b2fe5456216ab32	json	24ed1657	ce001fa3a2a4	129c0a0fd3e82a8
+1	3	3	a59a3a4ad8d2ab867c9b830974588645	json	24ed1657	08b8de7c543d	129c0a0fd3e82a8
+2	3	3	a59a3a4ad8d2ab867c9b830974588645	json	24ed1657	5311f290	129c0a0fd3e82a8
+3	3	3	a59a3a4ad8d2ab867c9b830974588645	json	24ed1657	ce001fa3a2a4	129c0a0fd3e82a8
+1	2	2	c6eb00fb5a023557439a9b898c7cc3ea	json	d6b3921920	a63d8	f891b965f2561d9
+2	2	2	c6eb00fb5a023557439a9b898c7cc3ea	rprt	d6b3921920	NULL	f891b965f2561d9
+1	2	2	c8360bd0e28ea5bbffd66e76886bbccb	json	d6b3921920	a63d8	0e06e1f9f6580fb
+2	2	2	c8360bd0e28ea5bbffd66e76886bbccb	rprt	d6b3921920	NULL	0e06e1f9f6580fb
+1	3	3	d0a7e9d3eda115120021a895a81db8be	json	24ed1657	08b8de7c543d	129c0a0fd3e82a8
+2	3	3	d0a7e9d3eda115120021a895a81db8be	json	24ed1657	5311f290	129c0a0fd3e82a8
+3	3	3	d0a7e9d3eda115120021a895a81db8be	json	24ed1657	ce001fa3a2a4	129c0a0fd3e82a8
+1	2	2	ecf1739fed72151784dab88dbe2f2aa9	json	14b5b262c52400	3c03d64c34	1b5cfdd6a5de
+2	2	2	ecf1739fed72151784dab88dbe2f2aa9	rprt	1a5cf3833	NULL	1b5cfdd6a5de

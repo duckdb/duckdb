@@ -19,9 +19,9 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		    idx_t len;
 		    Bit::TryGetBitStringSize(input, len, nullptr); // string verification
 
-		    len = Bit::ComputeBitstringLen(n);
+		    len = Bit::ComputeBitstringLen(UnsafeNumericCast<idx_t>(n));
 		    string_t target = StringVector::EmptyString(result, len);
-		    Bit::BitString(input, n, target);
+		    Bit::BitString(input, UnsafeNumericCast<idx_t>(n), target);
 		    target.Finalize();
 		    return target;
 	    });
@@ -41,7 +41,7 @@ struct GetBitOperator {
 			throw OutOfRangeException("bit index %s out of valid range (0..%s)", NumericHelper::ToString(n),
 			                          NumericHelper::ToString(Bit::BitLength(input) - 1));
 		}
-		return Bit::GetBit(input, n);
+		return UnsafeNumericCast<TR>(Bit::GetBit(input, UnsafeNumericCast<idx_t>(n)));
 	}
 };
 
@@ -66,7 +66,7 @@ static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &res
 		    }
 		    string_t target = StringVector::EmptyString(result, input.GetSize());
 		    memcpy(target.GetDataWriteable(), input.GetData(), input.GetSize());
-		    Bit::SetBit(target, n, new_value);
+		    Bit::SetBit(target, UnsafeNumericCast<idx_t>(n), UnsafeNumericCast<idx_t>(new_value));
 		    return target;
 	    });
 }
@@ -85,7 +85,7 @@ struct BitPositionOperator {
 		if (substring.GetSize() > input.GetSize()) {
 			return 0;
 		}
-		return Bit::BitPosition(substring, input);
+		return UnsafeNumericCast<TR>(Bit::BitPosition(substring, input));
 	}
 };
 

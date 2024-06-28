@@ -172,3 +172,24 @@ query II
 EXPLAIN SELECT i FROM test_bool where j = TRUE
 ----
 logical_opt	<!REGEX>:.*FILTER.*
+
+# test now() pushdown
+
+statement ok
+CREATE TABLE test_timestamps (ts TIMESTAMP);
+
+statement ok
+INSERT INTO  test_timestamps VALUES (NOW()::TIMESTAMP), (NOW()::TIMESTAMP - INTERVAL 10 YEARS);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT * FROM test_timestamps where ts >= NOW()::TIMESTAMP - INTERVAL 1 YEAR;
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query I
+SELECT COUNT(*) FROM test_timestamps where ts >= NOW()::TIMESTAMP - INTERVAL 1 YEAR;
+----
+1
