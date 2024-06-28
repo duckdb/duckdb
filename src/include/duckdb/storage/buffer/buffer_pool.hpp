@@ -85,10 +85,32 @@ protected:
 	void IncrementDeadNodes(FileBufferType type);
 
 protected:
+	struct MemoryUsageCounters {
+		static constexpr size_t kCacheThreshold = 32 << 10;
+		using MemoryUsagePerTag = std::array<atomic<int64_t>, MEMORY_TAG_COUNT>;
+
+		//! global memory usage counters
+		atomic<int64_t> memory_usage;
+		MemoryUsagePerTag memory_usage_per_tag;
+		//! cache memory usage to improve performance
+		std::vector<MemoryUsagePerTag> memory_usage_caches;
+
+		MemoryUsageCounters();
+
+		idx_t GetUsedMemory() const {
+			return static_cast<idx_t>(std::max(memory_usage.load(std::memory_order_relaxed), int64_t(0)));
+		}
+
+		idx_t GetUsedMemory(MemoryTag tag) const {
+			return static_cast<idx_t>(
+			    std::max(memory_usage_per_tag[(idx_t)tag].load(std::memory_order_relaxed), int64_t(0)));
+		}
+
+		void UpdateUsedMemory(MemoryTag tag, int64_t size);
+	};
+
 	//! The lock for changing the memory limit
 	mutex limit_lock;
-	//! The current amount of memory that is occupied by the buffer manager (in bytes)
-	atomic<idx_t> current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
 	atomic<idx_t> maximum_memory;
 	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
@@ -97,8 +119,10 @@ protected:
 	vector<unique_ptr<EvictionQueue>> queues;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
 	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
-	//! Memory usage per tag
-	atomic<idx_t> memory_usage_per_tag[MEMORY_TAG_COUNT];
+	//! To improve performance, MemoryUsageCounters maintains counter caches based on cpuid,
+	//! and only updates the global counter when the cache value exceeds a threshold.
+	//! Therefore, the statistics may have slight differences from the actual memory usage.
+	MemoryUsageCounters memory_usage;
 };
 
 } // namespace duckdb
