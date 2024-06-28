@@ -29,6 +29,12 @@ struct AttachInfo;
 struct AttachOptions;
 class DatabaseFileSystem;
 
+struct ExtensionInfo {
+	bool is_loaded;
+	unique_ptr<ExtensionInstallInfo> install_info;
+	unique_ptr<ExtensionLoadedInfo> load_info;
+};
+
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
 
@@ -56,11 +62,7 @@ public:
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
 
-	DUCKDB_API const unordered_set<string> &LoadedExtensions();
-	DUCKDB_API const unordered_map<string, ExtensionInstallInfo> &LoadedExtensionsData();
-	DUCKDB_API const unordered_map<string, ExtensionLoadedInfo> &LoadedExtensionsExtraData() {
-		return loaded_extensions_extra_data;
-	}
+	DUCKDB_API const unordered_map<string, ExtensionInfo> &GetExtensions();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
@@ -82,9 +84,7 @@ private:
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
-	unordered_set<string> loaded_extensions;
-	unordered_map<string, ExtensionInstallInfo> loaded_extensions_data;
-	unordered_map<string, ExtensionLoadedInfo> loaded_extensions_extra_data;
+	unordered_map<string, ExtensionInfo> loaded_extensions_info;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 };

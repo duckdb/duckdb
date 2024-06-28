@@ -14,6 +14,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
