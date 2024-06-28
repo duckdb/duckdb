@@ -544,7 +544,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	try {
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
 		if (active_query->progress_bar) {
-			auto is_finished = PendingQueryResult::IsFinishedOrBlocked(query_result);
+			auto is_finished = PendingQueryResult::IsResultReady(query_result);
 			active_query->progress_bar->Update(is_finished);
 			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
