@@ -49,7 +49,12 @@ public:
 	string ParamsToString() const override;
 
 private:
-	void ExecuteAggregate();
+	void ExecuteFunctions(ExecutionContext &context, DataChunk &chunk, DataChunk &delayed,
+	                      GlobalOperatorState &gstate_p, OperatorState &state_p) const;
+	void ExecuteInput(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
+	                  GlobalOperatorState &gstate, OperatorState &state) const;
+	void ExecuteDelayed(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
+	                    GlobalOperatorState &gstate, OperatorState &state) const;
 };
 
 } // namespace duckdb
