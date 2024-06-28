@@ -72,7 +72,6 @@ void ParquetOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", encryption_config, nullptr);
 	serializer.WritePropertyWithDefault<bool>(105, "debug_use_openssl", debug_use_openssl, true);
-
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
