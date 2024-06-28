@@ -90,6 +90,11 @@ select format('{:b}', 123456789)
 ----
 111010110111100110100010101
 
+query I
+select format('{:.2}', 0.00023404094995959);
+----
+0.00023
+
 # incorrect number of parameters
 # too few parameters
 statement error
