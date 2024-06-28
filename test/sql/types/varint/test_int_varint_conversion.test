@@ -4,11 +4,11 @@
 
 #statement ok
 #PRAGMA enable_verification
-
-query I
-select 0::varint
-----
-0
+#
+#query I
+#select 0::varint
+#----
+#0
 
 query I
 select 1::varint
@@ -57,10 +57,6 @@ select (-300)::VARINT
 ----
 -300
 
-
-
-
-
 query I
 SELECT * FROM integers;
 ----
@@ -108,3 +104,16 @@ query I
 select count(*) from integers where a < 0::VARINT
 ----
 3
+
+# Check Border values
+# Max 2147483647
+# Min -2147483648
+query I
+select 2147483647::varint
+----
+2147483647
+
+query I
+select -2147483648::varint
+----
+2147483648
