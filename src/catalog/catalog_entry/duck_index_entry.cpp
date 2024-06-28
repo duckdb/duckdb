@@ -2,7 +2,6 @@
 
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
