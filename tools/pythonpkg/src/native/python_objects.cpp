@@ -248,15 +248,15 @@ py::object PyTime::GetTZInfo(py::handle &obj) {
 	return py::reinterpret_borrow<py::object>(PyDateTime_TIME_GET_TZINFO(obj.ptr())); // NOLINT
 }
 
-interval_t PyTimezone::GetUTCOffset(py::handle &tzone_obj) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto this_really_should_not_be_needed = import_cache.datetime.datetime()(2024, 1, 1);
-	auto res = tzone_obj.attr("utcoffset")(this_really_should_not_be_needed);
+interval_t PyTimezone::GetUTCOffset(py::handle &datetime, py::handle &tzone_obj) {
+	// The datetime object is provided because the utcoffset could be ambiguous
+	auto res = tzone_obj.attr("utcoffset")(datetime);
 	auto timedelta = PyTimeDelta(res);
 	return timedelta.ToInterval();
 }
 
 int32_t PyTimezone::GetUTCOffsetSeconds(py::handle &tzone_obj) {
+	// We should be able to use None here, the tzone_obj of a datetime.time should never be ambiguous
 	auto res = tzone_obj.attr("utcoffset")(py::none());
 	auto timedelta = PyTimeDelta(res);
 	if (timedelta.days != 0) {
@@ -290,7 +290,7 @@ timestamp_t PyDateTime::ToTimestamp() {
 Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
 	auto timestamp = ToTimestamp();
 	if (!py::none().is(tzone_obj)) {
-		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
+		auto utc_offset = PyTimezone::GetUTCOffset(obj, tzone_obj);
 		// Need to subtract the UTC offset, so we invert the interval
 		utc_offset = Interval::Invert(utc_offset);
 		timestamp = Interval::Add(timestamp, utc_offset);
