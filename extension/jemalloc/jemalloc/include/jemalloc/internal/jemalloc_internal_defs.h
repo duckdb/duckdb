@@ -2,9 +2,7 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
-#ifdef _GNU_SOURCE
-#define JEMALLOC_ORIGINAL_GNU_SOURCE
-#elif defined(__GNUC__)
+#if defined(__GNUC__)
 #define _GNU_SOURCE
 #endif
 
@@ -42,9 +40,13 @@
  * Hyper-threaded CPUs may need a special instruction inside spin loops in
  * order to yield to another virtual CPU.
  */
-// #define CPU_SPINWAIT __asm__ volatile("isb")
+#if defined(__aarch64__) || defined(__ARM_ARCH)
+#define CPU_SPINWAIT __asm__ volatile("isb")
+#else
+#define CPU_SPINWAIT __asm__ volatile("pause")
+#endif
 /* 1 if CPU_SPINWAIT is defined, 0 otherwise. */
-// #define HAVE_CPU_SPINWAIT 1
+#define HAVE_CPU_SPINWAIT 1
 
 /*
  * Number of significant bits in virtual addresses.  This may be less than the
@@ -298,7 +300,7 @@
 #define JEMALLOC_INTERNAL_FFSLL ffsll
 #define JEMALLOC_INTERNAL_FFSL  ffsl
 #define JEMALLOC_INTERNAL_FFS   ffs
-#else
+#elif defined(__GNUC__)
 #define JEMALLOC_INTERNAL_FFSLL __builtin_ffsll
 #define JEMALLOC_INTERNAL_FFSL  __builtin_ffsl
 #define JEMALLOC_INTERNAL_FFS   __builtin_ffs
@@ -309,7 +311,7 @@
  */
 #ifdef __GNUC__
 #define JEMALLOC_INTERNAL_POPCOUNTL __builtin_popcountl
-#define JEMALLOC_INTERNAL_POPCOUNT __builtin_popcount
+#define JEMALLOC_INTERNAL_POPCOUNT  __builtin_popcount
 #endif
 
 /*
@@ -372,7 +374,7 @@
  *                                 system overhead.
  */
 #define JEMALLOC_PURGE_MADVISE_FREE
-// #define JEMALLOC_PURGE_MADVISE_DONTNEED
+#define JEMALLOC_PURGE_MADVISE_DONTNEED
 /* #undef JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */
@@ -459,14 +461,10 @@
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
 
 /* GNU specific sched_getcpu support */
-#if defined(__GNUC__) && defined(JEMALLOC_ORIGINAL_GNU_SOURCE)
-#define JEMALLOC_HAVE_SCHED_GETCPU
-#endif
+// #define JEMALLOC_HAVE_SCHED_GETCPU
 
 /* GNU specific sched_setaffinity support */
-#if defined(__GNUC__) && defined(JEMALLOC_ORIGINAL_GNU_SOURCE)
-#define JEMALLOC_HAVE_SCHED_SETAFFINITY
-#endif
+// #define JEMALLOC_HAVE_SCHED_SETAFFINITY
 
 /*
  * If defined, all the features necessary for background threads are present.
@@ -488,9 +486,7 @@
 /*
  * Defined if strerror_r returns char * if _GNU_SOURCE is defined.
  */
-#if defined(__GNUC__) && defined(JEMALLOC_ORIGINAL_GNU_SOURCE)
-#define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
-#endif
+// #define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
 
 /* Performs additional safety checks when defined. */
 /* #undef JEMALLOC_OPT_SAFETY_CHECKS */
