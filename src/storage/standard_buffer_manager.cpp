@@ -465,7 +465,6 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	}
 
 	// Get the path to write to.
-	D_ASSERT(buffer.size > GetBlockSize());
 	auto path = GetTemporaryPath(block_id);
 	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
 
