@@ -22,14 +22,31 @@ create table wide as select
 	(range::VARCHAR || '0011') k,
 	(range::VARCHAR || '0022') l,
 	(range::VARCHAR || '0033') m,
-	(range::VARCHAR || '0044') n from range(8000);
+    (range::VARCHAR || '9999') o,
+    (range::VARCHAR || '0000') p,
+    (range::VARCHAR || '0011') q,
+    (range::VARCHAR || '0022') u,
+    (range::VARCHAR || '0033') r,
+    (range::VARCHAR || '9999') s,
+    (range::VARCHAR || '0000') t,
+    (range::VARCHAR || '0011') w,
+    (range::VARCHAR || '0022') y,
+    (range::VARCHAR || '0033') z,
+    (range::VARCHAR || '9999') aa,
+    (range::VARCHAR || '0000') bb,
+    (range::VARCHAR || '0011') cc,
+    (range::VARCHAR || '0022') dd,
+    (range::VARCHAR || '0033') ee,
+    (range::VARCHAR || '9999') ff,
+    (range::VARCHAR || '0000') gg,
+    (range::VARCHAR || '0011') hh,
+    (range::VARCHAR || '0022') ii,
+    (range::VARCHAR || '0033') jj,
+	(range::VARCHAR || '0044') kk from range(8000);
 
-
-statement ok
-set explain_output = OPTIMIZED_ONLY;
 
 # wide should be the probe side, skinny should be on the build side
 query II
 explain select * from wide w, skinny s where w.pk=s.a;
 ----
-logical_opt	<REGEX>:.*wide.*skinny.*
+physical_plan	<REGEX>:.*wide.*skinny.*

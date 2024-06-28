@@ -113,17 +113,16 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	auto build_sizes = GetBuildSizes(op);
 	// special math.
 	auto left_side_metric = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
-	auto right_side_metric = rhs_cardinality * build_sizes.right_side;
+	auto right_side_metric = rhs_cardinality * build_sizes.right_side * MAGIC_RATIO_TO_SWAP_BUILD_SIDES;
 
-	// swap for cardinality
-	auto swap_bc_cardinality = !(rhs_cardinality < lhs_cardinality * cardinality_ratio);
-	auto swap_bc_build_sizes = right_side_metric > left_side_metric * MAGIC_RATIO_TO_SWAP_BUILD_SIDES;
+	const auto flip_coefficient = right_side_metric - left_side_metric;
 
-	// swap for build side?
-	if (swap_bc_cardinality || swap_bc_build_sizes) {
-		FlipChildren(op);
-		D_ASSERT(swap_status == SWAP_STATUS::NOT_SWAPPED);
-		swap_status = SWAP_STATUS::SWAPPED;
+	bool swap = false;
+	// RHS is build side.
+	// if right_side metric is larger than left_side metric, then right_side is more costly to build on
+	// than the lhs. So we swap
+	if (flip_coefficient > 0) {
+		swap = true;
 	}
 
 	// swap for preferred on probe side
@@ -135,10 +134,20 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 		                                                              : left_child->GetColumnBindings();
 		auto bindings_in_left = ComputeOverlappingBindings(bindings_left, preferred_on_probe_side);
 		auto bindings_in_right = ComputeOverlappingBindings(bindings_right, preferred_on_probe_side);
-		if ((swap_status == SWAP_STATUS::NOT_SWAPPED && bindings_in_right > bindings_in_left) ||
-		    (swap_status == SWAP_STATUS::SWAPPED && bindings_in_left > bindings_in_right)) {
-			FlipChildren(op);
+		// (if the sides are planning to be swapped AND
+		// if more projected bindings are in the left (meaning right/build side after the swap)
+		// then swap them back. The projected bindings stay in the left/probe side.)
+		// OR
+		// (if the sides are planning not to be swapped AND
+		// if more projected bindings are in the right (meaning right/build)
+		// then swap them. The projected bindings are swapped to the left/probe side.)
+		if ((swap && bindings_in_left > bindings_in_right) || (!swap && bindings_in_right > bindings_in_left)) {
+			swap = !swap;
 		}
+	}
+
+	if (swap) {
+		FlipChildren(op);
 	}
 }
 
