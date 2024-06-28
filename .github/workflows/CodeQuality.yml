@@ -49,6 +49,10 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black cxxheaderparser pcpp
 
+      - name: List Installed Packages
+        shell: bash
+        run: pip3 freeze
+
       - name: Format Check
         shell: bash
         run: |

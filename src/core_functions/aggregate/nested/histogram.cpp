@@ -67,7 +67,7 @@ static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_in
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
 
-	auto extra_state = OP::CreateExtraState();
+	auto extra_state = OP::CreateExtraState(count);
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 

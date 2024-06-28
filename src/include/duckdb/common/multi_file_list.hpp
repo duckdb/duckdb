@@ -79,9 +79,12 @@ public:
 	virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context,
 	                                                        const MultiFileReaderOptions &options, LogicalGet &get,
 	                                                        vector<unique_ptr<Expression>> &filters);
+
 	virtual vector<string> GetAllFiles() = 0;
 	virtual FileExpandResult GetExpandResult() = 0;
 	virtual idx_t GetTotalFileCount() = 0;
+
+	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context);
 
 protected:
 	//! Get the i-th expanded file

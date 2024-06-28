@@ -25,7 +25,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '!tools/odbc/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
@@ -103,10 +102,8 @@ jobs:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
-      BUILD_ODBC: 1
       OSX_BUILD_UNIVERSAL: 1
       GEN: ninja
-      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 
     steps:
       - uses: actions/checkout@v3
@@ -126,11 +123,6 @@ jobs:
         with:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-      - name: Install UnixODBC
-        shell: bash
-        run: |
-          CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
 
       - name: Install pytest
         run: |
@@ -175,7 +167,6 @@ jobs:
 
             codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/duckdb
             codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/src/libduckdb*.dylib
-            codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/tools/odbc/libduckdb_odbc.dylib
           fi
 
       - name: Deploy
@@ -187,8 +178,7 @@ jobs:
           python scripts/amalgamation.py
           zip -j duckdb_cli-osx-universal.zip build/release/duckdb
           zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-          zip -j duckdb_odbc-osx-universal.zip build/release/tools/odbc/libduckdb_odbc.dylib
-          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip
+          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip
 
       - uses: actions/upload-artifact@v3
         with:
@@ -196,7 +186,6 @@ jobs:
           path: |
             libduckdb-osx-universal.zip
             duckdb_cli-osx-universal.zip
-            duckdb_odbc-osx-universal.zip
 
   xcode-extensions:
     # Builds extensions for osx_arm64 and osx_amd64
