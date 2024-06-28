@@ -138,6 +138,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DuckDBApiSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
     DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
+    DUCKDB_LOCAL(PartitionedWriteMaxOpenFiles),
     DUCKDB_GLOBAL(DefaultBlockAllocSize),
     DUCKDB_GLOBAL(IndexScanPercentage),
     DUCKDB_GLOBAL(IndexScanMaxCount),
