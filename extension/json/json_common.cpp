@@ -1,7 +1,6 @@
 #include "json_common.hpp"
 
 #include "duckdb/common/exception/binder_exception.hpp"
-#include <iostream>
 
 namespace duckdb {
 
