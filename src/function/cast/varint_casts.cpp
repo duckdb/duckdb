@@ -9,18 +9,19 @@ string_t IntToVarInt(int32_t int_value) {
 	// Determine if the number is negative
 	bool is_negative = int_value < 0;
 
-	// If negative, convert to two's complement
-	if (is_negative) {
-		int_value = ~int_value;
-	}
-
 	// Determine the number of data bytes
 	uint64_t abs_value = std::abs(int_value);
 	uint32_t data_byte_size = (abs_value == 0) ? 1 : static_cast<int>(std::ceil(std::log2(abs_value + 1) / 8.0));
 
+	if (is_negative) {
+		abs_value = ~abs_value;
+	}
+
 	// Create the header
 	uint32_t header = data_byte_size;
-	if (!is_negative) {
+	// Set MSD of 3rd byte
+	header |= 0x00800000;
+	if (is_negative) {
 		header = ~header;
 	}
 
@@ -29,13 +30,14 @@ string_t IntToVarInt(int32_t int_value) {
 	auto writable_blob = blob.GetDataWriteable();
 	// Add header bytes to the blob
 	idx_t wb_idx = 0;
-	writable_blob[wb_idx++] = static_cast<uint8_t>(header >> 16);
-	writable_blob[wb_idx++] = static_cast<uint8_t>((header >> 8) & 0xFF);
-	writable_blob[wb_idx++] = static_cast<uint8_t>((header >> 8) & 0xFF);
+	// we ignore 4th byte of header.
+	writable_blob[wb_idx++] = static_cast<uint8_t>(header >> 16 & 0xFF); // 3rd byte
+	writable_blob[wb_idx++] = static_cast<uint8_t>(header >> 8 & 0xFF);  // 2nd byte
+	writable_blob[wb_idx++] = static_cast<uint8_t>(header & 0xFF);       // 1st byte
 
 	// Add data bytes to the blob
 	for (int i = data_byte_size - 1; i >= 0; --i) {
-		writable_blob[wb_idx++] = static_cast<uint8_t>((int_value >> (i * 8)) & 0xFF);
+		writable_blob[wb_idx++] = static_cast<uint8_t>((abs_value >> (i * 8)) & 0xFF);
 	}
 	return blob;
 }
@@ -111,28 +113,29 @@ string_t VarcharToVarInt(string_t int_value) {
 // FIXME: This should probably use a double
 string_t VarIntToVarchar(string_t &blob) {
 	if (blob.GetSize() < 4) {
-		throw std::invalid_argument("Invalid blob size.");
+		throw InvalidInputException("Invalid blob size.");
 	}
 	auto blob_ptr = blob.GetData();
-
-	// Extract the header
-	uint32_t header = (blob_ptr[0] << 16) | (blob_ptr[1] << 8) | blob_ptr[2];
 
 	// Determine the number of data bytes
 	int data_byte_size = blob.GetSize() - 3;
 
 	// Determine if the number is negative
-	bool is_negative = (header & (1 << 23)) == 0;
+	bool is_negative = (blob_ptr[0] & 0x80) == 0;
 
 	// Extract the data bytes
 	int64_t int_value = 0;
 	for (int i = 0; i < data_byte_size; ++i) {
-		int_value = (int_value << 8) | blob_ptr[3 + i];
+		if (is_negative) {
+			int_value = int_value << 8 | ~blob_ptr[3 + i];
+		} else {
+			int_value = int_value << 8 | blob_ptr[3 + i];
+		}
 	}
 
 	// If negative, convert from two's complement
 	if (is_negative) {
-		int_value = ~int_value;
+		int_value = 0 - int_value;
 	}
 
 	return std::to_string(int_value);
