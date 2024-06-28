@@ -1,4 +1,4 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/native/ingest_store_sales.benchmark
+# name: benchmark/large/ingestion/tpcds/native/ingest_store_sales.benchmark
 # description: benchmark ingestion of store_sales
 # group: [native]
 

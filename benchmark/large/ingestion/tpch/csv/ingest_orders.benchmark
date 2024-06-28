@@ -1,4 +1,4 @@
-# name: benchmark/ingestion/persistent_storage/tpch/csv/ingest_orders.benchmark
+# name: benchmark/large/ingestion/tpch/csv/ingest_orders.benchmark
 # description: benchmark ingestion of orders
 # group: [csv]
 
