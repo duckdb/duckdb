@@ -168,6 +168,8 @@ benchmark/micro/optimizer/topn_optimization.benchmark
 benchmark/micro/order/orderby.benchmark
 benchmark/micro/pushdown/or_pushdown.benchmark
 benchmark/micro/pushdown/window_partition_pushdown.benchmark
+benchmark/micro/result_collection/arrow_result.benchmark
+benchmark/micro/result_collection/batched_arrow_result.benchmark
 benchmark/micro/result_collection/batched_stream_query.benchmark
 benchmark/micro/simd/auto-vectorization.benchmark
 benchmark/micro/string/bitstring.benchmark

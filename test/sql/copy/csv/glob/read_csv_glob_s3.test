@@ -24,11 +24,23 @@ set ignore_error_messages
 # Copy files to S3 before beginning tests
 statement ok
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a1/a1.csv')) to 's3://test-bucket/read_csv_glob_s3/glob/a1/a1.csv' ( HEADER );
+
+statement ok
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a2/a2.csv')) to 's3://test-bucket/read_csv_glob_s3/glob/a2/a2.csv' ( HEADER );
+
+statement ok
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a3/b1.csv')) to 's3://test-bucket/read_csv_glob_s3/glob/a3/b1.csv' ( HEADER );
+
+statement ok
 COPY (select null) to 's3://test-bucket/read_csv_glob_s3/glob/empty/empty.csv' (HEADER 0);
+
+statement ok
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/i1/integer.csv')) to 's3://test-bucket/read_csv_glob_s3/glob/i1/integer.csv' ( HEADER );
+
+statement ok
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a1/a1.csv')) to 's3://test-bucket/read_csv_glob_s3/glob/f1/f*.csv' ( HEADER );
+
+statement ok
 COPY (select * from read_csv_auto('test/sql/copy/csv/data/glob/a2/a2.csv')) to 's3://test-bucket/read_csv_glob_s3/glob/f2/f[a].csv' ( HEADER );
 
 foreach urlstyle path vhost
@@ -91,6 +103,7 @@ SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/[aei]*/*.csv', co
 2019-08-15
 2019-08-25
 3
+NULL
 
 query II
 SELECT a, b LIKE '%a_.csv' FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/[aei]*/*.csv', columns=STRUCT_PACK(d := 'STRING'), filename=1) t(a,b) ORDER BY 1
@@ -107,6 +120,7 @@ SELECT a, b LIKE '%a_.csv' FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob
 2019-08-15	0
 2019-08-25	0
 3	0
+NULL	0
 
 # test glob parsing
 query I

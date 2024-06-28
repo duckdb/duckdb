@@ -214,7 +214,14 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("parameters") = py::none());
 	m.def("read_json", &DuckDBPyConnection::ReadJSON, "Create a relation object from the JSON file in 'name'",
 	      py::arg("name"), py::kw_only(), py::arg("columns") = py::none(), py::arg("sample_size") = py::none(),
-	      py::arg("maximum_depth") = py::none(), py::arg("records") = py::none(), py::arg("format") = py::none());
+	      py::arg("maximum_depth") = py::none(), py::arg("records") = py::none(), py::arg("format") = py::none(),
+	      py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
+	      py::arg("compression") = py::none(), py::arg("maximum_object_size") = py::none(),
+	      py::arg("ignore_errors") = py::none(), py::arg("convert_strings_to_integers") = py::none(),
+	      py::arg("field_appearance_threshold") = py::none(), py::arg("map_inference_threshold") = py::none(),
+	      py::arg("maximum_sample_files") = py::none(), py::arg("filename") = py::none(),
+	      py::arg("hive_partitioning") = py::none(), py::arg("union_by_name") = py::none(),
+	      py::arg("hive_types") = py::none(), py::arg("hive_types_autocast") = py::none());
 	m.def("extract_statements", &DuckDBPyConnection::ExtractStatements,
 	      "Parse the query string and extract the Statement object(s) produced", py::arg("query"));
 	m.def("sql", &DuckDBPyConnection::RunQuery,
@@ -464,17 +471,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object 
 	return shared_from_this();
 }
 
-static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQueryResult &pending_query) {
-	if (pending_query.AllowStreamResult()) {
-		return PendingQueryResult::IsFinishedOrBlocked;
-	}
-	return PendingQueryResult::IsFinished;
-}
-
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
-	auto is_finished = FinishedCondition(pending_query);
-	while (!is_finished(execution_result = pending_query.ExecuteTask())) {
+	while (!PendingQueryResult::IsResultReady(execution_result = pending_query.ExecuteTask())) {
 		{
 			py::gil_scoped_acquire gil;
 			if (PyErr_CheckSignals() != 0) {
@@ -737,16 +736,66 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	return shared_from_this();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const Optional<py::object> &columns,
-                                                          const Optional<py::object> &sample_size,
-                                                          const Optional<py::object> &maximum_depth,
-                                                          const Optional<py::str> &records,
-                                                          const Optional<py::str> &format) {
+static void ParseMultiFileReaderOptions(named_parameter_map_t &options, const Optional<py::object> &filename,
+                                        const Optional<py::object> &hive_partitioning,
+                                        const Optional<py::object> &union_by_name,
+                                        const Optional<py::object> &hive_types,
+                                        const Optional<py::object> &hive_types_autocast) {
+	if (!py::none().is(filename)) {
+		auto val = TransformPythonValue(filename);
+		options["filename"] = val;
+	}
+
+	if (!py::none().is(hive_types)) {
+		auto val = TransformPythonValue(hive_types);
+		options["hive_types"] = val;
+	}
+
+	if (!py::none().is(hive_partitioning)) {
+		if (!py::isinstance<py::bool_>(hive_partitioning)) {
+			string actual_type = py::str(hive_partitioning.get_type());
+			throw BinderException("read_json only accepts 'hive_partitioning' as a boolean, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(hive_partitioning, LogicalTypeId::BOOLEAN);
+		options["hive_partitioning"] = val;
+	}
+
+	if (!py::none().is(union_by_name)) {
+		if (!py::isinstance<py::bool_>(union_by_name)) {
+			string actual_type = py::str(union_by_name.get_type());
+			throw BinderException("read_json only accepts 'union_by_name' as a boolean, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(union_by_name, LogicalTypeId::BOOLEAN);
+		options["union_by_name"] = val;
+	}
+
+	if (!py::none().is(hive_types_autocast)) {
+		if (!py::isinstance<py::bool_>(hive_types_autocast)) {
+			string actual_type = py::str(hive_types_autocast.get_type());
+			throw BinderException("read_json only accepts 'hive_types_autocast' as a boolean, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(hive_types_autocast, LogicalTypeId::BOOLEAN);
+		options["hive_types_autocast"] = val;
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
+    const string &name, const Optional<py::object> &columns, const Optional<py::object> &sample_size,
+    const Optional<py::object> &maximum_depth, const Optional<py::str> &records, const Optional<py::str> &format,
+    const Optional<py::object> &date_format, const Optional<py::object> &timestamp_format,
+    const Optional<py::object> &compression, const Optional<py::object> &maximum_object_size,
+    const Optional<py::object> &ignore_errors, const Optional<py::object> &convert_strings_to_integers,
+    const Optional<py::object> &field_appearance_threshold, const Optional<py::object> &map_inference_threshold,
+    const Optional<py::object> &maximum_sample_files, const Optional<py::object> &filename,
+    const Optional<py::object> &hive_partitioning, const Optional<py::object> &union_by_name,
+    const Optional<py::object> &hive_types, const Optional<py::object> &hive_types_autocast) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 
 	named_parameter_map_t options;
+
+	ParseMultiFileReaderOptions(options, filename, hive_partitioning, union_by_name, hive_types, hive_types_autocast);
 
 	if (!py::none().is(columns)) {
 		if (!py::is_dict_like(columns)) {
@@ -792,6 +841,36 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 		options["format"] = Value(format_option);
 	}
 
+	if (!py::none().is(date_format)) {
+		if (!py::isinstance<py::str>(date_format)) {
+			string actual_type = py::str(date_format.get_type());
+			throw BinderException("read_json only accepts 'date_format' as a string, not '%s'", actual_type);
+		}
+		auto date_format_s = py::reinterpret_borrow<py::str>(date_format);
+		auto date_format_option = std::string(py::str(date_format_s));
+		options["date_format"] = Value(date_format_option);
+	}
+
+	if (!py::none().is(timestamp_format)) {
+		if (!py::isinstance<py::str>(timestamp_format)) {
+			string actual_type = py::str(timestamp_format.get_type());
+			throw BinderException("read_json only accepts 'timestamp_format' as a string, not '%s'", actual_type);
+		}
+		auto timestamp_format_s = py::reinterpret_borrow<py::str>(timestamp_format);
+		auto timestamp_format_option = std::string(py::str(timestamp_format_s));
+		options["timestamp_format"] = Value(timestamp_format_option);
+	}
+
+	if (!py::none().is(compression)) {
+		if (!py::isinstance<py::str>(compression)) {
+			string actual_type = py::str(compression.get_type());
+			throw BinderException("read_json only accepts 'compression' as a string, not '%s'", actual_type);
+		}
+		auto compression_s = py::reinterpret_borrow<py::str>(compression);
+		auto compression_option = std::string(py::str(compression_s));
+		options["compression"] = Value(compression_option);
+	}
+
 	if (!py::none().is(sample_size)) {
 		if (!py::isinstance<py::int_>(sample_size)) {
 			string actual_type = py::str(sample_size.get_type());
@@ -806,6 +885,64 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 			throw BinderException("read_json only accepts 'maximum_depth' as an integer, not '%s'", actual_type);
 		}
 		options["maximum_depth"] = Value::INTEGER(py::int_(maximum_depth));
+	}
+
+	if (!py::none().is(maximum_object_size)) {
+		if (!py::isinstance<py::int_>(maximum_object_size)) {
+			string actual_type = py::str(maximum_object_size.get_type());
+			throw BinderException("read_json only accepts 'maximum_object_size' as an unsigned integer, not '%s'",
+			                      actual_type);
+		}
+		auto val = TransformPythonValue(maximum_object_size, LogicalTypeId::UINTEGER);
+		options["maximum_object_size"] = val;
+	}
+
+	if (!py::none().is(ignore_errors)) {
+		if (!py::isinstance<py::bool_>(ignore_errors)) {
+			string actual_type = py::str(ignore_errors.get_type());
+			throw BinderException("read_json only accepts 'ignore_errors' as a boolean, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(ignore_errors, LogicalTypeId::BOOLEAN);
+		options["ignore_errors"] = val;
+	}
+
+	if (!py::none().is(convert_strings_to_integers)) {
+		if (!py::isinstance<py::bool_>(convert_strings_to_integers)) {
+			string actual_type = py::str(convert_strings_to_integers.get_type());
+			throw BinderException("read_json only accepts 'convert_strings_to_integers' as a boolean, not '%s'",
+			                      actual_type);
+		}
+		auto val = TransformPythonValue(convert_strings_to_integers, LogicalTypeId::BOOLEAN);
+		options["convert_strings_to_integers"] = val;
+	}
+
+	if (!py::none().is(field_appearance_threshold)) {
+		if (!py::isinstance<py::float_>(field_appearance_threshold)) {
+			string actual_type = py::str(field_appearance_threshold.get_type());
+			throw BinderException("read_json only accepts 'field_appearance_threshold' as a float, not '%s'",
+			                      actual_type);
+		}
+		auto val = TransformPythonValue(field_appearance_threshold, LogicalTypeId::DOUBLE);
+		options["field_appearance_threshold"] = val;
+	}
+
+	if (!py::none().is(map_inference_threshold)) {
+		if (!py::isinstance<py::int_>(map_inference_threshold)) {
+			string actual_type = py::str(map_inference_threshold.get_type());
+			throw BinderException("read_json only accepts 'map_inference_threshold' as an integer, not '%s'",
+			                      actual_type);
+		}
+		auto val = TransformPythonValue(map_inference_threshold, LogicalTypeId::BIGINT);
+		options["map_inference_threshold"] = val;
+	}
+
+	if (!py::none().is(maximum_sample_files)) {
+		if (!py::isinstance<py::int_>(maximum_sample_files)) {
+			string actual_type = py::str(maximum_sample_files.get_type());
+			throw BinderException("read_json only accepts 'maximum_sample_files' as an integer, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(maximum_sample_files, LogicalTypeId::BIGINT);
+		options["maximum_sample_files"] = val;
 	}
 
 	bool auto_detect = false;
@@ -1380,7 +1517,12 @@ void DuckDBPyConnection::Close() {
 	temporary_views.clear();
 	// https://peps.python.org/pep-0249/#Connection.close
 	for (auto &cur : cursors) {
-		cur->Close();
+		auto cursor = cur.lock();
+		if (!cursor) {
+			// The cursor has already been closed
+			continue;
+		}
+		cursor->Close();
 	}
 	registered_functions.clear();
 	cursors.clear();
