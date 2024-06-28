@@ -1,4 +1,4 @@
-# name: benchmark/ingestion/persistent_storage/tpch/native/ingest_lineitem.benchmark
+# name: benchmark/large/ingestion/tpch/native/ingest_lineitem.benchmark
 # description: benchmark ingestion of lineitem
 # group: [native]
 

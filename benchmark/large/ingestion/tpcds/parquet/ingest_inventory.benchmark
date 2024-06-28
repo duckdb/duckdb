@@ -1,4 +1,4 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/parquet/ingest_inventory.benchmark
+# name: benchmark/large/ingestion/tpcds/parquet/ingest_inventory.benchmark
 # description: benchmark ingestion of inventory
 # group: [parquet]
 
