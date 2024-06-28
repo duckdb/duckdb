@@ -1,0 +1,32 @@
+# name: test/sql/aggregate/aggregates/arg_top_k.test
+# description: Test approx top K operator
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 (arg VARCHAR, val VARCHAR);
+
+statement ok
+INSERT INTO t1 VALUES ('a', '2'), ('a', '1'), ('b', '5'), ('b', '4'), ('a', '3'), ('b', '6');
+
+query I
+SELECT arg_top_k(arg, val, 3 ORDER BY val DESC) FROM t1;
+----
+[6, 5, 4]
+
+query I
+SELECT arg_top_k(arg, val, 2) FROM t1 GROUP BY arg;
+----
+[5, 4]
+[2, 1]
+
+
+statement ok
+CREATE TABLE t2 AS SELECT i%5 as even_groups, i FROM range(10000) t(i);
+
+query I
+SELECT arg_top_k(even_groups, i, 3) FROM t2;
+----
+[4, 9, 14]
