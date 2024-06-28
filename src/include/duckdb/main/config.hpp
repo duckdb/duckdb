@@ -19,7 +19,6 @@
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"

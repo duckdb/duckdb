@@ -529,12 +529,14 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	// or if the cached version already expired
 	if (!metadata_p) {
 		if (!ObjectCache::ObjectCacheEnabled(context_p)) {
-			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, encryption_util);
+			metadata =
+			    LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, encryption_util);
 		} else {
 			auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 			if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
-				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, encryption_util);
+				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
+				                        encryption_util);
 				ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 			}
 		}
