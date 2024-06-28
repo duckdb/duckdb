@@ -42,23 +42,14 @@ interval_t PyTimeDelta::ToInterval() {
 }
 
 int64_t PyTimeDelta::GetDays(py::handle &obj) {
-	if (py::none().is(obj)) {
-		return 0;
-	}
 	return py::int_(obj.attr("days")).cast<int64_t>();
 }
 
 int64_t PyTimeDelta::GetSeconds(py::handle &obj) {
-	if (py::none().is(obj)) {
-		return 0;
-	}
 	return py::int_(obj.attr("seconds")).cast<int64_t>();
 }
 
 int64_t PyTimeDelta::GetMicros(py::handle &obj) {
-	if (py::none().is(obj)) {
-		return 0;
-	}
 	return py::int_(obj.attr("microseconds")).cast<int64_t>();
 }
 
@@ -258,7 +249,9 @@ py::object PyTime::GetTZInfo(py::handle &obj) {
 }
 
 interval_t PyTimezone::GetUTCOffset(py::handle &tzone_obj) {
-	auto res = tzone_obj.attr("utcoffset")(py::none());
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto this_really_should_not_be_needed = import_cache.datetime.datetime()(2024, 1, 1);
+	auto res = tzone_obj.attr("utcoffset")(this_really_should_not_be_needed);
 	auto timedelta = PyTimeDelta(res);
 	return timedelta.ToInterval();
 }
