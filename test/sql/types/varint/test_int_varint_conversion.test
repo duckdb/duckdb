@@ -1,4 +1,4 @@
-# name: test/sql/types/varint/test_varint.test
+# name: test/sql/types/varint/test_int_varint_conversion.test
 # description: Test basics of varint type
 # group: [varint]
 

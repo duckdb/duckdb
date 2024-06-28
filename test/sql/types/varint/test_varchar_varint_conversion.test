@@ -1,0 +1,23 @@
+# name: test/sql/types/varint/test_varchar_varint_conversion.test
+# description: Test basics of varint type
+# group: [varint]
+
+query I
+select '0'::varint
+----
+0
+
+query I
+select '1'::varint
+----
+1
+
+#query I
+#select '-1'::varint
+#----
+#-1
+#
+#query I
+#select '1000000000000'::varint
+#----
+#1000000000000

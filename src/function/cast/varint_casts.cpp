@@ -22,7 +22,6 @@ string_t IntToVarInt(int32_t int_value) {
 	uint32_t header = data_byte_size;
 	if (!is_negative) {
 		header = ~header;
-		// header |= (1 << 23); // Set the sign bit for positive numbers
 	}
 
 	string_t blob {data_byte_size + VARINT_HEADER_SIZE};
@@ -37,6 +36,73 @@ string_t IntToVarInt(int32_t int_value) {
 	// Add data bytes to the blob
 	for (int i = data_byte_size - 1; i >= 0; --i) {
 		writable_blob[wb_idx++] = static_cast<uint8_t>((int_value >> (i * 8)) & 0xFF);
+	}
+	return blob;
+}
+
+int CharToDigit(char c) {
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	throw InvalidInputException("bad string");
+}
+
+string_t VarcharToVarInt(string_t int_value) {
+	if (int_value.Empty()) {
+		throw InvalidInputException("bad string");
+	}
+
+	auto int_value_char = int_value.GetData();
+	idx_t int_value_size = int_value.GetSize();
+	idx_t start_pos = 0;
+
+	// check if first character is -
+	bool is_negative = int_value_char[0] == '-';
+	if (is_negative) {
+		start_pos++;
+	}
+	// trim 0's, unless value is 0
+	if (int_value_size - start_pos > 1) {
+		while (int_value_char[start_pos] == '0' && start_pos < int_value_size) {
+			start_pos++;
+		}
+	}
+	idx_t actual_size = int_value_size - start_pos;
+	uint32_t data_byte_size = ceil(actual_size * log2(10) / 8);
+	string_t blob {data_byte_size + VARINT_HEADER_SIZE};
+
+	uint32_t header = data_byte_size;
+	if (!is_negative) {
+		header = ~header;
+	}
+
+	auto writable_blob = blob.GetDataWriteable();
+	// Add header bytes to the blob
+
+	writable_blob[0] = static_cast<uint8_t>(header >> 16);
+	writable_blob[1] = static_cast<uint8_t>((header >> 8) & 0xFF);
+	writable_blob[2] = static_cast<uint8_t>((header >> 8) & 0xFF);
+
+	// convert the string to a byte array
+	string abs_str(int_value_char + start_pos, actual_size);
+	idx_t wb_idx = data_byte_size + VARINT_HEADER_SIZE - 1;
+	while (!abs_str.empty()) {
+		uint8_t remainder = 0;
+		std::string quotient;
+		// We convert ze string to a big-endian byte array by dividing the number by 256 and storing the remainders
+		for (char digit : abs_str) {
+			int new_value = remainder * 10 + CharToDigit(digit);
+			quotient += (new_value / 256) + '0';
+			remainder = new_value % 256;
+		}
+		if (is_negative) {
+			writable_blob[wb_idx--] = ~remainder;
+		} else {
+			writable_blob[wb_idx--] = remainder;
+		}
+
+		// Remove leading zeros from the quotient
+		abs_str = quotient.erase(0, quotient.find_first_not_of('0'));
 	}
 	return blob;
 }
@@ -67,8 +133,6 @@ string_t VarIntToVarchar(string_t &blob) {
 	// If negative, convert from two's complement
 	if (is_negative) {
 		int_value = ~int_value;
-
-		// int_value = -((~int_value + 1) & ((1LL << (data_byte_size * 8)) - 1));
 	}
 
 	return std::to_string(int_value);
@@ -78,6 +142,13 @@ struct IntTryCastToVarInt {
 	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
 		return StringVector::AddStringOrBlob(result, IntToVarInt(input));
+	}
+};
+
+struct VarcharTryCastToVarInt {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		return StringVector::AddStringOrBlob(result, VarcharToVarInt(input));
 	}
 };
 
@@ -95,6 +166,8 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 	switch (source.id()) {
 	case LogicalTypeId::INTEGER:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<int32_t, duckdb::IntTryCastToVarInt>);
+	case LogicalTypeId::VARCHAR:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::VarcharTryCastToVarInt>);
 	case LogicalTypeId::DOUBLE:
 		return TryVectorNullCast;
 	default:
