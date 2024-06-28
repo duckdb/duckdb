@@ -3,18 +3,19 @@
 namespace duckdb {
 
 IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
-    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, std::move(info.index_name)), sql(std::move(info.sql)),
-      options(std::move(info.options)), index_type(info.index_type), index_constraint_type(info.constraint_type),
-      column_ids(std::move(info.column_ids)) {
+    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info.index_name), sql(info.sql), options(info.options),
+      index_type(info.index_type), index_constraint_type(info.constraint_type), column_ids(info.column_ids) {
 
 	this->temporary = info.temporary;
-	this->dependencies = std::move(info.dependencies);
-	this->comment = std::move(info.comment);
+	this->dependencies = info.dependencies;
+	this->comment = info.comment;
 	for (auto &expr : expressions) {
-		expressions.push_back(std::move(expr));
+		D_ASSERT(expr);
+		expressions.push_back(expr->Copy());
 	}
 	for (auto &parsed_expr : info.parsed_expressions) {
-		parsed_expressions.push_back(std::move(parsed_expr));
+		D_ASSERT(parsed_expr);
+		parsed_expressions.push_back(parsed_expr->Copy());
 	}
 }
 
