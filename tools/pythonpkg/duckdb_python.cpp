@@ -563,18 +563,42 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("parameters") = py::none(), py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "read_json",
-	    [](const string &filename, const Optional<py::object> &columns = py::none(),
+	    [](const string &name, const Optional<py::object> &columns = py::none(),
 	       const Optional<py::object> &sample_size = py::none(), const Optional<py::object> &maximum_depth = py::none(),
 	       const Optional<py::str> &records = py::none(), const Optional<py::str> &format = py::none(),
+	       const Optional<py::object> &date_format = py::none(),
+	       const Optional<py::object> &timestamp_format = py::none(),
+	       const Optional<py::object> &compression = py::none(),
+	       const Optional<py::object> &maximum_object_size = py::none(),
+	       const Optional<py::object> &ignore_errors = py::none(),
+	       const Optional<py::object> &convert_strings_to_integers = py::none(),
+	       const Optional<py::object> &field_appearance_threshold = py::none(),
+	       const Optional<py::object> &map_inference_threshold = py::none(),
+	       const Optional<py::object> &maximum_sample_files = py::none(),
+	       const Optional<py::object> &filename = py::none(),
+	       const Optional<py::object> &hive_partitioning = py::none(),
+	       const Optional<py::object> &union_by_name = py::none(), const Optional<py::object> &hive_types = py::none(),
+	       const Optional<py::object> &hive_types_autocast = py::none(),
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->ReadJSON(filename, columns, sample_size, maximum_depth, records, format);
+		    return conn->ReadJSON(name, columns, sample_size, maximum_depth, records, format, date_format,
+		                          timestamp_format, compression, maximum_object_size, ignore_errors,
+		                          convert_strings_to_integers, field_appearance_threshold, map_inference_threshold,
+		                          maximum_sample_files, filename, hive_partitioning, union_by_name, hive_types,
+		                          hive_types_autocast);
 	    },
 	    "Create a relation object from the JSON file in 'name'", py::arg("name"), py::kw_only(),
 	    py::arg("columns") = py::none(), py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none(),
-	    py::arg("records") = py::none(), py::arg("format") = py::none(), py::arg("connection") = py::none());
+	    py::arg("records") = py::none(), py::arg("format") = py::none(), py::arg("date_format") = py::none(),
+	    py::arg("timestamp_format") = py::none(), py::arg("compression") = py::none(),
+	    py::arg("maximum_object_size") = py::none(), py::arg("ignore_errors") = py::none(),
+	    py::arg("convert_strings_to_integers") = py::none(), py::arg("field_appearance_threshold") = py::none(),
+	    py::arg("map_inference_threshold") = py::none(), py::arg("maximum_sample_files") = py::none(),
+	    py::arg("filename") = py::none(), py::arg("hive_partitioning") = py::none(),
+	    py::arg("union_by_name") = py::none(), py::arg("hive_types") = py::none(),
+	    py::arg("hive_types_autocast") = py::none(), py::arg("connection") = py::none());
 	m.def(
 	    "extract_statements",
 	    [](const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr) {
