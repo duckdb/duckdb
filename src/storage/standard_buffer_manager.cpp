@@ -589,7 +589,7 @@ void StandardBufferManager::FreeReservedMemory(idx_t size) {
 	if (size == 0) {
 		return;
 	}
-	buffer_pool.memory_usage.UpdateUsedMemory(MemoryTag::EXTENSION, -size);
+	buffer_pool.memory_usage.UpdateUsedMemory(MemoryTag::EXTENSION, -(int64_t)size);
 }
 
 //===--------------------------------------------------------------------===//
