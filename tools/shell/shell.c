@@ -19537,8 +19537,8 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
     }
     return 1;
   }else if( ShellHasFlag(p, SHFLG_CountChanges) ){
-    raw_printf(p->out, "changes: %3d   total_changes: %d\n",
-            sqlite3_changes(p->db), sqlite3_total_changes(p->db));
+    raw_printf(p->out, "changes: %3lld   total_changes: %lld\n",
+            sqlite3_changes64(p->db), sqlite3_total_changes64(p->db));
   }
   return 0;
 }
