@@ -471,17 +471,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object 
 	return shared_from_this();
 }
 
-static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQueryResult &pending_query) {
-	if (pending_query.AllowStreamResult()) {
-		return PendingQueryResult::IsFinishedOrBlocked;
-	}
-	return PendingQueryResult::IsFinished;
-}
-
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
-	auto is_finished = FinishedCondition(pending_query);
-	while (!is_finished(execution_result = pending_query.ExecuteTask())) {
+	while (!PendingQueryResult::IsResultReady(execution_result = pending_query.ExecuteTask())) {
 		{
 			py::gil_scoped_acquire gil;
 			if (PyErr_CheckSignals() != 0) {

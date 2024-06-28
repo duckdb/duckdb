@@ -1,4 +1,6 @@
 #include "arrow/arrow_test_helper.hpp"
+#include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/common/arrow/arrow_query_result.hpp"
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
 ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamParameters &parameters) {
@@ -24,22 +26,15 @@ int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream,
 	return 0;
 }
 
-int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
-	if (!stream->private_data) {
-		throw InternalException("No private data!?");
-	}
-	auto &data = *((ArrowArrayStreamData *)stream->private_data);
-	if (!data.factory.big_result) {
-		auto chunk = data.factory.result->Fetch();
-		if (!chunk || chunk->size() == 0) {
-			return 0;
-		}
-		ArrowConverter::ToArrowArray(*chunk, out, data.options);
-	} else {
-		ArrowAppender appender(data.factory.result->types, STANDARD_VECTOR_SIZE, data.options);
+static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientProperties properties,
+                                struct ArrowArray *out) {
+	auto &types = res.types;
+	if (big) {
+		// Combine all chunks into a single ArrowArray
+		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, properties);
 		idx_t count = 0;
 		while (true) {
-			auto chunk = data.factory.result->Fetch();
+			auto chunk = res.Fetch();
 			if (!chunk || chunk->size() == 0) {
 				break;
 			}
@@ -49,8 +44,45 @@ int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, s
 		if (count > 0) {
 			*out = appender.Finalize();
 		}
+	} else {
+		auto chunk = res.Fetch();
+		if (!chunk || chunk->size() == 0) {
+			return 0;
+		}
+		ArrowConverter::ToArrowArray(*chunk, out, properties);
 	}
 	return 0;
+}
+
+static int NextFromArrow(ArrowTestFactory &factory, struct ArrowArray *out) {
+	auto &it = factory.chunk_iterator;
+
+	unique_ptr<ArrowArrayWrapper> next_array;
+	if (it != factory.prefetched_chunks.end()) {
+		next_array = std::move(*it);
+		it++;
+	}
+
+	if (!next_array) {
+		return 0;
+	}
+	*out = next_array->arrow_array;
+	next_array->arrow_array.release = nullptr;
+	return 0;
+}
+
+int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+	if (!stream->private_data) {
+		throw InternalException("No private data!?");
+	}
+	auto &data = *((ArrowArrayStreamData *)stream->private_data);
+	if (data.factory.result->type == QueryResultType::MATERIALIZED_RESULT) {
+		auto &materialized_result = data.factory.result->Cast<MaterializedQueryResult>();
+		return NextFromMaterialized(materialized_result, data.factory.big_result, data.options, out);
+	} else {
+		D_ASSERT(data.factory.result->type == QueryResultType::ARROW_RESULT);
+		return NextFromArrow(data.factory, out);
+	}
 }
 
 const char *ArrowTestFactory::ArrowArrayStreamGetLastError(struct ArrowArrayStream *stream) {
@@ -152,31 +184,52 @@ vector<Value> ArrowTestHelper::ConstructArrowScan(ArrowArrayStream &stream) {
 }
 
 bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, bool big_result) {
-	// run the query
-	auto initial_result = con.Query(query);
-	if (initial_result->HasError()) {
-		initial_result->Print();
-		printf("Query: %s\n", query.c_str());
-		return false;
+	unique_ptr<QueryResult> initial_result;
+
+	// Using the PhysicalArrowCollector, we create a ArrowQueryResult from the result
+	{
+		auto &config = ClientConfig::GetConfig(*con.context);
+		idx_t batch_size = big_result ? NumericLimits<idx_t>::Maximum() : STANDARD_VECTOR_SIZE;
+		// Set up the result collector to use
+		ScopedConfigSetting setting(
+		    config,
+		    [&batch_size](ClientConfig &config) {
+			    config.result_collector = [&batch_size](ClientContext &context, PreparedStatementData &data) {
+				    return PhysicalArrowCollector::Create(context, data, batch_size);
+			    };
+		    },
+		    [](ClientConfig &config) { config.result_collector = nullptr; });
+
+		// run the query
+		initial_result = con.context->Query(query, false);
+		if (initial_result->HasError()) {
+			initial_result->Print();
+			printf("Query: %s\n", query.c_str());
+			return false;
+		}
 	}
-	// create the roundtrip factory
+
 	auto client_properties = con.context->GetClientProperties();
 	auto types = initial_result->types;
 	auto names = initial_result->names;
+	// We create an "arrow object" that consists of the arrays from our ArrowQueryResult
 	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result,
 	                         client_properties);
-
-	// construct the arrow scan
+	// And construct a `arrow_scan` to read the created "arrow object"
 	auto params = ConstructArrowScan(factory);
 
-	// run the arrow scan over the result
+	// Executing the scan gives us back a MaterializedQueryResult from the ArrowQueryResult we read
+	// query -> ArrowQueryResult -> arrow_scan() -> MaterializedQueryResult
 	auto arrow_result = ScanArrowObject(con, params);
 	if (!arrow_result) {
 		printf("Query: %s\n", query.c_str());
 		return false;
 	}
 
-	return CompareResults(std::move(arrow_result), con.Query(query), query);
+	// This query goes directly from:
+	// query -> MaterializedQueryResult
+	auto expected = con.Query(query);
+	return CompareResults(std::move(arrow_result), std::move(expected), query);
 }
 
 bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream) {
