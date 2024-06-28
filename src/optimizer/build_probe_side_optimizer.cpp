@@ -24,8 +24,7 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 	}
 }
 
-BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op)
-    : context(context), swap_status(SWAP_STATUS::NOT_SWAPPED) {
+BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op) : context(context) {
 	vector<ColumnBinding> updating_columns, current_op_bindings;
 	auto bindings = op.GetColumnBindings();
 	vector<ColumnBinding> row_id_bindings;
@@ -128,10 +127,8 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	// swap for preferred on probe side
 	if (rhs_cardinality == lhs_cardinality * cardinality_ratio && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
-		auto bindings_left = swap_status == SWAP_STATUS::NOT_SWAPPED ? left_child->GetColumnBindings()
-		                                                             : right_child->GetColumnBindings();
-		auto bindings_right = swap_status == SWAP_STATUS::NOT_SWAPPED ? right_child->GetColumnBindings()
-		                                                              : left_child->GetColumnBindings();
+		auto bindings_left = left_child->GetColumnBindings();
+		auto bindings_right = right_child->GetColumnBindings();
 		auto bindings_in_left = ComputeOverlappingBindings(bindings_left, preferred_on_probe_side);
 		auto bindings_in_right = ComputeOverlappingBindings(bindings_right, preferred_on_probe_side);
 		// (if the sides are planning to be swapped AND
