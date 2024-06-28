@@ -42,11 +42,34 @@ string_t IntToVarInt(int32_t int_value) {
 	return blob;
 }
 
+// int32_t VarIntToInt() {
+	// 	int32_t int_value = 0;
+	// idx_t cur_byte_pos = 3;
+	// for (idx_t i = 0; i < data_byte_size; i++) {
+	// 	if (is_negative) {
+	// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(~blob_ptr[cur_byte_pos + i]))
+	// 		             << 8 * (data_byte_size - i - 1);
+	// 	} else {
+	// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(blob_ptr[cur_byte_pos + i]))
+	// 		             << 8 * (data_byte_size - i - 1);
+	// 	}
+	// }
+	//
+	// // If negative, convert from two's complement
+	// if (is_negative) {
+	// 	int_value = 0 - int_value;
+	// }
+// }
+
 int CharToDigit(char c) {
-	if (c >= '0' && c <= '9') {
+	// if (c >= '0' && c <= '9') {
 		return c - '0';
-	}
-	throw InvalidInputException("bad string");
+	// }
+	// throw InvalidInputException("bad string");
+}
+
+char DigitToChar(int digit) {
+    return digit + '0';
 }
 
 string_t VarcharToVarInt(string_t int_value) {
@@ -82,8 +105,8 @@ string_t VarcharToVarInt(string_t int_value) {
 	// Add header bytes to the blob
 
 	writable_blob[0] = static_cast<uint8_t>(header >> 16);
-	writable_blob[1] = static_cast<uint8_t>((header >> 8) & 0xFF);
-	writable_blob[2] = static_cast<uint8_t>((header >> 8) & 0xFF);
+	writable_blob[1] = static_cast<uint8_t>(header >> 8 & 0xFF);
+	writable_blob[2] = static_cast<uint8_t>(header & 0xFF);
 
 	// convert the string to a byte array
 	string abs_str(int_value_char + start_pos, actual_size);
@@ -116,35 +139,64 @@ string_t VarIntToVarchar(string_t &blob) {
 		throw InvalidInputException("Invalid blob size.");
 	}
 	auto blob_ptr = blob.GetData();
-
-	// Determine the number of data bytes
-	int data_byte_size = blob.GetSize() - 3;
-
+	std::string decimalString;
+	std::vector<uint8_t> tempArray;
 	// Determine if the number is negative
 	bool is_negative = (blob_ptr[0] & 0x80) == 0;
-
-	// Extract the data bytes
-	int32_t int_value = 0;
-	idx_t cur_byte_pos = 3;
-	idx_t result_size = sizeof(int_value);
-	idx_t cur_byte_res = result_size - data_byte_size;
-
-	for (idx_t i = 0; i < data_byte_size; i++) {
+	for (idx_t i = 3; i < blob.GetSize(); i++) {
 		if (is_negative) {
-			int_value |= static_cast<uint32_t>(static_cast<uint8_t>(~blob_ptr[cur_byte_pos + i]))
-			             << 8 * (data_byte_size - i - 1);
+			tempArray.push_back(~blob_ptr[i]);
 		} else {
-			int_value |= static_cast<uint32_t>(static_cast<uint8_t>(blob_ptr[cur_byte_pos + i]))
-			             << 8 * (data_byte_size - i - 1);
+			tempArray.push_back(blob_ptr[i]);
 		}
 	}
+	std::reverse(decimalString.begin(), decimalString.end());
 
-	// If negative, convert from two's complement
-	if (is_negative) {
-		int_value = 0 - int_value;
-	}
-	return std::to_string(int_value);
+	while (!tempArray.empty()) {
+        std::string quotient;
+        uint8_t remainder = 0;
+        for (uint8_t byte : tempArray) {
+            int new_value = remainder * 256 + byte;
+            quotient += DigitToChar(new_value / 10);
+            remainder = new_value % 10;
+        }
+
+        decimalString += DigitToChar(remainder);
+
+        // Remove leading zeros from the quotient
+        tempArray.clear();
+        for (char digit : quotient) {
+            if (digit != '0' || !tempArray.empty()) {
+                tempArray.push_back(CharToDigit(digit));
+            }
+        }
+    }
+
+    if (is_negative) {
+        decimalString += '-';
+    }
+
+	 // Reverse the string to get the correct decimal representation
+    std::reverse(decimalString.begin(), decimalString.end());
+    return decimalString;
+
+	// for (idx_t i = 0; i < data_byte_size; i++) {
+	// 	if (is_negative) {
+	// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(~blob_ptr[cur_byte_pos + i]))
+	// 		             << 8 * (data_byte_size - i - 1);
+	// 	} else {
+	// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(blob_ptr[cur_byte_pos + i]))
+	// 		             << 8 * (data_byte_size - i - 1);
+	// 	}
+	// }
+	//
+	// // If negative, convert from two's complement
+	// if (is_negative) {
+	// 	int_value = 0 - int_value;
+	// }
+	// return std::to_string(int_value);
 }
+
 
 struct IntTryCastToVarInt {
 	template <class SRC>
