@@ -166,7 +166,6 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
                                           JoinHashTable::ProbeState &state, Vector &hashes_v,
                                           const SelectionVector &sel, idx_t &count, JoinHashTable *ht,
                                           ht_entry_t *entries, Vector &pointers_result_v, SelectionVector &match_sel) {
-
 	UnifiedVectorFormat hashes_v_unified;
 	hashes_v.ToUnifiedFormat(count, hashes_v_unified);
 
@@ -305,7 +304,6 @@ inline bool JoinHashTable::UseSalt() const {
 void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
                                    const SelectionVector &sel, idx_t &count, Vector &pointers_result_v,
                                    SelectionVector &match_sel) {
-
 	if (UseSalt()) {
 		GetRowPointersInternal<true>(keys, key_state, state, hashes_v, sel, count, this, entries, pointers_result_v,
 		                             match_sel);
@@ -815,16 +813,12 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 
 	// If there is a matcher for the probing side because of non-equality predicates, use it
 	if (ht.needs_chain_matcher) {
-
 		idx_t no_match_count = 0;
-
 		auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
-
 		D_ASSERT(matcher);
 
 		// we need to only use the vectors with the indices of the columns that are used in the probe phase, namely
 		// the non-equality columns
-
 		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, ht.layout, pointers, no_match_sel,
 		                      no_match_count, ht.non_equality_predicate_columns);
 	} else {
@@ -835,7 +829,6 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 
 idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {
 	while (true) {
-
 		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, result_vector, nullptr);
 
@@ -942,7 +935,6 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	// Start with the scan selection
 
 	while (this->count > 0) {
-
 		// resolve the equality_predicates for the current set of pointers
 		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, &chain_no_match_sel_vector);
 		idx_t no_match_count = this->count - match_count;

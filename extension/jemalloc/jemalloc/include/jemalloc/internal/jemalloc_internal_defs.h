@@ -2,7 +2,9 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
-#if defined(__GNUC__)
+#ifdef _GNU_SOURCE
+#define JEMALLOC_ORIGINAL_GNU_SOURCE
+#elif defined(__GNUC__)
 #define _GNU_SOURCE
 #endif
 
@@ -457,12 +459,12 @@
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
 
 /* GNU specific sched_getcpu support */
-#if defined(__GNUC__)
+#if defined(__GNUC__) && defined(JEMALLOC_ORIGINAL_GNU_SOURCE)
 #define JEMALLOC_HAVE_SCHED_GETCPU
 #endif
 
 /* GNU specific sched_setaffinity support */
-#if defined(__GNUC__)
+#if defined(__GNUC__) && defined(JEMALLOC_ORIGINAL_GNU_SOURCE)
 #define JEMALLOC_HAVE_SCHED_SETAFFINITY
 #endif
 
@@ -486,7 +488,9 @@
 /*
  * Defined if strerror_r returns char * if _GNU_SOURCE is defined.
  */
-// #define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
+#if defined(__GNUC__) && defined(JEMALLOC_ORIGINAL_GNU_SOURCE)
+#define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
+#endif
 
 /* Performs additional safety checks when defined. */
 /* #undef JEMALLOC_OPT_SAFETY_CHECKS */
