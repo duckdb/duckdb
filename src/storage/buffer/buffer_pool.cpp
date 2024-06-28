@@ -4,6 +4,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include <cstddef>
+#include <cstdint>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -14,24 +16,21 @@
 
 namespace duckdb {
 
-static int GetCpuId() {
+// this code comes from jemalloc
+static int GetCurrentCPU() {
 #if defined(_WIN32)
-	return (idx_t)GetCurrentProcessorNumber();
-#elif defined(__GNUC__)
-	// GNU specific sched_getcpu support
-	return (idx_t)sched_getcpu();
-#else
-	return -1;
-#endif
-}
-
-static int GetCpuCnts(void) {
-#ifdef _WIN32
-	SYSTEM_INFO si;
-	GetSystemInfo(&si);
-	return si.dwNumberOfProcessors;
-#elif defined(__GNUC__)
-	return sysconf(_SC_NPROCESSORS_ONLN);
+	return (int)GetCurrentProcessorNumber();
+#elif defined(DUCKDB_HAVE_SCHED_GETCPU)
+	return (int)sched_getcpu();
+#elif defined(DUCKDB_HAVE_RDTSCP)
+	unsigned int ecx;
+	asm volatile("rdtscp" : "=c"(ecx)::"eax", "edx");
+	return (int)(ecx & 0xfff);
+#elif defined(__aarch64__) && defined(__APPLE__)
+	/* Other oses most likely use tpidr_el0 instead */
+	uintptr_t c;
+	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
+	return (int)(c & (1 << 3) - 1);
 #else
 	return -1;
 #endif
@@ -425,16 +424,10 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	}
 }
 
-BufferPool::MemoryUsageCounters::MemoryUsageCounters()
-    : memory_usage(0), memory_usage_per_tag(), memory_usage_caches() {
+BufferPool::MemoryUsageCounters::MemoryUsageCounters() : memory_usage(0) {
 	for (auto &v : memory_usage_per_tag) {
 		v = 0;
 	}
-	auto cpu_cnts = GetCpuCnts();
-	if (cpu_cnts < 0) {
-		return;
-	}
-	memory_usage_caches = std::vector<MemoryUsagePerTag>(cpu_cnts);
 	for (auto &cache : memory_usage_caches) {
 		for (auto &v : cache) {
 			v = 0;
@@ -444,10 +437,14 @@ BufferPool::MemoryUsageCounters::MemoryUsageCounters()
 
 void BufferPool::MemoryUsageCounters::UpdateUsedMemory(MemoryTag tag, int64_t size) {
 	auto tag_idx = (idx_t)tag;
-	auto cpu_id = GetCpuId();
+	auto cpu_idx = GetCurrentCPU();
 	// update cache
-	if (cpu_id >= 0 && (size_t)cpu_id < memory_usage_caches.size() && (size_t)std::abs(size) < kCacheThreshold) {
-		auto &cache = memory_usage_caches[cpu_id];
+	if (cpu_idx >= 0 && (size_t)std::abs(size) < kCacheThreshold) {
+		// Get corresponding cache slot based on current CPU core index
+		// Two threads may access the same cache simultaneously,
+		// ensuring correctness through atomic operations
+		auto cache_idx = (size_t)cpu_idx % kCacheCnts;
+		auto &cache = memory_usage_caches[cache_idx];
 		auto new_val = cache[tag_idx].fetch_add(size, std::memory_order_relaxed) + size;
 		if ((size_t)std::abs(new_val) >= kCacheThreshold) {
 			size = cache[tag_idx].exchange(0, std::memory_order_relaxed);

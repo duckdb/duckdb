@@ -8,8 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/array.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
@@ -86,6 +89,8 @@ protected:
 
 protected:
 	struct MemoryUsageCounters {
+		//! The maximum difference between memory statistics and actual usage is 2MB (64 * 32k)
+		static constexpr size_t kCacheCnts = 64;
 		static constexpr size_t kCacheThreshold = 32 << 10;
 		using MemoryUsagePerTag = std::array<atomic<int64_t>, MEMORY_TAG_COUNT>;
 
@@ -93,17 +98,18 @@ protected:
 		atomic<int64_t> memory_usage;
 		MemoryUsagePerTag memory_usage_per_tag;
 		//! cache memory usage to improve performance
-		std::vector<MemoryUsagePerTag> memory_usage_caches;
+		std::array<MemoryUsagePerTag, kCacheCnts> memory_usage_caches;
 
 		MemoryUsageCounters();
 
 		idx_t GetUsedMemory() const {
-			return static_cast<idx_t>(std::max(memory_usage.load(std::memory_order_relaxed), int64_t(0)));
+			auto used_memory = memory_usage.load(std::memory_order_relaxed);
+			return used_memory > 0 ? static_cast<idx_t>(used_memory) : 0;
 		}
 
 		idx_t GetUsedMemory(MemoryTag tag) const {
-			return static_cast<idx_t>(
-			    std::max(memory_usage_per_tag[(idx_t)tag].load(std::memory_order_relaxed), int64_t(0)));
+			auto used_memory = memory_usage_per_tag[(idx_t)tag].load(std::memory_order_relaxed);
+			return used_memory > 0 ? static_cast<idx_t>(used_memory) : 0;
 		}
 
 		void UpdateUsedMemory(MemoryTag tag, int64_t size);
