@@ -524,7 +524,8 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 	return new_params;
 }
 
-case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedStatement &prep, const py::object &params) {
+case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedStatement &prep,
+                                                                       const py::object &params) {
 	case_insensitive_map_t<BoundParameterData> named_values;
 	if (py::is_list_like(params)) {
 		if (prep.n_param != py::len(params)) {
