@@ -121,7 +121,6 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 			pg_table->destination_fk.emplace_back(key->val.str);
 		}
 	}
-
 	return pg_table;
 }
 
