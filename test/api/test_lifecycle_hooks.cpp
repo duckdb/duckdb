@@ -80,7 +80,7 @@ TEST_CASE("Test ClientContextState", "[api]") {
 	}
 
 	SECTION("No error and explicit error rollback") {
-		// Multi statement transactions cannot have errors associated with them, as they have to be deliberate
+		// Multi statement transactions cannot have errors associated with them
 		// -> no error here
 		conn.BeginTransaction();
 		REQUIRE_FAIL(conn.Query("SELECT * FROM this_table_does_not_exist_1"));
@@ -89,6 +89,18 @@ TEST_CASE("Test ClientContextState", "[api]") {
 		REQUIRE((state.query_errors.size() == 2));
 		REQUIRE_THAT(state.query_errors.at(0), Contains("Table with name this_table_does_not_exist_1 does not exist!"));
 		REQUIRE_THAT(state.query_errors.at(1), Contains("Table with name this_table_does_not_exist_2 does not exist!"));
+		REQUIRE((state.transaction_errors.empty()));
+	}
+
+	SECTION("No error and explicit commit") {
+		// Multi statement transactions cannot have errors associated with them, as they have to be deliberate
+		// -> no error here
+		conn.BeginTransaction();
+		REQUIRE_NO_FAIL(conn.Query("INSERT INTO my_table VALUES (1)"));
+		REQUIRE_FAIL(conn.Query("SELECT * FROM raise_exception_tf()"));
+		conn.Commit();
+		REQUIRE((state.query_errors.size() == 1));
+		REQUIRE_THAT(state.query_errors.at(0), Contains("This is a test exception."));
 		REQUIRE((state.transaction_errors.empty()));
 	}
 
