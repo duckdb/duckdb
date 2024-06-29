@@ -48,7 +48,7 @@ void TransactionContext::Commit() {
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
 		for (auto const &s : context.registered_state) {
-			s.second->TransactionRollback(*transaction, context, &error);
+			s.second->TransactionRollback(*transaction, context, error);
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	} else {
