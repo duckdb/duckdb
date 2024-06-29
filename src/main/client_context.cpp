@@ -265,7 +265,8 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	auto &scheduler = TaskScheduler::GetScheduler(*this);
 	scheduler.RelaunchThreads();
 
-	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction, nullptr);
+	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction,
+	                              result ? result->GetErrorObject() : nullptr);
 	if (result && !result->HasError()) {
 		// if an error occurred while committing report it in the result
 		result->SetError(error);
