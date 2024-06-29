@@ -57,7 +57,7 @@ SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChu
 			throw TransactionException("cannot rollback - no transaction is active");
 		} else {
 			// explicitly rollback the current transaction
-			client.transaction.Rollback();
+			client.transaction.Rollback(nullptr);
 		}
 		break;
 	}

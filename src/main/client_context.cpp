@@ -160,7 +160,7 @@ void ClientContext::Destroy() {
 	if (transaction.HasActiveTransaction()) {
 		transaction.ResetActiveQuery();
 		if (!transaction.IsAutoCommit()) {
-			transaction.Rollback();
+			transaction.Rollback(nullptr);
 		}
 	}
 	CleanupInternal(*lock);
@@ -222,7 +222,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 				if (success) {
 					transaction.Commit();
 				} else {
-					transaction.Rollback();
+					transaction.Rollback(previous_error);
 				}
 			} else if (invalidate_transaction) {
 				D_ASSERT(!success);
@@ -244,7 +244,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		if (error.HasError()) {
 			s.second->QueryEnd(*this, &error);
 		} else {
-			s.second->QueryEnd(*this, nullptr);
+			s.second->QueryEnd(*this, previous_error);
 		}
 	}
 
@@ -265,8 +265,11 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	auto &scheduler = TaskScheduler::GetScheduler(*this);
 	scheduler.RelaunchThreads();
 
-	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction,
-	                              result ? result->GetErrorObject() : nullptr);
+	optional_ptr<ErrorData> passed_error = nullptr;
+	if (result && result->HasError()) {
+		passed_error = result->GetErrorObject();
+	}
+	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction, passed_error);
 	if (result && !result->HasError()) {
 		// if an error occurred while committing report it in the result
 		result->SetError(error);
@@ -1084,7 +1087,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
 		if (require_new_transaction) {
-			transaction.Rollback();
+			transaction.Rollback(error);
 		} else if (invalidates_transaction) {
 			ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
 		}

@@ -1,12 +1,13 @@
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/database_manager.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,7 @@ TransactionContext::TransactionContext(ClientContext &context)
 TransactionContext::~TransactionContext() {
 	if (current_transaction) {
 		try {
-			Rollback();
+			Rollback(nullptr);
 		} catch (...) { // NOLINT
 		}
 	}
@@ -68,7 +69,7 @@ void TransactionContext::SetReadOnly() {
 	current_transaction->SetReadOnly();
 }
 
-void TransactionContext::Rollback() {
+void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
@@ -77,7 +78,7 @@ void TransactionContext::Rollback() {
 	transaction->Rollback();
 	// Notify any registered state of transaction rollback
 	for (auto const &s : context.registered_state) {
-		s.second->TransactionRollback(*transaction, context, nullptr);
+		s.second->TransactionRollback(*transaction, context, error);
 	}
 }
 
