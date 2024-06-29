@@ -58,6 +58,18 @@ public:
 		return result;
 	};
 
+	shared_ptr<PropertyGraphTable> GetTable(const string &table_name, bool error_not_found = true) {
+		auto entry = label_map.find(table_name);
+		if (entry == label_map.end()) {
+			if (error_not_found) {
+				throw Exception(ExceptionType::INVALID,
+		    "Table " + table_name + " not found in property graph " + property_graph_name);
+			}
+			return nullptr;
+		}
+		return entry->second;
+	}
+
 	//! Serializes a blob into a CreatePropertyGraphInfo
 	void Serialize(Serializer &serializer) const override;
 	//! Deserializes a blob back into a CreatePropertyGraphInfo

@@ -92,7 +92,6 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		} else {
 			pg_table->source_reference = possible_src_alias->second;
 		}
-
 		D_ASSERT(graph_table->dst_name);
 		auto dst_name = TransformQualifiedName(*graph_table->dst_name);
 		auto possible_dst_alias = table_alias_map.find(dst_name.name);

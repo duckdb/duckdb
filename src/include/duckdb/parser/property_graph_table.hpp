@@ -69,5 +69,9 @@ public:
 	bool hasTableNameAlias() {
 		return !table_name_alias.empty();
 	}
+
+	string ToLower(const std::string &str);
+
+	bool IsSourceTable(const string &table_name);
 };
 } // namespace duckdb
