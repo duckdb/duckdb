@@ -92,8 +92,6 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		} else {
 			pg_table->source_reference = possible_src_alias->second;
 		}
-		std::transform(pg_table->source_reference.begin(), pg_table->source_reference.end(), pg_table->source_reference.begin(), ::tolower);
-
 		D_ASSERT(graph_table->dst_name);
 		auto dst_name = TransformQualifiedName(*graph_table->dst_name);
 		auto possible_dst_alias = table_alias_map.find(dst_name.name);
@@ -102,8 +100,6 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		} else {
 			pg_table->destination_reference = possible_dst_alias->second;
 		}
-		std::transform(pg_table->destination_reference.begin(), pg_table->destination_reference.end(), pg_table->destination_reference.begin(), ::tolower);
-
 
 		for (auto &src_key = graph_table->src_pk->head; src_key != nullptr; src_key = lnext(src_key)) {
 			auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(src_key->data.ptr_value);
