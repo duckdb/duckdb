@@ -257,6 +257,20 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &des
 	return pg_table;
 }
 
+
+// Helper function to convert a string to lowercase
+string PropertyGraphTable::ToLower(const std::string &str) {
+	string result = str;
+	transform(result.begin(), result.end(), result.begin(),
+				   [](unsigned char c){ return std::tolower(c); });
+	return result;
+}
+
+
+bool PropertyGraphTable::IsSourceTable(const string& table_name) {
+	return ToLower(this->source_reference) == ToLower(table_name);
+}
+
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	auto result = make_shared_ptr<PropertyGraphTable>();
 
