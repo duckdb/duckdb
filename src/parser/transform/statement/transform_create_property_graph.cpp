@@ -104,6 +104,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		}
 		std::transform(pg_table->destination_reference.begin(), pg_table->destination_reference.end(), pg_table->destination_reference.begin(), ::tolower);
 
+
 		for (auto &src_key = graph_table->src_pk->head; src_key != nullptr; src_key = lnext(src_key)) {
 			auto key = reinterpret_cast<duckdb_libpgquery::PGValue *>(src_key->data.ptr_value);
 			pg_table->source_pk.emplace_back(key->val.str);
