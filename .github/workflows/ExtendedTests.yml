@@ -140,7 +140,7 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         CMAKE_LLVM_PATH='/usr/local/opt/llvm' make
+         CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make
          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
          make
