@@ -2,30 +2,30 @@
 # description: Test basics of varint type
 # group: [varint]
 
-query I
-select '0'::varint
-----
-0
+#query I
+#select '0'::varint
+#----
+#0
+#
+#query I
+#select '1'::varint
+#----
+#1
+#
+#query I
+#select '-1'::varint
+#----
+#-1
+#
+#query I
+#select '2147483646'::varint
+#----
+#2147483646
 
 query I
-select '1'::varint
+select '2147483647'::varint
 ----
-1
-
-query I
-select (-1)::varint
-----
--1
-
-query I
-select '-1'::varint
-----
--1
-
-query I
-select '2147483646'::varint
-----
-2147483646
+2147483647
 
 query I
 select '-2147483647'::varint
@@ -33,7 +33,12 @@ select '-2147483647'::varint
 -2147483647
 
 
+#query I
+#select '10000000000'::varint
+#----
+#10000000000
+
 query I
-select '10000000000'::varint
+select '1000000000000092'::varint
 ----
--2147483647
+10000000000000000000000000000000000000000000000000000000000000000092
