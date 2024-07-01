@@ -1397,7 +1397,7 @@ bool ParquetWriteRotateNextFile(GlobalFunctionData &gstate, FunctionData &bind_d
 //===--------------------------------------------------------------------===//
 unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, ReplacementScanInput &input,
                                             optional_ptr<ReplacementScanData> data) {
-	auto &table_name = input.table_name;
+	auto table_name = ReplacementScan::GetFullPath(input);
 	if (!ReplacementScan::CanReplace(table_name, {"parquet"})) {
 		return nullptr;
 	}

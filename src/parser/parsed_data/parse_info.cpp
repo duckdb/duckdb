@@ -35,33 +35,18 @@ string ParseInfo::TypeToString(CatalogType type) {
 	}
 }
 
-static string QualifierToStringInternal(const string &catalog, const string &schema, const string &name,
-                                        const std::function<string(const string &)> &conversion) {
+string ParseInfo::QualifierToString(const string &catalog, const string &schema, const string &name) {
 	string result;
 	if (!catalog.empty()) {
-		result += conversion(catalog) + ".";
+		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
 		if (!schema.empty()) {
-			result += conversion(schema) + ".";
+			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 		}
 	} else if (!schema.empty() && schema != DEFAULT_SCHEMA) {
-		result += conversion(schema) + ".";
+		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 	}
-	result += conversion(name);
+	result += KeywordHelper::WriteOptionallyQuoted(name);
 	return result;
-}
-
-string ParseInfo::QualifierToStringNoQuotes(const string &catalog, const string &schema, const string &name) {
-	const auto conversion = [](const string &name) {
-		return name;
-	};
-	return QualifierToStringInternal(catalog, schema, name, conversion);
-}
-
-string ParseInfo::QualifierToString(const string &catalog, const string &schema, const string &name) {
-	const auto conversion = [](const string &name) {
-		return KeywordHelper::WriteOptionallyQuoted(name);
-	};
-	return QualifierToStringInternal(catalog, schema, name, conversion);
 }
 
 } // namespace duckdb
