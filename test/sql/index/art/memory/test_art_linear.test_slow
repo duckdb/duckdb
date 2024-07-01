@@ -74,10 +74,8 @@ FROM base, pragma_database_size() current;
 statement ok
 DELETE FROM t
 
-# memory usage statistics are not very accurate.
-
 query I
-SELECT mem_to_bytes(current.memory_usage) <= (base.usage + mem_to_bytes('4MiB'))
+SELECT mem_to_bytes(current.memory_usage) == base.usage
 FROM pragma_database_size() current, base;
 ----
 true
@@ -86,7 +84,7 @@ statement ok
 DROP TABLE t;
 
 query I
-SELECT mem_to_bytes(current.memory_usage) <= (empty.usage + mem_to_bytes('4MiB'))
+SELECT mem_to_bytes(current.memory_usage) == empty.usage
 FROM pragma_database_size() current, empty;
 ----
 true
@@ -111,7 +109,7 @@ statement ok
 DROP TABLE t
 
 query I
-SELECT mem_to_bytes(current.memory_usage) <= (empty.usage + mem_to_bytes('4MiB'))
+SELECT mem_to_bytes(current.memory_usage) == empty.usage
 FROM pragma_database_size() current, empty;
 ----
 true

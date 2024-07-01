@@ -2,8 +2,10 @@
 
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -16,23 +18,25 @@
 
 namespace duckdb {
 
-// this code comes from jemalloc
-static int GetCurrentCPU() {
+static idx_t GetCurrentCPU() {
+	// this code comes from jemalloc
 #if defined(_WIN32)
-	return (int)GetCurrentProcessorNumber();
-#elif defined(DUCKDB_HAVE_SCHED_GETCPU)
-	return (int)sched_getcpu();
-#elif defined(DUCKDB_HAVE_RDTSCP)
-	unsigned int ecx;
-	asm volatile("rdtscp" : "=c"(ecx)::"eax", "edx");
-	return (int)(ecx & 0xfff);
+	return (idx_t)GetCurrentProcessorNumber();
+#elif defined(_GNU_SOURCE)
+	auto cpu = sched_getcpu();
+	if (cpu < 0) {
+		// fallback to thread id
+		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+	}
+	return (idx_t)cpu;
 #elif defined(__aarch64__) && defined(__APPLE__)
 	/* Other oses most likely use tpidr_el0 instead */
 	uintptr_t c;
 	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
-	return (int)(c & (1 << 3) - 1);
+	return (idx_t)(c & (1 << 3) - 1);
 #else
-	return -1;
+	// fallback to thread id
+	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
 #endif
 }
 
@@ -267,7 +271,7 @@ void BufferPool::UpdateUsedMemory(MemoryTag tag, int64_t size) {
 }
 
 idx_t BufferPool::GetUsedMemory() const {
-	return memory_usage.GetUsedMemory();
+	return memory_usage.GetUsedMemory(true);
 }
 
 idx_t BufferPool::GetMaxMemory() const {
@@ -308,7 +312,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 	bool found = false;
 
-	if (GetUsedMemory() <= memory_limit) {
+	if (memory_usage.GetUsedMemory(false) <= memory_limit) {
 		return {true, std::move(r)};
 	}
 
@@ -324,7 +328,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 		// release the memory and mark the block as unloaded
 		handle->Unload();
 
-		if (GetUsedMemory() <= memory_limit) {
+		if (memory_usage.GetUsedMemory(false) <= memory_limit) {
 			found = true;
 			return false;
 		}
@@ -424,8 +428,8 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	}
 }
 
-BufferPool::MemoryUsageCounters::MemoryUsageCounters() : memory_usage(0) {
-	for (auto &v : memory_usage_per_tag) {
+BufferPool::MemoryUsage::MemoryUsage() {
+	for (auto &v : memory_usage) {
 		v = 0;
 	}
 	for (auto &cache : memory_usage_caches) {
@@ -435,28 +439,31 @@ BufferPool::MemoryUsageCounters::MemoryUsageCounters() : memory_usage(0) {
 	}
 }
 
-void BufferPool::MemoryUsageCounters::UpdateUsedMemory(MemoryTag tag, int64_t size) {
+void BufferPool::MemoryUsage::UpdateUsedMemory(MemoryTag tag, int64_t size) {
 	auto tag_idx = (idx_t)tag;
-	auto cpu_idx = GetCurrentCPU();
-	// update cache
-	if (cpu_idx >= 0 && (size_t)std::abs(size) < kCacheThreshold) {
+	if ((idx_t)AbsValue(size) < MEMORY_USAGE_CACHE_THRESHOLD) {
+		// update cache and update global counter when cache exceeds threshold
 		// Get corresponding cache slot based on current CPU core index
 		// Two threads may access the same cache simultaneously,
 		// ensuring correctness through atomic operations
-		auto cache_idx = (size_t)cpu_idx % kCacheCnts;
+		auto cache_idx = (idx_t)GetCurrentCPU() % MEMORY_USAGE_CACHE_COUNT;
 		auto &cache = memory_usage_caches[cache_idx];
-		auto new_val = cache[tag_idx].fetch_add(size, std::memory_order_relaxed) + size;
-		if ((size_t)std::abs(new_val) >= kCacheThreshold) {
-			size = cache[tag_idx].exchange(0, std::memory_order_relaxed);
-		} else {
-			size = 0;
+		auto new_tag_size = cache[tag_idx].fetch_add(size, std::memory_order_relaxed) + size;
+		if ((idx_t)AbsValue(new_tag_size) >= MEMORY_USAGE_CACHE_THRESHOLD) {
+			// cached tag memory usage exceeds threshold
+			auto tag_size = cache[tag_idx].exchange(0, std::memory_order_relaxed);
+			memory_usage[tag_idx].fetch_add(tag_size, std::memory_order_relaxed);
 		}
-	}
-
-	// update global counter
-	if (size) {
-		memory_usage.fetch_add(size, std::memory_order_relaxed);
-		memory_usage_per_tag[tag_idx].fetch_add(size, std::memory_order_relaxed);
+		auto new_total_size = cache[TOTAL_MEMORY_USAGE_INDEX].fetch_add(size, std::memory_order_relaxed) + size;
+		if ((idx_t)AbsValue(new_total_size) >= MEMORY_USAGE_CACHE_THRESHOLD) {
+			// cached total memory usage exceeds threshold
+			auto total_size = cache[TOTAL_MEMORY_USAGE_INDEX].exchange(0, std::memory_order_relaxed);
+			memory_usage[TOTAL_MEMORY_USAGE_INDEX].fetch_add(total_size, std::memory_order_relaxed);
+		}
+	} else {
+		// update global counter
+		memory_usage[tag_idx].fetch_add(size, std::memory_order_relaxed);
+		memory_usage[TOTAL_MEMORY_USAGE_INDEX].fetch_add(size, std::memory_order_relaxed);
 	}
 }
 
