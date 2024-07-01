@@ -55,12 +55,5 @@
         "description": "Finds the k approximately most occurring values in the data set",
         "example": "approx_top_k(x, 5)",
         "type": "aggregate_function"
-    },
-    {
-        "name": "arg_top_k",
-        "parameters": "arg,val,k",
-        "description": "Finds the top k 'val' values in the data set ordered by 'arg'",
-        "example": "arg_top_k(arg, val, k)",
-        "type": "aggregate_function"
     }
 ]

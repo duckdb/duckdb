@@ -93,13 +93,4 @@ struct ApproxTopKFun {
 	static AggregateFunction GetFunction();
 };
 
-struct ArgTopKFun {
-	static constexpr const char *Name = "arg_top_k";
-	static constexpr const char *Parameters = "val,k";
-	static constexpr const char *Description = "Finds the top k 'val' values in the data set ordered by 'arg'";
-	static constexpr const char *Example = "arg_top_k(arg, val, k)";
-
-	static AggregateFunction GetFunction();
-};
-
 } // namespace duckdb

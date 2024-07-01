@@ -1,7 +1,6 @@
 add_library_unity(
   duckdb_aggr_holistic
   OBJECT
-  arg_top_k.cpp
   approx_top_k.cpp
   quantile.cpp
   mad.cpp
