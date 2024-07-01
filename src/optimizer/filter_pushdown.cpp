@@ -2,9 +2,12 @@
 
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
 
