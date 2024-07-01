@@ -190,6 +190,10 @@ void PartialBlockManager::FlushPartialBlocks() {
 	partially_filled_blocks.clear();
 }
 
+BlockManager &PartialBlockManager::GetBlockManager() const {
+	return block_manager;
+}
+
 void PartialBlockManager::Rollback() {
 	ClearBlocks();
 	for (auto &block_id : written_blocks) {

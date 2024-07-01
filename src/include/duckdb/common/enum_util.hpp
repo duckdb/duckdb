@@ -104,6 +104,8 @@ enum class CopyFunctionReturnType : uint8_t;
 
 enum class CopyOverwriteMode : uint8_t;
 
+enum class CopyToType : uint8_t;
+
 enum class DataFileType : uint8_t;
 
 enum class DatePartSpecifier : uint8_t;
@@ -452,6 +454,9 @@ const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType val
 
 template<>
 const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
+
+template<>
+const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
@@ -921,6 +926,9 @@ CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *
 
 template<>
 CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
+
+template<>
+CopyToType EnumUtil::FromString<CopyToType>(const char *value);
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);

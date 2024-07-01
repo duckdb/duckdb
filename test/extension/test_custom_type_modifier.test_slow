@@ -64,7 +64,7 @@ SELECT bounded_add(t1.i, t2.i) as s, typeof(s) FROM t1, t2 ORDER BY 1;
 598	BOUNDED(700)
 599	BOUNDED(700)
 
-# Example of function that is specialized over the type property
+# Example of function that is specialized by the type property
 query II
 EXPLAIN SELECT bounded_ascii(i) FROM t1 ORDER BY 1;
 ----

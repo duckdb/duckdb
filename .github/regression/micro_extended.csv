@@ -77,19 +77,6 @@ benchmark/micro/copy/from_parquet_medium_row_groups.benchmark
 benchmark/micro/copy/from_parquet_small_row_groups.benchmark
 benchmark/micro/copy/to_parquet_partition_by_few.benchmark
 benchmark/micro/copy/to_parquet_partition_by_many.benchmark
-benchmark/micro/csv/16_byte_values.benchmark
-benchmark/micro/csv/1_byte_values.benchmark
-benchmark/micro/csv/ignore_errors.benchmark
-benchmark/micro/csv/multiple_read.benchmark
-benchmark/micro/csv/multiple_small_files.benchmark
-benchmark/micro/csv/multiple_small_read_csv.benchmark
-benchmark/micro/csv/null_padding.benchmark
-benchmark/micro/csv/projection_pushdown.benchmark
-benchmark/micro/csv/read.benchmark
-benchmark/micro/csv/small_csv.benchmark
-benchmark/micro/csv/sniffer.benchmark
-benchmark/micro/csv/sniffer_quotes.benchmark
-benchmark/micro/csv/time_type.benchmark
 benchmark/micro/cte/cte.benchmark
 benchmark/micro/cte/materialized_cte.benchmark
 benchmark/micro/cte/stacked_materialized_cte.benchmark
@@ -120,6 +107,7 @@ benchmark/micro/index/create/create_art_varchar_short.benchmark
 benchmark/micro/index/delete/delete_art.benchmark
 benchmark/micro/index/insert/insert_art.benchmark
 benchmark/micro/index/point/point_query_with_art.benchmark
+benchmark/micro/index/point/point_query_with_art_and_many_keys.benchmark
 benchmark/micro/index/point/point_query_without_index.benchmark
 benchmark/micro/index/point/point_query_without_index_sequential.benchmark
 benchmark/micro/index/range/range_query_with_art.benchmark
@@ -180,6 +168,8 @@ benchmark/micro/optimizer/topn_optimization.benchmark
 benchmark/micro/order/orderby.benchmark
 benchmark/micro/pushdown/or_pushdown.benchmark
 benchmark/micro/pushdown/window_partition_pushdown.benchmark
+benchmark/micro/result_collection/arrow_result.benchmark
+benchmark/micro/result_collection/batched_arrow_result.benchmark
 benchmark/micro/result_collection/batched_stream_query.benchmark
 benchmark/micro/simd/auto-vectorization.benchmark
 benchmark/micro/string/bitstring.benchmark
@@ -206,6 +196,7 @@ benchmark/micro/timestamp/extract_month.benchmark
 benchmark/micro/timestamp/extract_year.benchmark
 benchmark/micro/update/update_with_join.benchmark
 benchmark/micro/view/many_values.benchmark
+benchmark/micro/window/streaming_lag.benchmark
 benchmark/micro/window/window_constant_aggregates.benchmark
 benchmark/micro/window/window_constant_count.benchmark
 benchmark/micro/window/window_count_star_fixed_100.benchmark

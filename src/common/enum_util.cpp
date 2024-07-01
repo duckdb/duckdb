@@ -121,6 +121,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/simplified_token.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
@@ -1411,6 +1412,29 @@ CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_APPEND")) {
 		return CopyOverwriteMode::COPY_APPEND;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CopyToType>(CopyToType value) {
+	switch(value) {
+	case CopyToType::COPY_TO_FILE:
+		return "COPY_TO_FILE";
+	case CopyToType::EXPORT_DATABASE:
+		return "EXPORT_DATABASE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+CopyToType EnumUtil::FromString<CopyToType>(const char *value) {
+	if (StringUtil::Equals(value, "COPY_TO_FILE")) {
+		return CopyToType::COPY_TO_FILE;
+	}
+	if (StringUtil::Equals(value, "EXPORT_DATABASE")) {
+		return CopyToType::EXPORT_DATABASE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4805,6 +4829,8 @@ const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value) {
 		return "MERGE";
 	case PartitionSortStage::SORTED:
 		return "SORTED";
+	case PartitionSortStage::FINISHED:
+		return "FINISHED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4826,6 +4852,9 @@ PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SORTED")) {
 		return PartitionSortStage::SORTED;
+	}
+	if (StringUtil::Equals(value, "FINISHED")) {
+		return PartitionSortStage::FINISHED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5627,6 +5656,8 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 		return "STREAM_RESULT";
 	case QueryResultType::PENDING_RESULT:
 		return "PENDING_RESULT";
+	case QueryResultType::ARROW_RESULT:
+		return "ARROW_RESULT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5642,6 +5673,9 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PENDING_RESULT")) {
 		return QueryResultType::PENDING_RESULT;
+	}
+	if (StringUtil::Equals(value, "ARROW_RESULT")) {
+		return QueryResultType::ARROW_RESULT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

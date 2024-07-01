@@ -62,10 +62,12 @@ public:
 	TemporaryMemoryManager();
 
 private:
-	//! TemporaryMemoryState is initialized with a minimum reservation guarantee, which is either
-	//! 512 blocks per state per thread, which is 0.125GB per thread for Storage::BLOCK_ALLOC_SIZE = 262144
-	static constexpr const idx_t MINIMUM_RESERVATION_PER_STATE_PER_THREAD = idx_t(512) * Storage::BLOCK_ALLOC_SIZE;
-	//! Or 1/16th of main memory, if that is lower
+	//! TemporaryMemoryState is initialized with a minimum reservation guarantee, which is the minimum of
+	//! MINIMUM_RESERVATION_PER_STATE_PER_THREAD and MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR.
+
+	//! 512 blocks per state per thread, which is 0.125GB per thread for DEFAULT_BLOCK_ALLOC_SIZE.
+	static constexpr const idx_t MINIMUM_RESERVATION_PER_STATE_PER_THREAD = idx_t(512) * DEFAULT_BLOCK_ALLOC_SIZE;
+	//! 1/16th of the available main memory.
 	static constexpr const idx_t MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR = 16;
 
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager

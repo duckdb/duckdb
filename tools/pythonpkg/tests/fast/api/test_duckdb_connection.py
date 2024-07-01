@@ -71,6 +71,21 @@ class TestDuckDBConnection(object):
             # 'tbl' no longer exists
             duckdb.table("tbl")
 
+    def test_cursor_lifetime(self):
+        con = duckdb.connect()
+
+        def use_cursors():
+            cursors = []
+            for _ in range(10):
+                cursors.append(con.cursor())
+
+            for cursor in cursors:
+                print("closing cursor")
+                cursor.close()
+
+        use_cursors()
+        con.close()
+
     def test_df(self):
         ref = [([1, 2, 3],)]
         duckdb.execute("select [1,2,3]")
