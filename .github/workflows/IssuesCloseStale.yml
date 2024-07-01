@@ -5,6 +5,10 @@ on:
 
 jobs:
   close_stale_issues:
+    permissions:
+      contents: write # only for delete-branch option
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     steps:
       - name: Close stale issues
