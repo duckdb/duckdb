@@ -6,8 +6,6 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 
-#include <duckdb/planner/tableref/bound_column_data_ref.hpp>
-
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
