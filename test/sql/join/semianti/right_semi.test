@@ -13,7 +13,7 @@ CREATE TABLE right_table (a INTEGER, b INTEGER);
 
 # insert 2x values into right table. This means it will be forced to be the probe side
 statement ok
-INSERT INTO right_table select 41, range as b from range(100);
+INSERT INTO right_table select 41, range as b from range(375);
 
 
 query II

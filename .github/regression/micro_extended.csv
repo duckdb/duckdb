@@ -134,6 +134,7 @@ benchmark/micro/join/range_join.benchmark
 benchmark/micro/join/range_join_big_result.benchmark
 benchmark/micro/join/range_join_small_rhs.benchmark
 benchmark/micro/join/right_outer_join_left_big.benchmark
+benchmark/micro/join/skinny_probe_wide_build.benchmark
 benchmark/micro/json/inconsistent_schema.benchmark
 benchmark/micro/lambdas/list_filter_where.benchmark
 benchmark/micro/lambdas/list_reduce/complex_expression.benchmark
