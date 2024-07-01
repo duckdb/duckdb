@@ -143,7 +143,7 @@ struct MinMaxNOperation {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
-		if (source.heap.IsEmpty()) {
+		if (!source.heap.is_initialized) {
 			// source is empty, nothing to do
 			return;
 		}
@@ -189,7 +189,7 @@ struct MinMaxNOperation {
 			const auto state_idx = state_format.sel->get_index(i);
 			auto &state = *states[state_idx];
 
-			if (state.heap.IsEmpty()) {
+			if (!state.is_initialized || state.heap.IsEmpty()) {
 				mask.SetInvalid(rid);
 				continue;
 			}
