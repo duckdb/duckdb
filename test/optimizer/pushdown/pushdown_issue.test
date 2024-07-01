@@ -2,7 +2,6 @@
 # description: ????
 # group: [pushdown]
 
-
 statement ok
 CREATE OR REPLACE TABLE BaseData AS (
     SELECT
@@ -16,6 +15,21 @@ CREATE OR REPLACE TABLE BaseData AS (
 
 
 query III
+WITH
+Example AS (
+    SELECT
+        c.my_key,
+        (c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
+        p.my_key IS NOT NULL AS parentExists2,
+    FROM BaseData AS c
+    LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
+)
+SELECT *
+FROM Example
+WHERE parentExists
+----
+
+query III
 SELECT
 	 c.my_key,
 	 (c.parent_key IN (SELECT my_key FROM BaseData)) AS parentExists,
@@ -24,9 +38,6 @@ FROM BaseData AS c
 LEFT JOIN BaseData AS p ON c.parent_key = p.my_key
 WHERE parentExists;
 ----
-
-
-mode skip
 
 query III
 SELECT *
@@ -40,8 +51,6 @@ FROM (SELECT
 WHERE parentExists;
 ----
 
-
-mode skip
 
 query III
 WITH
