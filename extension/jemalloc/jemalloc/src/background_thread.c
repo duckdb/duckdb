@@ -48,10 +48,6 @@ pthread_create_wrapper(pthread_t *__restrict thread, const pthread_attr_t *attr,
 }
 
 #ifdef JEMALLOC_HAVE_DLSYM
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#define JEMALLOC_DEFINED_GNU_SOURCE
-#endif
 #include <dlfcn.h>
 #endif
 
@@ -83,10 +79,6 @@ pthread_create_fptr_init(void) {
 
 	return false;
 }
-
-#ifdef JEMALLOC_DEFINED_GNU_SOURCE
-#undef _GNU_SOURCE
-#endif
 
 #endif /* JEMALLOC_PTHREAD_CREATE_WRAPPER */
 

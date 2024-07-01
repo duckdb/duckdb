@@ -2,6 +2,10 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
+#if defined(__GNUC__)
+#define _GNU_SOURCE
+#endif
+
 #include <limits.h>
 
 /*
