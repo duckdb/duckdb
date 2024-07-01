@@ -88,27 +88,38 @@ protected:
 	void IncrementDeadNodes(FileBufferType type);
 
 protected:
-	struct MemoryUsageCounters {
+	struct MemoryUsage {
 		//! The maximum difference between memory statistics and actual usage is 2MB (64 * 32k)
-		static constexpr size_t kCacheCnts = 64;
-		static constexpr size_t kCacheThreshold = 32 << 10;
-		using MemoryUsagePerTag = std::array<atomic<int64_t>, MEMORY_TAG_COUNT>;
+		static constexpr idx_t MEMORY_USAGE_CACHE_COUNT = 64;
+		static constexpr idx_t MEMORY_USAGE_CACHE_THRESHOLD = 32 << 10;
+		static constexpr idx_t TOTAL_MEMORY_USAGE_INDEX = MEMORY_TAG_COUNT;
+		using MemoryUsageCounters = array<atomic<int64_t>, MEMORY_TAG_COUNT + 1>;
 
 		//! global memory usage counters
-		atomic<int64_t> memory_usage;
-		MemoryUsagePerTag memory_usage_per_tag;
+		MemoryUsageCounters memory_usage;
 		//! cache memory usage to improve performance
-		std::array<MemoryUsagePerTag, kCacheCnts> memory_usage_caches;
+		array<MemoryUsageCounters, MEMORY_USAGE_CACHE_COUNT> memory_usage_caches;
 
-		MemoryUsageCounters();
+		MemoryUsage();
 
-		idx_t GetUsedMemory() const {
-			auto used_memory = memory_usage.load(std::memory_order_relaxed);
-			return used_memory > 0 ? static_cast<idx_t>(used_memory) : 0;
+		idx_t GetUsedMemory(bool flush) {
+			return GetUsedMemory(TOTAL_MEMORY_USAGE_INDEX, flush);
 		}
 
-		idx_t GetUsedMemory(MemoryTag tag) const {
-			auto used_memory = memory_usage_per_tag[(idx_t)tag].load(std::memory_order_relaxed);
+		idx_t GetUsedMemory(MemoryTag tag, bool flush) {
+			return GetUsedMemory((idx_t)tag, flush);
+		}
+
+		idx_t GetUsedMemory(idx_t index, bool flush) {
+			if (!flush) {
+				auto used_memory = memory_usage[index].load(std::memory_order_relaxed);
+				return used_memory > 0 ? static_cast<idx_t>(used_memory) : 0;
+			}
+			int64_t cached = 0;
+			for (auto &cache : memory_usage_caches) {
+				cached += cache[index].exchange(0, std::memory_order_relaxed);
+			}
+			auto used_memory = memory_usage[index].fetch_add(cached, std::memory_order_relaxed) + cached;
 			return used_memory > 0 ? static_cast<idx_t>(used_memory) : 0;
 		}
 
@@ -125,10 +136,10 @@ protected:
 	vector<unique_ptr<EvictionQueue>> queues;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
 	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
-	//! To improve performance, MemoryUsageCounters maintains counter caches based on cpuid,
+	//! To improve performance, MemoryUsage maintains counter caches based on current cpu or thread id,
 	//! and only updates the global counter when the cache value exceeds a threshold.
 	//! Therefore, the statistics may have slight differences from the actual memory usage.
-	MemoryUsageCounters memory_usage;
+	mutable MemoryUsage memory_usage;
 };
 
 } // namespace duckdb
