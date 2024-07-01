@@ -226,17 +226,31 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 
 		vector<shared_ptr<MetaPipeline>> children;
 		meta_pipeline->GetMetaPipelines(children, false, true);
-		for (auto &child : children) {
-			if (!child->IsJoinBuild()) {
+		for (auto &child1 : children) {
+			if (!child1->IsJoinBuild()) {
 				continue;
 			}
-			auto &child_base = *child->GetBasePipeline();
-			auto child_entry = event_map.find(child_base);
-			D_ASSERT(child_entry != event_map.end());
+			auto &child1_base = *child1->GetBasePipeline();
+			auto child1_entry = event_map.find(child1_base);
+			D_ASSERT(child1_entry != event_map.end());
 
+			for (auto &child2 : children) {
+				if (child2->IsJoinBuild() || RefersToSameObject(*child1, *child2)) {
+					continue;
+				}
+				auto &child2_base = *child2->GetBasePipeline();
+				auto child2_entry = event_map.find(child2_base);
+				D_ASSERT(child2_entry != event_map.end());
+
+				// all children PrepareFinalizes must wait until all Combine
+				child1_entry->second.pipeline_prepare_finish_event.AddDependency(child2_entry->second.pipeline_event);
+			}
+
+			// the parent initializes after all children PrepareFinalize
 			meta_entry->second.pipeline_initialize_event.AddDependency(
-			    child_entry->second.pipeline_prepare_finish_event);
-			child_entry->second.pipeline_finish_event.AddDependency(meta_entry->second.pipeline_initialize_event);
+			    child1_entry->second.pipeline_prepare_finish_event);
+			// all children Finalize after parent initializes
+			child1_entry->second.pipeline_finish_event.AddDependency(meta_entry->second.pipeline_initialize_event);
 		}
 	}
 
