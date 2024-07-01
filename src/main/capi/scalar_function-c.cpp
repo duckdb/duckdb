@@ -117,9 +117,6 @@ void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckd
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	if (*logical_type == LogicalType::ANY) {
-		return;
-	}
 	scalar_function.arguments.push_back(*logical_type);
 }
 
@@ -129,9 +126,6 @@ void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duc
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	if (*logical_type == LogicalType::ANY) {
-		return;
-	}
 	scalar_function.return_type = *logical_type;
 }
 
