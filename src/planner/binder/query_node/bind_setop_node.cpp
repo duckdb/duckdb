@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -6,6 +7,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
@@ -182,6 +184,57 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 	}
 }
 
+void Binder::BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op) {
+	if (bound_set_op->left->type != QueryNodeType::SELECT_NODE ||
+	    bound_set_op->right->type != QueryNodeType::SELECT_NODE) {
+		return;
+	}
+	auto &left_node = bound_set_op->left->Cast<BoundSelectNode>();
+	auto &left_bind_state = left_node.bind_state;
+	auto &right_node = bound_set_op->right->Cast<BoundSelectNode>();
+	auto &right_bind_state = right_node.bind_state;
+
+	// using set data structure to ensure uniqueness
+	std::set<idx_t> collation_indexes(left_node.collation_sel_idx.begin(), left_node.collation_sel_idx.end());
+	std::copy(right_node.collation_sel_idx.begin(), right_node.collation_sel_idx.end(),
+	          std::inserter(collation_indexes, collation_indexes.end()));
+
+	// verifies collation conflicts
+	for (idx_t collate_idx : collation_indexes) {
+		auto &left_expr = left_bind_state.original_expressions[collate_idx];
+		auto &right_expr = right_bind_state.original_expressions[collate_idx];
+		// at least one expression must have to be a collation
+		D_ASSERT(left_expr->GetExpressionClass() == ExpressionClass::COLLATE ||
+		         right_expr->GetExpressionClass() == ExpressionClass::COLLATE);
+
+		LogicalType collation_type;
+		// collation on both sides
+		if (left_expr->GetExpressionClass() == ExpressionClass::COLLATE &&
+		    right_expr->GetExpressionClass() == ExpressionClass::COLLATE) {
+			auto &left_collation_expr = left_expr->Cast<CollateExpression>();
+			auto &right_collation_expr = right_expr->Cast<CollateExpression>();
+
+			auto &left_str_collation = left_collation_expr.collation;
+			auto &right_str_collation = right_collation_expr.collation;
+
+			if (left_str_collation != right_str_collation) {
+				throw BinderException("Different collations in a set operation at column: %lld.", collate_idx + 1);
+			}
+			collation_type = left_node.select_list[collate_idx]->return_type;
+		} else if (left_expr->GetExpressionClass() == ExpressionClass::COLLATE) {
+			// collation on lhf
+			collation_type = left_node.select_list[collate_idx]->return_type;
+		} else {
+			// collation on lhr
+			collation_type = right_node.select_list[collate_idx]->return_type;
+		}
+		//! creating a reference to the collated column and pushing the collation function into it
+		unique_ptr<Expression> bound_collation_expr = make_uniq<BoundReferenceExpression>(collation_type, collate_idx);
+		ExpressionBinder::PushCollation(context, bound_collation_expr, bound_collation_expr->return_type, true);
+		bound_set_op->collation_group_info.push_back({collate_idx, std::move(bound_collation_expr)});
+	}
+}
+
 unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	auto result = make_uniq<BoundSetOperationNode>();
 	result->setop_type = statement.setop_type;
@@ -253,6 +306,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions
 	BindModifiers(*result, result->setop_index, result->names, result->types, bind_state);
+
+	BindCollationGroup(result);
+
 	return std::move(result);
 }
 

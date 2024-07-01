@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 namespace duckdb {
 
@@ -34,11 +36,22 @@ public:
 		children.push_back(std::move(bottom));
 	}
 
+	LogicalSetOperation(idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
+	                    unique_ptr<LogicalOperator> bottom, LogicalOperatorType type, bool setop_all,
+	                    bool allow_out_of_order, vector<CollationGroupInfo> info)
+	    : LogicalSetOperation(table_index, column_count, std::move(top), std::move(bottom), type, setop_all,
+	                          allow_out_of_order) {
+		collation_info = std::move(info);
+	}
+
 	idx_t table_index;
 	idx_t column_count;
 	bool setop_all;
 	//! Whether or not UNION statements can be executed out of order
 	bool allow_out_of_order;
+
+	// unique_ptr<CollationGroupInfo> collation_info;
+	vector<CollationGroupInfo> collation_info;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
