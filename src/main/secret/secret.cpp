@@ -30,40 +30,83 @@ void BaseSecret::SerializeBaseSecret(Serializer &serializer) const {
 }
 
 string BaseSecret::ToString(SecretDisplayType display_type) const {
-	return "";
+	return ToMapValue().ToString();
+}
+
+Value BaseSecret::ToMapValue(SecretDisplayType display_type) const {
+	return Value();
+}
+
+Value BaseSecret::ToMapValueShort(SecretDisplayType display_type) const {
+	return Value();
 }
 
 void BaseSecret::Serialize(Serializer &serializer) const {
 	throw InternalException("Attempted to serialize secret without serialize");
 }
 
-string KeyValueSecret::ToString(SecretDisplayType mode) const {
-	string result;
+Value KeyValueSecret::ToMapValue(SecretDisplayType mode) const {
+	vector<Value> keys;
+	vector<Value> values;
 
-	result += "name=" + name + ";";
-	result += "type=" + type + ";";
-	result += "provider=" + provider + ";";
-	result += string("serializable=") + (serializable ? "true" : "false") + ";";
-	result += "scope=";
+	// Name
+	keys.push_back("name");
+	values.push_back(name);
+
+	// Type
+	keys.push_back("type");
+	values.push_back(type);
+
+	// Provider
+	keys.push_back("provider");
+	values.push_back(provider);
+
+	// Serializable
+	keys.push_back("serializable");
+	values.push_back((serializable ? "true" : "false"));
+
+	// Scope
+	keys.push_back("scope");
+	string scope_string;
 	for (const auto &scope_it : prefix_paths) {
-		result += scope_it + ",";
+		scope_string += scope_it + ",";
 	}
-	result = result.substr(0, result.size() - 1);
-	result += ";";
+	scope_string = scope_string.substr(0, scope_string.size() - 1);
+	values.push_back(scope_string);
+
+	// Contents of secret_map
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
-		result.append(it->first);
-		result.append("=");
+		keys.push_back(it->first);
 		if (mode == SecretDisplayType::REDACTED && redact_keys.find(it->first) != redact_keys.end()) {
-			result.append("redacted");
+			values.push_back("redacted");
 		} else {
-			result.append(it->second.ToString());
-		}
-		if (it != --secret_map.end()) {
-			result.append(";");
+			values.push_back(it->second.ToString());
 		}
 	}
 
-	return result;
+	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, keys, values);
+}
+
+Value KeyValueSecret::ToMapValueShort(SecretDisplayType mode) const {
+	vector<Value> keys;
+	vector<Value> values;
+
+	// Contents of secret_map
+	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
+		// We only print keys that have a value to print in the short version
+		if (it->second.ToString().empty()) {
+			continue;
+		}
+
+		keys.push_back(it->first);
+		if (mode == SecretDisplayType::REDACTED && redact_keys.find(it->first) != redact_keys.end()) {
+			values.push_back("redacted");
+		} else {
+			values.push_back(it->second.ToString());
+		}
+	}
+
+	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, keys, values);
 }
 
 // FIXME: use serialization scripts

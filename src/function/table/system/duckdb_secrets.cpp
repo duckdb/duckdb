@@ -67,8 +67,8 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 	names.emplace_back("scope");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
-	names.emplace_back("secret_string");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("secret_map");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
 
 	return std::move(result);
 }
@@ -113,7 +113,7 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(3, count, Value(secret_entry.persist_type == SecretPersistType::PERSISTENT));
 		output.SetValue(4, count, Value(secret_entry.storage_mode));
 		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, scope_value));
-		output.SetValue(6, count, secret.ToString(bind_data.redact));
+		output.SetValue(6, count, secret.ToMapValue(bind_data.redact));
 
 		data.offset++;
 		count++;

@@ -38,6 +38,10 @@ public:
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BOOLEAN);
+		types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+	}
+	vector<ColumnBinding> GetColumnBindings() override {
+		return {ColumnBinding(0, 0), ColumnBinding(0, 1)};
 	}
 };
 } // namespace duckdb
