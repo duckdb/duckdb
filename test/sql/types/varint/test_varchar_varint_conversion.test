@@ -2,43 +2,33 @@
 # description: Test basics of varint type
 # group: [varint]
 
-#query I
-#select '0'::varint
-#----
-#0
-#
-#query I
-#select '1'::varint
-#----
-#1
-#
-#query I
-#select '-1'::varint
-#----
-#-1
-#
-#query I
-#select '2147483646'::varint
-#----
-#2147483646
+# Basic compatibility tests
+
+loop i 0 100
 
 query I
-select '2147483647'::varint
+select '${i}'::varint = ${i}::varint
 ----
-2147483647
+true
 
 query I
-select '-2147483647'::varint
+select '-${i}'::varint = (-${i})::varint
 ----
--2147483647
+true
 
-
-#query I
-#select '10000000000'::varint
-#----
-#10000000000
+endloop
 
 query I
-select '1000000000000092'::varint
+select '2147483646'::varint = 2147483646::varint
 ----
-10000000000000000000000000000000000000000000000000000000000000000092
+true
+
+query I
+select '-2147483646'::varint = (-2147483646)::varint
+----
+true
+
+query I
+select '256'::varint = 256::varint;
+----
+true

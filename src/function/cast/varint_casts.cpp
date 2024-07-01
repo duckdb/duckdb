@@ -13,7 +13,7 @@ string_t IntToVarInt(int32_t int_value) {
 	uint64_t abs_value = std::abs(int_value);
 	uint32_t data_byte_size = (abs_value == 0) ? 1 : static_cast<int>(std::ceil(std::log2(abs_value + 1) / 8.0));
 
-	if (is_negative) {
+	if (is_negative && abs_value != 0) {
 		abs_value = ~abs_value;
 	}
 
@@ -21,11 +21,12 @@ string_t IntToVarInt(int32_t int_value) {
 	uint32_t header = data_byte_size;
 	// Set MSD of 3rd byte
 	header |= 0x00800000;
-	if (is_negative) {
+	if (is_negative && abs_value != 0) {
 		header = ~header;
 	}
 
 	string_t blob {data_byte_size + VARINT_HEADER_SIZE};
+	memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 
 	auto writable_blob = blob.GetDataWriteable();
 	// Add header bytes to the blob
@@ -43,33 +44,33 @@ string_t IntToVarInt(int32_t int_value) {
 }
 
 // int32_t VarIntToInt() {
-	// 	int32_t int_value = 0;
-	// idx_t cur_byte_pos = 3;
-	// for (idx_t i = 0; i < data_byte_size; i++) {
-	// 	if (is_negative) {
-	// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(~blob_ptr[cur_byte_pos + i]))
-	// 		             << 8 * (data_byte_size - i - 1);
-	// 	} else {
-	// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(blob_ptr[cur_byte_pos + i]))
-	// 		             << 8 * (data_byte_size - i - 1);
-	// 	}
-	// }
-	//
-	// // If negative, convert from two's complement
-	// if (is_negative) {
-	// 	int_value = 0 - int_value;
-	// }
+// 	int32_t int_value = 0;
+// idx_t cur_byte_pos = 3;
+// for (idx_t i = 0; i < data_byte_size; i++) {
+// 	if (is_negative) {
+// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(~blob_ptr[cur_byte_pos + i]))
+// 		             << 8 * (data_byte_size - i - 1);
+// 	} else {
+// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(blob_ptr[cur_byte_pos + i]))
+// 		             << 8 * (data_byte_size - i - 1);
+// 	}
+// }
+//
+// // If negative, convert from two's complement
+// if (is_negative) {
+// 	int_value = 0 - int_value;
+// }
 // }
 
 int CharToDigit(char c) {
 	// if (c >= '0' && c <= '9') {
-		return c - '0';
+	return c - '0';
 	// }
 	// throw InvalidInputException("bad string");
 }
 
 char DigitToChar(int digit) {
-    return digit + '0';
+	return digit + '0';
 }
 
 string_t VarcharToVarInt(string_t int_value) {
@@ -93,11 +94,17 @@ string_t VarcharToVarInt(string_t int_value) {
 		}
 	}
 	idx_t actual_size = int_value_size - start_pos;
-	uint32_t data_byte_size = ceil(actual_size * log2(10) / 8);
+	uint32_t data_byte_size = actual_size * log2(10) / 8;
+	if (data_byte_size == 0) {
+		// data byte size must be at least 1.
+		data_byte_size++;
+	}
 	string_t blob {data_byte_size + VARINT_HEADER_SIZE};
-
+	memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 	uint32_t header = data_byte_size;
-	if (!is_negative) {
+	// Set MSD of 3rd byte
+	header |= 0x00800000;
+	if (is_negative && int_value_char[start_pos] != '0') {
 		header = ~header;
 	}
 
@@ -117,17 +124,21 @@ string_t VarcharToVarInt(string_t int_value) {
 		// We convert ze string to a big-endian byte array by dividing the number by 256 and storing the remainders
 		for (char digit : abs_str) {
 			int new_value = remainder * 10 + CharToDigit(digit);
-			quotient += (new_value / 256) + '0';
+			if (new_value / 256 > 0) {
+				quotient += to_string(new_value / 256);
+			} else if (!quotient.empty()) {
+				quotient += '0';
+			}
 			remainder = new_value % 256;
 		}
-		if (is_negative) {
+		if (is_negative && int_value_char[start_pos] != '0') {
 			writable_blob[wb_idx--] = ~remainder;
 		} else {
 			writable_blob[wb_idx--] = remainder;
 		}
 
 		// Remove leading zeros from the quotient
-		abs_str = quotient.erase(0, quotient.find_first_not_of('0'));
+		abs_str = quotient;
 	}
 	return blob;
 }
@@ -153,32 +164,32 @@ string_t VarIntToVarchar(string_t &blob) {
 	std::reverse(decimalString.begin(), decimalString.end());
 
 	while (!tempArray.empty()) {
-        std::string quotient;
-        uint8_t remainder = 0;
-        for (uint8_t byte : tempArray) {
-            int new_value = remainder * 256 + byte;
-            quotient += DigitToChar(new_value / 10);
-            remainder = new_value % 10;
-        }
+		std::string quotient;
+		uint8_t remainder = 0;
+		for (uint8_t byte : tempArray) {
+			int new_value = remainder * 256 + byte;
+			quotient += DigitToChar(new_value / 10);
+			remainder = new_value % 10;
+		}
 
-        decimalString += DigitToChar(remainder);
+		decimalString += DigitToChar(remainder);
 
-        // Remove leading zeros from the quotient
-        tempArray.clear();
-        for (char digit : quotient) {
-            if (digit != '0' || !tempArray.empty()) {
-                tempArray.push_back(CharToDigit(digit));
-            }
-        }
-    }
+		// Remove leading zeros from the quotient
+		tempArray.clear();
+		for (char digit : quotient) {
+			if (digit != '0' || !tempArray.empty()) {
+				tempArray.push_back(CharToDigit(digit));
+			}
+		}
+	}
 
-    if (is_negative) {
-        decimalString += '-';
-    }
+	if (is_negative) {
+		decimalString += '-';
+	}
 
-	 // Reverse the string to get the correct decimal representation
-    std::reverse(decimalString.begin(), decimalString.end());
-    return decimalString;
+	// Reverse the string to get the correct decimal representation
+	std::reverse(decimalString.begin(), decimalString.end());
+	return decimalString;
 
 	// for (idx_t i = 0; i < data_byte_size; i++) {
 	// 	if (is_negative) {
@@ -196,7 +207,6 @@ string_t VarIntToVarchar(string_t &blob) {
 	// }
 	// return std::to_string(int_value);
 }
-
 
 struct IntTryCastToVarInt {
 	template <class SRC>

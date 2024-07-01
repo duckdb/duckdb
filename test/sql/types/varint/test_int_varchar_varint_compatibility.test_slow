@@ -1,0 +1,20 @@
+# name: test/sql/types/varint/test_int_varchar_varint_compatibility.test_slow
+# description: Test INT Varchar produces same blobs
+# group: [varint]
+
+statement ok
+PRAGMA enable_verification
+
+loop i 0 2147483646
+
+query I
+select '${i}'::varint = ${i}::varint
+----
+true
+
+query I
+select '-${i}'::varint = (-${i})::varint
+----
+true
+
+endloop

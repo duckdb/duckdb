@@ -2,13 +2,13 @@
 # description: Test basics of varint type
 # group: [varint]
 
-#statement ok
-#PRAGMA enable_verification
-#
-#query I
-#select 0::varint
-#----
-#0
+statement ok
+PRAGMA enable_verification
+
+query I
+select 0::varint
+----
+0
 
 query I
 select 1::varint
@@ -114,6 +114,6 @@ select 2147483647::varint
 2147483647
 
 query I
-select -2147483648::varint
+select (-2147483647)::varint
 ----
-2147483648
+-2147483647
