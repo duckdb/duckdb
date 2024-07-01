@@ -151,5 +151,15 @@ TEST_CASE("Test ClientContextState", "[api]") {
 		REQUIRE((state->transaction_errors.size() == 1));
 		REQUIRE_FAIL(conn.Query("SELECT * FROM my_table2"));
 	}
+
+	SECTION("Manually invalidated transaction, Explicit rollback") {
+		conn.BeginTransaction();
+		REQUIRE_NO_FAIL(conn.Query("CREATE TABLE my_table2(i INT)"));
+		auto &transaction = conn.context->ActiveTransaction();
+		ValidChecker::Invalidate(transaction, "42");
+		conn.Rollback();
+		REQUIRE((state->transaction_errors.size() == 1));
+		REQUIRE_FAIL(conn.Query("SELECT * FROM my_table2"));
+	}
 }
 // ClientContextState
