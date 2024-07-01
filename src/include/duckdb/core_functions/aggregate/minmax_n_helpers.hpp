@@ -143,7 +143,7 @@ struct MinMaxNOperation {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
-		if (!source.heap.is_initialized) {
+		if (!source.is_initialized) {
 			// source is empty, nothing to do
 			return;
 		}
