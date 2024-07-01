@@ -45,7 +45,7 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 }
 
 StreamExecutionResult StreamQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
-	return StreamExecutionResult::CHUNK_READY;
+	return buffered_data->ExecuteTaskInternal(*this, lock);
 }
 
 StreamExecutionResult StreamQueryResult::ExecuteTask() {
