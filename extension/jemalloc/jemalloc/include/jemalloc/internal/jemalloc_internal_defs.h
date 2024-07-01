@@ -296,7 +296,7 @@
 #define JEMALLOC_INTERNAL_FFSLL ffsll
 #define JEMALLOC_INTERNAL_FFSL  ffsl
 #define JEMALLOC_INTERNAL_FFS   ffs
-#elif defined(__GNUC__)
+#else
 #define JEMALLOC_INTERNAL_FFSLL __builtin_ffsll
 #define JEMALLOC_INTERNAL_FFSL  __builtin_ffsl
 #define JEMALLOC_INTERNAL_FFS   __builtin_ffs
