@@ -10,8 +10,8 @@ string_t IntToVarInt(int32_t int_value) {
 	bool is_negative = int_value < 0;
 
 	// Determine the number of data bytes
-	uint64_t abs_value = std::abs(int_value);
-	uint32_t data_byte_size = (abs_value == 0) ? 1 : static_cast<int>(std::ceil(std::log2(abs_value + 1) / 8.0));
+	uint64_t abs_value = static_cast<uint64_t>(std::abs(int_value));
+	uint32_t data_byte_size = (abs_value == 0) ? 1 : static_cast<uint32_t>(std::ceil(std::log2(abs_value + 1) / 8.0));
 
 	if (is_negative && abs_value != 0) {
 		abs_value = ~abs_value;
@@ -25,20 +25,24 @@ string_t IntToVarInt(int32_t int_value) {
 		header = ~header;
 	}
 
-	string_t blob {data_byte_size + VARINT_HEADER_SIZE};
-	memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
+	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
+	string_t blob {blob_size};
+	if (blob_size < string_t::INLINE_BYTES) {
+		// set these babies to 0.
+		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
+	}
 
 	auto writable_blob = blob.GetDataWriteable();
 	// Add header bytes to the blob
 	idx_t wb_idx = 0;
 	// we ignore 4th byte of header.
-	writable_blob[wb_idx++] = static_cast<uint8_t>(header >> 16 & 0xFF); // 3rd byte
-	writable_blob[wb_idx++] = static_cast<uint8_t>(header >> 8 & 0xFF);  // 2nd byte
-	writable_blob[wb_idx++] = static_cast<uint8_t>(header & 0xFF);       // 1st byte
+	writable_blob[wb_idx++] = static_cast<char>(header >> 16 & 0xFF); // 3rd byte
+	writable_blob[wb_idx++] = static_cast<char>(header >> 8 & 0xFF);  // 2nd byte
+	writable_blob[wb_idx++] = static_cast<char>(header & 0xFF);       // 1st byte
 
 	// Add data bytes to the blob
-	for (int i = data_byte_size - 1; i >= 0; --i) {
-		writable_blob[wb_idx++] = static_cast<uint8_t>(abs_value >> i * 8 & 0xFF);
+	for (int i = static_cast<int>(data_byte_size) - 1; i >= 0; --i) {
+		writable_blob[wb_idx++] = static_cast<char>(abs_value >> i * 8 & 0xFF);
 	}
 	return blob;
 }
@@ -93,31 +97,11 @@ string_t VarcharToVarInt(string_t int_value) {
 			start_pos++;
 		}
 	}
+
 	idx_t actual_size = int_value_size - start_pos;
-	uint32_t data_byte_size = actual_size * log2(10) / 8;
-	if (data_byte_size == 0) {
-		// data byte size must be at least 1.
-		data_byte_size++;
-	}
-	string_t blob {data_byte_size + VARINT_HEADER_SIZE};
-	memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
-	uint32_t header = data_byte_size;
-	// Set MSD of 3rd byte
-	header |= 0x00800000;
-	if (is_negative && int_value_char[start_pos] != '0') {
-		header = ~header;
-	}
-
-	auto writable_blob = blob.GetDataWriteable();
-	// Add header bytes to the blob
-
-	writable_blob[0] = static_cast<uint8_t>(header >> 16);
-	writable_blob[1] = static_cast<uint8_t>(header >> 8 & 0xFF);
-	writable_blob[2] = static_cast<uint8_t>(header & 0xFF);
-
 	// convert the string to a byte array
 	string abs_str(int_value_char + start_pos, actual_size);
-	idx_t wb_idx = data_byte_size + VARINT_HEADER_SIZE - 1;
+	string blob_string;
 	while (!abs_str.empty()) {
 		uint8_t remainder = 0;
 		std::string quotient;
@@ -132,13 +116,39 @@ string_t VarcharToVarInt(string_t int_value) {
 			remainder = new_value % 256;
 		}
 		if (is_negative && int_value_char[start_pos] != '0') {
-			writable_blob[wb_idx--] = ~remainder;
+			blob_string.push_back(~remainder);
 		} else {
-			writable_blob[wb_idx--] = remainder;
+			blob_string.push_back(remainder);
 		}
 
 		// Remove leading zeros from the quotient
 		abs_str = quotient;
+	}
+	uint32_t blob_size = static_cast<uint32_t>(blob_string.size() + VARINT_HEADER_SIZE);
+	string_t blob {blob_size};
+	if (blob_size < string_t::INLINE_BYTES) {
+		// set these babies to 0.
+		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
+	}
+
+	uint32_t header = blob_string.size();
+	// Set MSD of 3rd byte
+	header |= 0x00800000;
+	if (is_negative && int_value_char[start_pos] != '0') {
+		header = ~header;
+	}
+
+	auto writable_blob = blob.GetDataWriteable();
+
+	// Add header bytes to the blob
+	writable_blob[0] = static_cast<char>(header >> 16);
+	writable_blob[1] = static_cast<char>(header >> 8 & 0xFF);
+	writable_blob[2] = static_cast<char>(header & 0xFF);
+
+	// Write string_blob into blob
+	idx_t blob_string_idx = blob_string.size() - 1;
+	for (idx_t i = VARINT_HEADER_SIZE; i < blob_size; i++) {
+		writable_blob[i] = blob_string[blob_string_idx--];
 	}
 	return blob;
 }

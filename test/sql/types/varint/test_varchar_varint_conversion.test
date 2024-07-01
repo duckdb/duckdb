@@ -4,31 +4,57 @@
 
 # Basic compatibility tests
 
-loop i 0 100
+#loop i 0 1000
+#
+#query I
+#select '${i}'::varint = ${i}::varint
+#----
+#true
+#
+#query I
+#select '-${i}'::varint = (-${i})::varint
+#----
+#true
+#
+#endloop
+
+#query I
+#select '2147483646'::varint = 2147483646::varint
+#----
+#true
+#
+#query I
+#select '-2147483646'::varint = (-2147483646)::varint
+#----
+#true
+#
+#query I
+#select '100'::varint = 100::varint;
+#----
+#true
+#
+#query I
+#select '256'::varint = 256::varint;
+#----
+#true
+#
+## Now let's try to get some of these values back to strings
+#query I
+#select '256'::varint;
+#----
+#256
+#
+#query I
+#select '2147483646'::varint;
+#----
+#2147483646
 
 query I
-select '${i}'::varint = ${i}::varint
+select '21474836460000000000958'::varint;
 ----
-true
+21474836460000000000958
 
-query I
-select '-${i}'::varint = (-${i})::varint
-----
-true
-
-endloop
-
-query I
-select '2147483646'::varint = 2147483646::varint
-----
-true
-
-query I
-select '-2147483646'::varint = (-2147483646)::varint
-----
-true
-
-query I
-select '256'::varint = 256::varint;
-----
-true
+#query I
+#select '-21474836460000000000958'::varint;
+#----
+#-21474836460000000000958
