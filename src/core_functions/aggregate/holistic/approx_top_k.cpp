@@ -297,7 +297,7 @@ static void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 
 	auto &top_k_vector = inputs[1];
 
-	auto extra_state = OP::CreateExtraState();
+	auto extra_state = OP::CreateExtraState(count);
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 

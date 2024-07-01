@@ -42,7 +42,7 @@ duckdb::ScalarFunction &GetCScalarFunction(duckdb_scalar_function function) {
 	return *reinterpret_cast<duckdb::ScalarFunction *>(function);
 }
 
-unique_ptr<FunctionData> BindCAPIScalarFunction(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> BindCAPIScalarFunction(ClientContext &, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	auto &info = bound_function.function_info->Cast<CScalarFunctionInfo>();
 	return make_uniq<CScalarFunctionBindData>(info);
@@ -91,6 +91,15 @@ void duckdb_scalar_function_set_name(duckdb_scalar_function function, const char
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	scalar_function.name = name;
+}
+
+void duckdb_scalar_function_set_varargs(duckdb_scalar_function function, duckdb_logical_type type) {
+	if (!function || !type) {
+		return;
+	}
+	auto &scalar_function = GetCScalarFunction(function);
+	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
+	scalar_function.varargs = *logical_type;
 }
 
 void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckdb_logical_type type) {
