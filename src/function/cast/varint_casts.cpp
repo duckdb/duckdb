@@ -51,7 +51,7 @@ int CharToDigit(char c) {
 }
 
 char DigitToChar(int digit) {
-	return digit + '0';
+	return static_cast<char>(digit) + '0';
 }
 
 string_t VarcharToVarInt(Vector &result, string_t int_value) {
@@ -90,12 +90,12 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 			} else if (!quotient.empty()) {
 				quotient += '0';
 			}
-			remainder = new_value % 256;
+			remainder = static_cast<uint8_t>(new_value % 256);
 		}
 		if (is_negative && int_value_char[start_pos] != '0') {
-			blob_string.push_back(~remainder);
+			blob_string.push_back(static_cast<char>(~remainder));
 		} else {
-			blob_string.push_back(remainder);
+			blob_string.push_back(static_cast<char>(remainder));
 		}
 
 		// Remove leading zeros from the quotient
@@ -107,7 +107,7 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 		// set these babies to 0.
 		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 	}
-	uint32_t header = blob_string.size();
+	uint32_t header = static_cast<uint32_t>(blob_string.size());
 	// Set MSD of 3rd byte
 	header |= 0x00800000;
 	if (is_negative && int_value_char[start_pos] != '0') {
@@ -130,7 +130,7 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 }
 
 // Function to convert VARINT blob to a VARCHAR
-string_t VarIntToVarchar(string_t &blob) {
+string_t VarIntToVarchar(const string_t &blob) {
 	if (blob.GetSize() < 4) {
 		throw InvalidInputException("Invalid blob size.");
 	}
@@ -141,9 +141,9 @@ string_t VarIntToVarchar(string_t &blob) {
 	bool is_negative = (blob_ptr[0] & 0x80) == 0;
 	for (idx_t i = 3; i < blob.GetSize(); i++) {
 		if (is_negative) {
-			tempArray.push_back(~blob_ptr[i]);
+			tempArray.push_back(static_cast<uint8_t>(~blob_ptr[i]));
 		} else {
-			tempArray.push_back(blob_ptr[i]);
+			tempArray.push_back(static_cast<uint8_t>(blob_ptr[i]));
 		}
 	}
 	std::reverse(decimalString.begin(), decimalString.end());
@@ -154,7 +154,7 @@ string_t VarIntToVarchar(string_t &blob) {
 		for (uint8_t byte : tempArray) {
 			int new_value = remainder * 256 + byte;
 			quotient += DigitToChar(new_value / 10);
-			remainder = new_value % 10;
+			remainder = static_cast<uint8_t>(new_value % 10);
 		}
 
 		decimalString += DigitToChar(remainder);
@@ -163,7 +163,7 @@ string_t VarIntToVarchar(string_t &blob) {
 		tempArray.clear();
 		for (char digit : quotient) {
 			if (digit != '0' || !tempArray.empty()) {
-				tempArray.push_back(CharToDigit(digit));
+				tempArray.push_back(static_cast<uint8_t>(CharToDigit(digit)));
 			}
 		}
 	}
