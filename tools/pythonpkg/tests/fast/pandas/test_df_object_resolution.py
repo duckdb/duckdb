@@ -1,6 +1,7 @@
 import duckdb
 import datetime
 import numpy as np
+import platform
 import pytest
 import decimal
 import math
@@ -528,6 +529,10 @@ class TestResolveObjectColumns(object):
         assert isinstance(converted_col['0'].dtype, double_dtype.__class__) == True
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.xfail(
+        condition=platform.system() == "Emscripten",
+        reason="older numpy raises a warning when running with Pyodide",
+    )
     def test_numpy_object_with_stride(self, pandas, duckdb_cursor):
         df = pandas.DataFrame(columns=["idx", "evens", "zeros"])
 

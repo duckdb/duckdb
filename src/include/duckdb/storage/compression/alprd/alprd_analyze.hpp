@@ -8,13 +8,14 @@
 
 #pragma once
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/storage/compression/patas/patas.hpp"
+#include "duckdb/storage/compression/alp/alp_constants.hpp"
+#include "duckdb/storage/compression/alp/alp_utils.hpp"
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
-#include "duckdb/storage/compression/alp/alp_utils.hpp"
-#include "duckdb/storage/compression/alp/alp_constants.hpp"
-#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/storage/compression/patas/patas.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 #include <cmath>
 
@@ -25,7 +26,7 @@ struct AlpRDAnalyzeState : public AnalyzeState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpRDAnalyzeState() : state() {
+	explicit AlpRDAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), state() {
 	}
 
 	idx_t vectors_count = 0;
@@ -37,7 +38,8 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<AlpRDAnalyzeState<T>>();
+	CompressionInfo info(Storage::BLOCK_SIZE, type);
+	return make_uniq<AlpRDAnalyzeState<T>>(info);
 }
 
 /*
@@ -131,7 +133,7 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 
 	auto estimated_size = (estimed_compressed_bytes * factor_of_sampling) + (n_vectors * per_vector_overhead);
 	uint32_t estimated_n_blocks =
-	    NumericCast<uint32_t>(std::ceil(estimated_size / (Storage::BLOCK_SIZE - per_segment_overhead)));
+	    NumericCast<uint32_t>(std::ceil(estimated_size / (state.info.GetBlockSize() - per_segment_overhead)));
 
 	auto final_analyze_size = estimated_size + (estimated_n_blocks * per_segment_overhead);
 	return NumericCast<idx_t>(final_analyze_size);

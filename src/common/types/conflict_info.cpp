@@ -12,7 +12,7 @@ bool ConflictInfo::ConflictTargetMatches(Index &index) const {
 		return true;
 	}
 	// Check whether the column ids match
-	return column_ids == index.column_id_set;
+	return column_ids == index.GetColumnIdSet();
 }
 
 } // namespace duckdb

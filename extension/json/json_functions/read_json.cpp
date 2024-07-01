@@ -99,8 +99,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	bind_data.type = JSONScanType::READ_JSON;
 
 	// Convert structure to logical type
-	auto type =
-	    JSONStructure::StructureToType(context, node, bind_data.max_depth, bind_data.field_appearance_threshold);
+	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth, bind_data.field_appearance_threshold,
+	                                           bind_data.map_inference_threshold);
 
 	// Auto-detect record type
 	if (bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
@@ -196,6 +196,16 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 				    "read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
 			}
 			bind_data->field_appearance_threshold = arg;
+		} else if (loption == "map_inference_threshold") {
+			auto arg = BigIntValue::Get(kv.second);
+			if (arg == -1) {
+				bind_data->map_inference_threshold = NumericLimits<idx_t>::Maximum();
+			} else if (arg >= 0) {
+				bind_data->map_inference_threshold = arg;
+			} else {
+				throw BinderException("read_json_auto \"map_inference_threshold\" parameter must be 0 or positive, "
+				                      "or -1 to disable map inference for consistent objects.");
+			}
 		} else if (loption == "dateformat" || loption == "date_format") {
 			auto format_string = StringValue::Get(kv.second);
 			if (StringUtil::Lower(format_string) == "iso") {
@@ -277,8 +287,10 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		D_ASSERT(return_types.size() == names.size());
 	}
 
-	bind_data->reader_bind =
-	    MultiFileReader::BindOptions(bind_data->options.file_options, bind_data->files, return_types, names);
+	SimpleMultiFileList file_list(std::move(bind_data->files));
+	MultiFileReader().BindOptions(bind_data->options.file_options, file_list, return_types, names,
+	                              bind_data->reader_bind);
+	bind_data->files = file_list.GetAllFiles();
 
 	auto &transform_options = bind_data->transform_options;
 	transform_options.strict_cast = !bind_data->ignore_errors;
@@ -345,7 +357,7 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 
 	if (output.size() != 0) {
-		MultiFileReader::FinalizeChunk(gstate.bind_data.reader_bind, lstate.GetReaderData(), output);
+		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output, nullptr);
 	}
 }
 
@@ -378,6 +390,7 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["map_inference_threshold"] = LogicalType::BIGINT;
 	return MultiFileReader::CreateFunctionSet(table_function);
 }
 

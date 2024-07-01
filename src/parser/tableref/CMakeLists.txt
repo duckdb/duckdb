@@ -4,6 +4,7 @@ add_library_unity(
   basetableref.cpp
   emptytableref.cpp
   expressionlistref.cpp
+  column_data_ref.cpp
   joinref.cpp
   pivotref.cpp
   showref.cpp

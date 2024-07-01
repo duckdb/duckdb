@@ -13,8 +13,10 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
       is_validity(GetType().id() == LogicalTypeId::VALIDITY),
       intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity),
       checkpoint_info(checkpoint_info_p) {
+
 	auto &config = DBConfig::GetConfig(GetDatabase());
-	auto functions = config.GetCompressionFunctions(GetType().InternalType());
+	CompressionInfo info(Storage::BLOCK_SIZE, GetType().InternalType());
+	auto functions = config.GetCompressionFunctions(info);
 	for (auto &func : functions) {
 		compression_functions.push_back(&func.get());
 	}
@@ -100,7 +102,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	CompressionType forced_method = CompressionType::COMPRESSION_AUTO;
 
-	auto compression_type = checkpoint_info.compression_type;
+	auto compression_type = checkpoint_info.GetCompressionType();
 	if (compression_type != CompressionType::COMPRESSION_AUTO) {
 		forced_method = ForceCompression(compression_functions, compression_type);
 	}
@@ -267,7 +269,8 @@ CompressionFunction &ColumnDataCheckpointer::GetCompressionFunction(CompressionT
 	auto &db = GetDatabase();
 	auto &column_type = GetType();
 	auto &config = DBConfig::GetConfig(db);
-	return *config.GetCompressionFunction(compression_type, column_type.InternalType());
+	CompressionInfo info(Storage::BLOCK_SIZE, column_type.InternalType());
+	return *config.GetCompressionFunction(compression_type, info);
 }
 
 } // namespace duckdb

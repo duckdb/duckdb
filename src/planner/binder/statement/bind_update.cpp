@@ -96,6 +96,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	if (!table.temporary) {
 		// update of persistent table: not read only!
+		auto &properties = GetStatementProperties();
 		properties.modified_databases.insert(table.catalog.GetName());
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
@@ -149,6 +150,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	result.plan = std::move(update);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;

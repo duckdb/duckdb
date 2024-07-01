@@ -14,6 +14,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -245,10 +246,22 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 	if (!entry) {
 		return false;
 	}
-
-	auto &owner_entry = catalog.GetEntry(transaction.GetContext(), info.owner_schema, info.owner_name);
+	optional_ptr<CatalogEntry> owner_entry;
+	auto schema = catalog.GetSchema(transaction, info.owner_schema, OnEntryNotFound::RETURN_NULL);
+	if (schema) {
+		vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
+		for (auto entry_type : entry_types) {
+			owner_entry = schema->GetEntry(transaction, entry_type, info.owner_name);
+			if (owner_entry) {
+				break;
+			}
+		}
+	}
+	if (!owner_entry) {
+		throw CatalogException("CatalogElement \"%s.%s\" does not exist!", info.owner_schema, info.owner_name);
+	}
 	write_lock.unlock();
-	catalog.GetDependencyManager().AddOwnership(transaction, owner_entry, *entry);
+	catalog.GetDependencyManager().AddOwnership(transaction, *owner_entry, *entry);
 	return true;
 }
 
@@ -292,38 +305,40 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 }
 
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info) {
-	// lock the catalog for writing
-	unique_lock<mutex> write_lock(catalog.GetWriteLock());
-	// lock this catalog set to disallow reading
-	unique_lock<mutex> read_lock(catalog_lock);
-
 	// If the entry does not exist, we error
-	auto entry = GetEntryInternal(transaction, name);
+	auto entry = GetEntry(transaction, name);
 	if (!entry) {
 		return false;
 	}
 	if (!alter_info.allow_internal && entry->internal) {
 		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
 	}
-	if (!transaction.context) {
-		throw InternalException("Cannot AlterEntry without client context");
-	}
-
-	auto &context = *transaction.context;
 
 	unique_ptr<CatalogEntry> value;
 	if (alter_info.type == AlterType::SET_COMMENT) {
 		// Copy the existing entry; we are only changing metadata here
-		value = entry->Copy(context);
+		if (!transaction.context) {
+			throw InternalException("Cannot AlterEntry::SET_COMMENT without client context");
+		}
+		value = entry->Copy(*transaction.context);
 		value->comment = alter_info.Cast<SetCommentInfo>().comment_value;
 	} else {
 		// Use the existing entry to create the altered entry
-		value = entry->AlterEntry(context, alter_info);
+		value = entry->AlterEntry(transaction, alter_info);
 		if (!value) {
 			// alter failed, but did not result in an error
 			return true;
 		}
 	}
+
+	// lock the catalog for writing
+	unique_lock<mutex> write_lock(catalog.GetWriteLock());
+	// lock this catalog set to disallow reading
+	unique_lock<mutex> read_lock(catalog_lock);
+
+	// fetch the entry again before doing the modification
+	// this will catch any write-write conflicts between transactions
+	entry = GetEntryInternal(transaction, name);
 
 	// Mark this entry as being created by this transaction
 	value->timestamp = transaction.transaction_id;
@@ -508,14 +523,10 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 		// no defaults either: return null
 		return nullptr;
 	}
+	read_lock.unlock();
 	// this catalog set has a default map defined
 	// check if there is a default entry that we can create with this name
-	if (!transaction.context) {
-		// no context - cannot create default entry
-		return nullptr;
-	}
-	read_lock.unlock();
-	auto entry = defaults->CreateDefaultEntry(*transaction.context, name);
+	auto entry = defaults->CreateDefaultEntry(transaction, name);
 
 	read_lock.lock();
 	if (!entry) {
@@ -594,7 +605,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 }
 
 void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &read_lock) {
-	if (!defaults || defaults->created_all_entries || !transaction.context) {
+	if (!defaults || defaults->created_all_entries) {
 		return;
 	}
 	// this catalog set has a default set defined:
@@ -605,7 +616,7 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 			// we unlock during the CreateEntry, since it might reference other catalog sets...
 			// specifically for views this can happen since the view will be bound
 			read_lock.unlock();
-			auto entry = defaults->CreateDefaultEntry(*transaction.context, default_entry);
+			auto entry = defaults->CreateDefaultEntry(transaction, default_entry);
 			if (!entry) {
 				throw InternalException("Failed to create default entry for %s", default_entry);
 			}

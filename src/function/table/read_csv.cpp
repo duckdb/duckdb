@@ -48,9 +48,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
-	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 
-	options.FromNamedParameters(input.named_parameters, context, return_types, names);
+	options.FromNamedParameters(input.named_parameters, context);
 	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
 	    options.store_rejects.IsSetByUser()) {
 		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
@@ -79,18 +80,22 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 	}
 
-	options.file_options.AutoDetectHivePartitioning(result->files, context);
+	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
 
-	if (!options.auto_detect && return_types.empty()) {
-		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
-		                      "read_csv_auto or set read_csv(..., "
-		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+	if (!options.auto_detect) {
+		if (!options.columns_set) {
+			throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
+			                      "read_csv_auto or set read_csv(..., "
+			                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+		} else {
+			names = options.name_list;
+			return_types = options.sql_type_list;
+		}
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
-		options.file_path = result->files[0];
-		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, result->files[0], 0);
-		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context),
-		                   {&return_types, &names});
+		options.file_path = multi_file_list->GetFirstFile();
+		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
+		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
 			names = sniffer_result.names;
@@ -103,11 +108,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	D_ASSERT(return_types.size() == names.size());
 	result->options.dialect_options.num_cols = names.size();
 	if (options.file_options.union_by_name) {
-		result->reader_bind =
-		    MultiFileReader::BindUnionReader<CSVFileScan>(context, return_types, names, *result, options);
+		result->reader_bind = multi_file_reader->BindUnionReader<CSVFileScan>(context, return_types, names,
+		                                                                      *multi_file_list, *result, options);
 		if (result->union_readers.size() > 1) {
-			result->column_info.emplace_back(result->initial_reader->names, result->initial_reader->types);
-			for (idx_t i = 1; i < result->union_readers.size(); i++) {
+			for (idx_t i = 0; i < result->union_readers.size(); i++) {
 				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);
 			}
 		}
@@ -128,7 +132,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->csv_types = return_types;
 		result->csv_names = names;
-		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
+		multi_file_reader->BindOptions(options.file_options, *multi_file_list, return_types, names,
+		                               result->reader_bind);
 	}
 	result->return_types = return_types;
 	result->return_names = names;
@@ -153,6 +158,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		}
 	}
+
+	// TODO: make the CSV reader use MultiFileList throughout, instead of converting to vector<string>
+	result->files = multi_file_list->GetAllFiles();
+
 	result->Finalize();
 	return std::move(result);
 }
@@ -196,6 +205,10 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 		return nullptr;
 	}
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
+	if (global_state.current_boundary.done) {
+		// nothing to do
+		return nullptr;
+	}
 	auto csv_scanner = global_state.Next(nullptr);
 	if (!csv_scanner) {
 		global_state.DecrementThread();
@@ -209,6 +222,9 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		return;
 	}
 	auto &csv_global_state = data_p.global_state->Cast<CSVGlobalState>();
+	if (!data_p.local_state) {
+		return;
+	}
 	auto &csv_local_state = data_p.local_state->Cast<CSVLocalState>();
 
 	if (!csv_local_state.csv_reader) {
@@ -217,8 +233,8 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 	do {
 		if (output.size() != 0) {
-			MultiFileReader::FinalizeChunk(bind_data.reader_bind,
-			                               csv_local_state.csv_reader->csv_file_scan->reader_data, output);
+			MultiFileReader().FinalizeChunk(context, bind_data.reader_bind,
+			                                csv_local_state.csv_reader->csv_file_scan->reader_data, output, nullptr);
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
@@ -276,6 +292,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
+
 	MultiFileReader::AddParameters(table_function);
 }
 
@@ -292,10 +309,14 @@ double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                               vector<unique_ptr<Expression>> &filters) {
 	auto &data = bind_data_p->Cast<ReadCSVData>();
-	auto reset_reader =
-	    MultiFileReader::ComplexFilterPushdown(context, data.files, data.options.file_options, get, filters);
-	if (reset_reader) {
-		MultiFileReader::PruneReaders(data);
+	SimpleMultiFileList file_list(data.files);
+	auto filtered_list =
+	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
+	if (filtered_list) {
+		data.files = filtered_list->GetAllFiles();
+		MultiFileReader::PruneReaders(data, file_list);
+	} else {
+		data.files = file_list.GetAllFiles();
 	}
 }
 
@@ -362,7 +383,9 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetAutoFunction()));
 }
 
-unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &table_name, ReplacementScanData *data) {
+unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,
+                                        optional_ptr<ReplacementScanData> data) {
+	auto &table_name = input.table_name;
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
 	if (StringUtil::EndsWith(lower_name, ".gz")) {

@@ -147,6 +147,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 #else
 	result->options.checkpoint_on_shutdown = false;
 #endif
+	result->options.abort_on_wal_failure = true;
 #ifdef DUCKDB_RUN_SLOW_VERIFIERS
 	// This mode isn't slow, but we want test coverage both when it's enabled
 	// and when it's not, so we enable only when DUCKDB_RUN_SLOW_VERIFIERS is set.

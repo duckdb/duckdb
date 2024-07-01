@@ -15,6 +15,7 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 #include <cstring>
 #include <cassert>
@@ -33,7 +34,7 @@ struct DatabaseData {
 
 struct PreparedStatementWrapper {
 	//! Map of name -> values
-	case_insensitive_map_t<Value> values;
+	case_insensitive_map_t<BoundParameterData> values;
 	unique_ptr<PreparedStatement> statement;
 };
 
@@ -54,6 +55,11 @@ struct ArrowResultWrapper {
 
 struct AppenderWrapper {
 	unique_ptr<Appender> appender;
+	string error;
+};
+
+struct TableDescriptionWrapper {
+	unique_ptr<TableDescription> description;
 	string error;
 };
 

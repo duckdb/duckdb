@@ -19,7 +19,8 @@ namespace duckdb {
 //! Visitor pattern on LogicalOperator.
 class LogicalOperatorVisitor {
 public:
-	virtual ~LogicalOperatorVisitor() {};
+	virtual ~LogicalOperatorVisitor() {
+	}
 
 	virtual void VisitOperator(LogicalOperator &op);
 	virtual void VisitExpression(unique_ptr<Expression> *expression);

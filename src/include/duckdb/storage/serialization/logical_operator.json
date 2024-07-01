@@ -247,7 +247,7 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "ColumnDataCollection*"
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
     "constructor": ["table_index", "chunk_types", "collection"]
@@ -882,6 +882,12 @@
     "class": "LogicalExtensionOperator",
     "base": "LogicalOperator",
     "enum": "LOGICAL_EXTENSION_OPERATOR",
+    "custom_implementation": true
+  },
+  {
+    "class": "LogicalVacuum",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_VACUUM",
     "custom_implementation": true
   },
   {

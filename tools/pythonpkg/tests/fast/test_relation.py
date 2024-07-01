@@ -1,10 +1,13 @@
 import duckdb
 import numpy as np
+import platform
 import tempfile
 import os
 import pandas as pd
 import pytest
+from conftest import ArrowPandas, NumpyPandas
 import datetime
+from duckdb import ColumnExpression
 
 from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
 
@@ -26,6 +29,25 @@ class TestRelation(object):
         # now create a relation from it
         csv_rel = duckdb.from_csv_auto(temp_file_name)
         assert df_rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_relation_view(self, duckdb_cursor, pandas):
+        def create_view(duckdb_cursor):
+            df_in = pandas.DataFrame({'numbers': [1, 2, 3, 4, 5]})
+            rel = duckdb_cursor.query("select * from df_in")
+            rel.to_view("my_view")
+
+        create_view(duckdb_cursor)
+        with pytest.raises(duckdb.CatalogException, match="df_in does not exist"):
+            # The df_in object is no longer reachable
+            rel1 = duckdb_cursor.query("select * from df_in")
+        # But it **is** reachable through our 'my_view' VIEW
+        # Because a Relation was created that references the df_in, the 'df_in' TableRef was injected with an ExternalDependency on the dataframe object
+        # We then created a VIEW from that Relation, which in turn copied this 'df_in' TableRef into the ViewCatalogEntry
+        # Because of this, the df_in object will stay alive for as long as our 'my_view' entry exists.
+        rel2 = duckdb_cursor.query("select * from my_view")
+        res = rel2.fetchall()
+        assert res == [(1,), (2,), (3,), (4,), (5,)]
 
     def test_filter_operator(self):
         conn = duckdb.connect()
@@ -225,6 +247,36 @@ class TestRelation(object):
         rel = duckdb.project(test_df, 'i')
         assert rel.execute().fetchall() == [(1,), (2,), (3,), (4,)]
 
+    def test_relation_lifetime(self, duckdb_cursor):
+        def create_relation(con):
+            df = pd.DataFrame({'a': [1, 2, 3]})
+            return con.sql("select * from df")
+
+        assert create_relation(duckdb_cursor).fetchall() == [(1,), (2,), (3,)]
+
+        def create_simple_join(con):
+            df1 = pd.DataFrame({'a': ['a', 'b', 'c'], 'b': [1, 2, 3]})
+            df2 = pd.DataFrame({'a': ['a', 'b', 'c'], 'b': [4, 5, 6]})
+
+            return con.sql("select * from df1 JOIN df2 USING (a, a)")
+
+        assert create_simple_join(duckdb_cursor).fetchall() == [('a', 1, 4), ('b', 2, 5), ('c', 3, 6)]
+
+        def create_complex_join(con):
+            df1 = pd.DataFrame({'a': [1], '1': [1]})
+            df2 = pd.DataFrame({'a': [1], '2': [2]})
+            df3 = pd.DataFrame({'a': [1], '3': [3]})
+            df4 = pd.DataFrame({'a': [1], '4': [4]})
+            df5 = pd.DataFrame({'a': [1], '5': [5]})
+            df6 = pd.DataFrame({'a': [1], '6': [6]})
+            query = "select * from df1"
+            for i in range(5):
+                query += f" JOIN df{i + 2} USING (a, a)"
+            return con.sql(query)
+
+        rel = create_complex_join(duckdb_cursor)
+        assert rel.fetchall() == [(1, 1, 2, 3, 4, 5, 6)]
+
     def test_project_on_types(self):
         con = duckdb.connect()
         con.sql(
@@ -357,3 +409,125 @@ class TestRelation(object):
         text1 = str(rel1)
         assert '? rows' in text1
         assert '>9999 rows' in text1
+
+    @pytest.mark.parametrize(
+        'num_rows',
+        [
+            1024,
+            2048,
+            5000,
+            1000000,
+            pytest.param(
+                10000000,
+                marks=pytest.mark.skipif(
+                    condition=platform.system() == "Emscripten",
+                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not thrown reliably",
+                ),
+            ),
+        ],
+    )
+    def test_materialized_relation(self, duckdb_cursor, num_rows):
+        # Anything that is not a SELECT statement becomes a materialized relation, so we use `CALL`
+        query = f"call repeat_row(42, 'test', 'this is a long string', true, num_rows={num_rows})"
+        rel = duckdb_cursor.sql(query)
+        res = rel.fetchone()
+        assert res != None
+
+        res = rel.fetchmany(num_rows)
+        assert len(res) == num_rows - 1
+
+        res = rel.fetchmany(5)
+        assert len(res) == 0
+        res = rel.fetchmany(5)
+        assert len(res) == 0
+        res = rel.fetchone()
+        assert res == None
+
+        rel.execute()
+        res = rel.fetchone()
+        assert res != None
+
+        res = rel.fetchall()
+        assert len(res) == num_rows - 1
+        res = rel.fetchall()
+        assert len(res) == num_rows
+
+        rel = duckdb_cursor.sql(query)
+        projection = rel.select('column0')
+        assert projection.fetchall() == [(42,) for _ in range(num_rows)]
+
+        filtered = rel.filter("column1 != 'test'")
+        assert filtered.fetchall() == []
+
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match=r"Invalid Input Error: 'DuckDBPyRelation.insert' can only be used on a table relation",
+        ):
+            rel.insert([1, 2, 3, 4])
+
+        with pytest.raises(
+            duckdb.NotImplementedException, match='Creating a VIEW from a MaterializedRelation is not supported'
+        ):
+            query_rel = rel.query('x', "select 42 from x where column0 != 42")
+            assert query_rel.fetchall() == []
+
+        distinct_rel = rel.distinct()
+        assert distinct_rel.fetchall() == [(42, 'test', 'this is a long string', True)]
+
+        limited_rel = rel.limit(50)
+        assert len(limited_rel.fetchall()) == 50
+
+        materialized_one = duckdb_cursor.sql("call range(10)").project(
+            ColumnExpression('range').cast(str).alias('range')
+        )
+        materialized_two = duckdb_cursor.sql("call repeat('a', 5)")
+        joined_rel = materialized_one.join(materialized_two, 'range != a')
+        res = joined_rel.fetchall()
+        assert len(res) == 50
+
+        relation = duckdb_cursor.sql("select a from materialized_two")
+        assert relation.fetchone() == ('a',)
+
+        described = materialized_one.describe()
+        res = described.fetchall()
+        assert res == [('count', '10'), ('mean', None), ('stddev', None), ('min', '0'), ('max', '9'), ('median', None)]
+
+        unioned_rel = materialized_one.union(materialized_two)
+        res = unioned_rel.fetchall()
+        assert res == [
+            ('0',),
+            ('1',),
+            ('2',),
+            ('3',),
+            ('4',),
+            ('5',),
+            ('6',),
+            ('7',),
+            ('8',),
+            ('9',),
+            ('a',),
+            ('a',),
+            ('a',),
+            ('a',),
+            ('a',),
+        ]
+
+        except_rel = unioned_rel.except_(materialized_one)
+        res = except_rel.fetchall()
+        assert res == [tuple('a') for _ in range(5)]
+
+        intersect_rel = unioned_rel.intersect(materialized_one).order('range')
+        res = intersect_rel.fetchall()
+        assert res == [('0',), ('1',), ('2',), ('3',), ('4',), ('5',), ('6',), ('7',), ('8',), ('9',)]
+
+    def test_materialized_relation_view(self, duckdb_cursor):
+        with pytest.raises(
+            duckdb.NotImplementedException, match='Creating a VIEW from a MaterializedRelation is not supported'
+        ):
+            duckdb_cursor.sql(
+                """
+                create table tbl(a varchar);
+                insert into tbl values ('test') returning *
+            """
+            ).to_view('vw')
+            res = duckdb_cursor.sql("select * from vw").fetchone()

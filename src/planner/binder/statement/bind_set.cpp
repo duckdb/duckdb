@@ -21,6 +21,8 @@ BoundStatement Binder::Bind(SetVariableStatement &stmt) {
 	auto value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
 
 	result.plan = make_uniq<LogicalSet>(stmt.name, std::move(value), stmt.scope);
+
+	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
@@ -31,6 +33,8 @@ BoundStatement Binder::Bind(ResetVariableStatement &stmt) {
 	result.names = {"Success"};
 
 	result.plan = make_uniq<LogicalReset>(stmt.name, stmt.scope);
+
+	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

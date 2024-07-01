@@ -12,6 +12,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 namespace duckdb {
 struct CreateMacroInfo;
@@ -59,7 +60,8 @@ public:
 	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, TableFunctionSet function);
 
 	//! Registers a new type
-	DUCKDB_API static void RegisterType(DatabaseInstance &db, string type_name, LogicalType type);
+	DUCKDB_API static void RegisterType(DatabaseInstance &db, string type_name, LogicalType type,
+	                                    bind_type_modifiers_function_t bind_type_modifiers = nullptr);
 
 	//! Registers a new secret type
 	DUCKDB_API static void RegisterSecretType(DatabaseInstance &db, SecretType secret_type);

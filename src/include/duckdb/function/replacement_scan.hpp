@@ -17,12 +17,34 @@ class ClientContext;
 class TableRef;
 
 struct ReplacementScanData {
+public:
 	virtual ~ReplacementScanData() {
+	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
-typedef unique_ptr<TableRef> (*replacement_scan_t)(ClientContext &context, const string &table_name,
-                                                   ReplacementScanData *data);
+struct ReplacementScanInput {
+public:
+	explicit ReplacementScanInput(const string &table_name) : table_name(table_name) {
+	}
+
+public:
+	const string &table_name;
+};
+
+typedef unique_ptr<TableRef> (*replacement_scan_t)(ClientContext &context, ReplacementScanInput &input,
+                                                   optional_ptr<ReplacementScanData> data);
 
 //! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 //! This allows you to do e.g. SELECT * FROM 'filename.csv', and automatically convert this into a CSV scan

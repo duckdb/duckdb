@@ -9,6 +9,10 @@
 
 namespace duckdb {
 
+void ExpressionBinder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
+	binder.SetCatalogLookupCallback(std::move(callback));
+}
+
 ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
     : binder(binder), context(context) {
 	InitializeStackCheck();
@@ -280,18 +284,6 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 
 bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
-}
-
-bool ExpressionBinder::IsLambdaFunction(const FunctionExpression &function) {
-	// check for lambda parameters, ignore ->> operator (JSON extension)
-	if (function.function_name != "->>") {
-		for (auto &child : function.children) {
-			if (child->expression_class == ExpressionClass::LAMBDA) {
-				return true;
-			}
-		}
-	}
-	return false;
 }
 
 } // namespace duckdb

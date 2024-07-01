@@ -9,6 +9,7 @@ add_subdirectory(statistics)
 add_library_unity(
   duckdb_optimizer
   OBJECT
+  build_probe_side_optimizer.cpp
   column_binding_replacer.cpp
   column_lifetime_analyzer.cpp
   common_aggregate_optimizer.cpp
@@ -26,6 +27,7 @@ add_library_unity(
   remove_duplicate_groups.cpp
   remove_unused_columns.cpp
   statistics_propagator.cpp
+  limit_pushdown.cpp
   topn_optimizer.cpp
   unnest_rewriter.cpp)
 set(ALL_OBJECT_FILES

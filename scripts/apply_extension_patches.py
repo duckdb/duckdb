@@ -17,7 +17,7 @@ def raise_error(error_msg):
     sys.exit(1)
 
 
-patches = os.listdir(directory)
+patches = sorted(os.listdir(directory))
 for patch in patches:
     if not patch.endswith('.patch'):
         raise_error(

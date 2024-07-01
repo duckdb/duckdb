@@ -16,7 +16,7 @@ using JSONPathType = JSONCommon::JSONPathType;
 
 static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
 	if (path_val.IsNull()) {
-		throw InternalException("JSON path cannot be NULL");
+		throw BinderException("JSON path cannot be NULL");
 	}
 	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
@@ -194,8 +194,9 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	return functions;
 }
 
-unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, const string &table_name,
-                                                        ReplacementScanData *data) {
+unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
+                                                        optional_ptr<ReplacementScanData> data) {
+	auto &table_name = input.table_name;
 	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson"})) {
 		return nullptr;
 	}

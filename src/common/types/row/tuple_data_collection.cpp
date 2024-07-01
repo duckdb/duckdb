@@ -4,6 +4,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 #include <algorithm>
 
@@ -163,7 +164,7 @@ void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state,
 
 	for (auto &col : column_ids) {
 		auto &type = types[col];
-		if (type.Contains(LogicalTypeId::ARRAY)) {
+		if (TypeVisitor::Contains(type, LogicalTypeId::ARRAY)) {
 			auto cast_type = ArrayType::ConvertToList(type);
 			chunk_state.cached_cast_vector_cache.push_back(
 			    make_uniq<VectorCache>(Allocator::DefaultAllocator(), cast_type));
@@ -384,6 +385,17 @@ void TupleDataCollection::InitializeChunk(DataChunk &chunk) const {
 	chunk.Initialize(allocator->GetAllocator(), layout.GetTypes());
 }
 
+void TupleDataCollection::InitializeChunk(DataChunk &chunk, const vector<column_t> &columns) const {
+	vector<LogicalType> chunk_types(columns.size());
+	// keep the order of the columns
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto column_idx = columns[i];
+		D_ASSERT(column_idx < layout.ColumnCount());
+		chunk_types[i] = layout.GetTypes()[column_idx];
+	}
+	chunk.Initialize(allocator->GetAllocator(), chunk_types);
+}
+
 void TupleDataCollection::InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const {
 	auto &column_ids = state.chunk_state.column_ids;
 	D_ASSERT(!column_ids.empty());
@@ -419,7 +431,7 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<colum
 	for (auto &col : column_ids) {
 		auto &type = layout.GetTypes()[col];
 
-		if (type.Contains(LogicalTypeId::ARRAY)) {
+		if (TypeVisitor::Contains(type, LogicalTypeId::ARRAY)) {
 			auto cast_type = ArrayType::ConvertToList(type);
 			chunk_state.cached_cast_vector_cache.push_back(
 			    make_uniq<VectorCache>(Allocator::DefaultAllocator(), cast_type));

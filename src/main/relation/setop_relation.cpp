@@ -17,7 +17,7 @@ SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> r
 
 unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
 	auto result = make_uniq<SetOperationNode>();
-	if (setop_type == SetOperationType::EXCEPT || setop_type == SetOperationType::INTERSECT) {
+	if (!setop_all) {
 		result->modifiers.push_back(make_uniq<DistinctModifier>());
 	}
 	result->left = left->GetQueryNode();

@@ -1,29 +1,32 @@
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/checkpoint_manager.hpp"
-#include "duckdb/storage/in_memory_block_manager.hpp"
-#include "duckdb/storage/single_file_block_manager.hpp"
-#include "duckdb/storage/object_cache.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/function/function.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/function/function.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/storage/checkpoint_manager.hpp"
+#include "duckdb/storage/in_memory_block_manager.hpp"
+#include "duckdb/storage/object_cache.hpp"
+#include "duckdb/storage/single_file_block_manager.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
     : db(db), path(std::move(path_p)), read_only(read_only) {
+
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
-	} else {
-		auto &fs = FileSystem::Get(db);
-		this->path = fs.ExpandPath(path);
+		return;
 	}
+	auto &fs = FileSystem::Get(db);
+	path = fs.ExpandPath(path);
 }
 
 StorageManager::~StorageManager() {
@@ -56,18 +59,32 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 	return context.db->config.options.object_cache_enable;
 }
 
-optional_ptr<WriteAheadLog> StorageManager::GetWriteAheadLog() {
+idx_t StorageManager::GetWALSize() {
+	auto wal_ptr = GetWAL();
+	if (!wal_ptr) {
+		return 0;
+	}
+	return wal_ptr->GetWALSize();
+}
+
+optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	if (InMemory() || read_only || !load_complete) {
 		return nullptr;
 	}
 
-	if (wal) {
-		return wal.get();
+	if (!wal) {
+		auto wal_path = GetWALPath();
+		wal = make_uniq<WriteAheadLog>(db, wal_path);
 	}
-
-	// lazy WAL creation
-	wal = make_uniq<WriteAheadLog>(db, GetWALPath());
 	return wal.get();
+}
+
+void StorageManager::ResetWAL() {
+	auto wal_ptr = GetWAL();
+	if (wal_ptr) {
+		wal_ptr->Delete();
+	}
+	wal.reset();
 }
 
 string StorageManager::GetWALPath() {
@@ -87,14 +104,14 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(optional_ptr<ClientContext> context) {
+void StorageManager::Initialize(const optional_idx block_alloc_size) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
-	// create or load the database from disk, if not in-memory mode
-	LoadDatabase(context);
+	// Create or load the database from disk, if not in-memory mode.
+	LoadDatabase(block_alloc_size);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -121,9 +138,13 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context) {
+void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size) {
 	if (InMemory()) {
-		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
+		// NOTE: this becomes DEFAULT_BLOCK_ALLOC_SIZE once we start supporting different block sizes.
+		if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != Storage::BLOCK_ALLOC_SIZE) {
+			throw InternalException("in-memory databases must have the compiled block allocation size");
+		}
+		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
@@ -141,7 +162,8 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context)
 	options.use_direct_io = config.options.use_direct_io;
 	options.debug_initialize = config.options.debug_initialize;
 
-	// first check if the database exists
+	// Check if the database file already exists.
+	// Note: a file can also exist if there was a ROLLBACK on a previous transaction creating that file.
 	if (!read_only && !fs.FileExists(path)) {
 		// file does not exist and we are in read-write mode
 		// create a new file
@@ -154,16 +176,28 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context)
 			fs.RemoveFile(wal_path);
 		}
 
-		// initialize the block manager while creating a new db file
+		// Set the block allocation size for the new database file.
+		if (block_alloc_size.IsValid()) {
+			// Use the option provided by the user.
+			options.block_alloc_size = block_alloc_size;
+		} else {
+			// No explicit option provided: use the default option.
+			options.block_alloc_size = config.options.default_block_alloc_size;
+		}
+
+		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
-	} else {
-		// either the file exists, or we are in read-only mode
-		// try to read the existing file on disk
 
-		// initialize the block manager while loading the current db file
+	} else {
+		// Either the file exists, or we are in read-only mode, so we
+		// try to read the existing file on disk.
+
+		// Initialize the block manager while loading the database file.
+		// We'll construct the SingleFileBlockManager with the default block allocation size,
+		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->LoadExistingDatabase();
 		block_manager = std::move(sf_block_manager);
@@ -171,7 +205,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context)
 
 		// load the db from storage
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
-		checkpoint_reader.LoadFromStorage(context);
+		checkpoint_reader.LoadFromStorage();
 
 		// check if the WAL file exists
 		auto wal_path = GetWALPath();
@@ -189,92 +223,94 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context)
 
 ///////////////////////////////////////////////////////////////////////////////
 
+enum class WALCommitState { IN_PROGRESS, FLUSHED, TRUNCATED };
+
 class SingleFileStorageCommitState : public StorageCommitState {
-	idx_t initial_wal_size = 0;
-	idx_t initial_written = 0;
-	optional_ptr<WriteAheadLog> log;
-	bool checkpoint;
-
 public:
-	SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint);
-	~SingleFileStorageCommitState() override {
-		// If log is non-null, then commit threw an exception before flushing.
-		if (log) {
-			auto &wal = *log.get();
-			wal.skip_writing = false;
-			if (wal.GetTotalWritten() > initial_written) {
-				// remove any entries written into the WAL by truncating it
-				wal.Truncate(NumericCast<int64_t>(initial_wal_size));
-			}
-		}
-	}
+	SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &log);
+	~SingleFileStorageCommitState() override;
 
+	//! Revert the commit
+	void RevertCommit() override;
 	// Make the commit persistent
 	void FlushCommit() override;
+
+private:
+	idx_t initial_wal_size = 0;
+	idx_t initial_written = 0;
+	WriteAheadLog &wal;
+	WALCommitState state;
 };
 
-SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint)
-    : checkpoint(checkpoint) {
-	log = storage_manager.GetWriteAheadLog();
-	if (log) {
-		auto initial_size = log->GetWALSize();
-		initial_written = log->GetTotalWritten();
-		initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
+SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
+    : wal(wal), state(WALCommitState::IN_PROGRESS) {
+	auto initial_size = storage.GetWALSize();
+	initial_written = wal.GetTotalWritten();
+	initial_wal_size = initial_size;
+}
 
-		if (checkpoint) {
-			// check if we are checkpointing after this commit
-			// if we are checkpointing, we don't need to write anything to the WAL
-			// this saves us a lot of unnecessary writes to disk in the case of large commits
-			log->skip_writing = true;
-		}
-	} else {
-		D_ASSERT(!checkpoint);
+SingleFileStorageCommitState::~SingleFileStorageCommitState() {
+	if (state != WALCommitState::IN_PROGRESS) {
+		return;
+	}
+	try {
+		// truncate the WAL in case of a destructor
+		RevertCommit();
+	} catch (...) { // NOLINT
 	}
 }
 
-// Make the commit persistent
+void SingleFileStorageCommitState::RevertCommit() {
+	if (state != WALCommitState::IN_PROGRESS) {
+		return;
+	}
+	if (wal.GetTotalWritten() > initial_written) {
+		// remove any entries written into the WAL by truncating it
+		wal.Truncate(initial_wal_size);
+	}
+	state = WALCommitState::TRUNCATED;
+}
+
 void SingleFileStorageCommitState::FlushCommit() {
-	if (log) {
-		// flush the WAL if any changes were made
-		if (log->GetTotalWritten() > initial_written) {
-			(void)checkpoint;
-			D_ASSERT(!checkpoint);
-			D_ASSERT(!log->skip_writing);
-			log->Flush();
-		}
-		log->skip_writing = false;
+	if (state != WALCommitState::IN_PROGRESS) {
+		return;
 	}
-	// Null so that the destructor will not truncate the log.
-	log = nullptr;
+	wal.Flush();
+	state = WALCommitState::FLUSHED;
 }
 
-unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(Transaction &transaction,
-                                                                               bool checkpoint) {
-	return make_uniq<SingleFileStorageCommitState>(*this, checkpoint);
+unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {
+	return make_uniq<SingleFileStorageCommitState>(*this, wal);
 }
 
 bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id) {
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
-void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_checkpoint) {
-	if (InMemory() || read_only || !wal) {
+void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
+	if (InMemory() || read_only || !load_complete) {
 		return;
 	}
+	if (db.GetStorageExtension()) {
+		db.GetStorageExtension()->OnCheckpointStart(db, options);
+	}
 	auto &config = DBConfig::Get(db);
-	if (wal->GetWALSize() > 0 || config.options.force_checkpoint || force_checkpoint) {
+	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::FORCE_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
-			SingleFileCheckpointWriter checkpointer(db, *block_manager);
+			SingleFileCheckpointWriter checkpointer(db, *block_manager, options.type);
 			checkpointer.CreateCheckpoint();
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
-	if (delete_wal) {
-		wal->Delete();
-		wal.reset();
+	if (options.wal_action == CheckpointWALAction::DELETE_WAL) {
+		ResetWAL();
+	}
+
+	if (db.GetStorageExtension()) {
+		db.GetStorageExtension()->OnCheckpointEnd(db, options);
 	}
 }
 
@@ -283,13 +319,11 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 	DatabaseSize ds;
 	if (!InMemory()) {
 		ds.total_blocks = block_manager->TotalBlocks();
-		ds.block_size = Storage::BLOCK_ALLOC_SIZE;
+		ds.block_size = block_manager->GetBlockAllocSize();
 		ds.free_blocks = block_manager->FreeBlocks();
 		ds.used_blocks = ds.total_blocks - ds.free_blocks;
 		ds.bytes = (ds.total_blocks * ds.block_size);
-		if (auto wal = GetWriteAheadLog()) {
-			ds.wal_size = NumericCast<idx_t>(wal->GetWALSize());
-		}
+		ds.wal_size = NumericCast<idx_t>(GetWALSize());
 	}
 	return ds;
 }
@@ -300,15 +334,9 @@ vector<MetadataBlockInfo> SingleFileStorageManager::GetMetadataInfo() {
 }
 
 bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
-	auto log = GetWriteAheadLog();
-	if (!log) {
-		return false;
-	}
-
-	auto &config = DBConfig::Get(db);
-	auto initial_size = NumericCast<idx_t>(log->GetWALSize());
+	auto initial_size = NumericCast<idx_t>(GetWALSize());
 	idx_t expected_wal_size = initial_size + estimated_wal_bytes;
-	return expected_wal_size > config.options.checkpoint_wal_size;
+	return expected_wal_size > DBConfig::Get(db).options.checkpoint_wal_size;
 }
 
 shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCreateTableInfo *info /*info*/) {

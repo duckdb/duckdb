@@ -1,10 +1,6 @@
-#ifndef JEMALLOC_INTERNAL_ASSERT_H
-#define JEMALLOC_INTERNAL_ASSERT_H
-
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/malloc_io.h"
 #include "jemalloc/internal/util.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * Define a custom assert() in order to reduce the chances of deadlock during
@@ -16,7 +12,7 @@ namespace duckdb_jemalloc {
 		malloc_printf(						\
 		    "<jemalloc>: %s:%d: Failed assertion: \"%s\"\n",	\
 		    __FILE__, __LINE__, #e);				\
-		jemalloc_abort();						\
+		abort();						\
 	}								\
 } while (0)
 #endif
@@ -27,7 +23,7 @@ namespace duckdb_jemalloc {
 		malloc_printf(						\
 		    "<jemalloc>: %s:%d: Unreachable code reached\n",	\
 		    __FILE__, __LINE__);				\
-		jemalloc_abort();						\
+		abort();						\
 	}								\
 	unreachable();							\
 } while (0)
@@ -38,7 +34,7 @@ namespace duckdb_jemalloc {
 	if (config_debug) {						\
 		malloc_printf("<jemalloc>: %s:%d: Not implemented\n",	\
 		    __FILE__, __LINE__);				\
-		jemalloc_abort();						\
+		abort();						\
 	}								\
 } while (0)
 #endif
@@ -59,7 +55,3 @@ namespace duckdb_jemalloc {
 	}								\
 } while (0)
 #endif
-
-} // namespace duckdb_jemalloc
-
-#endif /* JEMALLOC_INTERNAL_ASSERT_H */

@@ -17,7 +17,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	D_ASSERT(vacuum.column_id_map.empty());
 	auto bound_table = Bind(*info.ref);
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
-		throw InvalidInputException("Can only vacuum/analyze base tables!");
+		throw InvalidInputException("can only vacuum or analyze base tables");
 	}
 	auto ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(std::move(bound_table));
 	auto &table = ref->table;
@@ -35,7 +35,8 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	vector<string> non_generated_column_names;
 	for (auto &col_name : columns) {
 		if (column_name_set.count(col_name) > 0) {
-			throw BinderException("Vacuum the same column twice(same name in column name list)");
+			throw BinderException("cannot vacuum or analyze the same column twice, i.e., there is a duplicate entry in "
+			                      "the list of column names");
 		}
 		column_name_set.insert(col_name);
 		if (!table.ColumnExists(col_name)) {
@@ -89,6 +90,8 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	result.plan = std::move(vacuum);
+
+	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

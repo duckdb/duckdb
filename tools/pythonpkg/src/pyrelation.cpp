@@ -35,12 +35,26 @@ DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(r
 }
 
 bool DuckDBPyRelation::CanBeRegisteredBy(Connection &con) {
+	return CanBeRegisteredBy(con.context);
+}
+
+bool DuckDBPyRelation::CanBeRegisteredBy(ClientContext &context) {
 	if (!rel) {
 		// PyRelation without an internal relation can not be registered
 		return false;
 	}
-	auto context = rel->context.GetContext();
-	return context == con.context;
+	auto this_context = rel->context.TryGetContext();
+	if (!this_context) {
+		return false;
+	}
+	return &context == this_context.get();
+}
+
+bool DuckDBPyRelation::CanBeRegisteredBy(shared_ptr<ClientContext> &con) {
+	if (!con) {
+		return false;
+	}
+	return CanBeRegisteredBy(*con);
 }
 
 DuckDBPyRelation::~DuckDBPyRelation() {
@@ -62,11 +76,13 @@ DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nu
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const string &expression) {
 	auto projected_relation = make_uniq<DuckDBPyRelation>(rel->Project(expression));
-	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
+	for (auto &dep : this->rel->external_dependencies) {
+		projected_relation->rel->AddExternalDependency(dep);
+	}
 	return projected_relation;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, const py::kwargs &kwargs) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, const string &groups) {
 	if (!rel) {
 		return nullptr;
 	}
@@ -89,7 +105,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, con
 			expressions.push_back(std::move(expr));
 		}
 		vector<string> empty_aliases;
-		auto groups = kwargs.contains("groups") ? std::string(py::cast<py::str>(kwargs["groups"])) : "";
 		if (groups.empty()) {
 			// No groups provided
 			return make_uniq<DuckDBPyRelation>(rel->Project(std::move(expressions), empty_aliases));
@@ -1356,10 +1371,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun, Optional<py
 	params.emplace_back(Value::POINTER(CastPointerToValue(fun.ptr())));
 	params.emplace_back(Value::POINTER(CastPointerToValue(schema.ptr())));
 	auto relation = make_uniq<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
-	auto rel_dependency = make_uniq<PythonDependencies>();
-	rel_dependency->map_function = std::move(fun);
-	rel_dependency->py_object_list.push_back(make_uniq<RegisteredObject>(std::move(schema)));
-	relation->rel->extra_dependencies = std::move(rel_dependency);
+	auto rel_dependency = make_uniq<ExternalDependency>();
+	rel_dependency->AddDependency("map", PythonDependencyItem::Create(std::move(fun)));
+	rel_dependency->AddDependency("schema", PythonDependencyItem::Create(std::move(schema)));
+	relation->rel->AddExternalDependency(std::move(rel_dependency));
 	return relation;
 }
 
@@ -1379,6 +1394,9 @@ string DuckDBPyRelation::ToStringInternal(const BoxRendererConfig &config, bool 
 string DuckDBPyRelation::ToString() {
 	BoxRendererConfig config;
 	config.limit = 10000;
+	if (DuckDBPyConnection::IsJupyter()) {
+		config.max_width = 10000;
+	}
 	return ToStringInternal(config);
 }
 
@@ -1392,6 +1410,9 @@ void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional
                              const py::object &render_mode) {
 	BoxRendererConfig config;
 	config.limit = 10000;
+	if (DuckDBPyConnection::IsJupyter()) {
+		config.max_width = 10000;
+	}
 
 	bool invalidate_cache = false;
 	if (!py::none().is(max_width)) {
@@ -1444,7 +1465,9 @@ string DuckDBPyRelation::Explain(ExplainType type) {
 
 // TODO: RelationType to a python enum
 py::str DuckDBPyRelation::Type() {
-	AssertRelation();
+	if (!rel) {
+		return py::str("QUERY_RESULT");
+	}
 	return py::str(RelationTypeToString(rel->type));
 }
 

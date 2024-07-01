@@ -92,7 +92,7 @@ struct HeaderValue {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache, SetColumns set_columns = {});
+	                    CSVStateMachineCache &state_machine_cache, bool default_null_to_varchar = true);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
@@ -139,6 +139,7 @@ private:
 	                                     const vector<QuoteRule> &quoterule_candidates,
 	                                     const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
 	                                     const unordered_map<uint8_t, vector<char>> &escape_candidates_map);
+
 	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
 	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
 	                             idx_t &prev_padding_count);
@@ -166,7 +167,7 @@ private:
 	                                   string_t &dummy_val);
 	//! If a string_t value can be cast to a type
 	bool CanYouCastIt(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
-	                  const bool is_null);
+	                  const bool is_null, const char decimal_separator);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types
@@ -190,6 +191,8 @@ private:
 	void RefineTypes();
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 	vector<LogicalType> detected_types;
+	//! If when finding a SQLNULL type in type detection we default it to varchar
+	const bool default_null_to_varchar;
 	//! ------------------------------------------------------//
 	//! ------------------ Header Detection ----------------- //
 	//! ------------------------------------------------------//

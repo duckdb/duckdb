@@ -35,6 +35,7 @@ public:
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
+	virtual CheckpointType GetCheckpointType() const = 0;
 
 	TaskScheduler &GetScheduler();
 
@@ -52,6 +53,7 @@ public:
 public:
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info, Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
+	CheckpointType GetCheckpointType() const override;
 
 private:
 	SingleFileCheckpointWriter &checkpoint_manager;

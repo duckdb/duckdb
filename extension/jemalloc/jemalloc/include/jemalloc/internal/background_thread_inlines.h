@@ -1,7 +1,10 @@
 #ifndef JEMALLOC_INTERNAL_BACKGROUND_THREAD_INLINES_H
 #define JEMALLOC_INTERNAL_BACKGROUND_THREAD_INLINES_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/arena_inlines_a.h"
+#include "jemalloc/internal/atomic.h"
+#include "jemalloc/internal/background_thread_externs.h"
 
 JEMALLOC_ALWAYS_INLINE bool
 background_thread_enabled(void) {
@@ -46,7 +49,5 @@ JEMALLOC_ALWAYS_INLINE bool
 background_thread_indefinite_sleep(background_thread_info_t *info) {
 	return atomic_load_b(&info->indefinite_sleep, ATOMIC_ACQUIRE);
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BACKGROUND_THREAD_INLINES_H */

@@ -27,8 +27,6 @@ public:
 	//! The offset within the current block
 	idx_t offset;
 
-	static constexpr idx_t STRING_SPACE = Storage::BLOCK_SIZE - sizeof(block_id_t);
-
 public:
 	void WriteString(UncompressedStringSegmentState &state, string_t string, block_id_t &result_block,
 	                 int32_t &result_offset) override;
@@ -36,6 +34,7 @@ public:
 
 private:
 	void AllocateNewBlock(UncompressedStringSegmentState &state, block_id_t new_block_id);
+	idx_t GetStringSpace() const;
 };
 
 } // namespace duckdb

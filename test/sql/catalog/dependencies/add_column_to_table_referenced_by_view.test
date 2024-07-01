@@ -1,0 +1,27 @@
+# name: test/sql/catalog/dependencies/add_column_to_table_referenced_by_view.test
+# group: [dependencies]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl(a varchar default 'abc');
+
+statement ok
+insert into tbl values(DEFAULT);
+
+statement ok
+create view vw as select * from tbl;
+
+query I
+select * from vw;
+----
+abc
+
+statement ok
+alter table tbl add column b integer default 5;
+
+statement error
+select * from vw;
+----
+Contents of view were altered: types don't match! Expected [VARCHAR], but found [VARCHAR, INTEGER] instead

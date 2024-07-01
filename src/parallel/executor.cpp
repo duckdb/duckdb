@@ -17,6 +17,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 
 #include <algorithm>
+#include <chrono>
 
 namespace duckdb {
 
@@ -426,6 +427,24 @@ void Executor::WorkOnTasks() {
 	}
 }
 
+void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
+	task_reschedule.notify_one();
+}
+
+void Executor::WaitForTask() {
+	static constexpr std::chrono::milliseconds WAIT_TIME = std::chrono::milliseconds(20);
+	std::unique_lock<mutex> l(executor_lock);
+	if (to_be_rescheduled_tasks.empty()) {
+		return;
+	}
+	if (ResultCollectorIsBlocked()) {
+		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
+		return;
+	}
+
+	task_reschedule.wait_for(l, WAIT_TIME);
+}
+
 void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 	// This function will spin lock until the task provided is added to the to_be_rescheduled_tasks
 	while (true) {
@@ -438,17 +457,20 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 			auto &scheduler = TaskScheduler::GetScheduler(context);
 			to_be_rescheduled_tasks.erase(task_p.get());
 			scheduler.ScheduleTask(GetToken(), task_p);
+			SignalTaskRescheduled(l);
 			break;
 		}
 	}
 }
 
 bool Executor::ResultCollectorIsBlocked() {
+	if (!HasResultCollector()) {
+		return false;
+	}
 	if (completed_pipelines + 1 != total_pipelines) {
 		// The result collector is always in the last pipeline
 		return false;
 	}
-	lock_guard<mutex> l(executor_lock);
 	if (to_be_rescheduled_tasks.empty()) {
 		return false;
 	}
@@ -483,7 +505,7 @@ bool Executor::ExecutionIsFinished() {
 PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 	// Only executor should return NO_TASKS_AVAILABLE
 	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
-	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
+	if (execution_result != PendingExecutionResult::RESULT_NOT_READY && ExecutionIsFinished()) {
 		return execution_result;
 	}
 	// check if there are any incomplete pipelines
@@ -503,13 +525,15 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 
 		if (!current_task && !HasError()) {
 			// there are no tasks to be scheduled and there are tasks blocked
-			if (ResultCollectorIsBlocked()) {
-				// The blocked tasks are processing the Sink of a BufferedResultCollector
-				// We return here so the query result can be made and fetched from
-				// which will in turn unblock the Sink tasks.
-				return PendingExecutionResult::BLOCKED;
+			lock_guard<mutex> l(executor_lock);
+			if (to_be_rescheduled_tasks.empty()) {
+				return PendingExecutionResult::NO_TASKS_AVAILABLE;
 			}
-			return PendingExecutionResult::NO_TASKS_AVAILABLE;
+			// At least one task is blocked
+			if (ResultCollectorIsBlocked()) {
+				return PendingExecutionResult::RESULT_READY;
+			}
+			return PendingExecutionResult::BLOCKED;
 		}
 
 		if (current_task) {
@@ -545,7 +569,7 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		execution_result = PendingExecutionResult::EXECUTION_ERROR;
 		ThrowException();
 	} // LCOV_EXCL_STOP
-	execution_result = PendingExecutionResult::RESULT_READY;
+	execution_result = PendingExecutionResult::EXECUTION_FINISHED;
 	return execution_result;
 }
 

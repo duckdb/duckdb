@@ -108,6 +108,14 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		auto &collation = expr->Cast<CollateExpression>();
 		if (collation.child->expression_class == ExpressionClass::CONSTANT) {
 			auto &constant = collation.child->Cast<ConstantExpression>();
+
+			// non-integral expression, we just leave the constant here.
+			// ORDER BY <constant> has no effect
+			// CONTROVERSIAL: maybe we should throw an error
+			if (!constant.value.type().IsIntegral()) {
+				return nullptr;
+			}
+
 			D_ASSERT(constant.value.GetValue<idx_t>() > 0);
 			auto index = constant.value.GetValue<idx_t>() - 1;
 			child_list_t<Value> values;

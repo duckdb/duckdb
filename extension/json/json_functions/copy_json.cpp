@@ -65,9 +65,10 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto select_stmt = make_uniq<SelectStatement>();
 	select_stmt->node = std::move(copied_info.select_statement);
 	auto subquery_ref = make_uniq<SubqueryRef>(std::move(select_stmt));
+
 	copied_info.select_statement = make_uniq_base<QueryNode, SelectNode>();
-	auto &new_select_node = copied_info.select_statement->Cast<SelectNode>();
-	new_select_node.from_table = std::move(subquery_ref);
+	auto &select_node = copied_info.select_statement->Cast<SelectNode>();
+	select_node.from_table = std::move(subquery_ref);
 
 	// Create new select list
 	vector<unique_ptr<ParsedExpression>> select_list;
@@ -95,7 +96,6 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	}
 
 	// Now create the struct_pack/to_json to create a JSON object per row
-	auto &select_node = copied_info.select_statement->Cast<SelectNode>();
 	vector<unique_ptr<ParsedExpression>> struct_pack_child;
 	struct_pack_child.emplace_back(make_uniq<FunctionExpression>("struct_pack", std::move(select_list)));
 	select_node.select_list.emplace_back(make_uniq<FunctionExpression>("to_json", std::move(struct_pack_child)));

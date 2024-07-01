@@ -46,10 +46,12 @@ typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(uintptr_
                                                                         ArrowStreamParameters &parameters);
 typedef void (*stream_factory_get_schema_t)(ArrowArrayStream *stream_factory_ptr, ArrowSchema &schema);
 
-struct ArrowScanFunctionData : public PyTableFunctionData {
+struct ArrowScanFunctionData : public TableFunctionData {
 public:
-	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p)
-	    : lines_read(0), stream_factory_ptr(stream_factory_ptr_p), scanner_producer(scanner_producer_p) {
+	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p,
+	                      shared_ptr<DependencyItem> dependency = nullptr)
+	    : lines_read(0), stream_factory_ptr(stream_factory_ptr_p), scanner_producer(scanner_producer_p),
+	      dependency(std::move(dependency)) {
 	}
 	vector<LogicalType> all_types;
 	atomic<idx_t> lines_read;
@@ -59,6 +61,8 @@ public:
 	uintptr_t stream_factory_ptr;
 	//! Pointer to the scanner factory produce
 	stream_factory_produce_t scanner_producer;
+	//! The (optional) dependency of this function (used in Python for example)
+	shared_ptr<DependencyItem> dependency;
 	//! Arrow table data
 	ArrowTableType arrow_table;
 };

@@ -165,7 +165,7 @@ protected:
 	atomic<bool> uploader_has_error {false};
 	std::exception_ptr upload_exception;
 
-	void InitializeClient() override;
+	void InitializeClient(optional_ptr<ClientContext> client_context) override;
 
 	//! Rethrow IO Exception originating from an upload thread
 	void RethrowIOError() {

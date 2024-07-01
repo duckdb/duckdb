@@ -11,6 +11,9 @@ statement ok
 SELECT SETSEED(0.8765309);
 
 statement ok
+SET merge_join_threshold=0
+
+statement ok
 CREATE TABLE df AS
     SELECT 
         (random() * 100)::INTEGER + 1 as id,
@@ -28,8 +31,6 @@ FROM df
 
 statement ok
 PRAGMA enable_verification
-
-# mode output_hash
 
 # Test right_projection_map
 foreach prefer False True

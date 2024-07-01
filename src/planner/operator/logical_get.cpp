@@ -9,6 +9,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,10 @@ string LogicalGet::ParamsToString() const {
 	if (!extra_info.file_filters.empty()) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "File Filters: " + extra_info.file_filters;
+		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
+			result += StringUtil::Format("\nScanning: %llu/%llu files", extra_info.filtered_files.GetIndex(),
+			                             extra_info.total_files.GetIndex());
+		}
 	}
 	if (!function.to_string) {
 		return result;
@@ -121,6 +126,9 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 			return node_stats->estimated_cardinality;
 		}
 	}
+	if (!children.empty()) {
+		return children[0]->EstimateCardinality(context);
+	}
 	return 1;
 }
 
@@ -164,8 +172,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		deserializer.ReadProperty(207, "named_parameters", result->named_parameters);
 		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
 		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
+		TableFunctionRef empty_ref;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
-		                             result->input_table_names, function.function_info.get(), nullptr);
+		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
+		                             empty_ref);
 
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;

@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include <string>
 #include <sstream>
+#include <string>
 
 namespace duckdb {
 using std::string;
-}
+using std::stringstream;
+} // namespace duckdb

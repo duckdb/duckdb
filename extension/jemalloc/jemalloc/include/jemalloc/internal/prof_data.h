@@ -1,9 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_PROF_DATA_H
 #define JEMALLOC_INTERNAL_PROF_DATA_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/mutex.h"
-
-namespace duckdb_jemalloc {
 
 extern malloc_mutex_t bt2gctx_mtx;
 extern malloc_mutex_t tdatas_mtx;
@@ -20,9 +19,8 @@ bool prof_bt_keycomp(const void *k1, const void *k2);
 
 bool prof_data_init(tsd_t *tsd);
 prof_tctx_t *prof_lookup(tsd_t *tsd, prof_bt_t *bt);
-char *prof_thread_name_alloc(tsd_t *tsd, const char *thread_name);
 int prof_thread_name_set_impl(tsd_t *tsd, const char *thread_name);
-void prof_unbias_map_init();
+void prof_unbias_map_init(void);
 void prof_dump_impl(tsd_t *tsd, write_cb_t *prof_dump_write, void *cbopaque,
     prof_tdata_t *tdata, bool leakcheck);
 prof_tdata_t * prof_tdata_init_impl(tsd_t *tsd, uint64_t thr_uid,
@@ -35,7 +33,5 @@ void prof_tctx_try_destroy(tsd_t *tsd, prof_tctx_t *tctx);
 size_t prof_tdata_count(void);
 size_t prof_bt_count(void);
 void prof_cnt_all(prof_cnt_t *cnt_all);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_DATA_H */
