@@ -184,12 +184,11 @@ public:
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
 	void Skip(ColumnSegment &col_segment, idx_t skip_count) {
-
 		if (total_value_count != 0 && !VectorFinished()) {
 			// Finish skipping the current vector
-			idx_t to_skip = LeftInVector();
-			skip_count -= to_skip;
+			idx_t to_skip = MinValue<idx_t>(skip_count, LeftInVector());
 			ScanVector<EXACT_TYPE, true>(nullptr, to_skip);
+			skip_count -= to_skip;
 		}
 		// Figure out how many entire vectors we can skip
 		// For these vectors, we don't even need to process the metadata or values

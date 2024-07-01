@@ -1535,9 +1535,18 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 	auto &ignore_nulls = gvstate.ignore_nulls;
 	auto &llstate = lstate.Cast<WindowLeadLagLocalState>();
 
+	bool can_shift = ignore_nulls.AllValid();
+	if (wexpr.offset_expr) {
+		can_shift = can_shift && wexpr.offset_expr->IsFoldable();
+	}
+	if (wexpr.default_expr) {
+		can_shift = can_shift && wexpr.default_expr->IsFoldable();
+	}
+
 	auto partition_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_END]);
-	for (idx_t i = 0; i < count; ++i, ++row_idx) {
+	const auto row_end = row_idx + count;
+	for (idx_t i = 0; i < count;) {
 		int64_t offset = 1;
 		if (wexpr.offset_expr) {
 			offset = llstate.leadlag_offset.GetCell<int64_t>(i);
@@ -1560,12 +1569,36 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 		}
 		// else offset is zero, so don't move.
 
-		if (!delta) {
-			CopyCell(payload_collection, 0, NumericCast<idx_t>(val_idx), result, i);
-		} else if (wexpr.default_expr) {
-			llstate.leadlag_default.CopyCell(result, i);
+		if (can_shift) {
+			if (!delta) {
+				//	Copy source[index:index+width] => result[i:]
+				const auto index = NumericCast<idx_t>(val_idx);
+				const auto source_limit = partition_end[i] - index;
+				const auto target_limit = MinValue(partition_end[i], row_end) - row_idx;
+				const auto width = MinValue(source_limit, target_limit);
+				auto &source = payload_collection.data[0];
+				VectorOperations::Copy(source, result, index + width, index, i);
+				i += width;
+				row_idx += width;
+			} else if (wexpr.default_expr) {
+				llstate.leadlag_default.CopyCell(result, i, delta);
+				i += delta;
+				row_idx += delta;
+			} else {
+				for (; delta--; ++i, ++row_idx) {
+					FlatVector::SetNull(result, i, true);
+				}
+			}
 		} else {
-			FlatVector::SetNull(result, i, true);
+			if (!delta) {
+				CopyCell(payload_collection, 0, NumericCast<idx_t>(val_idx), result, i);
+			} else if (wexpr.default_expr) {
+				llstate.leadlag_default.CopyCell(result, i);
+			} else {
+				FlatVector::SetNull(result, i, true);
+			}
+			++i;
+			++row_idx;
 		}
 	}
 }

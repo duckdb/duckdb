@@ -197,6 +197,7 @@ benchmark/micro/timestamp/extract_year.benchmark
 benchmark/micro/update/update_with_join.benchmark
 benchmark/micro/view/many_values.benchmark
 benchmark/micro/window/streaming_lag.benchmark
+benchmark/micro/window/streaming_lead.benchmark
 benchmark/micro/window/window_constant_aggregates.benchmark
 benchmark/micro/window/window_constant_count.benchmark
 benchmark/micro/window/window_count_star_fixed_100.benchmark
