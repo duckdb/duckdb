@@ -3,20 +3,24 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 
 namespace duckdb {
+
 constexpr uint8_t VARINT_HEADER_SIZE = 3;
 
-string_t IntToVarInt(Vector &result, int32_t int_value) {
+template <class T>
+string_t IntToVarInt(Vector &result, T int_value) {
 	// Determine if the number is negative
 	bool is_negative = int_value < 0;
-
 	// Determine the number of data bytes
-	uint64_t abs_value = static_cast<uint64_t>(std::abs(int_value));
+	uint64_t abs_value;
+	if (is_negative) {
+		abs_value = static_cast<uint64_t>(std::abs(static_cast<int64_t>(int_value)));
+	} else {
+		abs_value = static_cast<uint64_t>(int_value);
+	}
 	uint32_t data_byte_size = (abs_value == 0) ? 1 : static_cast<uint32_t>(std::ceil(std::log2(abs_value + 1) / 8.0));
-
 	if (is_negative && abs_value != 0) {
 		abs_value = ~abs_value;
 	}
-
 	// Create the header
 	uint32_t header = data_byte_size;
 	// Set MSD of 3rd byte
@@ -24,7 +28,6 @@ string_t IntToVarInt(Vector &result, int32_t int_value) {
 	if (is_negative && abs_value != 0) {
 		header = ~header;
 	}
-
 	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
 	auto blob = StringVector::EmptyString(result, blob_size);
 	if (blob_size < string_t::INLINE_BYTES) {
@@ -203,10 +206,27 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 	D_ASSERT(target.id() == LogicalTypeId::VARINT);
 	// now switch on the result type
 	switch (source.id()) {
+	case LogicalTypeId::TINYINT:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int8_t, duckdb::IntTryCastToVarInt>);
+	case LogicalTypeId::UTINYINT:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint8_t, duckdb::IntTryCastToVarInt>);
+	case LogicalTypeId::SMALLINT:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int16_t, duckdb::IntTryCastToVarInt>);
+	case LogicalTypeId::USMALLINT:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint16_t, duckdb::IntTryCastToVarInt>);
 	case LogicalTypeId::INTEGER:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<int32_t, duckdb::IntTryCastToVarInt>);
+	case LogicalTypeId::UINTEGER:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint32_t, duckdb::IntTryCastToVarInt>);
+	case LogicalTypeId::BIGINT:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint64_t, duckdb::IntTryCastToVarInt>);
+	case LogicalTypeId::UBIGINT:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint64_t, duckdb::IntTryCastToVarInt>);
 	case LogicalTypeId::VARCHAR:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::VarcharTryCastToVarInt>);
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::DOUBLE:
 		return TryVectorNullCast;
 	default:

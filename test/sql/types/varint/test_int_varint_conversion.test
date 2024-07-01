@@ -5,6 +5,28 @@
 statement ok
 PRAGMA enable_verification
 
+loop i 0 100
+
+foreach int_type tinyint utinyint smallint usmallint integer uinteger bigint ubigint
+
+query I
+select  ${i}::${int_type}::varint = '${i}'::varint
+----
+true
+
+endloop
+
+#foreach int_type tinyint  smallint  integer  bigint
+#
+#query I
+#select  (-${i})::${int_type}::varint = '-${i}'::varint
+#----
+#true
+#
+#endloop
+
+endloop
+
 query I
 select 0::varint
 ----
@@ -106,8 +128,6 @@ select count(*) from integers where a < 0::VARINT
 3
 
 # Check Border values
-# Max 2147483647
-# Min -2147483648
 query I
 select 2147483647::varint
 ----
