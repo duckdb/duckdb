@@ -68,9 +68,7 @@ TransformForeignKeyConstraint(duckdb_libpgquery::PGConstraint &constraint,
 	return make_uniq<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(fk_info));
 }
 
-unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGListCell &cell) {
-
-	auto constraint = PGPointerCast<duckdb_libpgquery::PGConstraint>(cell.data.ptr_value);
+unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGConstraint *constraint) {
 	D_ASSERT(constraint);
 
 	switch (constraint->contype) {
@@ -95,23 +93,21 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		return make_uniq<CheckConstraint>(TransformExpression(constraint->raw_expr));
 	}
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
-		return TransformForeignKeyConstraint(*constraint.get());
+		return TransformForeignKeyConstraint(*constraint);
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");
 	}
 }
 
-unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGListCell &cell, ColumnDefinition &column,
-                                                        idx_t index) {
-
-	auto constraint = PGPointerCast<duckdb_libpgquery::PGConstraint>(cell.data.ptr_value);
+unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGConstraint *constraint,
+                                                        ColumnDefinition &column, idx_t index) {
 	D_ASSERT(constraint);
 
 	switch (constraint->contype) {
 	case duckdb_libpgquery::PG_CONSTR_NOTNULL:
 		return make_uniq<NotNullConstraint>(LogicalIndex(index));
 	case duckdb_libpgquery::PG_CONSTR_CHECK:
-		return TransformConstraint(cell);
+		return TransformConstraint(constraint);
 	case duckdb_libpgquery::PG_CONSTR_PRIMARY:
 		return make_uniq<UniqueConstraint>(LogicalIndex(index), true);
 	case duckdb_libpgquery::PG_CONSTR_UNIQUE:
@@ -139,7 +135,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		}
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
-		return TransformForeignKeyConstraint(*constraint.get(), &column.Name());
+		return TransformForeignKeyConstraint(*constraint, &column.Name());
 	default:
 		throw NotImplementedException("Constraint not implemented!");
 	}

@@ -100,8 +100,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			auto cdef = PGPointerCast<duckdb_libpgquery::PGColumnDef>(c->data.ptr_value);
 			auto centry = TransformColumnDefinition(*cdef);
 			if (cdef->constraints) {
-				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
-					auto constraint = TransformConstraint(*constr, centry, info->columns.LogicalColumnCount());
+				for (auto cell = cdef->constraints->head; cell != nullptr; cell = cell->next) {
+					auto pg_constraint = reinterpret_cast<duckdb_libpgquery::PGConstraint *>(cell->data.ptr_value);
+					auto constraint = TransformConstraint(pg_constraint, centry, info->columns.LogicalColumnCount());
 					if (constraint) {
 						info->constraints.push_back(std::move(constraint));
 					}
@@ -112,7 +113,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {
-			info->constraints.push_back(TransformConstraint(*c));
+			auto pg_constraint = reinterpret_cast<duckdb_libpgquery::PGConstraint *>(c->data.ptr_value);
+			info->constraints.push_back(TransformConstraint(pg_constraint));
 			break;
 		}
 		default:

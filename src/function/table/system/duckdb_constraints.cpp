@@ -212,7 +212,11 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				switch (bound_constraint.type) {
 				case ConstraintType::UNIQUE: {
 					auto &bound_unique = bound_constraint.Cast<BoundUniqueConstraint>();
-					uk_info = {table.schema.name, table.name, bound_unique.keys};
+					vector<LogicalIndex> index;
+					for (auto &key : bound_unique.keys) {
+						index.push_back(table.GetColumns().PhysicalToLogical(key));
+					}
+					uk_info = {table.schema.name, table.name, index};
 					break;
 				}
 				case ConstraintType::FOREIGN_KEY: {
@@ -263,46 +267,19 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			output.SetValue(col++, count, expression_text);
 
-			vector<LogicalIndex> column_index_list;
+			vector<PhysicalIndex> column_index_list;
 			if (is_duck_table) {
 				auto &bound_constraint = *entry.bound_constraints[data.constraint_offset];
-				switch (bound_constraint.type) {
-				case ConstraintType::CHECK: {
-					auto &bound_check = bound_constraint.Cast<BoundCheckConstraint>();
-					for (auto &col_idx : bound_check.bound_columns) {
-						column_index_list.push_back(table.GetColumns().PhysicalToLogical(col_idx));
-					}
-					break;
-				}
-				case ConstraintType::UNIQUE: {
-					auto &bound_unique = bound_constraint.Cast<BoundUniqueConstraint>();
-					for (auto &col_idx : bound_unique.keys) {
-						column_index_list.push_back(col_idx);
-					}
-					break;
-				}
-				case ConstraintType::NOT_NULL: {
-					auto &bound_not_null = bound_constraint.Cast<BoundNotNullConstraint>();
-					column_index_list.push_back(table.GetColumns().PhysicalToLogical(bound_not_null.index));
-					break;
-				}
-				case ConstraintType::FOREIGN_KEY: {
-					auto &bound_foreign_key = bound_constraint.Cast<BoundForeignKeyConstraint>();
-					for (auto &col_idx : bound_foreign_key.info.fk_keys) {
-						column_index_list.push_back(table.GetColumns().PhysicalToLogical(col_idx));
-					}
-					break;
-				}
-				default:
-					throw NotImplementedException("Unimplemented constraint for duckdb_constraints");
-				}
+				auto indexes = bound_constraint.GetColumnIndices();
+				column_index_list.insert(column_index_list.end(), indexes.begin(), indexes.end());
 			}
 
 			vector<Value> index_list;
 			vector<Value> column_name_list;
 			for (auto column_index : column_index_list) {
-				index_list.push_back(Value::BIGINT(NumericCast<int64_t>(column_index.index)));
-				column_name_list.emplace_back(table.GetColumn(column_index).Name());
+				auto logical_index = table.GetColumns().PhysicalToLogical(column_index);
+				index_list.push_back(Value::BIGINT(NumericCast<int64_t>(logical_index.index)));
+				column_name_list.emplace_back(table.GetColumn(logical_index).Name());
 			}
 
 			// constraint_column_indexes, LIST

@@ -608,5 +608,17 @@
       }
     ],
     "constructor": ["options"]
+  },
+  {
+    "class": "AddConstraintInfo",
+    "base": "AlterTableInfo",
+    "enum": "ADD_CONSTRAINT",
+    "members": [
+      {
+        "id": 400,
+        "name": "constraint",
+        "type": "unique_ptr<Constraint>"
+      }
+    ]
   }
 ]
