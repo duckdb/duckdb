@@ -13,45 +13,15 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
+struct LocalUngroupedAggregateState;
 
 struct UngroupedAggregateState {
-	explicit UngroupedAggregateState(const vector<unique_ptr<Expression>> &aggregate_expressions) :
-		aggregate_expressions(aggregate_expressions) {
-		counts = make_uniq_array<atomic<idx_t>>(aggregate_expressions.size());
-		for (idx_t i = 0; i < aggregate_expressions.size(); i++) {
-			auto &aggregate = aggregate_expressions[i];
-			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-			auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-			auto state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
-			aggr.function.initialize(state.get());
-			aggregate_data.push_back(std::move(state));
-			bind_data.push_back(aggr.bind_info.get());
-			destructors.push_back(aggr.function.destructor);
-#ifdef DEBUG
-			counts[i] = 0;
-#endif
-		}
-	}
-	~UngroupedAggregateState() {
-		D_ASSERT(destructors.size() == aggregate_data.size());
-		for (idx_t i = 0; i < destructors.size(); i++) {
-			if (!destructors[i]) {
-				continue;
-			}
-			Vector state_vector(Value::POINTER(CastPointerToValue(aggregate_data[i].get())));
-			state_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	explicit UngroupedAggregateState(const vector<unique_ptr<Expression>> &aggregate_expressions);
+	~UngroupedAggregateState();
 
-			ArenaAllocator allocator(Allocator::DefaultAllocator());
-			AggregateInputData aggr_input_data(bind_data[i], allocator);
-			destructors[i](state_vector, aggr_input_data, 1);
-		}
-	}
+	void Move(UngroupedAggregateState &other);
 
-	void Move(UngroupedAggregateState &other) {
-		other.aggregate_data = std::move(aggregate_data);
-		other.destructors = std::move(destructors);
-	}
-
+public:
 	//! Aggregates
 	const vector<unique_ptr<Expression>> &aggregate_expressions;
 	//! The aggregate values
@@ -64,5 +34,37 @@ struct UngroupedAggregateState {
 	unique_array<atomic<idx_t>> counts;
 };
 
+struct GlobalUngroupedAggregateState {
+public:
+	GlobalUngroupedAggregateState(Allocator &client_allocator, const vector<unique_ptr<Expression>> &aggregates) :
+	    client_allocator(client_allocator), allocator(client_allocator), state(aggregates) {}
+
+	mutable mutex lock;
+	//! Client allocator
+	Allocator &client_allocator;
+	//! Global arena allocator
+	ArenaAllocator allocator;
+	//! Allocator pool
+	mutable vector<unique_ptr<ArenaAllocator>> stored_allocators;
+	//! The global aggregate state
+	UngroupedAggregateState state;
+public:
+	//! Create an ArenaAllocator with cross-thread lifetime
+	ArenaAllocator &CreateAllocator() const;
+	void Combine(LocalUngroupedAggregateState &other);
+};
+
+struct LocalUngroupedAggregateState {
+public:
+	LocalUngroupedAggregateState(GlobalUngroupedAggregateState &gstate);
+
+	//! Local arena allocator
+	ArenaAllocator &allocator;
+	//! The local aggregate state
+	UngroupedAggregateState state;
+
+public:
+	void Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx);
+};
 
 } // namespace duckdb
