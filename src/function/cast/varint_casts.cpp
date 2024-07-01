@@ -5,7 +5,7 @@
 namespace duckdb {
 constexpr uint8_t VARINT_HEADER_SIZE = 3;
 
-string_t IntToVarInt(int32_t int_value) {
+string_t IntToVarInt(Vector &result, int32_t int_value) {
 	// Determine if the number is negative
 	bool is_negative = int_value < 0;
 
@@ -26,12 +26,11 @@ string_t IntToVarInt(int32_t int_value) {
 	}
 
 	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
-	string_t blob {blob_size};
+	auto blob = StringVector::EmptyString(result, blob_size);
 	if (blob_size < string_t::INLINE_BYTES) {
 		// set these babies to 0.
 		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 	}
-
 	auto writable_blob = blob.GetDataWriteable();
 	// Add header bytes to the blob
 	idx_t wb_idx = 0;
@@ -47,37 +46,15 @@ string_t IntToVarInt(int32_t int_value) {
 	return blob;
 }
 
-// int32_t VarIntToInt() {
-// 	int32_t int_value = 0;
-// idx_t cur_byte_pos = 3;
-// for (idx_t i = 0; i < data_byte_size; i++) {
-// 	if (is_negative) {
-// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(~blob_ptr[cur_byte_pos + i]))
-// 		             << 8 * (data_byte_size - i - 1);
-// 	} else {
-// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(blob_ptr[cur_byte_pos + i]))
-// 		             << 8 * (data_byte_size - i - 1);
-// 	}
-// }
-//
-// // If negative, convert from two's complement
-// if (is_negative) {
-// 	int_value = 0 - int_value;
-// }
-// }
-
 int CharToDigit(char c) {
-	// if (c >= '0' && c <= '9') {
 	return c - '0';
-	// }
-	// throw InvalidInputException("bad string");
 }
 
 char DigitToChar(int digit) {
 	return digit + '0';
 }
 
-string_t VarcharToVarInt(string_t int_value) {
+string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	if (int_value.Empty()) {
 		throw InvalidInputException("bad string");
 	}
@@ -125,12 +102,11 @@ string_t VarcharToVarInt(string_t int_value) {
 		abs_str = quotient;
 	}
 	uint32_t blob_size = static_cast<uint32_t>(blob_string.size() + VARINT_HEADER_SIZE);
-	string_t blob {blob_size};
+	auto blob = StringVector::EmptyString(result, blob_size);
 	if (blob_size < string_t::INLINE_BYTES) {
 		// set these babies to 0.
 		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 	}
-
 	uint32_t header = blob_string.size();
 	// Set MSD of 3rd byte
 	header |= 0x00800000;
@@ -154,7 +130,6 @@ string_t VarcharToVarInt(string_t int_value) {
 }
 
 // Function to convert VARINT blob to a VARCHAR
-// FIXME: This should probably use a double
 string_t VarIntToVarchar(string_t &blob) {
 	if (blob.GetSize() < 4) {
 		throw InvalidInputException("Invalid blob size.");
@@ -200,35 +175,19 @@ string_t VarIntToVarchar(string_t &blob) {
 	// Reverse the string to get the correct decimal representation
 	std::reverse(decimalString.begin(), decimalString.end());
 	return decimalString;
-
-	// for (idx_t i = 0; i < data_byte_size; i++) {
-	// 	if (is_negative) {
-	// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(~blob_ptr[cur_byte_pos + i]))
-	// 		             << 8 * (data_byte_size - i - 1);
-	// 	} else {
-	// 		int_value |= static_cast<uint32_t>(static_cast<uint8_t>(blob_ptr[cur_byte_pos + i]))
-	// 		             << 8 * (data_byte_size - i - 1);
-	// 	}
-	// }
-	//
-	// // If negative, convert from two's complement
-	// if (is_negative) {
-	// 	int_value = 0 - int_value;
-	// }
-	// return std::to_string(int_value);
 }
 
 struct IntTryCastToVarInt {
 	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
-		return StringVector::AddStringOrBlob(result, IntToVarInt(input));
+		return IntToVarInt(result, input);
 	}
 };
 
 struct VarcharTryCastToVarInt {
 	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
-		return StringVector::AddStringOrBlob(result, VarcharToVarInt(input));
+		return VarcharToVarInt(result, input);
 	}
 };
 
