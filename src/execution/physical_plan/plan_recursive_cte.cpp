@@ -32,10 +32,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 		unordered_map<idx_t, idx_t> group_by_references;
 		for (idx_t i = 0; i < op.key_targets.size(); i++) {
 			auto &target = op.key_targets[i];
-			if (target->type == ExpressionType::BOUND_REF) {
-				auto &bound_ref = target->Cast<BoundReferenceExpression>();
-				group_by_references[bound_ref.index] = i;
-			}
+			D_ASSERT(target->type == ExpressionType::BOUND_REF);
+			auto &bound_ref = target->Cast<BoundReferenceExpression>();
+			group_by_references[bound_ref.index] = i;
 		}
 
 		/*
