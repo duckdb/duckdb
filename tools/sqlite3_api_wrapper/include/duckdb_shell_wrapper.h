@@ -27,6 +27,7 @@
 #define sqlite3_busy_handler           duckdb_shell_sqlite3_busy_handler
 #define sqlite3_busy_timeout           duckdb_shell_sqlite3_busy_timeout
 #define sqlite3_changes                duckdb_shell_sqlite3_changes
+#define sqlite3_changes64              duckdb_shell_sqlite3_changes64
 #define sqlite3_clear_bindings         duckdb_shell_sqlite3_clear_bindings
 #define sqlite3_close                  duckdb_shell_sqlite3_close
 #define sqlite3_collation_needed       duckdb_shell_sqlite3_collation_needed
@@ -142,6 +143,7 @@
 #define sqlite3_test_control           duckdb_shell_sqlite3_test_control
 #define sqlite3_threadsafe             duckdb_shell_sqlite3_threadsafe
 #define sqlite3_total_changes          duckdb_shell_sqlite3_total_changes
+#define sqlite3_total_changes64        duckdb_shell_sqlite3_total_changes64
 #define sqlite3_trace                  duckdb_shell_sqlite3_trace
 #define sqlite3_trace_v2               duckdb_shell_sqlite3_trace_v2
 #define sqlite3_unlock_notify          duckdb_shell_sqlite3_unlock_notify

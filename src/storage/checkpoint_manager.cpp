@@ -401,7 +401,6 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog_entry, Serial
 }
 
 void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &deserializer) {
-
 	// we need to keep the tag "index", even though it is slightly misleading.
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
 	auto &info = create_info->Cast<CreateIndexInfo>();
@@ -425,27 +424,19 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	}
 
 	// now we can look for the index in the catalog and assign the table info
-	auto &index = catalog.CreateIndex(transaction, info)->Cast<DuckIndexEntry>();
-	auto data_table_info = table.GetStorage().GetDataTableInfo();
-	index.info = make_shared_ptr<IndexDataTableInfo>(data_table_info, info.index_name);
-
-	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
-	for (auto &parsed_expr : info.parsed_expressions) {
-		index.parsed_expressions.push_back(parsed_expr->Copy());
-	}
-	D_ASSERT(!info.parsed_expressions.empty());
+	auto &index = schema.CreateIndex(transaction, info, table)->Cast<DuckIndexEntry>();
 	auto &data_table = table.GetStorage();
 
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
 		// this code path is necessary to read older duckdb files
-		index_storage_info.name = info.index_name;
+		index_storage_info.name = index.name;
 		index_storage_info.root_block_ptr = root_block_pointer;
 
 	} else {
 		// get the matching index storage info
 		for (auto const &elem : data_table.GetDataTableInfo()->GetIndexStorageInfo()) {
-			if (elem.name == info.index_name) {
+			if (elem.name == index.name) {
 				index_storage_info = elem;
 				break;
 			}
