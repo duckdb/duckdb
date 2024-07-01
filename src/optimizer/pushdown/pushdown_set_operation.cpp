@@ -40,8 +40,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	}
 
 	// pushdown into set operation, we can duplicate the condition and pushdown the expressions into both sides
-	FilterPushdown left_pushdown(optimizer, projected_mark_indexes, convert_mark_joins),
-	    right_pushdown(optimizer, projected_mark_indexes, convert_mark_joins);
+	FilterPushdown left_pushdown(optimizer, *op, convert_mark_joins),
+	    right_pushdown(optimizer, *op, convert_mark_joins);
 	for (idx_t i = 0; i < filters.size(); i++) {
 		// first create a copy of the filter
 		auto right_filter = make_uniq<Filter>();

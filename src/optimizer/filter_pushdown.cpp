@@ -74,12 +74,6 @@ FilterPushdown::FilterPushdown(Optimizer &optimizer, LogicalOperator &plan, bool
 	projected_mark_indexes = GetMarkJoinIndexes(plan, table_bindings);
 }
 
-FilterPushdown::FilterPushdown(Optimizer &optimizer, unordered_set<idx_t> &projected_mark_indexes,
-                               bool convert_mark_joins)
-    : optimizer(optimizer), combiner(optimizer.context), projected_mark_indexes(projected_mark_indexes),
-      convert_mark_joins(convert_mark_joins) {
-}
-
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(!combiner.HasFilters());
 	switch (op->type) {
@@ -142,7 +136,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	case JoinType::LEFT:
 		return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::MARK:
-		// return FinishPushdown(std::move(op));
 		return PushdownMarkJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::SINGLE:
 		return PushdownSingleJoin(std::move(op), left_bindings, right_bindings);
@@ -215,7 +208,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalO
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (auto &child : op->children) {
-		FilterPushdown pushdown(optimizer, projected_mark_indexes, convert_mark_joins);
+		FilterPushdown pushdown(optimizer, *child, convert_mark_joins);
 		child = pushdown.Rewrite(std::move(child));
 	}
 	// now push any existing filters
