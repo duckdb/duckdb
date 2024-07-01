@@ -48,6 +48,7 @@ class ScalarFunctionCatalogEntry;
 struct ActiveQueryContext;
 struct ParserOptions;
 class SimpleBufferedData;
+class BufferedData;
 struct ClientData;
 class ClientContextState;
 
@@ -62,6 +63,7 @@ struct PendingQueryParameters {
 //! during execution
 class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class PendingQueryResult;  // LockContext
+	friend class BufferedData;        // ExecuteTaskInternal
 	friend class SimpleBufferedData;  // ExecuteTaskInternal
 	friend class BatchedBufferedData; // ExecuteTaskInternal
 	friend class StreamQueryResult;   // LockContext

@@ -44,12 +44,32 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 	return context->LockContext();
 }
 
+StreamExecutionResult StreamQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
+	return StreamExecutionResult::CHUNK_READY;
+}
+
+StreamExecutionResult StreamQueryResult::ExecuteTask() {
+	auto lock = LockContext();
+	return ExecuteTaskInternal(*lock);
+}
+
+static bool ExecutionErrorOccurred(StreamExecutionResult result) {
+	if (result == StreamExecutionResult::EXECUTION_CANCELLED) {
+		return true;
+	}
+	if (result == StreamExecutionResult::EXECUTION_ERROR) {
+		return true;
+	}
+	return false;
+}
+
 unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) {
 	bool invalidate_query = true;
 	unique_ptr<DataChunk> chunk;
 	try {
 		// fetch the chunk and return it
-		if (!buffered_data->ReplenishBuffer(*this, lock)) {
+		auto stream_execution_result = buffered_data->ReplenishBuffer(*this, lock);
+		if (ExecutionErrorOccurred(stream_execution_result)) {
 			return chunk;
 		}
 		chunk = buffered_data->Scan();
@@ -146,6 +166,26 @@ bool StreamQueryResult::IsOpen() {
 void StreamQueryResult::Close() {
 	buffered_data->Close();
 	context.reset();
+}
+
+bool StreamQueryResult::IsChunkReady(StreamExecutionResult result) {
+	if (result == StreamExecutionResult::CHUNK_READY) {
+		// A chunk is ready to be fetched with Fetch()
+		return true;
+	}
+	if (result == StreamExecutionResult::EXECUTION_CANCELLED) {
+		// Another query execution was started that cancelled this one
+		return true;
+	}
+	if (result == StreamExecutionResult::EXECUTION_ERROR) {
+		// An error was encountered while executing the final pipeline
+		return true;
+	}
+	if (result == StreamExecutionResult::EXECUTION_FINISHED) {
+		// The final pipeline completed successfully
+		return true;
+	}
+	return false;
 }
 
 } // namespace duckdb
