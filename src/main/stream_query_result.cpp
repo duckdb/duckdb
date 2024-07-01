@@ -53,6 +53,12 @@ StreamExecutionResult StreamQueryResult::ExecuteTask() {
 	return ExecuteTaskInternal(*lock);
 }
 
+void StreamQueryResult::WaitForTask() {
+	auto lock = LockContext();
+	buffered_data->UnblockSinks();
+	context->WaitForTask(*lock, *this);
+}
+
 static bool ExecutionErrorOccurred(StreamExecutionResult result) {
 	if (result == StreamExecutionResult::EXECUTION_CANCELLED) {
 		return true;

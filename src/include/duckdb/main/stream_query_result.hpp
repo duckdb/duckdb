@@ -40,6 +40,8 @@ public:
 
 public:
 	static bool IsChunkReady(StreamExecutionResult result);
+	//! Reschedules the tasks that work on producing a result chunk, returning when at least one task can be executed
+	DUCKDB_API void WaitForTask();
 	//! Executes a single task within the final pipeline, returning whether or not a chunk is ready to be fetched
 	DUCKDB_API StreamExecutionResult ExecuteTask();
 	//! Fetches a DataChunk from the query result.
