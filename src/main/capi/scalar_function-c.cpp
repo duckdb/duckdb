@@ -1,8 +1,9 @@
-#include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/function/scalar_function.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -45,6 +46,9 @@ duckdb::ScalarFunction &GetCScalarFunction(duckdb_scalar_function function) {
 unique_ptr<FunctionData> BindCAPIScalarFunction(ClientContext &, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	auto &info = bound_function.function_info->Cast<CScalarFunctionInfo>();
+	if (bound_function.varargs == LogicalType::ANY) {
+		bound_function.arguments.assign(arguments.size(), bound_function.varargs);
+	}
 	return make_uniq<CScalarFunctionBindData>(info);
 }
 
@@ -102,12 +106,23 @@ void duckdb_scalar_function_set_varargs(duckdb_scalar_function function, duckdb_
 	scalar_function.varargs = *logical_type;
 }
 
+void duckdb_scalar_function_set_special_handling(duckdb_scalar_function function) {
+	if (!function) {
+		return;
+	}
+	auto &scalar_function = GetCScalarFunction(function);
+	scalar_function.null_handling = duckdb::FunctionNullHandling::SPECIAL_HANDLING;
+}
+
 void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckdb_logical_type type) {
 	if (!function || !type) {
 		return;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
+	if (*logical_type == LogicalType::ANY) {
+		return;
+	}
 	scalar_function.arguments.push_back(*logical_type);
 }
 
@@ -117,6 +132,9 @@ void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duc
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
+	if (*logical_type == LogicalType::ANY) {
+		return;
+	}
 	scalar_function.return_type = *logical_type;
 }
 

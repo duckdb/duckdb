@@ -142,6 +142,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
+	// ANY type
+	DUCKDB_TYPE_ANY = 34,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
@@ -1725,7 +1727,7 @@ DUCKDB_API duckdb_value duckdb_create_int64(int64_t val);
 /*!
 Creates a struct value from a type and an array of values
 
-* type: The type of the struct
+* type: The type of the struct. Struct field types cannot be INVALID or ANY.
 * values: The values for the struct fields
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
 */
@@ -1734,7 +1736,7 @@ DUCKDB_API duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duc
 /*!
 Creates a list value from a type and an array of values of length `value_count`
 
-* type: The type of the list
+* type: The type of the list. The child type cannot be INVALID or ANY.
 * values: The values for the list
 * value_count: The number of values in the list
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
@@ -1744,7 +1746,7 @@ DUCKDB_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckd
 /*!
 Creates an array value from a type and an array of values of length `value_count`
 
-* type: The type of the array
+* type: The type of the array. The child type cannot be INVALID or ANY.
 * values: The values for the array
 * value_count: The number of values in the array
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
@@ -1796,7 +1798,7 @@ DUCKDB_API char *duckdb_logical_type_get_alias(duckdb_logical_type type);
 Creates a list type from its child type.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* type: The child type of list type to create.
+* type: The child type of the list.
 * returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type);
@@ -1805,7 +1807,7 @@ DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type)
 Creates an array type from its child type.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* type: The child type of array type to create.
+* type: The child type of the array.
 * array_size: The number of elements in the array.
 * returns: The logical type.
 */
@@ -2315,15 +2317,22 @@ Sets the parameters of the given scalar function to varargs. Does not require ad
 duckdb_scalar_function_add_parameter.
 
 * scalar_function: The scalar function
-* type: The type of the arguments
+* type: The type of the arguments. Cannot be INVALID.
 */
 DUCKDB_API void duckdb_scalar_function_set_varargs(duckdb_scalar_function scalar_function, duckdb_logical_type type);
+
+/*!
+Sets the NULL handling of the scalar function to SPECIAL_HANDLING.
+
+* scalar_function: The scalar function
+*/
+DUCKDB_API void duckdb_scalar_function_set_special_handling(duckdb_scalar_function scalar_function);
 
 /*!
 Adds a parameter to the scalar function.
 
 * scalar_function: The scalar function
-* type: The type of the parameter to add.
+* type: The type of the parameter to add. Cannot be INVALID or ANY.
 */
 DUCKDB_API void duckdb_scalar_function_add_parameter(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 
@@ -2331,7 +2340,7 @@ DUCKDB_API void duckdb_scalar_function_add_parameter(duckdb_scalar_function scal
 Sets the return type of the scalar function.
 
 * scalar_function: The scalar function
-* type: The return type to set
+* type: The return type. Cannot be INVALID or ANY.
 */
 DUCKDB_API void duckdb_scalar_function_set_return_type(duckdb_scalar_function scalar_function,
                                                        duckdb_logical_type type);
