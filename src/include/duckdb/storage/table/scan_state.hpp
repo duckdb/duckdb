@@ -13,6 +13,7 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 
@@ -130,6 +131,8 @@ public:
 	idx_t batch_index;
 	//! The valid selection
 	SelectionVector valid_sel;
+
+	RandomEngine random;
 
 public:
 	void Initialize(const vector<LogicalType> &types);

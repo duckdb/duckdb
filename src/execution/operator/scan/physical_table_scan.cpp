@@ -86,6 +86,10 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	auto &state = input.local_state.Cast<TableScanLocalSourceState>();
 
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	if (function.sampling_pushdown) {
+		chunk.sampling_pushdown_option.do_system_sample = true;
+		chunk.sampling_pushdown_option.sample_rate = function.sample_rate;
+	}
 	if (function.function) {
 		function.function(context.client, data, chunk);
 	} else {
@@ -165,6 +169,10 @@ string PhysicalTableScan::ParamsToString() const {
 				result += "\n";
 			}
 		}
+	}
+	if (function.sampling_pushdown) {
+		result += "\n[INFOSEPARATOR]\n";
+		result += StringUtil::Format("System Sample: %.2f%%", function.sample_rate * 100);
 	}
 	if (!extra_info.file_filters.empty()) {
 		result += "\n[INFOSEPARATOR]\n";

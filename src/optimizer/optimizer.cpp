@@ -25,6 +25,7 @@
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
+#include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -171,6 +172,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
 		LimitPushdown limit_pushdown;
 		plan = limit_pushdown.Optimize(std::move(plan));
+	});
+
+	// perform sampling pushdown
+	RunOptimizer(OptimizerType::SAMPLING_PUSHDOWN, [&]() {
+		SamplingPushdown sampling_pushdown;
+		plan = sampling_pushdown.Optimize(std::move(plan));
 	});
 
 	// transform ORDER BY + LIMIT to TopN
