@@ -13,15 +13,7 @@ CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<Fi
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
 	is_pipe = file_handle->IsPipe();
-	if (compression_type == FileCompressionType::AUTO_DETECT) {
-		if (StringUtil::EndsWith(path, ".gz")) {
-			compression_type = FileCompressionType::GZIP;
-		} else if (StringUtil::EndsWith(path, ".zst")) {
-			compression_type = FileCompressionType::ZSTD;
-		} else {
-			compression_type = FileCompressionType::UNCOMPRESSED;
-		}
-	}
+	compression_type = file_handle->GetFileCompressionType();
 }
 
 unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
@@ -65,7 +57,6 @@ void CSVFileHandle::Reset() {
 	file_handle->Reset();
 	finished = false;
 	requested_bytes = 0;
-	// uncompressed_bytes_read = 0;
 }
 
 bool CSVFileHandle::IsPipe() {

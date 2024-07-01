@@ -585,6 +585,10 @@ bool FileHandle::CanSeek() {
 	return file_system.CanSeek();
 }
 
+FileCompressionType FileHandle::GetFileCompressionType() {
+	return FileCompressionType::UNCOMPRESSED;
+}
+
 bool FileHandle::IsPipe() {
 	return file_system.IsPipe(path);
 }

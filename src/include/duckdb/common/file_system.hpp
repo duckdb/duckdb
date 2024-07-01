@@ -69,6 +69,7 @@ public:
 	DUCKDB_API string ReadLine();
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
 	DUCKDB_API virtual idx_t GetProgress();
+	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
 
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsPipe();

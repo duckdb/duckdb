@@ -160,6 +160,10 @@ public:
 		Initialize(write);
 	}
 
+	DUCKDB_API FileCompressionType GetFileCompressionType() override {
+		return FileCompressionType::ZSTD;
+	}
+
 	ZStdFileSystem zstd_fs;
 };
 
