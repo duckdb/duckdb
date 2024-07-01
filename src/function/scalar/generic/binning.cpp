@@ -120,7 +120,7 @@ struct EquiWidthBinsInteger {
 			const hugeint_t target_boundary = bin_boundary / FACTOR;
 			int64_t real_boundary = Hugeint::Cast<int64_t>(target_boundary);
 			if (!result.empty()) {
-				if (real_boundary <= input_min || result.size() >= bin_count) {
+				if (real_boundary < input_min || result.size() >= bin_count) {
 					// we can never generate input_min
 					break;
 				}
@@ -166,8 +166,8 @@ struct EquiWidthBinsDouble {
 			if (nice_rounding) {
 				bin_boundary = std::round(bin_boundary * round_multiplication) / round_multiplication;
 			}
-			if (bin_boundary <= min || result.size() >= bin_count) {
-				// we can never generate input_min
+			if (bin_boundary < min || result.size() >= bin_count) {
+				// we can never generate below input_min
 				break;
 			}
 			result.push_back(bin_boundary);
@@ -332,18 +332,36 @@ struct EquiWidthBinsTimestamp {
 		                       (max_minute - min_minute) * Interval::MICROS_PER_MINUTE +
 		                       (max_sec - min_sec) * Interval::MICROS_PER_SEC + (max_micros - min_micros);
 
+		double step_months = static_cast<double>(interval_diff.months) / static_cast<double>(bin_count);
+		double step_days = static_cast<double>(interval_diff.days) / static_cast<int32_t>(bin_count);
+		double step_micros = static_cast<double>(interval_diff.micros) / static_cast<double>(bin_count);
+		// since we truncate the months/days, propagate any fractional component to the unit below (i.e. 0.2 months
+		// becomes 6 days)
+		if (step_months > 0) {
+			double overflow_months = step_months - std::floor(step_months);
+			step_days += overflow_months * Interval::DAYS_PER_MONTH;
+		}
+		if (step_days > 0) {
+			double overflow_days = step_days - std::floor(step_days);
+			step_micros += overflow_days * Interval::MICROS_PER_DAY;
+		}
 		interval_t step;
-		step.months = interval_diff.months / static_cast<int32_t>(bin_count);
-		step.days = interval_diff.days / static_cast<int32_t>(bin_count);
-		step.micros = interval_diff.micros / static_cast<int64_t>(bin_count);
+		step.months = static_cast<int32_t>(step_months);
+		step.days = static_cast<int32_t>(step_days);
+		step.micros = static_cast<int64_t>(step_micros);
 
 		// now we make the max, and the step nice
 		step = MakeIntervalNice(step);
 		timestamp_t timestamp_val =
 		    MakeTimestampNice(max_year, max_month, max_day, max_hour, max_minute, max_sec, max_micros, step);
+		if (step.months <= 0 && step.days <= 0 && step.micros <= 0) {
+			// interval must be at least one microsecond
+			step.months = step.days = 0;
+			step.micros = 1;
+		}
 
 		vector<PrimitiveType<timestamp_t>> result;
-		while (timestamp_val.value > input_min.value) {
+		while (timestamp_val.value >= input_min.value && result.size() < bin_count) {
 			result.push_back(timestamp_val);
 			timestamp_val = SubtractOperator::Operation<timestamp_t, interval_t, timestamp_t>(timestamp_val, step);
 		}

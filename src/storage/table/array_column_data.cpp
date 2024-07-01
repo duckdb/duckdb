@@ -171,7 +171,7 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
 	auto child_state = make_uniq<ColumnScanState>();
 	child_state->Initialize(child_type, nullptr);
-	child_column->InitializeScanWithOffset(*child_state, UnsafeNumericCast<idx_t>(row_id) * array_size);
+	child_column->InitializeScanWithOffset(*child_state, (UnsafeNumericCast<idx_t>(row_id) - this->start) * array_size);
 	Vector child_scan(child_type, array_size);
 	child_column->ScanCount(*child_state, child_scan, array_size);
 	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);

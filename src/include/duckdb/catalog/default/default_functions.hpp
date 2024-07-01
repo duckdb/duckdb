@@ -28,15 +28,14 @@ public:
 	SchemaCatalogEntry &schema;
 
 	DUCKDB_API static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro);
-	DUCKDB_API static unique_ptr<CreateMacroInfo> CreateInternalTableMacroInfo(const DefaultMacro &default_macro);
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
 	vector<string> GetDefaultEntries() override;
 
 private:
-	static unique_ptr<CreateMacroInfo> CreateInternalTableMacroInfo(const DefaultMacro &default_macro,
-	                                                                unique_ptr<MacroFunction> function);
+	static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro,
+	                                                           unique_ptr<MacroFunction> function);
 };
 
 } // namespace duckdb

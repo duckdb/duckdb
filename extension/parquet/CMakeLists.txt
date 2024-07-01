@@ -24,7 +24,8 @@ set(PARQUET_EXTENSION_FILES
     parquet_timestamp.cpp
     parquet_writer.cpp
     serialize_parquet.cpp
-    zstd_file_system.cpp)
+    zstd_file_system.cpp
+    geo_parquet.cpp)
 
 if(NOT CLANG_TIDY)
   # parquet/thrift/snappy

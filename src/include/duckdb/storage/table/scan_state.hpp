@@ -146,7 +146,7 @@ private:
 };
 
 struct TableScanOptions {
-	//! Test config that forces fetching rows one by one instead of regular scans
+	//! Fetch rows one-at-a-time instead of using the regular scans.
 	bool force_fetch_row = false;
 };
 

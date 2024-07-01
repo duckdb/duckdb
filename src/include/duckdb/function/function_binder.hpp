@@ -57,10 +57,10 @@ public:
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
-	DUCKDB_API unique_ptr<BoundFunctionExpression> BindScalarFunction(ScalarFunction bound_function,
-	                                                                  vector<unique_ptr<Expression>> children,
-	                                                                  bool is_operator = false,
-	                                                                  optional_ptr<Binder> binder = nullptr);
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunction bound_function,
+	                                                     vector<unique_ptr<Expression>> children,
+	                                                     bool is_operator = false,
+	                                                     optional_ptr<Binder> binder = nullptr);
 
 	DUCKDB_API unique_ptr<BoundAggregateExpression>
 	BindAggregateFunction(AggregateFunction bound_function, vector<unique_ptr<Expression>> children,

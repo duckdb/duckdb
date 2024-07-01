@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
+struct SelectionVector;
 struct ValidityMask;
 
 template <typename V>
@@ -339,6 +340,8 @@ public:
 	DUCKDB_API idx_t TargetCount();
 	DUCKDB_API void SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count);
 	DUCKDB_API void Slice(const ValidityMask &other, idx_t source_offset, idx_t count);
+	DUCKDB_API void CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,
+	                        idx_t target_offset, idx_t count);
 	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
 	DUCKDB_API string ToString(idx_t count) const;
 

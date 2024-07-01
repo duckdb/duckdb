@@ -31,7 +31,7 @@ public:
 	void Append(const DataChunk &chunk);
 	void BlockSink(const InterruptState &blocked_sink);
 	bool BufferIsFull();
-	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
+	bool ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 	inline idx_t BufferSize() const {
 		return buffer_size;

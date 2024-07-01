@@ -33,6 +33,7 @@ source_files = [
         'extension/parquet/parquet_writer.cpp',
         'extension/parquet/serialize_parquet.cpp',
         'extension/parquet/zstd_file_system.cpp',
+        'extension/parquet/geo_parquet.cpp',
     ]
 ]
 # parquet/thrift/snappy

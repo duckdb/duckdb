@@ -11,7 +11,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/core_functions/create_sort_key.hpp"
-#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {
 
@@ -339,12 +339,14 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::VARCHAR:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string_t, string_map_t<idx_t>>(
-			    result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string_t,
+			                                               OwningStringMap<idx_t>>(result, state_vector.state_vector,
+			                                                                       count);
 			break;
 		default:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeGenericValueFunctor, string_t, string_map_t<idx_t>>(
-			    result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeGenericValueFunctor, string_t,
+			                                               OwningStringMap<idx_t>>(result, state_vector.state_vector,
+			                                                                       count);
 			break;
 		}
 	}
