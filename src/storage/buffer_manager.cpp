@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-shared_ptr<BlockHandle> BufferManager::RegisterTransientMemory(const idx_t size) {
+shared_ptr<BlockHandle> BufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size) {
 	throw NotImplementedException("This type of BufferManager can not create 'transient-memory' blocks");
 }
 

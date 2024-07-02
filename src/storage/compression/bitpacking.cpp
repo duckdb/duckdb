@@ -325,7 +325,7 @@ template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
 
-	CompressionInfo info(Storage::BLOCK_SIZE, type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), type);
 	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
 	state->state.mode = config.options.force_bitpacking_mode;
 
@@ -485,7 +485,8 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		compressed_segment->function = function;
 		current_segment = std::move(compressed_segment);
 

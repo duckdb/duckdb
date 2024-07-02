@@ -5,8 +5,7 @@
 # data/storage/index_0-9-1.db was written with a 64-bit version of duckdb
 require 64bit
 
-require block_size 262144
-
+# The database is written with a vector size of 2048.
 require vector_size 2048
 
 statement ok

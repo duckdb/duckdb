@@ -2,6 +2,7 @@
 # description: Tests for insertion order preservation with compact blocks
 # group: [compact_block_size]
 
+# This test defaults to other counts for smaller block sizes.
 require block_size 16384
 
 require vector_size 512

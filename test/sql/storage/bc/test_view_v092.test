@@ -2,9 +2,7 @@
 # description: Test reading database with views
 # group: [bc]
 
-# we cannot read/open a file with a different block size
-require block_size 262144
-
+# The database is written with a vector size of 2048.
 require vector_size 2048
 
 load data/storage/views_092.db readonly

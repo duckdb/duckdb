@@ -4,10 +4,8 @@
 
 require skip_reload
 
-# database is written with vector size of 2048
+# The database is written with a vector size of 2048.
 require vector_size 2048
-
-require block_size 262144
 
 unzip data/storage/huggingface_index.db.gz __TEST_DIR__/huggingface_index.db
 

@@ -4,9 +4,7 @@
 
 require skip_reload
 
-# we cannot read/open a file with a different block size
-require block_size 262144
-
+# The database is written with a vector size of 2048.
 require vector_size 2048
 
 unzip data/storage/bc_0102.db.gz __TEST_DIR__/bc_0102.db
@@ -17,6 +15,6 @@ statement ok
 PRAGMA enable_verification
 
 query II
-select database_name, schema_name from duckdb_schemas where not internal
+SELECT database_name, schema_name FROM duckdb_schemas WHERE NOT internal
 ----
 bc_0102	s1

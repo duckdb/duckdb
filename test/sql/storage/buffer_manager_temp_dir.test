@@ -3,7 +3,6 @@
 # group: [storage]
 
 # FIXME: Fails with --force-storage for non-default block sizes.
-# FIXME: Possibly related to leftover_temp_files_issue_6420.test_slow, as we successfully create the table in both cases.
 require block_size 262144
 
 require skip_reload
@@ -20,6 +19,7 @@ PRAGMA memory_limit='2MB'
 statement error
 CREATE TABLE t2 AS SELECT * FROM range(1000000);
 ----
+could not allocate block of size
 
 # after we set the temp directory, we can create this table
 statement ok

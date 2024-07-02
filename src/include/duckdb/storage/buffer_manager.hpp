@@ -51,9 +51,13 @@ public:
 	virtual idx_t GetUsedSwap() = 0;
 	//! Returns the maximum swap space that can be used
 	virtual optional_idx GetMaxSwap() const = 0;
+	//! Returns the block allocation size for buffer-managed blocks.
+	virtual idx_t GetBlockAllocSize() const = 0;
+	//! Returns the block size for buffer-managed blocks.
+	virtual idx_t GetBlockSize() const = 0;
 
 	//! Returns a new block of transient memory.
-	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size);
+	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, const idx_t block_size);
 	//! Returns a new block of memory that is smaller than the block size setting.
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size);
 
@@ -85,8 +89,8 @@ public:
 	DUCKDB_API static const BufferManager &GetBufferManager(const ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
-	static idx_t GetAllocSize(idx_t block_size) {
-		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
+	static idx_t GetAllocSize(const idx_t block_size) {
+		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
 	}
 	//! Returns the maximum available memory for a given query
 	idx_t GetQueryMaxMemory() const;
