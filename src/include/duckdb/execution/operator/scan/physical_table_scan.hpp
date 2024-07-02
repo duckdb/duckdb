@@ -53,6 +53,9 @@ public:
 
 	bool Equals(const PhysicalOperator &other) const override;
 
+	//! Push a new table filter
+	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter);
+
 public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;

@@ -10,10 +10,12 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/join/physical_join.hpp"
+#include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 
 namespace duckdb {
 class ColumnDataCollection;
 struct ColumnDataScanState;
+class LogicalGet;
 
 //! PhysicalJoin represents the base class of the join operators
 class PhysicalComparisonJoin : public PhysicalJoin {
@@ -22,6 +24,8 @@ public:
 	                       JoinType join_type, idx_t estimated_cardinality);
 
 	vector<JoinCondition> conditions;
+	//! The probe source where we should push table filters into (if any)
+	unique_ptr<JoinFilterPushdownInfo> filter_pushdown;
 
 public:
 	string ParamsToString() const override;

@@ -121,6 +121,18 @@ idx_t PhysicalTableScan::GetBatchIndex(ExecutionContext &context, DataChunk &chu
 	                                gstate.global_state.get());
 }
 
+void PhysicalTableScan::PushFilter(idx_t column_index, unique_ptr<TableFilter> filter) {
+	if (function.filter_pushdown) {
+		// this should be handled before
+		throw InternalException("Cannot push filter - table scan does not support it");
+	}
+	// FIXME: this should have a lock
+	if (!table_filters) {
+		table_filters = make_uniq<TableFilterSet>();
+	}
+	table_filters->PushFilter(column_index, std::move(filter));
+}
+
 string PhysicalTableScan::GetName() const {
 	return StringUtil::Upper(function.name + " " + function.extra_info);
 }

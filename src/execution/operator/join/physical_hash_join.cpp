@@ -85,6 +85,18 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+JoinFilterGlobalState::~JoinFilterGlobalState() {
+}
+
+JoinFilterLocalState::~JoinFilterLocalState() {
+}
+
+unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context) const {
+	auto result = make_uniq<JoinFilterGlobalState>();
+	result->global_aggregate_state = make_uniq<GlobalUngroupedAggregateState>(BufferAllocator::Get(context), min_max_aggregates);
+	return result;
+}
+
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op, ClientContext &context_p)
@@ -103,6 +115,10 @@ public:
 		probe_types.insert(probe_types.end(), op.condition_types.begin(), op.condition_types.end());
 		probe_types.insert(probe_types.end(), payload_types.begin(), payload_types.end());
 		probe_types.emplace_back(LogicalType::HASH);
+
+		if (op.filter_pushdown) {
+			global_filter_state = op.filter_pushdown->GetGlobalState(context);
+		}
 	}
 
 	void ScheduleFinalize(Pipeline &pipeline, Event &event);
@@ -136,11 +152,20 @@ public:
 
 	//! Whether or not we have started scanning data using GetData
 	atomic<bool> scanned_data;
+
+	unique_ptr<JoinFilterGlobalState> global_filter_state;
+
 };
+
+unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
+	auto result = make_uniq<JoinFilterLocalState>();
+	result->local_aggregate_state = make_uniq<LocalUngroupedAggregateState>(*gstate.global_aggregate_state);
+	return result;
+}
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context)
+	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context, HashJoinGlobalSinkState &gstate)
 	    : join_key_executor(context), chunk_count(0) {
 		auto &allocator = BufferAllocator::Get(context);
 
@@ -155,6 +180,10 @@ public:
 
 		hash_table = op.InitializeHashTable(context);
 		hash_table->GetSinkCollection().InitializeAppendState(append_state);
+
+		if (op.filter_pushdown) {
+			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
+		}
 	}
 
 public:
@@ -171,6 +200,8 @@ public:
 	//! For updating the temporary memory state
 	idx_t chunk_count;
 	static constexpr const idx_t CHUNK_COUNT_UPDATE_INTERVAL = 60;
+
+	unique_ptr<JoinFilterLocalState> local_filter_state;
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
@@ -229,7 +260,21 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 }
 
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<HashJoinLocalSinkState>(*this, context.client);
+	auto &gstate = sink_state->Cast<HashJoinGlobalSinkState>();
+	return make_uniq<HashJoinLocalSinkState>(*this, context.client, gstate);
+}
+
+
+void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const {
+	// if we are pushing any filters into a probe-side, compute the min/max over the columns that we are pushing
+	for(idx_t pushdown_idx = 0; pushdown_idx < filters.size(); pushdown_idx++) {
+		auto &pushdown = filters[pushdown_idx];
+		for(idx_t i = 0; i < 2; i++) {
+			idx_t aggr_idx = pushdown_idx * 2 + i;
+			// FIXME: payload_column_idxs[pushdown.join_condition]?
+			lstate.local_aggregate_state->Sink(chunk, pushdown.join_condition, aggr_idx);
+		}
+	}
 }
 
 SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -238,6 +283,10 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
 	lstate.join_key_executor.Execute(chunk, lstate.join_keys);
+
+	if (filter_pushdown) {
+		filter_pushdown->Sink(chunk, *lstate.local_filter_state);
+	}
 
 	// build the HT
 	auto &ht = *lstate.hash_table;
@@ -267,6 +316,10 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
+void JoinFilterPushdownInfo::Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const {
+	gstate.global_aggregate_state->Combine(*lstate.local_aggregate_state);
+}
+
 SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
@@ -278,6 +331,9 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.join_key_executor, "join_key_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+	if (filter_pushdown) {
+		filter_pushdown->Combine(*gstate.global_filter_state, *lstate.local_filter_state);
+	}
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -455,6 +511,10 @@ public:
 	}
 };
 
+void JoinFilterPushdownInfo::PushFilters() const {
+	throw InternalException("FIXME: push filters");
+}
+
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             OperatorSinkFinalizeInput &input) const {
 	auto &sink = input.global_state.Cast<HashJoinGlobalSinkState>();
@@ -495,6 +555,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		}
 		sink.local_hash_tables.clear();
 		ht.Unpartition();
+	}
+
+	if (filter_pushdown) {
+		filter_pushdown->PushFilters();
 	}
 
 	// check for possible perfect hash table
