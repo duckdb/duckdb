@@ -3,6 +3,7 @@
 #include "httpfs_extension.hpp"
 
 #include "create_secret_functions.hpp"
+#include "http_functions.hpp"
 #include "duckdb.hpp"
 #include "s3fs.hpp"
 #include "hffs.hpp"
@@ -66,6 +67,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 	CreateS3SecretFunctions::Register(instance);
 	CreateBearerTokenFunctions::Register(instance);
+	HTTPFunctions::Register(instance);
 }
 
 void HttpfsExtension::Load(DuckDB &db) {
