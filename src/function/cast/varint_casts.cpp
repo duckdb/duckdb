@@ -6,6 +6,20 @@ namespace duckdb {
 
 constexpr uint8_t VARINT_HEADER_SIZE = 3;
 
+void SetHeader(char *blob, uint64_t number_of_bytes, bool is_negative) {
+	uint32_t header = static_cast<uint32_t>(number_of_bytes);
+	// Set MSBit of 3rd byte
+	header |= 0x00800000;
+	if (is_negative) {
+		header = ~header;
+	}
+	// we ignore MSByte  of header.
+	// write the 3 bytes to blob.
+	blob[0] = static_cast<char>(header >> 16);
+	blob[1] = static_cast<char>(header >> 8 & 0xFF);
+	blob[2] = static_cast<char>(header & 0xFF);
+}
+
 template <class T>
 string_t IntToVarInt(Vector &result, T int_value) {
 	// Determine if the number is negative
@@ -18,16 +32,7 @@ string_t IntToVarInt(Vector &result, T int_value) {
 		abs_value = static_cast<uint64_t>(int_value);
 	}
 	uint32_t data_byte_size = (abs_value == 0) ? 1 : static_cast<uint32_t>(std::ceil(std::log2(abs_value + 1) / 8.0));
-	if (is_negative && abs_value != 0) {
-		abs_value = ~abs_value;
-	}
-	// Create the header
-	uint32_t header = data_byte_size;
-	// Set MSD of 3rd byte
-	header |= 0x00800000;
-	if (is_negative && abs_value != 0) {
-		header = ~header;
-	}
+
 	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
 	auto blob = StringVector::EmptyString(result, blob_size);
 	if (blob_size < string_t::INLINE_BYTES) {
@@ -35,14 +40,10 @@ string_t IntToVarInt(Vector &result, T int_value) {
 		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 	}
 	auto writable_blob = blob.GetDataWriteable();
-	// Add header bytes to the blob
-	idx_t wb_idx = 0;
-	// we ignore 4th byte of header.
-	writable_blob[wb_idx++] = static_cast<char>(header >> 16 & 0xFF); // 3rd byte
-	writable_blob[wb_idx++] = static_cast<char>(header >> 8 & 0xFF);  // 2nd byte
-	writable_blob[wb_idx++] = static_cast<char>(header & 0xFF);       // 1st byte
+	SetHeader(writable_blob, data_byte_size, is_negative);
 
-	// Add data bytes to the blob
+	// Add data bytes to the blob, starting off after header bytes
+	idx_t wb_idx = VARINT_HEADER_SIZE;
 	for (int i = static_cast<int>(data_byte_size) - 1; i >= 0; --i) {
 		writable_blob[wb_idx++] = static_cast<char>(abs_value >> i * 8 & 0xFF);
 	}
@@ -77,7 +78,6 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 			start_pos++;
 		}
 	}
-
 	idx_t actual_size = int_value_size - start_pos;
 	// convert the string to a byte array
 	string abs_str(int_value_char + start_pos, actual_size);
@@ -110,19 +110,9 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 		// set these babies to 0.
 		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 	}
-	uint32_t header = static_cast<uint32_t>(blob_string.size());
-	// Set MSD of 3rd byte
-	header |= 0x00800000;
-	if (is_negative && int_value_char[start_pos] != '0') {
-		header = ~header;
-	}
-
 	auto writable_blob = blob.GetDataWriteable();
 
-	// Add header bytes to the blob
-	writable_blob[0] = static_cast<char>(header >> 16);
-	writable_blob[1] = static_cast<char>(header >> 8 & 0xFF);
-	writable_blob[2] = static_cast<char>(header & 0xFF);
+	SetHeader(writable_blob, blob_string.size(), is_negative);
 
 	// Write string_blob into blob
 	idx_t blob_string_idx = blob_string.size() - 1;
