@@ -1761,6 +1761,14 @@ The result must be destroyed with `duckdb_free`.
 DUCKDB_API char *duckdb_get_varchar(duckdb_value value);
 
 /*!
+Obtains a timestamp_t of the given value.
+
+* value: The value
+* returns: The timestamp value, or 0 if no conversion is possible.
+*/
+DUCKDB_API int64_t duckdb_get_timestamp(duckdb_value value);
+
+/*!
 Obtains an int64 of the given value.
 
 * value: The value
