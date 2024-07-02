@@ -54,6 +54,8 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::TIMESTAMP_NS;
 	case DUCKDB_TYPE_UUID:
 		return LogicalTypeId::UUID;
+	case DUCKDB_TYPE_ANY:
+		return LogicalTypeId::ANY;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return LogicalTypeId::INVALID;
@@ -128,6 +130,8 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_UUID;
 	case LogicalTypeId::ARRAY:
 		return DUCKDB_TYPE_ARRAY;
+	case LogicalTypeId::ANY:
+		return DUCKDB_TYPE_ANY;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;

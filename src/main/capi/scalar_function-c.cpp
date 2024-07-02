@@ -1,8 +1,9 @@
-#include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/function/scalar_function.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -100,6 +101,14 @@ void duckdb_scalar_function_set_varargs(duckdb_scalar_function function, duckdb_
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
 	scalar_function.varargs = *logical_type;
+}
+
+void duckdb_scalar_function_set_special_handling(duckdb_scalar_function function) {
+	if (!function) {
+		return;
+	}
+	auto &scalar_function = GetCScalarFunction(function);
+	scalar_function.null_handling = duckdb::FunctionNullHandling::SPECIAL_HANDLING;
 }
 
 void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckdb_logical_type type) {

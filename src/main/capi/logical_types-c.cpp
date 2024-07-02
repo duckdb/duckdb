@@ -30,9 +30,9 @@ duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type) {
 	if (!type) {
 		return nullptr;
 	}
-	duckdb::LogicalType *ltype = new duckdb::LogicalType;
-	*ltype = duckdb::LogicalType::LIST(*reinterpret_cast<duckdb::LogicalType *>(type));
-	return reinterpret_cast<duckdb_logical_type>(ltype);
+	duckdb::LogicalType *logical_type = new duckdb::LogicalType;
+	*logical_type = duckdb::LogicalType::LIST(*reinterpret_cast<duckdb::LogicalType *>(type));
+	return reinterpret_cast<duckdb_logical_type>(logical_type);
 }
 
 duckdb_logical_type duckdb_create_array_type(duckdb_logical_type type, idx_t array_size) {
@@ -311,8 +311,8 @@ char *duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index) {
 }
 
 char *duckdb_logical_type_get_alias(duckdb_logical_type type) {
-	auto &ltype = *(reinterpret_cast<duckdb::LogicalType *>(type));
-	return ltype.HasAlias() ? strdup(ltype.GetAlias().c_str()) : nullptr;
+	auto &logical_type = *(reinterpret_cast<duckdb::LogicalType *>(type));
+	return logical_type.HasAlias() ? strdup(logical_type.GetAlias().c_str()) : nullptr;
 }
 
 duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_t index) {
