@@ -584,8 +584,15 @@ static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 //------------------------------------------------------------------------------
 template <class K, class V, class COMPARATOR>
 static void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
-	function.update = ArgMinMaxNUpdate<ArgMinMaxNState<K, V, COMPARATOR>>;
-	function.finalize = MinMaxNOperation::Finalize<ArgMinMaxNState<K, V, COMPARATOR>>;
+	using STATE = ArgMinMaxNState<K, V, COMPARATOR>;
+	using OP = MinMaxNOperation;
+
+	function.state_size = AggregateFunction::StateSize<STATE>;
+	function.initialize = AggregateFunction::StateInitialize<STATE, OP>;
+	function.combine = AggregateFunction::StateCombine<STATE, OP>;
+	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+
+	function.finalize = MinMaxNOperation::Finalize<STATE>, function.update = ArgMinMaxNUpdate<STATE>;
 }
 
 template <class VAL_TYPE, class COMPARATOR>
@@ -657,13 +664,9 @@ unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunctio
 
 template <class COMPARATOR>
 static void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
-	using STATE = ArgMinMaxNState<MinMaxFallbackValue, MinMaxFallbackValue, COMPARATOR>;
-	using OP = MinMaxNOperation;
 	AggregateFunction function({LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalType::BIGINT},
-	                           LogicalType::LIST(LogicalType::ANY), AggregateFunction::StateSize<STATE>,
-	                           AggregateFunction::StateInitialize<STATE, OP>, nullptr,
-	                           AggregateFunction::StateCombine<STATE, OP>, nullptr, nullptr, ArgMinMaxNBind<COMPARATOR>,
-	                           AggregateFunction::StateDestroy<STATE, OP>);
+	                           LogicalType::LIST(LogicalType::ANY), nullptr, nullptr, nullptr, nullptr, nullptr,
+	                           nullptr, ArgMinMaxNBind<COMPARATOR>);
 
 	return set.AddFunction(function);
 }
