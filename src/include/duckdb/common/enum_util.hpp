@@ -302,6 +302,8 @@ enum class StatsInfo : uint8_t;
 
 enum class StrTimeSpecifier : uint8_t;
 
+enum class StreamExecutionResult : uint8_t;
+
 enum class SubqueryType : uint8_t;
 
 enum class TableColumnType : uint8_t;
@@ -751,6 +753,9 @@ const char* EnumUtil::ToChars<StatsInfo>(StatsInfo value);
 
 template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
+
+template<>
+const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value);
 
 template<>
 const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
@@ -1223,6 +1228,9 @@ StatsInfo EnumUtil::FromString<StatsInfo>(const char *value);
 
 template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);
+
+template<>
+StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value);
 
 template<>
 SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);
