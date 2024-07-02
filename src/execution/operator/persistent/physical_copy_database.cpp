@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 namespace duckdb {
 
