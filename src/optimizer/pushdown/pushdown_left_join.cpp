@@ -64,8 +64,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return FinishPushdown(std::move(op));
 	}
-	FilterPushdown left_pushdown(optimizer, *op, convert_mark_joins),
-	    right_pushdown(optimizer, *op, convert_mark_joins);
+	FilterPushdown left_pushdown(optimizer, projected_mark_indexes, convert_mark_joins),
+	    right_pushdown(optimizer, projected_mark_indexes, convert_mark_joins);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join
 	FilterCombiner filter_combiner(optimizer);

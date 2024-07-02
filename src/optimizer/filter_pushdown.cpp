@@ -31,7 +31,7 @@ static unordered_set<idx_t> GetMarkJoinIndexes(LogicalOperator &plan, unordered_
 	// if you get to a projection, you need to change the table_bindings passed so they reflect the
 	// table index of the original expression they originated from.
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		// if it is a projection, replace teh table_bindings with
+		// when we encounter a projection, replace the table_bindings with
 		// the tables in the projection
 		auto plan_bindings = plan.GetColumnBindings();
 		auto &proj = plan.Cast<LogicalProjection>();
@@ -70,11 +70,20 @@ static unordered_set<idx_t> GetMarkJoinIndexes(LogicalOperator &plan, unordered_
 
 FilterPushdown::FilterPushdown(Optimizer &optimizer, LogicalOperator &plan, bool convert_mark_joins)
     : optimizer(optimizer), combiner(optimizer.context), convert_mark_joins(convert_mark_joins) {
+
 	unordered_set<idx_t> table_bindings;
+	// other operators have not yet removed unused columns, so they will project mark joins
+	// even though they are not needed at this time
 	for (auto &binding : plan.GetColumnBindings()) {
 		table_bindings.insert(binding.table_index);
 	}
 	projected_mark_indexes = GetMarkJoinIndexes(plan, table_bindings);
+}
+
+FilterPushdown::FilterPushdown(Optimizer &optimizer, const unordered_set<idx_t> &projected_mark_indexes,
+                               bool convert_mark_joins)
+    : optimizer(optimizer), combiner(optimizer.context), projected_mark_indexes(projected_mark_indexes),
+      convert_mark_joins(convert_mark_joins) {
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
