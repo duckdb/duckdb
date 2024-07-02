@@ -1,0 +1,8 @@
+# name: benchmark/large/ingestion/tpcds/native/ingest_inventory.benchmark
+# description: benchmark ingestion of inventory
+# group: [native]
+
+template benchmark/large/ingestion/tpcds/tpcds_ingestion_persistent.benchmark.in
+table_name=inventory
+format=native
+
