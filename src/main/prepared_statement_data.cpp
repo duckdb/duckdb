@@ -21,12 +21,17 @@ void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
 	}
 }
 
-void StartTransactionInCatalog(ClientContext &context, const string &catalog_name) {
+bool CheckCatalogIdentity(ClientContext &context, const string &catalog_name,
+                          const StatementProperties::CatalogIdentity catalog_identity) {
 	auto database = DatabaseManager::Get(context).GetDatabase(context, catalog_name);
 	if (!database) {
 		throw BinderException("Prepared statement requires database %s but it was not attached", catalog_name);
 	}
 	Transaction::Get(context, *database);
+	auto current_catalog_oid = database->GetCatalog().GetOid();
+	auto current_catalog_version = database->GetCatalog().GetCatalogVersion(context);
+
+	return StatementProperties::CatalogIdentity {current_catalog_oid, current_catalog_version} == catalog_identity;
 }
 
 bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<case_insensitive_map_t<Value>> values) {
@@ -53,17 +58,22 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<c
 			return true;
 		}
 	}
+	// TODO: also check system catalog version?
 	// prior to checking the catalog version we need to explicitly start transactions in all affected databases
 	// this ensures all catalog entries we rely on are cached
-	for (auto &catalog_name : properties.read_databases) {
-		StartTransactionInCatalog(context, catalog_name);
+	for (auto &it : properties.read_databases) {
+		auto &catalog_name = it.first;
+		auto &catalog_identity = it.second;
+		if (!CheckCatalogIdentity(context, catalog_name, catalog_identity)) {
+			return true;
+		}
 	}
-	for (auto &catalog_name : properties.modified_databases) {
-		StartTransactionInCatalog(context, catalog_name);
-	}
-	if (context.db->GetDatabaseManager().CurrentOid() != start_bind_global_oid) {
-		//! context is out of bounds
-		return true;
+	for (auto &it : properties.modified_databases) {
+		auto &catalog_name = it.first;
+		auto &catalog_identity = it.second;
+		if (!CheckCatalogIdentity(context, catalog_name, catalog_identity)) {
+			return true;
+		}
 	}
 	return false;
 }

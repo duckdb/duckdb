@@ -1,9 +1,13 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/extension_util.hpp"
 
 #include "duckdb.hpp"
 
 using namespace duckdb;
+
+void SomeTableFunc(duckdb::ClientContext &, duckdb::TableFunctionInput &, duckdb::DataChunk &) {
+}
 
 TEST_CASE("Test catalog versioning", "[catalog]") {
 	DBConfig config;
@@ -55,5 +59,14 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 	con1.context->RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*con1.context, "foo");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 0);
+	});
+
+	// system transactions do not register catalog version changes :/
+	duckdb::TableFunction tf("some_new_table_function", {}, SomeTableFunc);
+	ExtensionUtil::RegisterFunction(*db.instance, tf);
+
+	con1.context->RunFunctionInTransaction([&]() {
+		auto &catalog = Catalog::GetCatalog(*con1.context, "system");
+		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 2);
 	});
 }

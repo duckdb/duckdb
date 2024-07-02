@@ -6,9 +6,9 @@
 
 namespace duckdb {
 
-MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p, idx_t start_catalog_oid_p)
-    : context(context_p), start_timestamp(start_timestamp_p), start_global_oid(start_catalog_oid_p), read_only(true),
-      active_query(MAXIMUM_QUERY_ID), modified_database(nullptr) {
+MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p)
+    : context(context_p), start_timestamp(start_timestamp_p), read_only(true), active_query(MAXIMUM_QUERY_ID),
+      modified_database(nullptr) {
 }
 
 MetaTransaction &MetaTransaction::Get(ClientContext &context) {

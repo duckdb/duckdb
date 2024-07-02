@@ -59,6 +59,9 @@ enum class StatementReturnType : uint8_t {
 
 string StatementReturnTypeToString(StatementReturnType type);
 
+class Catalog;
+class ClientContext;
+
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
@@ -66,10 +69,23 @@ struct StatementProperties {
 	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
+	struct CatalogIdentity {
+		idx_t catalog_oid;
+		idx_t catalog_version;
+
+		bool operator==(const CatalogIdentity &rhs) const {
+			return catalog_oid == rhs.catalog_oid && catalog_version == rhs.catalog_version;
+		}
+
+		bool operator!=(const CatalogIdentity &rhs) const {
+			return !operator==(rhs);
+		}
+	};
+
 	//! The set of databases this statement will read from
-	unordered_set<string> read_databases;
+	unordered_map<string, CatalogIdentity> read_databases; // also stored oid of DB as version is oid-specific
 	//! The set of databases this statement will modify
-	unordered_set<string> modified_databases;
+	unordered_map<string, CatalogIdentity> modified_databases; // also store oid of DB as version is oid-specific
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
 	//! exception of ROLLBACK
 	bool requires_valid_transaction;
@@ -87,6 +103,10 @@ struct StatementProperties {
 	bool IsReadOnly() {
 		return modified_databases.empty();
 	}
+
+	void RegisterDBRead(Catalog &catalog, ClientContext &context);
+
+	void RegisterDBModify(Catalog &catalog, ClientContext &context);
 };
 
 } // namespace duckdb

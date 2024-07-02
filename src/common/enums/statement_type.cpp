@@ -1,5 +1,7 @@
 #include "duckdb/common/enums/statement_type.hpp"
 
+#include <duckdb/catalog/catalog.hpp>
+
 namespace duckdb {
 
 // LCOV_EXCL_START
@@ -81,5 +83,13 @@ string StatementReturnTypeToString(StatementReturnType type) {
 	return "INVALID";
 }
 // LCOV_EXCL_STOP
+
+void StatementProperties::RegisterDBRead(Catalog &catalog, ClientContext &context) {
+	read_databases[catalog.GetName()] = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
+}
+
+void StatementProperties::RegisterDBModify(Catalog &catalog, ClientContext &context) {
+	modified_databases[catalog.GetName()] = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
+}
 
 } // namespace duckdb
