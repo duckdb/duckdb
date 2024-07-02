@@ -17,6 +17,28 @@ struct ReadBlobOperation {
 
 	static inline void VERIFY(const string &, const string_t &) {
 	}
+
+	static constexpr const idx_t FILE_NAME_COLUMN = 0;
+	static constexpr const idx_t FILE_CONTENT_COLUMN = 1;
+	static constexpr const idx_t FILE_SIZE_COLUMN = 2;
+	static constexpr const idx_t FILE_LAST_MODIFIED_COLUMN = 3;
+};
+
+struct ReadMetadataOperation {
+	static constexpr const char *NAME = "read_metadata";
+	static constexpr const char *FILE_TYPE = "any";
+
+	static inline LogicalType TYPE() {
+		return LogicalType::INVALID;
+	}
+
+	static inline void VERIFY(const string &, const string_t &) {
+	}
+
+	static constexpr const idx_t FILE_NAME_COLUMN = 0;
+	static constexpr const idx_t FILE_CONTENT_COLUMN = DConstants::INVALID_INDEX;
+	static constexpr const idx_t FILE_SIZE_COLUMN = 1;
+	static constexpr const idx_t FILE_LAST_MODIFIED_COLUMN = 2;
 };
 
 struct ReadTextOperation {
@@ -35,6 +57,11 @@ struct ReadTextOperation {
 			    filename);
 		}
 	}
+
+	static constexpr const idx_t FILE_NAME_COLUMN = 0;
+	static constexpr const idx_t FILE_CONTENT_COLUMN = 1;
+	static constexpr const idx_t FILE_SIZE_COLUMN = 2;
+	static constexpr const idx_t FILE_LAST_MODIFIED_COLUMN = 3;
 };
 
 //------------------------------------------------------------------------------
@@ -44,9 +71,6 @@ struct ReadFileBindData : public TableFunctionData {
 	vector<string> files;
 
 	static constexpr const idx_t FILE_NAME_COLUMN = 0;
-	static constexpr const idx_t FILE_CONTENT_COLUMN = 1;
-	static constexpr const idx_t FILE_SIZE_COLUMN = 2;
-	static constexpr const idx_t FILE_LAST_MODIFIED_COLUMN = 3;
 };
 
 template <class OP>
@@ -60,8 +84,13 @@ static unique_ptr<FunctionData> ReadFileBind(ClientContext &context, TableFuncti
 
 	return_types.push_back(LogicalType::VARCHAR);
 	names.push_back("filename");
-	return_types.push_back(OP::TYPE());
-	names.push_back("content");
+
+	LogicalType type = OP::TYPE();
+	if (type != LogicalType::INVALID) {
+		return_types.push_back(type);
+		names.push_back("content");
+	}
+
 	return_types.push_back(LogicalType::BIGINT);
 	names.push_back("size");
 	return_types.push_back(LogicalType::TIMESTAMP);
@@ -144,12 +173,12 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 			}
 			try {
 				switch (proj_idx) {
-				case ReadFileBindData::FILE_NAME_COLUMN: {
+				case OP::FILE_NAME_COLUMN: {
 					auto &file_name_vector = output.data[col_idx];
 					auto file_name_string = StringVector::AddString(file_name_vector, file_name);
 					FlatVector::GetData<string_t>(file_name_vector)[out_idx] = file_name_string;
 				} break;
-				case ReadFileBindData::FILE_CONTENT_COLUMN: {
+				case OP::FILE_CONTENT_COLUMN: {
 					auto file_size = file_handle->GetFileSize();
 					AssertMaxFileSize(file_name, file_size);
 					auto &file_content_vector = output.data[col_idx];
@@ -161,12 +190,12 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 
 					FlatVector::GetData<string_t>(file_content_vector)[out_idx] = content_string;
 				} break;
-				case ReadFileBindData::FILE_SIZE_COLUMN: {
+				case OP::FILE_SIZE_COLUMN: {
 					auto &file_size_vector = output.data[col_idx];
 					FlatVector::GetData<int64_t>(file_size_vector)[out_idx] =
 					    NumericCast<int64_t>(file_handle->GetFileSize());
 				} break;
-				case ReadFileBindData::FILE_LAST_MODIFIED_COLUMN: {
+				case OP::FILE_LAST_MODIFIED_COLUMN: {
 					auto &last_modified_vector = output.data[col_idx];
 					// This can sometimes fail (e.g. httpfs file system cant always parse the last modified time
 					// correctly)
@@ -237,6 +266,10 @@ static TableFunction GetFunction() {
 
 void ReadBlobFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(MultiFileReader::CreateFunctionSet(GetFunction<ReadBlobOperation>()));
+}
+
+void ReadMetadataFunction::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(MultiFileReader::CreateFunctionSet(GetFunction<ReadMetadataOperation>()));
 }
 
 void ReadTextFunction::RegisterFunction(BuiltinFunctions &set) {
