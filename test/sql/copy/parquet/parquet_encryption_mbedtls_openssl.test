@@ -1,0 +1,54 @@
+# name: test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
+# description: Test Parquet encryption with OpenSSL
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+# add keys of 3 different lengths
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+PRAGMA add_parquet_key('key192', '012345678911234501234567')
+
+statement ok
+PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
+
+# test all valid AES key lengths
+foreach key_len 128 192 256
+
+# write files with OpenSSL enabled
+statement error
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'}, DEBUG_USE_OPENSSL randomval)
+----
+Binder Error: Expected debug_use_openssl to be a BOOLEAN
+
+# write files with OpenSSL enabled
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'}, DEBUG_USE_OPENSSL true)
+
+# read OpenSSL encrypted files by using mbedtls
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'}, debug_use_openssl=false)
+----
+42
+
+# write files with default mbedtls
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_mbedtls.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'}, DEBUG_USE_OPENSSL false)
+
+# read mbedtls encrypted files using OpenSSL
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_mbedtls.parquet', encryption_config={footer_key: 'key${key_len}'}, debug_use_openssl=true)
+----
+42
+
+endloop

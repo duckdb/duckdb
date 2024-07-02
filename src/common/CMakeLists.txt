@@ -34,6 +34,7 @@ add_library_unity(
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
+  encryption_state.cpp
   exception.cpp
   exception_format_value.cpp
   extra_type_info.cpp
