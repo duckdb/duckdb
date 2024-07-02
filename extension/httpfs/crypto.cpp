@@ -33,7 +33,6 @@ void hex256(hash_bytes &in, hash_str &out) {
 
 const EVP_CIPHER *GetCipher(const string &key) {
 	// For now, we only support GCM ciphers
-	// TODO: add support for CTR
 	switch (key.size()) {
 	case 16:
 		return EVP_aes_128_gcm();
