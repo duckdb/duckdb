@@ -302,6 +302,109 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 	}
 }
 
+TEST_CASE("duckdb_create_value", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+#define TEST_VALUE(creator, getter, expected)                                                                          \
+	{                                                                                                                  \
+		auto value = creator;                                                                                          \
+		REQUIRE(getter(value) == expected);                                                                            \
+		duckdb_destroy_value(&value);                                                                                  \
+	}
+
+	TEST_VALUE(duckdb_create_bool(true), duckdb_get_bool, true);
+
+	TEST_VALUE(duckdb_create_tinyint(42), duckdb_get_tinyint, 42);
+	TEST_VALUE(duckdb_create_utinyint(32), duckdb_get_utinyint, 32);
+	TEST_VALUE(duckdb_create_smallint(42), duckdb_get_smallint, 42);
+	TEST_VALUE(duckdb_create_usmallint(42), duckdb_get_usmallint, 42);
+	TEST_VALUE(duckdb_create_integer(42), duckdb_get_integer, 42);
+	TEST_VALUE(duckdb_create_uinteger(42), duckdb_get_uinteger, 42);
+	TEST_VALUE(duckdb_create_bigint(42), duckdb_get_bigint, 42);
+	TEST_VALUE(duckdb_create_ubigint(42), duckdb_get_ubigint, 42);
+
+	{
+		auto val = duckdb_create_hugeint({42, 42});
+		auto result = duckdb_get_hugeint(val);
+		REQUIRE(result.lower == 42);
+		REQUIRE(result.upper == 42);
+		duckdb_destroy_value(&val);
+	}
+	{
+		auto val = duckdb_create_uhugeint({42, 42});
+		auto result = duckdb_get_uhugeint(val);
+		REQUIRE(result.lower == 42);
+		REQUIRE(result.upper == 42);
+		duckdb_destroy_value(&val);
+	}
+
+	TEST_VALUE(duckdb_create_float(42.0), duckdb_get_float, 42.0);
+	TEST_VALUE(duckdb_create_double(42.0), duckdb_get_double, 42.0);
+
+	{
+		auto val = duckdb_create_date({1});
+		auto result = duckdb_get_date(val);
+		REQUIRE(result.days == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_time({1});
+		auto result = duckdb_get_time(val);
+		REQUIRE(result.micros == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_timestamp({1});
+		auto result = duckdb_get_timestamp(val);
+		REQUIRE(result.micros == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_interval({1, 1, 1});
+		auto result = duckdb_get_interval(val);
+		REQUIRE(result.months == 1);
+		REQUIRE(result.days == 1);
+		REQUIRE(result.micros == 1);
+		REQUIRE(result.days == 1);
+		duckdb_destroy_value(&val);
+	}
+	{
+		auto val = duckdb_create_blob((const uint8_t *)"hello", 5);
+		auto result = duckdb_get_blob(val);
+		REQUIRE(result.size == 5);
+		REQUIRE(memcmp(result.data, "hello", 5) == 0);
+		duckdb_free(result.data);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_time_tz_value({1});
+		auto result = duckdb_get_time_tz(val);
+		REQUIRE(result.bits == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_bool(true);
+		auto result = duckdb_get_value_type(val);
+		REQUIRE(duckdb_get_type_id(result) == DUCKDB_TYPE_BOOLEAN);
+		duckdb_destroy_logical_type(&result);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_varchar("hello");
+		auto result = duckdb_get_varchar(val);
+		REQUIRE(string(result) == "hello");
+		duckdb_free(result);
+		duckdb_destroy_value(&val);
+	}
+}
+
 TEST_CASE("Statement types", "[capi]") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));

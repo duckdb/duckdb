@@ -84,5 +84,4 @@ idx_t GetCTypeSize(duckdb_type type);
 duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result, duckdb_result *out);
 bool DeprecatedMaterializeResult(duckdb_result *result);
 duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type);
-
 } // namespace duckdb
