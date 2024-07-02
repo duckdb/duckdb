@@ -35,11 +35,11 @@ string_t IntToVarInt(Vector &result, T int_value) {
 
 	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
 	auto blob = StringVector::EmptyString(result, blob_size);
-	if (blob_size < string_t::INLINE_BYTES) {
-		// set these babies to 0.
-		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
-	}
 	auto writable_blob = blob.GetDataWriteable();
+	// if (blob_size < string_t::INLINE_BYTES) {
+	// 	// set these babies to 0.
+	// 	memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
+	// }
 	SetHeader(writable_blob, data_byte_size, is_negative);
 
 	// Add data bytes to the blob, starting off after header bytes
@@ -51,6 +51,7 @@ string_t IntToVarInt(Vector &result, T int_value) {
 			writable_blob[wb_idx++] = static_cast<char>(abs_value >> i * 8 & 0xFF);
 		}
 	}
+	blob.Finalize();
 	return blob;
 }
 
@@ -133,9 +134,10 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 		uint32_t blob_size = 1 + VARINT_HEADER_SIZE;
 		auto blob = StringVector::EmptyString(result, blob_size);
 		// set these babies to 0.
-		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
+		// memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 		auto writable_blob = blob.GetDataWriteable();
 		SetHeader(writable_blob, 1, false);
+		blob.Finalize();
 		return blob;
 	}
 
@@ -168,10 +170,10 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	}
 	uint32_t blob_size = static_cast<uint32_t>(blob_string.size() + VARINT_HEADER_SIZE);
 	auto blob = StringVector::EmptyString(result, blob_size);
-	if (blob_size < string_t::INLINE_BYTES) {
-		// set these babies to 0.
-		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
-	}
+	// if (blob_size < string_t::INLINE_BYTES) {
+	// 	// set these babies to 0.
+	// 	memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
+	// }
 	auto writable_blob = blob.GetDataWriteable();
 
 	SetHeader(writable_blob, blob_string.size(), is_negative);
@@ -181,11 +183,12 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	for (idx_t i = VARINT_HEADER_SIZE; i < blob_size; i++) {
 		writable_blob[i] = blob_string[blob_string_idx--];
 	}
+	blob.Finalize();
 	return blob;
 }
 
 // Function to convert VARINT blob to a VARCHAR
-string_t VarIntToVarchar(const string_t &blob) {
+string VarIntToVarchar(const string_t &blob) {
 	if (blob.GetSize() < 4) {
 		throw InvalidInputException("Invalid blob size.");
 	}
