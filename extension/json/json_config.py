@@ -30,5 +30,15 @@ source_files = [
         'extension/json/json_serializer.cpp',
         'extension/json/json_deserializer.cpp',
         'extension/json/serialize_json.cpp',
+        'extension/json/json_functions/json_array_tail.cpp',
+        'extension/json/json_functions/json_array_append.cpp',
+        'extension/json/json_functions/json_array_prepend.cpp',
+        'extension/json/json_functions/json_array_insert.cpp',
+        'extension/json/json_functions/json_array_remove.cpp',
+        'extension/json/json_functions/json_array_take.cpp',
+        'extension/json/json_functions/json_array_rotate.cpp',
+        'extension/json/json_functions/json_object_add.cpp',
+        'extension/json/json_functions/json_object_replace.cpp',
+        'extension/json/json_functions/json_object_rename_key.cpp',
     ]
 ]

@@ -1,0 +1,111 @@
+# name: test/sql/json/scalar/test_json_array_remove.test
+# description: Checks whether an element is removed at the correct index of a JSON Array or correct slice is removed
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table valid (j json)
+
+statement ok
+insert into valid values ('[]'), ('[42]'), ('["a", 42, true]')
+
+# Per element
+query I
+SELECT json_array_remove(j, 0) FROM valid
+----
+[]
+[]
+[42,true]
+
+query I
+SELECT json_array_remove(j, -1) FROM valid
+----
+[]
+[]
+["a",42]
+
+query I
+SELECT json_array_remove(j, 1) FROM valid
+----
+[]
+[42]
+["a",true]
+
+statement error
+SELECT json_array_remove('', 42)
+----
+
+statement error
+SELECT json_array_remove('{}', 42)
+----
+
+statement error
+SELECT json_array_remove('true', 42)
+----
+
+statement error
+SELECT json_array_remove('"Hello"', 42)
+----
+
+statement error
+SELECT json_array_remove('42', 42)
+----
+
+# Per range
+query I
+SELECT json_array_remove(j, 0, 0) FROM valid
+----
+[]
+[]
+[42,true]
+
+query I
+SELECT json_array_remove(j, 0, 1) FROM valid
+----
+[]
+[]
+[true]
+
+query I
+SELECT json_array_remove(j, 1, 2) FROM valid
+----
+[]
+[42]
+["a"]
+
+statement error
+SELECT json_array_remove('[42]', -1, 0)
+----
+
+statement error
+SELECT json_array_remove('[42]', 2, -1)
+----
+
+statement error
+SELECT json_array_remove('[42]', 2, 1)
+----
+
+statement error
+SELECT json_array_remove('', 42)
+----
+
+statement error
+SELECT json_array_remove('{}', 42)
+----
+
+statement error
+SELECT json_array_remove('true', 42)
+----
+
+statement error
+SELECT json_array_remove('"Hello"', 42)
+----
+
+statement error
+SELECT json_array_remove('42', 42)
+----

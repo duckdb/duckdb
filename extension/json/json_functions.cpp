@@ -167,6 +167,16 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetSerializeSqlFunction());
 	functions.push_back(GetDeserializeSqlFunction());
 
+	functions.push_back(GetArrayTailFunction());
+	functions.push_back(GetArrayTakeFunction());
+	functions.push_back(GetArrayAppendFunction());
+	functions.push_back(GetArrayPrependFunction());
+	functions.push_back(GetArrayInsertFunction());
+	functions.push_back(GetArrayRemoveFunction());
+	functions.push_back(GetArrayRotateFunction());
+	functions.push_back(GetObjectAddFunction());
+	functions.push_back(GetObjectReplaceFunction());
+	functions.push_back(GetObjectRenameKeyFunction());
 	return functions;
 }
 

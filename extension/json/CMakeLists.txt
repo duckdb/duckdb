@@ -29,7 +29,18 @@ set(JSON_EXTENSION_FILES
     json_functions/json_serialize_sql.cpp
     json_functions/json_serialize_plan.cpp
     json_functions/read_json.cpp
-    json_functions/read_json_objects.cpp)
+    json_functions/read_json_objects.cpp
+    json_functions/json_array_tail.cpp
+    json_functions/json_array_take.cpp
+    json_functions/json_array_append.cpp
+    json_functions/json_array_prepend.cpp
+    json_functions/json_array_insert.cpp
+    json_functions/json_array_remove.cpp
+    json_functions/json_array_rotate.cpp
+    json_functions/json_object_add.cpp
+    json_functions/json_object_replace.cpp
+    json_functions/json_object_rename_key.cpp
+    ${YYJSON_OBJECT_FILES})
 
 build_static_extension(json ${JSON_EXTENSION_FILES})
 set(PARAMETERS "-warnings")

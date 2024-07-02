@@ -1,0 +1,137 @@
+# name: test/sql/json/scalar/test_json_object_add.test
+# description: Checks whether a given JSON Object is appended correctly
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values('{}'), ('{"a":42}'), ('{"a":42, "b": true}')
+
+query I
+SELECT json_obj_add(json_obj_add(j, 'c', TRUE), 'd', FALSE) FROM test
+----
+{"c":true,"d":false}
+{"a":42,"c":true,"d":false}
+{"a":42,"b":true,"c":true,"d":false}
+
+query I
+SELECT json_obj_add(j, 'key', 42::UTINYINT) FROM test
+----
+{"key":42}
+{"a":42,"key":42}
+{"a":42,"b":true,"key":42}
+
+query I
+SELECT json_obj_add(json_obj_add(j, 'k1', -42::TINYINT), 'k2', 42::TINYINT) FROM test
+----
+{"k1":-42,"k2":42}
+{"a":42,"k1":-42,"k2":42}
+{"a":42,"b":true,"k1":-42,"k2":42}
+
+query I
+SELECT json_obj_add(j, 'k', 1337::USMALLINT) FROM test
+----
+{"k":1337}
+{"a":42,"k":1337}
+{"a":42,"b":true,"k":1337}
+
+query I
+SELECT json_obj_add(json_obj_add(j, 'k1', -1337::SMALLINT), 'k2', 1337::SMALLINT) FROM test
+----
+{"k1":-1337,"k2":1337}
+{"a":42,"k1":-1337,"k2":1337}
+{"a":42,"b":true,"k1":-1337,"k2":1337}
+
+query I
+SELECT json_obj_add(j, 'k', 2024::UINTEGER) FROM test
+----
+{"k":2024}
+{"a":42,"k":2024}
+{"a":42,"b":true,"k":2024}
+
+query I
+SELECT json_obj_add(json_obj_add(j, 'k1', -2024::INTEGER), 'k2', 2024::INTEGER) FROM test
+----
+{"k1":-2024,"k2":2024}
+{"a":42,"k1":-2024,"k2":2024}
+{"a":42,"b":true,"k1":-2024,"k2":2024}
+
+query I
+SELECT json_obj_add(j, 'k', 18446744073709551615::UBIGINT) FROM test
+----
+{"k":18446744073709551615}
+{"a":42,"k":18446744073709551615}
+{"a":42,"b":true,"k":18446744073709551615}
+
+query I
+SELECT json_obj_add(json_obj_add(j, 'k1', -1234567891011121314::BIGINT), 'k2', 1234567891011121314::BIGINT) FROM test
+----
+{"k1":-1234567891011121314,"k2":1234567891011121314}
+{"a":42,"k1":-1234567891011121314,"k2":1234567891011121314}
+{"a":42,"b":true,"k1":-1234567891011121314,"k2":1234567891011121314}
+
+query I
+SELECT json_obj_add(json_obj_add(j, 'k1', pi()::FLOAT), 'k2', pi()::DOUBLE) FROM test
+----
+{"k1":3.1415927410125732,"k2":3.141592653589793}
+{"a":42,"k1":3.1415927410125732,"k2":3.141592653589793}
+{"a":42,"b":true,"k1":3.1415927410125732,"k2":3.141592653589793}
+
+statement ok
+create table test2 (j json)
+
+statement ok
+insert into test2 values('42'), ('"Hello"'), ('true'), ('[1337]'), ('{"a": 42}')
+
+query I
+SELECT json_obj_add(a.j, 'k', b.j) FROM test AS a, test2 AS b
+----
+{"k":42}
+{"k":"Hello"}
+{"k":true}
+{"k":[1337]}
+{"k":{"a":42}}
+{"a":42,"k":42}
+{"a":42,"k":"Hello"}
+{"a":42,"k":true}
+{"a":42,"k":[1337]}
+{"a":42,"k":{"a":42}}
+{"a":42,"b":true,"k":42}
+{"a":42,"b":true,"k":"Hello"}
+{"a":42,"b":true,"k":true}
+{"a":42,"b":true,"k":[1337]}
+{"a":42,"b":true,"k":{"a":42}}
+
+# You would think empty key strings are not allowed. But they are:
+# https://www.json.org/json-en.html
+query I
+SELECT json_obj_add('{}', '', 42::INTEGER)
+----
+{"":42}
+
+statement error
+SELECT json_obj_add('', 'k', False)
+----
+
+statement error
+SELECT json_obj_add('[]', 'k', False)
+----
+
+statement error
+SELECT json_obj_add('true', 'k', False)
+----
+
+statement error
+SELECT json_obj_add('"Hello"', 'k', False)
+----
+
+statement error
+SELECT json_obj_add('42', 'k', False)
+----

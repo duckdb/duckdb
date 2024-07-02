@@ -1,0 +1,42 @@
+# name: test/sql/json/scalar/test_json_array_tail.test
+# description: Checks whether a given JSON Array's tail is correct
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values('[]'), ('[42]'), ('["a", 42, true]')
+
+query I
+SELECT json_array_tail(j) FROM test
+----
+[]
+[]
+[42,true]
+
+statement error
+SELECT json_array_tail('')
+----
+
+statement error
+SELECT json_array_tail('{}')
+----
+
+statement error
+SELECT json_array_tail('true')
+----
+
+statement error
+SELECT json_array_tail('"Hello"')
+----
+
+statement error
+SELECT json_array_tail('42')
+----

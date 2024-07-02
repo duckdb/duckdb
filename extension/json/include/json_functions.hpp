@@ -103,6 +103,16 @@ private:
 	static ScalarFunctionSet GetDeserializeSqlFunction();
 	static ScalarFunctionSet GetSerializePlanFunction();
 
+	static ScalarFunctionSet GetArrayTailFunction();
+	static ScalarFunctionSet GetArrayTakeFunction();
+	static ScalarFunctionSet GetArrayAppendFunction();
+	static ScalarFunctionSet GetArrayPrependFunction();
+	static ScalarFunctionSet GetArrayInsertFunction();
+	static ScalarFunctionSet GetArrayRemoveFunction();
+	static ScalarFunctionSet GetArrayRotateFunction();
+	static ScalarFunctionSet GetObjectAddFunction();
+	static ScalarFunctionSet GetObjectReplaceFunction();
+	static ScalarFunctionSet GetObjectRenameKeyFunction();
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 
 	template <class FUNCTION_INFO>

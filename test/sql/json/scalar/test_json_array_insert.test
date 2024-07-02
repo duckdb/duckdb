@@ -1,0 +1,139 @@
+# name: test/sql/json/scalar/test_json_array_insert.test
+# description: Checks whether an element is inserted at the correct index of a JSON Array
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values('[]'), ('[42]'), ('["a", 42, true]')
+
+# BOOLEAN
+query I
+SELECT json_array_insert(json_array_insert(j, True, 1), False, -3) FROM test
+----
+[false,null,true]
+[false,42,true]
+["a",false,true,42,true]
+
+# TINYINT
+query I
+SELECT json_array_insert(json_array_insert(j, 13::UTINYINT, 1), 37::UTINYINT, -3) FROM test
+----
+[37,null,13]
+[37,42,13]
+["a",37,13,42,true]
+
+query I
+SELECT json_array_insert(json_array_insert(j, -13::TINYINT, 1), 37::TINYINT, -3) FROM test
+----
+[37,null,-13]
+[37,42,-13]
+["a",37,-13,42,true]
+
+# SMALLINT
+query I
+SELECT json_array_insert(json_array_insert(j, 13::USMALLINT, 1), 37::USMALLINT, -3) FROM test
+----
+[37,null,13]
+[37,42,13]
+["a",37,13,42,true]
+
+query I
+SELECT json_array_insert(json_array_insert(j, -13::SMALLINT, 1), 37::SMALLINT, -3) FROM test
+----
+[37,null,-13]
+[37,42,-13]
+["a",37,-13,42,true]
+
+# INTEGER
+query I
+SELECT json_array_insert(json_array_insert(j, 13::UINTEGER, 1), 37::UINTEGER, -3) FROM test
+----
+[37,null,13]
+[37,42,13]
+["a",37,13,42,true]
+
+query I
+SELECT json_array_insert(json_array_insert(j, -13::INTEGER, 1), 37::INTEGER, -3) FROM test
+----
+[37,null,-13]
+[37,42,-13]
+["a",37,-13,42,true]
+
+# BIGINT
+query I
+SELECT json_array_insert(json_array_insert(j, 18446744073709551615::UBIGINT, 1), 18446744073709551610::UBIGINT, -3) FROM test
+----
+[18446744073709551610,null,18446744073709551615]
+[18446744073709551610,42,18446744073709551615]
+["a",18446744073709551610,18446744073709551615,42,true]
+
+query I
+SELECT json_array_insert(json_array_insert(j, -1234567891011121314::BIGINT, 1), 1234567891011121314::BIGINT, -3) FROM test
+----
+[1234567891011121314,null,-1234567891011121314]
+[1234567891011121314,42,-1234567891011121314]
+["a",1234567891011121314,-1234567891011121314,42,true]
+
+# INTEGER
+query I
+SELECT json_array_insert(json_array_insert(j, PI()::FLOAT, 1), PI()::DOUBLE, -3) FROM test
+----
+[3.141592653589793,null,3.1415927410125732]
+[3.141592653589793,42,3.1415927410125732]
+["a",3.141592653589793,3.1415927410125732,42,true]
+
+
+statement ok
+create table test2 (j json)
+
+statement ok
+insert into test2 values('42'), ('"Hello"'), ('true'), ('[1337]'), ('{"a": 42}')
+
+query I
+SELECT json_array_insert(a.j, b.j, 2) FROM test AS a, test2 AS b
+----
+[null,null,42]
+[null,null,"Hello"]
+[null,null,true]
+[null,null,[1337]]
+[null,null,{"a":42}]
+[42,null,42]
+[42,null,"Hello"]
+[42,null,true]
+[42,null,[1337]]
+[42,null,{"a":42}]
+["a",42,42,true]
+["a",42,"Hello",true]
+["a",42,true,true]
+["a",42,[1337],true]
+["a",42,{"a":42},true]
+
+
+
+statement error
+SELECT json_array_insert('', False, 1)
+----
+
+statement error
+SELECT json_array_insert('{}', False, 1)
+----
+
+statement error
+SELECT json_array_insert('true', False, 1)
+----
+
+statement error
+SELECT json_array_insert('"Hello"', False, 1)
+----
+
+statement error
+SELECT json_array_insert('42', False, 1)
+----

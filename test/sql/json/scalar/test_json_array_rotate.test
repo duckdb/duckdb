@@ -1,0 +1,56 @@
+# name: test/sql/json/scalar/test_json_array_rotate.test
+# description: Checks whether a given JSON Array is rotated correctly
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values('[]'), ('[42]'), ('["a",42,true]')
+
+query I
+SELECT json_array_rotate(j, 1) FROM test
+----
+[]
+[42]
+[42,true,"a"]
+
+query I
+SELECT json_array_rotate(j, -1) FROM test
+----
+[]
+[42]
+[true,"a",42]
+
+# rotate both ways hundred times the array length
+query I
+SELECT bool_and(json_array_rotate(j, (amount * json_array_length(j)) :: INT) = j)
+FROM   test, generate_series(-100,100) AS _(amount)
+----
+true
+
+statement error
+SELECT json_array_rotate('', 42)
+----
+
+statement error
+SELECT json_array_rotate('{}', 42)
+----
+
+statement error
+SELECT json_array_rotate('true', 42)
+----
+
+statement error
+SELECT json_array_rotate('"Hello"', 42)
+----
+
+statement error
+SELECT json_array_rotate('42', 42)
+----

@@ -1,0 +1,130 @@
+# name: test/sql/json/scalar/test_json_array_prepend.test
+# description: Checks whether a given JSON Array is prepended correctly
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values('[]'), ('[42]'), ('["a", 42, true]')
+
+query I
+SELECT json_array_prepend(False, json_array_prepend(True, j)) FROM test
+----
+[false,true]
+[false,true,42]
+[false,true,"a",42,true]
+
+query I
+SELECT json_array_prepend(42::UTINYINT, j) FROM test
+----
+[42]
+[42,42]
+[42,"a",42,true]
+
+query I
+SELECT json_array_prepend(42::TINYINT, json_array_prepend(-42::TINYINT, j)) FROM test
+----
+[42,-42]
+[42,-42,42]
+[42,-42,"a",42,true]
+
+query I
+SELECT json_array_prepend(1337::USMALLINT, j) FROM test
+----
+[1337]
+[1337,42]
+[1337,"a",42,true]
+
+query I
+SELECT json_array_prepend(1337::SMALLINT, json_array_prepend(-1337::SMALLINT, j)) FROM test
+----
+[1337,-1337]
+[1337,-1337,42]
+[1337,-1337,"a",42,true]
+
+query I
+SELECT json_array_prepend(2024::UINTEGER, j) FROM test
+----
+[2024]
+[2024,42]
+[2024,"a",42,true]
+
+query I
+SELECT json_array_prepend(2024::INTEGER, json_array_prepend(-2024::INTEGER, j)) FROM test
+----
+[2024,-2024]
+[2024,-2024,42]
+[2024,-2024,"a",42,true]
+
+query I
+SELECT json_array_prepend(18446744073709551615::UBIGINT, j) FROM test
+----
+[18446744073709551615]
+[18446744073709551615,42]
+[18446744073709551615,"a",42,true]
+
+query I
+SELECT json_array_prepend(1234567891011121314::BIGINT, json_array_prepend(-1234567891011121314::BIGINT, j)) FROM test
+----
+[1234567891011121314,-1234567891011121314]
+[1234567891011121314,-1234567891011121314,42]
+[1234567891011121314,-1234567891011121314,"a",42,true]
+
+query I
+SELECT json_array_prepend(pi()::DOUBLE, json_array_prepend(pi()::FLOAT, j)) FROM test
+----
+[3.141592653589793,3.1415927410125732]
+[3.141592653589793,3.1415927410125732,42]
+[3.141592653589793,3.1415927410125732,"a",42,true]
+
+statement ok
+create table test2 (j json)
+
+statement ok
+insert into test2 values('42'), ('"Hello"'), ('true'), ('[1337]'), ('{"a": 42}')
+
+query I
+SELECT json_array_prepend(b.j, a.j) FROM test AS a, test2 AS b
+----
+[42]
+["Hello"]
+[true]
+[[1337]]
+[{"a":42}]
+[42,42]
+["Hello",42]
+[true,42]
+[[1337],42]
+[{"a":42},42]
+[42,"a",42,true]
+["Hello","a",42,true]
+[true,"a",42,true]
+[[1337],"a",42,true]
+[{"a":42},"a",42,true]
+
+statement error
+SELECT json_array_prepend(False, '')
+----
+
+statement error
+SELECT json_array_prepend(False,'{}')
+----
+
+statement error
+SELECT json_array_prepend(False,'true')
+----
+
+statement error
+SELECT json_array_prepend(False, '"Hello"')
+----
+
+statement error
+SELECT json_array_prepend(False, '42')
+----
