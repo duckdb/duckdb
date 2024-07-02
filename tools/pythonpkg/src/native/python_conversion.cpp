@@ -140,6 +140,12 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict, const Logic
 
 		elements.push_back(Value::STRUCT(std::move(struct_values)));
 	}
+	if (key_type.id() == LogicalTypeId::SQLNULL) {
+		key_type = key_target;
+	}
+	if (value_type.id() == LogicalTypeId::SQLNULL) {
+		value_type = value_target;
+	}
 
 	LogicalType map_type = LogicalType::MAP(key_type, value_type);
 
