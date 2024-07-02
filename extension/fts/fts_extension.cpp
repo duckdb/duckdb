@@ -59,6 +59,7 @@ static void LoadInternal(DuckDB &db) {
 	create_fts_index_func.named_parameters["strip_accents"] = LogicalType::BOOLEAN;
 	create_fts_index_func.named_parameters["lower"] = LogicalType::BOOLEAN;
 	create_fts_index_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
+	create_fts_index_func.named_parameters["shingle_len"] = LogicalType::INTEGER;
 
 	auto drop_fts_index_func =
 	    PragmaFunction::PragmaCall("drop_fts_index", FTSIndexing::DropFTSIndexQuery, {LogicalType::VARCHAR});
