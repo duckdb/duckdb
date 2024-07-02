@@ -1116,7 +1116,7 @@ template <typename Char> class float_writer {
       // 1234e-6 -> 0.001234
       *it++ = static_cast<Char>('0');
       int num_zeros = -full_exp;
-      if (specs_.precision >= 0 && specs_.precision < num_zeros)
+      if (num_digits_ == 0 && specs_.precision >= 0 && specs_.precision < num_zeros)
         num_zeros = specs_.precision;
       int num_digits = num_digits_;
       if (!specs_.trailing_zeros)

@@ -49,8 +49,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) 
 	unique_ptr<DataChunk> chunk;
 	try {
 		// fetch the chunk and return it
-		auto res = buffered_data->ReplenishBuffer(*this, lock);
-		if (res == PendingExecutionResult::EXECUTION_ERROR) {
+		if (!buffered_data->ReplenishBuffer(*this, lock)) {
 			return chunk;
 		}
 		chunk = buffered_data->Scan();

@@ -173,7 +173,7 @@ struct ArgMinMaxBase {
 };
 
 struct SpecializedGenericArgMinMaxState {
-	static bool CreateExtraState() {
+	static bool CreateExtraState(idx_t count) {
 		// nop extra state
 		return false;
 	}
@@ -185,8 +185,8 @@ struct SpecializedGenericArgMinMaxState {
 
 template <OrderType ORDER_TYPE>
 struct GenericArgMinMaxState {
-	static Vector CreateExtraState() {
-		return Vector(LogicalType::BLOB);
+	static Vector CreateExtraState(idx_t count) {
+		return Vector(LogicalType::BLOB, count);
 	}
 
 	static void PrepareData(Vector &by, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
@@ -209,7 +209,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		using BY_TYPE = typename STATE::BY_TYPE;
 		auto &by = inputs[1];
 		UnifiedVectorFormat bdata;
-		auto extra_state = UPDATE_TYPE::CreateExtraState();
+		auto extra_state = UPDATE_TYPE::CreateExtraState(count);
 		UPDATE_TYPE::PrepareData(by, count, extra_state, bdata);
 		const auto bys = UnifiedVectorFormat::GetData<BY_TYPE>(bdata);
 

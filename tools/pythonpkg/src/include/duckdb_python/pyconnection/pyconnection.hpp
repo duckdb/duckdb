@@ -26,6 +26,7 @@
 #include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
+struct BoundParameterData;
 
 enum class PythonEnvironmentType { NORMAL, INTERACTIVE, JUPYTER };
 
@@ -85,11 +86,21 @@ public:
 
 	py::list ExtractStatements(const string &query);
 
-	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const Optional<py::object> &columns = py::none(),
-	                                      const Optional<py::object> &sample_size = py::none(),
-	                                      const Optional<py::object> &maximum_depth = py::none(),
-	                                      const Optional<py::str> &records = py::none(),
-	                                      const Optional<py::str> &format = py::none());
+	unique_ptr<DuckDBPyRelation> ReadJSON(
+	    const string &name, const Optional<py::object> &columns = py::none(),
+	    const Optional<py::object> &sample_size = py::none(), const Optional<py::object> &maximum_depth = py::none(),
+	    const Optional<py::str> &records = py::none(), const Optional<py::str> &format = py::none(),
+	    const Optional<py::object> &date_format = py::none(), const Optional<py::object> &timestamp_format = py::none(),
+	    const Optional<py::object> &compression = py::none(),
+	    const Optional<py::object> &maximum_object_size = py::none(),
+	    const Optional<py::object> &ignore_errors = py::none(),
+	    const Optional<py::object> &convert_strings_to_integers = py::none(),
+	    const Optional<py::object> &field_appearance_threshold = py::none(),
+	    const Optional<py::object> &map_inference_threshold = py::none(),
+	    const Optional<py::object> &maximum_sample_files = py::none(),
+	    const Optional<py::object> &filename = py::none(), const Optional<py::object> &hive_partitioning = py::none(),
+	    const Optional<py::object> &union_by_name = py::none(), const Optional<py::object> &hive_types = py::none(),
+	    const Optional<py::object> &hive_types_autocast = py::none());
 
 	shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key_type,
 	                                 const shared_ptr<DuckDBPyType> &value_type);
@@ -207,7 +218,7 @@ public:
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
-	static case_insensitive_map_t<Value> TransformPythonParamDict(const py::dict &params);
+	static case_insensitive_map_t<BoundParameterData> TransformPythonParamDict(const py::dict &params);
 
 	void RegisterFilesystem(AbstractFileSystem filesystem);
 	void UnregisterFilesystem(const py::str &name);

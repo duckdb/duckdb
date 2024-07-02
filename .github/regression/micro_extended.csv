@@ -168,6 +168,8 @@ benchmark/micro/optimizer/topn_optimization.benchmark
 benchmark/micro/order/orderby.benchmark
 benchmark/micro/pushdown/or_pushdown.benchmark
 benchmark/micro/pushdown/window_partition_pushdown.benchmark
+benchmark/micro/result_collection/arrow_result.benchmark
+benchmark/micro/result_collection/batched_arrow_result.benchmark
 benchmark/micro/result_collection/batched_stream_query.benchmark
 benchmark/micro/simd/auto-vectorization.benchmark
 benchmark/micro/string/bitstring.benchmark
@@ -195,6 +197,7 @@ benchmark/micro/timestamp/extract_year.benchmark
 benchmark/micro/update/update_with_join.benchmark
 benchmark/micro/view/many_values.benchmark
 benchmark/micro/window/streaming_lag.benchmark
+benchmark/micro/window/streaming_lead.benchmark
 benchmark/micro/window/window_constant_aggregates.benchmark
 benchmark/micro/window/window_constant_count.benchmark
 benchmark/micro/window/window_count_star_fixed_100.benchmark
