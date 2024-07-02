@@ -19,32 +19,45 @@ PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, Physic
     : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(nullptr), cte_index(cte_index) {
 }
 
-class PhysicalColumnDataScanState : public GlobalSourceState {
+class PhysicalColumnDataGlobalScanState : public GlobalSourceState {
 public:
-	explicit PhysicalColumnDataScanState() : initialized(false) {
+	PhysicalColumnDataGlobalScanState(const ClientContext &context, const ColumnDataCollection &collection)
+	    : max_threads(MaxValue<idx_t>(context.config.verify_parallelism ? collection.ChunkCount()
+	                                                                    : collection.ChunkCount() / CHUNKS_PER_THREAD,
+	                                  1)) {
+		collection.InitializeScan(global_scan_state);
 	}
 
-	//! The current position in the scan
-	ColumnDataScanState scan_state;
-	bool initialized;
+	idx_t MaxThreads() override {
+		return max_threads;
+	}
+
+public:
+	ColumnDataParallelScanState global_scan_state;
+
+	static constexpr idx_t CHUNKS_PER_THREAD = 32;
+	const idx_t max_threads;
+};
+
+class PhysicalColumnDataLocalScanState : public LocalSourceState {
+public:
+	ColumnDataLocalScanState local_scan_state;
 };
 
 unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<PhysicalColumnDataScanState>();
+	return make_uniq<PhysicalColumnDataGlobalScanState>(context, *collection);
+}
+
+unique_ptr<LocalSourceState> PhysicalColumnDataScan::GetLocalSourceState(ExecutionContext &,
+                                                                         GlobalSourceState &) const {
+	return make_uniq<PhysicalColumnDataLocalScanState>();
 }
 
 SourceResultType PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk,
                                                  OperatorSourceInput &input) const {
-	auto &state = input.global_state.Cast<PhysicalColumnDataScanState>();
-	if (collection->Count() == 0) {
-		return SourceResultType::FINISHED;
-	}
-	if (!state.initialized) {
-		collection->InitializeScan(state.scan_state);
-		state.initialized = true;
-	}
-	collection->Scan(state.scan_state, chunk);
-
+	auto &gstate = input.global_state.Cast<PhysicalColumnDataGlobalScanState>();
+	auto &lstate = input.local_state.Cast<PhysicalColumnDataLocalScanState>();
+	collection->Scan(gstate.global_scan_state, lstate.local_scan_state, chunk);
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
@@ -108,7 +121,8 @@ string PhysicalColumnDataScan::ParamsToString() const {
 	default:
 		break;
 	}
-
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
 	return result;
 }
 

@@ -4,6 +4,10 @@
 
 namespace duckdb {
 
+string LogicalCTERef::ParamsToString() const {
+	return StringUtil::Format("idx: %llu", cte_index);
+}
+
 vector<idx_t> LogicalCTERef::GetTableIndex() const {
 	return vector<idx_t> {table_index};
 }

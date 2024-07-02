@@ -1,0 +1,404 @@
+# name: test/sql/cte/materialized/automatic_cte_materialization.test_slow
+# description: Test that CTEs are automatically materialized
+# group: [materialized]
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output='OPTIMIZED_ONLY'
+
+statement ok
+CALL dbgen(sf=0.01);
+
+# TPC-H Q15
+query II
+EXPLAIN WITH revenue AS (
+    SELECT
+        l_suppkey AS supplier_no,
+        sum(l_extendedprice * (1 - l_discount)) AS total_revenue
+    FROM
+        lineitem
+    WHERE
+        l_shipdate >= CAST('1996-01-01' AS date)
+      AND l_shipdate < CAST('1996-04-01' AS date)
+    GROUP BY
+        supplier_no
+)
+SELECT
+    s_suppkey,
+    s_name,
+    s_address,
+    s_phone,
+    total_revenue
+FROM
+    supplier,
+    revenue
+WHERE
+    s_suppkey = supplier_no
+  AND total_revenue = (
+    SELECT
+        max(total_revenue)
+    FROM revenue)
+ORDER BY
+    s_suppkey;
+----
+logical_opt	<REGEX>:.*CTE_SCAN.*
+
+query II
+EXPLAIN WITH revenue AS NOT MATERIALIZED (
+    SELECT
+        l_suppkey AS supplier_no,
+        sum(l_extendedprice * (1 - l_discount)) AS total_revenue
+    FROM
+        lineitem
+    WHERE
+        l_shipdate >= CAST('1996-01-01' AS date)
+      AND l_shipdate < CAST('1996-04-01' AS date)
+    GROUP BY
+        supplier_no
+)
+SELECT
+    s_suppkey,
+    s_name,
+    s_address,
+    s_phone,
+    total_revenue
+FROM
+    supplier,
+    revenue
+WHERE
+    s_suppkey = supplier_no
+  AND total_revenue = (
+    SELECT
+        max(total_revenue)
+    FROM revenue)
+ORDER BY
+    s_suppkey;
+----
+logical_opt	<!REGEX>:.*CTE_SCAN.*
+
+# duplicate table name
+statement ok
+DROP TABLE customer
+
+require tpcds
+
+statement ok
+call dsdgen(sf=0.01)
+
+# TPC-DS Q23
+query II
+EXPLAIN WITH frequent_ss_items AS
+  (SELECT itemdesc,
+          i_item_sk item_sk,
+          d_date solddate,
+          count(*) cnt
+   FROM store_sales,
+        date_dim,
+     (SELECT SUBSTRING(i_item_desc, 1, 30) itemdesc,
+             *
+      FROM item) sq1
+   WHERE ss_sold_date_sk = d_date_sk
+     AND ss_item_sk = i_item_sk
+     AND d_year IN (2000,
+                    2000+1,
+                    2000+2,
+                    2000+3)
+   GROUP BY itemdesc,
+            i_item_sk,
+            d_date
+   HAVING count(*) >4),
+     max_store_sales AS
+  (SELECT max(csales) tpcds_cmax
+   FROM
+     (SELECT c_customer_sk,
+             sum(ss_quantity*ss_sales_price) csales
+      FROM store_sales,
+           customer,
+           date_dim
+      WHERE ss_customer_sk = c_customer_sk
+        AND ss_sold_date_sk = d_date_sk
+        AND d_year IN (2000,
+                       2000+1,
+                       2000+2,
+                       2000+3)
+      GROUP BY c_customer_sk) sq2),
+     best_ss_customer AS
+  (SELECT c_customer_sk,
+          sum(ss_quantity*ss_sales_price) ssales
+   FROM store_sales,
+        customer,
+        max_store_sales
+   WHERE ss_customer_sk = c_customer_sk
+   GROUP BY c_customer_sk
+   HAVING sum(ss_quantity*ss_sales_price) > (50/100.0) * max(tpcds_cmax))
+SELECT c_last_name,
+       c_first_name,
+       sales
+FROM
+  (SELECT c_last_name,
+          c_first_name,
+          sum(cs_quantity*cs_list_price) sales
+   FROM catalog_sales,
+        customer,
+        date_dim,
+        frequent_ss_items,
+        best_ss_customer
+   WHERE d_year = 2000
+     AND d_moy = 2
+     AND cs_sold_date_sk = d_date_sk
+     AND cs_item_sk = item_sk
+     AND cs_bill_customer_sk = best_ss_customer.c_customer_sk
+     AND cs_bill_customer_sk = customer.c_customer_sk
+   GROUP BY c_last_name,
+            c_first_name
+   UNION ALL SELECT c_last_name,
+                    c_first_name,
+                    sum(ws_quantity*ws_list_price) sales
+   FROM web_sales,
+        customer,
+        date_dim,
+        frequent_ss_items,
+        best_ss_customer
+   WHERE d_year = 2000
+     AND d_moy = 2
+     AND ws_sold_date_sk = d_date_sk
+     AND ws_item_sk = item_sk
+     AND ws_bill_customer_sk = best_ss_customer.c_customer_sk
+     AND ws_bill_customer_sk = customer.c_customer_sk
+   GROUP BY c_last_name,
+            c_first_name) sq3
+ORDER BY c_last_name NULLS FIRST,
+         c_first_name NULLS FIRST,
+         sales NULLS FIRST
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE_SCAN.*
+
+query II
+EXPLAIN WITH frequent_ss_items AS NOT MATERIALIZED
+  (SELECT itemdesc,
+          i_item_sk item_sk,
+          d_date solddate,
+          count(*) cnt
+   FROM store_sales,
+        date_dim,
+     (SELECT SUBSTRING(i_item_desc, 1, 30) itemdesc,
+             *
+      FROM item) sq1
+   WHERE ss_sold_date_sk = d_date_sk
+     AND ss_item_sk = i_item_sk
+     AND d_year IN (2000,
+                    2000+1,
+                    2000+2,
+                    2000+3)
+   GROUP BY itemdesc,
+            i_item_sk,
+            d_date
+   HAVING count(*) >4),
+     max_store_sales AS NOT MATERIALIZED
+  (SELECT max(csales) tpcds_cmax
+   FROM
+     (SELECT c_customer_sk,
+             sum(ss_quantity*ss_sales_price) csales
+      FROM store_sales,
+           customer,
+           date_dim
+      WHERE ss_customer_sk = c_customer_sk
+        AND ss_sold_date_sk = d_date_sk
+        AND d_year IN (2000,
+                       2000+1,
+                       2000+2,
+                       2000+3)
+      GROUP BY c_customer_sk) sq2),
+     best_ss_customer AS NOT MATERIALIZED
+  (SELECT c_customer_sk,
+          sum(ss_quantity*ss_sales_price) ssales
+   FROM store_sales,
+        customer,
+        max_store_sales
+   WHERE ss_customer_sk = c_customer_sk
+   GROUP BY c_customer_sk
+   HAVING sum(ss_quantity*ss_sales_price) > (50/100.0) * max(tpcds_cmax))
+SELECT c_last_name,
+       c_first_name,
+       sales
+FROM
+  (SELECT c_last_name,
+          c_first_name,
+          sum(cs_quantity*cs_list_price) sales
+   FROM catalog_sales,
+        customer,
+        date_dim,
+        frequent_ss_items,
+        best_ss_customer
+   WHERE d_year = 2000
+     AND d_moy = 2
+     AND cs_sold_date_sk = d_date_sk
+     AND cs_item_sk = item_sk
+     AND cs_bill_customer_sk = best_ss_customer.c_customer_sk
+     AND cs_bill_customer_sk = customer.c_customer_sk
+   GROUP BY c_last_name,
+            c_first_name
+   UNION ALL SELECT c_last_name,
+                    c_first_name,
+                    sum(ws_quantity*ws_list_price) sales
+   FROM web_sales,
+        customer,
+        date_dim,
+        frequent_ss_items,
+        best_ss_customer
+   WHERE d_year = 2000
+     AND d_moy = 2
+     AND ws_sold_date_sk = d_date_sk
+     AND ws_item_sk = item_sk
+     AND ws_bill_customer_sk = best_ss_customer.c_customer_sk
+     AND ws_bill_customer_sk = customer.c_customer_sk
+   GROUP BY c_last_name,
+            c_first_name) sq3
+ORDER BY c_last_name NULLS FIRST,
+         c_first_name NULLS FIRST,
+         sales NULLS FIRST
+LIMIT 100;
+----
+logical_opt	<!REGEX>:.*CTE_SCAN.*
+
+# TPC-DS Q57
+query II
+EXPLAIN WITH v1 AS
+  (SELECT i_category,
+          i_brand,
+          cc_name,
+          d_year,
+          d_moy,
+          sum(cs_sales_price) sum_sales,
+          avg(sum(cs_sales_price)) OVER (PARTITION BY i_category,
+                                                      i_brand,
+                                                      cc_name,
+                                                      d_year) avg_monthly_sales,
+                                        rank() OVER (PARTITION BY i_category,
+                                                                  i_brand,
+                                                                  cc_name
+                                                     ORDER BY d_year,
+                                                              d_moy) rn
+   FROM item,
+        catalog_sales,
+        date_dim,
+        call_center
+   WHERE cs_item_sk = i_item_sk
+     AND cs_sold_date_sk = d_date_sk
+     AND cc_call_center_sk= cs_call_center_sk
+     AND (d_year = 1999
+          OR (d_year = 1999-1
+              AND d_moy =12)
+          OR (d_year = 1999+1
+              AND d_moy =1))
+   GROUP BY i_category,
+            i_brand,
+            cc_name,
+            d_year,
+            d_moy),
+     v2 AS
+  (SELECT v1.i_category,
+          v1.i_brand,
+          v1.cc_name,
+          v1.d_year,
+          v1.d_moy,
+          v1.avg_monthly_sales,
+          v1.sum_sales,
+          v1_lag.sum_sales psum,
+          v1_lead.sum_sales nsum
+   FROM v1,
+        v1 v1_lag,
+        v1 v1_lead
+   WHERE v1.i_category = v1_lag.i_category
+     AND v1.i_category = v1_lead.i_category
+     AND v1.i_brand = v1_lag.i_brand
+     AND v1.i_brand = v1_lead.i_brand
+     AND v1. cc_name = v1_lag. cc_name
+     AND v1. cc_name = v1_lead. cc_name
+     AND v1.rn = v1_lag.rn + 1
+     AND v1.rn = v1_lead.rn - 1)
+SELECT *
+FROM v2
+WHERE d_year = 1999
+  AND avg_monthly_sales > 0
+  AND CASE
+          WHEN avg_monthly_sales > 0 THEN abs(sum_sales - avg_monthly_sales) / avg_monthly_sales
+          ELSE NULL
+      END > 0.1
+ORDER BY sum_sales - avg_monthly_sales NULLS FIRST, 1, 2, 3, 4, 5, 6, 7, 8, 9
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE_SCAN.*
+
+query II
+EXPLAIN WITH v1 AS NOT MATERIALIZED
+  (SELECT i_category,
+          i_brand,
+          cc_name,
+          d_year,
+          d_moy,
+          sum(cs_sales_price) sum_sales,
+          avg(sum(cs_sales_price)) OVER (PARTITION BY i_category,
+                                                      i_brand,
+                                                      cc_name,
+                                                      d_year) avg_monthly_sales,
+                                        rank() OVER (PARTITION BY i_category,
+                                                                  i_brand,
+                                                                  cc_name
+                                                     ORDER BY d_year,
+                                                              d_moy) rn
+   FROM item,
+        catalog_sales,
+        date_dim,
+        call_center
+   WHERE cs_item_sk = i_item_sk
+     AND cs_sold_date_sk = d_date_sk
+     AND cc_call_center_sk= cs_call_center_sk
+     AND (d_year = 1999
+          OR (d_year = 1999-1
+              AND d_moy =12)
+          OR (d_year = 1999+1
+              AND d_moy =1))
+   GROUP BY i_category,
+            i_brand,
+            cc_name,
+            d_year,
+            d_moy),
+     v2 AS
+  (SELECT v1.i_category,
+          v1.i_brand,
+          v1.cc_name,
+          v1.d_year,
+          v1.d_moy,
+          v1.avg_monthly_sales,
+          v1.sum_sales,
+          v1_lag.sum_sales psum,
+          v1_lead.sum_sales nsum
+   FROM v1,
+        v1 v1_lag,
+        v1 v1_lead
+   WHERE v1.i_category = v1_lag.i_category
+     AND v1.i_category = v1_lead.i_category
+     AND v1.i_brand = v1_lag.i_brand
+     AND v1.i_brand = v1_lead.i_brand
+     AND v1. cc_name = v1_lag. cc_name
+     AND v1. cc_name = v1_lead. cc_name
+     AND v1.rn = v1_lag.rn + 1
+     AND v1.rn = v1_lead.rn - 1)
+SELECT *
+FROM v2
+WHERE d_year = 1999
+  AND avg_monthly_sales > 0
+  AND CASE
+          WHEN avg_monthly_sales > 0 THEN abs(sum_sales - avg_monthly_sales) / avg_monthly_sales
+          ELSE NULL
+      END > 0.1
+ORDER BY sum_sales - avg_monthly_sales NULLS FIRST, 1, 2, 3, 4, 5, 6, 7, 8, 9
+LIMIT 100;
+----
+logical_opt	<!REGEX>:.*CTE_SCAN.*

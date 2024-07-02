@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/optionally_owned_ptr.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
@@ -33,9 +33,15 @@ public:
 
 public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
+		return true;
+	}
+
+	bool ParallelSource() const override {
 		return true;
 	}
 
