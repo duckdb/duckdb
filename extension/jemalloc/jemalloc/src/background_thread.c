@@ -30,6 +30,8 @@ background_thread_info_t *background_thread_info;
 static int (*pthread_create_fptr)(pthread_t *__restrict, const pthread_attr_t *,
     void *(*)(void *), void *__restrict);
 
+static int (*pthread_join_fptr)(pthread_t , void **);
+
 static void
 pthread_create_wrapper_init(void) {
 #ifdef JEMALLOC_LAZY_LOCK
@@ -45,6 +47,11 @@ pthread_create_wrapper(pthread_t *__restrict thread, const pthread_attr_t *attr,
 	pthread_create_wrapper_init();
 
 	return pthread_create_fptr(thread, attr, start_routine, arg);
+}
+
+int
+pthread_join_wrapper(pthread_t th, void **thread_return){
+	return pthread_join_fptr(th,thread_return);
 }
 
 #ifdef JEMALLOC_HAVE_DLSYM
@@ -82,6 +89,38 @@ pthread_create_fptr_init(void) {
 
 	return false;
 }
+
+static bool
+pthread_join_fptr_init(void) {
+	if (pthread_join_fptr != NULL) {
+		return false;
+	}
+	/*
+	 * Try the next symbol first, because 1) when use lazy_lock we have a
+	 * wrapper for pthread_create; and 2) application may define its own
+	 * wrapper as well (and can call malloc within the wrapper).
+	 */
+
+#ifdef JEMALLOC_HAVE_DLSYM
+	pthread_join_fptr = dlsym(RTLD_NEXT, "pthread_join");
+#else
+	pthread_join_fptr = NULL;
+#endif
+
+	if (pthread_join_fptr == NULL) {
+		if (config_lazy_lock) {
+			malloc_write("<jemalloc>: Error in dlsym(RTLD_NEXT, "
+			    "\"pthread_join\")\n");
+			abort();
+		} else {
+			/* Fall back to the default symbol. */
+			pthread_join_fptr = pthread_join;
+		}
+	}
+
+	return false;
+}
+
 #endif /* JEMALLOC_PTHREAD_CREATE_WRAPPER */
 
 #ifndef JEMALLOC_BACKGROUND_THREAD
@@ -297,7 +336,7 @@ background_threads_disable_single(tsd_t *tsd, background_thread_info_t *info) {
 		return false;
 	}
 	void *ret;
-	if (pthread_join(info->thread, &ret)) {
+	if (pthread_join_wrapper(info->thread, &ret)) {
 		post_reentrancy(tsd);
 		return true;
 	}
@@ -769,6 +808,7 @@ background_thread_ctl_init(tsdn_t *tsdn) {
 	malloc_mutex_assert_not_owner(tsdn, &background_thread_lock);
 #ifdef JEMALLOC_PTHREAD_CREATE_WRAPPER
 	pthread_create_fptr_init();
+	pthread_join_fptr_init();
 	pthread_create_wrapper_init();
 #endif
 }
@@ -784,7 +824,7 @@ background_thread_boot0(void) {
 	}
 #ifdef JEMALLOC_PTHREAD_CREATE_WRAPPER
 	if ((config_lazy_lock || opt_background_thread) &&
-	    pthread_create_fptr_init()) {
+	    pthread_create_fptr_init() && pthread_join_fptr_init()) {
 		return true;
 	}
 #endif
