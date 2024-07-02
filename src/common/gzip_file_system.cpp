@@ -300,7 +300,9 @@ public:
 	    : CompressedFile(gzip_fs, std::move(child_handle_p), path) {
 		Initialize(write);
 	}
-
+	DUCKDB_API FileCompressionType GetFileCompressionType() override {
+		return FileCompressionType::GZIP;
+	}
 	GZipFileSystem gzip_fs;
 };
 
