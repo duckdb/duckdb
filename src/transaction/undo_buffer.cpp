@@ -12,6 +12,7 @@
 #include "duckdb/transaction/rollback_state.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/transaction/wal_write_state.hpp"
+#include "duckdb/transaction/delete_info.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
