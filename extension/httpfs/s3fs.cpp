@@ -46,6 +46,9 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
 	if (auth_params.session_token.length() > 0) {
 		res["x-amz-security-token"] = auth_params.session_token;
 	}
+	if (auth_params.requester_pays == true) {
+		res["x-amz-request-payer"] = "requester";
+	}
 
 	string signed_headers = "";
 	hash_bytes canonical_request_hash;
@@ -164,6 +167,7 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
 	this->SetExtensionOptionValue("s3_session_token", SESSION_TOKEN_ENV_VAR);
 	this->SetExtensionOptionValue("s3_endpoint", DUCKDB_ENDPOINT_ENV_VAR);
 	this->SetExtensionOptionValue("s3_use_ssl", DUCKDB_USE_SSL_ENV_VAR);
+	this->SetExtensionOptionValue("s3_requester_pays", DUCKDB_REQUESTER_PAYS_ENV_VAR);
 }
 
 S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
@@ -176,6 +180,7 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 	params.session_token = SESSION_TOKEN_ENV_VAR;
 	params.endpoint = DUCKDB_ENDPOINT_ENV_VAR;
 	params.use_ssl = DUCKDB_USE_SSL_ENV_VAR;
+	params.requester_pays = DUCKDB_REQUESTER_PAYS_ENV_VAR;
 
 	return params;
 }
@@ -262,6 +267,12 @@ S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerI
 		result.use_ssl = true;
 	}
 
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_requester_pays", value, info)) {
+		result.requester_pays = value.GetValue<bool>();
+	} else {
+		result.requester_pays = false;
+	}
+
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", value, info)) {
 		result.s3_url_compatibility_mode = value.GetValue<bool>();
 	} else {
@@ -283,6 +294,7 @@ unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_p
 	return_value->secret_map["endpoint"] = params.endpoint;
 	return_value->secret_map["url_style"] = params.url_style;
 	return_value->secret_map["use_ssl"] = params.use_ssl;
+	return_value->secret_map["requester_pays"] = params.requester_pays;
 	return_value->secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode;
 
 	//! Set redact keys
@@ -313,6 +325,9 @@ S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
 	}
 	if (!secret.TryGetValue("use_ssl").IsNull()) {
 		params.use_ssl = secret.TryGetValue("use_ssl").GetValue<bool>();
+	}
+	if (!secret.TryGetValue("requester_pays").IsNull()) {
+		params.requester_pays = secret.TryGetValue("requester_pays").GetValue<bool>();
 	}
 	if (!secret.TryGetValue("s3_url_compatibility_mode").IsNull()) {
 		params.s3_url_compatibility_mode = secret.TryGetValue("s3_url_compatibility_mode").GetValue<bool>();
@@ -601,6 +616,22 @@ void S3FileSystem::GetQueryParam(const string &key, string &param, duckdb_httpli
 	}
 }
 
+void S3FileSystem::GetBoolQueryParam(const string &key, bool &param, duckdb_httplib_openssl::Params &query_params) {
+	auto found_param = query_params.find(key);
+	if (found_param != query_params.end()) {
+		if (found_param->second == "true") {
+			param = true;
+		} else if (found_param->second == "false") {
+			param = false;
+		} else {
+			std::string errorMessage = std::string("Incorrect setting found for ") + key +
+			                           std::string(", allowed values are: 'true' or 'false'");
+			throw IOException(errorMessage);
+		}
+		query_params.erase(found_param);
+	}
+}
+
 void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &params) {
 	if (url_query_param.empty()) {
 		return;
@@ -615,20 +646,12 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 	GetQueryParam("s3_session_token", params.session_token, query_params);
 	GetQueryParam("s3_endpoint", params.endpoint, query_params);
 	GetQueryParam("s3_url_style", params.url_style, query_params);
-	auto found_param = query_params.find("s3_use_ssl");
-	if (found_param != query_params.end()) {
-		if (found_param->second == "true") {
-			params.use_ssl = true;
-		} else if (found_param->second == "false") {
-			params.use_ssl = false;
-		} else {
-			throw IOException("Incorrect setting found for s3_use_ssl, allowed values are: 'true' or 'false'");
-		}
-		query_params.erase(found_param);
-	}
+	GetBoolQueryParam("s3_use_ssl", params.use_ssl, query_params);
+	GetBoolQueryParam("requester_pays", params.requester_pays, query_params);
 	if (!query_params.empty()) {
 		throw IOException("Invalid query parameters found. Supported parameters are:\n's3_region', 's3_access_key_id', "
-		                  "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl'");
+		                  "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl', "
+		                  "'requester_pays'");
 	}
 }
 

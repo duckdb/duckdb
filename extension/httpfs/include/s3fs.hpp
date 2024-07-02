@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -9,7 +10,6 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "httpfs.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
@@ -29,6 +29,7 @@ struct S3AuthParams {
 	string endpoint;
 	string url_style;
 	bool use_ssl = true;
+	bool requester_pays = false;
 	bool s3_url_compatibility_mode = false;
 
 	static S3AuthParams ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info);
@@ -43,6 +44,7 @@ struct AWSEnvironmentCredentialsProvider {
 	static constexpr const char *SESSION_TOKEN_ENV_VAR = "AWS_SESSION_TOKEN";
 	static constexpr const char *DUCKDB_ENDPOINT_ENV_VAR = "DUCKDB_S3_ENDPOINT";
 	static constexpr const char *DUCKDB_USE_SSL_ENV_VAR = "DUCKDB_S3_USE_SSL";
+	static constexpr const char *DUCKDB_REQUESTER_PAYS_ENV_VAR = "DUCKDB_S3_REQUESTER_PAYS";
 
 	explicit AWSEnvironmentCredentialsProvider(DBConfig &config) : config(config) {};
 
@@ -243,6 +245,7 @@ protected:
 
 	// helper for ReadQueryParams
 	void GetQueryParam(const string &key, string &param, CPPHTTPLIB_NAMESPACE::Params &query_params);
+	void GetBoolQueryParam(const string &key, bool &param, CPPHTTPLIB_NAMESPACE::Params &query_params);
 };
 
 // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
