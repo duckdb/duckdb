@@ -399,12 +399,12 @@ idx_t DatabaseInstance::NumberOfThreads() {
 	return NumericCast<idx_t>(scheduler->NumberOfThreads());
 }
 
-const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
-	return loaded_extensions;
+const unordered_map<string, ExtensionInfo> &DatabaseInstance::GetExtensions() {
+	return loaded_extensions_info;
 }
 
-const unordered_map<std::string, ExtensionInstallInfo> &DatabaseInstance::LoadedExtensionsData() {
-	return loaded_extensions_data;
+void DatabaseInstance::AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info) {
+	loaded_extensions_info[name].load_info = make_uniq<ExtensionLoadedInfo>(info);
 }
 
 idx_t DuckDB::NumberOfThreads() {
@@ -413,7 +413,8 @@ idx_t DuckDB::NumberOfThreads() {
 
 bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	return loaded_extensions.find(extension_name) != loaded_extensions.end();
+	auto it = loaded_extensions_info.find(extension_name);
+	return it != loaded_extensions_info.end() && it->second.is_loaded;
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
@@ -422,8 +423,8 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 
 void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallInfo &install_info) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	loaded_extensions.insert(extension_name);
-	loaded_extensions_data.insert({extension_name, install_info});
+	loaded_extensions_info[extension_name].is_loaded = true;
+	loaded_extensions_info[extension_name].install_info = make_uniq<ExtensionInstallInfo>(install_info);
 
 	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
 	for (auto &callback : callbacks) {
