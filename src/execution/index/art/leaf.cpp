@@ -1,13 +1,14 @@
 #include "duckdb/execution/index/art/leaf.hpp"
+
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
 void Leaf::New(Node &node, const row_t row_id) {
 
-	// we directly inline this row ID into the node pointer
+	// We directly inline this row ID into the node pointer.
 	D_ASSERT(row_id < MAX_ROW_ID_LOCAL);
 	node.Clear();
 	node.SetMetadata(static_cast<uint8_t>(NType::LEAF_INLINED));
@@ -18,15 +19,14 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 
 	D_ASSERT(count > 1);
 
+	// We append to the tail, possibly leaving the tail not entirely filled.
 	idx_t copy_count = 0;
 	while (count) {
 		node.get() = Node::GetAllocator(art, NType::LEAF).New();
 		node.get().SetMetadata(static_cast<uint8_t>(NType::LEAF));
 
 		auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
-
 		leaf.count = UnsafeNumericCast<uint8_t>(MinValue((idx_t)Node::LEAF_SIZE, count));
-
 		for (idx_t i = 0; i < leaf.count; i++) {
 			leaf.row_ids[i] = row_ids[copy_count + i];
 		}
@@ -49,17 +49,20 @@ Leaf &Leaf::New(ART &art, Node &node) {
 	return leaf;
 }
 
-void Leaf::Free(ART &art, Node &node) {
-
-	Node current_node = node;
+void Leaf::FreeChain(ART &art, Node &node) {
 	Node next_node;
-	while (current_node.HasMetadata()) {
-		next_node = Node::RefMutable<Leaf>(art, current_node, NType::LEAF).ptr;
-		Node::GetAllocator(art, NType::LEAF).Free(current_node);
-		current_node = next_node;
+	while (node.HasMetadata()) {
+		next_node = Node::RefMutable<Leaf>(art, node, NType::LEAF).ptr;
+		Node::GetAllocator(art, NType::LEAF).Free(node);
+		node = next_node;
 	}
-
 	node.Clear();
+}
+
+void Leaf::Free(ART &art, Node &node) {
+	auto next_node = Node::RefMutable<Leaf>(art, node, NType::LEAF).ptr;
+	Node::GetAllocator(art, NType::LEAF).Free(node);
+	node = next_node;
 }
 
 void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
@@ -82,14 +85,14 @@ void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
 
 	D_ASSERT(l_node.HasMetadata() && r_node.HasMetadata());
 
-	// copy inlined row ID of r_node
+	// Copy the inlined row ID of r_node.
 	if (r_node.GetType() == NType::LEAF_INLINED) {
 		Insert(art, l_node, r_node.GetRowId());
 		r_node.Clear();
 		return;
 	}
 
-	// l_node has an inlined row ID, swap and insert
+	// l_node has an inlined row ID, swap and insert.
 	if (l_node.GetType() == NType::LEAF_INLINED) {
 		auto row_id = l_node.GetRowId();
 		l_node = r_node;
@@ -101,39 +104,14 @@ void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
 	D_ASSERT(l_node.GetType() != NType::LEAF_INLINED);
 	D_ASSERT(r_node.GetType() != NType::LEAF_INLINED);
 
-	reference<Node> l_node_ref(l_node);
-	reference<Leaf> l_leaf = Node::RefMutable<Leaf>(art, l_node_ref, NType::LEAF);
-
-	// find a non-full node
-	while (l_leaf.get().count == Node::LEAF_SIZE) {
-		l_node_ref = l_leaf.get().ptr;
-
-		// the last leaf is full
-		if (!l_leaf.get().ptr.HasMetadata()) {
-			break;
-		}
-		l_leaf = Node::RefMutable<Leaf>(art, l_node_ref, NType::LEAF);
+	// Append r_node to l_node.
+	reference<Leaf> leaf = Node::RefMutable<Leaf>(art, l_node, NType::LEAF);
+	while (leaf.get().ptr.HasMetadata()) {
+		leaf = Node::RefMutable<Leaf>(art, leaf.get().ptr, NType::LEAF);
 	}
 
-	// store the last leaf and then append r_node
-	auto last_leaf_node = l_node_ref.get();
-	l_node_ref.get() = r_node;
+	leaf.get().ptr = r_node;
 	r_node.Clear();
-
-	// append the remaining row IDs of the last leaf node
-	if (last_leaf_node.HasMetadata()) {
-		// find the tail
-		l_leaf = Node::RefMutable<Leaf>(art, l_node_ref, NType::LEAF);
-		while (l_leaf.get().ptr.HasMetadata()) {
-			l_leaf = Node::RefMutable<Leaf>(art, l_leaf.get().ptr, NType::LEAF);
-		}
-		// append the row IDs
-		auto &last_leaf = Node::RefMutable<Leaf>(art, last_leaf_node, NType::LEAF);
-		for (idx_t i = 0; i < last_leaf.count; i++) {
-			l_leaf = l_leaf.get().Append(art, last_leaf.row_ids[i]);
-		}
-		Node::GetAllocator(art, NType::LEAF).Free(last_leaf_node);
-	}
 }
 
 void Leaf::Insert(ART &art, Node &node, const row_t row_id) {
@@ -146,12 +124,34 @@ void Leaf::Insert(ART &art, Node &node, const row_t row_id) {
 		return;
 	}
 
-	// append to the tail
+	// Append to the head.
 	reference<Leaf> leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
-	while (leaf.get().ptr.HasMetadata()) {
-		leaf = Node::RefMutable<Leaf>(art, leaf.get().ptr, NType::LEAF);
+
+	// Add a new leaf to the front.
+	if (leaf.get().count == Node::LEAF_SIZE) {
+		auto head = node;
+		leaf = New(art, node);
+		leaf.get().ptr = head;
 	}
-	leaf.get().Append(art, row_id);
+
+	leaf.get().row_ids[leaf.get().count] = row_id;
+	leaf.get().count++;
+}
+
+bool RemoveInternal(Leaf &leaf, const row_t row_id) {
+	for (idx_t i = 0; i < leaf.count; i++) {
+		if (leaf.row_ids[i] != row_id) {
+			continue;
+		}
+
+		// Shift the remaining row IDs and decrement the count.
+		for (idx_t j = i + 1; j < leaf.count; j++) {
+			leaf.row_ids[j - 1] = leaf.row_ids[j];
+		}
+		leaf.count--;
+		return true;
+	}
+	return false;
 }
 
 bool Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
@@ -165,52 +165,30 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 		return false;
 	}
 
-	reference<Leaf> leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
+	// Remove the row ID and possibly the leaf.
+	reference<Node> ref_node(node);
+	while (ref_node.get().HasMetadata()) {
+		auto &leaf = Node::RefMutable<Leaf>(art, ref_node, NType::LEAF);
+		if (RemoveInternal(leaf, row_id)) {
+			if (leaf.count == 0) {
+				Leaf::Free(art, ref_node);
+			}
+			break;
+		}
+		ref_node = leaf.ptr;
+	}
 
-	// inline the remaining row ID
-	if (leaf.get().count == 2) {
-		if (leaf.get().row_ids[0] == row_id || leaf.get().row_ids[1] == row_id) {
-			auto remaining_row_id = leaf.get().row_ids[0] == row_id ? leaf.get().row_ids[1] : leaf.get().row_ids[0];
-			Node::Free(art, node);
+	// Check for inline.
+	auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
+	if (!leaf.ptr.HasMetadata()) {
+		if (leaf.count == 1) {
+			auto remaining_row_id = leaf.row_ids[0];
+			Leaf::Free(art, node);
 			New(node, remaining_row_id);
 		}
-		return false;
 	}
 
-	// get the last row ID (the order within a leaf does not matter)
-	// because we want to overwrite the row ID to remove with that one
-
-	// go to the tail and keep track of the previous leaf node
-	reference<Leaf> prev_leaf(leaf);
-	while (leaf.get().ptr.HasMetadata()) {
-		prev_leaf = leaf;
-		leaf = Node::RefMutable<Leaf>(art, leaf.get().ptr, NType::LEAF);
-	}
-
-	auto last_idx = leaf.get().count;
-	auto last_row_id = leaf.get().row_ids[last_idx - 1];
-
-	// only one row ID in this leaf segment, free it
-	if (leaf.get().count == 1) {
-		Node::Free(art, prev_leaf.get().ptr);
-		if (last_row_id == row_id) {
-			return false;
-		}
-	} else {
-		leaf.get().count--;
-	}
-
-	// find the row ID and copy the last row ID to that position
-	while (node.get().HasMetadata()) {
-		leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
-		for (idx_t i = 0; i < leaf.get().count; i++) {
-			if (leaf.get().row_ids[i] == row_id) {
-				leaf.get().row_ids[i] = last_row_id;
-				return false;
-			}
-		}
-		node = leaf.get().ptr;
-	}
+	// FIXME: To prevent fragmentation, we can swap the first non-full leave to the front.
 	return false;
 }
 
@@ -309,6 +287,7 @@ void Leaf::Vacuum(ART &art, Node &node) {
 
 	auto &allocator = Node::GetAllocator(art, NType::LEAF);
 
+	// FIXME: Decrease fragmentation by combining non-full nodes.
 	reference<Node> node_ref(node);
 	while (node_ref.get().HasMetadata()) {
 		if (allocator.NeedsVacuum(node_ref)) {
@@ -328,20 +307,6 @@ void Leaf::MoveInlinedToLeaf(ART &art, Node &node) {
 
 	leaf.count = 1;
 	leaf.row_ids[0] = row_id;
-}
-
-Leaf &Leaf::Append(ART &art, const row_t row_id) {
-
-	reference<Leaf> leaf(*this);
-
-	// we need a new leaf node
-	if (leaf.get().count == Node::LEAF_SIZE) {
-		leaf = New(art, leaf.get().ptr);
-	}
-
-	leaf.get().row_ids[leaf.get().count] = row_id;
-	leaf.get().count++;
-	return leaf.get();
 }
 
 } // namespace duckdb

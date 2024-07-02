@@ -47,7 +47,9 @@ public:
 	static void New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t count);
 	//! Get a new leaf node without any data
 	static Leaf &New(ART &art, Node &node);
-	//! Free the leaf (chain)
+	//! Free the leaf chain starting at node.
+	static void FreeChain(ART &art, Node &node);
+	//! Free the leaf.
 	static void Free(ART &art, Node &node);
 
 	//! Initializes a merge by incrementing the buffer IDs of the leaf (chain)
@@ -76,8 +78,6 @@ public:
 private:
 	//! Moves the inlined row ID onto a leaf
 	static void MoveInlinedToLeaf(ART &art, Node &node);
-	//! Appends the row ID to this leaf, or creates a subsequent leaf, if this node is full
-	Leaf &Append(ART &art, const row_t row_id);
 };
 
 } // namespace duckdb
