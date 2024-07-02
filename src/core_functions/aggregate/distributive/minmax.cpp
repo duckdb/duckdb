@@ -392,17 +392,11 @@ public:
 	using VAL_TYPE = A;
 	using T = typename VAL_TYPE::TYPE;
 
-	struct ValueComparator {
-		static bool Operation(const T &a, const T &b) {
-			return COMPARATOR::Operation(a, b);
-		}
-	};
-
-	BoundedHeap<T, ValueComparator> heap;
+	UnaryAggregateHeap<T, COMPARATOR> heap;
 	bool is_initialized = false;
 
 	void Initialize(idx_t kval) {
-		heap.SetSize(kval);
+		heap.Initialize(kval);
 		is_initialized = true;
 	}
 
@@ -458,7 +452,7 @@ static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t
 
 		// Now add the input to the heap
 		auto val_val = STATE::VAL_TYPE::Create(val_format, val_idx);
-		state.heap.Insert(val_val);
+		state.heap.Insert(aggr_input.allocator, val_val);
 	}
 }
 
@@ -472,7 +466,8 @@ static void SpecializeMinMaxNFunction(AggregateFunction &function) {
 	function.combine = AggregateFunction::StateCombine<STATE, OP>;
 	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 
-	function.finalize = MinMaxNOperation::Finalize<STATE>, function.update = MinMaxNUpdate<STATE>;
+	function.finalize = MinMaxNOperation::Finalize<STATE>;
+	function.update = MinMaxNUpdate<STATE>;
 }
 
 template <class COMPARATOR>

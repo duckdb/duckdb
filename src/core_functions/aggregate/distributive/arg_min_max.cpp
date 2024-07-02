@@ -498,23 +498,12 @@ public:
 	using K = typename ARG_TYPE::TYPE;
 	using V = typename VAL_TYPE::TYPE;
 
-	// Only compare the keys
-	struct ArgComparator {
-		static bool Operation(const std::tuple<K, V> &a, const std::tuple<K, V> &b) {
-			return COMPARATOR::Operation(std::get<0>(a), std::get<0>(b));
-		}
-	};
+	BinaryAggregateHeap<K, V, COMPARATOR> heap;
 
-	BoundedHeap<std::tuple<K, V>, ArgComparator> heap;
 	bool is_initialized = false;
-
 	void Initialize(idx_t kval) {
-		heap.SetSize(kval);
+		heap.Initialize(kval);
 		is_initialized = true;
-	}
-
-	static const V &GetValue(const std::tuple<K, V> &val) {
-		return std::get<1>(val);
 	}
 };
 
@@ -575,7 +564,7 @@ static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 		auto arg_val = STATE::ARG_TYPE::Create(arg_format, arg_idx);
 		auto val_val = STATE::VAL_TYPE::Create(val_format, val_idx);
 
-		state.heap.Insert(std::make_tuple(arg_val, val_val));
+		state.heap.Insert(aggr_input.allocator, arg_val, val_val);
 	}
 }
 
@@ -592,7 +581,8 @@ static void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 	function.combine = AggregateFunction::StateCombine<STATE, OP>;
 	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 
-	function.finalize = MinMaxNOperation::Finalize<STATE>, function.update = ArgMinMaxNUpdate<STATE>;
+	function.finalize = MinMaxNOperation::Finalize<STATE>;
+	function.update = ArgMinMaxNUpdate<STATE>;
 }
 
 template <class VAL_TYPE, class COMPARATOR>
