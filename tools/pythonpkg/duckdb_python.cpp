@@ -898,7 +898,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("partition_by") = py::none(), py::arg("connection") = py::none());
 	m.def(
 	    "aggregate",
-	    [](const PandasDataFrame &df, const string &expr, const string &groups = "",
+	    [](const PandasDataFrame &df, const py::object &expr, const string &groups = "",
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
