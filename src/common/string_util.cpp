@@ -1,6 +1,7 @@
 #include "duckdb/common/string_util.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
@@ -8,12 +9,10 @@
 
 #include <algorithm>
 #include <cctype>
-#include <iomanip>
 #include <memory>
-#include <sstream>
 #include <stdarg.h>
 #include <string.h>
-#include <random>
+#include <cstdlib>
 
 #include "yyjson.hpp"
 
@@ -22,16 +21,11 @@ using namespace duckdb_yyjson; // NOLINT
 namespace duckdb {
 
 string StringUtil::GenerateRandomName(idx_t length) {
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<> dis(0, 15);
-
-	std::stringstream ss;
-	ss << std::hex;
+	string result;
 	for (idx_t i = 0; i < length; i++) {
-		ss << dis(gen);
+		result += "0123456789abcdef"[rand() % 16];
 	}
-	return ss.str();
+	return result;
 }
 
 bool StringUtil::Contains(const string &haystack, const string &needle) {
@@ -87,7 +81,7 @@ string StringUtil::Repeat(const string &str, idx_t n) {
 }
 
 vector<string> StringUtil::Split(const string &str, char delimiter) {
-	std::stringstream ss(str);
+	stringstream ss(str);
 	vector<string> lines;
 	string temp;
 	while (getline(ss, temp, delimiter)) {
