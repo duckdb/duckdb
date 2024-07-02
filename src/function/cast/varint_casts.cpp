@@ -58,6 +58,63 @@ char DigitToChar(int digit) {
 	return static_cast<char>(digit) + '0';
 }
 
+// Function to prepare a varchar for conversion
+// We trim zero's, check for negative values, and what-not
+void VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative, bool &is_zero) {
+	// If it's empty we error
+	if (value.Empty()) {
+		throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
+	}
+	start_pos = 0;
+
+	auto int_value_char = value.GetDataWriteable();
+	end_pos = value.GetSize();
+
+	// If first character is -, we have a negative number, if + we have a + number
+	is_negative = int_value_char[0] == '-';
+	if (is_negative) {
+		start_pos++;
+	}
+	if (int_value_char[0] == '+') {
+		start_pos++;
+	}
+	// Now lets trim 0s
+	bool at_least_one_zero = false;
+	while (start_pos < end_pos && int_value_char[start_pos] == '0') {
+		start_pos++;
+		at_least_one_zero = true;
+	}
+	if (start_pos == end_pos) {
+		if (at_least_one_zero) {
+			// This is a 0 value
+			is_zero = true;
+			return;
+		}
+		// This is either a '+' or '-'. Hence invalid.
+		throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
+	}
+	idx_t cur_pos = start_pos;
+	// Verify all is numeric
+	while (cur_pos < end_pos && std::isdigit(int_value_char[cur_pos])) {
+		cur_pos++;
+	}
+	if (cur_pos < end_pos) {
+		// Oh oh, this is not a digit, if it's a . we might be fine, otherwise, this is invalid.
+		if (int_value_char[cur_pos] == '.') {
+			cur_pos++;
+		} else {
+			throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
+		}
+		if (cur_pos == end_pos) {
+			// This is a number that ends in a ., which is valid and we we just have to floor cast it.
+			end_pos--;
+			return;
+		}
+		// we have to check if the next number is
+	}
+
+	// If we have a . we can only have one .
+}
 string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	if (int_value.Empty()) {
 		throw InvalidInputException("bad string");
@@ -128,46 +185,46 @@ string_t VarIntToVarchar(const string_t &blob) {
 		throw InvalidInputException("Invalid blob size.");
 	}
 	auto blob_ptr = blob.GetData();
-	std::string decimalString;
-	std::vector<uint8_t> tempArray;
+	std::string decimal_string;
+	std::vector<uint8_t> temp_array;
 	// Determine if the number is negative
 	bool is_negative = (blob_ptr[0] & 0x80) == 0;
 	for (idx_t i = 3; i < blob.GetSize(); i++) {
 		if (is_negative) {
-			tempArray.push_back(static_cast<uint8_t>(~blob_ptr[i]));
+			temp_array.push_back(static_cast<uint8_t>(~blob_ptr[i]));
 		} else {
-			tempArray.push_back(static_cast<uint8_t>(blob_ptr[i]));
+			temp_array.push_back(static_cast<uint8_t>(blob_ptr[i]));
 		}
 	}
-	std::reverse(decimalString.begin(), decimalString.end());
+	std::reverse(decimal_string.begin(), decimal_string.end());
 
-	while (!tempArray.empty()) {
+	while (!temp_array.empty()) {
 		std::string quotient;
 		uint8_t remainder = 0;
-		for (uint8_t byte : tempArray) {
+		for (uint8_t byte : temp_array) {
 			int new_value = remainder * 256 + byte;
 			quotient += DigitToChar(new_value / 10);
 			remainder = static_cast<uint8_t>(new_value % 10);
 		}
 
-		decimalString += DigitToChar(remainder);
+		decimal_string += DigitToChar(remainder);
 
 		// Remove leading zeros from the quotient
-		tempArray.clear();
+		temp_array.clear();
 		for (char digit : quotient) {
-			if (digit != '0' || !tempArray.empty()) {
-				tempArray.push_back(static_cast<uint8_t>(CharToDigit(digit)));
+			if (digit != '0' || !temp_array.empty()) {
+				temp_array.push_back(static_cast<uint8_t>(CharToDigit(digit)));
 			}
 		}
 	}
 
 	if (is_negative) {
-		decimalString += '-';
+		decimal_string += '-';
 	}
 
 	// Reverse the string to get the correct decimal representation
-	std::reverse(decimalString.begin(), decimalString.end());
-	return decimalString;
+	std::reverse(decimal_string.begin(), decimal_string.end());
+	return decimal_string;
 }
 
 struct IntTryCastToVarInt {
