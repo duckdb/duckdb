@@ -31,6 +31,7 @@ void background_thread_ctl_init(tsdn_t *tsdn);
 #ifdef JEMALLOC_PTHREAD_CREATE_WRAPPER
 extern int pthread_create_wrapper(pthread_t *__restrict, const pthread_attr_t *,
     void *(*)(void *), void *__restrict);
+extern int pthread_join_wrapper(pthread_t th, void **thread_return);
 #endif
 bool background_thread_boot0(void);
 bool background_thread_boot1(tsdn_t *tsdn, base_t *base);
