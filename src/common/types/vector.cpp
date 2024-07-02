@@ -1392,7 +1392,7 @@ void Vector::VerifyUnion(Vector &vector_p, const SelectionVector &sel_p, idx_t c
 }
 
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
-#ifdef DEBUG
+	#ifdef DEBUG
 	if (count == 0) {
 		return;
 	}
@@ -1426,6 +1426,60 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 				auto oidx = sel->get_index(i);
 				if (validity.RowIsValid(oidx)) {
 					strings[oidx].Verify();
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	if (type.id() == LogicalTypeId::VARINT) {
+		switch (vtype) {
+		case VectorType::FLAT_VECTOR: {
+			auto &validity = FlatVector::Validity(*vector);
+			auto strings = FlatVector::GetData<string_t>(*vector);
+			for (idx_t i = 0; i < count; i++) {
+				auto oidx = sel->get_index(i);
+				if (validity.RowIsValid(oidx)) {
+					// Size must be >= 4
+					idx_t varint_bytes = strings[oidx].GetSize();
+					if (varint_bytes < 4) {
+						throw InternalException("Varint number of bytes is invalid, current number of bytes is %d",
+						                        strings[oidx].GetSize());
+					}
+					// Bytes in header must quantify the number of data bytes
+					auto varint_ptr = strings[oidx].GetData();
+					bool is_negative = (varint_ptr[0] & 0x80) == 0;
+					uint32_t number_of_bytes = 0;
+					char mask = 0x7F;
+					if (is_negative) {
+						number_of_bytes |= static_cast<uint32_t>(~varint_ptr[0] & mask) << 16;
+						number_of_bytes |= static_cast<uint32_t>(~varint_ptr[1]) << 8;
+						number_of_bytes |= static_cast<uint32_t>(~varint_ptr[2]);
+					} else {
+						number_of_bytes |= static_cast<uint32_t>(varint_ptr[0] & mask) << 16;
+						number_of_bytes |= static_cast<uint32_t>(varint_ptr[1]) << 8;
+						number_of_bytes |= static_cast<uint32_t>(varint_ptr[2]);
+					}
+					if (number_of_bytes != varint_bytes - 3) {
+						throw InternalException("The number of bytes set in the Varint header: %d bytes. Does not "
+						                        "match the number of bytes encountered as the varint data: %d bytes.",
+						                        number_of_bytes, varint_bytes - 3);
+					}
+					//  No bytes between 4 and end can be 0, unless total size == 4
+					if (varint_bytes > 4) {
+						if (is_negative) {
+							if (~varint_ptr[3] == 0) {
+								throw InternalException("Invalid top data bytes set to 0 for VARINT values");
+							}
+						} else {
+							if (varint_ptr[3] == 0) {
+								throw InternalException("Invalid top data bytes set to 0 for VARINT values");
+							}
+						}
+					}
 				}
 			}
 			break;
@@ -1602,7 +1656,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			VerifyMap(*vector, *sel, count);
 		}
 	}
-#endif
+	#endif
 }
 
 void Vector::Verify(idx_t count) {
