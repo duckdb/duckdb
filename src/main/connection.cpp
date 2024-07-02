@@ -57,6 +57,17 @@ string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	}
 }
 
+optional_ptr<ProfilingNode> Connection::GetProfilingTree() {
+	auto &client_config = ClientConfig::GetConfig(*context);
+	auto enable_profiler = client_config.enable_profiler;
+
+	if (!enable_profiler) {
+		throw Exception(ExceptionType::SETTINGS, "Profiling is not enabled for this connection");
+	}
+	auto &profiler = QueryProfiler::Get(*context);
+	return profiler.GetRoot();
+}
+
 void Connection::Interrupt() {
 	context->Interrupt();
 }

@@ -644,18 +644,23 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	auto &config = ClientConfig::GetConfig(context);
+	config.enable_profiler = true;
+	config.emit_profiler_output = true;
+
 	if (parameter == "json") {
 		config.profiler_print_format = ProfilerPrintFormat::JSON;
 	} else if (parameter == "query_tree") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else if (parameter == "query_tree_optimizer") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	} else if (parameter == "no_output") {
+		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
+		config.emit_profiler_output = false;
 	} else {
 		throw ParserException(
-		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", parameter);
+		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]",
+		    parameter);
 	}
-	config.enable_profiler = true;
-	config.emit_profiler_output = true;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
@@ -670,6 +675,8 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 		return Value("query_tree");
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
 		return Value("query_tree_optimizer");
+	case ProfilerPrintFormat::NO_OUTPUT:
+		return Value("no_output");
 	default:
 		throw InternalException("Unsupported profiler print format");
 	}

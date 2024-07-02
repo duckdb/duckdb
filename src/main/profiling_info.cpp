@@ -55,7 +55,7 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 	return "";
 }
 
-void ProfilingInfo::PrintAllMetricsToSS(std::ostream &ss, const string &depth) {
+void ProfilingInfo::PrintAllMetricsToSS(std::stringstream &ss, const string &depth) {
 	for (auto &metric : settings) {
 		ss << depth << "   \"" << StringUtil::Lower(EnumUtil::ToString(metric)) << "\": " << GetMetricAsString(metric)
 		   << ",\n";

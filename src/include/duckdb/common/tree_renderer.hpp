@@ -94,12 +94,12 @@ public:
 
 	string ToString(const LogicalOperator &op);
 	string ToString(const PhysicalOperator &op);
-	string ToString(const QueryProfiler::TreeNode &op);
+	string ToString(const ProfilingNode &op);
 	string ToString(const Pipeline &op);
 
 	void Render(const LogicalOperator &op, std::ostream &ss);
 	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const QueryProfiler::TreeNode &op, std::ostream &ss);
+	void Render(const ProfilingNode &op, std::ostream &ss);
 	void Render(const Pipeline &op, std::ostream &ss);
 
 	void ToStream(RenderTree &root, std::ostream &ss);
@@ -114,14 +114,14 @@ public:
 private:
 	unique_ptr<RenderTree> CreateTree(const LogicalOperator &op);
 	unique_ptr<RenderTree> CreateTree(const PhysicalOperator &op);
-	unique_ptr<RenderTree> CreateTree(const QueryProfiler::TreeNode &op);
+	unique_ptr<RenderTree> CreateTree(const ProfilingNode &op);
 	unique_ptr<RenderTree> CreateTree(const Pipeline &op);
 
 	string ExtraInfoSeparator();
 	unique_ptr<RenderTreeNode> CreateRenderNode(string name, string extra_info);
 	unique_ptr<RenderTreeNode> CreateNode(const LogicalOperator &op);
 	unique_ptr<RenderTreeNode> CreateNode(const PhysicalOperator &op);
-	unique_ptr<RenderTreeNode> CreateNode(const QueryProfiler::TreeNode &op);
+	unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op);
 	unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op);
 
 private:

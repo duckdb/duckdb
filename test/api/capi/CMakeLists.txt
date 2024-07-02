@@ -11,6 +11,7 @@ add_library_unity(
   test_capi_extract.cpp
   test_capi_pending.cpp
   test_capi_prepared.cpp
+  test_capi_profiling.cpp
   test_capi_website.cpp
   test_capi_complex_types.cpp
   test_capi_to_decimal.cpp

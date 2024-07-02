@@ -93,6 +93,7 @@ public:
 
 	//! Interrupt execution of a query
 	DUCKDB_API void Interrupt();
+
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
 	//! Disable query profiling
