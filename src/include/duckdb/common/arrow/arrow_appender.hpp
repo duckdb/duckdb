@@ -21,12 +21,12 @@ public:
 	DUCKDB_API ArrowAppender(vector<LogicalType> types, idx_t initial_capacity, ClientProperties options);
 	DUCKDB_API ~ArrowAppender();
 
+public:
 	//! Append a data chunk to the underlying arrow array
 	DUCKDB_API void Append(DataChunk &input, idx_t from, idx_t to, idx_t input_size);
 	//! Returns the underlying arrow array
 	DUCKDB_API ArrowArray Finalize();
-
-public:
+	idx_t RowCount() const;
 	static void ReleaseArray(ArrowArray *array);
 	static ArrowArray *FinalizeChild(const LogicalType &type, unique_ptr<ArrowAppendData> append_data);
 	static unique_ptr<ArrowAppendData> InitializeChild(const LogicalType &type, idx_t capacity,

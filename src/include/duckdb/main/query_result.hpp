@@ -17,7 +17,7 @@
 namespace duckdb {
 struct BoxRendererConfig;
 
-enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT };
+enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT, ARROW_RESULT };
 
 class BaseQueryResult {
 public:

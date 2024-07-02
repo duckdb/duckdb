@@ -40,6 +40,8 @@ class TestDuckDBExecute(object):
                 yield min(2048, rowcount - count)
                 count += 2048
 
+        # FIXME: perhaps we want to test with different buffer sizes?
+        # duckdb_cursor.execute("set streaming_buffer_size='1mb'")
         duckdb_cursor.execute(f"create table tbl as from range({rowcount})")
         duckdb_cursor.execute("select * from tbl")
         for rows in generator(rowcount):
