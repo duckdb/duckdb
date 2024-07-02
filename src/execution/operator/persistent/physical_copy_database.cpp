@@ -49,7 +49,10 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 			catalog.CreateTable(context.client, *bound_info);
 			break;
 		}
-		case CatalogType::INDEX_ENTRY:
+		case CatalogType::INDEX_ENTRY: {
+			catalog.CreateIndex(context.client, create_info->Cast<CreateIndexInfo>());
+			break;
+		}
 		default:
 			throw NotImplementedException("Entry type %s not supported in PhysicalCopyDatabase",
 			                              CatalogTypeToString(create_info->type));

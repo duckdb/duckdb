@@ -95,6 +95,8 @@ struct ClientConfig {
 	idx_t ordered_aggregate_threshold = (idx_t(1) << 18);
 	//! The number of rows to accumulate before flushing during a partitioned write
 	idx_t partitioned_write_flush_threshold = idx_t(1) << idx_t(19);
+	//! The amount of rows we can keep open before we close and flush them during a partitioned write
+	idx_t partitioned_write_max_open_files = idx_t(100);
 	//! The number of rows we need on either table to choose a nested loop join
 	idx_t nested_loop_join_threshold = 5;
 	//! The number of rows we need on either table to choose a merge join over an IE join
@@ -144,6 +146,30 @@ public:
 
 public:
 	void SetDefaultStreamingBufferSize();
+};
+
+struct ScopedConfigSetting {
+public:
+	using config_modify_func_t = std::function<void(ClientConfig &config)>;
+
+public:
+	explicit ScopedConfigSetting(ClientConfig &config, config_modify_func_t set_f = nullptr,
+	                             config_modify_func_t unset_f = nullptr)
+	    : config(config), set(std::move(set_f)), unset(std::move(unset_f)) {
+		if (set) {
+			set(config);
+		}
+	}
+	~ScopedConfigSetting() {
+		if (unset) {
+			unset(config);
+		}
+	}
+
+public:
+	ClientConfig &config;
+	config_modify_func_t set;
+	config_modify_func_t unset;
 };
 
 } // namespace duckdb

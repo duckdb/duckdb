@@ -29,8 +29,11 @@ struct ExtensionFunctionEntry {
 
 static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"->>", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"<<=", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {">>=", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"add_parquet_key", "parquet", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"array_to_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"broadcast", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"create_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"current_localtime", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtimestamp", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -217,6 +220,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"mysql_clear_cache", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"mysql_execute", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"mysql_query", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"netmask", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"network", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"parquet_file_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_kv_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},

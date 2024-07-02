@@ -11,6 +11,8 @@ namespace duckdb {
 constexpr static const int32_t HEX_BITSIZE = 4;
 constexpr static const int32_t MAX_QUIBBLE_DIGITS = 4;
 constexpr static const idx_t QUIBBLES_PER_HALF = 4;
+constexpr static const uint64_t IPV4_NETWORK_MASK = 0xffffffff;
+constexpr static const uhugeint_t IPV6_NETWORK_MASK = uhugeint_t(0xffffffffffffffff, 0xffffffffffffffff);
 
 IPAddress::IPAddress() : type(IPAddressType::IP_ADDRESS_INVALID) {
 }
@@ -418,6 +420,20 @@ IPAddress IPAddress::FromString(string_t input) {
 		throw InternalException("Not successful but no exception was thrown");
 	}
 	return result;
+}
+
+IPAddress IPAddress::Netmask() const {
+	uhugeint_t mask = this->type == IPAddressType::IP_ADDRESS_V4 ? IPV4_NETWORK_MASK : IPV6_NETWORK_MASK;
+	uhugeint_t netmask = mask ^ (mask >> this->mask);
+	return IPAddress(this->type, netmask, this->mask);
+}
+
+IPAddress IPAddress::Network() const {
+	return IPAddress(this->type, (this->address & this->Netmask().address), this->mask);
+}
+
+IPAddress IPAddress::Broadcast() const {
+	return IPAddress(this->type, (this->Network().address | ~this->Netmask().address), this->mask);
 }
 
 } // namespace duckdb

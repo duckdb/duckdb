@@ -571,6 +571,76 @@
 				"name": "format",
 				"default": "None",
 				"type": "Optional[str]"
+			},
+			{
+				"name": "date_format",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "timestamp_format",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "compression",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "maximum_object_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "ignore_errors",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "convert_strings_to_integers",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "field_appearance_threshold",
+				"default": "None",
+				"type": "Optional[float]"
+			},
+			{
+				"name": "map_inference_threshold",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "maximum_sample_files",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "filename",
+				"default": "None",
+				"type": "Optional[bool | str]"
+			},
+			{
+				"name": "hive_partitioning",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "union_by_name",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "hive_types",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "hive_types_autocast",
+				"default": "None",
+				"type": "Optional[bool]"
 			}
 		],
 		"return": "DuckDBPyRelation"

@@ -103,6 +103,9 @@ endif
 ifeq (${BUILD_ICU}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};icu
 endif
+ifeq (${BUILD_INET}, 1)
+	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};inet
+endif
 ifeq (${BUILD_TPCH}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};tpch
 endif
@@ -133,12 +136,6 @@ ifeq (${STATIC_OPENSSL}, 1)
 endif
 ifeq (${BUILD_TPCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_TPCE=1
-endif
-ifeq (${BUILD_ODBC}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_ODBC_DRIVER=1
-endif
-ifneq ($(ODBC_CONFIG),)
-	CMAKE_VARS:=${CMAKE_VARS} -DODBC_CONFIG=${ODBC_CONFIG}
 endif
 ifeq (${BUILD_PYTHON}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_PYTHON=1 -DDUCKDB_EXTENSION_CONFIGS="tools/pythonpkg/duckdb_extension_config.cmake"

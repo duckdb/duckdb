@@ -19,7 +19,7 @@ struct HistogramFunctor {
 		FlatVector::GetData<T>(result)[offset] = value;
 	}
 
-	static bool CreateExtraState() {
+	static bool CreateExtraState(idx_t count) {
 		return false;
 	}
 
@@ -66,7 +66,7 @@ struct HistogramStringFunctor : HistogramStringFunctorBase {
 		FlatVector::GetData<string_t>(result)[offset] = StringVector::AddStringOrBlob(result, value);
 	}
 
-	static bool CreateExtraState() {
+	static bool CreateExtraState(idx_t count) {
 		return false;
 	}
 
@@ -82,8 +82,8 @@ struct HistogramGenericFunctor : HistogramStringFunctorBase {
 		                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
 	}
 
-	static Vector CreateExtraState() {
-		return Vector(LogicalType::BLOB);
+	static Vector CreateExtraState(idx_t count) {
+		return Vector(LogicalType::BLOB, count);
 	}
 
 	static void PrepareData(Vector &input, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {

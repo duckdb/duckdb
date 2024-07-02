@@ -10,24 +10,25 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
-#include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/deque.hpp"
+#include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/enums/prepared_statement_mode.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/client_properties.hpp"
+#include "duckdb/main/external_dependencies.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/main/pending_query_result.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/main/external_dependencies.hpp"
-#include "duckdb/common/error_data.hpp"
-#include "duckdb/common/enums/prepared_statement_mode.hpp"
-#include "duckdb/main/client_properties.hpp"
-#include "duckdb/main/client_context_state.hpp"
-#include "duckdb/main/settings.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
 class Appender;
@@ -52,7 +53,7 @@ class ClientContextState;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
-	optional_ptr<case_insensitive_map_t<Value>> parameters;
+	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
 	//! Whether or not a stream result should be allowed
 	bool allow_stream_result = false;
 };
@@ -142,7 +143,8 @@ public:
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	                                           case_insensitive_map_t<Value> &values, bool allow_stream_result = true);
+	                                           case_insensitive_map_t<BoundParameterData> &values,
+	                                           bool allow_stream_result = true);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
 	                                           const PendingQueryParameters &parameters);
 
@@ -227,7 +229,7 @@ private:
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr,
+	                        optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr,
 	                        PreparedStatementMode mode = PreparedStatementMode::PREPARE_ONLY);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
@@ -268,7 +270,7 @@ private:
 
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                                optional_ptr<case_insensitive_map_t<Value>> values);
+	                                optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 
 private:
 	//! Lock on using the ClientContext in parallel

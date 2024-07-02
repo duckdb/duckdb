@@ -30,6 +30,21 @@ static const T *GetPrimitiveData(const ListSegment *segment) {
 }
 
 //===--------------------------------------------------------------------===//
+// Strings
+//===--------------------------------------------------------------------===//
+static idx_t GetStringAllocationSize(uint16_t capacity) {
+	return AlignValue(sizeof(ListSegment) + (capacity * (sizeof(char))));
+}
+
+static data_ptr_t AllocateStringData(ArenaAllocator &allocator, uint16_t capacity) {
+	return allocator.Allocate(GetStringAllocationSize(capacity));
+}
+
+static char *GetStringData(ListSegment *segment) {
+	return reinterpret_cast<char *>(data_ptr_cast(segment) + sizeof(ListSegment));
+}
+
+//===--------------------------------------------------------------------===//
 // Lists
 //===--------------------------------------------------------------------===//
 static idx_t GetAllocationSizeList(uint16_t capacity) {
@@ -125,7 +140,17 @@ static uint16_t GetCapacityForNewSegment(uint16_t capacity) {
 template <class T>
 static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, ArenaAllocator &allocator, uint16_t capacity) {
 	// allocate data and set the header
-	auto segment = (ListSegment *)AllocatePrimitiveData<T>(allocator, capacity);
+	auto segment = reinterpret_cast<ListSegment *>(AllocatePrimitiveData<T>(allocator, capacity));
+	segment->capacity = capacity;
+	segment->count = 0;
+	segment->next = nullptr;
+	return segment;
+}
+
+static ListSegment *CreateVarcharDataSegment(const ListSegmentFunctions &, ArenaAllocator &allocator,
+                                             uint16_t capacity) {
+	// allocate data and set the header
+	auto segment = reinterpret_cast<ListSegment *>(AllocateStringData(allocator, capacity));
 	segment->capacity = capacity;
 	segment->count = 0;
 	segment->next = nullptr;
@@ -190,8 +215,7 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, ArenaAlloc
 	// determine segment
 	if (!linked_list.last_segment) {
 		// empty linked list, create the first (and last) segment
-		auto capacity = ListSegment::INITIAL_CAPACITY;
-		segment = functions.create_segment(functions, allocator, UnsafeNumericCast<uint16_t>(capacity));
+		segment = functions.create_segment(functions, allocator, functions.initial_capacity);
 		linked_list.first_segment = segment;
 		linked_list.last_segment = segment;
 	} else if (linked_list.last_segment->capacity == linked_list.last_segment->count) {
@@ -260,7 +284,7 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 	idx_t current_offset = 0;
 	while (current_offset < str_size) {
 		auto child_segment = GetSegment(functions.child_functions.back(), allocator, child_segments);
-		auto data = GetPrimitiveData<char>(child_segment);
+		auto data = GetStringData(child_segment);
 		idx_t copy_count = MinValue<idx_t>(str_size - current_offset, child_segment->capacity - child_segment->count);
 		memcpy(data + child_segment->count, str_data + current_offset, copy_count);
 		current_offset += copy_count;
@@ -399,6 +423,7 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 
 	auto null_mask = GetNullMask(segment);
 	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
+	auto current_segment = linked_child_list.first_segment;
 	idx_t child_offset = 0;
 	for (idx_t i = 0; i < segment->count; i++) {
 		if (null_mask[i]) {
@@ -415,18 +440,17 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 		// copy over the data
 		idx_t current_offset = 0;
 		while (current_offset < str_length) {
-			if (!linked_child_list.first_segment) {
+			if (!current_segment) {
 				throw InternalException("Insufficient data to read string");
 			}
-			auto child_segment = linked_child_list.first_segment;
-			auto child_data = GetPrimitiveData<char>(child_segment);
-			idx_t max_copy = MinValue<idx_t>(str_length - current_offset, child_segment->capacity - child_offset);
+			auto child_data = GetStringData(current_segment);
+			idx_t max_copy = MinValue<idx_t>(str_length - current_offset, current_segment->capacity - child_offset);
 			memcpy(result_data + current_offset, child_data + child_offset, max_copy);
 			current_offset += max_copy;
 			child_offset += max_copy;
-			if (child_offset >= child_segment->capacity) {
-				D_ASSERT(child_offset == child_segment->capacity);
-				linked_child_list.first_segment = child_segment->next;
+			if (child_offset >= current_segment->capacity) {
+				D_ASSERT(child_offset == current_segment->capacity);
+				current_segment = current_segment->next;
 				child_offset = 0;
 			}
 		}
@@ -556,9 +580,11 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 	case PhysicalType::BIT:
 	case PhysicalType::BOOL:
 		SegmentPrimitiveFunction<bool>(functions);
+		functions.initial_capacity = 8;
 		break;
 	case PhysicalType::INT8:
 		SegmentPrimitiveFunction<int8_t>(functions);
+		functions.initial_capacity = 8;
 		break;
 	case PhysicalType::INT16:
 		SegmentPrimitiveFunction<int16_t>(functions);
@@ -571,6 +597,7 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		break;
 	case PhysicalType::UINT8:
 		SegmentPrimitiveFunction<uint8_t>(functions);
+		functions.initial_capacity = 8;
 		break;
 	case PhysicalType::UINT16:
 		SegmentPrimitiveFunction<uint16_t>(functions);
@@ -601,8 +628,12 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		functions.write_data = WriteDataToVarcharSegment;
 		functions.read_data = ReadDataFromVarcharSegment;
 
-		functions.child_functions.emplace_back();
-		SegmentPrimitiveFunction<char>(functions.child_functions.back());
+		ListSegmentFunctions child_function;
+		child_function.create_segment = CreateVarcharDataSegment;
+		child_function.write_data = nullptr;
+		child_function.read_data = nullptr;
+		child_function.initial_capacity = 16;
+		functions.child_functions.push_back(child_function);
 		break;
 	}
 	case PhysicalType::LIST: {
