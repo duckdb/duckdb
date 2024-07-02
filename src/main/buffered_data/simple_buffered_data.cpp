@@ -44,30 +44,36 @@ void SimpleBufferedData::UnblockSinks() {
 	}
 }
 
-PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
+bool SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
 	if (Closed()) {
-		return PendingExecutionResult::EXECUTION_ERROR;
+		return false;
 	}
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
-		return PendingExecutionResult::RESULT_READY;
+		return true;
+	}
+	auto cc = context.lock();
+	if (!cc) {
+		return false;
 	}
 	UnblockSinks();
-	auto cc = context.lock();
 	// Let the executor run until the buffer is no longer empty
-	auto res = cc->ExecuteTaskInternal(context_lock, result);
-	while (!PendingQueryResult::IsFinished(res)) {
+	PendingExecutionResult execution_result;
+	while (!PendingQueryResult::IsExecutionFinished(execution_result = cc->ExecuteTaskInternal(context_lock, result))) {
 		if (buffered_count >= BufferSize()) {
 			break;
 		}
-		// Check if we need to unblock more sinks to reach the buffer size
-		UnblockSinks();
-		res = cc->ExecuteTaskInternal(context_lock, result);
+		if (execution_result == PendingExecutionResult::BLOCKED ||
+		    execution_result == PendingExecutionResult::RESULT_READY) {
+			// Check if we need to unblock more sinks to reach the buffer size
+			UnblockSinks();
+			cc->WaitForTask(context_lock, result);
+		}
 	}
 	if (result.HasError()) {
 		Close();
 	}
-	return res;
+	return execution_result != PendingExecutionResult::EXECUTION_ERROR;
 }
 
 unique_ptr<DataChunk> SimpleBufferedData::Scan() {

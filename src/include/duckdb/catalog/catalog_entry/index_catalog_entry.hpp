@@ -50,9 +50,9 @@ public:
 	virtual string GetTableName() const = 0;
 
 	//! Returns true, if this index is UNIQUE
-	bool IsUnique();
+	bool IsUnique() const;
 	//! Returns true, if this index is a PRIMARY KEY
-	bool IsPrimary();
+	bool IsPrimary() const;
 };
 
 } // namespace duckdb
