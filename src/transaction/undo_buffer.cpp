@@ -123,9 +123,14 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 		case UndoFlags::UPDATE_TUPLE:
 			properties.has_updates = true;
 			break;
-		case UndoFlags::DELETE_TUPLE:
+		case UndoFlags::DELETE_TUPLE: {
+			auto info = reinterpret_cast<DeleteInfo *>(data);
+			if (info->is_consecutive) {
+				properties.estimated_size += sizeof(row_t) * info->count;
+			}
 			properties.has_deletes = true;
 			break;
+		}
 		case UndoFlags::CATALOG_ENTRY: {
 			properties.has_catalog_changes = true;
 
