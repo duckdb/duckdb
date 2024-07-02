@@ -1,6 +1,7 @@
 #include "duckdb/storage/standard_buffer_manager.hpp"
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -406,7 +407,7 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 	for (idx_t k = 0; k < MEMORY_TAG_COUNT; k++) {
 		MemoryInformation info;
 		info.tag = MemoryTag(k);
-		info.size = buffer_pool.memory_usage_per_tag[k].load();
+		info.size = buffer_pool.memory_usage.GetUsedMemory(MemoryTag(k), true);
 		info.evicted_data = evicted_data_per_tag[k].load();
 		result.push_back(info);
 	}
@@ -577,7 +578,7 @@ void StandardBufferManager::FreeReservedMemory(idx_t size) {
 	if (size == 0) {
 		return;
 	}
-	buffer_pool.current_memory -= size;
+	buffer_pool.memory_usage.UpdateUsedMemory(MemoryTag::EXTENSION, -(int64_t)size);
 }
 
 //===--------------------------------------------------------------------===//

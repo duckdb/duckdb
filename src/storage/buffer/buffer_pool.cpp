@@ -1,11 +1,44 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
-#include "duckdb/common/chrono.hpp"
+
+#include <cstddef>
+#include <cstdint>
+
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__GNUC__)
+#include <sched.h>
+#include <unistd.h>
+#endif
 
 namespace duckdb {
+
+static idx_t GetCurrentCPU() {
+	// this code comes from jemalloc
+#if defined(_WIN32)
+	return (idx_t)GetCurrentProcessorNumber();
+#elif defined(_GNU_SOURCE)
+	auto cpu = sched_getcpu();
+	if (cpu < 0) {
+		// fallback to thread id
+		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+	}
+	return (idx_t)cpu;
+#elif defined(__aarch64__) && defined(__APPLE__)
+	/* Other oses most likely use tpidr_el0 instead */
+	uintptr_t c;
+	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
+	return (idx_t)(c & (1 << 3) - 1);
+#else
+	// fallback to thread id
+	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#endif
+}
 
 BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num)
     : handle(std::move(handle_p)), handle_sequence_number(eviction_seq_num) {
@@ -192,14 +225,11 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 }
 
 BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps)
-    : current_memory(0), maximum_memory(maximum_memory), track_eviction_timestamps(track_eviction_timestamps),
+    : maximum_memory(maximum_memory), track_eviction_timestamps(track_eviction_timestamps),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
 	queues.reserve(FILE_BUFFER_TYPE_COUNT);
 	for (idx_t i = 0; i < FILE_BUFFER_TYPE_COUNT; i++) {
 		queues.push_back(make_uniq<EvictionQueue>());
-	}
-	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
-		memory_usage_per_tag[i] = 0;
 	}
 }
 BufferPool::~BufferPool() {
@@ -237,17 +267,11 @@ void BufferPool::IncrementDeadNodes(FileBufferType type) {
 }
 
 void BufferPool::UpdateUsedMemory(MemoryTag tag, int64_t size) {
-	if (size < 0) {
-		current_memory -= UnsafeNumericCast<idx_t>(-size);
-		memory_usage_per_tag[uint8_t(tag)] -= UnsafeNumericCast<idx_t>(-size);
-	} else {
-		current_memory += UnsafeNumericCast<idx_t>(size);
-		memory_usage_per_tag[uint8_t(tag)] += UnsafeNumericCast<idx_t>(size);
-	}
+	memory_usage.UpdateUsedMemory(tag, size);
 }
 
 idx_t BufferPool::GetUsedMemory() const {
-	return current_memory;
+	return memory_usage.GetUsedMemory(true);
 }
 
 idx_t BufferPool::GetMaxMemory() const {
@@ -288,7 +312,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 	bool found = false;
 
-	if (current_memory <= memory_limit) {
+	if (memory_usage.GetUsedMemory(false) <= memory_limit) {
 		return {true, std::move(r)};
 	}
 
@@ -304,7 +328,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 		// release the memory and mark the block as unloaded
 		handle->Unload();
 
-		if (current_memory <= memory_limit) {
+		if (memory_usage.GetUsedMemory(false) <= memory_limit) {
 			found = true;
 			return false;
 		}
@@ -401,6 +425,45 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 		throw OutOfMemoryException(
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
+	}
+}
+
+BufferPool::MemoryUsage::MemoryUsage() {
+	for (auto &v : memory_usage) {
+		v = 0;
+	}
+	for (auto &cache : memory_usage_caches) {
+		for (auto &v : cache) {
+			v = 0;
+		}
+	}
+}
+
+void BufferPool::MemoryUsage::UpdateUsedMemory(MemoryTag tag, int64_t size) {
+	auto tag_idx = (idx_t)tag;
+	if ((idx_t)AbsValue(size) < MEMORY_USAGE_CACHE_THRESHOLD) {
+		// update cache and update global counter when cache exceeds threshold
+		// Get corresponding cache slot based on current CPU core index
+		// Two threads may access the same cache simultaneously,
+		// ensuring correctness through atomic operations
+		auto cache_idx = (idx_t)GetCurrentCPU() % MEMORY_USAGE_CACHE_COUNT;
+		auto &cache = memory_usage_caches[cache_idx];
+		auto new_tag_size = cache[tag_idx].fetch_add(size, std::memory_order_relaxed) + size;
+		if ((idx_t)AbsValue(new_tag_size) >= MEMORY_USAGE_CACHE_THRESHOLD) {
+			// cached tag memory usage exceeds threshold
+			auto tag_size = cache[tag_idx].exchange(0, std::memory_order_relaxed);
+			memory_usage[tag_idx].fetch_add(tag_size, std::memory_order_relaxed);
+		}
+		auto new_total_size = cache[TOTAL_MEMORY_USAGE_INDEX].fetch_add(size, std::memory_order_relaxed) + size;
+		if ((idx_t)AbsValue(new_total_size) >= MEMORY_USAGE_CACHE_THRESHOLD) {
+			// cached total memory usage exceeds threshold
+			auto total_size = cache[TOTAL_MEMORY_USAGE_INDEX].exchange(0, std::memory_order_relaxed);
+			memory_usage[TOTAL_MEMORY_USAGE_INDEX].fetch_add(total_size, std::memory_order_relaxed);
+		}
+	} else {
+		// update global counter
+		memory_usage[tag_idx].fetch_add(size, std::memory_order_relaxed);
+		memory_usage[TOTAL_MEMORY_USAGE_INDEX].fetch_add(size, std::memory_order_relaxed);
 	}
 }
 
