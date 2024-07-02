@@ -52,11 +52,13 @@ public:
 	//! Create an ArenaAllocator with cross-thread lifetime
 	ArenaAllocator &CreateAllocator() const;
 	void Combine(LocalUngroupedAggregateState &other);
+	void CombineDistinct(LocalUngroupedAggregateState &other, DistinctAggregateData &distinct_data);
+	void Finalize(DataChunk &result);
 };
 
 struct LocalUngroupedAggregateState {
 public:
-	LocalUngroupedAggregateState(GlobalUngroupedAggregateState &gstate);
+	explicit LocalUngroupedAggregateState(GlobalUngroupedAggregateState &gstate);
 
 	//! Local arena allocator
 	ArenaAllocator &allocator;

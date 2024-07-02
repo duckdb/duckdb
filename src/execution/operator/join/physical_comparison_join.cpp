@@ -80,4 +80,5 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		}
 	}
 }
+
 } // namespace duckdb
