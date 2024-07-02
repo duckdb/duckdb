@@ -17,15 +17,15 @@ namespace duckdb {
 
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
-                                     bool figure_out_new_line_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
+                                     idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
                                      CSVIterator &iterator_p, bool store_line_size_p,
                                      shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p, bool sniffing_p,
                                      string path_p)
-    : ScannerResult(states, state_machine),
+    : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
-      figure_out_new_line(figure_out_new_line_p), error_handler(error_hander_p), iterator(iterator_p),
-      store_line_size(store_line_size_p), csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
+      error_handler(error_hander_p), iterator(iterator_p), store_line_size(store_line_size_p),
+      csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
       current_errors(state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(std::move(path_p)) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
@@ -35,7 +35,6 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	buffer_size = buffer_handle->actual_size;
 	last_position = {buffer_handle->buffer_idx, buffer_position, buffer_size};
 	requested_size = buffer_handle->requested_size;
-	result_size = figure_out_new_line ? 1 : STANDARD_VECTOR_SIZE;
 
 	// Current Result information
 	current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle->actual_size};
@@ -782,10 +781,10 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        const shared_ptr<CSVErrorHandler> &error_handler,
                                        const shared_ptr<CSVFileScan> &csv_file_scan, bool sniffing,
-                                       CSVIterator boundary, bool figure_out_nl)
+                                       CSVIterator boundary, idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, sniffing, csv_file_scan, boundary),
       scanner_idx(scanner_idx_p),
-      result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), figure_out_nl,
+      result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath()) {
@@ -793,15 +792,16 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
 
 StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary)
+                                       const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size,
+                                       CSVIterator boundary)
     : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, boundary), scanner_idx(0),
-      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), false, iterator.pos.buffer_pos,
-             *error_handler, iterator, buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan,
-             lines_read, sniffing, buffer_manager->GetFilePath()) {
+      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
+             iterator.pos.buffer_pos, *error_handler, iterator,
+             buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
+             buffer_manager->GetFilePath()) {
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
-	// Its possible we might have to do some skipping first
 	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                      CSVStateMachineCache::Get(context));
 
@@ -810,7 +810,8 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 	auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
 	idx_t rows_to_skip = state_machine->options.GetSkipRows() + state_machine->options.GetHeader();
 	auto it = BaseScanner::SkipCSVRows(buffer_manager, state_machine, rows_to_skip);
-	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(), it);
+	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(),
+	                                             STANDARD_VECTOR_SIZE, it);
 	scanner->csv_file_scan = make_shared_ptr<CSVFileScan>(context, options.file_path, options);
 	scanner->csv_file_scan->InitializeProjection();
 	return scanner;
@@ -1305,6 +1306,12 @@ void StringValueScanner::SetStart() {
 		}
 		return;
 	}
+	if (state_machine->options.IgnoreErrors()) {
+		// If we are ignoring errors we don't really need to figure out a line.
+		return;
+	}
+	// The result size of the data after skipping the row is one line
+	const idx_t result_size = 1;
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
 	bool line_found;
@@ -1317,7 +1324,7 @@ void StringValueScanner::SetStart() {
 		}
 		scan_finder =
 		    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(true),
-		                                  csv_file_scan, false, iterator, true);
+		                                  csv_file_scan, false, iterator, result_size);
 		auto &tuples = scan_finder->ParseChunk();
 		line_found = true;
 		if (tuples.number_of_rows != 1 ||

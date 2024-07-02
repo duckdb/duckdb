@@ -86,9 +86,9 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 							                                          options.dialect_options.skip_rows.GetValue());
 							iterator_set = true;
 						}
-						column_count_scanners.emplace_back(
-						    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine),
-						                                  detection_error_handler, first_iterator));
+						column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
+						    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,
+						    STANDARD_VECTOR_SIZE, first_iterator));
 						continue;
 					}
 					column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
@@ -254,11 +254,10 @@ bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
 			return !set_columns.IsCandidateUnacceptable(sniffed_column_counts[i], options.null_padding,
 			                                            options.ignore_errors.GetValue(),
 			                                            sniffed_column_counts.last_value_always_empty);
-		} else {
-			if (max_columns_found != sniffed_column_counts[i] &&
-			    (!options.null_padding && !options.ignore_errors.GetValue())) {
-				return false;
-			}
+		}
+		if (max_columns_found != sniffed_column_counts[i] &&
+		    (!options.null_padding && !options.ignore_errors.GetValue())) {
+			return false;
 		}
 	}
 	return true;
@@ -305,9 +304,7 @@ void CSVSniffer::RefineCandidates() {
 			}
 			candidates.push_back(std::move(cc_best_candidate));
 		}
-		return;
 	}
-	return;
 }
 
 NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_manager) {

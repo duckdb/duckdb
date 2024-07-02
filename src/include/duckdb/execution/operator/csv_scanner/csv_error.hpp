@@ -125,6 +125,8 @@ public:
 	//! Return the 1-indexed line number
 	idx_t GetLine(const LinesPerBoundary &error_info);
 	void NewMaxLineSize(idx_t scan_line_size);
+	//! Returns true if there are any errors
+	bool AnyErrors();
 	//! Set of errors
 	map<LinesPerBoundary, vector<CSVError>> errors;
 

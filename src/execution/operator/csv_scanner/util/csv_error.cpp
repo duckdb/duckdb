@@ -82,6 +82,11 @@ void CSVErrorHandler::NewMaxLineSize(idx_t scan_line_size) {
 	max_line_length = std::max(scan_line_size, max_line_length);
 }
 
+bool CSVErrorHandler::AnyErrors() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	return !errors.empty();
+}
+
 CSVError::CSVError(string error_message_p, CSVErrorType type_p, LinesPerBoundary error_info_p)
     : error_message(std::move(error_message_p)), type(type_p), error_info(error_info_p) {
 }
