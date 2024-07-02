@@ -196,4 +196,5 @@ print("=========================================")
 required_queries = reduce_sql.reduce_multi_statement(all_queries, shell, load_script)
 cmd = load_script + '\n' + last_query + "\n"
 
-fuzzer_helper.file_issue(cmd, error_msg, fuzzer_name, seed, git_hash)
+if not dry:
+    fuzzer_helper.file_issue(cmd, error_msg, fuzzer_name, seed, git_hash)
