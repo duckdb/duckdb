@@ -567,7 +567,7 @@ TEST_CASE("Test C API config", "[capi]") {
 	REQUIRE(duckdb_set_config(config, "aaaa_invalidoption", "read_only") == DuckDBSuccess);
 	REQUIRE(((DBConfig *)config)->options.unrecognized_options["aaaa_invalidoption"] == "read_only");
 	REQUIRE(duckdb_open_ext(dbdir.c_str(), &db, config, &error) == DuckDBError);
-	REQUIRE_THAT(error, Catch::Matchers::Contains("Unrecognized configuration property"));
+	REQUIRE_THAT(error, Catch::Matchers::Contains("The following options were not recognized"));
 	duckdb_free(error);
 
 	// we can destroy the config right after duckdb_open

@@ -194,13 +194,59 @@ void DatabaseInstance::CreateMainDatabase() {
 	initial_database->Initialize(config.options.default_block_alloc_size);
 }
 
-void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
-	auto unrecognized_options_iter = unrecognized_options.begin();
-	string unrecognized_option_keys = unrecognized_options_iter->first;
-	while (++unrecognized_options_iter != unrecognized_options.end()) {
-		unrecognized_option_keys = "," + unrecognized_options_iter->first;
+void DatabaseInstance::LoadExtensionSettings() {
+	if (!config.options.autoload_known_extensions) {
+		// Autoloading not enabled
+		return;
 	}
-	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
+	auto &unrecognized_options = config.options.unrecognized_options;
+	if (unrecognized_options.empty()) {
+		// Nothing to do
+		return;
+	}
+
+	auto it = unrecognized_options.begin();
+	vector<string> extension_options;
+	for (; it != unrecognized_options.end(); it++) {
+		auto name = it->first;
+		auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_SETTINGS);
+		if (extension_name.empty()) {
+			continue;
+		}
+		// Attempt to autoload it
+		if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
+			throw InvalidInputException(
+			    "To set the %s setting, the %s extension needs to be loaded. But it could not be autoloaded.", name,
+			    extension_name);
+		}
+		try {
+			ExtensionHelper::AutoLoadExtension(*this, extension_name);
+		} catch (std::exception &e) {
+			ErrorData error(e);
+			throw InvalidInputException("To set the %s setting, the %s extension needs to be loaded. But autoloading "
+			                            "failed with the following error: ",
+			                            name, extension_name, error.RawMessage());
+		}
+		config.SetOptionByName(name, it->second);
+		extension_options.push_back(name);
+	}
+
+	for (auto &option : extension_options) {
+		unrecognized_options.erase(option);
+	}
+}
+
+void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
+	if (unrecognized_options.empty()) {
+		return;
+	}
+
+	vector<string> options;
+	for (auto &kv : unrecognized_options) {
+		options.push_back(kv.first);
+	}
+	auto concatenated = StringUtil::Join(options, ", ");
+	throw InvalidInputException("The following options were not recognized: " + concatenated);
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
@@ -246,9 +292,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 	}
 
-	if (!config.options.unrecognized_options.empty()) {
-		ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
-	}
+	LoadExtensionSettings();
+	ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
 
 	if (!db_manager->HasDefaultDatabase()) {
 		CreateMainDatabase();
