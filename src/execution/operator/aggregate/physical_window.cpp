@@ -56,7 +56,10 @@ public:
 		return make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, block_idx, true);
 	}
 
+	//! The hash partition data
 	HashGroupPtr hash_group;
+	//! The size of the group
+	idx_t count = 0;
 	//! The generated input chunks
 	unique_ptr<RowDataCollection> rows;
 	unique_ptr<RowDataCollection> heap;
@@ -420,7 +423,6 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 	//	How big is the partition?
 	auto &gpart = *gstate.global_partition;
 	layout.Initialize(gpart.payload_types);
-	idx_t count = 0;
 	if (hash_bin < gpart.hash_groups.size() && gpart.hash_groups[hash_bin]) {
 		count = gpart.hash_groups[hash_bin]->count;
 	} else if (gpart.rows && !hash_bin) {
@@ -467,13 +469,6 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 	} else {
 		return;
 	}
-
-	// Create the executor state for each function
-	for (auto &wexec : executors) {
-		auto &wexpr = wexec->wexpr;
-		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
-		gestates.emplace_back(wexec->GetGlobalState(count, partition_mask, order_mask));
-	}
 }
 
 // Per-thread scan state
@@ -512,13 +507,24 @@ void WindowLocalSourceState::BuildPartition() {
 	auto &gsink = gsource.gsink;
 	auto &gpart = *gsink.global_partition;
 	window_hash_group = gpart.window_hash_groups[task->group_idx].get();
-	const auto &executors = gsink.executors;
-	auto &gestates = window_hash_group->gestates;
 
 	//	Single-threaded building for now.
 	lock_guard<mutex> built_guard(window_hash_group->lock);
 	if (window_hash_group->built) {
 		return;
+	}
+
+	// Create the executor state for each function
+	// These can be large so we defer building them until we are ready.
+	const auto count = window_hash_group->count;
+	auto &gestates = window_hash_group->gestates;
+	const auto &partition_mask = window_hash_group->partition_mask;
+	auto &order_masks = window_hash_group->order_masks;
+	const auto &executors = gsink.executors;
+	for (auto &wexec : executors) {
+		auto &wexpr = wexec->wexpr;
+		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
+		gestates.emplace_back(wexec->GetGlobalState(count, partition_mask, order_mask));
 	}
 
 	//	First pass over the input without flushing
