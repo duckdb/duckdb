@@ -435,6 +435,7 @@ struct DecimalType {
 
 struct StringType {
 	DUCKDB_API static string GetCollation(const LogicalType &type);
+	DUCKDB_API static bool IsCollated(const LogicalType &type);
 };
 
 struct ListType {

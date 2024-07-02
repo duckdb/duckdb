@@ -113,13 +113,15 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	if (!constant_expr.IsFoldable()) {
 		return nullptr;
 	}
-
+	// TODO constant_expr.return_type get collation and push it
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr.return_type);
 	auto &patt_str = StringValue::Get(constant_value);
 
 	bool is_not_like = root.function.name == "!~~";
 	if (PatternIsConstant(patt_str)) {
+		ExpressionBinder::PushCollation(GetContext(), root.children[0], root.children[0]->return_type, false);
+		ExpressionBinder::PushCollation(GetContext(), root.children[1], root.children[1]->return_type, false);
 		// Pattern is constant
 		return make_uniq<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
 		                                                        : ExpressionType::COMPARE_EQUAL,
@@ -144,10 +146,15 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &
 	auto new_function =
 	    make_uniq<BoundFunctionExpression>(expr.return_type, std::move(function), std::move(expr.children), nullptr);
 
+	ExpressionBinder::PushCollation(GetContext(), new_function->children[0], new_function->children[0]->return_type,
+	                                false);
+
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
+	auto constant_ret_type = new_function->children[1]->return_type;
 	new_function->children[1] = make_uniq<BoundConstantExpression>(Value(std::move(pattern)));
+	ExpressionBinder::PushCollation(GetContext(), new_function->children[1], constant_ret_type, false);
 
 	result = std::move(new_function);
 	if (is_not_like) {
