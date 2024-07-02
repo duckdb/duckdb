@@ -31,15 +31,16 @@ string_t IntToVarInt(Vector &result, T int_value) {
 	} else {
 		abs_value = static_cast<uint64_t>(int_value);
 	}
-	uint32_t data_byte_size = (abs_value == 0) ? 1 : static_cast<uint32_t>(std::ceil(std::log2(abs_value + 1) / 8.0));
+	uint32_t data_byte_size;
+	if (abs_value != NumericLimits<uint64_t>::Maximum()) {
+		data_byte_size = (abs_value == 0) ? 1 : static_cast<uint32_t>(std::ceil(std::log2(abs_value + 1) / 8.0));
+	} else {
+		data_byte_size = static_cast<uint32_t>(std::ceil(std::log2(abs_value) / 8.0));
+	}
 
 	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
 	auto blob = StringVector::EmptyString(result, blob_size);
 	auto writable_blob = blob.GetDataWriteable();
-	// if (blob_size < string_t::INLINE_BYTES) {
-	// 	// set these babies to 0.
-	// 	memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
-	// }
 	SetHeader(writable_blob, data_byte_size, is_negative);
 
 	// Add data bytes to the blob, starting off after header bytes
@@ -49,6 +50,59 @@ string_t IntToVarInt(Vector &result, T int_value) {
 			writable_blob[wb_idx++] = ~static_cast<char>(abs_value >> i * 8 & 0xFF);
 		} else {
 			writable_blob[wb_idx++] = static_cast<char>(abs_value >> i * 8 & 0xFF);
+		}
+	}
+	blob.Finalize();
+	return blob;
+}
+
+template <class T>
+string_t HugeintToVarInt(Vector &result, T int_value) {
+	// Determine if the number is negative
+	bool is_negative = int_value.upper < 0;
+	// Determine the number of data bytes
+	uint64_t abs_value_upper;
+	if (is_negative) {
+		abs_value_upper = static_cast<uint64_t>(std::abs(static_cast<int64_t>(int_value.upper)));
+	} else {
+		abs_value_upper = static_cast<uint64_t>(int_value.upper);
+	}
+	uint32_t data_byte_size;
+	if (abs_value_upper != NumericLimits<uint64_t>::Maximum()) {
+		data_byte_size =
+		    (abs_value_upper == 0) ? 0 : static_cast<uint32_t>(std::ceil(std::log2(abs_value_upper + 1) / 8.0));
+	} else {
+		data_byte_size = static_cast<uint32_t>(std::ceil(std::log2(abs_value_upper) / 8.0));
+	}
+
+	uint32_t upper_byte_size = data_byte_size;
+	if (abs_value_upper != NumericLimits<uint64_t>::Maximum()) {
+		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
+	} else {
+		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+	}
+	if (data_byte_size == 0) {
+		data_byte_size++;
+	}
+	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
+	auto blob = StringVector::EmptyString(result, blob_size);
+	auto writable_blob = blob.GetDataWriteable();
+	SetHeader(writable_blob, data_byte_size, is_negative);
+
+	// Add data bytes to the blob, starting off after header bytes
+	idx_t wb_idx = VARINT_HEADER_SIZE;
+	for (int i = static_cast<int>(upper_byte_size) - 1; i >= 0; --i) {
+		if (is_negative) {
+			writable_blob[wb_idx++] = ~static_cast<char>(abs_value_upper >> i * 8 & 0xFF);
+		} else {
+			writable_blob[wb_idx++] = static_cast<char>(abs_value_upper >> i * 8 & 0xFF);
+		}
+	}
+	for (int i = static_cast<int>(data_byte_size - upper_byte_size) - 1; i >= 0; --i) {
+		if (is_negative) {
+			writable_blob[wb_idx++] = ~static_cast<char>(int_value.lower >> i * 8 & 0xFF);
+		} else {
+			writable_blob[wb_idx++] = static_cast<char>(int_value.lower >> i * 8 & 0xFF);
 		}
 	}
 	blob.Finalize();
@@ -133,10 +187,9 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 		// return zero
 		uint32_t blob_size = 1 + VARINT_HEADER_SIZE;
 		auto blob = StringVector::EmptyString(result, blob_size);
-		// set these babies to 0.
-		// memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 		auto writable_blob = blob.GetDataWriteable();
 		SetHeader(writable_blob, 1, false);
+		writable_blob[3] = 0;
 		blob.Finalize();
 		return blob;
 	}
@@ -170,10 +223,6 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	}
 	uint32_t blob_size = static_cast<uint32_t>(blob_string.size() + VARINT_HEADER_SIZE);
 	auto blob = StringVector::EmptyString(result, blob_size);
-	// if (blob_size < string_t::INLINE_BYTES) {
-	// 	// set these babies to 0.
-	// 	memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
-	// }
 	auto writable_blob = blob.GetDataWriteable();
 
 	SetHeader(writable_blob, blob_string.size(), is_negative);
@@ -242,6 +291,13 @@ struct IntTryCastToVarInt {
 	}
 };
 
+struct HugeintTryCastToVarInt {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		return HugeintToVarInt(result, input);
+	}
+};
+
 struct VarcharTryCastToVarInt {
 	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
@@ -279,8 +335,9 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 		return BoundCastInfo(&VectorCastHelpers::StringCast<uint64_t, duckdb::IntTryCastToVarInt>);
 	case LogicalTypeId::VARCHAR:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::VarcharTryCastToVarInt>);
-	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UHUGEINT:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uhugeint_t, duckdb::HugeintTryCastToVarInt>);
+	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::DOUBLE:
 		return TryVectorNullCast;

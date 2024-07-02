@@ -4,6 +4,14 @@
 
 # Basic compatibility tests
 
+statement ok
+PRAGMA enable_verification
+
+query I
+select '340282366920938463463374607431768211455'::UHUGEINT::varint
+----
+340282366920938463463374607431768211455
+
 loop i 0 1000
 
 query I
@@ -20,6 +28,14 @@ endloop
 
 query I
 select '2147483646'::varint = 2147483646::varint
+----
+true
+
+
+
+
+query I
+select '340282366920938463463374607431768211455'::UHUGEINT::varint = '340282366920938463463374607431768211455'::varint
 ----
 true
 
