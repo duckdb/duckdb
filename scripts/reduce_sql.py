@@ -214,7 +214,7 @@ def reduce_query_log_query(start, shell, queries, query_index, max_time_seconds)
     return sql_query
 
 
-def reduce_multi_statement(sql_queries, local_shell, local_data_load, max_time):
+def reduce_multi_statement(sql_queries, local_shell, local_data_load, max_time=300):
     reducer = MultiStatementManager(sql_queries)
     last_statement = reducer.get_last_statement()
     print(f"testing if just last statement of multi statement creates the error")
