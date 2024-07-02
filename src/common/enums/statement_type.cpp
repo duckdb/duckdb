@@ -85,11 +85,16 @@ string StatementReturnTypeToString(StatementReturnType type) {
 // LCOV_EXCL_STOP
 
 void StatementProperties::RegisterDBRead(Catalog &catalog, ClientContext &context) {
-	read_databases[catalog.GetName()] = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
+	auto catalog_identity = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
+	D_ASSERT(read_databases.count(catalog.GetName()) == 0 || read_databases[catalog.GetName()] == catalog_identity);
+	read_databases[catalog.GetName()] = catalog_identity;
 }
 
 void StatementProperties::RegisterDBModify(Catalog &catalog, ClientContext &context) {
-	modified_databases[catalog.GetName()] = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
+	auto catalog_identity = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
+	D_ASSERT(modified_databases.count(catalog.GetName()) == 0 ||
+	         modified_databases[catalog.GetName()] == catalog_identity);
+	modified_databases[catalog.GetName()] = catalog_identity;
 }
 
 } // namespace duckdb
