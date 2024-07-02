@@ -4923,6 +4923,8 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 		return "BLOCKED";
 	case PendingExecutionResult::NO_TASKS_AVAILABLE:
 		return "NO_TASKS_AVAILABLE";
+	case PendingExecutionResult::EXECUTION_FINISHED:
+		return "EXECUTION_FINISHED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4944,6 +4946,9 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 	}
 	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
 		return PendingExecutionResult::NO_TASKS_AVAILABLE;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_FINISHED")) {
+		return PendingExecutionResult::EXECUTION_FINISHED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

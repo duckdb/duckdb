@@ -39,7 +39,7 @@ public:
 	void BlockSink(const InterruptState &blocked_sink, idx_t batch);
 
 	bool ShouldBlockBatch(idx_t batch);
-	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
+	bool ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 	void UpdateMinBatchIndex(idx_t min_batch_index);
 	bool IsMinimumBatchIndex(lock_guard<mutex> &lock, idx_t batch);

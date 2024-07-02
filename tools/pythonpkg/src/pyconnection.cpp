@@ -471,17 +471,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object 
 	return shared_from_this();
 }
 
-static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQueryResult &pending_query) {
-	if (pending_query.AllowStreamResult()) {
-		return PendingQueryResult::IsFinishedOrBlocked;
-	}
-	return PendingQueryResult::IsFinished;
-}
-
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
-	auto is_finished = FinishedCondition(pending_query);
-	while (!is_finished(execution_result = pending_query.ExecuteTask())) {
+	while (!PendingQueryResult::IsResultReady(execution_result = pending_query.ExecuteTask())) {
 		{
 			py::gil_scoped_acquire gil;
 			if (PyErr_CheckSignals() != 0) {
@@ -531,8 +523,9 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 	return new_params;
 }
 
-case_insensitive_map_t<Value> TransformPreparedParameters(PreparedStatement &prep, const py::object &params) {
-	case_insensitive_map_t<Value> named_values;
+case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedStatement &prep,
+                                                                       const py::object &params) {
+	case_insensitive_map_t<BoundParameterData> named_values;
 	if (py::is_list_like(params)) {
 		if (prep.n_param != py::len(params)) {
 			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.n_param,
@@ -542,7 +535,7 @@ case_insensitive_map_t<Value> TransformPreparedParameters(PreparedStatement &pre
 		for (idx_t i = 0; i < unnamed_values.size(); i++) {
 			auto &value = unnamed_values[i];
 			auto identifier = std::to_string(i + 1);
-			named_values[identifier] = std::move(value);
+			named_values[identifier] = BoundParameterData(std::move(value));
 		}
 	} else if (py::is_dict_like(params)) {
 		auto dict = py::cast<py::dict>(params);
@@ -1678,13 +1671,13 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(const py::handle &par
 	return args;
 }
 
-case_insensitive_map_t<Value> DuckDBPyConnection::TransformPythonParamDict(const py::dict &params) {
-	case_insensitive_map_t<Value> args;
+case_insensitive_map_t<BoundParameterData> DuckDBPyConnection::TransformPythonParamDict(const py::dict &params) {
+	case_insensitive_map_t<BoundParameterData> args;
 
 	for (auto pair : params) {
 		auto &key = pair.first;
 		auto &value = pair.second;
-		args[std::string(py::str(key))] = TransformPythonValue(value, LogicalType::UNKNOWN, false);
+		args[std::string(py::str(key))] = BoundParameterData(TransformPythonValue(value, LogicalType::UNKNOWN, false));
 	}
 	return args;
 }
