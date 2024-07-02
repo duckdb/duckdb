@@ -1,5 +1,6 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/common/arrow/physical_arrow_batch_collector.hpp"
 #include "duckdb/common/arrow/arrow_query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -16,7 +17,7 @@ unique_ptr<PhysicalResultCollector> PhysicalArrowCollector::Create(ClientContext
 		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
 		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, false, batch_size);
 	} else {
-		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, false, batch_size);
+		return make_uniq_base<PhysicalResultCollector, PhysicalArrowBatchCollector>(data, batch_size);
 	}
 }
 
@@ -103,13 +104,13 @@ SinkFinalizeType PhysicalArrowCollector::Finalize(Pipeline &pipeline, Event &eve
 			    "PhysicalArrowCollector Finalize contains no chunks, but tuple_count is non-zero (%d)",
 			    gstate.tuple_count);
 		}
-		gstate.result =
-		    make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties());
+		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
+		                                            context.GetClientProperties(), record_batch_size);
 		return SinkFinalizeType::READY;
 	}
 
-	gstate.result =
-	    make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties());
+	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
+	                                            record_batch_size);
 	auto &arrow_result = gstate.result->Cast<ArrowQueryResult>();
 	arrow_result.SetArrowData(std::move(gstate.chunks));
 

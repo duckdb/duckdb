@@ -9,22 +9,6 @@ PhysicalMaterializedCollector::PhysicalMaterializedCollector(PreparedStatementDa
     : PhysicalResultCollector(data), parallel(parallel) {
 }
 
-//===--------------------------------------------------------------------===//
-// Sink
-//===--------------------------------------------------------------------===//
-class MaterializedCollectorGlobalState : public GlobalSinkState {
-public:
-	mutex glock;
-	unique_ptr<ColumnDataCollection> collection;
-	shared_ptr<ClientContext> context;
-};
-
-class MaterializedCollectorLocalState : public LocalSinkState {
-public:
-	unique_ptr<ColumnDataCollection> collection;
-	ColumnDataAppendState append_state;
-};
-
 SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, DataChunk &chunk,
                                                    OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<MaterializedCollectorLocalState>();

@@ -9,27 +9,6 @@ namespace duckdb {
 PhysicalBatchCollector::PhysicalBatchCollector(PreparedStatementData &data) : PhysicalResultCollector(data) {
 }
 
-//===--------------------------------------------------------------------===//
-// Sink
-//===--------------------------------------------------------------------===//
-class BatchCollectorGlobalState : public GlobalSinkState {
-public:
-	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
-	}
-
-	mutex glock;
-	BatchedDataCollection data;
-	unique_ptr<MaterializedQueryResult> result;
-};
-
-class BatchCollectorLocalState : public LocalSinkState {
-public:
-	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
-	}
-
-	BatchedDataCollection data;
-};
-
 SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSinkInput &input) const {
 	auto &state = input.local_state.Cast<BatchCollectorLocalState>();

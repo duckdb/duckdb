@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
 
 namespace duckdb {
 
@@ -38,4 +39,24 @@ public:
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class BatchCollectorGlobalState : public GlobalSinkState {
+public:
+	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
+	}
+
+	mutex glock;
+	BatchedDataCollection data;
+	unique_ptr<QueryResult> result;
+};
+
+class BatchCollectorLocalState : public LocalSinkState {
+public:
+	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
+	}
+
+	BatchedDataCollection data;
+};
 } // namespace duckdb

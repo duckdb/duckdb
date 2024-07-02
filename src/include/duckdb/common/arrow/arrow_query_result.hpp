@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/arrow/arrow_wrapper.hpp"
 
 namespace duckdb {
 
@@ -26,7 +26,7 @@ public:
 	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API ArrowQueryResult(StatementType statement_type, StatementProperties properties, vector<string> names_p,
-	                            vector<LogicalType> types_p, ClientProperties client_properties);
+	                            vector<LogicalType> types_p, ClientProperties client_properties, idx_t batch_size);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit ArrowQueryResult(ErrorData error);
 
@@ -42,9 +42,11 @@ public:
 	vector<unique_ptr<ArrowArrayWrapper>> ConsumeArrays();
 	vector<unique_ptr<ArrowArrayWrapper>> &Arrays();
 	void SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays);
+	idx_t BatchSize() const;
 
 private:
 	vector<unique_ptr<ArrowArrayWrapper>> arrays;
+	idx_t batch_size;
 };
 
 } // namespace duckdb

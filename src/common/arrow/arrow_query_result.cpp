@@ -7,9 +7,10 @@
 namespace duckdb {
 
 ArrowQueryResult::ArrowQueryResult(StatementType statement_type, StatementProperties properties, vector<string> names_p,
-                                   vector<LogicalType> types_p, ClientProperties client_properties)
+                                   vector<LogicalType> types_p, ClientProperties client_properties, idx_t batch_size)
     : QueryResult(QueryResultType::ARROW_RESULT, statement_type, std::move(properties), std::move(types_p),
-                  std::move(names_p), std::move(client_properties)) {
+                  std::move(names_p), std::move(client_properties)),
+      batch_size(batch_size) {
 }
 
 ArrowQueryResult::ArrowQueryResult(ErrorData error) : QueryResult(QueryResultType::ARROW_RESULT, std::move(error)) {
@@ -46,6 +47,10 @@ vector<unique_ptr<ArrowArrayWrapper>> &ArrowQueryResult::Arrays() {
 void ArrowQueryResult::SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays) {
 	D_ASSERT(this->arrays.empty());
 	this->arrays = std::move(arrays);
+}
+
+idx_t ArrowQueryResult::BatchSize() const {
+	return batch_size;
 }
 
 } // namespace duckdb
