@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/inet_escape_function.benchmark
+# description: inet's extension escape function benchmark
+# group: [string]
+
+name html_escape benchmark
+group string
+
+require inet
+
+load
+CREATE TABLE html_text_tbl AS SELECT repeat('&', i%10) html_text FROM range(1000000) t(i);
+
+run
+SELECT html_escape(html_text) FROM html_text_tbl;
