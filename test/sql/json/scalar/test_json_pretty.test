@@ -1,0 +1,46 @@
+# name: test/sql/json/scalar/test_json_pretty.test
+# description: Test JSON pretty printer
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT json_pretty('[1,2,{"a":43,    "g":[true, true]}]') = '[
+    1,
+    2,
+    {
+        "a": 43,
+        "g": [
+            true,
+            true
+        ]
+    }
+]'
+----
+true
+
+query I
+SELECT json_pretty(NULL)
+----
+NULL
+
+query I
+SELECT json_pretty('null'::json);
+----
+null
+
+query I
+SELECT json_pretty('[1,2,null,   {"a": null},  42]'::json) = '[
+    1,
+    2,
+    null,
+    {
+        "a": null
+    },
+    42
+]'
+----
+true

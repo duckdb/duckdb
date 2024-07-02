@@ -18,6 +18,7 @@ source_files = [
         'extension/json/json_functions/json_extract.cpp',
         'extension/json/json_functions/json_keys.cpp',
         'extension/json/json_functions/json_merge_patch.cpp',
+        'extension/json/json_functions/json_pretty.cpp',
         'extension/json/json_functions/json_structure.cpp',
         'extension/json/json_functions/json_transform.cpp',
         'extension/json/json_functions/json_create.cpp',
