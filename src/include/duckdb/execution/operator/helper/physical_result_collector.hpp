@@ -45,6 +45,12 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
+public:
+	//! Whether this is a streaming result collector
+	virtual bool IsStreaming() const {
+		return false;
+	}
 };
 
 } // namespace duckdb

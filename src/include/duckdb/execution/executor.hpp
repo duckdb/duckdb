@@ -97,6 +97,8 @@ public:
 
 	//! Whether or not the root of the pipeline is a result collector object
 	bool HasResultCollector();
+	//! Whether or not the root of the pipeline is a streaming result collector object
+	bool HasStreamingResultCollector();
 	//! Returns the query result - can only be used if `HasResultCollector` returns true
 	unique_ptr<QueryResult> GetResult();
 

@@ -44,6 +44,10 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+	bool IsStreaming() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb
