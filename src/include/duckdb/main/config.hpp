@@ -300,7 +300,7 @@ public:
 	shared_ptr<BufferManager> buffer_manager;
 	//! Set of callbacks that can be installed by extensions
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
-	//! AES state for en/decryption
+	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
 
 public:

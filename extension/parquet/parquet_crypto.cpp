@@ -88,8 +88,8 @@ using duckdb_apache::thrift::transport::TTransport;
 //! Encryption wrapper for a transport protocol
 class EncryptionTransport : public TTransport {
 public:
-	EncryptionTransport(TProtocol &prot_p, const string &key, const shared_ptr<EncryptionState> &aes_p)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(aes_p),
+	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
+	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 		Initialize(key);
 	}
@@ -169,8 +169,8 @@ private:
 //! Decryption wrapper for a transport protocol
 class DecryptionTransport : public TTransport {
 public:
-	DecryptionTransport(TProtocol &prot_p, const string &key, const shared_ptr<EncryptionState> &aes_p)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(aes_p), read_buffer_size(0), read_buffer_offset(0) {
+	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
+	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()), read_buffer_size(0), read_buffer_offset(0) {
 		Initialize(key);
 	}
 
@@ -316,9 +316,9 @@ private:
 };
 
 uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
-                             const shared_ptr<EncryptionState> &aes_p) {
+                             const EncryptionUtil &encryption_util_p) {
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, aes_p));
+	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// We have to read the whole thing otherwise thrift throws an error before we realize we're decryption is wrong
@@ -334,10 +334,10 @@ uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
 }
 
 uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const string &key,
-                              const shared_ptr<EncryptionState> &aes_p) {
+                              const EncryptionUtil &encryption_util_p) {
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
-	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, aes_p));
+	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
 	auto &etrans = reinterpret_cast<EncryptionTransport &>(*eprot->getTransport());
 
 	// Write the object in memory
@@ -348,10 +348,10 @@ uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const strin
 }
 
 uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size,
-                                 const string &key, const shared_ptr<EncryptionState> &aes_p) {
+                                 const string &key, const EncryptionUtil &encryption_util_p) {
 	// Create decryption protocol
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, aes_p));
+	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// Read buffer
@@ -362,11 +362,11 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
 }
 
 uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
-                                  const string &key, const shared_ptr<EncryptionState> &aes_p) {
+                                  const string &key, const EncryptionUtil &encryption_util_p) {
 	// FIXME: we know the size upfront so we could do a streaming write instead of this
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
-	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, aes_p));
+	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
 	auto &etrans = reinterpret_cast<EncryptionTransport &>(*eprot->getTransport());
 
 	// Write the data in memory
