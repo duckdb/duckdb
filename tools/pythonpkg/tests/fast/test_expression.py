@@ -834,3 +834,14 @@ class TestExpression(object):
         rel2 = rel.sort(b.desc().nulls_last())
         res = rel2.b.fetchall()
         assert res == [('c',), ('b',), ('a',), ('a',), (None,)]
+
+    def test_aggregate(self):
+        con = duckdb.connect()
+        con.execute("PRAGMA threads=4")
+        con.execute("PRAGMA verify_parallelism")
+
+        rel = con.sql("select * from range(1000000) t(a)")
+        # Also test multiple reads
+        count = FunctionExpression("count", "a").cast("int")
+        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
