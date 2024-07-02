@@ -45,7 +45,11 @@ string_t IntToVarInt(Vector &result, T int_value) {
 	// Add data bytes to the blob, starting off after header bytes
 	idx_t wb_idx = VARINT_HEADER_SIZE;
 	for (int i = static_cast<int>(data_byte_size) - 1; i >= 0; --i) {
-		writable_blob[wb_idx++] = static_cast<char>(abs_value >> i * 8 & 0xFF);
+		if (is_negative) {
+			writable_blob[wb_idx++] = ~static_cast<char>(abs_value >> i * 8 & 0xFF);
+		} else {
+			writable_blob[wb_idx++] = static_cast<char>(abs_value >> i * 8 & 0xFF);
+		}
 	}
 	return blob;
 }
@@ -66,8 +70,9 @@ void VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &
 		throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
 	}
 	start_pos = 0;
+	is_zero = false;
 
-	auto int_value_char = value.GetDataWriteable();
+	auto int_value_char = value.GetData();
 	end_pos = value.GetSize();
 
 	// If first character is -, we have a negative number, if + we have a + number
@@ -99,43 +104,43 @@ void VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &
 		cur_pos++;
 	}
 	if (cur_pos < end_pos) {
+		idx_t possible_end = cur_pos;
 		// Oh oh, this is not a digit, if it's a . we might be fine, otherwise, this is invalid.
 		if (int_value_char[cur_pos] == '.') {
 			cur_pos++;
 		} else {
 			throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
 		}
-		if (cur_pos == end_pos) {
-			// This is a number that ends in a ., which is valid and we we just have to floor cast it.
-			end_pos--;
-			return;
-		}
-		// we have to check if the next number is
-	}
 
-	// If we have a . we can only have one .
+		while (cur_pos < end_pos) {
+			if (std::isdigit(int_value_char[cur_pos])) {
+				cur_pos++;
+			} else {
+				// By now we can only have numbers, otherwise this is invalid.
+				throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
+			}
+		}
+		// Floor cast this boy
+		end_pos = possible_end;
+	}
 }
 string_t VarcharToVarInt(Vector &result, string_t int_value) {
-	if (int_value.Empty()) {
-		throw InvalidInputException("bad string");
+	idx_t start_pos, end_pos;
+	bool is_negative, is_zero;
+	VarcharFormatting(int_value, start_pos, end_pos, is_negative, is_zero);
+	if (is_zero) {
+		// return zero
+		uint32_t blob_size = 1 + VARINT_HEADER_SIZE;
+		auto blob = StringVector::EmptyString(result, blob_size);
+		// set these babies to 0.
+		memset(blob.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
+		auto writable_blob = blob.GetDataWriteable();
+		SetHeader(writable_blob, 1, false);
+		return blob;
 	}
 
 	auto int_value_char = int_value.GetData();
-	idx_t int_value_size = int_value.GetSize();
-	idx_t start_pos = 0;
-
-	// check if first character is -
-	bool is_negative = int_value_char[0] == '-';
-	if (is_negative) {
-		start_pos++;
-	}
-	// trim 0's, unless value is 0
-	if (int_value_size - start_pos > 1) {
-		while (int_value_char[start_pos] == '0' && start_pos < int_value_size) {
-			start_pos++;
-		}
-	}
-	idx_t actual_size = int_value_size - start_pos;
+	idx_t actual_size = end_pos - start_pos;
 	// convert the string to a byte array
 	string abs_str(int_value_char + start_pos, actual_size);
 	string blob_string;

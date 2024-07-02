@@ -16,6 +16,7 @@ true
 
 endloop
 
+
 #foreach int_type tinyint  smallint  integer  bigint
 #
 #query I
@@ -28,6 +29,11 @@ endloop
 endloop
 
 query I
+select (-1)::varint
+----
+-1
+
+query I
 select 0::varint
 ----
 0
@@ -37,10 +43,7 @@ select 1::varint
 ----
 1
 
-query I
-select (-1)::varint
-----
--1
+
 
 statement ok
 CREATE TABLE integers(a varint);
