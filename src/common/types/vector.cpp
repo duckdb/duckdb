@@ -1392,7 +1392,7 @@ void Vector::VerifyUnion(Vector &vector_p, const SelectionVector &sel_p, idx_t c
 }
 
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
-	#ifdef DEBUG
+#ifdef DEBUG
 	if (count == 0) {
 		return;
 	}
@@ -1656,7 +1656,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			VerifyMap(*vector, *sel, count);
 		}
 	}
-	#endif
+#endif
 }
 
 void Vector::Verify(idx_t count) {

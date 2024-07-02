@@ -17,14 +17,14 @@ true
 endloop
 
 
-#foreach int_type tinyint  smallint  integer  bigint
-#
-#query I
-#select  (-${i})::${int_type}::varint = '-${i}'::varint
-#----
-#true
-#
-#endloop
+foreach int_type tinyint  smallint  integer  bigint
+
+query I
+select  (-${i})::${int_type}::varint = '-${i}'::varint
+----
+true
+
+endloop
 
 endloop
 

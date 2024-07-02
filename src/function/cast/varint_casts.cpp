@@ -271,7 +271,7 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 	case LogicalTypeId::UINTEGER:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<uint32_t, duckdb::IntTryCastToVarInt>);
 	case LogicalTypeId::BIGINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uint64_t, duckdb::IntTryCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int64_t, duckdb::IntTryCastToVarInt>);
 	case LogicalTypeId::UBIGINT:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<uint64_t, duckdb::IntTryCastToVarInt>);
 	case LogicalTypeId::VARCHAR:
