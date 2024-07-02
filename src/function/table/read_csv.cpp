@@ -385,7 +385,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
 unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,
                                         optional_ptr<ReplacementScanData> data) {
-	auto &table_name = input.table_name;
+	auto table_name = ReplacementScan::GetFullPath(input);
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
 	if (StringUtil::EndsWith(lower_name, ".gz")) {

@@ -11,6 +11,7 @@
 #include "duckdb_python/pandas/pandas_scan.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/python_context_state.hpp"
 
 namespace duckdb {
 
@@ -31,7 +32,32 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 	table_function.external_dependency = std::move(dependency);
 }
 
-static unique_ptr<TableRef> TryReplacementObject(const py::object &entry, const string &name, ClientContext &context) {
+static void ThrowScanFailureError(const py::object &entry, const string &name, const string &location = "") {
+	string error;
+	auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
+	error += StringUtil::Format("Python Object \"%s\" of type \"%s\"", name, py_object_type);
+	if (!location.empty()) {
+		error += StringUtil::Format(" found on line \"%s\"", location);
+	}
+	error +=
+	    StringUtil::Format(" not suitable for replacement scans.\nMake sure "
+	                       "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
+	                       "RecordBatchReader, Scanner, or NumPy ndarrays with supported format",
+	                       name);
+	throw InvalidInputException(error);
+}
+
+unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const py::object &entry, const string &name,
+                                                              ClientContext &context) {
+	auto replacement = TryReplacementObject(entry, name, context);
+	if (!replacement) {
+		ThrowScanFailureError(entry, name);
+	}
+	return replacement;
+}
+
+unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::object &entry, const string &name,
+                                                                 ClientContext &context) {
 	auto client_properties = context.GetClientProperties();
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
@@ -135,19 +161,12 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, const string &name, C
 		return nullptr;
 	}
 
-	auto result = TryReplacementObject(entry, name, context);
+	auto result = PythonReplacementScan::TryReplacementObject(entry, name, context);
 	if (!result) {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
 		location += py::cast<py::str>(current_frame.attr("f_lineno"));
-		std::string cpp_table_name = table_name;
-		auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
-
-		throw InvalidInputException(
-		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
-		    "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
-		    "RecordBatchReader, Scanner, or NumPy ndarrays with supported format",
-		    cpp_table_name, py_object_type, location, cpp_table_name);
+		ThrowScanFailureError(entry, name, location);
 	}
 	return result;
 }
@@ -187,6 +206,12 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, ReplacementScanInput &input,
                                                     optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
+	auto &state = PythonContextState::Get(context);
+	auto registered_object = state.GetRegisteredObject(table_name);
+	if (registered_object) {
+		// A object with this name was registered, use it (even if external access is disabled)
+		return std::move(registered_object);
+	}
 
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {

@@ -33,7 +33,7 @@ class TestRelationToView(object):
         # Register on a different connection is not allowed
         with pytest.raises(
             duckdb.InvalidInputException,
-            match='The relation you are attempting to register was not made from this connection',
+            match='was created by another Connection and can therefore not be used by this Connection',
         ):
             con.register('cross_connection', rel)
 

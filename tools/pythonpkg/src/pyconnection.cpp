@@ -56,6 +56,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
+#include "duckdb_python/python_context_state.hpp"
 
 #include <random>
 
@@ -74,7 +75,6 @@ DuckDBPyConnection::~DuckDBPyConnection() {
 		// Release any structures that do not need to hold the GIL here
 		database.reset();
 		connection.reset();
-		temporary_views.clear();
 	} catch (...) { // NOLINT
 	}
 }
@@ -658,82 +658,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, co
 	return Execute(py::str(sql_query));
 }
 
-void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, const string &name) {
-	auto stream_factory =
-	    make_uniq<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->GetClientProperties());
-	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
-	{
-		py::gil_scoped_release release;
-		temporary_views[name] =
-		    connection
-		        ->TableFunction("arrow_scan", {Value::POINTER(CastPointerToValue(stream_factory.get())),
-		                                       Value::POINTER(CastPointerToValue(stream_factory_produce)),
-		                                       Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
-		        ->CreateView(name, true, true);
-	}
-	vector<shared_ptr<ExternalDependency>> dependencies;
-	auto dependency = make_shared_ptr<ExternalDependency>();
-	auto dependency_item =
-	    PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
-	dependency->AddDependency("object", std::move(dependency_item));
-	dependencies.push_back(std::move(dependency));
-	connection->context->external_dependencies[name] = std::move(dependencies);
-}
-
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const string &name,
                                                                         const py::object &python_object) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
+	auto &client = *connection->context;
+	auto object = PythonReplacementScan::ReplacementObject(python_object, name, client);
+	D_ASSERT(object);
+	auto &state = PythonContextState::Get(client);
+	state.RegisterObject(name, std::move(object));
 
-	if (DuckDBPyConnection::IsPandasDataframe(python_object)) {
-		if (PandasDataFrame::IsPyArrowBacked(python_object)) {
-			auto arrow_table = PandasDataFrame::ToArrowTable(python_object);
-			RegisterArrowObject(arrow_table, name);
-		} else {
-			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(python_object);
-			{
-				py::gil_scoped_release release;
-				temporary_views[name] =
-				    connection->TableFunction("pandas_scan", {Value::POINTER(CastPointerToValue(new_df.ptr()))})
-				        ->CreateView(name, true, true);
-			}
-
-			auto dependency = make_shared_ptr<ExternalDependency>();
-			dependency->AddDependency("original", PythonDependencyItem::Create(python_object));
-			dependency->AddDependency("copy", PythonDependencyItem::Create(std::move(new_df)));
-
-			vector<shared_ptr<ExternalDependency>> dependencies;
-			dependencies.push_back(std::move(dependency));
-			connection->context->external_dependencies[name] = std::move(dependencies);
-		}
-	} else if (IsAcceptedArrowObject(python_object) || IsPolarsDataframe(python_object)) {
-		py::object arrow_object;
-		if (IsPolarsDataframe(python_object)) {
-			if (PolarsDataFrame::IsDataFrame(python_object)) {
-				arrow_object = python_object.attr("to_arrow")();
-			} else if (PolarsDataFrame::IsLazyFrame(python_object)) {
-				py::object materialized = python_object.attr("collect")();
-				arrow_object = materialized.attr("to_arrow")();
-			} else {
-				throw NotImplementedException("Unsupported Polars DF Type");
-			}
-		} else {
-			arrow_object = python_object;
-		}
-		RegisterArrowObject(arrow_object, name);
-	} else if (DuckDBPyRelation::IsRelation(python_object)) {
-		auto pyrel = py::cast<DuckDBPyRelation *>(python_object);
-		if (!pyrel->CanBeRegisteredBy(*connection)) {
-			throw InvalidInputException(
-			    "The relation you are attempting to register was not made from this connection");
-		}
-		pyrel->CreateView(name, true);
-	} else {
-		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
-		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);
-	}
 	return shared_from_this();
 }
 
@@ -1290,10 +1225,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	// First check our temporary view
-	if (temporary_views.find(vname) != temporary_views.end()) {
-		return make_uniq<DuckDBPyRelation>(temporary_views[vname]);
-	}
 	return make_uniq<DuckDBPyRelation>(connection->View(vname));
 }
 
@@ -1321,14 +1252,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 		auto table = PandasDataFrame::ToArrowTable(value);
 		return DuckDBPyConnection::FromArrow(table);
 	}
-	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
-	vector<Value> params;
-	params.emplace_back(Value::POINTER(CastPointerToValue(new_df.ptr())));
-	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
-	auto dependency = make_shared_ptr<ExternalDependency>();
-	dependency->AddDependency("original", PythonDependencyItem::Create(value));
-	dependency->AddDependency("copy", PythonDependencyItem::Create(new_df));
-	rel->AddExternalDependency(std::move(dependency));
+	auto tableref = PythonReplacementScan::ReplacementObject(value, name, *connection->context);
+	D_ASSERT(tableref && tableref->type == TableReferenceType::TABLE_FUNCTION);
+	auto table_function = unique_ptr_cast<TableRef, TableFunctionRef>(std::move(tableref));
+	auto rel =
+	    make_shared_ptr<TableFunctionRelation>(connection->context, name, std::move(table_function))->Alias(name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
@@ -1393,28 +1321,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	py::gil_scoped_acquire acquire;
 	string name = "arrow_object_" + StringUtil::GenerateRandomName();
 	if (!IsAcceptedArrowObject(arrow_object)) {
 		auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
 	}
-	auto stream_factory =
-	    make_uniq<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->GetClientProperties());
-
-	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
-
-	auto rel = connection
-	               ->TableFunction("arrow_scan", {Value::POINTER(CastPointerToValue(stream_factory.get())),
-	                                              Value::POINTER(CastPointerToValue(stream_factory_produce)),
-	                                              Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
-	               ->Alias(name);
-	auto dependency = make_shared_ptr<ExternalDependency>();
-	auto dependency_item =
-	    PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
-	dependency->AddDependency("object", std::move(dependency_item));
-	rel->AddExternalDependency(std::move(dependency));
+	auto tableref = PythonReplacementScan::ReplacementObject(arrow_object, name, *connection->context);
+	D_ASSERT(tableref && tableref->type == TableReferenceType::TABLE_FUNCTION);
+	auto table_function = unique_ptr_cast<TableRef, TableFunctionRef>(std::move(tableref));
+	auto rel =
+	    make_shared_ptr<TableFunctionRelation>(connection->context, name, std::move(table_function))->Alias(name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
@@ -1468,12 +1384,11 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const string &name) {
-	connection->context->external_dependencies.erase(name);
-	temporary_views.erase(name);
-	py::gil_scoped_release release;
-	if (connection) {
-		connection->Query("DROP VIEW \"" + name + "\"");
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
 	}
+	auto &state = PythonContextState::Get(*connection->context);
+	state.UnregisterObject(name);
 	return shared_from_this();
 }
 
@@ -1515,7 +1430,6 @@ void DuckDBPyConnection::Close() {
 	result = nullptr;
 	connection = nullptr;
 	database = nullptr;
-	temporary_views.clear();
 	// https://peps.python.org/pep-0249/#Connection.close
 	for (auto &cur : cursors) {
 		auto cursor = cur.lock();
@@ -1552,6 +1466,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared_ptr<DuckDBPyConnection>();
 	res->database = database;
 	res->connection = make_uniq<Connection>(*res->database);
+	auto &client_context = *res->connection->context;
+	client_context.registered_state["python_state"] = make_shared_ptr<PythonContextState>();
 	cursors.push_back(res);
 	return res;
 }
@@ -1740,6 +1656,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->connection->context;
+	client_context.registered_state["python_state"] = make_shared_ptr<PythonContextState>();
 	SetDefaultConfigArguments(client_context);
 	return res;
 }
