@@ -1202,7 +1202,7 @@ Value MaximumTempDirectorySize::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void MergeJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.merge_join_threshold = input.GetValue<int64_t>();
+	config.merge_join_threshold = input.GetValue<idx_t>();
 }
 
 void MergeJoinThreshold::ResetLocal(ClientContext &context) {
@@ -1211,7 +1211,7 @@ void MergeJoinThreshold::ResetLocal(ClientContext &context) {
 
 Value MergeJoinThreshold::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	return Value::BIGINT(config.merge_join_threshold);
+	return Value::UBIGINT(config.merge_join_threshold);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1219,7 +1219,7 @@ Value MergeJoinThreshold::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void NestedLoopJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.nested_loop_join_threshold = input.GetValue<int64_t>();
+	config.nested_loop_join_threshold = input.GetValue<idx_t>();
 }
 
 void NestedLoopJoinThreshold::ResetLocal(ClientContext &context) {
@@ -1228,7 +1228,7 @@ void NestedLoopJoinThreshold::ResetLocal(ClientContext &context) {
 
 Value NestedLoopJoinThreshold::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	return Value::BIGINT(config.nested_loop_join_threshold);
+	return Value::UBIGINT(config.nested_loop_join_threshold);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1260,7 +1260,22 @@ void PartitionedWriteFlushThreshold::SetLocal(ClientContext &context, const Valu
 }
 
 Value PartitionedWriteFlushThreshold::GetSetting(const ClientContext &context) {
-	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).partitioned_write_flush_threshold));
+	return Value::UBIGINT(ClientConfig::GetConfig(context).partitioned_write_flush_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Partitioned Write Flush Threshold
+//===--------------------------------------------------------------------===//
+void PartitionedWriteMaxOpenFiles::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).partitioned_write_max_open_files = ClientConfig().partitioned_write_max_open_files;
+}
+
+void PartitionedWriteMaxOpenFiles::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).partitioned_write_max_open_files = input.GetValue<idx_t>();
+}
+
+Value PartitionedWriteMaxOpenFiles::GetSetting(const ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).partitioned_write_max_open_files);
 }
 
 //===--------------------------------------------------------------------===//

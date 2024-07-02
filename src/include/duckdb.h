@@ -2296,19 +2296,28 @@ The return value should be destroyed with `duckdb_destroy_scalar_function`.
 DUCKDB_API duckdb_scalar_function duckdb_create_scalar_function();
 
 /*!
-Destroys the given table function object.
+Destroys the given scalar function object.
 
-* table_function: The table function to destroy
+* scalar_function: The scalar function to destroy
 */
 DUCKDB_API void duckdb_destroy_scalar_function(duckdb_scalar_function *scalar_function);
 
 /*!
 Sets the name of the given scalar function.
 
-* table_function: The scalar function
+* scalar_function: The scalar function
 * name: The name of the scalar function
 */
 DUCKDB_API void duckdb_scalar_function_set_name(duckdb_scalar_function scalar_function, const char *name);
+
+/*!
+Sets the parameters of the given scalar function to varargs. Does not require adding parameters with
+duckdb_scalar_function_add_parameter.
+
+* scalar_function: The scalar function
+* type: The type of the arguments
+*/
+DUCKDB_API void duckdb_scalar_function_set_varargs(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 
 /*!
 Adds a parameter to the scalar function.
@@ -2330,7 +2339,7 @@ DUCKDB_API void duckdb_scalar_function_set_return_type(duckdb_scalar_function sc
 /*!
 Assigns extra information to the scalar function that can be fetched during binding, etc.
 
-* scalar_function: The table function
+* scalar_function: The scalar function
 * extra_info: The extra information
 * destroy: The callback that will be called to destroy the bind data (if any)
 */
@@ -2338,9 +2347,9 @@ DUCKDB_API void duckdb_scalar_function_set_extra_info(duckdb_scalar_function sca
                                                       duckdb_delete_callback_t destroy);
 
 /*!
-Sets the main function of the table function.
+Sets the main function of the scalar function.
 
-* table_function: The table function
+* scalar_function: The scalar function
 * function: The function
 */
 DUCKDB_API void duckdb_scalar_function_set_function(duckdb_scalar_function scalar_function,

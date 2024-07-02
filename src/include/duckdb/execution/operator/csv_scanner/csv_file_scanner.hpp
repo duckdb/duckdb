@@ -15,6 +15,22 @@
 
 namespace duckdb {
 struct ReadCSVData;
+class CSVFileScan;
+
+struct CSVUnionData {
+	~CSVUnionData();
+
+	string file_name;
+	vector<string> names;
+	vector<LogicalType> types;
+	CSVReaderOptions options;
+	unique_ptr<CSVFileScan> reader;
+
+	const string &GetFileName() {
+		return file_name;
+	}
+};
+
 //! Basic CSV Column Info
 struct CSVColumnInfo {
 	CSVColumnInfo(string &name_p, LogicalType &type_p) : name(name_p), type(type_p) {
@@ -37,6 +53,9 @@ struct CSVColumnSchema {
 //! Struct holding information over a CSV File we will scan
 class CSVFileScan {
 public:
+	using UNION_READER_DATA = unique_ptr<CSVUnionData>;
+
+public:
 	//! Constructor for when a CSV File Scan is being constructed over information acquired during sniffing
 	//! This means the options are alreadu set, and the buffer manager is already up and runinng.
 	CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager,
@@ -48,7 +67,7 @@ public:
 	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVColumnSchema &file_schema,
 	            bool per_file_single_threaded);
 
-	CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options);
+	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options);
 
 	void SetStart();
 	const string &GetFileName();
@@ -57,8 +76,28 @@ public:
 	void InitializeProjection();
 	void Finish();
 
+	static unique_ptr<CSVUnionData> StoreUnionReader(unique_ptr<CSVFileScan> scan_p, idx_t file_idx) {
+		auto data = make_uniq<CSVUnionData>();
+		if (file_idx == 0) {
+			data->file_name = scan_p->file_path;
+			data->options = scan_p->options;
+			data->names = scan_p->names;
+			data->types = scan_p->types;
+			data->reader = std::move(scan_p);
+		} else {
+			data->file_name = scan_p->file_path;
+			data->options = std::move(scan_p->options);
+			data->names = std::move(scan_p->names);
+			data->types = std::move(scan_p->types);
+		}
+		data->options.auto_detect = false;
+		return data;
+	}
+
 	//! Initialize the actual names and types to be scanned from the file
 	void InitializeFileNamesTypes();
+
+public:
 	const string file_path;
 	//! File Index
 	idx_t file_idx;

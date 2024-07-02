@@ -7,6 +7,7 @@
 #pragma once
 
 #include "benchmark.hpp"
+#include "duckdb/main/query_result.hpp"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -53,6 +54,12 @@ public:
 	bool RequireReinit() override {
 		return require_reinit;
 	}
+	QueryResultType ResultMode() const {
+		return result_type;
+	}
+	idx_t ArrowBatchSize() const {
+		return arrow_batch_size;
+	}
 
 private:
 	string VerifyInternal(BenchmarkState *state_p, MaterializedQueryResult &result);
@@ -83,7 +90,8 @@ private:
 	string subgroup;
 
 	bool in_memory = true;
-	bool streaming = false;
+	QueryResultType result_type = QueryResultType::MATERIALIZED_RESULT;
+	idx_t arrow_batch_size = STANDARD_VECTOR_SIZE;
 	bool require_reinit = false;
 };
 

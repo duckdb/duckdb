@@ -91,6 +91,10 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	    !ExtractNumericValue(NumericStats::Max(stats_build), max_value)) {
 		return;
 	}
+	if (max_value < min_value) {
+		// empty table
+		return;
+	}
 	int64_t build_range;
 	if (!TrySubtractOperator::Operation(max_value, min_value, build_range)) {
 		return;

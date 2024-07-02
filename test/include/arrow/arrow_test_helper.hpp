@@ -21,6 +21,7 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/common/arrow/arrow_query_result.hpp"
 
 class ArrowStreamTestFactory {
 public:
@@ -37,11 +38,18 @@ public:
 	                 bool big_result, ClientProperties options)
 	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)), big_result(big_result),
 	      options(options) {
+		if (result->type == QueryResultType::ARROW_RESULT) {
+			auto &arrow_result = result->Cast<ArrowQueryResult>();
+			prefetched_chunks = arrow_result.ConsumeArrays();
+			chunk_iterator = prefetched_chunks.begin();
+		}
 	}
 
 	vector<LogicalType> types;
 	vector<string> names;
 	duckdb::unique_ptr<QueryResult> result;
+	vector<unique_ptr<ArrowArrayWrapper>> prefetched_chunks;
+	vector<unique_ptr<ArrowArrayWrapper>>::iterator chunk_iterator;
 	bool big_result;
 	ClientProperties options;
 

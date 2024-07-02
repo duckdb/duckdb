@@ -46,7 +46,7 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	idx_t total_files = bind_data.files.size();
 	// get the progress WITHIN the current file
 	double percentage = 0;
-	if (file_scans.back()->file_size == 0) {
+	if (file_scans.front()->file_size == 0) {
 		percentage = 1.0;
 	} else {
 		// for compressed files, readed bytes may greater than files size.
@@ -60,34 +60,37 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 
 unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScanner> previous_scanner) {
 	if (single_threaded) {
-		idx_t cur_idx = last_file_idx++;
-		if (cur_idx >= bind_data.files.size()) {
-			return nullptr;
-		}
-		shared_ptr<CSVFileScan> current_file;
-		if (cur_idx == 0) {
-			current_file = file_scans.back();
-		} else {
-			auto file_scan = make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
-			                                              bind_data, column_ids, file_schema, true);
+		idx_t cur_idx;
+		{
 			lock_guard<mutex> parallel_lock(main_mutex);
-			file_scans.emplace_back(std::move(file_scan));
-			current_file = file_scans.back();
-			current_boundary = current_file->start_iterator;
-			current_boundary.SetCurrentBoundaryToPosition(single_threaded);
-			current_buffer_in_use =
-			    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
+			cur_idx = last_file_idx++;
+			if (cur_idx >= bind_data.files.size()) {
+				return nullptr;
+			}
+			if (cur_idx == 0) {
+				D_ASSERT(!previous_scanner);
+				auto current_file = file_scans.front();
+				return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
+				                                     current_file->state_machine, current_file->error_handler,
+				                                     current_file, false, current_boundary);
+			}
 		}
+		auto file_scan = make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
+		                                              bind_data, column_ids, file_schema, true);
+		lock_guard<mutex> parallel_lock(main_mutex);
+		file_scans.emplace_back(std::move(file_scan));
+		auto current_file = file_scans.back();
+		current_boundary = current_file->start_iterator;
+		current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+		current_buffer_in_use =
+		    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 		if (previous_scanner) {
-			lock_guard<mutex> parallel_lock(main_mutex);
 			previous_scanner->buffer_tracker.reset();
 			current_buffer_in_use.reset();
 			previous_scanner->csv_file_scan->Finish();
 		}
-		auto csv_scanner =
-		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
-		                                  current_file->error_handler, current_file, false, current_boundary);
-		return csv_scanner;
+		return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
+		                                     current_file->error_handler, current_file, false, current_boundary);
 	}
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (finished) {
@@ -127,7 +130,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
 				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
 				                                                        current_boundary.GetBufferIdx());
-
 			} else {
 				// If not we are done with this CSV Scanning
 				finished = true;
@@ -144,7 +146,7 @@ idx_t CSVGlobalState::MaxThreads() const {
 	if (single_threaded) {
 		return system_threads;
 	}
-	idx_t total_threads = file_scans.back()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
+	idx_t total_threads = file_scans.front()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
 
 	if (total_threads < system_threads) {
 		return total_threads;

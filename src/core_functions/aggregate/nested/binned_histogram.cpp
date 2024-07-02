@@ -50,9 +50,10 @@ struct HistogramBinState {
 		}
 
 		auto &bin_child = ListVector::GetEntry(bin_vector);
+		auto bin_count = ListVector::GetListSize(bin_vector);
 		UnifiedVectorFormat bin_child_data;
-		auto extra_state = OP::CreateExtraState();
-		OP::PrepareData(bin_child, ListVector::GetListSize(bin_vector), extra_state, bin_child_data);
+		auto extra_state = OP::CreateExtraState(bin_count);
+		OP::PrepareData(bin_child, bin_count, extra_state, bin_child_data);
 
 		bin_boundaries->reserve(bin_list.length);
 		for (idx_t i = 0; i < bin_list.length; i++) {
@@ -154,7 +155,7 @@ static void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr
 
 	auto &bin_vector = inputs[1];
 
-	auto extra_state = OP::CreateExtraState();
+	auto extra_state = OP::CreateExtraState(count);
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
@@ -248,7 +249,7 @@ static Value OtherBucketValue(const LogicalType &type) {
 		return Value::STRUCT(std::move(child_list));
 	}
 	case LogicalTypeId::LIST:
-		return Value::EMPTYLIST(type);
+		return Value::EMPTYLIST(ListType::GetChildType(type));
 	default:
 		throw InternalException("Unsupported type for other bucket");
 	}

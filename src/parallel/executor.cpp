@@ -438,6 +438,7 @@ void Executor::WaitForTask() {
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
+		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
 		return;
 	}
 
@@ -463,6 +464,9 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 }
 
 bool Executor::ResultCollectorIsBlocked() {
+	if (!HasResultCollector()) {
+		return false;
+	}
 	if (completed_pipelines + 1 != total_pipelines) {
 		// The result collector is always in the last pipeline
 		return false;
@@ -501,7 +505,7 @@ bool Executor::ExecutionIsFinished() {
 PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 	// Only executor should return NO_TASKS_AVAILABLE
 	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
-	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
+	if (execution_result != PendingExecutionResult::RESULT_NOT_READY && ExecutionIsFinished()) {
 		return execution_result;
 	}
 	// check if there are any incomplete pipelines
@@ -522,13 +526,14 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		if (!current_task && !HasError()) {
 			// there are no tasks to be scheduled and there are tasks blocked
 			lock_guard<mutex> l(executor_lock);
-			if (ResultCollectorIsBlocked()) {
-				// The blocked tasks are processing the Sink of a BufferedResultCollector
-				// We return here so the query result can be made and fetched from
-				// which will in turn unblock the Sink tasks.
-				return PendingExecutionResult::BLOCKED;
+			if (to_be_rescheduled_tasks.empty()) {
+				return PendingExecutionResult::NO_TASKS_AVAILABLE;
 			}
-			return PendingExecutionResult::NO_TASKS_AVAILABLE;
+			// At least one task is blocked
+			if (ResultCollectorIsBlocked()) {
+				return PendingExecutionResult::RESULT_READY;
+			}
+			return PendingExecutionResult::BLOCKED;
 		}
 
 		if (current_task) {
@@ -564,7 +569,7 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		execution_result = PendingExecutionResult::EXECUTION_ERROR;
 		ThrowException();
 	} // LCOV_EXCL_STOP
-	execution_result = PendingExecutionResult::RESULT_READY;
+	execution_result = PendingExecutionResult::EXECUTION_FINISHED;
 	return execution_result;
 }
 

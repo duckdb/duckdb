@@ -17,7 +17,8 @@ enum class PendingExecutionResult : uint8_t {
 	RESULT_NOT_READY,
 	EXECUTION_ERROR,
 	BLOCKED,
-	NO_TASKS_AVAILABLE
+	NO_TASKS_AVAILABLE,
+	EXECUTION_FINISHED
 };
 
 } // namespace duckdb
