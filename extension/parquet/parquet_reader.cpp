@@ -111,8 +111,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.path);
 		}
-		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(),
-		                    encryption_util);
+		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util);
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -604,8 +603,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context,
 
 uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
 	if (parquet_options.encryption_config) {
-		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(),
-		                           *encryption_util);
+		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util);
 	} else {
 		return object.read(&iprot);
 	}

@@ -170,7 +170,8 @@ private:
 class DecryptionTransport : public TTransport {
 public:
 	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()), read_buffer_size(0), read_buffer_offset(0) {
+	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()),
+	      read_buffer_size(0), read_buffer_offset(0) {
 		Initialize(key);
 	}
 

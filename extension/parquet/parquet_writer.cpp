@@ -285,8 +285,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 
 uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
 	if (encryption_config) {
-		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey(),
-		                            *encryption_util);
+		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey(), *encryption_util);
 	} else {
 		return object.write(protocol.get());
 	}
