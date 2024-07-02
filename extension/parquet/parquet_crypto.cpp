@@ -174,7 +174,7 @@ public:
 	      read_buffer_size(0), read_buffer_offset(0) {
 		Initialize(key);
 	}
-	F uint32_t read_virt(uint8_t *buf, uint32_t len) override {
+	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
 
 		if (len > transport_remaining - ParquetCrypto::TAG_BYTES + read_buffer_size - read_buffer_offset) {
