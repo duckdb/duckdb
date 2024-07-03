@@ -141,16 +141,21 @@ SELECT html_unescape('&no valid &charref;');
 ----
 &no valid &charref;
 
-# ampersand followed by numbers, letters and invalid chars
-query I
-SELECT html_unescape('abc&a;&&not;');
+# verify that there are no rows where html_unescape(code) is not equal to result
+query II
+SELECT * FROM 'data/csv/html_unescape_codes.csv' WHERE html_unescape(code)<>result
 ----
-abc&a;&¬
 
+# ampersand followed by numbers, letters and invalid chars
 query I
 SELECT html_unescape('&0 &9&\n; &&\t&9;');
 ----
 &0 &9&\n; &&\t&9;
+
+query I
+SELECT html_unescape('abc&a;&&not;');
+----
+abc&a;&¬
 
 # invalid decimal digit in the match
 query I 

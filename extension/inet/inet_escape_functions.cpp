@@ -74,7 +74,7 @@ struct Matcher {
 		auto input_data = input.GetData();
 		auto input_size = input.GetSize();
 		uint32_t num = 0; // the interpretation of the input string to the actual number
-		idx_t start = 0;  // match's starts
+		idx_t start = 0;  // match's start
 		MatchType type = MatchType::Unknown;
 		for (idx_t i = 0; i < input_size; ++i) {
 			if (type != MatchType::Unknown) {
@@ -217,13 +217,22 @@ struct Matcher {
 			for (; sz >= 1; --sz) {
 				auto it = bind_data.html5_names.mapped_strings.find(string_t(input_data + start, sz));
 				if (it != bind_data.html5_names.mapped_strings.end()) {
+					char glyph[8] = {};
+					// encode first codepoint
 					int utf8_sz = 0;
-					char utf8_val[4] = {'\0', '\0', '\0', '\0'};
-					if (!Utf8Proc::CodepointToUtf8(it->second, utf8_sz, utf8_val)) {
-						throw InternalException("Cannot decode &%s", it->first.GetString());
+					if (!Utf8Proc::CodepointToUtf8(it->second.codepoints[0], utf8_sz, glyph)) {
+						throw InternalException("Cannot encode to utf8 the first codepoint of &%s",
+						                        it->first.GetString());
 					}
-					Append<OP>(utf8_val, 0, utf8_sz - 1, result);
-					Append<OP>(input_data, start + sz, end, result);
+					// encode second codepoint (if it exists)
+					int utf8_sz2 = 0;
+					if (it->second.codepoints[1] != 0 &&
+					    !Utf8Proc::CodepointToUtf8(it->second.codepoints[1], utf8_sz2, glyph + utf8_sz)) {
+						throw InternalException("Cannot encode to utf8 the second codepoint of &%s",
+						                        it->first.GetString());
+					}
+					Append<OP>(glyph, 0, utf8_sz + utf8_sz2 - 1, result);
+					Append<OP>(input_data, start + sz, end, result); // append the rest of the match
 					return;
 				}
 			}
