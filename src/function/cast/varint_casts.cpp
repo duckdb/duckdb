@@ -20,6 +20,17 @@ void SetHeader(char *blob, uint64_t number_of_bytes, bool is_negative) {
 	blob[2] = static_cast<char>(header & 0xFF);
 }
 
+// Creates a blob representing the value 0
+string_t ZeroBlob(Vector &result) {
+	// return zero
+	uint32_t blob_size = 1 + VARINT_HEADER_SIZE;
+	auto blob = StringVector::EmptyString(result, blob_size);
+	auto writable_blob = blob.GetDataWriteable();
+	SetHeader(writable_blob, 1, false);
+	writable_blob[3] = 0;
+	blob.Finalize();
+	return blob;
+}
 template <class T>
 string_t IntToVarInt(Vector &result, T int_value) {
 	// Determine if the number is negative
@@ -180,28 +191,35 @@ void VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &
 	}
 }
 
-string_t DoubleToVarInt(Vector &result, double double_value) {
-	vector<char> value;
-	while (double_value > 0) {
-		value.push_back(static_cast<uint8_t>(std::fmod(double_value, 256)));
-		double_value = floor(double_value / 256);
+template <class T>
+string_t DoubleToVarInt(Vector &result, T double_value) {
+	// Determine if the number is negative
+	bool is_negative = double_value < 0;
+	// Determine the number of data bytes
+	double abs_value = std::abs(double_value);
+
+	if (abs_value == 0) {
+		// Return Value 0
+		return ZeroBlob(result);
 	}
-
-	uint32_t data_byte_size = value.size();
-
+	vector<char> value;
+	while (abs_value > 0) {
+		value.push_back(static_cast<char>(std::fmod(abs_value, 256)));
+		abs_value = floor(abs_value / 256);
+	}
+	uint32_t data_byte_size = static_cast<uint32_t>(value.size());
 	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
 	auto blob = StringVector::EmptyString(result, blob_size);
 	auto writable_blob = blob.GetDataWriteable();
-	SetHeader(writable_blob, data_byte_size, false);
-
+	SetHeader(writable_blob, data_byte_size, is_negative);
 	// Add data bytes to the blob, starting off after header bytes
 	idx_t wb_idx = VARINT_HEADER_SIZE;
 	for (int i = static_cast<int>(data_byte_size) - 1; i >= 0; --i) {
-		// if (false) {
-		// 	writable_blob[wb_idx++] = ~static_cast<char>(abs_value >> i * 8 & 0xFF);
-		// } else {
-		writable_blob[wb_idx++] = static_cast<char>(value[i]);
-		// }
+		if (is_negative) {
+			writable_blob[wb_idx++] = ~value[i];
+		} else {
+			writable_blob[wb_idx++] = value[i];
+		}
 	}
 	blob.Finalize();
 	return blob;
@@ -212,16 +230,9 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	bool is_negative, is_zero;
 	VarcharFormatting(int_value, start_pos, end_pos, is_negative, is_zero);
 	if (is_zero) {
-		// return zero
-		uint32_t blob_size = 1 + VARINT_HEADER_SIZE;
-		auto blob = StringVector::EmptyString(result, blob_size);
-		auto writable_blob = blob.GetDataWriteable();
-		SetHeader(writable_blob, 1, false);
-		writable_blob[3] = 0;
-		blob.Finalize();
-		return blob;
+		// Return Value 0
+		return ZeroBlob(result);
 	}
-
 	auto int_value_char = int_value.GetData();
 	idx_t actual_size = end_pos - start_pos;
 	// convert the string to a byte array
@@ -245,7 +256,6 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 		} else {
 			blob_string.push_back(static_cast<char>(remainder));
 		}
-
 		// Remove leading zeros from the quotient
 		abs_str = quotient;
 	}
@@ -372,12 +382,13 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::VarcharTryCastToVarInt>);
 	case LogicalTypeId::UHUGEINT:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<uhugeint_t, duckdb::HugeintTryCastToVarInt>);
+	case LogicalTypeId::FLOAT:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<float, duckdb::DoubleTryCastToVarInt>);
 	case LogicalTypeId::DOUBLE:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<double, duckdb::DoubleTryCastToVarInt>);
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
 
-	case LogicalTypeId::FLOAT:
 	default:
 		return TryVectorNullCast;
 	}
