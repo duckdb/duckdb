@@ -101,7 +101,7 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block
 
 			// Finally, we allocate a new heap block and copy data to it
 			swizzled_string_heap.blocks.emplace_back(make_uniq<RowDataBlock>(
-			    MemoryTag::ORDER_BY, buffer_manager, MaxValue<idx_t>(total_size, (idx_t)Storage::BLOCK_SIZE), 1U));
+			    MemoryTag::ORDER_BY, buffer_manager, MaxValue<idx_t>(total_size, buffer_manager.GetBlockSize()), 1U));
 			auto new_heap_handle = buffer_manager.Pin(swizzled_string_heap.blocks.back()->block);
 			auto new_heap_ptr = new_heap_handle.Ptr();
 			for (auto &ptr_and_size : ptrs_and_sizes) {

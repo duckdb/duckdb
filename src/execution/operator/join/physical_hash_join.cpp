@@ -401,6 +401,7 @@ public:
 public:
 	void Schedule() override {
 		D_ASSERT(sink.hash_table->GetRadixBits() > JoinHashTable::INITIAL_RADIX_BITS);
+		auto block_size = sink.hash_table->buffer_manager.GetBlockSize();
 
 		idx_t total_size = 0;
 		idx_t total_count = 0;
@@ -409,14 +410,14 @@ public:
 			total_size += sink_collection.SizeInBytes();
 			total_count += sink_collection.Count();
 		}
-		auto total_blocks = NumericCast<idx_t>((double(total_size) + Storage::BLOCK_SIZE - 1) / Storage::BLOCK_SIZE);
+		auto total_blocks = NumericCast<idx_t>((double(total_size) + block_size - 1) / block_size);
 		auto count_per_block = total_count / total_blocks;
 		auto blocks_per_vector = MaxValue<idx_t>(STANDARD_VECTOR_SIZE / count_per_block, 2);
 
 		// Assume 8 blocks per partition per thread (4 input, 4 output)
 		auto partition_multiplier =
 		    RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits() - JoinHashTable::INITIAL_RADIX_BITS);
-		auto thread_memory = 2 * blocks_per_vector * partition_multiplier * Storage::BLOCK_SIZE;
+		auto thread_memory = 2 * blocks_per_vector * partition_multiplier * block_size;
 		auto repartition_threads = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / thread_memory, 1);
 
 		if (repartition_threads < local_hts.size()) {
