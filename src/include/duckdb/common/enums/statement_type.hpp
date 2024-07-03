@@ -83,9 +83,9 @@ struct StatementProperties {
 	};
 
 	//! The set of databases this statement will read from
-	unordered_map<string, CatalogIdentity> read_databases; // also stored oid of DB as version is oid-specific
+	unordered_map<string, CatalogIdentity> read_databases;
 	//! The set of databases this statement will modify
-	unordered_map<string, CatalogIdentity> modified_databases; // also store oid of DB as version is oid-specific
+	unordered_map<string, CatalogIdentity> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
 	//! exception of ROLLBACK
 	bool requires_valid_transaction;

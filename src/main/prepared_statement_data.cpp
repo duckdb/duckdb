@@ -1,7 +1,9 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
@@ -59,20 +61,14 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 			return true;
 		}
 	}
-	// TODO: also check system catalog version?
-	// prior to checking the catalog version we need to explicitly start transactions in all affected databases
-	// this ensures all catalog entries we rely on are cached
+	// Check the catalog versions to ensure all catalog entries we rely on are current
 	for (auto &it : properties.read_databases) {
-		auto &catalog_name = it.first;
-		auto &catalog_identity = it.second;
-		if (!CheckCatalogIdentity(context, catalog_name, catalog_identity)) {
+		if (!CheckCatalogIdentity(context, it.first, it.second)) {
 			return true;
 		}
 	}
 	for (auto &it : properties.modified_databases) {
-		auto &catalog_name = it.first;
-		auto &catalog_identity = it.second;
-		if (!CheckCatalogIdentity(context, catalog_name, catalog_identity)) {
+		if (!CheckCatalogIdentity(context, it.first, it.second)) {
 			return true;
 		}
 	}
