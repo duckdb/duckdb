@@ -1717,9 +1717,20 @@ bool IsDefaultConnectionString(const string &database, bool read_only, case_inse
 	return true;
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
+static string GetPathString(const py::object &path) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	const bool is_path = py::isinstance(path, import_cache.pathlib.Path());
+	if (is_path || py::isinstance<py::str>(path)) {
+		return std::string(py::str(path));
+	}
+	string actual_type = py::str(path.get_type());
+	throw InvalidInputException("Please provide either a str or a pathlib.Path, not %s", actual_type);
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const py::object &database_p, bool read_only,
                                                            const py::dict &config_options) {
 	auto config_dict = TransformPyConfigDict(config_options);
+	auto database = GetPathString(database_p);
 	if (IsDefaultConnectionString(database, read_only, config_dict)) {
 		return DuckDBPyConnection::DefaultConnection();
 	}
@@ -1768,7 +1779,7 @@ case_insensitive_map_t<BoundParameterData> DuckDBPyConnection::TransformPythonPa
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
 		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
+		default_connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
 	}
 	return default_connection;
 }
