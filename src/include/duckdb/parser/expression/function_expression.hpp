@@ -92,7 +92,7 @@ public:
 		if (!schema.empty()) {
 			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 		}
-		result += function_name;
+		result += KeywordHelper::WriteOptionallyQuoted(function_name);
 		result += "(";
 		if (distinct) {
 			result += "DISTINCT ";
