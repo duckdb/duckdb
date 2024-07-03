@@ -238,22 +238,28 @@ void RadixSortMSD(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const id
 //! Calls different sort functions, depending on the count and sorting sizes
 void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count, const idx_t &col_offset,
                const idx_t &sorting_size, const SortLayout &sort_layout, bool contains_string) {
+
 	if (contains_string) {
 		auto begin = duckdb_pdqsort::PDQIterator(dataptr, sort_layout.entry_size);
 		auto end = begin + count;
 		duckdb_pdqsort::PDQConstants constants(sort_layout.entry_size, col_offset, sorting_size, *end);
-		duckdb_pdqsort::pdqsort_branchless(begin, begin + count, constants);
-	} else if (count <= SortConstants::INSERTION_SORT_THRESHOLD) {
-		InsertionSort(dataptr, nullptr, count, col_offset, sort_layout.entry_size, sorting_size, 0, false);
-	} else if (sorting_size <= SortConstants::MSD_RADIX_SORT_SIZE_THRESHOLD) {
-		RadixSortLSD(buffer_manager, dataptr, count, col_offset, sort_layout.entry_size, sorting_size);
-	} else {
-		auto temp_block = buffer_manager.Allocate(MemoryTag::ORDER_BY,
-		                                          MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
-		auto preallocated_array = make_unsafe_uniq_array<idx_t>(sorting_size * SortConstants::MSD_RADIX_LOCATIONS);
-		RadixSortMSD(dataptr, temp_block.Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
-		             preallocated_array.get(), false);
+		return duckdb_pdqsort::pdqsort_branchless(begin, begin + count, constants);
 	}
+
+	if (count <= SortConstants::INSERTION_SORT_THRESHOLD) {
+		return InsertionSort(dataptr, nullptr, count, col_offset, sort_layout.entry_size, sorting_size, 0, false);
+	}
+
+	if (sorting_size <= SortConstants::MSD_RADIX_SORT_SIZE_THRESHOLD) {
+		return RadixSortLSD(buffer_manager, dataptr, count, col_offset, sort_layout.entry_size, sorting_size);
+	}
+
+	const auto block_size = buffer_manager.GetBlockSize();
+	auto temp_block =
+	    buffer_manager.Allocate(MemoryTag::ORDER_BY, MaxValue(count * sort_layout.entry_size, block_size));
+	auto pre_allocated_array = make_unsafe_uniq_array<idx_t>(sorting_size * SortConstants::MSD_RADIX_LOCATIONS);
+	RadixSortMSD(dataptr, temp_block.Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
+	             pre_allocated_array.get(), false);
 }
 
 //! Identifies sequences of rows that are tied, and calls radix sort on these
