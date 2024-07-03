@@ -204,7 +204,11 @@ string_t DoubleToVarInt(Vector &result, T double_value) {
 	}
 	vector<char> value;
 	while (abs_value > 0) {
-		value.push_back(static_cast<char>(std::fmod(abs_value, 256)));
+		if (is_negative) {
+			value.push_back(~static_cast<char>(std::fmod(abs_value, 256)));
+		} else {
+			value.push_back(static_cast<char>(std::fmod(abs_value, 256)));
+		}
 		abs_value = floor(abs_value / 256);
 	}
 	uint32_t data_byte_size = static_cast<uint32_t>(value.size());
@@ -213,14 +217,11 @@ string_t DoubleToVarInt(Vector &result, T double_value) {
 	auto writable_blob = blob.GetDataWriteable();
 	SetHeader(writable_blob, data_byte_size, is_negative);
 	// Add data bytes to the blob, starting off after header bytes
-	idx_t wb_idx = VARINT_HEADER_SIZE;
-	for (int i = static_cast<int>(data_byte_size) - 1; i >= 0; --i) {
-		if (is_negative) {
-			writable_blob[wb_idx++] = ~value[i];
-		} else {
-			writable_blob[wb_idx++] = value[i];
-		}
+	idx_t blob_string_idx = value.size() - 1;
+	for (idx_t i = VARINT_HEADER_SIZE; i < blob_size; i++) {
+		writable_blob[i] = value[blob_string_idx--];
 	}
+
 	blob.Finalize();
 	return blob;
 }
