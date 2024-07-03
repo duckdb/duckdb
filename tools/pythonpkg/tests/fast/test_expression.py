@@ -837,11 +837,26 @@ class TestExpression(object):
 
     def test_aggregate(self):
         con = duckdb.connect()
-        con.execute("PRAGMA threads=4")
-        con.execute("PRAGMA verify_parallelism")
-
         rel = con.sql("select * from range(1000000) t(a)")
-        # Also test multiple reads
         count = FunctionExpression("count", "a").cast("int")
         assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
         assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+
+    def test_aggregate_error(self):
+        con = duckdb.connect()
+
+        # Not necessarily an error, but even non-aggregates are accepted
+        rel = con.sql("select * from values (5) t(a)")
+        res = rel.aggregate(["a"]).execute().fetchone()[0]
+        assert res == 5
+
+        # Providing something that can not be converted into an expression is an error:
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Invalid Input Error: Please provide arguments of type Expression!'
+        ):
+
+            class MyClass:
+                def __init__(self):
+                    pass
+
+            res = rel.aggregate([MyClass()]).fetchone()[0]
