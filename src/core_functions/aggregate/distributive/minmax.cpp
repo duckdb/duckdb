@@ -435,17 +435,17 @@ static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t
 
 		// Initialize the heap if necessary and add the input to the heap
 		if (!state.is_initialized) {
-			static constexpr int64_t MAX_K = 1000000;
+			static constexpr int64_t MAX_N = 1000000;
 			const auto kidx = top_k_format.sel->get_index(i);
 			if (!top_k_format.validity.RowIsValid(kidx)) {
-				throw InvalidInputException("Invalid input for approx_top_k: k value cannot be NULL");
+				throw InvalidInputException("Invalid input for MIN/MAX: n value cannot be NULL");
 			}
 			const auto kval = UnifiedVectorFormat::GetData<int64_t>(top_k_format)[kidx];
 			if (kval <= 0) {
-				throw InvalidInputException("Invalid input for approx_top_k: k value must be > 0");
+				throw InvalidInputException("Invalid input for MIN/MAX: n value must be > 0");
 			}
-			if (kval >= MAX_K) {
-				throw InvalidInputException("Invalid input for approx_top_k: k value must be < %d", MAX_K);
+			if (kval >= MAX_N) {
+				throw InvalidInputException("Invalid input for MIN/MAX: n value must be < %d", MAX_N);
 			}
 			state.Initialize(UnsafeNumericCast<idx_t>(kval));
 		}

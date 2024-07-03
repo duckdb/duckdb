@@ -492,11 +492,11 @@ static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 template <class A, class B, class COMPARATOR>
 class ArgMinMaxNState {
 public:
-	using ARG_TYPE = A;
-	using VAL_TYPE = B;
+	using VAL_TYPE = A;
+	using ARG_TYPE = B;
 
-	using K = typename ARG_TYPE::TYPE;
 	using V = typename VAL_TYPE::TYPE;
+	using K = typename ARG_TYPE::TYPE;
 
 	BinaryAggregateHeap<K, V, COMPARATOR> heap;
 
@@ -518,16 +518,16 @@ static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 	auto &arg_vector = inputs[1];
 	auto &top_k_vector = inputs[2];
 
-	UnifiedVectorFormat arg_format;
 	UnifiedVectorFormat val_format;
+	UnifiedVectorFormat arg_format;
 	UnifiedVectorFormat top_k_format;
 	UnifiedVectorFormat state_format;
 
-	auto arg_extra_state = STATE::ARG_TYPE::CreateExtraState(arg_vector, count);
 	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
+	auto arg_extra_state = STATE::ARG_TYPE::CreateExtraState(arg_vector, count);
 
-	STATE::ARG_TYPE::PrepareData(arg_vector, count, arg_extra_state, arg_format);
 	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format);
+	STATE::ARG_TYPE::PrepareData(arg_vector, count, arg_extra_state, arg_format);
 
 	top_k_vector.ToUnifiedFormat(count, top_k_format);
 	state_vector.ToUnifiedFormat(count, state_format);
@@ -545,17 +545,17 @@ static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 
 		// Initialize the heap if necessary and add the input to the heap
 		if (!state.is_initialized) {
-			static constexpr int64_t MAX_K = 1000000;
+			static constexpr int64_t MAX_N = 1000000;
 			const auto kidx = top_k_format.sel->get_index(i);
 			if (!top_k_format.validity.RowIsValid(kidx)) {
-				throw InvalidInputException("Invalid input for approx_top_k: k value cannot be NULL");
+				throw InvalidInputException("Invalid input for arg_min/max: n value cannot be NULL");
 			}
 			const auto kval = UnifiedVectorFormat::GetData<int64_t>(top_k_format)[kidx];
 			if (kval <= 0) {
-				throw InvalidInputException("Invalid input for approx_top_k: k value must be > 0");
+				throw InvalidInputException("Invalid input for arg_min/max: n value must be > 0");
 			}
-			if (kval >= MAX_K) {
-				throw InvalidInputException("Invalid input for approx_top_k: k value must be < %d", MAX_K);
+			if (kval >= MAX_N) {
+				throw InvalidInputException("Invalid input for arg_min/max: n value must be < %d", MAX_N);
 			}
 			state.Initialize(UnsafeNumericCast<idx_t>(kval));
 		}
@@ -571,9 +571,9 @@ static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 //------------------------------------------------------------------------------
 // Bind
 //------------------------------------------------------------------------------
-template <class K, class V, class COMPARATOR>
+template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
 static void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
-	using STATE = ArgMinMaxNState<K, V, COMPARATOR>;
+	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
 	function.state_size = AggregateFunction::StateSize<STATE>;
@@ -660,14 +660,6 @@ static void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 
 	return set.AddFunction(function);
 }
-
-template <class COMPARATOR>
-struct ArgComparator {
-	template <class K, class V>
-	static bool Operation(const pair<K, V> &left, const pair<K, V> &right) {
-		return COMPARATOR::Operation(left.first, right.first);
-	}
-};
 
 //------------------------------------------------------------------------------
 // Function Registration

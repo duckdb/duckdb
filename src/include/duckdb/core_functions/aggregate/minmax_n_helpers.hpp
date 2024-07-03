@@ -148,19 +148,12 @@ public:
 
 private:
 	static bool Compare(const HeapStorage<T> &left, const HeapStorage<T> &right) {
-		return T_COMPARATOR::Operation(left.value, right.value);
+		// Intentionally reversed to get a min-heap
+		return T_COMPARATOR::Operation(right.value, left.value);
 	}
 
 	vector<HeapStorage<T>> heap;
 	idx_t capacity;
-};
-
-template <class K, class V, class COMPARATOR>
-struct BinaryHeapStorageComparator {
-	static bool Operation(const pair<HeapStorage<K>, HeapStorage<V>> &left,
-	                      const pair<HeapStorage<K>, HeapStorage<V>> &right) {
-		return COMPARATOR::Operation(left.first.value, right.first.value);
-	}
 };
 
 template <class K, class V, class K_COMPARATOR>
@@ -227,7 +220,8 @@ public:
 
 private:
 	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
-		return K_COMPARATOR::Operation(left.first.value, right.first.value);
+		// Intentionally reversed to get a min-heap
+		return K_COMPARATOR::Operation(right.first.value, left.first.value);
 	}
 
 	vector<STORAGE_TYPE> heap;
@@ -269,7 +263,7 @@ struct MinMaxStringValue {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value) {
-		FlatVector::GetData<string_t>(vector)[idx] = StringVector::AddString(vector, value);
+		FlatVector::GetData<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
 	}
 
 	// Nothing to do here
@@ -303,6 +297,10 @@ struct MinMaxFallbackValue {
 	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format) {
 		const OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, extra_state);
+		input.Flatten(count);
+		extra_state.Flatten(count);
+		// Ensure the validity vectors match, because we want to ignore nulls
+		FlatVector::Validity(extra_state).Initialize(FlatVector::Validity(input));
 		extra_state.ToUnifiedFormat(count, format);
 	}
 };
