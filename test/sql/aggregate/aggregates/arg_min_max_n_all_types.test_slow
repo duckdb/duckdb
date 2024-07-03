@@ -24,7 +24,7 @@ true
 query I
 SELECT MAX("${col}", 2)
 IS NOT DISTINCT FROM
-(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" DESC) as rid FROM all_types) as rs WHERE rid < 3)
+(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" DESC) as rid FROM all_types ORDER BY "${col}" DESC) as rs WHERE rid < 3)
 FROM all_types;
 ----
 true
@@ -32,7 +32,7 @@ true
 query I
 SELECT MIN("${col}", 2)
 IS NOT DISTINCT FROM
-(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" ASC) as rid FROM all_types) as rs WHERE rid < 3)
+(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" ASC) as rid FROM all_types ORDER BY "${col}" ASC) as rs WHERE rid < 3)
 FROM all_types;
 ----
 true
@@ -41,7 +41,15 @@ true
 query I
 SELECT ARG_MAX("${col}", "${col}", 2)
 IS NOT DISTINCT FROM
-(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" DESC) as rid FROM all_types) as rs WHERE rid < 3)
+(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" DESC) as rid FROM all_types ORDER BY "${col}" DESC) as rs WHERE rid < 3)
+FROM all_types;
+----
+true
+
+query I
+SELECT ARG_MIN("${col}", "${col}", 2)
+IS NOT DISTINCT FROM
+(SELECT list(rs."${col}") FROM (SELECT "${col}", row_number() OVER (ORDER BY "${col}" ASC) as rid FROM all_types ORDER BY "${col}" ASC) as rs WHERE rid < 3)
 FROM all_types;
 ----
 true

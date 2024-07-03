@@ -7,7 +7,7 @@ namespace duckdb {
 
 // For basic types
 template <class T>
-struct HeapStorage {
+struct HeapEntry {
 	T value;
 
 	void Assign(ArenaAllocator &allocator, const T &val) {
@@ -17,20 +17,20 @@ struct HeapStorage {
 
 // For strings that require arena allocation
 template <>
-struct HeapStorage<string_t> {
+struct HeapEntry<string_t> {
 	string_t value;
 	uint32_t capacity;
 	data_ptr_t allocated_data;
 
-	HeapStorage() : value(), capacity(0), allocated_data(nullptr) {
+	HeapEntry() : value(), capacity(0), allocated_data(nullptr) {
 	}
 
 	// Not copyable
-	HeapStorage(const HeapStorage &other) = delete;
-	HeapStorage &operator=(const HeapStorage &other) = delete;
+	HeapEntry(const HeapEntry &other) = delete;
+	HeapEntry &operator=(const HeapEntry &other) = delete;
 
 	// But movable
-	HeapStorage(HeapStorage &&other) noexcept {
+	HeapEntry(HeapEntry &&other) noexcept {
 		if (other.value.IsInlined()) {
 			value = other.value;
 		} else {
@@ -41,7 +41,7 @@ struct HeapStorage<string_t> {
 		}
 	}
 
-	HeapStorage &operator=(HeapStorage &&other) noexcept {
+	HeapEntry &operator=(HeapEntry &&other) noexcept {
 		if (other.value.IsInlined()) {
 			value = other.value;
 		} else {
@@ -137,27 +137,27 @@ public:
 		}
 	}
 
-	vector<HeapStorage<T>> &SortAndGetHeap() {
+	vector<HeapEntry<T>> &SortAndGetHeap() {
 		std::sort_heap(heap.begin(), heap.end(), Compare);
 		return heap;
 	}
 
-	static const T &GetValue(const HeapStorage<T> &slot) {
+	static const T &GetValue(const HeapEntry<T> &slot) {
 		return slot.value;
 	}
 
 private:
-	static bool Compare(const HeapStorage<T> &left, const HeapStorage<T> &right) {
+	static bool Compare(const HeapEntry<T> &left, const HeapEntry<T> &right) {
 		return T_COMPARATOR::Operation(left.value, right.value);
 	}
 
-	vector<HeapStorage<T>> heap;
+	vector<HeapEntry<T>> heap;
 	idx_t capacity;
 };
 
 template <class K, class V, class K_COMPARATOR>
 class BinaryAggregateHeap {
-	using STORAGE_TYPE = pair<HeapStorage<K>, HeapStorage<V>>;
+	using STORAGE_TYPE = pair<HeapEntry<K>, HeapEntry<V>>;
 
 public:
 	BinaryAggregateHeap() = default;
