@@ -88,3 +88,13 @@ FROM Example
 WHERE parentExists
 ----
 logical_opt	<!REGEX>:.*SEMI.*
+
+statement ok
+create table t0 as select range a from range(300);
+statement ok
+create table t2 as select range b from range(50000);
+
+query I
+select sum(in_alias::INT) FROM (select a in (select b from t2) as in_alias from t0) where in_alias;
+----
+300
