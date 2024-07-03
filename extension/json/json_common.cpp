@@ -309,15 +309,14 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 				vector<yyjson_val *> rec_vals;
 				rec_vals.emplace_back(val);
 				for (idx_t i = 0; i < rec_vals.size(); i++) {
-					yyjson_val* rec_val = rec_vals[i];
+					yyjson_val *rec_val = rec_vals[i];
 					if (yyjson_is_arr(rec_val)) {
 						size_t idx, max;
 						yyjson_val *element;
 						yyjson_arr_foreach(rec_val, idx, max, element) {
 							rec_vals.emplace_back(element);
 						}
-					}
-					else if (yyjson_is_obj(rec_val)) {
+					} else if (yyjson_is_obj(rec_val)) {
 						size_t idx, max;
 						yyjson_val *key, *element;
 						yyjson_obj_foreach(rec_val, idx, max, key, element) {
@@ -354,7 +353,7 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 #ifdef DEBUG
 			bool success =
 #endif
-				ReadArrayIndex(ptr, end, array_index, from_back);
+			    ReadArrayIndex(ptr, end, array_index, from_back);
 #ifdef DEBUG
 			D_ASSERT(success);
 #endif
@@ -375,7 +374,7 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 		}
 		default: // LCOV_EXCL_START
 			throw InternalException(
-				"Invalid JSON Path encountered in GetWildcardPathInternal, call JSONCommon::ValidatePath first!");
+			    "Invalid JSON Path encountered in GetWildcardPathInternal, call JSONCommon::ValidatePath first!");
 		} // LCOV_EXCL_STOP
 	}
 	if (val != nullptr) {
