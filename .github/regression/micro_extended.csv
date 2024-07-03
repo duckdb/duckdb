@@ -106,6 +106,7 @@ benchmark/micro/index/create/create_art_varchar_long.benchmark
 benchmark/micro/index/create/create_art_varchar_short.benchmark
 benchmark/micro/index/delete/delete_art.benchmark
 benchmark/micro/index/insert/insert_art.benchmark
+benchmark/micro/index/insert/insert_pk_fk.benchmark
 benchmark/micro/index/point/point_query_with_art.benchmark
 benchmark/micro/index/point/point_query_with_art_and_many_keys.benchmark
 benchmark/micro/index/point/point_query_without_index.benchmark

@@ -53,7 +53,7 @@ void Node::Free(ART &art, Node &node) {
 		return Prefix::Free(art, node);
 	case NType::LEAF:
 		// iterative
-		return Leaf::Free(art, node);
+		return Leaf::FreeChain(art, node);
 	case NType::NODE_4:
 		Node4::Free(art, node);
 		break;
