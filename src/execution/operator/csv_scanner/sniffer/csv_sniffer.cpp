@@ -3,9 +3,9 @@
 namespace duckdb {
 
 CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-                       CSVStateMachineCache &state_machine_cache_p, SetColumns set_columns_p)
+                       CSVStateMachineCache &state_machine_cache_p, bool default_null_to_varchar_p)
     : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)),
-      set_columns(set_columns_p) {
+      default_null_to_varchar(default_null_to_varchar_p) {
 	// Initialize Format Candidates
 	for (const auto &format_template : format_template_candidates) {
 		auto &logical_type = format_template.first;
@@ -15,6 +15,9 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	max_columns_found = set_columns.Size();
 	error_handler = make_shared_ptr<CSVErrorHandler>(options.ignore_errors.GetValue());
 	detection_error_handler = make_shared_ptr<CSVErrorHandler>(true);
+	if (options.columns_set) {
+		set_columns = SetColumns(&options.sql_type_list, &options.name_list);
+	}
 }
 
 bool SetColumns::IsSet() {
@@ -142,7 +145,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		string type_error = "The Column types set by the user do not match the ones found by the sniffer. \n";
 		auto &set_types = *set_columns.types;
 		for (idx_t i = 0; i < set_columns.Size(); i++) {
-			if (set_types[i] != detected_types[i] && !(set_types[i].IsNumeric() && detected_types[i].IsNumeric())) {
+			if (set_types[i] != detected_types[i]) {
 				type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
 				              " Sniffed type: " + detected_types[i].ToString() + "\n";
 				detected_types[i] = set_types[i];
@@ -158,13 +161,14 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 			throw InvalidInputException(error);
 		}
 		options.was_type_manually_set = manually_set;
-		// We do not need to run type refinement, since the types have been given by the user
-		return SnifferResult({}, {});
 	}
 	if (!error.empty() && force_match) {
 		throw InvalidInputException(error);
 	}
 	options.was_type_manually_set = manually_set;
+	if (set_columns.IsSet()) {
+		return SnifferResult(*set_columns.types, *set_columns.names);
+	}
 	return SnifferResult(detected_types, names);
 }
 

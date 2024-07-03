@@ -29,6 +29,7 @@ public:
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 	idx_t GetMaxEntry() override;
 
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 

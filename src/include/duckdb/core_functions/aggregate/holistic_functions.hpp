@@ -19,7 +19,7 @@ struct ApproxQuantileFun {
 	static constexpr const char *Name = "approx_quantile";
 	static constexpr const char *Parameters = "x,pos";
 	static constexpr const char *Description = "Computes the approximate quantile using T-Digest.";
-	static constexpr const char *Example = "approx_quantile(A,0.5)";
+	static constexpr const char *Example = "approx_quantile(x, 0.5)";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -28,7 +28,7 @@ struct MadFun {
 	static constexpr const char *Name = "mad";
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the median absolute deviation for the values within x. NULL values are ignored. Temporal types return a positive INTERVAL.	";
-	static constexpr const char *Example = "MEDIAN(ABS(x-MEDIAN(x)))";
+	static constexpr const char *Example = "mad(x)";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -36,8 +36,8 @@ struct MadFun {
 struct MedianFun {
 	static constexpr const char *Name = "median";
 	static constexpr const char *Parameters = "x";
-	static constexpr const char *Description = "Returns the middle value of the set. NULL values are ignored. For even value counts, quantitiative values are averaged and ordinal values return the lower value.";
-	static constexpr const char *Example = "QUANTILE_CONT(x, 0.5)";
+	static constexpr const char *Description = "Returns the middle value of the set. NULL values are ignored. For even value counts, quantitative values are averaged and ordinal values return the lower value.";
+	static constexpr const char *Example = "median(x)";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -55,7 +55,7 @@ struct QuantileDiscFun {
 	static constexpr const char *Name = "quantile_disc";
 	static constexpr const char *Parameters = "x,pos";
 	static constexpr const char *Description = "Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs, then the result is a LIST of the corresponding exact quantiles.";
-	static constexpr const char *Example = "";
+	static constexpr const char *Example = "quantile_disc(x, 0.5)";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -69,8 +69,8 @@ struct QuantileFun {
 struct QuantileContFun {
 	static constexpr const char *Name = "quantile_cont";
 	static constexpr const char *Parameters = "x,pos";
-	static constexpr const char *Description = "Returns the intepolated quantile number between 0 and 1 . If pos is a LIST of FLOATs, then the result is a LIST of the corresponding intepolated quantiles.	";
-	static constexpr const char *Example = "";
+	static constexpr const char *Description = "Returns the interpolated quantile number between 0 and 1 . If pos is a LIST of FLOATs, then the result is a LIST of the corresponding interpolated quantiles.	";
+	static constexpr const char *Example = "quantile_cont(x, 0.5)";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -82,6 +82,15 @@ struct ReservoirQuantileFun {
 	static constexpr const char *Example = "reservoir_quantile(A,0.5,1024)";
 
 	static AggregateFunctionSet GetFunctions();
+};
+
+struct ApproxTopKFun {
+	static constexpr const char *Name = "approx_top_k";
+	static constexpr const char *Parameters = "val,k";
+	static constexpr const char *Description = "Finds the k approximately most occurring values in the data set";
+	static constexpr const char *Example = "approx_top_k(x, 5)";
+
+	static AggregateFunction GetFunction();
 };
 
 } // namespace duckdb

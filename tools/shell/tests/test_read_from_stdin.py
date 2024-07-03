@@ -29,7 +29,7 @@ class TestReadFromStdin(object):
         )
         result = test.run()
         result.check_stdout("foo,bar,baz")
-        result.check_stdout('0,0," test"')
+        result.check_stdout('0,0, test')
 
     def test_read_stdin_csv_where_filename(self, shell):
         test = (
@@ -71,7 +71,7 @@ class TestReadFromStdin(object):
         )
         result = test.run()
         result.check_stdout("column0,column1,column2")
-        result.check_stdout('0,0," test"')
+        result.check_stdout('0,0, test')
 
 
     def test_read_stdin_csv_auto_projection(self, shell):

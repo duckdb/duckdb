@@ -50,7 +50,7 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 		return nullptr;
 	}
 	for (auto &scan : config.replacement_scans) {
-		ReplacementScanInput input(ref.Cast<TableRef>(), table_name);
+		ReplacementScanInput input(table_name);
 		auto replacement_function = scan.function(context, input, scan.data.get());
 		if (!replacement_function) {
 			continue;
@@ -70,6 +70,9 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 			subquery.column_name_alias = ref.column_name_alias;
 		} else {
 			throw InternalException("Replacement scan should return either a table function or a subquery");
+		}
+		if (GetBindingMode() == BindingMode::EXTRACT_REPLACEMENT_SCANS) {
+			AddReplacementScan(ref.table_name, replacement_function->Copy());
 		}
 		return Bind(*replacement_function);
 	}
@@ -141,6 +144,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 		if (circular_cte) {
+			string table_name = ref.catalog_name;
+			if (!ref.schema_name.empty()) {
+				table_name += (!table_name.empty() ? "." : "") + ref.schema_name;
+			}
+			table_name += (!table_name.empty() ? "." : "") + ref.table_name;
+
+			auto replacement_scan_bind_result = BindWithReplacementScan(context, table_name, ref);
+			if (replacement_scan_bind_result) {
+				return replacement_scan_bind_result;
+			}
+
 			throw BinderException(
 			    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
 			    "use recursive CTEs. \n2. If "

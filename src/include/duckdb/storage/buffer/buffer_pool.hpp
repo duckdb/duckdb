@@ -68,35 +68,21 @@ protected:
 	};
 	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
+	virtual EvictionResult EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
+	                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Purge all blocks that haven't been pinned within the last N seconds
 	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
-
-	//! Iterate over all purgable blocks and invoke the callback. If the callback returns true
-	//! iteration continues.
-	//! - Callback signature is: bool((BufferEvictionNode &, const std::shared_ptr<BlockHandle> &)
-	//! - Callback is invoked while holding the corresponding BlockHandle mutex.
-	template <typename FN>
-	void IterateUnloadableBlocks(FN fn);
-
-	//! Tries to dequeue an element from the eviction queue, but only after acquiring the purge queue lock.
-	bool TryDequeueWithLock(BufferEvictionNode &node);
-	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
-	void PurgeIteration(const idx_t purge_size);
+	idx_t PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit);
 	//! Garbage collect dead nodes in the eviction queue.
-	void PurgeQueue();
+	void PurgeQueue(FileBufferType type);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
 	//! ready to be purged, and false otherwise.
 	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
-
-	//! Increment the dead node counter in the purge queue.
-	inline void IncrementDeadNodes() {
-		total_dead_nodes++;
-	}
-	//! Decrement the dead node counter in the purge queue.
-	inline void DecrementDeadNodes() {
-		total_dead_nodes--;
-	}
+	//! Gets the eviction queue for the specified type
+	EvictionQueue &GetEvictionQueueForType(FileBufferType type);
+	//! Increments the dead nodes for the queue with specified type
+	void IncrementDeadNodes(FileBufferType type);
 
 protected:
 	//! The lock for changing the memory limit
@@ -107,35 +93,12 @@ protected:
 	atomic<idx_t> maximum_memory;
 	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
 	bool track_eviction_timestamps;
-	//! Eviction queue
-	unique_ptr<EvictionQueue> queue;
+	//! Eviction queues
+	vector<unique_ptr<EvictionQueue>> queues;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
 	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
 	//! Memory usage per tag
 	atomic<idx_t> memory_usage_per_tag[MEMORY_TAG_COUNT];
-
-	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
-	constexpr static idx_t INSERT_INTERVAL = 4096;
-	//! We multiply the base purge size by this value.
-	constexpr static idx_t PURGE_SIZE_MULTIPLIER = 2;
-	//! We multiply the purge size by this value to determine early-outs. This is the minimum queue size.
-	//! We never purge below this point.
-	constexpr static idx_t EARLY_OUT_MULTIPLIER = 4;
-	//! We multiply the approximate alive nodes by this value to test whether our total dead nodes
-	//! exceed their allowed ratio. Must be greater than 1.
-	constexpr static idx_t ALIVE_NODE_MULTIPLIER = 4;
-
-	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
-	atomic<idx_t> evict_queue_insertions;
-	//! Total dead nodes in the eviction queue. There are two scenarios in which a node dies: (1) we destroy its block
-	//! handle, or (2) we insert a newer version into the eviction queue.
-	atomic<idx_t> total_dead_nodes;
-	//! Locked, if a queue purge is currently active or we're trying to forcefully evict a node.
-	//! Only lets a single thread enter the purge phase.
-	mutex purge_lock;
-
-	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.
-	vector<BufferEvictionNode> purge_nodes;
 };
 
 } // namespace duckdb

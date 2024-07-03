@@ -148,7 +148,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::INSERT_STATEMENT:
 		return Bind(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
-		return Bind(statement.Cast<CopyStatement>());
+		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
 	case StatementType::DELETE_STATEMENT:
 		return BindWithCTE(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
@@ -516,9 +516,26 @@ void Binder::AddTableName(string table_name) {
 	root_binder.table_names.insert(std::move(table_name));
 }
 
+void Binder::AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement) {
+	auto &root_binder = GetRootBinder();
+	auto it = root_binder.replacement_scans.find(table_name);
+	replacement->column_name_alias.clear();
+	replacement->alias.clear();
+	if (it == root_binder.replacement_scans.end()) {
+		root_binder.replacement_scans[table_name] = std::move(replacement);
+	} else {
+		// A replacement scan by this name was previously registered, we can just use it
+	}
+}
+
 const unordered_set<string> &Binder::GetTableNames() {
 	auto &root_binder = GetRootBinder();
 	return root_binder.table_names;
+}
+
+case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
+	auto &root_binder = GetRootBinder();
+	return root_binder.replacement_scans;
 }
 
 // FIXME: this is extremely naive

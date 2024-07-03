@@ -4,27 +4,26 @@
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
+#include "geo_parquet.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #endif
 
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
+#include "brotli/encode.h"
 
 namespace duckdb {
 
@@ -238,6 +237,18 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		compressed_data = compressed_buf.get();
 		break;
 	}
+	case CompressionCodec::BROTLI: {
+
+		compressed_size = duckdb_brotli::BrotliEncoderMaxCompressedSize(temp_writer.GetPosition());
+		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+
+		duckdb_brotli::BrotliEncoderCompress(BROTLI_DEFAULT_QUALITY, BROTLI_DEFAULT_WINDOW, BROTLI_DEFAULT_MODE,
+		                                     temp_writer.GetPosition(), temp_writer.GetData(), &compressed_size,
+		                                     compressed_buf.get());
+		compressed_data = compressed_buf.get();
+
+		break;
+	}
 	default:
 		throw InternalException("Unsupported codec for Parquet Writer");
 	}
@@ -249,7 +260,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 }
 
 void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterState *parent, idx_t count,
-                                      idx_t max_repeat) {
+                                      idx_t max_repeat) const {
 	if (!parent) {
 		// no repeat levels without a parent node
 		return;
@@ -259,8 +270,8 @@ void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterStat
 	}
 }
 
-void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, ValidityMask &validity,
-                                      idx_t count, uint16_t define_value, uint16_t null_value) {
+void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
+                                      const idx_t count, const uint16_t define_value, const uint16_t null_value) const {
 	if (parent) {
 		// parent node: inherit definition level from the parent
 		idx_t vector_index = 0;
@@ -284,15 +295,12 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 	} else {
 		// no parent: set definition levels only from this validity mask
 		for (idx_t i = 0; i < count; i++) {
-			if (validity.RowIsValid(i)) {
-				state.definition_levels.push_back(define_value);
-			} else {
-				if (!can_have_nulls) {
-					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
-				}
-				state.null_count++;
-				state.definition_levels.push_back(null_value);
-			}
+			const auto is_null = !validity.RowIsValid(i);
+			state.definition_levels.emplace_back(is_null ? null_value : define_value);
+			state.null_count += is_null;
+		}
+		if (!can_have_nulls && state.null_count != 0) {
+			throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 		}
 	}
 }
@@ -386,8 +394,8 @@ public:
 	void FinalizeWrite(ColumnWriterState &state) override;
 
 protected:
-	void WriteLevels(WriteStream &temp_writer, const vector<uint16_t> &levels, idx_t max_value, idx_t start_offset,
-	                 idx_t count);
+	static void WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels, idx_t max_value,
+	                        idx_t start_offset, idx_t count);
 
 	virtual duckdb_parquet::format::Encoding::type GetEncoding(BasicColumnWriterState &state);
 
@@ -404,7 +412,7 @@ protected:
 	virtual void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state);
 
 	//! Retrieves the row size of a vector at the specified location. Only used for scalar types.
-	virtual idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state);
+	virtual idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const;
 	//! Writes a (subset of a) vector to the specified serializer. Only used for scalar types.
 	virtual void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
 	                         Vector &vector, idx_t chunk_start, idx_t chunk_end) = 0;
@@ -456,8 +464,9 @@ void BasicColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	HandleDefineLevels(state, parent, validity, count, max_define, max_define - 1);
 
 	idx_t vector_index = 0;
+	reference<PageInformation> page_info_ref = state.page_info.back();
 	for (idx_t i = start; i < vcount; i++) {
-		auto &page_info = state.page_info.back();
+		auto &page_info = page_info_ref.get();
 		page_info.row_count++;
 		col_chunk.meta_data.num_values++;
 		if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index + i]) {
@@ -470,6 +479,7 @@ void BasicColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 				PageInformation new_info;
 				new_info.offset = page_info.offset + page_info.row_count;
 				state.page_info.push_back(new_info);
+				page_info_ref = state.page_info.back();
 			}
 		}
 		vector_index++;
@@ -505,7 +515,8 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
 
-		write_info.temp_writer = make_uniq<MemoryStream>();
+		write_info.temp_writer = make_uniq<MemoryStream>(
+		    MaxValue<idx_t>(NextPowerOfTwo(page_info.estimated_page_size), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
 		write_info.page_state = InitializePageState(state);
@@ -520,7 +531,7 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 	NextPage(state);
 }
 
-void BasicColumnWriter::WriteLevels(WriteStream &temp_writer, const vector<uint16_t> &levels, idx_t max_value,
+void BasicColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels, idx_t max_value,
                                     idx_t offset, idx_t count) {
 	if (levels.empty() || count == 0) {
 		return;
@@ -604,7 +615,8 @@ unique_ptr<ColumnWriterStatistics> BasicColumnWriter::InitializeStatsState() {
 	return make_uniq<ColumnWriterStatistics>();
 }
 
-idx_t BasicColumnWriter::GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state) {
+idx_t BasicColumnWriter::GetRowSize(const Vector &vector, const idx_t index,
+                                    const BasicColumnWriterState &state) const {
 	throw InternalException("GetRowSize unsupported for struct/list column writers");
 }
 
@@ -814,7 +826,7 @@ struct ParquetCastOperator : public BaseParquetOperator {
 struct ParquetTimestampNSOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		return Timestamp::FromEpochNanoSecondsPossiblyInfinite(input).value;
+		return TGT(input);
 	}
 };
 
@@ -865,16 +877,26 @@ struct ParquetUhugeintOperator {
 };
 
 template <class SRC, class TGT, class OP = ParquetCastOperator>
-static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, idx_t chunk_start, idx_t chunk_end,
-                                ValidityMask &mask, WriteStream &ser) {
-	auto *ptr = FlatVector::GetData<SRC>(col);
+static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, const idx_t chunk_start,
+                                const idx_t chunk_end, ValidityMask &mask, WriteStream &ser) {
+	static constexpr idx_t WRITE_COMBINER_CAPACITY = 8;
+	TGT write_combiner[WRITE_COMBINER_CAPACITY];
+	idx_t write_combiner_count = 0;
+
+	const auto *ptr = FlatVector::GetData<SRC>(col);
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
-		if (mask.RowIsValid(r)) {
-			TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
-			OP::template HandleStats<SRC, TGT>(stats, ptr[r], target_value);
-			ser.Write<TGT>(target_value);
+		if (!mask.RowIsValid(r)) {
+			continue;
+		}
+		TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
+		OP::template HandleStats<SRC, TGT>(stats, ptr[r], target_value);
+		write_combiner[write_combiner_count++] = target_value;
+		if (write_combiner_count == WRITE_COMBINER_CAPACITY) {
+			ser.WriteData(const_data_ptr_cast(write_combiner), WRITE_COMBINER_CAPACITY * sizeof(TGT));
+			write_combiner_count = 0;
 		}
 	}
+	ser.WriteData(const_data_ptr_cast(write_combiner), write_combiner_count * sizeof(TGT));
 }
 
 template <class SRC, class TGT, class OP = ParquetCastOperator>
@@ -897,7 +919,7 @@ public:
 		TemplatedWritePlain<SRC, TGT, OP>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
 	}
 
-	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state) override {
+	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
 		return sizeof(TGT);
 	}
 };
@@ -991,7 +1013,7 @@ public:
 		}
 	}
 
-	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state) override {
+	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
 		return sizeof(bool);
 	}
 };
@@ -1092,7 +1114,7 @@ public:
 		}
 	}
 
-	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state) override {
+	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
 		return sizeof(hugeint_t);
 	}
 };
@@ -1139,7 +1161,7 @@ public:
 		}
 	}
 
-	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state) override {
+	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
 		return PARQUET_UUID_SIZE;
 	}
 };
@@ -1181,8 +1203,49 @@ public:
 		}
 	}
 
-	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state) override {
+	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
 		return PARQUET_INTERVAL_SIZE;
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// Geometry Column Writer
+//===--------------------------------------------------------------------===//
+// This class just wraps another column writer, but also calculates the extent
+// of the geometry column by updating the geodata object with every written
+// vector.
+template <class WRITER_IMPL>
+class GeometryColumnWriter : public WRITER_IMPL {
+	GeoParquetColumnMetadata geo_data;
+	GeoParquetColumnMetadataWriter geo_data_writer;
+	string column_name;
+
+public:
+	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
+		// Just write normally
+		WRITER_IMPL::Write(state, vector, count);
+
+		// And update the geodata object
+		geo_data_writer.Update(geo_data, vector, count);
+	}
+	void FinalizeWrite(ColumnWriterState &state) override {
+		WRITER_IMPL::FinalizeWrite(state);
+
+		// Add the geodata object to the writer
+		this->writer.GetGeoParquetData().geometry_columns[column_name] = geo_data;
+	}
+
+public:
+	GeometryColumnWriter(ClientContext &context, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
+	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
+	    : WRITER_IMPL(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
+	      geo_data_writer(context), column_name(std::move(name)) {
+
+		auto &geo_data = writer.GetGeoParquetData();
+		if (geo_data.primary_geometry_column.empty()) {
+			// Set the first column to the primary column
+			geo_data.primary_geometry_column = column_name;
+		}
 	}
 };
 
@@ -1262,7 +1325,7 @@ public:
 	// key_bit_width== 0 signifies the chunk is written in plain encoding
 	uint32_t key_bit_width;
 
-	bool IsDictionaryEncoded() {
+	bool IsDictionaryEncoded() const {
 		return key_bit_width != 0;
 	}
 };
@@ -1457,7 +1520,8 @@ public:
 			values[entry.second] = entry.first;
 		}
 		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<MemoryStream>();
+		auto temp_writer = make_uniq<MemoryStream>(
+		    MaxValue<idx_t>(NextPowerOfTwo(state.estimated_dict_page_size), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		for (idx_t r = 0; r < values.size(); r++) {
 			auto &value = values[r];
 			// update the statistics
@@ -1470,7 +1534,7 @@ public:
 		WriteDictionary(state, std::move(temp_writer), values.size());
 	}
 
-	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state_p) override {
+	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state_p) const override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
 		if (state.IsDictionaryEncoded()) {
 			return (state.key_bit_width + 7) / 8;
@@ -1614,7 +1678,7 @@ public:
 		WriteDictionary(state, std::move(temp_writer), enum_count);
 	}
 
-	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state) override {
+	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state) const override {
 		return (bit_width + 7) / 8;
 	}
 };
@@ -2006,7 +2070,8 @@ void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 // Create Column Writer
 //===--------------------------------------------------------------------===//
 
-unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
+unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context,
+                                                             vector<duckdb_parquet::format::SchemaElement> &schemas,
                                                              ParquetWriter &writer, const LogicalType &type,
                                                              const string &name, vector<string> schema_path,
                                                              optional_ptr<const ChildFieldIDs> field_ids,
@@ -2048,7 +2113,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(child_types.size());
 		for (auto &child_type : child_types) {
-			child_writers.push_back(CreateWriterRecursive(schemas, writer, child_type.second, child_type.first,
+			child_writers.push_back(CreateWriterRecursive(context, schemas, writer, child_type.second, child_type.first,
 			                                              schema_path, child_field_ids, max_repeat, max_define + 1));
 		}
 		return make_uniq<StructColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
@@ -2087,8 +2152,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schemas.push_back(std::move(repeated_element));
 		schema_path.emplace_back(is_list ? "list" : "array");
 
-		auto child_writer = CreateWriterRecursive(schemas, writer, child_type, "element", schema_path, child_field_ids,
-		                                          max_repeat + 1, max_define + 2);
+		auto child_writer = CreateWriterRecursive(context, schemas, writer, child_type, "element", schema_path,
+		                                          child_field_ids, max_repeat + 1, max_define + 2);
 		if (is_list) {
 			return make_uniq<ListColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 			                                   std::move(child_writer), can_have_nulls);
@@ -2142,7 +2207,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		for (idx_t i = 0; i < 2; i++) {
 			// key needs to be marked as REQUIRED
 			bool is_key = i == 0;
-			auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], schema_path,
+			auto child_writer = CreateWriterRecursive(context, schemas, writer, kv_types[i], kv_names[i], schema_path,
 			                                          child_field_ids, max_repeat + 1, max_define + 2, !is_key);
 
 			child_writers.push_back(std::move(child_writer));
@@ -2166,6 +2231,11 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 	ParquetWriter::SetSchemaProperties(type, schema_element);
 	schemas.push_back(std::move(schema_element));
 	schema_path.push_back(name);
+
+	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
+		return make_uniq<GeometryColumnWriter<StringColumnWriter>>(context, writer, schema_idx, std::move(schema_path),
+		                                                           max_repeat, max_define, can_have_nulls, name);
+	}
 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:

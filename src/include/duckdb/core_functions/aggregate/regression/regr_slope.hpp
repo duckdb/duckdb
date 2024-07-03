@@ -26,7 +26,7 @@ struct RegrSlopeOperation {
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, y, x,idata);
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, y, x, idata);
 		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, x);
 	}
 

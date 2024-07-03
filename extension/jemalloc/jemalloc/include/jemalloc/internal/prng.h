@@ -1,6 +1,7 @@
 #ifndef JEMALLOC_INTERNAL_PRNG_H
 #define JEMALLOC_INTERNAL_PRNG_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/bit_util.h"
 
 /*
@@ -30,8 +31,6 @@
 
 #define PRNG_A_64	UINT64_C(6364136223846793005)
 #define PRNG_C_64	UINT64_C(1442695040888963407)
-
-namespace duckdb_jemalloc {
 
 JEMALLOC_ALWAYS_INLINE uint32_t
 prng_state_next_u32(uint32_t state) {
@@ -166,7 +165,5 @@ prng_range_zu(size_t *state, size_t range) {
 
 	return ret;
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PRNG_H */

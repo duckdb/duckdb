@@ -1,7 +1,7 @@
 #ifndef JEMALLOC_INTERNAL_ACTIVITY_CALLBACK_H
 #define JEMALLOC_INTERNAL_ACTIVITY_CALLBACK_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
 
 /*
  * The callback to be executed "periodically", in response to some amount of
@@ -21,7 +21,5 @@ struct activity_callback_thunk_s {
 	activity_callback_t callback;
 	void *uctx;
 };
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ACTIVITY_CALLBACK_H */

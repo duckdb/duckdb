@@ -97,11 +97,28 @@ public:
 	static ParquetOptions Deserialize(Deserializer &deserializer);
 };
 
+struct ParquetUnionData {
+	~ParquetUnionData();
+
+	string file_name;
+	vector<string> names;
+	vector<LogicalType> types;
+	ParquetOptions options;
+	shared_ptr<ParquetFileMetadataCache> metadata;
+	unique_ptr<ParquetReader> reader;
+
+	const string &GetFileName() {
+		return file_name;
+	}
+};
+
 class ParquetReader {
 public:
-	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options);
-	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
-	              shared_ptr<ParquetFileMetadataCache> metadata);
+	using UNION_READER_DATA = unique_ptr<ParquetUnionData>;
+
+public:
+	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
+	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
 	~ParquetReader();
 
 	FileSystem &fs;
@@ -120,8 +137,26 @@ public:
 	vector<duckdb_parquet::format::SchemaElement> generated_column_schema;
 
 public:
-	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read);
+	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
 	void Scan(ParquetReaderScanState &state, DataChunk &output);
+
+	static unique_ptr<ParquetUnionData> StoreUnionReader(unique_ptr<ParquetReader> reader_p, idx_t file_idx) {
+		auto result = make_uniq<ParquetUnionData>();
+		result->file_name = reader_p->file_name;
+		if (file_idx == 0) {
+			result->names = reader_p->names;
+			result->types = reader_p->return_types;
+			result->options = reader_p->parquet_options;
+			result->metadata = reader_p->metadata;
+			result->reader = std::move(reader_p);
+		} else {
+			result->names = std::move(reader_p->names);
+			result->types = std::move(reader_p->return_types);
+			result->options = std::move(reader_p->parquet_options);
+			result->metadata = std::move(reader_p->metadata);
+		}
+		return result;
+	}
 
 	idx_t NumRows();
 	idx_t NumRowGroups();
@@ -149,13 +184,20 @@ public:
 		return return_types;
 	}
 
-private:
-	void InitializeSchema();
-	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
-	unique_ptr<ColumnReader> CreateReader();
+	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
+	                                                 shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
 
-	unique_ptr<ColumnReader> CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
-	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
+private:
+	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
+	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
+	              shared_ptr<ParquetFileMetadataCache> metadata);
+
+	void InitializeSchema(ClientContext &context);
+	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
+	unique_ptr<ColumnReader> CreateReader(ClientContext &context);
+
+	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, idx_t depth, idx_t max_define,
+	                                               idx_t max_repeat, idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);

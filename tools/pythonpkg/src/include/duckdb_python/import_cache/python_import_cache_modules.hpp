@@ -12,3 +12,4 @@
 #include "duckdb_python/import_cache/modules/types_module.hpp"
 #include "duckdb_python/import_cache/modules/typing_module.hpp"
 #include "duckdb_python/import_cache/modules/uuid_module.hpp"
+#include "duckdb_python/import_cache/modules/collections_module.hpp"

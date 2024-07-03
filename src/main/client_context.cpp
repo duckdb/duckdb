@@ -310,7 +310,7 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 shared_ptr<PreparedStatementData>
 ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
                                                unique_ptr<SQLStatement> statement,
-                                               optional_ptr<case_insensitive_map_t<Value>> values) {
+                                               optional_ptr<case_insensitive_map_t<BoundParameterData>> values) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
@@ -368,7 +368,8 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 
 shared_ptr<PreparedStatementData>
 ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                       optional_ptr<case_insensitive_map_t<Value>> values, PreparedStatementMode mode) {
+                                       optional_ptr<case_insensitive_map_t<BoundParameterData>> values,
+                                       PreparedStatementMode mode) {
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
 	for (auto const &s : registered_state) {
@@ -419,7 +420,7 @@ QueryProgress ClientContext::GetQueryProgress() {
 }
 
 void BindPreparedStatementParameters(PreparedStatementData &statement, const PendingQueryParameters &parameters) {
-	case_insensitive_map_t<Value> owned_values;
+	case_insensitive_map_t<BoundParameterData> owned_values;
 	if (parameters.parameters) {
 		auto &params = *parameters.parameters;
 		for (auto &val : params) {
@@ -532,6 +533,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	return PendingPreparedStatementInternal(lock, prepared, parameters);
 }
 
+void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
+	active_query->executor->WaitForTask();
+}
+
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
                                                           bool dry_run) {
 	D_ASSERT(active_query);
@@ -540,7 +545,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	try {
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
 		if (active_query->progress_bar) {
-			auto is_finished = PendingQueryResult::IsFinishedOrBlocked(query_result);
+			auto is_finished = PendingQueryResult::IsResultReady(query_result);
 			active_query->progress_bar->Update(is_finished);
 			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
@@ -708,7 +713,8 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-                                               case_insensitive_map_t<Value> &values, bool allow_stream_result) {
+                                               case_insensitive_map_t<BoundParameterData> &values,
+                                               bool allow_stream_result) {
 	PendingQueryParameters parameters;
 	parameters.parameters = &values;
 	parameters.allow_stream_result = allow_stream_result;
@@ -752,13 +758,6 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &res
 		return false;
 	}
 	return active_query->IsOpenResult(result);
-}
-
-void ClientContext::SetActiveResult(ClientContextLock &lock, BaseQueryResult &result) {
-	if (!active_query) {
-		return;
-	}
-	return active_query->SetOpenResult(result);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
@@ -1107,7 +1106,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result->schema = schema_name;
 		result->table = table_name;
 		for (auto &column : table->GetColumns().Logical()) {
-			result->columns.emplace_back(column.Name(), column.Type());
+			result->columns.emplace_back(column.Copy());
 		}
 	});
 	return result;
@@ -1283,7 +1282,8 @@ ClientProperties ClientContext::GetClientProperties() const {
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
-	return {timezone, db->config.options.arrow_offset_size};
+	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
+	        db->config.options.produce_arrow_string_views};
 }
 
 bool ClientContext::ExecutionIsFinished() {

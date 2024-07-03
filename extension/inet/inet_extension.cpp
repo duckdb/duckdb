@@ -40,6 +40,12 @@ void InetExtension::Load(DuckDB &db) {
 	                                ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host));
 	ExtensionUtil::RegisterFunction(
 	    *db.instance, ScalarFunction("family", {inet_type}, LogicalType::UTINYINT, INetFunctions::Family));
+	ExtensionUtil::RegisterFunction(*db.instance,
+	                                ScalarFunction("netmask", {inet_type}, {inet_type}, INetFunctions::Netmask));
+	ExtensionUtil::RegisterFunction(*db.instance,
+	                                ScalarFunction("network", {inet_type}, {inet_type}, INetFunctions::Network));
+	ExtensionUtil::RegisterFunction(*db.instance,
+	                                ScalarFunction("broadcast", {inet_type}, {inet_type}, INetFunctions::Broadcast));
 
 	// Add - function with ALTER_ON_CONFLICT
 	ScalarFunction substract_fun("-", {inet_type, LogicalType::HUGEINT}, inet_type, INetFunctions::Subtract);
@@ -47,6 +53,12 @@ void InetExtension::Load(DuckDB &db) {
 
 	ScalarFunction add_fun("+", {inet_type, LogicalType::HUGEINT}, inet_type, INetFunctions::Add);
 	ExtensionUtil::AddFunctionOverload(*db.instance, add_fun);
+
+	// Add IP range operators
+	ExtensionUtil::RegisterFunction(
+	    *db.instance, ScalarFunction("<<=", {inet_type, inet_type}, LogicalType::BOOLEAN, INetFunctions::ContainsLeft));
+	ExtensionUtil::RegisterFunction(*db.instance, ScalarFunction(">>=", {inet_type, inet_type}, LogicalType::BOOLEAN,
+	                                                             INetFunctions::ContainsRight));
 }
 
 std::string InetExtension::Name() {

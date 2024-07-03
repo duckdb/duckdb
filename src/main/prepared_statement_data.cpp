@@ -34,7 +34,8 @@ bool CheckCatalogIdentity(ClientContext &context, const string &catalog_name,
 	return StatementProperties::CatalogIdentity {current_catalog_oid, current_catalog_version} == catalog_identity;
 }
 
-bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<case_insensitive_map_t<Value>> values) {
+bool PreparedStatementData::RequireRebind(ClientContext &context,
+                                          optional_ptr<case_insensitive_map_t<BoundParameterData>> values) {
 	idx_t count = values ? values->size() : 0;
 	CheckParameterCount(count);
 	if (!unbound_statement) {
@@ -54,7 +55,7 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<c
 		if (lookup == values->end()) {
 			break;
 		}
-		if (lookup->second.type() != it.second->return_type) {
+		if (lookup->second.GetValue().type() != it.second->return_type) {
 			return true;
 		}
 	}
@@ -78,7 +79,7 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<c
 	return false;
 }
 
-void PreparedStatementData::Bind(case_insensitive_map_t<Value> values) {
+void PreparedStatementData::Bind(case_insensitive_map_t<BoundParameterData> values) {
 	// set parameters
 	D_ASSERT(!unbound_statement || unbound_statement->n_param == properties.parameter_count);
 	CheckParameterCount(values.size());
@@ -91,13 +92,13 @@ void PreparedStatementData::Bind(case_insensitive_map_t<Value> values) {
 			throw BinderException("Could not find parameter with identifier %s", identifier);
 		}
 		D_ASSERT(it.second);
-		auto &value = lookup->second;
+		auto value = lookup->second.GetValue();
 		if (!value.DefaultTryCastAs(it.second->return_type)) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with identifier %s, expected type %s but got type %s", identifier,
 			    it.second->return_type.ToString().c_str(), value.type().ToString().c_str());
 		}
-		it.second->SetValue(value);
+		it.second->SetValue(std::move(value));
 	}
 }
 

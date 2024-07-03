@@ -1,0 +1,63 @@
+# name: test/sql/index/art/scan/test_art_scan_thresholds.test
+# description: Test setting different index scan thresholds.
+# group: [scan]
+
+statement ok
+PRAGMA enable_verification
+
+# Take the maximum of the absolut count and the percentage, which is 100%.
+
+statement ok
+SET index_scan_max_count = 1;
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers SELECT 42 FROM range(1000);
+
+statement ok
+CREATE INDEX idx ON integers(i);
+
+statement ok
+SET explain_output='optimized_only';
+
+query II
+EXPLAIN SELECT * FROM integers WHERE i = 42;
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+statement  ok
+SELECT * FROM integers WHERE i = 42;
+
+statement ok
+SET index_scan_percentage = 0.000001;
+
+# Use one as the maximum count, with the matching keys exceeding that maximum.
+
+query II
+EXPLAIN SELECT * FROM integers WHERE i = 42;
+----
+logical_opt	<REGEX>:.*SEQ_SCAN.*
+
+statement ok
+SELECT * FROM integers WHERE i = 42;
+
+# Let's also test more than STANDARD_VECTOR_SIZE values.
+
+statement ok
+SET index_scan_max_count = 4000;
+
+statement ok
+INSERT INTO integers SELECT 4242 FROM range(4000);
+
+query II
+EXPLAIN SELECT * FROM integers WHERE i = 4242;
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+statement ok
+SELECT * FROM integers WHERE i = 4242;

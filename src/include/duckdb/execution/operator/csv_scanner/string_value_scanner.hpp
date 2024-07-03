@@ -160,7 +160,7 @@ public:
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
 	                  bool figure_out_new_line, idx_t buffer_position, CSVErrorHandler &error_handler,
 	                  CSVIterator &iterator, bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan,
-	                  idx_t &lines_read, bool sniffing);
+	                  idx_t &lines_read, bool sniffing, string path);
 
 	~StringValueResult();
 
@@ -225,6 +225,8 @@ public:
 	//! We store borked rows so we can generate multiple errors during flushing
 	unordered_set<idx_t> borked_rows;
 
+	const string path;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -247,6 +249,9 @@ public:
 	DataChunk &ToChunk();
 	//! Resets the state of the result
 	void Reset();
+
+	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
+	void SkipBOM();
 };
 
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
@@ -259,7 +264,7 @@ public:
 
 	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
-	                   const shared_ptr<CSVErrorHandler> &error_handler);
+	                   const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary);
 
 	StringValueResult &ParseChunk() override;
 
@@ -293,9 +298,6 @@ private:
 	void ProcessExtraRow();
 	//! Function used to move from one buffer to the other, if necessary
 	bool MoveToNextBuffer();
-
-	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
-	void SkipBOM();
 
 	void SkipUntilNewLine();
 
