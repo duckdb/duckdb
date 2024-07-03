@@ -1,6 +1,6 @@
 #include "duckdb/common/enums/statement_type.hpp"
 
-#include <duckdb/catalog/catalog.hpp>
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
