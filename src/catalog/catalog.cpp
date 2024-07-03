@@ -315,7 +315,6 @@ struct CatalogEntryLookup {
 // Generic
 //===--------------------------------------------------------------------===//
 void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
-	NextOid();
 	if (info.type == CatalogType::SCHEMA_ENTRY) {
 		// DROP SCHEMA
 		DropSchema(context, info);
@@ -884,8 +883,6 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 }
 
 void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
-	NextOid();
-
 	if (transaction.HasContext()) {
 		auto lookup =
 		    LookupEntry(transaction.GetContext(), info.GetCatalogType(), info.schema, info.name, info.if_not_found);
@@ -908,10 +905,6 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 }
 
 void Catalog::Verify() {
-}
-
-idx_t Catalog::NextOid() {
-	return GetDatabase().GetDatabaseManager().NextOid();
 }
 
 bool Catalog::IsSystemCatalog() const {

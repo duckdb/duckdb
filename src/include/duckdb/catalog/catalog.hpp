@@ -111,8 +111,6 @@ public:
 		return {}; // don't return anything by default
 	}
 
-	DUCKDB_API idx_t NextOid();
-
 	//! Returns the catalog name - based on how the catalog was attached
 	DUCKDB_API const string &GetName() const;
 	DUCKDB_API idx_t GetOid();

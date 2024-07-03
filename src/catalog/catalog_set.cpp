@@ -601,8 +601,6 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 		// This was the root of the entry chain
 		map.DropEntry(entry);
 	}
-	// we mark the catalog as being modified, since this action can lead to e.g. tables being dropped
-	catalog.NextOid();
 }
 
 void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &read_lock) {

@@ -80,9 +80,6 @@ public:
 	idx_t NextOid() {
 		return next_oid++;
 	}
-	idx_t CurrentOid() {
-		return next_oid;
-	}
 	bool HasDefaultDatabase() {
 		return !default_database.empty();
 	}

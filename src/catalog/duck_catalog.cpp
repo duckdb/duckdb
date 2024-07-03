@@ -95,7 +95,6 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 
 void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 	D_ASSERT(!info.name.empty());
-	NextOid();
 	if (!schemas->DropEntry(transaction, info.name, info.cascade)) {
 		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.name, string());
