@@ -37,6 +37,15 @@ void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &ty
 	Initialize(Allocator::Get(context), types, capacity_p);
 }
 
+idx_t DataChunk::GetAllocationSize() const {
+	idx_t total_size = 0;
+	auto cardinality = size();
+	for (auto &vec : data) {
+		total_size += vec.GetAllocationSize(cardinality);
+	}
+	return total_size;
+}
+
 void DataChunk::Initialize(Allocator &allocator, vector<LogicalType>::const_iterator begin,
                            vector<LogicalType>::const_iterator end, idx_t capacity_p) {
 	D_ASSERT(data.empty());                   // can only be initialized once

@@ -68,6 +68,14 @@ std::string JsonExtension::Name() {
 	return "json";
 }
 
+std::string JsonExtension::Version() const {
+#ifdef EXT_VERSION_JSON
+	return EXT_VERSION_JSON;
+#else
+	return "";
+#endif
+}
+
 } // namespace duckdb
 
 extern "C" {

@@ -1,0 +1,17 @@
+# name: test/sql/copy/csv/test_headers_12089.test
+# description: Test that headers described on #12089 are properly parsed.
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select columns FROM sniff_csv('data/csv/headers/escaped_quote.csv');
+----
+[{'name': Name, 'type': VARCHAR}, {'name': Escaped''Quote, 'type': BIGINT}]
+
+
+query I
+select columns FROM sniff_csv('data/csv/headers/unescaped_quote.csv');
+----
+[{'name': Name, 'type': VARCHAR}, {'name': Unescaped'Quote, 'type': BIGINT}]

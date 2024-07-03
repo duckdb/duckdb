@@ -1,2 +1,3 @@
 %type <str> file_name
-%type <str> repo_path
+%type <str> opt_ext_version
+%type <loadinstalltype> opt_force

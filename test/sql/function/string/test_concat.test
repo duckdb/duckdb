@@ -81,4 +81,3 @@ SELECT CONCAT('hello', ' ', s) FROM strings ORDER BY s
 hello 
 hello hello
 hello world
-

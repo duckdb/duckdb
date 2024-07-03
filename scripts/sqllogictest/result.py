@@ -432,24 +432,31 @@ class SQLLogicDatabase:
         return SQLLogicConnectionPool(self.database.cursor())
 
 
+def is_regex(input: str) -> bool:
+    return input.startswith("<REGEX>:") or input.startswith("<!REGEX>:")
+
+
+def matches_regex(input: str, actual_str: str) -> bool:
+    if input.startswith("<REGEX>:"):
+        should_match = True
+        regex_str = input.replace("<REGEX>:", "")
+    else:
+        should_match = False
+        regex_str = input.replace("<!REGEX>:", "")
+    re_options = re.DOTALL
+    re_pattern = re.compile(regex_str, re_options)
+    regex_matches = bool(re_pattern.fullmatch(actual_str))
+    return regex_matches == should_match
+
+
 def compare_values(result: QueryResult, actual_str, expected_str, current_column):
     error = False
 
     if actual_str == expected_str:
         return True
 
-    if expected_str.startswith("<REGEX>:") or expected_str.startswith("<!REGEX>:"):
-        if expected_str.startswith("<REGEX>:"):
-            should_match = True
-            regex_str = expected_str.replace("<REGEX>:", "")
-        else:
-            should_match = False
-            regex_str = expected_str.replace("<!REGEX>:", "")
-        re_options = re.DOTALL
-        re_pattern = re.compile(regex_str, re_options)
-        regex_matches = bool(re_pattern.fullmatch(actual_str))
-        if regex_matches == should_match:
-            return True
+    if is_regex(expected_str):
+        return matches_regex(expected_str, actual_str)
 
     sql_type = result.types[current_column]
 
@@ -779,6 +786,7 @@ class SQLLogicContext:
                 self.runner.delete_database(dbpath)
         else:
             dbpath = ""
+        self.runner.loaded_databases.add(dbpath)
 
         # set up the config file
         additional_config = {}
@@ -969,13 +977,19 @@ class SQLLogicContext:
             if expected_result.lines == None:
                 return
             expected = '\n'.join(expected_result.lines)
-            # Sanitize the expected error
-            if expected.startswith('Dependency Error: '):
-                expected = expected.split('Dependency Error: ')[1]
-            if expected not in str(e):
-                self.fail(
-                    f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
-                )
+            if is_regex(expected):
+                if not matches_regex(expected, str(e)):
+                    self.fail(
+                        f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
+                    )
+            else:
+                # Sanitize the expected error
+                if expected.startswith('Dependency Error: '):
+                    expected = expected.split('Dependency Error: ')[1]
+                if expected not in str(e):
+                    self.fail(
+                        f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
+                    )
 
     def check_require(self, statement: Require) -> RequireResult:
         not_an_extension = [
@@ -1115,7 +1129,10 @@ class SQLLogicContext:
                     context.remove_keyword(key)
 
             loop_context = SQLLogicContext(self.pool, self.runner, statements, self.keywords.copy(), update_value)
-            loop_context.execute()
+            try:
+                loop_context.execute()
+            except TestException:
+                self.error = loop_context.error
         else:
             contexts: Dict[Tuple[str, int], Any] = {}
             for val in range(loop.start, loop.end):
@@ -1247,6 +1264,8 @@ class SQLLogicContext:
                     if self.runner.skip_active() and statement.__class__ != Unskip:
                         # Keep skipping until Unskip is found
                         continue
+                    if statement.get_decorators() != []:
+                        self.skiptest("Decorators are not supported yet")
                     method = self.STATEMENTS.get(statement.__class__)
                     if not method:
                         self.skiptest("Not supported by the runner")

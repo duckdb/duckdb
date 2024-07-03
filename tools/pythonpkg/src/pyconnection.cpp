@@ -55,6 +55,7 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
+#include "duckdb/main/relation/query_relation.hpp"
 
 #include <random>
 
@@ -164,7 +165,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection");
 	m.def("execute", &DuckDBPyConnection::Execute,
 	      "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
-	      py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false);
+	      py::arg("parameters") = py::none());
 	m.def("executemany", &DuckDBPyConnection::ExecuteMany,
 	      "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	      py::arg("query"), py::arg("parameters") = py::none());
@@ -213,7 +214,14 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("parameters") = py::none());
 	m.def("read_json", &DuckDBPyConnection::ReadJSON, "Create a relation object from the JSON file in 'name'",
 	      py::arg("name"), py::kw_only(), py::arg("columns") = py::none(), py::arg("sample_size") = py::none(),
-	      py::arg("maximum_depth") = py::none(), py::arg("records") = py::none(), py::arg("format") = py::none());
+	      py::arg("maximum_depth") = py::none(), py::arg("records") = py::none(), py::arg("format") = py::none(),
+	      py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
+	      py::arg("compression") = py::none(), py::arg("maximum_object_size") = py::none(),
+	      py::arg("ignore_errors") = py::none(), py::arg("convert_strings_to_integers") = py::none(),
+	      py::arg("field_appearance_threshold") = py::none(), py::arg("map_inference_threshold") = py::none(),
+	      py::arg("maximum_sample_files") = py::none(), py::arg("filename") = py::none(),
+	      py::arg("hive_partitioning") = py::none(), py::arg("union_by_name") = py::none(),
+	      py::arg("hive_types") = py::none(), py::arg("hive_types_autocast") = py::none());
 	m.def("extract_statements", &DuckDBPyConnection::ExtractStatements,
 	      "Parse the query string and extract the Statement object(s) produced", py::arg("query"));
 	m.def("sql", &DuckDBPyConnection::RunQuery,
@@ -420,33 +428,62 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	DuckDBPyConnection::ImportCache();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object &query, py::object params) {
-	if (params.is_none()) {
-		params = py::list();
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object &query, py::object params_p) {
+	result.reset();
+	if (params_p.is_none()) {
+		params_p = py::list();
 	}
-	Execute(query, std::move(params), true);
-	return shared_from_this();
-}
 
-static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQueryResult &pending_query) {
-	if (pending_query.AllowStreamResult()) {
-		return PendingQueryResult::IsFinishedOrBlocked;
+	auto statements = GetStatements(query);
+	if (statements.empty()) {
+		// TODO: should we throw?
+		return nullptr;
 	}
-	return PendingQueryResult::IsFinished;
+
+	auto last_statement = std::move(statements.back());
+	statements.pop_back();
+	// First immediately execute any preceding statements (if any)
+	// FIXME: DBAPI says to not accept an 'executemany' call with multiple statements
+	ExecuteImmediately(std::move(statements));
+
+	auto prep = PrepareQuery(std::move(last_statement));
+
+	if (!py::is_list_like(params_p)) {
+		throw InvalidInputException("executemany requires a list of parameter sets to be provided");
+	}
+	auto outer_list = py::list(params_p);
+	if (outer_list.empty()) {
+		throw InvalidInputException("executemany requires a non-empty list of parameter sets to be provided");
+	}
+
+	unique_ptr<QueryResult> query_result;
+	// Execute once for every set of parameters that are provided
+	for (auto &parameters : outer_list) {
+		auto params = py::reinterpret_borrow<py::object>(parameters);
+		query_result = ExecuteInternal(*prep, std::move(params));
+	}
+	// Set the internal 'result' object
+	if (query_result) {
+		auto py_result = make_uniq<DuckDBPyResult>(std::move(query_result));
+		result = make_uniq<DuckDBPyRelation>(std::move(py_result));
+	}
+
+	return shared_from_this();
 }
 
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
-	auto is_finished = FinishedCondition(pending_query);
-	do {
-		execution_result = pending_query.ExecuteTask();
+	while (!PendingQueryResult::IsResultReady(execution_result = pending_query.ExecuteTask())) {
 		{
 			py::gil_scoped_acquire gil;
 			if (PyErr_CheckSignals() != 0) {
 				throw std::runtime_error("Query interrupted");
 			}
 		}
-	} while (!is_finished(execution_result));
+		if (execution_result == PendingExecutionResult::BLOCKED) {
+			pending_query.WaitForTask();
+		}
+	}
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
 	}
@@ -486,99 +523,66 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 	return new_params;
 }
 
-unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(vector<unique_ptr<SQLStatement>> statements,
-                                                            py::object params, bool many) {
+case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedStatement &prep,
+                                                                       const py::object &params) {
+	case_insensitive_map_t<BoundParameterData> named_values;
+	if (py::is_list_like(params)) {
+		if (prep.n_param != py::len(params)) {
+			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.n_param,
+			                            py::len(params));
+		}
+		auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(params);
+		for (idx_t i = 0; i < unnamed_values.size(); i++) {
+			auto &value = unnamed_values[i];
+			auto identifier = std::to_string(i + 1);
+			named_values[identifier] = BoundParameterData(std::move(value));
+		}
+	} else if (py::is_dict_like(params)) {
+		auto dict = py::cast<py::dict>(params);
+		named_values = DuckDBPyConnection::TransformPythonParamDict(dict);
+	} else {
+		throw InvalidInputException("Prepared parameters can only be passed as a list or a dictionary");
+	}
+	return named_values;
+}
+
+unique_ptr<PreparedStatement> DuckDBPyConnection::PrepareQuery(unique_ptr<SQLStatement> statement) {
+	unique_ptr<PreparedStatement> prep;
+	{
+		py::gil_scoped_release release;
+		unique_lock<mutex> lock(py_connection_lock);
+
+		prep = connection->Prepare(std::move(statement));
+		if (prep->HasError()) {
+			prep->error.Throw();
+		}
+	}
+	return prep;
+}
+
+unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &prep, py::object params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	if (params.is_none()) {
 		params = py::list();
 	}
-	result = nullptr;
-	unique_ptr<PreparedStatement> prep;
+
+	// Execute the prepared statement with the prepared parameters
+	auto named_values = TransformPreparedParameters(prep, params);
+	unique_ptr<QueryResult> res;
 	{
 		py::gil_scoped_release release;
 		unique_lock<std::mutex> lock(py_connection_lock);
 
-		if (statements.empty()) {
-			// no statements to execute
-			return nullptr;
-		}
-		// if there are multiple statements, we directly execute the statements besides the last one
-		// we only return the result of the last statement to the user, unless one of the previous statements fails
-		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			if (statements[i]->n_param != 0) {
-				throw NotImplementedException(
-				    "Prepared parameters are only supported for the last statement, please split your query up into "
-				    "separate 'execute' calls if you want to use prepared parameters");
-			}
-			auto pending_query = connection->PendingQuery(std::move(statements[i]), false);
-			auto res = CompletePendingQuery(*pending_query);
+		auto pending_query = prep.PendingQuery(named_values);
+		res = CompletePendingQuery(*pending_query);
 
-			if (res->HasError()) {
-				res->ThrowError();
-			}
-		}
-
-		prep = connection->Prepare(std::move(statements.back()));
-		if (prep->HasError()) {
-			prep->error.Throw();
+		if (res->HasError()) {
+			res->ThrowError();
 		}
 	}
-
-	// this is a list of a list of parameters in executemany
-	py::list params_set;
-	if (!many) {
-		params_set = py::list(1);
-		params_set[0] = params;
-	} else {
-		if (!py::isinstance<py::list>(params)) {
-			throw InvalidInputException("executemany requires a list of parameter sets to be provided");
-		}
-		auto outer_list = py::list(params);
-		if (outer_list.empty()) {
-			throw InvalidInputException("executemany requires a non-empty list of parameter sets to be provided");
-		}
-		params_set = params;
-	}
-
-	// For every entry of the argument list, execute the prepared statement with said arguments
-	for (pybind11::handle single_query_params : params_set) {
-		case_insensitive_map_t<Value> named_values;
-		if (py::isinstance<py::list>(single_query_params) || py::isinstance<py::tuple>(single_query_params)) {
-			if (prep->n_param != py::len(single_query_params)) {
-				throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
-				                            py::len(single_query_params));
-			}
-			auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(single_query_params);
-			for (idx_t i = 0; i < unnamed_values.size(); i++) {
-				auto &value = unnamed_values[i];
-				auto identifier = std::to_string(i + 1);
-				named_values[identifier] = std::move(value);
-			}
-		} else if (py::isinstance<py::dict>(single_query_params)) {
-			auto dict = py::cast<py::dict>(single_query_params);
-			named_values = DuckDBPyConnection::TransformPythonParamDict(dict);
-		} else {
-			throw InvalidInputException("Prepared parameters can only be passed as a list or a dictionary");
-		}
-		unique_ptr<QueryResult> res;
-		{
-			py::gil_scoped_release release;
-			unique_lock<std::mutex> lock(py_connection_lock);
-			auto pending_query = prep->PendingQuery(named_values);
-			res = CompletePendingQuery(*pending_query);
-
-			if (res->HasError()) {
-				res->ThrowError();
-			}
-		}
-
-		if (!many) {
-			return res;
-		}
-	}
-	return nullptr;
+	return res;
 }
 
 vector<unique_ptr<SQLStatement>> DuckDBPyConnection::GetStatements(const py::object &query) {
@@ -603,10 +607,25 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const strin
 	return Execute(py::str(query));
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &query, py::object params, bool many) {
-	auto statements = GetStatements(query);
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &query, py::object params) {
+	result.reset();
 
-	auto res = ExecuteInternal(std::move(statements), std::move(params), many);
+	auto statements = GetStatements(query);
+	if (statements.empty()) {
+		// TODO: should we throw?
+		return nullptr;
+	}
+
+	auto last_statement = std::move(statements.back());
+	statements.pop_back();
+	// First immediately execute any preceding statements (if any)
+	// FIXME: SQLites implementation says to not accept an 'execute' call with multiple statements
+	ExecuteImmediately(std::move(statements));
+
+	auto prep = PrepareQuery(std::move(last_statement));
+	auto res = ExecuteInternal(*prep, std::move(params));
+
+	// Set the internal 'result' object
 	if (res) {
 		auto py_result = make_uniq<DuckDBPyResult>(std::move(res));
 		result = make_uniq<DuckDBPyRelation>(std::move(py_result));
@@ -718,19 +737,69 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	return shared_from_this();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const Optional<py::object> &columns,
-                                                          const Optional<py::object> &sample_size,
-                                                          const Optional<py::object> &maximum_depth,
-                                                          const Optional<py::str> &records,
-                                                          const Optional<py::str> &format) {
+static void ParseMultiFileReaderOptions(named_parameter_map_t &options, const Optional<py::object> &filename,
+                                        const Optional<py::object> &hive_partitioning,
+                                        const Optional<py::object> &union_by_name,
+                                        const Optional<py::object> &hive_types,
+                                        const Optional<py::object> &hive_types_autocast) {
+	if (!py::none().is(filename)) {
+		auto val = TransformPythonValue(filename);
+		options["filename"] = val;
+	}
+
+	if (!py::none().is(hive_types)) {
+		auto val = TransformPythonValue(hive_types);
+		options["hive_types"] = val;
+	}
+
+	if (!py::none().is(hive_partitioning)) {
+		if (!py::isinstance<py::bool_>(hive_partitioning)) {
+			string actual_type = py::str(hive_partitioning.get_type());
+			throw BinderException("read_json only accepts 'hive_partitioning' as a boolean, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(hive_partitioning, LogicalTypeId::BOOLEAN);
+		options["hive_partitioning"] = val;
+	}
+
+	if (!py::none().is(union_by_name)) {
+		if (!py::isinstance<py::bool_>(union_by_name)) {
+			string actual_type = py::str(union_by_name.get_type());
+			throw BinderException("read_json only accepts 'union_by_name' as a boolean, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(union_by_name, LogicalTypeId::BOOLEAN);
+		options["union_by_name"] = val;
+	}
+
+	if (!py::none().is(hive_types_autocast)) {
+		if (!py::isinstance<py::bool_>(hive_types_autocast)) {
+			string actual_type = py::str(hive_types_autocast.get_type());
+			throw BinderException("read_json only accepts 'hive_types_autocast' as a boolean, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(hive_types_autocast, LogicalTypeId::BOOLEAN);
+		options["hive_types_autocast"] = val;
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
+    const string &name, const Optional<py::object> &columns, const Optional<py::object> &sample_size,
+    const Optional<py::object> &maximum_depth, const Optional<py::str> &records, const Optional<py::str> &format,
+    const Optional<py::object> &date_format, const Optional<py::object> &timestamp_format,
+    const Optional<py::object> &compression, const Optional<py::object> &maximum_object_size,
+    const Optional<py::object> &ignore_errors, const Optional<py::object> &convert_strings_to_integers,
+    const Optional<py::object> &field_appearance_threshold, const Optional<py::object> &map_inference_threshold,
+    const Optional<py::object> &maximum_sample_files, const Optional<py::object> &filename,
+    const Optional<py::object> &hive_partitioning, const Optional<py::object> &union_by_name,
+    const Optional<py::object> &hive_types, const Optional<py::object> &hive_types_autocast) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 
 	named_parameter_map_t options;
 
+	ParseMultiFileReaderOptions(options, filename, hive_partitioning, union_by_name, hive_types, hive_types_autocast);
+
 	if (!py::none().is(columns)) {
-		if (!py::isinstance<py::dict>(columns)) {
+		if (!py::is_dict_like(columns)) {
 			throw BinderException("read_json only accepts 'columns' as a dict[str, str]");
 		}
 		py::dict columns_dict = columns;
@@ -773,6 +842,36 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 		options["format"] = Value(format_option);
 	}
 
+	if (!py::none().is(date_format)) {
+		if (!py::isinstance<py::str>(date_format)) {
+			string actual_type = py::str(date_format.get_type());
+			throw BinderException("read_json only accepts 'date_format' as a string, not '%s'", actual_type);
+		}
+		auto date_format_s = py::reinterpret_borrow<py::str>(date_format);
+		auto date_format_option = std::string(py::str(date_format_s));
+		options["date_format"] = Value(date_format_option);
+	}
+
+	if (!py::none().is(timestamp_format)) {
+		if (!py::isinstance<py::str>(timestamp_format)) {
+			string actual_type = py::str(timestamp_format.get_type());
+			throw BinderException("read_json only accepts 'timestamp_format' as a string, not '%s'", actual_type);
+		}
+		auto timestamp_format_s = py::reinterpret_borrow<py::str>(timestamp_format);
+		auto timestamp_format_option = std::string(py::str(timestamp_format_s));
+		options["timestamp_format"] = Value(timestamp_format_option);
+	}
+
+	if (!py::none().is(compression)) {
+		if (!py::isinstance<py::str>(compression)) {
+			string actual_type = py::str(compression.get_type());
+			throw BinderException("read_json only accepts 'compression' as a string, not '%s'", actual_type);
+		}
+		auto compression_s = py::reinterpret_borrow<py::str>(compression);
+		auto compression_option = std::string(py::str(compression_s));
+		options["compression"] = Value(compression_option);
+	}
+
 	if (!py::none().is(sample_size)) {
 		if (!py::isinstance<py::int_>(sample_size)) {
 			string actual_type = py::str(sample_size.get_type());
@@ -787,6 +886,64 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 			throw BinderException("read_json only accepts 'maximum_depth' as an integer, not '%s'", actual_type);
 		}
 		options["maximum_depth"] = Value::INTEGER(py::int_(maximum_depth));
+	}
+
+	if (!py::none().is(maximum_object_size)) {
+		if (!py::isinstance<py::int_>(maximum_object_size)) {
+			string actual_type = py::str(maximum_object_size.get_type());
+			throw BinderException("read_json only accepts 'maximum_object_size' as an unsigned integer, not '%s'",
+			                      actual_type);
+		}
+		auto val = TransformPythonValue(maximum_object_size, LogicalTypeId::UINTEGER);
+		options["maximum_object_size"] = val;
+	}
+
+	if (!py::none().is(ignore_errors)) {
+		if (!py::isinstance<py::bool_>(ignore_errors)) {
+			string actual_type = py::str(ignore_errors.get_type());
+			throw BinderException("read_json only accepts 'ignore_errors' as a boolean, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(ignore_errors, LogicalTypeId::BOOLEAN);
+		options["ignore_errors"] = val;
+	}
+
+	if (!py::none().is(convert_strings_to_integers)) {
+		if (!py::isinstance<py::bool_>(convert_strings_to_integers)) {
+			string actual_type = py::str(convert_strings_to_integers.get_type());
+			throw BinderException("read_json only accepts 'convert_strings_to_integers' as a boolean, not '%s'",
+			                      actual_type);
+		}
+		auto val = TransformPythonValue(convert_strings_to_integers, LogicalTypeId::BOOLEAN);
+		options["convert_strings_to_integers"] = val;
+	}
+
+	if (!py::none().is(field_appearance_threshold)) {
+		if (!py::isinstance<py::float_>(field_appearance_threshold)) {
+			string actual_type = py::str(field_appearance_threshold.get_type());
+			throw BinderException("read_json only accepts 'field_appearance_threshold' as a float, not '%s'",
+			                      actual_type);
+		}
+		auto val = TransformPythonValue(field_appearance_threshold, LogicalTypeId::DOUBLE);
+		options["field_appearance_threshold"] = val;
+	}
+
+	if (!py::none().is(map_inference_threshold)) {
+		if (!py::isinstance<py::int_>(map_inference_threshold)) {
+			string actual_type = py::str(map_inference_threshold.get_type());
+			throw BinderException("read_json only accepts 'map_inference_threshold' as an integer, not '%s'",
+			                      actual_type);
+		}
+		auto val = TransformPythonValue(map_inference_threshold, LogicalTypeId::BIGINT);
+		options["map_inference_threshold"] = val;
+	}
+
+	if (!py::none().is(maximum_sample_files)) {
+		if (!py::isinstance<py::int_>(maximum_sample_files)) {
+			string actual_type = py::str(maximum_sample_files.get_type());
+			throw BinderException("read_json only accepts 'maximum_sample_files' as an integer, not '%s'", actual_type);
+		}
+		auto val = TransformPythonValue(maximum_sample_files, LogicalTypeId::BIGINT);
+		options["maximum_sample_files"] = val;
 	}
 
 	bool auto_detect = false;
@@ -852,7 +1009,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 
 	if (!py::none().is(dtype)) {
-		if (py::isinstance<py::dict>(dtype)) {
+		if (py::is_dict_like(dtype)) {
 			child_list_t<Value> struct_fields;
 			py::dict dtype_dict = dtype;
 			for (auto &kv : dtype_dict) {
@@ -864,7 +1021,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 			}
 			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
 			bind_parameters["dtypes"] = std::move(dtype_struct);
-		} else if (py::isinstance<py::list>(dtype)) {
+		} else if (py::is_list_like(dtype)) {
 			vector<Value> list_values;
 			py::list dtype_list = dtype;
 			for (auto &child : dtype_list) {
@@ -892,7 +1049,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 
 	if (!py::none().is(names_p)) {
-		if (!py::isinstance<py::list>(names_p)) {
+		if (!py::is_list_like(names_p)) {
 			throw InvalidInputException("read_csv only accepts 'names' as a list of strings");
 		}
 		vector<Value> names;
@@ -908,7 +1065,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 
 	if (!py::none().is(na_values)) {
 		vector<Value> null_values;
-		if (!py::isinstance<py::str>(na_values) && !py::isinstance<py::list>(na_values)) {
+		if (!py::isinstance<py::str>(na_values) && !py::is_list_like(na_values)) {
 			throw InvalidInputException("read_csv only accepts 'na_values' as a string or a list of strings");
 		} else if (py::isinstance<py::str>(na_values)) {
 			null_values.push_back(Value(py::str(na_values)));
@@ -1022,8 +1179,26 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(read_csv.alias));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &query, string alias,
-                                                          const py::object &params) {
+void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements) {
+	if (statements.empty()) {
+		return;
+	}
+	for (auto &stmt : statements) {
+		if (stmt->n_param != 0) {
+			throw NotImplementedException(
+			    "Prepared parameters are only supported for the last statement, please split your query up into "
+			    "separate 'execute' calls if you want to use prepared parameters");
+		}
+		auto pending_query = connection->PendingQuery(std::move(stmt), false);
+		auto res = CompletePendingQuery(*pending_query);
+
+		if (res->HasError()) {
+			res->ThrowError();
+		}
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &query, string alias, py::object params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -1032,25 +1207,51 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 	}
 
 	auto statements = GetStatements(query);
-	if (statements.size() == 1 && statements[0]->type == StatementType::SELECT_STATEMENT && py::none().is(params)) {
-		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statements[0]));
-		return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(std::move(select_statement), alias));
+	if (statements.empty()) {
+		// TODO: should we throw?
+		return nullptr;
 	}
 
-	auto res = ExecuteInternal(std::move(statements), params);
-	if (!res) {
-		return nullptr;
+	auto last_statement = std::move(statements.back());
+	statements.pop_back();
+	// First immediately execute any preceding statements (if any)
+	ExecuteImmediately(std::move(statements));
+
+	// Attempt to create a Relation for lazy execution if possible
+	shared_ptr<Relation> relation;
+	if (py::none().is(params)) {
+		// FIXME: currently we can't create relations with prepared parameters
+		auto statement_type = last_statement->type;
+		switch (statement_type) {
+		case StatementType::SELECT_STATEMENT: {
+			auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(last_statement));
+			relation = connection->RelationFromQuery(std::move(select_statement), alias);
+			break;
+		}
+		default:
+			break;
+		}
 	}
-	if (res->properties.return_type != StatementReturnType::QUERY_RESULT) {
-		return nullptr;
+
+	if (!relation) {
+		// Could not create a relation, resort to direct execution
+		auto prep = PrepareQuery(std::move(last_statement));
+		auto res = ExecuteInternal(*prep, std::move(params));
+		if (!res) {
+			return nullptr;
+		}
+		if (res->properties.return_type != StatementReturnType::QUERY_RESULT) {
+			return nullptr;
+		}
+		if (res->type == QueryResultType::STREAM_RESULT) {
+			auto &stream_result = res->Cast<StreamQueryResult>();
+			res = stream_result.Materialize();
+		}
+		auto &materialized_result = res->Cast<MaterializedQueryResult>();
+		relation = make_shared_ptr<MaterializedRelation>(connection->context, materialized_result.TakeCollection(),
+		                                                 res->names, alias);
 	}
-	if (res->type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = res->Cast<StreamQueryResult>();
-		res = stream_result.Materialize();
-	}
-	auto &materialized_result = res->Cast<MaterializedQueryResult>();
-	return make_uniq<DuckDBPyRelation>(
-	    make_uniq<MaterializedRelation>(connection->context, materialized_result.TakeCollection(), res->names, alias));
+	return make_uniq<DuckDBPyRelation>(std::move(relation));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
@@ -1099,6 +1300,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fname, py::object params) {
 	if (params.is_none()) {
 		params = py::list();
+	}
+	if (!py::is_list_like(params)) {
+		throw InvalidInputException("'params' has to be a list of parameters");
 	}
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
@@ -1314,7 +1518,12 @@ void DuckDBPyConnection::Close() {
 	temporary_views.clear();
 	// https://peps.python.org/pep-0249/#Connection.close
 	for (auto &cur : cursors) {
-		cur->Close();
+		auto cursor = cur.lock();
+		if (!cursor) {
+			// The cursor has already been closed
+			continue;
+		}
+		cursor->Close();
 	}
 	registered_functions.clear();
 	cursors.clear();
@@ -1436,9 +1645,7 @@ case_insensitive_map_t<Value> TransformPyConfigDict(const py::dict &py_config_di
 void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig &config) {
 	// We don't cache unnamed memory instances (i.e., :memory:)
 	bool cache_instance = database != ":memory:" && !database.empty();
-	if (config.options.enable_external_access) {
-		config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
-	}
+	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
 	res.database = instance_cache.CreateInstance(database, config, cache_instance);
 	res.connection = make_uniq<Connection>(*res.database);
 	auto &context = *res.connection->context;
@@ -1521,6 +1728,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	config.AddExtensionOption("pandas_analyze_sample",
 	                          "The maximum number of rows to sample when analyzing a pandas object column.",
 	                          LogicalType::UBIGINT, Value::UBIGINT(1000));
+	config.AddExtensionOption("python_enable_replacements",
+	                          "Whether variables visible to the current stack should be used for replacement scans.",
+	                          LogicalType::BOOLEAN, Value::BOOLEAN(true));
 	if (!DuckDBPyConnection::IsJupyter()) {
 		config_dict["duckdb_api"] = Value("python");
 	} else {
@@ -1544,13 +1754,13 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(const py::handle &par
 	return args;
 }
 
-case_insensitive_map_t<Value> DuckDBPyConnection::TransformPythonParamDict(const py::dict &params) {
-	case_insensitive_map_t<Value> args;
+case_insensitive_map_t<BoundParameterData> DuckDBPyConnection::TransformPythonParamDict(const py::dict &params) {
+	case_insensitive_map_t<BoundParameterData> args;
 
 	for (auto pair : params) {
 		auto &key = pair.first;
 		auto &value = pair.second;
-		args[std::string(py::str(key))] = TransformPythonValue(value, LogicalType::UNKNOWN, false);
+		args[std::string(py::str(key))] = BoundParameterData(TransformPythonValue(value, LogicalType::UNKNOWN, false));
 	}
 	return args;
 }
@@ -1656,7 +1866,7 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 		default:
 			return NumpyObjectType::INVALID;
 		}
-	} else if (py::isinstance<py::dict>(object)) {
+	} else if (py::is_dict_like(object)) {
 		int dim = -1;
 		for (auto item : py::cast<py::dict>(object)) {
 			if (!IsValidNumpyDimensions(item.second, dim)) {
@@ -1664,7 +1874,7 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 			}
 		}
 		return NumpyObjectType::DICT;
-	} else if (py::isinstance<py::list>(object)) {
+	} else if (py::is_list_like(object)) {
 		int dim = -1;
 		for (auto item : py::cast<py::list>(object)) {
 			if (!IsValidNumpyDimensions(item, dim)) {

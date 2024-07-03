@@ -1,8 +1,6 @@
 #ifndef JEMALLOC_INTERNAL_DECLS_H
 #define JEMALLOC_INTERNAL_DECLS_H
 
-#include "jemalloc/internal/jemalloc_internal_defs.h"
-
 #include <math.h>
 #ifdef _WIN32
 #  include <windows.h>
@@ -34,7 +32,7 @@
 #    include <sys/uio.h>
 #  endif
 #  include <pthread.h>
-#  if defined(__FreeBSD__) || defined(__DragonFly__)
+#  if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
 #  include <pthread_np.h>
 #  include <sched.h>
 #  if defined(__FreeBSD__)
@@ -57,25 +55,24 @@
 #endif
 #include <sys/types.h>
 
-#include <climits>
+#include <limits.h>
 #ifndef SIZE_T_MAX
 #  define SIZE_T_MAX	SIZE_MAX
 #endif
 #ifndef SSIZE_MAX
 #  define SSIZE_MAX	((ssize_t)(SIZE_T_MAX >> 1))
 #endif
-
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stddef.h>
 #ifndef offsetof
 #  define offsetof(type, member)	((size_t)&(((type *)NULL)->member))
 #endif
-#include <cstring>
-
-#ifdef _MSC_VER
-#include "msvc_compat/strings.h"
-#else
+#include <string.h>
 #include <strings.h>
-#endif
-
 #include <ctype.h>
 #ifdef _MSC_VER
 #  include <io.h>
@@ -107,5 +104,22 @@ isblank(int c) {
 #ifdef small
 #  undef small
 #endif
+
+/*
+ * Oftentimes we'd like to perform some kind of arithmetic to obtain
+ * a pointer from another pointer but with some offset or mask applied.
+ * Naively you would accomplish this by casting the source pointer to
+ * `uintptr_t`, performing all of the relevant arithmetic, and then casting
+ * the result to the desired pointer type. However, this has the unfortunate
+ * side-effect of concealing pointer provenance, hiding useful information for
+ * optimization from the compiler (see here for details:
+ * https://clang.llvm.org/extra/clang-tidy/checks/performance/no-int-to-ptr.html
+ * )
+ * Instead what one should do is cast the source pointer to `char *` and perform
+ * the equivalent arithmetic (since `char` of course represents one byte). But
+ * because `char *` has the semantic meaning of "string", we define this typedef
+ * simply to make it clearer where we are performing such pointer arithmetic.
+ */
+typedef char byte_t;
 
 #endif /* JEMALLOC_INTERNAL_H */

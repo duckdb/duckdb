@@ -419,10 +419,9 @@ class TestRelation(object):
             1000000,
             pytest.param(
                 10000000,
-                marks=pytest.mark.xfail(
+                marks=pytest.mark.skipif(
                     condition=platform.system() == "Emscripten",
-                    raises=MemoryError,
-                    reason="Emscripten/Pyodide builds run out of memory at this scale",
+                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not thrown reliably",
                 ),
             ),
         ],
@@ -466,8 +465,11 @@ class TestRelation(object):
         ):
             rel.insert([1, 2, 3, 4])
 
-        query_rel = rel.query('x', "select 42 from x where column0 != 42")
-        assert query_rel.fetchall() == []
+        with pytest.raises(
+            duckdb.NotImplementedException, match='Creating a VIEW from a MaterializedRelation is not supported'
+        ):
+            query_rel = rel.query('x', "select 42 from x where column0 != 42")
+            assert query_rel.fetchall() == []
 
         distinct_rel = rel.distinct()
         assert distinct_rel.fetchall() == [(42, 'test', 'this is a long string', True)]
@@ -512,8 +514,20 @@ class TestRelation(object):
 
         except_rel = unioned_rel.except_(materialized_one)
         res = except_rel.fetchall()
-        assert res == [('a',)]
+        assert res == [tuple('a') for _ in range(5)]
 
         intersect_rel = unioned_rel.intersect(materialized_one).order('range')
         res = intersect_rel.fetchall()
         assert res == [('0',), ('1',), ('2',), ('3',), ('4',), ('5',), ('6',), ('7',), ('8',), ('9',)]
+
+    def test_materialized_relation_view(self, duckdb_cursor):
+        with pytest.raises(
+            duckdb.NotImplementedException, match='Creating a VIEW from a MaterializedRelation is not supported'
+        ):
+            duckdb_cursor.sql(
+                """
+                create table tbl(a varchar);
+                insert into tbl values ('test') returning *
+            """
+            ).to_view('vw')
+            res = duckdb_cursor.sql("select * from vw").fetchone()

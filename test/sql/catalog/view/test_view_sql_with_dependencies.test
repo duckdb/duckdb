@@ -1,0 +1,111 @@
+# name: test/sql/catalog/view/test_view_sql_with_dependencies.test
+# description: Test behavior of 'sql' on various different views
+# group: [view]
+
+statement ok
+set storage_compatibility_version='latest'
+
+statement ok
+set enable_view_dependencies=true
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create schema my_schema;
+
+# X contains columns `a` and `y`
+statement ok
+CREATE VIEW my_schema.X (a) AS SELECT 'x' as x, 'y' as y;
+
+query I
+select trim(sql, chr(10)) from duckdb_views() where internal = false;
+----
+CREATE VIEW my_schema.X (a) AS SELECT 'x' AS x, 'y' AS y;
+
+statement ok
+alter view my_schema.X rename to Y;
+
+# Properly renamed to Y
+query I
+select trim(sql, chr(10)) from duckdb_views() where internal = false;
+----
+CREATE VIEW my_schema.Y (a) AS SELECT 'x' AS x, 'y' AS y;
+
+statement ok
+drop schema my_schema cascade;
+
+query I
+select trim(sql, chr(10)) from duckdb_views() where internal = false;
+----
+
+statement ok
+create table tbl (
+	a integer,
+	b varchar
+)
+
+statement ok
+create view vw as select * from tbl;
+
+# sql is not affected by the column names of the table
+query I
+select trim(sql, chr(10)) from duckdb_views() where internal = false;
+----
+CREATE VIEW vw AS SELECT * FROM tbl;
+
+statement error
+alter table tbl rename column b to x;
+----
+Dependency Error: Cannot alter entry "tbl" because there are entries that depend on it.
+
+# The VIEW has to be dropped before the table can be altered
+statement ok
+drop view vw;
+
+statement ok
+alter table tbl rename column b to x;
+
+# Recreate the view
+statement ok
+CREATE VIEW vw AS SELECT * FROM tbl;
+
+# sql is not affected by the column names of the table
+query I
+select trim(sql, chr(10)) from duckdb_views() where internal = false;
+----
+CREATE VIEW vw AS SELECT * FROM tbl;
+
+statement ok
+create or replace view vw (c1, c2) as select * from tbl;
+
+statement ok
+create or replace table "table name" (
+	"column name 1" integer,
+	"column name 2" varchar
+)
+
+statement ok
+create or replace view "view name" as select * from "table name";
+
+statement ok
+drop view vw;
+
+query I
+select trim(sql, chr(10)) from duckdb_views() where internal = false;
+----
+CREATE VIEW "view name" AS SELECT * FROM "table name";
+
+statement ok
+drop view "view name"
+
+statement ok
+create schema "schema name";
+
+statement ok
+CREATE VIEW "schema name"."view name" ("other name 1", "column name 2") AS SELECT * FROM "table name";
+
+query I
+select trim(sql, chr(10)) from duckdb_views() where internal = false;
+----
+CREATE VIEW "schema name"."view name" ("other name 1", "column name 2") AS SELECT * FROM "table name";

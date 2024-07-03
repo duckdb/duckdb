@@ -8,6 +8,9 @@ require noforcestorage
 # this test performs many comparisons against the default block size of 256KiB
 require block_size 262144
 
+# temp directory usage changes with vector size
+require vector_size 2048
+
 # Set a temp_directory to offload data
 statement ok
 set temp_directory='__TEST_DIR__/max_swap_space_reached'

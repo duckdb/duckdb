@@ -31,6 +31,8 @@ public:
 	virtual ~StorageCommitState() {
 	}
 
+	//! Revert the commit
+	virtual void RevertCommit() = 0;
 	// Make the commit persistent
 	virtual void FlushCommit() = 0;
 };
@@ -57,8 +59,10 @@ public:
 	static StorageManager &Get(AttachedDatabase &db);
 	static StorageManager &Get(Catalog &catalog);
 
-	//! Initialize a database or load an existing database from the given path
-	void Initialize();
+	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
+	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
+	//! or the file's block allocation size, if it is an existing database.
+	void Initialize(const optional_idx block_alloc_size);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -66,22 +70,25 @@ public:
 	}
 
 	//! Gets the size of the WAL, or zero, if there is no WAL.
-	int64_t GetWALSize();
+	idx_t GetWALSize();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Deletes the WAL file, and resets the unique pointer.
 	void ResetWAL();
 
 	//! Returns the database file path
-	string GetDBPath() {
+	string GetDBPath() const {
 		return path;
+	}
+	bool IsLoaded() const {
+		return load_complete;
 	}
 	//! The path to the WAL, derived from the database file path
 	string GetWALPath();
 	bool InMemory();
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
-	virtual unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) = 0;
+	virtual unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) = 0;
 	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
 	virtual void CreateCheckpoint(CheckpointOptions options = CheckpointOptions()) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
@@ -89,7 +96,7 @@ public:
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
-	virtual void LoadDatabase() = 0;
+	virtual void LoadDatabase(const optional_idx block_alloc_size) = 0;
 
 protected:
 	//! The database this storage manager belongs to
@@ -120,6 +127,7 @@ public:
 //! Stores database in a single file.
 class SingleFileStorageManager : public StorageManager {
 public:
+	SingleFileStorageManager() = delete;
 	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only);
 
 	//! The BlockManager to read/store meta information and data in blocks
@@ -129,7 +137,7 @@ public:
 
 public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
-	unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) override;
+	unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) override;
 	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
 	void CreateCheckpoint(CheckpointOptions options) override;
 	DatabaseSize GetDatabaseSize() override;
@@ -137,6 +145,6 @@ public:
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:
-	void LoadDatabase() override;
+	void LoadDatabase(const optional_idx block_alloc_size) override;
 };
 } // namespace duckdb

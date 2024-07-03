@@ -246,7 +246,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
 	const auto charmap = UpperFun::ASCII_TO_UPPER_MAP;
 
-	unsigned char u1, u2;
+	unsigned char u1 {}, u2 {};
 
 	idx_t length = MinValue<idx_t>(s1.length(), s2.length());
 	length += s1.length() != s2.length();
@@ -472,8 +472,8 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 
 	yyjson_write_err err;
 	size_t len;
-	yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
-	const char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
+	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
+	char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
 	if (!json) {
 		yyjson_mut_doc_free(doc);
 		throw SerializationException("Failed to write JSON string: %s", err.msg);
@@ -482,7 +482,7 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	string result(json, len);
 
 	// Free the JSON and the document
-	free((void *)json);
+	free(json);
 	yyjson_mut_doc_free(doc);
 
 	// Return the result

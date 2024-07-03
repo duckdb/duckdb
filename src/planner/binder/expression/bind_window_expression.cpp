@@ -202,12 +202,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	//	Restore any collation expressions
 	for (auto &part_expr : window.partitions) {
 		auto &bound_partition = BoundExpression::GetExpression(*part_expr);
-		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->return_type, true);
+		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->return_type);
 	}
 	for (auto &order : window.orders) {
 		auto &order_expr = order.expression;
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
-		ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type, false);
+		ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type);
 	}
 	// successfully bound all children: create bound window function
 	vector<LogicalType> types;

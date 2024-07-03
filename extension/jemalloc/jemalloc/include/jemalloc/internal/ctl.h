@@ -1,6 +1,10 @@
 #ifndef JEMALLOC_INTERNAL_CTL_H
 #define JEMALLOC_INTERNAL_CTL_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/arena_stats.h"
+#include "jemalloc/internal/background_thread_structs.h"
+#include "jemalloc/internal/bin_stats.h"
 #include "jemalloc/internal/jemalloc_internal_types.h"
 #include "jemalloc/internal/malloc_io.h"
 #include "jemalloc/internal/mutex_prof.h"
@@ -8,10 +12,9 @@
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/stats.h"
 
-namespace duckdb_jemalloc {
-
 /* Maximum ctl tree depth. */
 #define CTL_MAX_DEPTH	7
+#define CTL_MULTI_SETTING_MAX_LEN 1000
 
 typedef struct ctl_node_s {
 	bool named;
@@ -55,6 +58,8 @@ typedef struct ctl_stats_s {
 	size_t allocated;
 	size_t active;
 	size_t metadata;
+	size_t metadata_edata;
+	size_t metadata_rtree;
 	size_t metadata_thp;
 	size_t resident;
 	size_t mapped;
@@ -118,7 +123,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 		malloc_printf(						\
 		    "<jemalloc>: Failure in xmallctl(\"%s\", ...)\n",	\
 		    name);						\
-		jemalloc_abort();						\
+		abort();						\
 	}								\
 } while (0)
 
@@ -126,7 +131,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 	if (je_mallctlnametomib(name, mibp, miblenp) != 0) {		\
 		malloc_printf("<jemalloc>: Failure in "			\
 		    "xmallctlnametomib(\"%s\", ...)\n", name);		\
-		jemalloc_abort();						\
+		abort();						\
 	}								\
 } while (0)
 
@@ -135,7 +140,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 	    newlen) != 0) {						\
 		malloc_write(						\
 		    "<jemalloc>: Failure in xmallctlbymib()\n");	\
-		jemalloc_abort();						\
+		abort();						\
 	}								\
 } while (0)
 
@@ -144,7 +149,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 	    != 0) {							\
 		malloc_write(						\
 		    "<jemalloc>: Failure in ctl_mibnametomib()\n");	\
-		jemalloc_abort();						\
+		abort();						\
 	}								\
 } while (0)
 
@@ -154,10 +159,8 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 	    oldp, oldlenp, newp, newlen) != 0) {			\
 		malloc_write(						\
 		    "<jemalloc>: Failure in ctl_bymibname()\n");	\
-		jemalloc_abort();						\
+		abort();						\
 	}								\
 } while (0)
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_CTL_H */

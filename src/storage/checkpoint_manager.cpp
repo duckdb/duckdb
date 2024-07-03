@@ -28,8 +28,8 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -170,7 +170,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	    }
 	 */
 	auto catalog_entries = GetCatalogEntries(schemas);
-	BinarySerializer serializer(*metadata_writer);
+	SerializationOptions serialization_options;
+
+	serialization_options.serialization_compatibility = config.options.serialization_compatibility;
+
+	BinarySerializer serializer(*metadata_writer, serialization_options);
 	serializer.Begin();
 	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = catalog_entries[i];
@@ -200,7 +204,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// finally write the updated header
 	DatabaseHeader header;
 	header.meta_block = meta_block.block_pointer;
-	header.block_size = Storage::BLOCK_ALLOC_SIZE;
+	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(header);
 
@@ -237,6 +241,12 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 	if (!meta_block.IsValid()) {
 		// storage is empty
 		return;
+	}
+
+	if (block_manager.IsRemote()) {
+		auto metadata_blocks = metadata_manager.GetBlocks();
+		auto &buffer_manager = BufferManager::GetBufferManager(storage.GetDatabase());
+		buffer_manager.Prefetch(metadata_blocks);
 	}
 
 	// create the MetadataReader to read from the storage
@@ -391,7 +401,6 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog_entry, Serial
 }
 
 void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &deserializer) {
-
 	// we need to keep the tag "index", even though it is slightly misleading.
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
 	auto &info = create_info->Cast<CreateIndexInfo>();
@@ -415,27 +424,19 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	}
 
 	// now we can look for the index in the catalog and assign the table info
-	auto &index = catalog.CreateIndex(transaction, info)->Cast<DuckIndexEntry>();
-	auto data_table_info = table.GetStorage().GetDataTableInfo();
-	index.info = make_shared_ptr<IndexDataTableInfo>(data_table_info, info.index_name);
-
-	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
-	for (auto &parsed_expr : info.parsed_expressions) {
-		index.parsed_expressions.push_back(parsed_expr->Copy());
-	}
-	D_ASSERT(!info.parsed_expressions.empty());
+	auto &index = schema.CreateIndex(transaction, info, table)->Cast<DuckIndexEntry>();
 	auto &data_table = table.GetStorage();
 
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
 		// this code path is necessary to read older duckdb files
-		index_storage_info.name = info.index_name;
+		index_storage_info.name = index.name;
 		index_storage_info.root_block_ptr = root_block_pointer;
 
 	} else {
 		// get the matching index storage info
 		for (auto const &elem : data_table.GetDataTableInfo()->GetIndexStorageInfo()) {
-			if (elem.name == info.index_name) {
+			if (elem.name == index.name) {
 				index_storage_info = elem;
 				break;
 			}

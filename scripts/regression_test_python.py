@@ -6,6 +6,7 @@ import pyarrow as pa
 import time
 import argparse
 from typing import Dict, List, Any
+import numpy as np
 
 TPCH_QUERIES = []
 res = duckdb.execute(
@@ -317,6 +318,39 @@ class PandasDFLoadBenchmark:
         return result
 
 
+class PandasAnalyzerBenchmark:
+    def __init__(self):
+        self.initialize_connection()
+        self.generate()
+
+    def initialize_connection(self):
+        self.con = duckdb.connect()
+        if not threads:
+            return
+        print_msg(f'Limiting threads to {threads}')
+        self.con.execute(f"SET threads={threads}")
+
+    def generate(self):
+        return
+
+    def benchmark(self, benchmark_name) -> BenchmarkResult:
+        result = BenchmarkResult(benchmark_name)
+        data = [None] * 9999999 + [1]  # Last element is 1, others are None
+
+        # Create the DataFrame with the specified data and column type as object
+        pandas_df = pd.DataFrame(data, columns=['Column'], dtype=object)
+        for _ in range(nruns):
+            duration = 0.0
+            start = time.time()
+            for _ in range(30):
+                res = self.con.execute("""select * from pandas_df""").df()
+            end = time.time()
+            duration = float(end - start)
+            del res
+            result.add(duration)
+        return result
+
+
 def test_arrow_dictionaries_scan():
     DICT_SIZE = 26 * 1000
     print_msg(f"Generating a unique dictionary of size {DICT_SIZE}")
@@ -336,6 +370,13 @@ def test_loading_pandas_df_many_times():
     result.write()
 
 
+def test_pandas_analyze():
+    test = PandasAnalyzerBenchmark()
+    benchmark_name = f"pandas_analyze"
+    result = test.benchmark(benchmark_name)
+    result.write()
+
+
 def test_call_and_select_statements():
     test = SelectAndCallBenchmark()
     queries = {
@@ -351,6 +392,7 @@ def main():
     test_tpch()
     test_arrow_dictionaries_scan()
     test_loading_pandas_df_many_times()
+    test_pandas_analyze()
     test_call_and_select_statements()
 
     close_result()

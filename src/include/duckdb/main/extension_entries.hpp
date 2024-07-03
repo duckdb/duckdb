@@ -29,8 +29,11 @@ struct ExtensionFunctionEntry {
 
 static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"->>", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"<<=", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {">>=", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"add_parquet_key", "parquet", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"array_to_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"broadcast", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"create_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"current_localtime", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtimestamp", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -138,6 +141,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"icu_collate_ne", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_nl", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_nn", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"icu_collate_noaccent", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_om", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_or", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_pa", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -216,6 +220,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"mysql_clear_cache", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"mysql_execute", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"mysql_query", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"netmask", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"network", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"parquet_file_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_kv_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -289,6 +295,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_geomfromhexwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geomfromtext", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geomfromwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_hasm", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_hasz", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_hilbert", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_intersection", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_intersection_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
@@ -328,6 +336,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_point4d", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_pointn", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_pointonsurface", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_points", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_polygon2dfromwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_quadkey", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_read", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -354,6 +363,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_ymin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_z", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_zmax", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_zmflag", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_zmin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"stem", "fts", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"text", "excel", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -490,7 +500,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"r2/config", "httpfs"},          {"s3/credential_chain", "aws"},
     {"gcs/credential_chain", "aws"},  {"r2/credential_chain", "aws"},
     {"azure/config", "azure"},        {"azure/credential_chain", "azure"},
-    {"huggingface/config", "httfps"}, {"huggingface/cache", "httpfs"},
+    {"huggingface/config", "httfps"}, {"huggingface/credential_chain", "httpfs"},
     {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {

@@ -1,0 +1,16 @@
+# name: test/sql/window/test_order_by_all.test
+# description: Window Order By All
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT i, j, ROW_NUMBER() OVER (ORDER BY ALL) AS rn
+FROM (
+    SELECT i ,j
+    FROM generate_series(1, 5) s(i)
+    CROSS JOIN generate_series(1, 2) t(j)
+) t;
+----
+Cannot ORDER BY ALL in a window expression
