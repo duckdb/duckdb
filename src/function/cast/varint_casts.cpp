@@ -179,6 +179,34 @@ void VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &
 		end_pos = possible_end;
 	}
 }
+
+string_t DoubleToVarInt(Vector &result, double double_value) {
+	vector<char> value;
+	while (double_value > 0) {
+		value.push_back(static_cast<uint8_t>(std::fmod(double_value, 256)));
+		double_value = floor(double_value / 256);
+	}
+
+	uint32_t data_byte_size = value.size();
+
+	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
+	auto blob = StringVector::EmptyString(result, blob_size);
+	auto writable_blob = blob.GetDataWriteable();
+	SetHeader(writable_blob, data_byte_size, false);
+
+	// Add data bytes to the blob, starting off after header bytes
+	idx_t wb_idx = VARINT_HEADER_SIZE;
+	for (int i = static_cast<int>(data_byte_size) - 1; i >= 0; --i) {
+		// if (false) {
+		// 	writable_blob[wb_idx++] = ~static_cast<char>(abs_value >> i * 8 & 0xFF);
+		// } else {
+		writable_blob[wb_idx++] = static_cast<char>(value[i]);
+		// }
+	}
+	blob.Finalize();
+	return blob;
+}
+
 string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	idx_t start_pos, end_pos;
 	bool is_negative, is_zero;
@@ -298,6 +326,13 @@ struct HugeintTryCastToVarInt {
 	}
 };
 
+struct DoubleTryCastToVarInt {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		return DoubleToVarInt(result, input);
+	}
+};
+
 struct VarcharTryCastToVarInt {
 	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
@@ -337,10 +372,12 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::VarcharTryCastToVarInt>);
 	case LogicalTypeId::UHUGEINT:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<uhugeint_t, duckdb::HugeintTryCastToVarInt>);
+	case LogicalTypeId::DOUBLE:
+		return BoundCastInfo(&VectorCastHelpers::StringCast<double, duckdb::DoubleTryCastToVarInt>);
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
-	case LogicalTypeId::DOUBLE:
-		return TryVectorNullCast;
+
+	case LogicalTypeId::FLOAT:
 	default:
 		return TryVectorNullCast;
 	}

@@ -1455,13 +1455,14 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 					uint32_t number_of_bytes = 0;
 					char mask = 0x7F;
 					if (is_negative) {
-						number_of_bytes |= static_cast<uint32_t>(~varint_ptr[0] & mask) << 16;
-						number_of_bytes |= static_cast<uint32_t>(~varint_ptr[1]) << 8;
-						number_of_bytes |= static_cast<uint32_t>(~varint_ptr[2]);
+						number_of_bytes |= static_cast<uint32_t>(~varint_ptr[0] & mask) << 16 & 0xFF0000;
+						number_of_bytes |= static_cast<uint32_t>(~varint_ptr[1]) << 8 & 0xFF00;
+						;
+						number_of_bytes |= static_cast<uint32_t>(~varint_ptr[2]) & 0xFF;
 					} else {
-						number_of_bytes |= static_cast<uint32_t>(varint_ptr[0] & mask) << 16;
-						number_of_bytes |= static_cast<uint32_t>(varint_ptr[1]) << 8;
-						number_of_bytes |= static_cast<uint32_t>(varint_ptr[2]);
+						number_of_bytes |= static_cast<uint32_t>(varint_ptr[0] & mask) << 16 & 0xFF0000;
+						number_of_bytes |= static_cast<uint32_t>(varint_ptr[1]) << 8 & 0xFF00;
+						number_of_bytes |= static_cast<uint32_t>(varint_ptr[2]) & 0xFF;
 					}
 					if (number_of_bytes != varint_bytes - 3) {
 						throw InternalException("The number of bytes set in the Varint header: %d bytes. Does not "
