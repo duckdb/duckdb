@@ -156,4 +156,11 @@ void DuckCatalog::Verify() {
 #endif
 }
 
+optional_idx DuckCatalog::GetCatalogVersion(ClientContext &context) {
+	auto &transaction_manager = DuckTransactionManager::Get(db);
+	auto transaction = GetCatalogTransaction(context);
+	D_ASSERT(transaction.transaction);
+	return transaction_manager.GetCatalogVersion(*transaction.transaction);
+}
+
 } // namespace duckdb

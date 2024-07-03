@@ -37,7 +37,6 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/catalog/similar_catalog_entry.hpp"
 #include "duckdb/storage/database_size.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -909,12 +908,6 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 }
 
 void Catalog::Verify() {
-}
-
-idx_t Catalog::GetCatalogVersion(ClientContext &context) {
-	auto transaction = GetCatalogTransaction(context);
-	D_ASSERT(transaction.transaction);
-	return db.GetTransactionManager().GetCatalogVersion(*transaction.transaction);
 }
 
 idx_t Catalog::NextOid() {

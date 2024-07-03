@@ -25,6 +25,10 @@ void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
 
 bool CheckCatalogIdentity(ClientContext &context, const string &catalog_name,
                           const StatementProperties::CatalogIdentity catalog_identity) {
+	// some catalogs don't support catalog version, we can't check identity in that case
+	if (!catalog_identity.catalog_version.IsValid()) {
+		return false;
+	}
 	auto database = DatabaseManager::Get(context).GetDatabase(context, catalog_name);
 	if (!database) {
 		throw BinderException("Prepared statement requires database %s but it was not attached", catalog_name);

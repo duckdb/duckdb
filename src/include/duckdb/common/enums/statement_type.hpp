@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
@@ -71,7 +72,7 @@ struct StatementProperties {
 
 	struct CatalogIdentity {
 		idx_t catalog_oid;
-		idx_t catalog_version;
+		optional_idx catalog_version;
 
 		bool operator==(const CatalogIdentity &rhs) const {
 			return catalog_oid == rhs.catalog_oid && catalog_version == rhs.catalog_version;
