@@ -107,8 +107,6 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	prepared_data->names = names;
 	prepared_data->types = types;
 	prepared_data->value_map = std::move(value_map);
-	context.transaction.ActiveTransaction().OpenedTransactions();
-	// prepared_data->
 	prepared_data->properties = properties;
 	return prepared_data;
 }
