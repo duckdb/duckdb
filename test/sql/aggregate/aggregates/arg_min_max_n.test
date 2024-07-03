@@ -17,12 +17,12 @@ SELECT arg_max(val, arg, 3 ORDER BY val DESC) FROM t1;
 [b, b, b]
 
 query I
-SELECT list(rs.val) FROM (SELECT val, arg, row_number() OVER (ORDER BY arg DESC) as rid FROM t1 ORDER BY val ) as rs WHERE rid < 4;
+SELECT list(rs.val) FROM (SELECT val, arg, row_number() OVER (ORDER BY arg DESC) as rid FROM t1 ORDER BY val) as rs WHERE rid < 4;
 ----
 [b, b, b]
 
 query I rowsort
-SELECT arg_max(arg, val, 2) FROM t1 GROUP BY val;
+SELECT arg_max(arg, val, 2 ORDER BY arg) FROM t1 GROUP BY val;
 ----
 [2, 1]
 [5, 4]
@@ -33,4 +33,4 @@ CREATE TABLE t2 AS SELECT i%5 as even_groups, i FROM range(10000) t(i);
 query I
 SELECT arg_max(even_groups, i, 3) FROM t2;
 ----
-[4, 1, 0]
+[4, 3, 2]

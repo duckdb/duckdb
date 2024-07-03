@@ -148,8 +148,7 @@ public:
 
 private:
 	static bool Compare(const HeapStorage<T> &left, const HeapStorage<T> &right) {
-		// Intentionally reversed to get a min-heap
-		return T_COMPARATOR::Operation(right.value, left.value);
+		return T_COMPARATOR::Operation(left.value, right.value);
 	}
 
 	vector<HeapStorage<T>> heap;
@@ -220,8 +219,7 @@ public:
 
 private:
 	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
-		// Intentionally reversed to get a min-heap
-		return K_COMPARATOR::Operation(right.first.value, left.first.value);
+		return K_COMPARATOR::Operation(left.first.value, right.first.value);
 	}
 
 	vector<STORAGE_TYPE> heap;
@@ -375,9 +373,8 @@ struct MinMaxNOperation {
 			// Turn the heap into a sorted list, invalidating the heap property
 			auto &heap = state.heap.SortAndGetHeap();
 
-			// Loop over the heap backwards to add the entries in sorted order
-			for (auto rit = heap.rbegin(); rit != heap.rend(); ++rit) {
-				STATE::VAL_TYPE::Assign(child_data, current_offset++, state.heap.GetValue(*rit));
+			for (const auto &slot : heap) {
+				STATE::VAL_TYPE::Assign(child_data, current_offset++, state.heap.GetValue(slot));
 			}
 		}
 
