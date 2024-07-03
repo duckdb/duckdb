@@ -108,6 +108,48 @@ void INetFunctions::Family(DataChunk &args, ExpressionState &state, Vector &resu
 	    });
 }
 
+void INetFunctions::Netmask(DataChunk &args, ExpressionState &state, Vector &result) {
+	GenericExecutor::ExecuteUnary<INET_TYPE, INET_TYPE>(args.data[0], result, args.size(), [&](INET_TYPE input) {
+		IPAddressType type = IPAddressType(input.a_val);
+		IPAddress inet(type, FromCompatAddr(input.b_val, type), input.c_val);
+		IPAddress netmask = inet.Netmask();
+
+		INET_TYPE str;
+		str.a_val = uint8_t(netmask.type);
+		str.b_val = ToCompatAddr(netmask.address, netmask.type);
+		str.c_val = netmask.mask;
+		return str;
+	});
+}
+
+void INetFunctions::Network(DataChunk &args, ExpressionState &state, Vector &result) {
+	GenericExecutor::ExecuteUnary<INET_TYPE, INET_TYPE>(args.data[0], result, args.size(), [&](INET_TYPE input) {
+		IPAddressType type = IPAddressType(input.a_val);
+		IPAddress inet(type, FromCompatAddr(input.b_val, type), input.c_val);
+		IPAddress network = inet.Network();
+
+		INET_TYPE str;
+		str.a_val = uint8_t(network.type);
+		str.b_val = ToCompatAddr(network.address, network.type);
+		str.c_val = network.mask;
+		return str;
+	});
+}
+
+void INetFunctions::Broadcast(DataChunk &args, ExpressionState &state, Vector &result) {
+	GenericExecutor::ExecuteUnary<INET_TYPE, INET_TYPE>(args.data[0], result, args.size(), [&](INET_TYPE input) {
+		IPAddressType type = IPAddressType(input.a_val);
+		IPAddress inet(type, FromCompatAddr(input.b_val, type), input.c_val);
+		IPAddress broadcast = inet.Broadcast();
+
+		INET_TYPE str;
+		str.a_val = uint8_t(broadcast.type);
+		str.b_val = ToCompatAddr(broadcast.address, broadcast.type);
+		str.c_val = broadcast.mask;
+		return str;
+	});
+}
+
 // The signed hugeint_t value cannot extend through the full IPv6 range in one
 // operation, but it is the largest native signed type available and should be
 // appropriate for most realistic operations. Using the signed type will make
@@ -142,6 +184,25 @@ static INET_TYPE AddImplementation(INET_TYPE ip, hugeint_t val) {
 	return result;
 }
 
+// Calculate if the left INET is a subset of the right INET
+static bool ContainsImplementation(INET_TYPE ip_left, INET_TYPE ip_right) {
+	IPAddressType left_addr_type = IPAddressType(ip_left.a_val);
+	IPAddressType right_addr_type = IPAddressType(ip_right.a_val);
+
+	if (left_addr_type == right_addr_type) {
+		uhugeint_t left_addr_ip = FromCompatAddr(ip_left.b_val, left_addr_type);
+		uhugeint_t right_addr_ip = FromCompatAddr(ip_right.b_val, right_addr_type);
+
+		IPAddress left(left_addr_type, left_addr_ip, ip_left.c_val);
+		IPAddress right(right_addr_type, right_addr_ip, ip_right.c_val);
+
+		return left.Network().address >= right.Network().address &&
+		       left.Broadcast().address <= right.Broadcast().address;
+	}
+
+	return false;
+}
+
 void INetFunctions::Subtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	GenericExecutor::ExecuteBinary<INET_TYPE, PrimitiveType<hugeint_t>, INET_TYPE>(
 	    args.data[0], args.data[1], result, args.size(),
@@ -152,6 +213,18 @@ void INetFunctions::Add(DataChunk &args, ExpressionState &state, Vector &result)
 	GenericExecutor::ExecuteBinary<INET_TYPE, PrimitiveType<hugeint_t>, INET_TYPE>(
 	    args.data[0], args.data[1], result, args.size(),
 	    [&](INET_TYPE ip, PrimitiveType<hugeint_t> val) { return AddImplementation(ip, val.val); });
+}
+
+void INetFunctions::ContainsLeft(DataChunk &args, ExpressionState &state, Vector &result) {
+	GenericExecutor::ExecuteBinary<INET_TYPE, INET_TYPE, PrimitiveType<bool>>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](INET_TYPE ip_left, INET_TYPE ip_right) { return ContainsImplementation(ip_left, ip_right); });
+}
+
+void INetFunctions::ContainsRight(DataChunk &args, ExpressionState &state, Vector &result) {
+	GenericExecutor::ExecuteBinary<INET_TYPE, INET_TYPE, PrimitiveType<bool>>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](INET_TYPE ip_left, INET_TYPE ip_right) { return ContainsImplementation(ip_right, ip_left); });
 }
 
 } // namespace duckdb
