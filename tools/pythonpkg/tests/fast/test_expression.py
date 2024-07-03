@@ -850,6 +850,9 @@ class TestExpression(object):
         res = rel.aggregate(["a"]).execute().fetchone()[0]
         assert res == 5
 
+        res = rel.aggregate([5]).execute().fetchone()[0]
+        assert res == 5
+
         # Providing something that can not be converted into an expression is an error:
         with pytest.raises(
             duckdb.InvalidInputException, match='Invalid Input Error: Please provide arguments of type Expression!'
@@ -860,3 +863,9 @@ class TestExpression(object):
                     pass
 
             res = rel.aggregate([MyClass()]).fetchone()[0]
+
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Please provide either a string or list of Expression objects, not <class 'int'>",
+        ):
+            res = rel.aggregate(5).execute().fetchone()
