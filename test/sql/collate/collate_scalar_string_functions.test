@@ -13,12 +13,12 @@ insert into tbl values ('ö', '>>>>>ö<<<<<'), ('o', '>>>>>o<<<<<'), ('p', '>>>>
 query I
 SELECT 'Abbbb' COLLATE NOCASE || 'a'
 ----
-abbbba
+Abbbba
 
 query I
 SELECT concat('Abbbb' COLLATE NOCASE, 'a')
 ----
-abbbba
+Abbbba
 
 query I
 SELECT a FROM tbl ORDER BY a;
@@ -44,30 +44,29 @@ p
 query I
 SELECT a FROM tbl ORDER BY concat(a collate noaccent, a);
 ----
-o
 ö
+o
 p
 
 query I
 SELECT concat(a COLLATE noaccent, a) FROM tbl GROUP BY 1 ORDER BY 1;
 ----
 oo
-oö
 pp
 
 query I
 SELECT a FROM tbl ORDER BY concat(a, a collate noaccent);
 ----
+ö
 o
 p
-ö
 
 query I
 SELECT a FROM tbl ORDER BY concat(concat(a, a collate noaccent), a);
 ----
+ö
 o
 p
-ö
 
 query I
 SELECT a FROM tbl ORDER BY concat(a collate noaccent, a collate noaccent);
@@ -75,6 +74,12 @@ SELECT a FROM tbl ORDER BY concat(a collate noaccent, a collate noaccent);
 ö
 o
 p
+
+query I
+SELECT * FROM (SELECT concat(concat(a, a collate noaccent), a) AS c1 FROM tbl) AS t1 WHERE t1.c1 ='ooo'
+----
+ööö
+ooo
 
 statement error
 SELECT a FROM tbl ORDER BY concat(a collate noaccent, a collate nocase);
@@ -150,9 +155,9 @@ p
 query I
 SELECT a FROM tbl ORDER BY trim(b, '><' collate noaccent);
 ----
+ö
 o
 p
-ö
 
 statement error
 SELECT a FROM tbl ORDER BY trim(b collate nocase, '><' collate noaccent);
@@ -189,9 +194,9 @@ p
 query I
 SELECT a FROM tbl ORDER BY ltrim(b, '><' collate noaccent);
 ----
+ö
 o
 p
-ö
 
 statement error
 SELECT a FROM tbl ORDER BY ltrim(b collate nocase, '><' collate noaccent);
@@ -228,9 +233,9 @@ p
 query I
 SELECT a FROM tbl ORDER BY rtrim(b, '><' collate noaccent);
 ----
+ö
 o
 p
-ö
 
 statement error
 SELECT a FROM tbl ORDER BY rtrim(b collate nocase, '><' collate noaccent);
@@ -253,22 +258,22 @@ p<<<<<
 query I
 SELECT trim(b collate noaccent, '>o') FROM tbl;
 ----
-<<<<<
+ö<<<<<
 <<<<<
 p<<<<<
 
 query I
 SELECT trim(b, '>ö' collate noaccent) FROM tbl;
 ----
-ö<<<<<
 <<<<<
+o<<<<<
 p<<<<<
 
 query I
 SELECT trim(b collate noaccent, '>ö' collate noaccent) FROM tbl;
 ----
 <<<<<
-<<<<<
+o<<<<<
 p<<<<<
 
 
@@ -289,22 +294,22 @@ p<<<<<
 query I
 SELECT ltrim(b collate noaccent, '>o') FROM tbl;
 ----
-<<<<<
+ö<<<<<
 <<<<<
 p<<<<<
 
 query I
 SELECT ltrim(b, '>ö' collate noaccent) FROM tbl;
 ----
-ö<<<<<
 <<<<<
+o<<<<<
 p<<<<<
 
 query I
 SELECT ltrim(b collate noaccent, '>ö' collate noaccent) FROM tbl;
 ----
 <<<<<
-<<<<<
+o<<<<<
 p<<<<<
 
 
@@ -325,21 +330,21 @@ SELECT rtrim(b, '<o' collate noaccent) FROM tbl;
 query I
 SELECT rtrim(b, '<ö' collate noaccent) FROM tbl;
 ----
->>>>>ö
 >>>>>
+>>>>>o
 >>>>>p
 
 query I
 SELECT rtrim(b collate noaccent, '<o') FROM tbl;
 ----
->>>>>
+>>>>>ö
 >>>>>
 >>>>>p
 
 query I
 SELECT rtrim(b collate noaccent, '<ö') FROM tbl;
 ----
->>>>>o
+>>>>>
 >>>>>o
 >>>>>p
 
@@ -421,7 +426,7 @@ A
 query I
 SELECT 'Abbbb' COLLATE NOCASE ^@ 'a'
 ----
-true
+false
 
 
 ######### !!! test ends_with
@@ -429,39 +434,38 @@ true
 query I
 SELECT ends_with('aaaaB' COLLATE NOCASE, 'b')
 ----
-true
+false
 
-query I
-SELECT ends_with(a COLLATE NOACCENT, 'o') FROM tbl
+query II
+SELECT a, ends_with(a COLLATE NOACCENT, 'o') FROM tbl
 ----
-true
-true
-false
+ö	false
+o	true
+p	false
 
-query I
-SELECT ends_with(a, 'ö' COLLATE NOACCENT) FROM tbl ORDER BY a
+query II
+SELECT a, ends_with(a, 'ö' COLLATE NOACCENT) FROM tbl ORDER BY a
 ----
-true
-false
-false
-
+o	false
+p	false
+ö	true
 
 ######### !!! test ascii()
 
 query I
 SELECT ascii('A' COLLATE NOCASE)
 ----
-97
+65
 
 query I
 SELECT ascii('ö' COLLATE NOACCENT)
 ----
-111
+246
 
 query I
 SELECT ascii(a COLLATE NOACCENT) FROM tbl
 ----
-111
+246
 111
 112
 
@@ -471,12 +475,12 @@ SELECT ascii(a COLLATE NOACCENT) FROM tbl
 query I
 SELECT concat_ws('|', 'A' COLLATE NOCASE, 'B' COLLATE NOCASE, 'a', 'b')
 ----
-a|b|a|b
+A|B|a|b
 
 query I
 SELECT concat_ws('|', a COLLATE NOACCENT, a) FROM tbl
 ----
-o|ö
+ö|ö
 o|o
 p|p
 
@@ -487,18 +491,18 @@ p|p
 query I
 SELECT contains('abbbb', 'A' COLLATE NOCASE)
 ----
-true
+false
 
 query I
 SELECT contains('Abbbb' COLLATE NOCASE, 'a')
 ----
-true
+false
 
 
 query I
 SELECT contains(a COLLATE NOACCENT, 'o') FROM tbl
 ----
-true
+false
 true
 false
 
@@ -513,13 +517,13 @@ SELECT greatest('o', 'ö', 'p');
 query I
 SELECT greatest('o', 'ö' COLLATE NOACCENT, 'p');
 ----
-p
+ö
 
 
 query I
 SELECT greatest(a COLLATE NOACCENT) FROM tbl;
 ----
-o
+ö
 o
 p
 
@@ -529,17 +533,17 @@ p
 query I
 SELECT format('Benchmark "{}" took {} seconds', 'ö' COLLATE NOACCENT, 42);
 ----
-Benchmark "o" took 42 seconds
+Benchmark "ö" took 42 seconds
 
 query I
 SELECT format('BENCHMARK "{}" TOOK {} SECONDS' COLLATE NOCASE, 'CSV', 42);
 ----
-benchmark "CSV" took 42 seconds
+BENCHMARK "CSV" TOOK 42 SECONDS
 
 query I
 SELECT format('BENCHMARK "{}" TOOK {} SECONDS' COLLATE NOCASE, 'CSV' COLLATE NOCASE, 42);
 ----
-benchmark "csv" took 42 seconds
+BENCHMARK "CSV" TOOK 42 SECONDS
 
 
 statement error
@@ -551,7 +555,7 @@ Binder Error: Function "format" has multiple collations: NOCASE and NOACCENT
 query I
 SELECT format('Reading noaccent string: "{}"', a COLLATE NOACCENT) FROM tbl
 ----
-Reading noaccent string: "o"
+Reading noaccent string: "ö"
 Reading noaccent string: "o"
 Reading noaccent string: "p"
 
@@ -566,12 +570,12 @@ SELECT instr('oöp', 'ö');
 query I
 SELECT instr('oöp', 'ö' COLLATE NOACCENT);
 ----
-1
+2
 
 query I
 SELECT instr('oöp' COLLATE NOACCENT, 'ö');
 ----
-0
+2
 
 query II
 SELECT a, instr(a, 'ö') FROM tbl;
@@ -583,14 +587,14 @@ p	0
 query II
 SELECT a, instr(a, 'ö' COLLATE NOACCENT) FROM tbl;
 ----
-ö	0
-o	1
+ö	1
+o	0
 p	0
 
 query II
 SELECT a, instr(a COLLATE NOACCENT, 'ö') FROM tbl;
 ----
-ö	0
+ö	1
 o	0
 p	0
 
@@ -605,7 +609,7 @@ p
 query I
 SELECT least('p','ö' COLLATE NOACCENT,'z')
 ----
-o
+p
 
 query I
 SELECT a FROM tbl ORDER BY a
@@ -662,7 +666,7 @@ p	false
 query II
 SELECT a, like_escape(b, '>>>>>>>>>>ö<<<<<' COLLATE NOACCENT, '>') FROM tbl
 ----
-ö	false
+ö	true
 o	true
 p	false
 
@@ -693,7 +697,7 @@ p	true
 query II
 SELECT a, not_like_escape(b, '>>>>>>>>>>ö<<<<<' COLLATE NOACCENT, '>') FROM tbl
 ----
-ö	true
+ö	false
 o	false
 p	true
 
@@ -715,7 +719,7 @@ hellö wörld
 query I
 SELECT lower('HELLÖ WÖRLD' COLLATE NOACCENT)
 ----
-hello world
+hellö wörld
 
 
 ######### !!! test parse_dirname
@@ -728,7 +732,7 @@ SELECT parse_dirname('öop/to/file.csv', 'forward_slash')
 query I
 SELECT parse_dirname('öop/to/file.csv' COLLATE NOACCENT, 'forward_slash')
 ----
-oop
+öop
 
 
 ######### !!! test parse_dirpath
@@ -741,7 +745,7 @@ SELECT parse_dirpath('/öop/to/file.csv', 'forward_slash')
 query I
 SELECT parse_dirpath('/öop/to/file.csv' COLLATE NOACCENT, 'forward_slash')
 ----
-/oop/to
+/öop/to
 
 
 ######### !!! test parse_filename
@@ -754,7 +758,7 @@ SELECT parse_filename('/path/to/öop.csv', true, 'forward_slash')
 query I
 SELECT parse_filename('/path/to/öop.csv' COLLATE NOACCENT, true, 'forward_slash')
 ----
-oop
+öop
 
 
 ######### !!! test printf
@@ -762,17 +766,17 @@ oop
 query I
 SELECT printf('Benchmark "%s" took %d seconds', 'ö' COLLATE NOACCENT, 42);
 ----
-Benchmark "o" took 42 seconds
+Benchmark "ö" took 42 seconds
 
 query I
 SELECT printf('BENCHMARK "%s" TOOK %d SECONDS' COLLATE NOCASE, 'CSV', 42);
 ----
-benchmark "CSV" took 42 seconds
+BENCHMARK "CSV" TOOK 42 SECONDS
 
 query I
 SELECT printf('BENCHMARK "%s" TOOK %d SECONDS' COLLATE NOCASE, 'CSV' COLLATE NOCASE, 42);
 ----
-benchmark "csv" took 42 seconds
+BENCHMARK "CSV" TOOK 42 SECONDS
 
 
 statement error
@@ -784,7 +788,7 @@ Binder Error: Function "printf" has multiple collations: NOCASE and NOACCENT
 query I
 SELECT printf('Reading noaccent string: "%s"', a COLLATE NOACCENT) FROM tbl
 ----
-Reading noaccent string: "o"
+Reading noaccent string: "ö"
 Reading noaccent string: "o"
 Reading noaccent string: "p"
 
@@ -800,7 +804,7 @@ http\:\/\/d\.örg
 query I
 SELECT regexp_escape('http://d.örg' COLLATE NOACCENT)
 ----
-http\:\/\/d\.org
+http\:\/\/d\.örg
 
 
 ######### !!! test regexp_extract_all
@@ -826,18 +830,18 @@ SELECT regexp_extract_all('hellö_wörld', '([a-z ö]+)_?', 1)
 query I
 SELECT regexp_extract_all('hellö_wörld', '([a-z ö]+)_?' COLLATE NOACCENT, 1);
 ----
-[hell, w, rld]
+[hellö, wörld]
 
 
 query I
 SELECT regexp_extract_all('hellö_wörld' COLLATE NOACCENT, '([a-z ]+)_?', 1)
 ----
-[hello, world]
+[hell, w, rld]
 
 query I
 SELECT regexp_extract_all('hellö_wörld' COLLATE NOACCENT, '([a-z ]+)_?' COLLATE NOACCENT, 1)
 ----
-[hello, world]
+[hell, w, rld]
 
 
 ######### !!! test regexp_extract
@@ -863,18 +867,18 @@ hellö
 query I
 SELECT regexp_extract('hellö_wörld', '([a-z ö]+)_?' COLLATE NOACCENT, 1);
 ----
-hell
+hellö
 
 
 query I
 SELECT regexp_extract('hellö_wörld' COLLATE NOACCENT, '([a-z ]+)_?', 1)
 ----
-hello
+hell
 
 query I
 SELECT regexp_extract('hellö_wörld' COLLATE NOACCENT, '([a-z ]+)_?' COLLATE NOACCENT, 1)
 ----
-hello
+hell
 
 
 ######### !!! test regexp_full_match
@@ -892,7 +896,7 @@ false
 query I
 SELECT regexp_full_match('hellö_world' COLLATE NOACCENT, '[a-z]+_[a-z]+')
 ----
-true
+false
 
 query I
 SELECT regexp_full_match('hellö_world', '[a-zö]+_[a-z]+')
@@ -902,7 +906,7 @@ true
 query I
 SELECT regexp_full_match('hellö_world', '[a-zö]+_[a-z]+' COLLATE NOACCENT)
 ----
-false
+true
 
 query II
 SELECT b, regexp_full_match(b, '[>oö<]+') FROM tbl
@@ -922,7 +926,7 @@ SELECT b, regexp_full_match(b COLLATE NOACCENT, '[>oö<]+') FROM tbl
 query II
 SELECT b, regexp_full_match(b, '[>oö<]+' COLLATE NOACCENT) FROM tbl
 ----
->>>>>ö<<<<<	false
+>>>>>ö<<<<<	true
 >>>>>o<<<<<	true
 >>>>>p<<<<<	false
 
@@ -937,7 +941,7 @@ false
 query I
 SELECT regexp_matches('hellö_world' COLLATE NOACCENT, '[a-z]+_[a-z]+')
 ----
-true
+false
 
 query I
 SELECT regexp_matches('hellö_world', '[a-zö]+_[a-z]+')
@@ -947,7 +951,7 @@ true
 query I
 SELECT regexp_matches('hellö_world', '[a-zö]+_[a-z]+' COLLATE NOACCENT)
 ----
-false
+true
 
 
 query II
@@ -968,7 +972,7 @@ SELECT b, regexp_matches(b COLLATE NOACCENT, '[oö]+') FROM tbl
 query II
 SELECT b, regexp_matches(b, '[oö]+' COLLATE NOACCENT) FROM tbl
 ----
->>>>>ö<<<<<	false
+>>>>>ö<<<<<	true
 >>>>>o<<<<<	true
 >>>>>p<<<<<	false
 
@@ -983,12 +987,12 @@ world
 query I
 SELECT split_part('hellöworld', 'ö' COLLATE NOACCENT, 2)
 ----
-rld
+world
 
 query I
 SELECT split_part('hellöworld' COLLATE NOACCENT, 'o', 2)
 ----
-w
+rld
 
 query II
 SELECT b, split_part(b, 'o', 1) FROM tbl
@@ -1001,7 +1005,7 @@ SELECT b, split_part(b, 'o', 1) FROM tbl
 query II
 SELECT b, split_part(b COLLATE NOACCENT, 'o', 1) FROM tbl
 ----
->>>>>ö<<<<<	>>>>>
+>>>>>ö<<<<<	>>>>>ö<<<<<
 >>>>>o<<<<<	>>>>>
 >>>>>p<<<<<	>>>>>p<<<<<
 
@@ -1009,8 +1013,8 @@ SELECT b, split_part(b COLLATE NOACCENT, 'o', 1) FROM tbl
 query II
 SELECT b, split_part(b, 'ö' COLLATE NOACCENT, 1) FROM tbl
 ----
->>>>>ö<<<<<	>>>>>ö<<<<<
->>>>>o<<<<<	>>>>>
+>>>>>ö<<<<<	>>>>>
+>>>>>o<<<<<	>>>>>o<<<<<
 >>>>>p<<<<<	>>>>>p<<<<<
 
 
@@ -1024,13 +1028,13 @@ SELECT string_split('hellöwörld', 'ö')
 query I
 SELECT string_split('hellöwörld', 'ö' COLLATE NOACCENT)
 ----
-[hellöwörld]
+[hell, w, rld]
 
 
 query I
 SELECT string_split('hellöwörld' COLLATE NOACCENT, 'ö')
 ----
-[helloworld]
+[hell, w, rld]
 
 
 query I
@@ -1051,7 +1055,7 @@ SELECT b, string_split(b, 'o') FROM tbl
 query II
 SELECT b, string_split(b COLLATE NOACCENT, 'o') FROM tbl
 ----
->>>>>ö<<<<<	[>>>>>, <<<<<]
+>>>>>ö<<<<<	[>>>>>ö<<<<<]
 >>>>>o<<<<<	[>>>>>, <<<<<]
 >>>>>p<<<<<	[>>>>>p<<<<<]
 
@@ -1059,8 +1063,8 @@ SELECT b, string_split(b COLLATE NOACCENT, 'o') FROM tbl
 query II
 SELECT b, string_split(b, 'ö' COLLATE NOACCENT) FROM tbl
 ----
->>>>>ö<<<<<	[>>>>>ö<<<<<]
->>>>>o<<<<<	[>>>>>, <<<<<]
+>>>>>ö<<<<<	[>>>>>, <<<<<]
+>>>>>o<<<<<	[>>>>>o<<<<<]
 >>>>>p<<<<<	[>>>>>p<<<<<]
 
 
@@ -1075,7 +1079,7 @@ SELECT strlen('ö')
 query I
 SELECT strlen('ö' COLLATE NOACCENT)
 ----
-1
+2
 
 query I
 SELECT strlen(a) FROM tbl
@@ -1087,7 +1091,7 @@ SELECT strlen(a) FROM tbl
 query I
 SELECT strlen(a COLLATE NOACCENT) FROM tbl
 ----
-1
+2
 1
 1
 
@@ -1102,12 +1106,12 @@ SELECT strpos('hellöwörld', 'ö')
 query I
 SELECT strpos('hellöwörld', 'ö' COLLATE NOACCENT)
 ----
-0
+5
 
 query I
 SELECT strpos('hellöwörld' COLLATE NOACCENT, 'ö')
 ----
-0
+5
 
 query I
 SELECT strpos('hellöwörld' COLLATE NOACCENT, 'ö' COLLATE NOACCENT)
@@ -1126,7 +1130,7 @@ SELECT b, strpos(b, 'o') FROM tbl
 query II
 SELECT b, strpos(b COLLATE NOACCENT, 'o') FROM tbl
 ----
->>>>>ö<<<<<	6
+>>>>>ö<<<<<	0
 >>>>>o<<<<<	6
 >>>>>p<<<<<	0
 
@@ -1134,8 +1138,8 @@ SELECT b, strpos(b COLLATE NOACCENT, 'o') FROM tbl
 query II
 SELECT b, strpos(b, 'ö' COLLATE NOACCENT) FROM tbl
 ----
->>>>>ö<<<<<	0
->>>>>o<<<<<	6
+>>>>>ö<<<<<	6
+>>>>>o<<<<<	0
 >>>>>p<<<<<	0
 
 
@@ -1149,5 +1153,4 @@ HELLÖ WÖRLD
 query I
 SELECT upper('hellö wörld' COLLATE NOACCENT)
 ----
-HELLO WORLD
-
+HELLÖ WÖRLD
