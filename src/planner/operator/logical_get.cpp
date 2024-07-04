@@ -181,7 +181,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		empty_ref.column_type_hint = result->user_provided_types;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
-		                             empty_ref);
+		                             empty_ref, result->user_provided_types, result->user_provided_names);
 
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;
