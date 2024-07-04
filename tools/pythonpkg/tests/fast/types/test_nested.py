@@ -44,10 +44,10 @@ class TestNested(object):
 
     def test_map(self, duckdb_cursor):
         result = duckdb_cursor.execute("select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7))").fetchall()
-        assert result == [({'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]},)]
+        assert result == [({1: 10, 2: 9, 3: 8, 4: 7},)]
 
         result = duckdb_cursor.execute("select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, NULL))").fetchall()
-        assert result == [({'key': [1, 2, 3, 4], 'value': [10, 9, 8, None]},)]
+        assert result == [({1: 10, 2: 9, 3: 8, 4: None},)]
 
         result = duckdb_cursor.execute("SELECT MAP() ").fetchall()
-        assert result == [({'key': [], 'value': []},)]
+        assert result == [({},)]

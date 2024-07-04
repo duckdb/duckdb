@@ -191,7 +191,7 @@ void DatabaseInstance::CreateMainDatabase() {
 	}
 
 	initial_database->SetInitialDatabase();
-	initial_database->Initialize(config.options.default_block_alloc_size);
+	initial_database->Initialize();
 }
 
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {

@@ -200,13 +200,13 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       any_combined(false), finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
       count_before_combining(0), max_partition_size(0) {
 
-	auto tuples_per_block = Storage::BLOCK_ALLOC_SIZE / radix_ht.GetLayout().GetRowWidth();
+	auto tuples_per_block = DEFAULT_BLOCK_ALLOC_SIZE / radix_ht.GetLayout().GetRowWidth();
 	idx_t ht_count =
 	    NumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
 	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetRadixBits());
 	auto count_per_partition = ht_count / num_partitions;
 	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block + 1;
-	auto ht_size = blocks_per_partition * Storage::BLOCK_ALLOC_SIZE + config.sink_capacity * sizeof(ht_entry_t);
+	auto ht_size = blocks_per_partition * DEFAULT_BLOCK_ALLOC_SIZE + config.sink_capacity * sizeof(ht_entry_t);
 
 	// This really is the minimum reservation that we can do
 	auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
@@ -416,7 +416,7 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 
 	const auto row_size_per_partition =
 	    partitioned_data->Count() * partitioned_data->GetLayout().GetRowWidth() / partition_count;
-	if (row_size_per_partition > NumericCast<idx_t>(config.BLOCK_FILL_FACTOR * Storage::BLOCK_SIZE)) {
+	if (row_size_per_partition > NumericCast<idx_t>(config.BLOCK_FILL_FACTOR * Storage::DEFAULT_BLOCK_SIZE)) {
 		// We crossed our block filling threshold, try to increment radix bits
 		config.SetRadixBits(current_radix_bits + config.REPARTITION_RADIX_BITS);
 	}
