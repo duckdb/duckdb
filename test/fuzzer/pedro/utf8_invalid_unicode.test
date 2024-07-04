@@ -7,7 +7,7 @@ SELECT upper(decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR);
 ----
 <REGEX>:Conversion Error.*Failure in decode.*could not convert blob to UTF8.*
 
-# invalid utf8, unicode value too high
+# unicode value too high
 statement error
 SELECT decode('\xF6\x96\xB0\x85'::BLOB)::VARCHAR ILIKE '1';
 ----
