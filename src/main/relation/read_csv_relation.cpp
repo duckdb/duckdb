@@ -49,10 +49,7 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	CSVReaderOptions csv_options;
 	csv_options.file_path = file_name;
 	vector<string> empty;
-
-	vector<LogicalType> unused_types;
-	vector<string> unused_names;
-	csv_options.FromNamedParameters(options, *context, unused_types, unused_names);
+	csv_options.FromNamedParameters(options, *context);
 
 	// Run the auto-detect, populating the options with the detected settings
 
@@ -89,6 +86,9 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	}
 
 	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
+	RemoveNamedParameterIfExists("names");
+	RemoveNamedParameterIfExists("types");
+	RemoveNamedParameterIfExists("dtypes");
 }
 
 string ReadCSVRelation::GetAlias() {

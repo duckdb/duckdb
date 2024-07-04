@@ -16,6 +16,8 @@
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
+#include <condition_variable>
+
 namespace duckdb {
 class ClientContext;
 class DataChunk;
@@ -49,6 +51,8 @@ public:
 
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
+	void WaitForTask();
+	void SignalTaskRescheduled(lock_guard<mutex> &);
 
 	void Reset();
 
@@ -93,6 +97,8 @@ public:
 
 	//! Whether or not the root of the pipeline is a result collector object
 	bool HasResultCollector();
+	//! Whether or not the root of the pipeline is a streaming result collector object
+	bool HasStreamingResultCollector();
 	//! Returns the query result - can only be used if `HasResultCollector` returns true
 	unique_ptr<QueryResult> GetResult();
 
@@ -107,6 +113,7 @@ public:
 	}
 
 private:
+	//! Check if the streaming query result is waiting to be fetched from, must hold the 'executor_lock'
 	bool ResultCollectorIsBlocked();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
@@ -164,6 +171,8 @@ private:
 
 	//! Task that have been descheduled
 	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
+	//! The semaphore to signal task rescheduling
+	std::condition_variable task_reschedule;
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;

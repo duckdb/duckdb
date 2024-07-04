@@ -1,5 +1,7 @@
 # test_basic_queries.jl
 
+using Tables: partitions
+
 @testset "Test DBInterface.execute" begin
     con = DBInterface.connect(DuckDB.DB)
 
@@ -132,5 +134,15 @@ end
 
     @test DataFrame(DuckDB.query(db, "select 'a'; select 2;"))[1, 1] == "a"
 
+    DBInterface.close!(con)
+end
+
+@testset "Test chunked response" begin
+    con = DBInterface.connect(DuckDB.DB)
+    DBInterface.execute(con, "CREATE TABLE chunked_table AS SELECT * FROM range(2049)")
+    result = DBInterface.execute(con, "SELECT * FROM chunked_table ;")
+    chunks_it = partitions(result)
+    chunks = collect(chunks_it)
+    @test length(chunks) == 2
     DBInterface.close!(con)
 end

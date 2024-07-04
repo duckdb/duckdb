@@ -558,6 +558,11 @@ LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partit
 	}
 	return LogicalType::VARCHAR;
 }
+
+bool MultiFileReaderOptions::AnySet() {
+	return filename || hive_partitioning || union_by_name;
+}
+
 Value MultiFileReaderOptions::GetHivePartitionValue(const string &base, const string &entry,
                                                     ClientContext &context) const {
 	Value value(base);

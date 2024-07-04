@@ -40,6 +40,8 @@ public:
 	//! The error message can be obtained by calling GetError() on the PendingQueryResult.
 	DUCKDB_API PendingExecutionResult ExecuteTask();
 	DUCKDB_API PendingExecutionResult CheckPulse();
+	//! Halt execution of the thread until a Task is ready to be executed (use with caution)
+	void WaitForTask();
 
 	//! Returns the result of the query as an actual query result.
 	//! This returns (mostly) instantly if ExecuteTask has been called until RESULT_READY was returned.
@@ -48,8 +50,8 @@ public:
 	DUCKDB_API void Close();
 
 	//! Function to determine whether execution is considered finished
-	DUCKDB_API static bool IsFinished(PendingExecutionResult result);
-	DUCKDB_API static bool IsFinishedOrBlocked(PendingExecutionResult result);
+	DUCKDB_API static bool IsResultReady(PendingExecutionResult result);
+	DUCKDB_API static bool IsExecutionFinished(PendingExecutionResult result);
 
 private:
 	shared_ptr<ClientContext> context;

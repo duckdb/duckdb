@@ -1,0 +1,39 @@
+# name: test/sql/storage/compression/chimp/chimp_read.test_slow
+# group: [chimp]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+load test/sql/storage/compression/chimp/chimp.db readonly
+
+query I
+select count(temperature) from temperatures_double;
+----
+245000
+
+query I
+select count(temperature) from temperatures_float;
+----
+245000
+
+query I nosort res
+select temperature from temperatures_double;
+----
+
+query I nosort res
+select temperature from temperatures_float;
+----
+
+query I
+SELECT compression FROM pragma_storage_info('temperatures_double') WHERE segment_type == 'double' AND compression != 'Chimp';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('temperatures_float') WHERE segment_type == 'float' AND compression != 'Chimp';
+----
+
+# Verify that the compression method is deprecated
+statement error
+pragma force_compression='chimp'
+----
+deprecated

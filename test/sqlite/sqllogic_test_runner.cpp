@@ -1,13 +1,15 @@
 
-#include "catch.hpp"
-#include "test_helpers.hpp"
-#include "sqllogic_parser.hpp"
 #include "sqllogic_test_runner.hpp"
-#include "duckdb/main/extension_helper.hpp"
+
+#include "catch.hpp"
+#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/main/extension_entries.hpp"
-#include "duckdb/common/virtual_file_system.hpp"
-#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "sqllogic_parser.hpp"
+#include "test_helpers.hpp"
+#include "sqllogic_test_logger.hpp"
 
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
@@ -86,7 +88,13 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	named_connection_map.clear();
 	// now re-open the current database
 
-	db = make_uniq<DuckDB>(dbpath, config.get());
+	try {
+		db = make_uniq<DuckDB>(dbpath, config.get());
+	} catch (std::exception &ex) {
+		ErrorData err(ex);
+		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+		FAIL();
+	}
 	Reconnect();
 
 	// load any previously loaded extensions again
@@ -323,7 +331,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		// require a specific block size
 		auto required_block_size = NumericCast<idx_t>(std::stoi(params[1]));
-		if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
+		if (config->options.default_block_alloc_size != required_block_size) {
 			// block size does not match the required block size: skip it
 			return RequireResult::MISSING;
 		}

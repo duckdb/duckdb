@@ -47,7 +47,11 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black libclang==16.0.6
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black cxxheaderparser pcpp
+
+      - name: List Installed Packages
+        shell: bash
+        run: pip3 freeze
 
       - name: Format Check
         shell: bash
@@ -81,12 +85,7 @@ jobs:
     - name: Install python dependencies
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
-      run: python -m pip install libclang
-
-    - name: Install libclang
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      shell: bash
-      run: sudo apt-get update && sudo apt install llvm-dev && sudo apt install libclang-dev
+      run: python -m pip install cxxheaderparser pcpp
 
     - name: Verify C enum integrity
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}

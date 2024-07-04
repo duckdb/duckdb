@@ -466,9 +466,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
-		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 		if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-			count = state.row_group->GetSelVector(transaction, state.vector_index, valid_sel, max_count);
+			count = state.row_group->GetSelVector(transaction, state.vector_index, state.valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
 				NextVector(state);
@@ -476,7 +475,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			}
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
 			count = state.row_group->GetCommittedSelVector(transaction.start_time, transaction.transaction_id,
-			                                               state.vector_index, valid_sel, max_count);
+			                                               state.vector_index, state.valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
 				NextVector(state);
@@ -528,7 +527,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			idx_t approved_tuple_count = count;
 			SelectionVector sel;
 			if (count != max_count) {
-				sel.Initialize(valid_sel);
+				sel.Initialize(state.valid_sel);
 			} else {
 				sel.Initialize(nullptr);
 			}

@@ -46,3 +46,13 @@ statement error
 SELECT useRrr
 ----
 useRrr
+
+# value function in having
+query II
+select
+  1 as one,
+  max(cast('1000-05-01 00:00:00' as timestamp)) as mt
+group by one
+having max(cast('1000-05-01 00:00:00' as timestamp))  <= current_timestamp;
+----
+1	1000-05-01 00:00:00

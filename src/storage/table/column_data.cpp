@@ -419,9 +419,9 @@ void ColumnData::RevertAppend(row_t start_row) {
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
 	auto last_segment = data.GetLastSegment(l);
-	if (idx_t(start_row) >= last_segment->start + last_segment->count) {
+	if (NumericCast<idx_t>(start_row) >= last_segment->start + last_segment->count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(idx_t(start_row) == last_segment->start + last_segment->count);
+		D_ASSERT(NumericCast<idx_t>(start_row) == last_segment->start + last_segment->count);
 		return;
 	}
 	// find the segment index that the current row belongs to
@@ -440,7 +440,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	D_ASSERT(row_id >= 0);
-	D_ASSERT(idx_t(row_id) >= start);
+	D_ASSERT(NumericCast<idx_t>(row_id) >= start);
 	// perform the fetch within the segment
 	state.row_index =
 	    start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
@@ -479,19 +479,22 @@ void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 
-	idx_t vector_segment_size = Storage::BLOCK_SIZE;
-	if (start_row == idx_t(MAX_ROW_ID)) {
+	const auto block_size = block_manager.GetBlockSize();
+	const auto type_size = GetTypeIdSize(type.InternalType());
+	auto vector_segment_size = block_size;
+
+	if (start_row == NumericCast<idx_t>(MAX_ROW_ID)) {
 #if STANDARD_VECTOR_SIZE < 1024
-		vector_segment_size = 1024 * GetTypeIdSize(type.InternalType());
+		vector_segment_size = 1024 * type_size;
 #else
-		vector_segment_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
+		vector_segment_size = STANDARD_VECTOR_SIZE * type_size;
 #endif
 	}
 
-	// the segment size is bound by the block size, but can be smaller
-	idx_t segment_size = Storage::BLOCK_SIZE < vector_segment_size ? Storage::BLOCK_SIZE : vector_segment_size;
+	// The segment size is bound by the block size, but can be smaller.
+	idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
 	allocation_size += segment_size;
-	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
+	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size, block_size);
 	data.AppendSegment(l, std::move(new_segment));
 }
 
@@ -548,15 +551,18 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 }
 
 void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	// load the data pointers for the column
+	// Set the stack of the deserializer to load the data pointers.
 	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
 	deserializer.Set<LogicalType &>(type);
+	CompressionInfo compression_info(block_manager.GetBlockSize(), type.InternalType());
+	deserializer.Set<const CompressionInfo &>(compression_info);
 
 	vector<DataPointer> data_pointers;
 	deserializer.ReadProperty(100, "data_pointers", data_pointers);
 
 	deserializer.Unset<DatabaseInstance>();
 	deserializer.Unset<LogicalType>();
+	deserializer.Unset<const CompressionInfo>();
 
 	// construct the segments based on the data pointers
 	this->count = 0;
