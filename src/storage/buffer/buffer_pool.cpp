@@ -4,42 +4,10 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
-#include <cstddef>
-#include <cstdint>
-
-#if defined(_WIN32)
-#include <windows.h>
-#elif defined(__GNUC__)
-#include <sched.h>
-#include <unistd.h>
-#endif
-
 namespace duckdb {
-
-static idx_t GetCurrentCPU() {
-	// this code comes from jemalloc
-#if defined(_WIN32)
-	return (idx_t)GetCurrentProcessorNumber();
-#elif defined(_GNU_SOURCE)
-	auto cpu = sched_getcpu();
-	if (cpu < 0) {
-		// fallback to thread id
-		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
-	}
-	return (idx_t)cpu;
-#elif defined(__aarch64__) && defined(__APPLE__)
-	/* Other oses most likely use tpidr_el0 instead */
-	uintptr_t c;
-	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
-	return (idx_t)(c & (1 << 3) - 1);
-#else
-	// fallback to thread id
-	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
-#endif
-}
-
 BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num)
     : handle(std::move(handle_p)), handle_sequence_number(eviction_seq_num) {
 	D_ASSERT(!handle.expired());
@@ -271,7 +239,7 @@ void BufferPool::UpdateUsedMemory(MemoryTag tag, int64_t size) {
 }
 
 idx_t BufferPool::GetUsedMemory() const {
-	return memory_usage.GetUsedMemory(true);
+	return memory_usage.GetUsedMemory(MemoryUsageCaches::FLUSH);
 }
 
 idx_t BufferPool::GetMaxMemory() const {
@@ -312,7 +280,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 	bool found = false;
 
-	if (memory_usage.GetUsedMemory(false) <= memory_limit) {
+	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 		return {true, std::move(r)};
 	}
 
@@ -328,7 +296,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 		// release the memory and mark the block as unloaded
 		handle->Unload();
 
-		if (memory_usage.GetUsedMemory(false) <= memory_limit) {
+		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 			found = true;
 			return false;
 		}
@@ -446,7 +414,7 @@ void BufferPool::MemoryUsage::UpdateUsedMemory(MemoryTag tag, int64_t size) {
 		// Get corresponding cache slot based on current CPU core index
 		// Two threads may access the same cache simultaneously,
 		// ensuring correctness through atomic operations
-		auto cache_idx = (idx_t)GetCurrentCPU() % MEMORY_USAGE_CACHE_COUNT;
+		auto cache_idx = (idx_t)TaskScheduler::GetCurrentCPU() % MEMORY_USAGE_CACHE_COUNT;
 		auto &cache = memory_usage_caches[cache_idx];
 		auto new_tag_size = cache[tag_idx].fetch_add(size, std::memory_order_relaxed) + size;
 		if ((idx_t)AbsValue(new_tag_size) >= MEMORY_USAGE_CACHE_THRESHOLD) {

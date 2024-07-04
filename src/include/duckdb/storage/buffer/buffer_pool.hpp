@@ -88,6 +88,11 @@ protected:
 	void IncrementDeadNodes(FileBufferType type);
 
 protected:
+	enum class MemoryUsageCaches {
+		FLUSH,
+		NO_FLUSH,
+	};
+
 	struct MemoryUsage {
 		//! The maximum difference between memory statistics and actual usage is 2MB (64 * 32k)
 		static constexpr idx_t MEMORY_USAGE_CACHE_COUNT = 64;
@@ -102,16 +107,16 @@ protected:
 
 		MemoryUsage();
 
-		idx_t GetUsedMemory(bool flush) {
-			return GetUsedMemory(TOTAL_MEMORY_USAGE_INDEX, flush);
+		idx_t GetUsedMemory(MemoryUsageCaches cache) {
+			return GetUsedMemory(TOTAL_MEMORY_USAGE_INDEX, cache);
 		}
 
-		idx_t GetUsedMemory(MemoryTag tag, bool flush) {
-			return GetUsedMemory((idx_t)tag, flush);
+		idx_t GetUsedMemory(MemoryTag tag, MemoryUsageCaches cache) {
+			return GetUsedMemory((idx_t)tag, cache);
 		}
 
-		idx_t GetUsedMemory(idx_t index, bool flush) {
-			if (!flush) {
+		idx_t GetUsedMemory(idx_t index, MemoryUsageCaches cache) {
+			if (cache == MemoryUsageCaches::NO_FLUSH) {
 				auto used_memory = memory_usage[index].load(std::memory_order_relaxed);
 				return used_memory > 0 ? static_cast<idx_t>(used_memory) : 0;
 			}
