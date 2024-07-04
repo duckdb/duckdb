@@ -20,8 +20,8 @@ namespace duckdb {
 class ARTKey {
 public:
 	ARTKey();
-	ARTKey(const data_ptr_t &data, const uint32_t &len);
-	ARTKey(ArenaAllocator &allocator, const uint32_t &len);
+	ARTKey(const data_ptr_t &data, const uint32_t len);
+	ARTKey(ArenaAllocator &allocator, const uint32_t len);
 
 	uint32_t len;
 	data_ptr_t data;

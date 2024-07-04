@@ -52,6 +52,8 @@ public:
 	shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data
 	bool owns_data;
+	//! True, if the ART uses deprecated storage.
+	bool deprecated;
 
 	//! Try to initialize a scan on the index with the given expression and filter
 	unique_ptr<IndexScanState> TryInitializeScan(const Transaction &transaction, const Expression &index_expr,

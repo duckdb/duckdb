@@ -5,6 +5,7 @@ add_library_unity(
   node.cpp
   iterator.cpp
   leaf.cpp
+  deprecated_leaf.cpp
   node4.cpp
   node16.cpp
   node48.cpp

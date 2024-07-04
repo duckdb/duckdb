@@ -5,10 +5,10 @@ namespace duckdb {
 ARTKey::ARTKey() : len(0) {
 }
 
-ARTKey::ARTKey(const data_ptr_t &data, const uint32_t &len) : len(len), data(data) {
+ARTKey::ARTKey(const data_ptr_t &data, const uint32_t len) : len(len), data(data) {
 }
 
-ARTKey::ARTKey(ArenaAllocator &allocator, const uint32_t &len) : len(len) {
+ARTKey::ARTKey(ArenaAllocator &allocator, const uint32_t len) : len(len) {
 	data = allocator.Allocate(len);
 }
 

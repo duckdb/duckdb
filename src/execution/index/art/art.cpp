@@ -35,12 +35,13 @@ struct ARTIndexScanState : public IndexScanState {
 // ART
 //===--------------------------------------------------------------------===//
 
+// TODO: deprecated to false.
 ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
-      allocators(allocators_ptr), owns_data(false) {
+      allocators(allocators_ptr), owns_data(false), deprecated(true) {
 
 	// initialize all allocators
 	if (!allocators) {
@@ -438,7 +439,16 @@ bool ConstructInternal(ART &art, vector<ARTKey> &keys, const row_t *row_ids, Nod
 		if (single_row_id) {
 			Leaf::New(ref_node, row_ids[key_section.start]);
 		} else {
-			Leaf::New(art, ref_node, row_ids + key_section.start, num_row_ids);
+			if (art.deprecated) {
+				Leaf::_deprecated_New(art, ref_node, row_ids + key_section.start, num_row_ids);
+			} else {
+				// Transform the row ids.
+				vector<ARTKey> row_id_keys;
+				row_id_keys.resize(num_row_ids);
+				for (idx_t i = 0; i < num_row_ids; i++) {
+				}
+				// TODO.
+			}
 		}
 		return true;
 	}
@@ -488,7 +498,11 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 	for (idx_t i = 0; i < count; i++) {
 		D_ASSERT(!keys[i].Empty());
 		auto leaf = Lookup(tree, keys[i], 0);
-		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_ids[i]));
+		if (deprecated) {
+			D_ASSERT(Leaf::_deprecated_ContainsRowId(*this, *leaf, row_ids[i]));
+		} else {
+			// TODO.
+		}
 	}
 #endif
 
@@ -549,7 +563,11 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers
 		}
 
 		auto leaf = Lookup(tree, keys[i], 0);
-		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_ids[i]));
+		if (deprecated) {
+			D_ASSERT(Leaf::_deprecated_ContainsRowId(*this, *leaf, row_ids[i]));
+		} else {
+			// TODO.
+		}
 	}
 #endif
 
@@ -583,7 +601,12 @@ bool ART::InsertToLeaf(Node &leaf, const row_t &row_id) {
 		return false;
 	}
 
-	Leaf::Insert(*this, leaf, row_id);
+	if (deprecated) {
+		Leaf::_deprecated_Insert(*this, leaf, row_id);
+	} else {
+		// TODO.
+	}
+
 	return true;
 }
 
@@ -701,7 +724,11 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_identifiers) {
 
 		auto leaf = Lookup(tree, keys[i], 0);
 		if (leaf) {
-			D_ASSERT(!Leaf::ContainsRowId(*this, *leaf, row_ids[i]));
+			if (deprecated) {
+				D_ASSERT(!Leaf::_deprecated_ContainsRowId(*this, *leaf, row_ids[i]));
+			} else {
+				// TODO.
+			}
 		}
 	}
 #endif
@@ -724,7 +751,13 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 	// delete a row ID from a leaf (root is leaf with possible prefix nodes)
 	if (next_node.get().GetType() == NType::LEAF || next_node.get().GetType() == NType::LEAF_INLINED) {
-		if (Leaf::Remove(*this, next_node, row_id)) {
+		bool remove_leaf = false;
+		if (deprecated) {
+			remove_leaf = Leaf::_deprecated_Remove(*this, next_node, row_id);
+		} else {
+			// TODO.
+		}
+		if (remove_leaf) {
 			Node::Free(*this, node);
 		}
 		return;
@@ -746,7 +779,13 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 		if (child_node.get().GetType() == NType::LEAF || child_node.get().GetType() == NType::LEAF_INLINED) {
 			// leaf found, remove entry
-			if (Leaf::Remove(*this, child_node, row_id)) {
+			bool remove_leaf = false;
+			if (deprecated) {
+				remove_leaf = Leaf::_deprecated_Remove(*this, child_node, row_id);
+			} else {
+				// TODO.
+			}
+			if (remove_leaf) {
 				Node::DeleteChild(*this, next_node, node, key[depth]);
 			}
 			return;
@@ -804,7 +843,11 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &result_ids) {
 	if (!leaf) {
 		return true;
 	}
-	return Leaf::GetRowIds(*this, *leaf, result_ids, max_count);
+	if (deprecated) {
+		return Leaf::_deprecated_GetRowIds(*this, *leaf, result_ids, max_count);
+	}
+	// TODO
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
