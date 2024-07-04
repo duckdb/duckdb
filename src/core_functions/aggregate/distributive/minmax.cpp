@@ -395,8 +395,8 @@ public:
 	UnaryAggregateHeap<T, COMPARATOR> heap;
 	bool is_initialized = false;
 
-	void Initialize(idx_t kval) {
-		heap.Initialize(kval);
+	void Initialize(idx_t nval) {
+		heap.Initialize(nval);
 		is_initialized = true;
 	}
 
@@ -410,17 +410,17 @@ static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t
                           idx_t count) {
 
 	auto &val_vector = inputs[0];
-	auto &top_k_vector = inputs[1];
+	auto &n_vector = inputs[1];
 
 	UnifiedVectorFormat val_format;
-	UnifiedVectorFormat top_k_format;
+	UnifiedVectorFormat n_format;
 	UnifiedVectorFormat state_format;
 	;
 	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
 
 	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format);
 
-	top_k_vector.ToUnifiedFormat(count, top_k_format);
+	n_vector.ToUnifiedFormat(count, n_format);
 	state_vector.ToUnifiedFormat(count, state_format);
 
 	auto states = UnifiedVectorFormat::GetData<STATE *>(state_format);
@@ -436,18 +436,18 @@ static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t
 		// Initialize the heap if necessary and add the input to the heap
 		if (!state.is_initialized) {
 			static constexpr int64_t MAX_N = 1000000;
-			const auto kidx = top_k_format.sel->get_index(i);
-			if (!top_k_format.validity.RowIsValid(kidx)) {
+			const auto nidx = n_format.sel->get_index(i);
+			if (!n_format.validity.RowIsValid(nidx)) {
 				throw InvalidInputException("Invalid input for MIN/MAX: n value cannot be NULL");
 			}
-			const auto kval = UnifiedVectorFormat::GetData<int64_t>(top_k_format)[kidx];
-			if (kval <= 0) {
+			const auto nval = UnifiedVectorFormat::GetData<int64_t>(n_format)[nidx];
+			if (nval <= 0) {
 				throw InvalidInputException("Invalid input for MIN/MAX: n value must be > 0");
 			}
-			if (kval >= MAX_N) {
+			if (nval >= MAX_N) {
 				throw InvalidInputException("Invalid input for MIN/MAX: n value must be < %d", MAX_N);
 			}
-			state.Initialize(UnsafeNumericCast<idx_t>(kval));
+			state.Initialize(UnsafeNumericCast<idx_t>(nval));
 		}
 
 		// Now add the input to the heap

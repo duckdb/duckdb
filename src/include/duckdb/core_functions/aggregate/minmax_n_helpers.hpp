@@ -322,7 +322,7 @@ struct MinMaxNOperation {
 		if (!target.is_initialized) {
 			target.Initialize(source.heap.Capacity());
 		} else if (source.heap.Capacity() != target.heap.Capacity()) {
-			throw InvalidInputException("Mismatched k values in arg_top_k");
+			throw InvalidInputException("Mismatched n values in min/max/arg_min/arg_max");
 		}
 
 		// Merge the heaps

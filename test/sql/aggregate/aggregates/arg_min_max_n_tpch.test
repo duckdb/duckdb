@@ -1,0 +1,22 @@
+# name: test/sql/aggregate/aggregates/arg_min_max_n_tpch.test
+# description: Test max/min N overloads with TPCH data
+# group: [aggregates]
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CALL dbgen(sf=0.001);
+
+query I
+select min(l_orderkey, 3) from lineitem;
+----
+[1, 1, 1]
+
+query I
+select max(l_orderkey, 3) from lineitem;
+----
+[5988, 5987, 5987]
+

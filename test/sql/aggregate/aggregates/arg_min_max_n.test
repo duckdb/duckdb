@@ -1,5 +1,5 @@
 # name: test/sql/aggregate/aggregates/arg_min_max_n.test
-# description: Test approx top K operator
+# description: Test for arg_max with N
 # group: [aggregates]
 
 statement ok
@@ -34,3 +34,44 @@ query I
 SELECT arg_max(even_groups, i, 3) FROM t2;
 ----
 [4, 3, 2]
+
+
+# Test limits
+
+foreach FUNC min max
+
+statement error
+select ${FUNC}(arg, NULL) from t1;
+----
+Invalid Input Error: Invalid input for MIN/MAX: n value cannot be NULL
+
+statement error
+SELECT ${FUNC}(arg, -1) FROM t1;
+----
+Invalid Input Error: Invalid input for MIN/MAX: n value must be > 0
+
+statement error
+select ${FUNC}(arg, 1000000) from t1;
+----
+Invalid Input Error: Invalid input for MIN/MAX: n value must be < 1000000
+
+endloop
+
+foreach FUNC arg_min arg_max min_by max_by
+
+statement error
+select ${FUNC}(arg, val, NULL) from t1;
+----
+Invalid Input Error: Invalid input for arg_min/arg_max: n value cannot be NULL
+
+statement error
+SELECT ${FUNC}(arg, val, -1) FROM t1;
+----
+Invalid Input Error: Invalid input for arg_min/arg_max: n value must be > 0
+
+statement error
+select ${FUNC}(arg, val, 1000000) from t1;
+----
+Invalid Input Error: Invalid input for arg_min/arg_max: n value must be < 1000000
+
+endloop

@@ -1,5 +1,5 @@
 # name: test/sql/aggregate/aggregates/arg_min_max_n_all_types.test_slow
-# description: Test approx top K operator
+# description: Test the ARG_MIN and ARG_MAX "N" overloads with all types
 # group: [aggregates]
 
 statement ok
