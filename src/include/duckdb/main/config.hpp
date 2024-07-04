@@ -223,7 +223,7 @@ struct DBConfigOptions {
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of unrecognized (other) options
-	unordered_map<string, Value> unrecognized_options;
+	case_insensitive_map_t<Value> unrecognized_options;
 	//! Whether or not the configuration settings can be altered
 	bool lock_configuration = false;
 	//! Whether to print bindings when printing the plan (debug mode only)
