@@ -80,7 +80,7 @@ jobs:
     - uses: ./.github/actions/manylinux_2014_setup
       with:
         ninja-build: 1
-        ccache: 1
+        ccache: 0
         python_alias: 1
         aws-cli: 1
 
