@@ -120,6 +120,27 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 	return chunk;
 }
 
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+static unique_ptr<DataChunk> AlternativeFetch(StreamQueryResult &stream_result) {
+	// We first use StreamQueryResult::ExecuteTask until IsChunkReady becomes true
+	// then call Fetch
+	StreamExecutionResult execution_result;
+	while (!StreamQueryResult::IsChunkReady(execution_result = stream_result.ExecuteTask())) {
+		if (execution_result == StreamExecutionResult::BLOCKED) {
+			stream_result.WaitForTask();
+		}
+	}
+	if (execution_result == StreamExecutionResult::EXECUTION_CANCELLED) {
+		throw InvalidInputException("The execution of the query was cancelled before it could finish, likely "
+		                            "caused by executing a different query");
+	}
+	if (execution_result == StreamExecutionResult::EXECUTION_ERROR) {
+		stream_result.ThrowError();
+	}
+	return stream_result.Fetch();
+}
+#endif
+
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (HasError() || !context) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
@@ -129,7 +150,11 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
 	while (true) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+		auto chunk = AlternativeFetch(*this);
+#else
 		auto chunk = Fetch();
+#endif
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
