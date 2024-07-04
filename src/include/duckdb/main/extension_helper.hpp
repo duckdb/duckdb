@@ -14,8 +14,6 @@
 
 #include <string>
 
-#include <string>
-
 namespace duckdb {
 
 class DuckDB;
@@ -104,6 +102,7 @@ public:
 	static void AutoLoadExtension(DatabaseInstance &db, const string &extension_name);
 
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
+	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
 
 	//! Update all extensions, return a vector of extension names that were updated;

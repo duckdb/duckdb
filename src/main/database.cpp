@@ -222,20 +222,10 @@ void DatabaseInstance::LoadExtensionSettings() {
 			if (extension_name.empty()) {
 				continue;
 			}
-			// Attempt to autoload it
-			if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
+			if (!ExtensionHelper::TryAutoLoadExtension(*this, extension_name)) {
 				throw InvalidInputException(
 				    "To set the %s setting, the %s extension needs to be loaded. But it could not be autoloaded.", name,
 				    extension_name);
-			}
-			try {
-				ExtensionHelper::AutoLoadExtension(*this, extension_name);
-			} catch (std::exception &e) {
-				ErrorData error(e);
-				throw InvalidInputException(
-				    "To set the %s setting, the %s extension needs to be loaded. But autoloading "
-				    "failed with the following error: ",
-				    name, extension_name, error.RawMessage());
 			}
 			config.SetOptionByName(name, value);
 			extension_options.push_back(name);
