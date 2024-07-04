@@ -114,7 +114,7 @@
         "args": [
             {
                 "name": "aggr_expr",
-                "type": "str"
+                "type": "str | List[Expression]"
             },
             {
                 "name": "group_expr",
