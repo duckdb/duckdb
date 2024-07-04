@@ -12,7 +12,6 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
                                          case_insensitive_map_t<string> &table_alias_map) {
 	vector<string> column_names;
 	vector<string> except_list;
-	case_insensitive_set_t label_set;
 	vector<string> label_names;
 
 	auto table_name = reinterpret_cast<duckdb_libpgquery::PGRangeVar *>(graph_table->table->head->data.ptr_value);
@@ -59,7 +58,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 			label_str = label->val.str;
 		}
 		label_str = StringUtil::Lower(label_str);
-		if (global_label_set.find(label_str) != label_set.end()) {
+		if (global_label_set.find(label_str) != global_label_set.end()) {
 			throw ConstraintException("Label %s is not unique, make sure all labels are unique", label_str);
 		}
 		global_label_set.insert(label_str);
