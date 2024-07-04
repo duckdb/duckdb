@@ -42,15 +42,15 @@ interval_t PyTimeDelta::ToInterval() {
 }
 
 int64_t PyTimeDelta::GetDays(py::handle &obj) {
-	return PyDateTime_TIMEDELTA_GET_DAYS(obj.ptr()); // NOLINT
+	return py::int_(obj.attr("days")).cast<int64_t>();
 }
 
 int64_t PyTimeDelta::GetSeconds(py::handle &obj) {
-	return PyDateTime_TIMEDELTA_GET_SECONDS(obj.ptr()); // NOLINT
+	return py::int_(obj.attr("seconds")).cast<int64_t>();
 }
 
 int64_t PyTimeDelta::GetMicros(py::handle &obj) {
-	return PyDateTime_TIMEDELTA_GET_MICROSECONDS(obj.ptr()); // NOLINT
+	return py::int_(obj.attr("microseconds")).cast<int64_t>();
 }
 
 PyDecimal::PyDecimal(py::handle &obj) : obj(obj) {
@@ -248,13 +248,15 @@ py::object PyTime::GetTZInfo(py::handle &obj) {
 	return py::reinterpret_borrow<py::object>(PyDateTime_TIME_GET_TZINFO(obj.ptr())); // NOLINT
 }
 
-interval_t PyTimezone::GetUTCOffset(py::handle &tzone_obj) {
-	auto res = tzone_obj.attr("utcoffset")(py::none());
+interval_t PyTimezone::GetUTCOffset(py::handle &datetime, py::handle &tzone_obj) {
+	// The datetime object is provided because the utcoffset could be ambiguous
+	auto res = tzone_obj.attr("utcoffset")(datetime);
 	auto timedelta = PyTimeDelta(res);
 	return timedelta.ToInterval();
 }
 
 int32_t PyTimezone::GetUTCOffsetSeconds(py::handle &tzone_obj) {
+	// We should be able to use None here, the tzone_obj of a datetime.time should never be ambiguous
 	auto res = tzone_obj.attr("utcoffset")(py::none());
 	auto timedelta = PyTimeDelta(res);
 	if (timedelta.days != 0) {
@@ -288,7 +290,7 @@ timestamp_t PyDateTime::ToTimestamp() {
 Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
 	auto timestamp = ToTimestamp();
 	if (!py::none().is(tzone_obj)) {
-		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
+		auto utc_offset = PyTimezone::GetUTCOffset(obj, tzone_obj);
 		// Need to subtract the UTC offset, so we invert the interval
 		utc_offset = Interval::Invert(utc_offset);
 		timestamp = Interval::Add(timestamp, utc_offset);
