@@ -133,6 +133,16 @@ static bool HasNonReorderableChild(LogicalOperator &op) {
 	return tmp->children.empty();
 }
 
+static void ModifyStatsIfLimit(LogicalOperator *limit_op, RelationStats &stats) {
+	if (!limit_op) {
+		return;
+	}
+	auto &limit = limit_op->Cast<LogicalLimit>();
+	if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		stats.cardinality = MinValue(limit.limit_val.GetConstantValue(), stats.cardinality);
+	}
+}
+
 bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
                                            vector<reference<LogicalOperator>> &filter_operators,
                                            optional_ptr<LogicalOperator> parent) {
@@ -203,12 +213,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			operator_stats.cardinality = NumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
 			                                                RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
-		if (limit_op) {
-			auto &limit = limit_op->Cast<LogicalLimit>();
-			if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-				operator_stats.cardinality = MinValue(limit.limit_val.GetConstantValue(), operator_stats.cardinality);
-			}
-		}
+		ModifyStatsIfLimit(limit_op, child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
@@ -223,12 +228,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			operator_stats.cardinality = NumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
 			                                                RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
-		if (limit_op) {
-			auto &limit = limit_op->Cast<LogicalLimit>();
-			if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-				operator_stats.cardinality = MinValue(limit.limit_val.GetConstantValue(), operator_stats.cardinality);
-			}
-		}
+		ModifyStatsIfLimit(limit_op, child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
@@ -263,12 +263,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			stats.cardinality =
 			    (idx_t)MaxValue(stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
-		if (limit_op) {
-			auto &limit = limit_op->Cast<LogicalLimit>();
-			if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-				stats.cardinality = MinValue(limit.limit_val.GetConstantValue(), stats.cardinality);
-			}
-		}
+		ModifyStatsIfLimit(limit_op, stats);
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
@@ -287,12 +282,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
-		if (limit_op) {
-			auto &limit = limit_op->Cast<LogicalLimit>();
-			if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-				proj_stats.cardinality = MinValue(limit.limit_val.GetConstantValue(), proj_stats.cardinality);
-			}
-		}
+		ModifyStatsIfLimit(limit_op, child_stats);
 		AddRelation(input_op, parent, proj_stats);
 		return true;
 	}
