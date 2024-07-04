@@ -226,6 +226,7 @@ string_t DoubleToVarInt(Vector &result, T double_value) {
 	return blob;
 }
 
+// This algorithm is quadratic :(
 string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	idx_t start_pos, end_pos;
 	bool is_negative, is_zero;
@@ -237,29 +238,49 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	auto int_value_char = int_value.GetData();
 	idx_t actual_size = end_pos - start_pos;
 	// convert the string to a byte array
-	string abs_str(int_value_char + start_pos, actual_size);
 	string blob_string;
-	while (!abs_str.empty()) {
+
+	unsafe_vector<uint64_t> digits;
+	// The max number a uint64_t can represent is 18.446.744.073.709.551.615
+	// That has 20 digits
+	// In the worst case a remainder of a division will be 255, which is 3 digits
+	// Since the max value is 184, we need to take one more digit out
+	// Hence we end up with a max of 16 digits supported.
+	const uint8_t max_digits = 16;
+	const idx_t number_of_digits = static_cast<idx_t>(std::ceil((double) actual_size / max_digits));
+
+	// lets convert the string to a uint64_t vector
+	idx_t cur_end = end_pos;
+	for (idx_t i = 0; i < number_of_digits; i++) {
+		idx_t cur_start  = (int64_t) cur_end - max_digits < 0 ? 0 : cur_end - max_digits;
+		std::string current_number(int_value_char + cur_start, cur_end - cur_start);
+		digits.push_back(std::stoull(current_number));
+		// move cur_end to more digits down the road
+		cur_end = cur_end - max_digits;
+	}
+
+	// Now that we have our uint64_t vector, lets start our division process to figure out the new number and remainder
+	while (!digits.empty()) {
+		idx_t digit_idx =  digits.size() -1;
 		uint8_t remainder = 0;
-		std::string quotient;
-		// We convert ze string to a big-endian byte array by dividing the number by 256 and storing the remainders
-		for (char digit : abs_str) {
-			int new_value = remainder * 10 + CharToDigit(digit);
-			if (new_value / 256 > 0) {
-				quotient += to_string(new_value / 256);
-			} else if (!quotient.empty()) {
-				quotient += '0';
+		idx_t digits_size = digits.size();
+		for (idx_t i = 0; i < digits_size; i ++) {
+			digits[digit_idx] += static_cast<uint64_t>(remainder * pow(10,max_digits));
+			remainder = digits[digit_idx] % 256;
+			digits[digit_idx] /= 256;
+			if (digits[digit_idx] == 0 && digit_idx == digits.size() -1) {
+				// we can cap this
+				digits.pop_back();
 			}
-			remainder = static_cast<uint8_t>(new_value % 256);
+			digit_idx--;
 		}
-		if (is_negative && int_value_char[start_pos] != '0') {
+		if (is_negative) {
 			blob_string.push_back(static_cast<char>(~remainder));
 		} else {
 			blob_string.push_back(static_cast<char>(remainder));
 		}
-		// Remove leading zeros from the quotient
-		abs_str = quotient;
 	}
+
 	uint32_t blob_size = static_cast<uint32_t>(blob_string.size() + VARINT_HEADER_SIZE);
 	auto blob = StringVector::EmptyString(result, blob_size);
 	auto writable_blob = blob.GetDataWriteable();
