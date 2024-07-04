@@ -223,8 +223,8 @@ class TestAllTypes(object):
             ],
             'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)],
             'map': [
-                ({'key': [], 'value': []},),
-                ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},),
+                ({},),
+                ({'key1': '🦆🦆🦆🦆🦆🦆', 'key2': 'goose'},),
                 (None,),
             ],
             'time_tz': [(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)],
@@ -474,8 +474,8 @@ class TestAllTypes(object):
             ),
             'map': np.ma.array(
                 [
-                    {'key': [], 'value': []},
-                    {'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},
+                    {},
+                    {'key1': '🦆🦆🦆🦆🦆🦆', 'key2': 'goose'},
                     None,
                 ],
                 mask=[0, 0, 1],
