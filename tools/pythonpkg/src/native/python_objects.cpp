@@ -406,6 +406,58 @@ py::object PythonObject::FromStruct(const Value &val, const LogicalType &type,
 	}
 }
 
+static bool KeyIsHashable(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::ENUM:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::INTERVAL:
+		return true;
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::MAP:
+		return false;
+	case LogicalTypeId::UNION: {
+		idx_t count = UnionType::GetMemberCount(type);
+		for (idx_t i = 0; i < count; i++) {
+			if (!KeyIsHashable(UnionType::GetMemberType(type, i))) {
+				return false;
+			}
+		}
+		// Only if all the member types are hashable do we say the entire UNION is hashable
+		return true;
+	}
+	case LogicalTypeId::STRUCT:
+		return false;
+	default:
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
+	}
+}
+
 py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
                                    const ClientProperties &client_properties) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
@@ -598,16 +650,25 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		auto &key_type = MapType::KeyType(type);
 		auto &val_type = MapType::ValueType(type);
 
-		py::list keys;
-		py::list values;
-		for (auto &list_elem : list_values) {
-			auto &struct_children = StructValue::GetChildren(list_elem);
-			keys.append(PythonObject::FromValue(struct_children[0], key_type, client_properties));
-			values.append(PythonObject::FromValue(struct_children[1], val_type, client_properties));
-		}
 		py::dict py_struct;
-		py_struct["key"] = std::move(keys);
-		py_struct["value"] = std::move(values);
+		if (KeyIsHashable(key_type)) {
+			for (auto &list_elem : list_values) {
+				auto &struct_children = StructValue::GetChildren(list_elem);
+				auto key = PythonObject::FromValue(struct_children[0], key_type, client_properties);
+				auto value = PythonObject::FromValue(struct_children[1], val_type, client_properties);
+				py_struct[std::move(key)] = std::move(value);
+			}
+		} else {
+			py::list keys;
+			py::list values;
+			for (auto &list_elem : list_values) {
+				auto &struct_children = StructValue::GetChildren(list_elem);
+				keys.append(PythonObject::FromValue(struct_children[0], key_type, client_properties));
+				values.append(PythonObject::FromValue(struct_children[1], val_type, client_properties));
+			}
+			py_struct["key"] = std::move(keys);
+			py_struct["value"] = std::move(values);
+		}
 		return std::move(py_struct);
 	}
 	case LogicalTypeId::STRUCT: {
