@@ -253,12 +253,13 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-
 		LogicalType result_type;
 		if (GetCollationLikePattern(arguments[0], arguments[1], result_type)) {
-
-			ExpressionBinder::PushCollation(context, arguments[0], arguments[0]->return_type, false);
 			// there is a collation, then pushing it
+			ExpressionBinder::PushCollation(context, arguments[0], arguments[0]->return_type, false);
+			if (arguments.size() == 3) {
+				ExpressionBinder::PushCollation(context, arguments[2], arguments[2]->return_type, false);
+			}
 			auto like_matcher = LikeMatcher::CreateLikeMatcher<true>(pattern_str.ToString());
 			if (like_matcher) {
 				like_matcher->PushCollation(context, result_type);

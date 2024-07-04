@@ -17,6 +17,8 @@ class SelectBinder : public BaseSelectBinder {
 public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
+	bool IsExtraEntry(ParsedExpression &expr);
+
 protected:
 	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;

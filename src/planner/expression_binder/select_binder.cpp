@@ -49,4 +49,13 @@ bool SelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
 	return false;
 }
 
+bool SelectBinder::IsExtraEntry(ParsedExpression &expr) {
+	auto entry_idx = node.bind_state.projection_map[expr];
+	if (entry_idx >= node.bind_state.original_expressions.size()) {
+		// extra entry added to the select list, it came from OrderBinder
+		return true;
+	}
+	return false;
+}
+
 } // namespace duckdb

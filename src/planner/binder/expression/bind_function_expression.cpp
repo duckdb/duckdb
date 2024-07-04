@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
 
 namespace duckdb {
 
@@ -103,7 +104,53 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	}
 }
 
+static bool IsSelectBinder(ExpressionBinder *binder) {
+	return nullptr != dynamic_cast<SelectBinder *>(binder);
+}
+
+static LogicalType GetResultCollation(FunctionExpression &function, vector<unique_ptr<Expression>> &children) {
+	string last_collation;
+	LogicalType result_type;
+	for (auto &child: children) {
+		auto child_ret_type = child->return_type;
+		if (StringType::IsCollated(child_ret_type)) {
+			auto collation = StringType::GetCollation(child_ret_type);
+			if (!last_collation.empty() && last_collation != collation) {
+				throw BinderException(function, "Function \"%s\" has multiple collations: %s and %s",
+				                      function.function_name, last_collation, collation);
+			}
+			last_collation = collation;
+			result_type = child_ret_type;
+		}
+	}
+	return result_type;
+}
+
+static bool SkippedLikeFunction(const string &function_name) {
+	return function_name == "like" || function_name == "~~" || function_name == "!~~";
+}
+
+static bool NotSkippedLikeFunction(const string &function_name) {
+	return function_name == "like_escape" || function_name == "ilike_escape" ||
+		   function_name == "not_like_escape" || function_name == "not_ilike_escape" ||
+		   function_name == "~~~" || function_name == "~~*" || function_name == "!~~*";
+}
+
+static bool CanPushCollation(ExpressionBinder *binder, FunctionExpression &function) {
+	if(!IsSelectBinder(binder) || NotSkippedLikeFunction(function.function_name)) {
+		return true;
+	}
+	if (SkippedLikeFunction(function.function_name)) {
+		return false;
+	}
+	SelectBinder *select_binder = dynamic_cast<SelectBinder *>(binder);
+	return select_binder->IsExtraEntry(function);
+}
+
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
+	bool is_select_binder = IsSelectBinder(this);
+	bool push_collation = CanPushCollation(this, function);
+
 	// bind the children of the function expression
 	ErrorData error;
 	// bind of each child
@@ -120,21 +167,23 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	// all children bound successfully
 	// extract the children and types
-	string last_collation;
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		auto &child = BoundExpression::GetExpression(*function.children[i]);
 		children.push_back(std::move(child));
+	}
 
-		auto child_ret_type = children[i]->return_type;
-		if (StringType::IsCollated(child_ret_type)) {
-			auto collation = StringType::GetCollation(child_ret_type);
-			if (!last_collation.empty() && last_collation != collation) {
-				throw BinderException(function, "Function \"%s\" has multiple collations: %s and %s",
-				                      function.function_name, last_collation, collation);
+	auto children_res_type = GetResultCollation(function, children);
+	bool is_skipped_like = SkippedLikeFunction(function.function_name);
+	if (push_collation && StringType::IsCollated(children_res_type)) {
+		for (idx_t i = 0; i < children.size(); i++) {
+			if (children[i]->return_type.id() == LogicalTypeId::VARCHAR) {
+				if (!is_skipped_like) {
+					ExpressionBinder::PushCollation(context, children[i], children_res_type, false);
+				} else {
+					children[i]->return_type = children_res_type;
+				}
 			}
-			ExpressionBinder::PushCollation(context, children[i], child_ret_type, false);
-			last_collation = collation;
 		}
 	}
 
@@ -149,9 +198,18 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
 		}
-		if (bound_function.return_type.id() == LogicalTypeId::VARCHAR &&
-		    StringType::IsCollated(bound_function.return_type)) {
-			ExpressionBinder::PushCollation(context, result, result->return_type, false);
+		if (bound_function.return_type.id() == LogicalTypeId::VARCHAR && StringType::IsCollated(children_res_type)) {
+			if(StringType::IsCollated(bound_function.return_type) && bound_function.return_type != children_res_type) {
+				throw BinderException(function, "Function \"%s\" has multiple collations: %s and %s",
+				                      function.function_name, StringType::GetCollation(bound_function.return_type),
+									  StringType::GetCollation(children_res_type));
+			}
+			// propagating result child collation to function result
+			bound_function.return_type = children_res_type;
+			// not SelectBinder, we should push collation
+			if (push_collation) {
+				ExpressionBinder::PushCollation(context, result, result->return_type, false);
+			}
 		}
 	}
 	return BindResult(std::move(result));
