@@ -1,6 +1,6 @@
-# name: benchmark/csv/varchar_varint_1M.benchmark
+# name: benchmark/cast/varchar_varint_1M.benchmark
 # description: Casting of a Varchar with 1M digits to varint
-# group: [csv]
+# group: [cast]
 
 name Casting of a Varchar with 1M digits to varint
 group csv
