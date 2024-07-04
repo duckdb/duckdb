@@ -30,15 +30,15 @@ PRAGMA DEBUG_CHECKPOINT_ABORT = 'after_free_list_write';
 statement ok
 CREATE SCHEMA s3;
 
-# error Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 statement error
 CHECKPOINT;
 ----
+<REGEX>:FATAL Error.*Checkpoint aborted.*because of.*checkpoint_abort flag.*
 
-# error Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 statement error
 CHECKPOINT;
 ----
+<REGEX>:FATAL Error.*Checkpoint aborted.*because of.*checkpoint_abort flag.*
 
 restart
 
