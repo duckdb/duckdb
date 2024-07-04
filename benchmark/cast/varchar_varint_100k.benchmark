@@ -6,7 +6,7 @@ name Casting of a Varchar with 100k digits to varint
 group csv
 
 load
-CREATE TABLE t1 AS select concat('1', repeat('0', 100000));
+CREATE TABLE t1 AS select concat('1', repeat('0', 100000)) as a;
 
 run
 SELECT a::varint from t1
