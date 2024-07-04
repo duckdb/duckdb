@@ -66,10 +66,16 @@ jobs:
       DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+    - name: Build
+      shell: bash
+      env:
+        REPO_NAME: ${{ github.repository }}
+        REPO_REF: ${{ inputs.git_ref }}
+      run: |
+        git config --global --add safe.directory $(pwd)
+        git clone https://github.com/$REPO_NAME .
+        git fetch
+        git checkout $REPO_REF
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
