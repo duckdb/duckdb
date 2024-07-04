@@ -1,5 +1,6 @@
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
