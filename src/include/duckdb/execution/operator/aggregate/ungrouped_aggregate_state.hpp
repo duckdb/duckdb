@@ -36,8 +36,9 @@ public:
 
 struct GlobalUngroupedAggregateState {
 public:
-	GlobalUngroupedAggregateState(Allocator &client_allocator, const vector<unique_ptr<Expression>> &aggregates) :
-	    client_allocator(client_allocator), allocator(client_allocator), state(aggregates) {}
+	GlobalUngroupedAggregateState(Allocator &client_allocator, const vector<unique_ptr<Expression>> &aggregates)
+	    : client_allocator(client_allocator), allocator(client_allocator), state(aggregates) {
+	}
 
 	mutable mutex lock;
 	//! Client allocator
@@ -48,6 +49,7 @@ public:
 	mutable vector<unique_ptr<ArenaAllocator>> stored_allocators;
 	//! The global aggregate state
 	UngroupedAggregateState state;
+
 public:
 	//! Create an ArenaAllocator with cross-thread lifetime
 	ArenaAllocator &CreateAllocator() const;

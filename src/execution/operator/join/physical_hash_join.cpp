@@ -27,7 +27,8 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
-                                   PerfectHashJoinStats perfect_join_stats, unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
+                                   PerfectHashJoinStats perfect_join_stats,
+                                   unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
       delim_types(std::move(delim_types)), perfect_join_statistics(std::move(perfect_join_stats)) {
 	D_ASSERT(left_projection_map.empty());
@@ -99,7 +100,8 @@ JoinFilterLocalState::~JoinFilterLocalState() {
 
 unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context) const {
 	auto result = make_uniq<JoinFilterGlobalState>();
-	result->global_aggregate_state = make_uniq<GlobalUngroupedAggregateState>(BufferAllocator::Get(context), min_max_aggregates);
+	result->global_aggregate_state =
+	    make_uniq<GlobalUngroupedAggregateState>(BufferAllocator::Get(context), min_max_aggregates);
 	return result;
 }
 
@@ -160,7 +162,6 @@ public:
 	atomic<bool> scanned_data;
 
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
-
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
@@ -270,12 +271,11 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 	return make_uniq<HashJoinLocalSinkState>(*this, context.client, gstate);
 }
 
-
 void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const {
 	// if we are pushing any filters into a probe-side, compute the min/max over the columns that we are pushing
-	for(idx_t pushdown_idx = 0; pushdown_idx < filters.size(); pushdown_idx++) {
+	for (idx_t pushdown_idx = 0; pushdown_idx < filters.size(); pushdown_idx++) {
 		auto &pushdown = filters[pushdown_idx];
-		for(idx_t i = 0; i < 2; i++) {
+		for (idx_t i = 0; i < 2; i++) {
 			idx_t aggr_idx = pushdown_idx * 2 + i;
 			// FIXME: payload_column_idxs[pushdown.join_condition]?
 			lstate.local_aggregate_state->Sink(chunk, pushdown.join_condition, aggr_idx);
@@ -520,7 +520,7 @@ public:
 void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
-	for(auto &aggr_expr : min_max_aggregates) {
+	for (auto &aggr_expr : min_max_aggregates) {
 		min_max_types.push_back(aggr_expr->return_type);
 	}
 	DataChunk final_min_max;
@@ -529,7 +529,7 @@ void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate) const {
 	gstate.global_aggregate_state->Finalize(final_min_max);
 
 	// create a filter for each of the aggregates
-	for(idx_t filter_idx = 0; filter_idx < filters.size(); filter_idx++) {
+	for (idx_t filter_idx = 0; filter_idx < filters.size(); filter_idx++) {
 		auto &filter = filters[filter_idx];
 		auto filter_col_idx = filter.probe_column_index.column_index;
 		auto min_idx = filter_idx * 2;
@@ -546,7 +546,8 @@ void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate) const {
 			dynamic_filters->PushFilter(filter_col_idx, std::move(constant_filter));
 		} else {
 			// min != max - generate a range filter
-			auto greater_equals = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
+			auto greater_equals =
+			    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
 			dynamic_filters->PushFilter(filter_col_idx, std::move(greater_equals));
 			auto less_equals = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
 			dynamic_filters->PushFilter(filter_col_idx, std::move(less_equals));

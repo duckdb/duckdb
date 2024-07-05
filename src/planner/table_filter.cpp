@@ -41,11 +41,11 @@ unique_ptr<TableFilterSet> DynamicTableFilterSet::GetFinalTableFilters(optional_
 	D_ASSERT(HasFilters());
 	auto result = make_uniq<TableFilterSet>();
 	if (existing_filters) {
-		for(auto &entry : existing_filters->filters) {
+		for (auto &entry : existing_filters->filters) {
 			result->filters[entry.first] = entry.second->Copy();
 		}
 	}
-	for(auto &entry : filters->filters) {
+	for (auto &entry : filters->filters) {
 		result->filters[entry.first] = entry.second->Copy();
 	}
 	return result;

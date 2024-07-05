@@ -48,7 +48,7 @@ bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
 
 unique_ptr<TableFilter> ConjunctionOrFilter::Copy() const {
 	auto result = make_uniq<ConjunctionOrFilter>();
-	for(auto &filter : child_filters) {
+	for (auto &filter : child_filters) {
 		result->child_filters.push_back(filter->Copy());
 	}
 	return result;
@@ -101,7 +101,7 @@ bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
 
 unique_ptr<TableFilter> ConjunctionAndFilter::Copy() const {
 	auto result = make_uniq<ConjunctionAndFilter>();
-	for(auto &filter : child_filters) {
+	for (auto &filter : child_filters) {
 		result->child_filters.push_back(filter->Copy());
 	}
 	return result;

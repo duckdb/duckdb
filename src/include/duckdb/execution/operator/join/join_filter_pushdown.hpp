@@ -39,7 +39,6 @@ struct JoinFilterLocalState {
 	unique_ptr<LocalUngroupedAggregateState> local_aggregate_state;
 };
 
-
 struct JoinFilterPushdownInfo {
 	//! The dynamic table filter set where to push filters into
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
@@ -55,7 +54,6 @@ public:
 	void Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const;
 	void Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const;
 	void PushFilters(JoinFilterGlobalState &gstate) const;
-
 };
 
 } // namespace duckdb

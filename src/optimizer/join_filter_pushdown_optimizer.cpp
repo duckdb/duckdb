@@ -9,14 +9,12 @@
 
 namespace duckdb {
 
-
 JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
-
 }
 
 void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &join) {
 	auto pushdown_info = make_uniq<JoinFilterPushdownInfo>();
-	for(idx_t cond_idx = 0; cond_idx < join.conditions.size(); cond_idx++) {
+	for (idx_t cond_idx = 0; cond_idx < join.conditions.size(); cond_idx++) {
 		auto &cond = join.conditions[cond_idx];
 		if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
 			// only equality supported for now
@@ -43,7 +41,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	}
 	// find the child LogicalGet (if possible)
 	reference<LogicalOperator> probe_source(*join.children[0]);
-	while(probe_source.get().type != LogicalOperatorType::LOGICAL_GET) {
+	while (probe_source.get().type != LogicalOperatorType::LOGICAL_GET) {
 		auto &probe_child = probe_source.get();
 		switch (probe_child.type) {
 		case LogicalOperatorType::LOGICAL_LIMIT:
@@ -58,7 +56,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			// projection - check if we all of the expressions are only column references
 			auto &proj = probe_source.get().Cast<LogicalProjection>();
-			for(auto &filter : pushdown_info->filters) {
+			for (auto &filter : pushdown_info->filters) {
 				if (filter.probe_column_index.table_index != proj.table_index) {
 					// index does not belong to this projection - bail-out
 					return;
@@ -85,7 +83,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		// filter pushdown is not supported - bail-out
 		return;
 	}
-	for(auto &filter : pushdown_info->filters) {
+	for (auto &filter : pushdown_info->filters) {
 		if (filter.probe_column_index.table_index != get.table_index) {
 			// the filter does not apply to the probe side here - bail-out
 			return;
@@ -102,13 +100,13 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	vector<AggregateFunction> aggr_functions;
 	aggr_functions.push_back(MinFun::GetFunction());
 	aggr_functions.push_back(MaxFun::GetFunction());
-	for(auto &filter : pushdown_info->filters) {
-		for(auto &aggr : aggr_functions) {
+	for (auto &filter : pushdown_info->filters) {
+		for (auto &aggr : aggr_functions) {
 			FunctionBinder function_binder(optimizer.GetContext());
 			vector<unique_ptr<Expression>> aggr_children;
 			aggr_children.push_back(join.conditions[filter.join_condition].right->Copy());
-			auto aggr_expr = function_binder.BindAggregateFunction(
-			    aggr, std::move(aggr_children), nullptr, AggregateType::NON_DISTINCT);
+			auto aggr_expr = function_binder.BindAggregateFunction(aggr, std::move(aggr_children), nullptr,
+			                                                       AggregateType::NON_DISTINCT);
 			pushdown_info->min_max_aggregates.push_back(std::move(aggr_expr));
 		}
 	}
@@ -116,7 +114,6 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	// set up the filter pushdown in the join itself
 	join.filter_pushdown = std::move(pushdown_info);
 }
-
 
 void JoinFilterPushdownOptimizer::VisitOperator(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
