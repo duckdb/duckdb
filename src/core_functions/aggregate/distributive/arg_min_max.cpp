@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/core_functions/create_sort_key.hpp"
+#include "duckdb/core_functions/aggregate/minmax_n_helpers.hpp"
 
 namespace duckdb {
 
@@ -481,15 +482,200 @@ static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 	AddGenericArgMinMaxFunction<GENERIC_VECTOR_OP>(fun);
 }
 
+//------------------------------------------------------------------------------
+// ArgMinMax(N) Function
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// State
+//------------------------------------------------------------------------------
+
+template <class A, class B, class COMPARATOR>
+class ArgMinMaxNState {
+public:
+	using VAL_TYPE = A;
+	using ARG_TYPE = B;
+
+	using V = typename VAL_TYPE::TYPE;
+	using K = typename ARG_TYPE::TYPE;
+
+	BinaryAggregateHeap<K, V, COMPARATOR> heap;
+
+	bool is_initialized = false;
+	void Initialize(idx_t nval) {
+		heap.Initialize(nval);
+		is_initialized = true;
+	}
+};
+
+//------------------------------------------------------------------------------
+// Operation
+//------------------------------------------------------------------------------
+template <class STATE>
+static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
+                             idx_t count) {
+
+	auto &val_vector = inputs[0];
+	auto &arg_vector = inputs[1];
+	auto &n_vector = inputs[2];
+
+	UnifiedVectorFormat val_format;
+	UnifiedVectorFormat arg_format;
+	UnifiedVectorFormat n_format;
+	UnifiedVectorFormat state_format;
+
+	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
+	auto arg_extra_state = STATE::ARG_TYPE::CreateExtraState(arg_vector, count);
+
+	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format);
+	STATE::ARG_TYPE::PrepareData(arg_vector, count, arg_extra_state, arg_format);
+
+	n_vector.ToUnifiedFormat(count, n_format);
+	state_vector.ToUnifiedFormat(count, state_format);
+
+	auto states = UnifiedVectorFormat::GetData<STATE *>(state_format);
+
+	for (idx_t i = 0; i < count; i++) {
+		const auto arg_idx = arg_format.sel->get_index(i);
+		const auto val_idx = val_format.sel->get_index(i);
+		if (!arg_format.validity.RowIsValid(arg_idx) || !val_format.validity.RowIsValid(val_idx)) {
+			continue;
+		}
+		const auto state_idx = state_format.sel->get_index(i);
+		auto &state = *states[state_idx];
+
+		// Initialize the heap if necessary and add the input to the heap
+		if (!state.is_initialized) {
+			static constexpr int64_t MAX_N = 1000000;
+			const auto nidx = n_format.sel->get_index(i);
+			if (!n_format.validity.RowIsValid(nidx)) {
+				throw InvalidInputException("Invalid input for arg_min/arg_max: n value cannot be NULL");
+			}
+			const auto nval = UnifiedVectorFormat::GetData<int64_t>(n_format)[nidx];
+			if (nval <= 0) {
+				throw InvalidInputException("Invalid input for arg_min/arg_max: n value must be > 0");
+			}
+			if (nval >= MAX_N) {
+				throw InvalidInputException("Invalid input for arg_min/arg_max: n value must be < %d", MAX_N);
+			}
+			state.Initialize(UnsafeNumericCast<idx_t>(nval));
+		}
+
+		// Now add the input to the heap
+		auto arg_val = STATE::ARG_TYPE::Create(arg_format, arg_idx);
+		auto val_val = STATE::VAL_TYPE::Create(val_format, val_idx);
+
+		state.heap.Insert(aggr_input.allocator, arg_val, val_val);
+	}
+}
+
+//------------------------------------------------------------------------------
+// Bind
+//------------------------------------------------------------------------------
+template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
+static void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
+	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
+	using OP = MinMaxNOperation;
+
+	function.state_size = AggregateFunction::StateSize<STATE>;
+	function.initialize = AggregateFunction::StateInitialize<STATE, OP>;
+	function.combine = AggregateFunction::StateCombine<STATE, OP>;
+	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+
+	function.finalize = MinMaxNOperation::Finalize<STATE>;
+	function.update = ArgMinMaxNUpdate<STATE>;
+}
+
+template <class VAL_TYPE, class COMPARATOR>
+static void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
+	switch (arg_type) {
+	case PhysicalType::VARCHAR:
+		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxStringValue, COMPARATOR>(function);
+		break;
+	case PhysicalType::INT32:
+		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFixedValue<int32_t>, COMPARATOR>(function);
+		break;
+	case PhysicalType::INT64:
+		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFixedValue<int64_t>, COMPARATOR>(function);
+		break;
+	case PhysicalType::FLOAT:
+		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFixedValue<float>, COMPARATOR>(function);
+		break;
+	case PhysicalType::DOUBLE:
+		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFixedValue<double>, COMPARATOR>(function);
+		break;
+	default:
+		SpecializeArgMinMaxNFunction<VAL_TYPE, MinMaxFallbackValue, COMPARATOR>(function);
+		break;
+	}
+}
+
+template <class COMPARATOR>
+static void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
+	switch (val_type) {
+	case PhysicalType::VARCHAR:
+		SpecializeArgMinMaxNFunction<MinMaxStringValue, COMPARATOR>(arg_type, function);
+		break;
+	case PhysicalType::INT32:
+		SpecializeArgMinMaxNFunction<MinMaxFixedValue<int32_t>, COMPARATOR>(arg_type, function);
+		break;
+	case PhysicalType::INT64:
+		SpecializeArgMinMaxNFunction<MinMaxFixedValue<int64_t>, COMPARATOR>(arg_type, function);
+		break;
+	case PhysicalType::FLOAT:
+		SpecializeArgMinMaxNFunction<MinMaxFixedValue<float>, COMPARATOR>(arg_type, function);
+		break;
+	case PhysicalType::DOUBLE:
+		SpecializeArgMinMaxNFunction<MinMaxFixedValue<double>, COMPARATOR>(arg_type, function);
+		break;
+	default:
+		SpecializeArgMinMaxNFunction<MinMaxFallbackValue, COMPARATOR>(arg_type, function);
+		break;
+	}
+}
+
+template <class COMPARATOR>
+unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunction &function,
+                                        vector<unique_ptr<Expression>> &arguments) {
+	for (auto &arg : arguments) {
+		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
+	}
+
+	const auto val_type = arguments[0]->return_type.InternalType();
+	const auto arg_type = arguments[1]->return_type.InternalType();
+
+	// Specialize the function based on the input types
+	SpecializeArgMinMaxNFunction<COMPARATOR>(val_type, arg_type, function);
+
+	function.return_type = LogicalType::LIST(arguments[0]->return_type);
+	return nullptr;
+}
+
+template <class COMPARATOR>
+static void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
+	AggregateFunction function({LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalType::BIGINT},
+	                           LogicalType::LIST(LogicalType::ANY), nullptr, nullptr, nullptr, nullptr, nullptr,
+	                           nullptr, ArgMinMaxNBind<COMPARATOR>);
+
+	return set.AddFunction(function);
+}
+
+//------------------------------------------------------------------------------
+// Function Registration
+//------------------------------------------------------------------------------
+
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<LessThan, true, OrderType::ASCENDING>(fun);
+	AddArgMinMaxNFunction<LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, true, OrderType::DESCENDING>(fun);
+	AddArgMinMaxNFunction<GreaterThan>(fun);
 	return fun;
 }
 
