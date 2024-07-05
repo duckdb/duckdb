@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
@@ -69,7 +70,7 @@ public:
 	unordered_map<idx_t, unique_ptr<TableFilter>> filters;
 
 public:
-	void PushFilter(idx_t table_index, unique_ptr<TableFilter> filter);
+	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter);
 
 	bool Equals(TableFilterSet &other) {
 		if (filters.size() != other.filters.size()) {
@@ -98,6 +99,15 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static TableFilterSet Deserialize(Deserializer &deserializer);
+};
+
+class DynamicTableFilterSet {
+public:
+	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter);
+
+private:
+	mutex lock;
+	unique_ptr<TableFilterSet> filters;
 };
 
 } // namespace duckdb

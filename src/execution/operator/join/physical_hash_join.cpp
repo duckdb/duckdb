@@ -92,6 +92,9 @@ JoinFilterGlobalState::~JoinFilterGlobalState() {
 JoinFilterLocalState::~JoinFilterLocalState() {
 }
 
+JoinFilterPushdownInfo::JoinFilterPushdownInfo(shared_ptr<DynamicTableFilterSet> dynamic_filters_p) :
+    dynamic_filters(std::move(dynamic_filters_p)) {}
+
 unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context) const {
 	auto result = make_uniq<JoinFilterGlobalState>();
 	result->global_aggregate_state = make_uniq<GlobalUngroupedAggregateState>(BufferAllocator::Get(context), min_max_aggregates);
