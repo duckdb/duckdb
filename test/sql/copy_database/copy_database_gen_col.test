@@ -1,0 +1,29 @@
+# name: test/sql/copy_database/copy_database_gen_col.test
+# group: [copy_database]
+
+require skip_reload
+
+load __TEST_DIR__/mydb.db
+
+statement ok
+pragma enable_verification;
+
+statement ok
+CREATE TABLE test (x INT, y AS (x + 100));
+
+statement ok
+insert into test VALUES (42);
+
+statement ok
+FROM test;
+
+statement ok
+ATTACH '__TEST_DIR__/myotherdb.db';
+
+statement ok
+COPY FROM DATABASE mydb TO myotherdb;
+
+query II
+select * from myotherdb.test;
+----
+42	142

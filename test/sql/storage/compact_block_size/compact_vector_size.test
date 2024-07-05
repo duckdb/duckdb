@@ -4,7 +4,7 @@
 
 require exact_vector_size 512
 
-# The vector size is of this file is 2048.
+# The vector size of this file is 2048.
 statement error
 ATTACH 'data/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);
 ----
