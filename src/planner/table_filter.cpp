@@ -37,7 +37,7 @@ bool DynamicTableFilterSet::HasFilters() const {
 	return filters.get();
 }
 
-unique_ptr<TableFilterSet> DynamicTableFilterSet::GetFinalTableFilters(optional_ptr<TableFilterSet> existing_filters) {
+unique_ptr<TableFilterSet> DynamicTableFilterSet::GetFinalTableFilters(optional_ptr<TableFilterSet> existing_filters) const {
 	D_ASSERT(HasFilters());
 	auto result = make_uniq<TableFilterSet>();
 	if (existing_filters) {

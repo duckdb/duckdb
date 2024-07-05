@@ -13,6 +13,18 @@ JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) :
 }
 
 void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &join) {
+	switch(join.join_type) {
+	case JoinType::MARK:
+	case JoinType::SINGLE:
+	case JoinType::LEFT:
+	case JoinType::ANTI:
+	case JoinType::RIGHT_ANTI:
+		// cannot generate join filters for these join types
+		// mark/single/left - cannot change cardinality of probe side
+		return;
+	default:
+		break;
+	}
 	auto pushdown_info = make_uniq<JoinFilterPushdownInfo>();
 	for (idx_t cond_idx = 0; cond_idx < join.conditions.size(); cond_idx++) {
 		auto &cond = join.conditions[cond_idx];

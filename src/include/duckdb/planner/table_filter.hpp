@@ -107,7 +107,7 @@ public:
 	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter);
 
 	bool HasFilters() const;
-	unique_ptr<TableFilterSet> GetFinalTableFilters(optional_ptr<TableFilterSet> existing_filters);
+	unique_ptr<TableFilterSet> GetFinalTableFilters(optional_ptr<TableFilterSet> existing_filters) const;
 
 private:
 	mutable mutex lock;
