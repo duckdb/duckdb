@@ -13,24 +13,24 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-ATTACH '__TEST_DIR__/small.db' (BLOCK_SIZE 16384);
+ATTACH '__TEST_DIR__/no_bitpacking.db' (BLOCK_SIZE 16384);
 
 statement ok
-CREATE TABLE small.tbl AS SELECT range AS i FROM range(10000);
+CREATE TABLE no_bitpacking.tbl AS SELECT range AS i FROM range(10000);
 
 statement ok
-ATTACH '__TEST_DIR__/large.db' (BLOCK_SIZE 262144);
+ATTACH '__TEST_DIR__/has_bitpacking.db' (BLOCK_SIZE 262144);
 
 statement ok
-CREATE TABLE large.tbl AS SELECT range AS i FROM range(10000);
+CREATE TABLE has_bitpacking.tbl AS SELECT range AS i FROM range(10000);
 
 statement ok
-CHECKPOINT large;
+CHECKPOINT has_bitpacking;
 
 statement ok
-CHECKPOINT small;
+CHECKPOINT no_bitpacking;
 
 query I
-SELECT COUNT(*) FROM pragma_storage_info('small.tbl') WHERE compression = 'BitPacking';
+SELECT COUNT(*) FROM pragma_storage_info('no_bitpacking.tbl') WHERE compression = 'BitPacking';
 ----
 0
