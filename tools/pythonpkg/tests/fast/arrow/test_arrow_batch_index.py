@@ -3,18 +3,11 @@ import pytest
 import pandas as pd
 import duckdb
 
-try:
-    import pyarrow as pa
-
-    can_run = True
-except:
-    can_run = False
+pa = pytest.importorskip("pyarrow")
 
 
 class TestArrowBatchIndex(object):
     def test_arrow_batch_index(self, duckdb_cursor):
-        if not can_run:
-            return
         con = duckdb.connect()
         df = con.execute('SELECT * FROM range(10000000) t(i)').df()
         arrow_tbl = pa.Table.from_pandas(df)

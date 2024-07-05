@@ -82,8 +82,8 @@ private:
 	WriteStream &serializer;
 };
 
-CopyTypeSupport ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
-                                                               Type::type &parquet_type) {
+bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_ptr<Type::type> parquet_type_ptr) {
+	Type::type parquet_type;
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		parquet_type = Type::BOOLEAN;
@@ -106,7 +106,7 @@ CopyTypeSupport ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 		parquet_type = Type::DOUBLE;
-		return CopyTypeSupport::LOSSY;
+		break;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
@@ -151,67 +151,20 @@ CopyTypeSupport ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType
 		break;
 	default:
 		// Anything that is not supported
-		return CopyTypeSupport::UNSUPPORTED;
+		return false;
 	}
-	return CopyTypeSupport::SUPPORTED;
+	if (parquet_type_ptr) {
+		*parquet_type_ptr = parquet_type;
+	}
+	return true;
 }
 
 Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 	Type::type result;
-	auto type_supports = DuckDBTypeToParquetTypeInternal(duckdb_type, result);
-	if (type_supports == CopyTypeSupport::UNSUPPORTED) {
-		throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
+	if (TryGetParquetType(duckdb_type, &result)) {
+		return result;
 	}
-	return result;
-}
-
-CopyTypeSupport ParquetWriter::TypeIsSupported(const LogicalType &type) {
-	Type::type unused;
-	auto id = type.id();
-	if (id == LogicalTypeId::LIST) {
-		auto &child_type = ListType::GetChildType(type);
-		return TypeIsSupported(child_type);
-	}
-	if (id == LogicalTypeId::ARRAY) {
-		auto &child_type = ArrayType::GetChildType(type);
-		return TypeIsSupported(child_type);
-	}
-	if (id == LogicalTypeId::UNION) {
-		auto count = UnionType::GetMemberCount(type);
-		for (idx_t i = 0; i < count; i++) {
-			auto &member_type = UnionType::GetMemberType(type, i);
-			auto type_support = TypeIsSupported(member_type);
-			if (type_support != CopyTypeSupport::SUPPORTED) {
-				return type_support;
-			}
-		}
-		return CopyTypeSupport::SUPPORTED;
-	}
-	if (id == LogicalTypeId::STRUCT) {
-		auto &children = StructType::GetChildTypes(type);
-		for (auto &child : children) {
-			auto &child_type = child.second;
-			auto type_support = TypeIsSupported(child_type);
-			if (type_support != CopyTypeSupport::SUPPORTED) {
-				return type_support;
-			}
-		}
-		return CopyTypeSupport::SUPPORTED;
-	}
-	if (id == LogicalTypeId::MAP) {
-		auto &key_type = MapType::KeyType(type);
-		auto &value_type = MapType::ValueType(type);
-		auto key_type_support = TypeIsSupported(key_type);
-		if (key_type_support != CopyTypeSupport::SUPPORTED) {
-			return key_type_support;
-		}
-		auto value_type_support = TypeIsSupported(value_type);
-		if (value_type_support != CopyTypeSupport::SUPPORTED) {
-			return value_type_support;
-		}
-		return CopyTypeSupport::SUPPORTED;
-	}
-	return DuckDBTypeToParquetTypeInternal(type, unused);
+	throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
 }
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
@@ -360,8 +313,8 @@ void VerifyUniqueNames(const vector<string> &names) {
 #endif
 }
 
-ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
-                             CompressionCodec::type codec, ChildFieldIDs field_ids_p,
+ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
+                             vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p,
                              double dictionary_compression_ratio_threshold_p, optional_idx compression_level_p)
@@ -424,8 +377,8 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 
 	vector<string> schema_path;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
-		column_writers.push_back(ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i],
-		                                                             unique_names[i], schema_path, &field_ids));
+		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
+		    context, file_meta_data.schema, *this, sql_types[i], unique_names[i], schema_path, &field_ids));
 	}
 }
 
@@ -469,6 +422,11 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 			if (col_writers[i].get().HasAnalyze()) {
 				col_writers[i].get().FinalizeAnalyze(*write_states[i]);
 			}
+		}
+
+		// Reserving these once at the start really pays off
+		for (auto &write_state : write_states) {
+			write_state->definition_levels.reserve(buffer.Count());
 		}
 
 		for (auto &chunk : buffer.Chunks({column_ids})) {
@@ -566,7 +524,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 }
 
 void ParquetWriter::Finalize() {
-	auto start_offset = writer->GetTotalWritten();
+	const auto start_offset = writer->GetTotalWritten();
 	if (encryption_config) {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
@@ -576,6 +534,12 @@ void ParquetWriter::Finalize() {
 		crypto_metadata.__set_encryption_algorithm(alg);
 		crypto_metadata.write(protocol.get());
 	}
+
+	// Add geoparquet metadata to the file metadata
+	if (geoparquet_data) {
+		geoparquet_data->Write(file_meta_data);
+	}
+
 	Write(file_meta_data);
 
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
@@ -591,6 +555,13 @@ void ParquetWriter::Finalize() {
 	// flush to disk
 	writer->Close();
 	writer.reset();
+}
+
+GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
+	if (!geoparquet_data) {
+		geoparquet_data = make_uniq<GeoParquetFileMetadata>();
+	}
+	return *geoparquet_data;
 }
 
 } // namespace duckdb

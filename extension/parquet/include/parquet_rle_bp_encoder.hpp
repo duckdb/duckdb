@@ -16,7 +16,7 @@ namespace duckdb {
 
 class RleBpEncoder {
 public:
-	RleBpEncoder(uint32_t bit_width);
+	explicit RleBpEncoder(uint32_t bit_width);
 
 public:
 	//! NOTE: Prepare is only required if a byte count is required BEFORE writing

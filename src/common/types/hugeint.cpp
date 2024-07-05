@@ -77,6 +77,14 @@ bool Hugeint::TryNegate(hugeint_t input, hugeint_t &result) {
 	return true;
 }
 
+hugeint_t Hugeint::Abs(hugeint_t n) {
+	if (n < 0) {
+		return Hugeint::Negate(n);
+	} else {
+		return n;
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Divide
 //===--------------------------------------------------------------------===//

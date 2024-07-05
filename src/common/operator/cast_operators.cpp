@@ -922,26 +922,45 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCast::Operation(string_t input, bool &result, bool strict) {
-	auto input_data = input.GetData();
+	auto input_data = reinterpret_cast<const uint8_t *>(input.GetData());
 	auto input_size = input.GetSize();
 
 	switch (input_size) {
 	case 1: {
-		char c = UnsafeNumericCast<char>(std::tolower(*input_data));
-		if (c == 't' || (!strict && c == '1')) {
+		unsigned char c = UnsafeNumericCast<uint8_t>(std::tolower(*input_data));
+		if (c == 't' || (!strict && c == 'y') || (!strict && c == '1')) {
 			result = true;
 			return true;
-		} else if (c == 'f' || (!strict && c == '0')) {
+		} else if (c == 'f' || (!strict && c == 'n') || (!strict && c == '0')) {
 			result = false;
 			return true;
 		}
 		return false;
 	}
+	case 2: {
+		unsigned char n = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char o = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
+		if (n == 'n' && o == 'o') {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	case 3: {
+		unsigned char y = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char e = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
+		unsigned char s = UnsafeNumericCast<uint8_t>(std::tolower(input_data[2]));
+		if (y == 'y' && e == 'e' && s == 's') {
+			result = true;
+			return true;
+		}
+		return false;
+	}
 	case 4: {
-		char t = UnsafeNumericCast<char>(std::tolower(input_data[0]));
-		char r = UnsafeNumericCast<char>(std::tolower(input_data[1]));
-		char u = UnsafeNumericCast<char>(std::tolower(input_data[2]));
-		char e = UnsafeNumericCast<char>(std::tolower(input_data[3]));
+		unsigned char t = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char r = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
+		unsigned char u = UnsafeNumericCast<uint8_t>(std::tolower(input_data[2]));
+		unsigned char e = UnsafeNumericCast<uint8_t>(std::tolower(input_data[3]));
 		if (t == 't' && r == 'r' && u == 'u' && e == 'e') {
 			result = true;
 			return true;
@@ -949,11 +968,11 @@ bool TryCast::Operation(string_t input, bool &result, bool strict) {
 		return false;
 	}
 	case 5: {
-		char f = UnsafeNumericCast<char>(std::tolower(input_data[0]));
-		char a = UnsafeNumericCast<char>(std::tolower(input_data[1]));
-		char l = UnsafeNumericCast<char>(std::tolower(input_data[2]));
-		char s = UnsafeNumericCast<char>(std::tolower(input_data[3]));
-		char e = UnsafeNumericCast<char>(std::tolower(input_data[4]));
+		unsigned char f = UnsafeNumericCast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char a = UnsafeNumericCast<uint8_t>(std::tolower(input_data[1]));
+		unsigned char l = UnsafeNumericCast<uint8_t>(std::tolower(input_data[2]));
+		unsigned char s = UnsafeNumericCast<uint8_t>(std::tolower(input_data[3]));
+		unsigned char e = UnsafeNumericCast<uint8_t>(std::tolower(input_data[4]));
 		if (f == 'f' && a == 'a' && l == 'l' && s == 's' && e == 'e') {
 			result = false;
 			return true;

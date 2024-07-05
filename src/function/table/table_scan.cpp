@@ -211,10 +211,13 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 // Index Scan
 //===--------------------------------------------------------------------===//
 struct IndexScanGlobalState : public GlobalTableFunctionState {
-	explicit IndexScanGlobalState(data_ptr_t row_id_data) : row_ids(LogicalType::ROW_TYPE, row_id_data) {
+	IndexScanGlobalState(const data_ptr_t row_id_data, const idx_t count)
+	    : row_ids(LogicalType::ROW_TYPE, row_id_data), row_ids_count(count), row_ids_offset(0) {
 	}
 
-	Vector row_ids;
+	const Vector row_ids;
+	const idx_t row_ids_count;
+	idx_t row_ids_offset;
 	ColumnFetchState fetch_state;
 	TableScanState local_storage_state;
 	vector<storage_t> column_ids;
@@ -223,19 +226,21 @@ struct IndexScanGlobalState : public GlobalTableFunctionState {
 
 static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
+
 	data_ptr_t row_id_data = nullptr;
-	if (!bind_data.result_ids.empty()) {
-		row_id_data = (data_ptr_t)&bind_data.result_ids[0]; // NOLINT - this is not pretty
+	if (!bind_data.row_ids.empty()) {
+		row_id_data = (data_ptr_t)&bind_data.row_ids[0]; // NOLINT - this is not pretty
 	}
-	auto result = make_uniq<IndexScanGlobalState>(row_id_data);
+
+	auto result = make_uniq<IndexScanGlobalState>(row_id_data, bind_data.row_ids.size());
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
 
 	result->local_storage_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
-
 	result->column_ids.reserve(input.column_ids.size());
 	for (auto &id : input.column_ids) {
 		result->column_ids.push_back(GetStorageIndex(bind_data.table, id));
 	}
+
 	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
 
@@ -250,9 +255,17 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 	auto &local_storage = LocalStorage::Get(transaction);
 
 	if (!state.finished) {
-		bind_data.table.GetStorage().Fetch(transaction, output, state.column_ids, state.row_ids,
-		                                   bind_data.result_ids.size(), state.fetch_state);
-		state.finished = true;
+		auto remaining = state.row_ids_count - state.row_ids_offset;
+		auto scan_count = remaining < STANDARD_VECTOR_SIZE ? remaining : STANDARD_VECTOR_SIZE;
+
+		Vector row_ids(state.row_ids, state.row_ids_offset, state.row_ids_offset + scan_count);
+		bind_data.table.GetStorage().Fetch(transaction, output, state.column_ids, row_ids, scan_count,
+		                                   state.fetch_state);
+
+		state.row_ids_offset += scan_count;
+		if (state.row_ids_offset == state.row_ids_count) {
+			state.finished = true;
+		}
 	}
 	if (output.size() == 0) {
 		local_storage.Scan(state.local_storage_state.local_state, state.column_ids, output);
@@ -328,17 +341,27 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			return false;
 		}
 
-		// try to find a matching index for any of the filter expressions
+		// Try to find a matching index for any of the filter expressions.
 		for (auto &filter : filters) {
 			auto index_state = art_index.TryInitializeScan(transaction, *index_expression, *filter);
 			if (index_state != nullptr) {
-				if (art_index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
-					// use an index scan!
+
+				auto &db_config = DBConfig::GetConfig(context);
+				auto index_scan_percentage = db_config.options.index_scan_percentage;
+				auto index_scan_max_count = db_config.options.index_scan_max_count;
+
+				auto total_rows = storage.GetTotalRows();
+				auto total_rows_from_percentage = NumericCast<idx_t>(double(total_rows) * index_scan_percentage);
+				auto max_count = MaxValue(index_scan_max_count, total_rows_from_percentage);
+
+				// Check if we can use an index scan, and already retrieve the matching row ids.
+				if (art_index.Scan(transaction, storage, *index_state, max_count, bind_data.row_ids)) {
 					bind_data.is_index_scan = true;
 					get.function = TableScanFunction::GetIndexScanFunction();
-				} else {
-					bind_data.result_ids.clear();
+					return true;
 				}
+
+				bind_data.row_ids.clear();
 				return true;
 			}
 		}
@@ -360,7 +383,7 @@ static void TableScanSerialize(Serializer &serializer, const optional_ptr<Functi
 	serializer.WriteProperty(102, "table", bind_data.table.name);
 	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
 	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
-	serializer.WriteProperty(105, "result_ids", bind_data.result_ids);
+	serializer.WriteProperty(105, "result_ids", bind_data.row_ids);
 }
 
 static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
@@ -375,7 +398,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
 	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
 	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
-	deserializer.ReadProperty(105, "result_ids", result->result_ids);
+	deserializer.ReadProperty(105, "result_ids", result->row_ids);
 	return std::move(result);
 }
 

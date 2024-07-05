@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 
 namespace duckdb {
 struct DateTimestampSniffing {
@@ -50,7 +51,7 @@ struct SetColumns {
 	//! How many columns
 	idx_t Size();
 	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
-	inline bool IsCandidateUnacceptable(idx_t num_cols, bool null_padding, bool ignore_errors,
+	inline bool IsCandidateUnacceptable(const idx_t num_cols, bool null_padding, bool ignore_errors,
 	                                    bool last_value_always_empty) {
 		if (!IsSet() || ignore_errors) {
 			// We can't say its unacceptable if it's not set or if we ignore errors
@@ -78,7 +79,7 @@ struct SetColumns {
 struct HeaderValue {
 	HeaderValue() : is_null(true) {
 	}
-	explicit HeaderValue(string_t value_p) {
+	explicit HeaderValue(const string_t value_p) {
 		value = value_p;
 	}
 	bool IsNull() {
@@ -92,7 +93,7 @@ struct HeaderValue {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache, SetColumns set_columns = {});
+	                    CSVStateMachineCache &state_machine_cache, bool default_null_to_varchar = true);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
@@ -103,7 +104,21 @@ public:
 	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
 	SnifferResult SniffCSV(bool force_match = false);
 
+	//! I call it adaptive, since that's a sexier term.
+	//! In practice this Function that only sniffs the first two rows, to verify if a header exists and what are the
+	//! data types It does this considering a priorly set CSV schema. If there is a mismatch of the schema it runs the
+	//! full on blazing all guns sniffer, if that still fails it tells the user to union_by_name.
+	//! It returns the projection order.
+	SnifferResult AdaptiveSniff(CSVSchema &file_schema);
+
+	//! Function that only sniffs the first two rows, to verify if a header exists and what are the data types
+	SnifferResult MinimalSniff();
+
 	static NewLineIdentifier DetectNewLineDelimiter(CSVBufferManager &buffer_manager);
+
+	//! If a string_t value can be cast to a type
+	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
+	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator);
 
 private:
 	//! CSV State Machine Cache
@@ -165,9 +180,9 @@ private:
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
 	                                   string_t &dummy_val);
-	//! If a string_t value can be cast to a type
-	bool CanYouCastIt(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
-	                  const bool is_null, const char decimal_separator);
+	//! Sniffs the types from a data chunk
+	void SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machine,
+	                unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates, idx_t start_idx_detection);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types
@@ -191,11 +206,19 @@ private:
 	void RefineTypes();
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 	vector<LogicalType> detected_types;
+	//! If when finding a SQLNULL type in type detection we default it to varchar
+	const bool default_null_to_varchar;
 	//! ------------------------------------------------------//
 	//! ------------------ Header Detection ----------------- //
 	//! ------------------------------------------------------//
 	void DetectHeader();
-	bool DetectHeaderWithSetColumn();
+	static bool DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row,
+	                                      SetColumns &set_columns, CSVReaderOptions &options);
+	static vector<string>
+	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
+	                     SetColumns &set_columns,
+	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
+	                     CSVReaderOptions &options, CSVErrorHandler &error_handler);
 	vector<string> names;
 
 	//! ------------------------------------------------------//

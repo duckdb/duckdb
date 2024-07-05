@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine)
-    : ScannerResult(states, state_machine) {
+ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size)
+    : ScannerResult(states, state_machine, result_size) {
 }
 
 void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos) {
@@ -20,7 +20,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos
 	if (!result.states.EmptyLastValue()) {
 		result.last_value_always_empty = false;
 	}
-	if (result.result_position >= STANDARD_VECTOR_SIZE) {
+	if (result.result_position >= result.result_size) {
 		// We sniffed enough rows
 		return true;
 	}
@@ -41,11 +41,13 @@ void ColumnCountResult::QuotedNewLine(ColumnCountResult &result) {
 	// nop
 }
 
-ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager_p,
+ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       shared_ptr<CSVErrorHandler> error_handler, CSVIterator iterator)
-    : BaseScanner(std::move(buffer_manager_p), state_machine, std::move(error_handler), true, nullptr, iterator),
-      result(states, *state_machine), column_count(1) {
+                                       shared_ptr<CSVErrorHandler> error_handler, idx_t result_size_p,
+                                       CSVIterator iterator)
+    : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler), true, nullptr, iterator),
+      result(states, *state_machine, result_size_p), column_count(1), result_size(result_size_p) {
+	sniffing = true;
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
@@ -53,7 +55,8 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 	if (iterator.done) {
 		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
 	}
-	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator);
+	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator,
+	                                     result_size);
 }
 
 ColumnCountResult &ColumnCountScanner::ParseChunk() {
@@ -72,12 +75,12 @@ void ColumnCountScanner::Initialize() {
 }
 
 void ColumnCountScanner::FinalizeChunkProcess() {
-	if (result.result_position == STANDARD_VECTOR_SIZE || result.error) {
+	if (result.result_position == result.result_size || result.error) {
 		// We are done
 		return;
 	}
 	// We run until we have a full chunk, or we are done scanning
-	while (!FinishedFile() && result.result_position < STANDARD_VECTOR_SIZE && !result.error) {
+	while (!FinishedFile() && result.result_position < result.result_size && !result.error) {
 		if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
 			// Move to next buffer
 			cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);

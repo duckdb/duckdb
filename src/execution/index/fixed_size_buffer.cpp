@@ -40,7 +40,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
       block_handle(nullptr) {
 
 	auto &buffer_manager = block_manager.buffer_manager;
-	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, Storage::BLOCK_SIZE, false, &block_handle);
+	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.GetBlockSize(), false, &block_handle);
 }
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
@@ -134,7 +134,7 @@ void FixedSizeBuffer::Pin() {
 	// we need to copy the (partial) data into a new (not yet disk-backed) buffer handle
 	shared_ptr<BlockHandle> new_block_handle;
 	auto new_buffer_handle =
-	    buffer_manager.Allocate(MemoryTag::ART_INDEX, Storage::BLOCK_SIZE, false, &new_block_handle);
+	    buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.GetBlockSize(), false, &new_block_handle);
 
 	memcpy(new_buffer_handle.Ptr(), buffer_handle.Ptr() + block_pointer.offset, allocation_size);
 

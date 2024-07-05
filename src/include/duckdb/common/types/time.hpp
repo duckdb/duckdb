@@ -40,6 +40,7 @@ public:
 	DUCKDB_API static string ToUTCOffset(int hour_offset, int minute_offset);
 
 	DUCKDB_API static dtime_t FromTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds = 0);
+	DUCKDB_API static int64_t ToNanoTime(int32_t hour, int32_t minute, int32_t second, int32_t nanoseconds = 0);
 
 	//! Normalize a TIME_TZ by adding the offset to the time part and returning the TIME
 	DUCKDB_API static dtime_t NormalizeTimeTZ(dtime_tz_t timetz);

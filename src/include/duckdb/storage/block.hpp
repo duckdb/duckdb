@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -19,7 +19,7 @@ class Deserializer;
 
 class Block : public FileBuffer {
 public:
-	Block(Allocator &allocator, block_id_t id);
+	Block(Allocator &allocator, const block_id_t id, const idx_t block_size);
 	Block(Allocator &allocator, block_id_t id, uint32_t internal_size);
 	Block(FileBuffer &source, block_id_t id);
 

@@ -612,10 +612,6 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                 FileOpener *opener) {
-	if (!DirectoryExists(directory, opener)) {
-		return false;
-	}
-
 	auto dir = opendir(directory.c_str());
 	if (!dir) {
 		return false;
@@ -634,11 +630,11 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		}
 		// now stat the file to figure out if it is a regular file or directory
 		string full_path = JoinPath(directory, name);
-		if (access(full_path.c_str(), 0) != 0) {
+		struct stat status;
+		auto res = stat(full_path.c_str(), &status);
+		if (res != 0) {
 			continue;
 		}
-		struct stat status;
-		stat(full_path.c_str(), &status);
 		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
 			// not a file or directory: skip
 			continue;

@@ -1,11 +1,12 @@
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
 CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-                       CSVStateMachineCache &state_machine_cache_p, SetColumns set_columns_p)
+                       CSVStateMachineCache &state_machine_cache_p, bool default_null_to_varchar_p)
     : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)),
-      set_columns(set_columns_p) {
+      default_null_to_varchar(default_null_to_varchar_p) {
 	// Initialize Format Candidates
 	for (const auto &format_template : format_template_candidates) {
 		auto &logical_type = format_template.first;
@@ -15,6 +16,9 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	max_columns_found = set_columns.Size();
 	error_handler = make_shared_ptr<CSVErrorHandler>(options.ignore_errors.GetValue());
 	detection_error_handler = make_shared_ptr<CSVErrorHandler>(true);
+	if (options.columns_set) {
+		set_columns = SetColumns(&options.sql_type_list, &options.name_list);
+	}
 }
 
 bool SetColumns::IsSet() {
@@ -82,6 +86,95 @@ void CSVSniffer::SetResultOptions() {
 	options.dialect_options.num_cols = best_candidate->GetStateMachine().dialect_options.num_cols;
 }
 
+SnifferResult CSVSniffer::MinimalSniff() {
+	if (set_columns.IsSet()) {
+		// Nothing to see here
+		return SnifferResult(*set_columns.types, *set_columns.names);
+	}
+	// Return Types detected
+	vector<LogicalType> return_types;
+	// Column Names detected
+	vector<string> names;
+
+	buffer_manager->sniffing = true;
+	const idx_t result_size = 2;
+
+	auto state_machine =
+	    make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options, state_machine_cache);
+	ColumnCountScanner count_scanner(buffer_manager, state_machine, error_handler, result_size);
+	auto &sniffed_column_counts = count_scanner.ParseChunk();
+	if (sniffed_column_counts.result_position == 0) {
+		return {{}, {}};
+	}
+
+	state_machine->dialect_options.num_cols = sniffed_column_counts[0];
+	options.dialect_options.num_cols = sniffed_column_counts[0];
+
+	// First figure out the number of columns on this configuration
+	auto scanner = count_scanner.UpgradeToStringValueScanner();
+	// Parse chunk and read csv with info candidate
+	auto &data_chunk = scanner->ParseChunk().ToChunk();
+	idx_t start_row = 0;
+	if (sniffed_column_counts.result_position == 2) {
+		// If equal to two, we will only use the second row for type checking
+		start_row = 1;
+	}
+
+	// Gather Types
+	for (idx_t i = 0; i < state_machine->dialect_options.num_cols; i++) {
+		best_sql_types_candidates_per_column_idx[i] = state_machine->options.auto_type_candidates;
+	}
+	SniffTypes(data_chunk, *state_machine, best_sql_types_candidates_per_column_idx, start_row);
+
+	// Possibly Gather Header
+	vector<HeaderValue> potential_header;
+	if (start_row != 0) {
+		for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
+			auto &cur_vector = data_chunk.data[col_idx];
+			auto vector_data = FlatVector::GetData<string_t>(cur_vector);
+			HeaderValue val(vector_data[0]);
+			potential_header.emplace_back(val);
+		}
+	}
+	names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
+	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
+
+	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
+		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
+		if (best_sql_types_candidates_per_column_idx[column_idx].size() == options.auto_type_candidates.size()) {
+			d_type = LogicalType::VARCHAR;
+		}
+		detected_types.push_back(d_type);
+	}
+
+	return {detected_types, names};
+}
+
+SnifferResult CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
+	auto min_sniff_res = MinimalSniff();
+	bool run_full = error_handler->AnyErrors() || detection_error_handler->AnyErrors();
+	// Check if we are happy with the result or if we need to do more sniffing
+	if (!error_handler->AnyErrors() && !detection_error_handler->AnyErrors()) {
+		// If we got no errors, we also run full if schemas do not match.
+		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
+			string error;
+			run_full =
+			    !file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types, options.file_path);
+		}
+	}
+	if (run_full) {
+		// We run full sniffer
+		string error;
+		auto full_sniffer = SniffCSV();
+		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
+			if (!file_schema.SchemasMatch(error, full_sniffer.names, full_sniffer.return_types, options.file_path)) {
+				throw InvalidInputException(error);
+			}
+		}
+		return full_sniffer;
+	}
+	return min_sniff_res;
+}
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;
 	// 1. Dialect Detection
@@ -142,7 +235,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		string type_error = "The Column types set by the user do not match the ones found by the sniffer. \n";
 		auto &set_types = *set_columns.types;
 		for (idx_t i = 0; i < set_columns.Size(); i++) {
-			if (set_types[i] != detected_types[i] && !(set_types[i].IsNumeric() && detected_types[i].IsNumeric())) {
+			if (set_types[i] != detected_types[i]) {
 				type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
 				              " Sniffed type: " + detected_types[i].ToString() + "\n";
 				detected_types[i] = set_types[i];
@@ -158,13 +251,14 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 			throw InvalidInputException(error);
 		}
 		options.was_type_manually_set = manually_set;
-		// We do not need to run type refinement, since the types have been given by the user
-		return SnifferResult({}, {});
 	}
 	if (!error.empty() && force_match) {
 		throw InvalidInputException(error);
 	}
 	options.was_type_manually_set = manually_set;
+	if (set_columns.IsSet()) {
+		return SnifferResult(*set_columns.types, *set_columns.names);
+	}
 	return SnifferResult(detected_types, names);
 }
 
