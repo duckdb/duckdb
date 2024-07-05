@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 
 namespace duckdb {
@@ -70,29 +71,24 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+
+
+
 		auto &left_child = op.children[0];
 		auto &right_child = op.children[1];
 
-		auto left_column_count = left_child->GetColumnBindings();
-		auto right_column_count = right_child->GetColumnBindings();
-
 		// resolve operator types to determine how big the build side is going to be
 		op.ResolveOperatorTypes();
-		auto left_column_types = left_child->types;
-		auto right_column_types = right_child->types;
+		auto left_tuple_layout = TupleDataLayout();
+		left_tuple_layout.Initialize(left_child->types);
 
-		idx_t left_build_side = 0;
-		for (auto &type : left_column_types) {
-			left_build_side += GetTypeIdSize(type.InternalType());
-		}
-		idx_t right_build_side = 0;
-		for (auto &type : right_column_types) {
-			right_build_side += GetTypeIdSize(type.InternalType());
-		}
+		auto right_tuple_layout = TupleDataLayout();
+		right_tuple_layout.Initialize(right_child->types);
+
 		// Don't multiply by cardinalities, the only important metric is the size of the row
 		// in the hash table
-		ret.left_side = left_build_side;
-		ret.right_side = right_build_side;
+		ret.left_side = left_tuple_layout.GetRowWidth();
+		ret.right_side = right_tuple_layout.GetRowWidth();
 		return ret;
 	}
 	default:
