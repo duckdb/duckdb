@@ -148,7 +148,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
                                            optional_ptr<LogicalOperator> parent) {
 	LogicalOperator *op = &input_op;
 	vector<reference<LogicalOperator>> datasource_filters;
-	LogicalOperator *limit_op = nullptr;
+	optional_ptr<LogicalOperator> limit_op = nullptr;
 	// pass through single child operators
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
@@ -213,7 +213,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			operator_stats.cardinality = NumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
 			                                                RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
-		ModifyStatsIfLimit(limit_op, child_stats);
+		ModifyStatsIfLimit(limit_op.get(), child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
@@ -228,7 +228,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			operator_stats.cardinality = NumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
 			                                                RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
-		ModifyStatsIfLimit(limit_op, child_stats);
+		ModifyStatsIfLimit(limit_op.get(), child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
@@ -263,7 +263,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			stats.cardinality =
 			    (idx_t)MaxValue(stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
-		ModifyStatsIfLimit(limit_op, stats);
+		ModifyStatsIfLimit(limit_op.get(), stats);
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
@@ -282,7 +282,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
-		ModifyStatsIfLimit(limit_op, child_stats);
+		ModifyStatsIfLimit(limit_op.get(), proj_stats);
 		AddRelation(input_op, parent, proj_stats);
 		return true;
 	}
