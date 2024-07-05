@@ -423,7 +423,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 			for (idx_t to_member_idx = 0; to_member_idx < UnionType::GetMemberCount(to); to_member_idx++) {
 				auto &to_member_name = UnionType::GetMemberName(to, to_member_idx);
 
-				if (from_member_name == to_member_name) {
+				if (StringUtil::CIEquals(from_member_name, to_member_name)) {
 					auto &from_member_type = UnionType::GetMemberType(from, from_member_idx);
 					auto &to_member_type = UnionType::GetMemberType(to, to_member_idx);
 
