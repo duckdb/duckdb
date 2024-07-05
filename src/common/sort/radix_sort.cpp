@@ -73,7 +73,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, SortedBlock &sb, bool *
 			continue;
 		}
 		idx_t j;
-		for (j = i; j < count; j++) {
+		for (j = i + 1; j < count; j++) {
 			if (!ties[j]) {
 				break;
 			}

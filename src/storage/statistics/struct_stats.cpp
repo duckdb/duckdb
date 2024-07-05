@@ -85,7 +85,8 @@ void StructStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
-	D_ASSERT(stats.GetType() == other.GetType());
+	D_ASSERT(stats.GetType().id() == other.GetType().id());
+	D_ASSERT(StructType::GetChildCount(stats.GetType()) == StructType::GetChildCount(other.GetType()));
 	auto child_count = StructType::GetChildCount(stats.GetType());
 	for (idx_t i = 0; i < child_count; i++) {
 		stats.child_stats[i].Merge(other.child_stats[i]);
