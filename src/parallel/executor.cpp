@@ -502,7 +502,7 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 }
 
 bool Executor::ResultCollectorIsBlocked() {
-	if (!HasResultCollector()) {
+	if (!HasStreamingResultCollector()) {
 		return false;
 	}
 	if (completed_pipelines + 1 != total_pipelines) {
@@ -713,6 +713,14 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 
 bool Executor::HasResultCollector() {
 	return physical_plan->type == PhysicalOperatorType::RESULT_COLLECTOR;
+}
+
+bool Executor::HasStreamingResultCollector() {
+	if (!HasResultCollector()) {
+		return false;
+	}
+	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
+	return result_collector.IsStreaming();
 }
 
 unique_ptr<QueryResult> Executor::GetResult() {

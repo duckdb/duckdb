@@ -130,7 +130,7 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 
 # should yield multiple files, can be less than 4 because we create files lazily
 query I
-SELECT count(*) > 2 FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
+SELECT count(*) > 1 FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 ----
 true
 

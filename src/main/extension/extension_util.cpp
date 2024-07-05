@@ -10,11 +10,19 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
+
+void ExtensionUtil::RegisterExtension(DatabaseInstance &db, const string &name,
+                                      const ExtensionLoadedInfo &description) {
+
+	db.AddExtensionInfo(name, description);
+}
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, ScalarFunctionSet set) {
 	D_ASSERT(!set.name.empty());
