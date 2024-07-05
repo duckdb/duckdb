@@ -37,6 +37,7 @@ loop i 0 2
 statement error
 SELECT f::HUGEINT FROM (SELECT f FROM broken_floats ORDER BY f LIMIT 1 OFFSET ${i}) t1
 ----
+<REGEX>:Conversion Error.*FLOAT.*is out of range for.*INT128.*
 
 endloop
 
