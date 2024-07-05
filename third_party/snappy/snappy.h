@@ -39,7 +39,9 @@
 #ifndef THIRD_PARTY_SNAPPY_SNAPPY_H__
 #define THIRD_PARTY_SNAPPY_SNAPPY_H__
 
-#include <cstddef>
+#include <stddef.h>
+#include <stdint.h>
+
 #include <string>
 
 #include "snappy-stubs-public.h"
@@ -48,13 +50,38 @@ namespace duckdb_snappy {
   class Source;
   class Sink;
 
+  struct CompressionOptions {
+    // Compression level.
+    // Level 1 is the fastest
+    // Level 2 is a little slower but provides better compression. Level 2 is
+    // **EXPERIMENTAL** for the time being. It might happen that we decide to
+    // fall back to level 1 in the future.
+    // Levels 3+ are currently not supported. We plan to support levels up to
+    // 9 in the future.
+    // If you played with other compression algorithms, level 1 is equivalent to
+    // fast mode (level 1) of LZ4, level 2 is equivalent to LZ4's level 2 mode
+    // and compresses somewhere around zstd:-3 and zstd:-2 but generally with
+    // faster decompression speeds than snappy:1 and zstd:-3.
+    int level = DefaultCompressionLevel();
+
+    constexpr CompressionOptions() = default;
+    constexpr CompressionOptions(int compression_level)
+        : level(compression_level) {}
+    static constexpr int MinCompressionLevel() { return 1; }
+    static constexpr int MaxCompressionLevel() { return 2; }
+    static constexpr int DefaultCompressionLevel() { return 1; }
+  };
+
   // ------------------------------------------------------------------------
   // Generic compression/decompression routines.
   // ------------------------------------------------------------------------
 
-  // Compress the bytes read from "*source" and append to "*sink". Return the
+  // Compress the bytes read from "*reader" and append to "*writer". Return the
   // number of bytes written.
-  size_t Compress(Source* source, Sink* sink);
+  // First version is to preserve ABI.
+  size_t Compress(Source* reader, Sink* writer);
+  size_t Compress(Source* reader, Sink* writer,
+                  CompressionOptions options);
 
   // Find the uncompressed length of the given stream, as given by the header.
   // Note that the true length could deviate from this; the stream could e.g.
@@ -63,26 +90,41 @@ namespace duckdb_snappy {
   // Also note that this leaves "*source" in a state that is unsuitable for
   // further operations, such as RawUncompress(). You will need to rewind
   // or recreate the source yourself before attempting any further calls.
-  bool GetUncompressedLength(Source* source, uint32* result);
+  bool GetUncompressedLength(Source* source, uint32_t* result);
 
   // ------------------------------------------------------------------------
   // Higher-level string based routines (should be sufficient for most users)
   // ------------------------------------------------------------------------
 
-  // Sets "*output" to the compressed version of "input[0,input_length-1]".
-  // Original contents of *output are lost.
+  // Sets "*compressed" to the compressed version of "input[0..input_length-1]".
+  // Original contents of *compressed are lost.
   //
-  // REQUIRES: "input[]" is not an alias of "*output".
-  size_t Compress(const char* input, size_t input_length, string* output);
+  // REQUIRES: "input[]" is not an alias of "*compressed".
+  // First version is to preserve ABI.
+  size_t Compress(const char* input, size_t input_length,
+                  std::string* compressed);
+  size_t Compress(const char* input, size_t input_length,
+                  std::string* compressed, CompressionOptions options);
 
-  // Decompresses "compressed[0,compressed_length-1]" to "*uncompressed".
+  // Same as `Compress` above but taking an `iovec` array as input. Note that
+  // this function preprocesses the inputs to compute the sum of
+  // `iov[0..iov_cnt-1].iov_len` before reading. To avoid this, use
+  // `RawCompressFromIOVec` below.
+  // First version is to preserve ABI.
+  size_t CompressFromIOVec(const struct iovec* iov, size_t iov_cnt,
+                           std::string* compressed);
+  size_t CompressFromIOVec(const struct iovec* iov, size_t iov_cnt,
+                           std::string* compressed,
+                           CompressionOptions options);
+
+  // Decompresses "compressed[0..compressed_length-1]" to "*uncompressed".
   // Original contents of "*uncompressed" are lost.
   //
   // REQUIRES: "compressed[]" is not an alias of "*uncompressed".
   //
   // returns false if the message is corrupted and could not be decompressed
   bool Uncompress(const char* compressed, size_t compressed_length,
-                  string* uncompressed);
+                  std::string* uncompressed);
 
   // Decompresses "compressed" to "*uncompressed".
   //
@@ -116,10 +158,19 @@ namespace duckdb_snappy {
   //    RawCompress(input, input_length, output, &output_length);
   //    ... Process(output, output_length) ...
   //    delete [] output;
-  void RawCompress(const char* input,
-                   size_t input_length,
-                   char* compressed,
+  void RawCompress(const char* input, size_t input_length, char* compressed,
                    size_t* compressed_length);
+  void RawCompress(const char* input, size_t input_length, char* compressed,
+                   size_t* compressed_length, CompressionOptions options);
+
+  // Same as `RawCompress` above but taking an `iovec` array as input. Note that
+  // `uncompressed_length` is the total number of bytes to be read from the
+  // elements of `iov` (_not_ the number of elements in `iov`).
+  void RawCompressFromIOVec(const struct iovec* iov, size_t uncompressed_length,
+                            char* compressed, size_t* compressed_length);
+  void RawCompressFromIOVec(const struct iovec* iov, size_t uncompressed_length,
+                            char* compressed, size_t* compressed_length,
+                            CompressionOptions options);
 
   // Given data in "compressed[0..compressed_length-1]" generated by
   // calling the Snappy::Compress routine, this routine
@@ -184,6 +235,23 @@ namespace duckdb_snappy {
   // unspecified prefix of *compressed.
   bool IsValidCompressed(Source* compressed);
 
+  // The size of a compression block. Note that many parts of the compression
+  // code assumes that kBlockSize <= 65536; in particular, the hash table
+  // can only store 16-bit offsets, and EmitCopy() also assumes the offset
+  // is 65535 bytes or less. Note also that if you change this, it will
+  // affect the framing format (see framing_format.txt).
+  //
+  // Note that there might be older data around that is compressed with larger
+  // block sizes, so the decompression code should not rely on the
+  // non-existence of long backreferences.
+  static constexpr int kBlockLog = 16;
+  static constexpr size_t kBlockSize = 1 << kBlockLog;
+
+  static constexpr int kMinHashTableBits = 8;
+  static constexpr size_t kMinHashTableSize = 1 << kMinHashTableBits;
+
+  static constexpr int kMaxHashTableBits = 15;
+  static constexpr size_t kMaxHashTableSize = 1 << kMaxHashTableBits;
 }  // end namespace duckdb_snappy
 
 #endif  // THIRD_PARTY_SNAPPY_SNAPPY_H__
