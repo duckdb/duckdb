@@ -1,4 +1,5 @@
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
@@ -414,7 +415,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 		// Unions can be cast if the source tags are a subset of the target tags
 		// in which case the most expensive cost is used
-		int cost = -1;
+		int64_t cost = -1;
 		for (idx_t from_member_idx = 0; from_member_idx < UnionType::GetMemberCount(from); from_member_idx++) {
 			auto &from_member_name = UnionType::GetMemberName(from, from_member_idx);
 
@@ -426,10 +427,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 					auto &from_member_type = UnionType::GetMemberType(from, from_member_idx);
 					auto &to_member_type = UnionType::GetMemberType(to, to_member_idx);
 
-					int child_cost = NumericCast<int>(ImplicitCast(from_member_type, to_member_type));
-					if (child_cost > cost) {
-						cost = child_cost;
-					}
+					auto child_cost = ImplicitCast(from_member_type, to_member_type);
+					cost = MaxValue(cost, child_cost);
 					found = true;
 					break;
 				}
@@ -458,8 +457,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		auto source_is_unnamed = StructType::IsUnnamed(from);
 		auto named_struct_cast = !source_is_unnamed && !target_is_unnamed;
 
+		int64_t cost = -1;
 		if (named_struct_cast) {
-			int64_t cost = -1;
 
 			// Collect the target members in a map for easy lookup
 			case_insensitive_map_t<idx_t> target_members;
@@ -471,7 +470,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 				}
 				target_members[target_name] = target_idx;
 			}
-
+			// Match the source members to the target members by name
 			for (idx_t source_idx = 0; source_idx < source_children.size(); source_idx++) {
 				auto &source_child = source_children[source_idx];
 				auto entry = target_members.find(source_child.first);
@@ -482,24 +481,24 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 				auto target_idx = entry->second;
 				target_members.erase(entry);
 				auto child_cost = ImplicitCast(source_child.second, target_children[target_idx].second);
-				if (child_cost > cost) {
-					cost = child_cost;
+				if (child_cost == -1) {
+					return -1;
 				}
+				cost = MaxValue(cost, child_cost);
 			}
-			return cost;
 		} else {
-			// Calculate the cast cost positionally
-			int64_t cost = -1;
+			// Match the source members to the target members by position
 			for (idx_t i = 0; i < source_children.size(); i++) {
 				auto &source_child = source_children[i];
 				auto &target_child = target_children[i];
 				auto child_cost = ImplicitCast(source_child.second, target_child.second);
-				if (child_cost > cost) {
-					cost = child_cost;
+				if (child_cost == -1) {
+					return -1;
 				}
+				cost = MaxValue(cost, child_cost);
 			}
-			return cost;
 		}
+		return cost;
 	}
 
 	if (from.id() == to.id()) {
@@ -513,14 +512,19 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		if (to.AuxInfo() == nullptr) {
 			return -1;
 		}
-		// check if the union contains the source type
+		// check if the union contains something castable from the source type
+		// in which case the least expensive (most specific) cast should be used
+		bool found = false;
+		auto cost = NumericLimits<int64_t>::Maximum();
 		for (idx_t i = 0; i < UnionType::GetMemberCount(to); i++) {
-			auto member = UnionType::GetMemberType(to, i);
-			if (from == member) {
-				return 0;
+			auto target_member = UnionType::GetMemberType(to, i);
+			auto target_cost = ImplicitCast(from, target_member);
+			if (target_cost != -1) {
+				found = true;
+				cost = MinValue(cost, target_cost);
 			}
 		}
-		return -1;
+		return found ? cost : -1;
 	}
 
 	switch (from.id()) {
