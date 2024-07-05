@@ -569,3 +569,47 @@ class TestReadCSV(object):
         with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
             rel = con.read_csv(files)
             res = rel.fetchall()
+
+    @pytest.mark.parametrize(
+        'options',
+        [
+            {'new_line': '\\r\\n'},
+            {'new_line': '\\n'},
+            {'columns': {'id': 'INTEGER', 'name': 'INTEGER', 'c': 'integer', 'd': 'INTEGER'}},
+            {'auto_type_candidates': ['INTEGER', 'INTEGER']},
+            {'max_line_size': 10000},
+            {'ignore_errors': True},
+            {'ignore_errors': False},
+            {'store_rejects': True},
+            {'store_rejects': False},
+            {'rejects_table': 'my_rejects_table'},
+            {'rejects_scan': 'my_rejects_scan'},
+            {'rejects_table': 'my_rejects_table', 'rejects_limit': 50},
+            {'force_not_null': ['one', 'two']},
+            {'buffer_size': 420000},
+            {'decimal_separator': '.'},
+            {'allow_quoted_nulls': True},
+            {'allow_quoted_nulls': False},
+            {'filename': True},
+            {'filename': 'test'},
+            {'hive_partitioning': True},
+            {'hive_partitioning': False},
+            # {'union_by_name': True},
+            {'union_by_name': False},
+            {'hive_types_autocast': False},
+            {'hive_types_autocast': True},
+            {'hive_types': {'one': 'INTEGER', 'two': 'VARCHAR'}},
+        ],
+    )
+    def test_read_csv_options(self, duckdb_cursor, options, tmp_path):
+        file = tmp_path / "file.csv"
+        file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+        print(options)
+        if 'hive_types' in options:
+            with pytest.raises(
+                duckdb.InvalidInputException, match=r'Unknown hive_type: "two" does not appear to be a partition'
+            ):
+                rel = duckdb_cursor.read_csv(file, **options)
+        else:
+            rel = duckdb_cursor.read_csv(file, **options)
+            res = rel.fetchall()
