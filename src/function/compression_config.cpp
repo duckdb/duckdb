@@ -6,7 +6,6 @@
 namespace duckdb {
 
 typedef CompressionFunction (*get_compression_function_t)(PhysicalType type);
-typedef bool (*compression_supports_type_t)(const CompressionInfo &info);
 
 struct DefaultCompressionMethod {
 	CompressionType type;
@@ -54,6 +53,7 @@ static optional_ptr<CompressionFunction> LoadCompressionFunction(CompressionFunc
 			}
 			// the type is supported: create the function and insert it into the set
 			auto function = method.get_function(info.GetPhysicalType());
+			function.supports_type = method.supports_type;
 			set.functions[type].insert(make_pair(info.GetPhysicalType(), function));
 			return FindCompressionFunction(set, type, info);
 		}
@@ -86,12 +86,19 @@ vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(const C
 
 optional_ptr<CompressionFunction> DBConfig::GetCompressionFunction(CompressionType type, const CompressionInfo &info) {
 	lock_guard<mutex> l(compression_functions->lock);
-	// check if the function is already loaded
+
+	// Check if the function is already loaded into the global compression functions.
 	auto function = FindCompressionFunction(*compression_functions, type, info);
 	if (function) {
-		return function;
+		// Check if we can use it with the current CompressionInfo.
+		if (function->supports_type(info)) {
+			return function;
+		}
+		return nullptr;
 	}
-	// else load the function
+
+	// We could not find the function in the global compression functions,
+	// so we attempt loading it.
 	return LoadCompressionFunction(*compression_functions, type, info);
 }
 

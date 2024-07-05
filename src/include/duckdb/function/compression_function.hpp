@@ -134,6 +134,11 @@ struct CompressionAppendState {
 };
 
 //===--------------------------------------------------------------------===//
+// Function selection
+//===--------------------------------------------------------------------===//
+typedef bool (*compression_supports_type_t)(const CompressionInfo &info);
+
+//===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
 //! The analyze functions are used to determine whether or not to use this compression method
@@ -225,6 +230,10 @@ public:
 	CompressionType type;
 	//! The data type this function can compress
 	PhysicalType data_type;
+
+	//! When selecting a compression function, we first check whether it is already loaded or not.
+	// If it is, we perform an additional check to ensure that the checkpointer can use the function.
+	compression_supports_type_t supports_type;
 
 	//! Analyze step: determine which compression function is the most effective
 	//! init_analyze is called once to set up the analyze state
