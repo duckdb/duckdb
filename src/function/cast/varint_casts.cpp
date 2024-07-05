@@ -205,13 +205,13 @@ string_t DoubleToVarInt(Vector &result, T double_value) {
 	vector<char> value;
 	while (abs_value > 0) {
 		double quotient = abs_value / 256;
-	    double truncated = floor(quotient); // truncate towards zero
-	    uint8_t byte =  abs_value - truncated * 256;
+		double truncated = floor(quotient);
+		uint8_t byte = static_cast<uint8_t>(abs_value - truncated * 256);
 		abs_value = truncated;
 		if (is_negative) {
-			value.push_back(~byte);
+			value.push_back(~static_cast<char>(byte));
 		} else {
-			value.push_back(byte);
+			value.push_back(static_cast<char>(byte));
 		}
 	}
 	uint32_t data_byte_size = static_cast<uint32_t>(value.size());
@@ -272,7 +272,7 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 		idx_t digits_size = digits.size();
 		for (idx_t i = 0; i < digits_size; i++) {
 			digits[digit_idx] += static_cast<uint64_t>(remainder * pow(10, max_digits));
-			remainder = digits[digit_idx] % 256;
+			remainder = static_cast<uint8_t>(digits[digit_idx] % 256);
 			digits[digit_idx] /= 256;
 			if (digits[digit_idx] == 0 && digit_idx == digits.size() - 1) {
 				// we can cap this
@@ -385,6 +385,18 @@ struct VarIntTryCastToVarchar {
 	}
 };
 
+bool VarintToDouble(string_t &input, double &result, bool &strict) {
+	result = 0;
+	return true;
+}
+
+struct VarintToDoubleCast {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+		return VarintToDouble(input, result, strict);
+	}
+};
+
 BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const LogicalType &source,
                                                const LogicalType &target) {
 	D_ASSERT(target.id() == LogicalTypeId::VARINT);
@@ -416,7 +428,6 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 		return BoundCastInfo(&VectorCastHelpers::StringCast<double, duckdb::DoubleTryCastToVarInt>);
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
-
 	default:
 		return TryVectorNullCast;
 	}
@@ -429,6 +440,8 @@ BoundCastInfo DefaultCasts::VarintCastSwitch(BindCastInput &input, const Logical
 	switch (target.id()) {
 	case LogicalTypeId::VARCHAR:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::VarIntTryCastToVarchar>);
+	case LogicalTypeId::DOUBLE:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, double, duckdb::VarintToDoubleCast>);
 	default:
 		return TryVectorNullCast;
 	}

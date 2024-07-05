@@ -1,0 +1,11 @@
+# name: test/sql/types/varint/test_varint_double.test
+# description: Test varint double
+# group: [varint]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select '340282366920938463463374607431768211455'::varint::double
+----
+340282366920938463463374607431768211455
