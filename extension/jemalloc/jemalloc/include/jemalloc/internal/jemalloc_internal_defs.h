@@ -447,7 +447,7 @@
 #define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
-#define JEMALLOC_HAVE_DLSYM
+// #define JEMALLOC_HAVE_DLSYM
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
