@@ -204,12 +204,15 @@ string_t DoubleToVarInt(Vector &result, T double_value) {
 	}
 	vector<char> value;
 	while (abs_value > 0) {
+		double quotient = abs_value / 256;
+	    double truncated = floor(quotient); // truncate towards zero
+	    uint8_t byte =  abs_value - truncated * 256;
+		abs_value = truncated;
 		if (is_negative) {
-			value.push_back(~static_cast<char>(std::fmod(abs_value, 256)));
+			value.push_back(~byte);
 		} else {
-			value.push_back(static_cast<char>(std::fmod(abs_value, 256)));
+			value.push_back(byte);
 		}
-		abs_value = floor(abs_value / 256);
 	}
 	uint32_t data_byte_size = static_cast<uint32_t>(value.size());
 	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
