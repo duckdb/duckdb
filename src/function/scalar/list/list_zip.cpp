@@ -1,9 +1,11 @@
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/common/to_string.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -138,6 +140,8 @@ static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFuncti
 		auto &child = arguments[i];
 		switch (child->return_type.id()) {
 		case LogicalTypeId::LIST:
+		case LogicalTypeId::ARRAY:
+			child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
 			struct_children.push_back(make_pair(string(), ListType::GetChildType(child->return_type)));
 			break;
 		case LogicalTypeId::SQLNULL:
