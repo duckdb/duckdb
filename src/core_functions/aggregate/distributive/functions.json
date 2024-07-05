@@ -112,14 +112,14 @@
         "parameters": "arg",
         "description": "Returns the minimum value present in arg.",
         "example": "min(A)",
-        "type": "aggregate_function_set"
+        "type": "aggregate_function"
     },
     {
         "name": "max",
         "parameters": "arg",
         "description": "Returns the maximum value present in arg.",
         "example": "max(A)",
-        "type": "aggregate_function_set"
+        "type": "aggregate_function"
     },
     {
         "name": "product",

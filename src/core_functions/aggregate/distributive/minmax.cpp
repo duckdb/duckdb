@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
+#include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 
 namespace duckdb {
 
@@ -376,21 +377,17 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
-static void AddMinMaxOperator(AggregateFunctionSet &set) {
-	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                  nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>));
+static AggregateFunction GetMinMaxOperator(string name) {
+	return AggregateFunction(std::move(name), {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                                  nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
 }
 
-AggregateFunctionSet MinFun::GetFunctions() {
-	AggregateFunctionSet min("min");
-	AddMinMaxOperator<MinOperation, MinOperationString, MinOperationVector>(min);
-	return min;
+AggregateFunction MinFun::GetFunction() {
+	return GetMinMaxOperator<MinOperation, MinOperationString, MinOperationVector>("min");
 }
 
-AggregateFunctionSet MaxFun::GetFunctions() {
-	AggregateFunctionSet max("max");
-	AddMinMaxOperator<MaxOperation, MaxOperationString, MaxOperationVector>(max);
-	return max;
+AggregateFunction MaxFun::GetFunction() {
+	return GetMinMaxOperator<MaxOperation, MaxOperationString, MaxOperationVector>("max");
 }
 
 } // namespace duckdb

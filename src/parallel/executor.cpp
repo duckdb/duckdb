@@ -149,13 +149,6 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 	// set up the dependencies within this MetaPipeline
 	for (auto &pipeline : pipelines) {
-		auto source = pipeline->GetSource();
-		if (source->type == PhysicalOperatorType::TABLE_SCAN) {
-			// we have to reset the source here (in the main thread), because some of our clients (looking at you, R)
-			// do not like it when threads other than the main thread call into R, for e.g., arrow scans
-			pipeline->ResetSource(true);
-		}
-
 		auto dependencies = meta_pipeline->GetDependencies(*pipeline);
 		if (!dependencies) {
 			continue;

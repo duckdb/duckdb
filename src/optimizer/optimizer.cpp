@@ -25,6 +25,7 @@
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
+#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -209,6 +210,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::REORDER_FILTER, [&]() {
 		ExpressionHeuristics expression_heuristics(*this);
 		plan = expression_heuristics.Rewrite(std::move(plan));
+	});
+
+	// then we perform the join ordering optimization
+	// this also rewrites cross products + filters into joins and performs filter pushdowns
+	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {
+		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
+		join_filter_pushdown.VisitOperator(*plan);
 	});
 }
 

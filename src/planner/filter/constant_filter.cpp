@@ -43,4 +43,8 @@ bool ConstantFilter::Equals(const TableFilter &other_p) const {
 	return other.comparison_type == comparison_type && other.constant == constant;
 }
 
+unique_ptr<TableFilter> ConstantFilter::Copy() const {
+	return make_uniq<ConstantFilter>(comparison_type, constant);
+}
+
 } // namespace duckdb

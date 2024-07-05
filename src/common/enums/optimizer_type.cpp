@@ -30,6 +30,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
     {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},
     {"reorder_filter", OptimizerType::REORDER_FILTER},
+    {"join_filter_pushdown", OptimizerType::JOIN_FILTER_PUSHDOWN},
     {"extension", OptimizerType::EXTENSION},
     {nullptr, OptimizerType::INVALID}};
 

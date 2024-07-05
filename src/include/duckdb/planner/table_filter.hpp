@@ -40,6 +40,7 @@ public:
 	//! Returns true if the statistics indicate that the segment can contain values that satisfy that filter
 	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
 	virtual string ToString(const string &column_name) = 0;
+	virtual unique_ptr<TableFilter> Copy() const = 0;
 	virtual bool Equals(const TableFilter &other) const {
 		return filter_type != other.filter_type;
 	}
@@ -105,8 +106,11 @@ class DynamicTableFilterSet {
 public:
 	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter);
 
+	bool HasFilters() const;
+	unique_ptr<TableFilterSet> GetFinalTableFilters(optional_ptr<TableFilterSet> existing_filters);
+
 private:
-	mutex lock;
+	mutable mutex lock;
 	unique_ptr<TableFilterSet> filters;
 };
 

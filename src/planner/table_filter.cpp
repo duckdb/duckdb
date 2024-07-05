@@ -24,4 +24,31 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 	}
 }
 
+void DynamicTableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filter) {
+	lock_guard<mutex> l(lock);
+	if (!filters) {
+		filters = make_uniq<TableFilterSet>();
+	}
+	filters->PushFilter(column_index, std::move(filter));
+}
+
+bool DynamicTableFilterSet::HasFilters() const {
+	lock_guard<mutex> l(lock);
+	return filters.get();
+}
+
+unique_ptr<TableFilterSet> DynamicTableFilterSet::GetFinalTableFilters(optional_ptr<TableFilterSet> existing_filters) {
+	D_ASSERT(HasFilters());
+	auto result = make_uniq<TableFilterSet>();
+	if (existing_filters) {
+		for(auto &entry : existing_filters->filters) {
+			result->filters[entry.first] = entry.second->Copy();
+		}
+	}
+	for(auto &entry : filters->filters) {
+		result->filters[entry.first] = entry.second->Copy();
+	}
+	return result;
+}
+
 } // namespace duckdb

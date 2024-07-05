@@ -17,6 +17,9 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
 
 namespace duckdb {
 
@@ -24,10 +27,12 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
-                                   PerfectHashJoinStats perfect_join_stats)
+                                   PerfectHashJoinStats perfect_join_stats, unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
       delim_types(std::move(delim_types)), perfect_join_statistics(std::move(perfect_join_stats)) {
 	D_ASSERT(left_projection_map.empty());
+
+	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
@@ -80,7 +85,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_state)
     : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {},
-                       estimated_cardinality, std::move(perfect_join_state)) {
+                       estimated_cardinality, std::move(perfect_join_state), nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -91,9 +96,6 @@ JoinFilterGlobalState::~JoinFilterGlobalState() {
 
 JoinFilterLocalState::~JoinFilterLocalState() {
 }
-
-JoinFilterPushdownInfo::JoinFilterPushdownInfo(shared_ptr<DynamicTableFilterSet> dynamic_filters_p) :
-    dynamic_filters(std::move(dynamic_filters_p)) {}
 
 unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context) const {
 	auto result = make_uniq<JoinFilterGlobalState>();
@@ -515,8 +517,43 @@ public:
 	}
 };
 
-void JoinFilterPushdownInfo::PushFilters() const {
-	throw InternalException("FIXME: push filters");
+void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate) const {
+	// finalize the min/max aggregates
+	vector<LogicalType> min_max_types;
+	for(auto &aggr_expr : min_max_aggregates) {
+		min_max_types.push_back(aggr_expr->return_type);
+	}
+	DataChunk final_min_max;
+	final_min_max.Initialize(Allocator::DefaultAllocator(), min_max_types);
+
+	gstate.global_aggregate_state->Finalize(final_min_max);
+
+	// create a filter for each of the aggregates
+	for(idx_t filter_idx = 0; filter_idx < filters.size(); filter_idx++) {
+		auto &filter = filters[filter_idx];
+		auto filter_col_idx = filter.probe_column_index.column_index;
+		auto min_idx = filter_idx * 2;
+		auto max_idx = min_idx + 1;
+
+		auto min_val = final_min_max.data[min_idx].GetValue(0);
+		auto max_val = final_min_max.data[max_idx].GetValue(0);
+		if (min_val.IsNull() || max_val.IsNull()) {
+			throw InternalException("Filter pushdown - min/max is null - should be handled before");
+		}
+		if (Value::NotDistinctFrom(min_val, max_val)) {
+			// min = max - generate an equality filter
+			auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, std::move(min_val));
+			dynamic_filters->PushFilter(filter_col_idx, std::move(constant_filter));
+		} else {
+			// min != max - generate a range filter
+			auto greater_equals = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
+			dynamic_filters->PushFilter(filter_col_idx, std::move(greater_equals));
+			auto less_equals = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
+			dynamic_filters->PushFilter(filter_col_idx, std::move(less_equals));
+		}
+		// not null filter
+		dynamic_filters->PushFilter(filter_col_idx, make_uniq<IsNotNullFilter>());
+	}
 }
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -562,7 +599,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 
 	if (filter_pushdown) {
-		filter_pushdown->PushFilters();
+		filter_pushdown->PushFilters(*sink.global_filter_state);
 	}
 
 	// check for possible perfect hash table

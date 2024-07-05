@@ -192,7 +192,7 @@ struct MinFun {
 	static constexpr const char *Description = "Returns the minimum value present in arg.";
 	static constexpr const char *Example = "min(A)";
 
-	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 struct MaxFun {
@@ -201,7 +201,7 @@ struct MaxFun {
 	static constexpr const char *Description = "Returns the maximum value present in arg.";
 	static constexpr const char *Example = "max(A)";
 
-	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 struct ProductFun {

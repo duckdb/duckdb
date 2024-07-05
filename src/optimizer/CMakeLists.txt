@@ -22,7 +22,7 @@ add_library_unity(
   filter_pullup.cpp
   filter_pushdown.cpp
   in_clause_rewriter.cpp
-  join_filter_pushdown.cpp
+  join_filter_pushdown_optimizer.cpp
   optimizer.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp

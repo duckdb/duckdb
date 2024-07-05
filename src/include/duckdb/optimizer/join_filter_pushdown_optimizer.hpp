@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/join_filter_pushdown.hpp
+// duckdb/optimizer/join_filter_pushdown_optimizer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,6 +15,14 @@ namespace duckdb {
 //! The JoinFilterPushdownOptimizer links comparison joins to data sources to enable dynamic execution-time filter pushdown
 class JoinFilterPushdownOptimizer : public LogicalOperatorVisitor {
 public:
+	explicit JoinFilterPushdownOptimizer(Optimizer &optimizer);
+
 	void VisitOperator(LogicalOperator &op) override;
+
+private:
+	void GenerateJoinFilters(LogicalComparisonJoin &join);
+
+private:
+	Optimizer &optimizer;
 };
 } // namespace duckdb
