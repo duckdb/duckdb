@@ -61,7 +61,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 		// copy all row IDs of this leaf into the result IDs (if they don't exceed max_count)
 		bool within_max_count = true;
 		if (art->deprecated) {
-			within_max_count = Leaf::_deprecated_GetRowIds(*art, last_leaf, result_ids, max_count);
+			within_max_count = Leaf::DeprecatedGetRowIds(*art, last_leaf, result_ids, max_count);
 		} else {
 			// TODO.
 		}

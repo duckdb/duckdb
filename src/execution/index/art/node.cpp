@@ -54,7 +54,7 @@ void Node::Free(ART &art, Node &node) {
 	case NType::LEAF:
 		// iterative
 		if (art.deprecated) {
-			return Leaf::_deprecated_Free(art, node);
+			return Leaf::DeprecatedFree(art, node);
 		}
 		// TODO
 		return;
@@ -228,7 +228,7 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 
 	if (GetType() == NType::LEAF || GetType() == NType::LEAF_INLINED) {
 		if (art.deprecated) {
-			auto str = Leaf::_deprecated_VerifyAndToString(art, *this, only_verify);
+			auto str = Leaf::DeprecatedVerifyAndToString(art, *this, only_verify);
 			return only_verify ? "" : "\n" + str;
 		}
 		// TODO.
@@ -298,7 +298,7 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 	case NType::LEAF:
 		// iterative
 		if (art.deprecated) {
-			return Leaf::_deprecated_InitializeMerge(art, *this, flags);
+			return Leaf::DeprecatedInitializeMerge(art, *this, flags);
 		}
 		// TODO.
 		return;
@@ -447,7 +447,7 @@ bool Node::MergeInternal(ART &art, Node &other) {
 		}
 
 		if (art.deprecated) {
-			Leaf::_deprecated_Merge(art, l_node, r_node);
+			Leaf::DeprecatedMerge(art, l_node, r_node);
 		} else {
 			// TODO.
 		}
@@ -504,7 +504,7 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 	if (node_type == NType::LEAF) {
 		if (flags.vacuum_flags[node_type_idx - 1]) {
 			if (art.deprecated) {
-				Leaf::_deprecated_Vacuum(art, *this);
+				Leaf::DeprecatedVacuum(art, *this);
 			} else {
 				// TODO.
 			}

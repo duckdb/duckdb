@@ -440,7 +440,7 @@ bool ConstructInternal(ART &art, vector<ARTKey> &keys, const row_t *row_ids, Nod
 			Leaf::New(ref_node, row_ids[key_section.start]);
 		} else {
 			if (art.deprecated) {
-				Leaf::_deprecated_New(art, ref_node, row_ids + key_section.start, num_row_ids);
+				Leaf::DeprecatedNew(art, ref_node, row_ids + key_section.start, num_row_ids);
 			} else {
 				// Transform the row ids.
 				vector<ARTKey> row_id_keys;
@@ -499,7 +499,7 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 		D_ASSERT(!keys[i].Empty());
 		auto leaf = Lookup(tree, keys[i], 0);
 		if (deprecated) {
-			D_ASSERT(Leaf::_deprecated_ContainsRowId(*this, *leaf, row_ids[i]));
+			D_ASSERT(Leaf::DeprecatedContainsRowId(*this, *leaf, row_ids[i]));
 		} else {
 			// TODO.
 		}
@@ -564,7 +564,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers
 
 		auto leaf = Lookup(tree, keys[i], 0);
 		if (deprecated) {
-			D_ASSERT(Leaf::_deprecated_ContainsRowId(*this, *leaf, row_ids[i]));
+			D_ASSERT(Leaf::DeprecatedContainsRowId(*this, *leaf, row_ids[i]));
 		} else {
 			// TODO.
 		}
@@ -602,7 +602,7 @@ bool ART::InsertToLeaf(Node &leaf, const row_t &row_id) {
 	}
 
 	if (deprecated) {
-		Leaf::_deprecated_Insert(*this, leaf, row_id);
+		Leaf::DeprecatedInsert(*this, leaf, row_id);
 	} else {
 		// TODO.
 	}
@@ -725,7 +725,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_identifiers) {
 		auto leaf = Lookup(tree, keys[i], 0);
 		if (leaf) {
 			if (deprecated) {
-				D_ASSERT(!Leaf::_deprecated_ContainsRowId(*this, *leaf, row_ids[i]));
+				D_ASSERT(!Leaf::DeprecatedContainsRowId(*this, *leaf, row_ids[i]));
 			} else {
 				// TODO.
 			}
@@ -753,7 +753,7 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 	if (next_node.get().GetType() == NType::LEAF || next_node.get().GetType() == NType::LEAF_INLINED) {
 		bool remove_leaf = false;
 		if (deprecated) {
-			remove_leaf = Leaf::_deprecated_Remove(*this, next_node, row_id);
+			remove_leaf = Leaf::DeprecatedRemove(*this, next_node, row_id);
 		} else {
 			// TODO.
 		}
@@ -781,7 +781,7 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 			// leaf found, remove entry
 			bool remove_leaf = false;
 			if (deprecated) {
-				remove_leaf = Leaf::_deprecated_Remove(*this, child_node, row_id);
+				remove_leaf = Leaf::DeprecatedRemove(*this, child_node, row_id);
 			} else {
 				// TODO.
 			}
@@ -844,7 +844,7 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &result_ids) {
 		return true;
 	}
 	if (deprecated) {
-		return Leaf::_deprecated_GetRowIds(*this, *leaf, result_ids, max_count);
+		return Leaf::DeprecatedGetRowIds(*this, *leaf, result_ids, max_count);
 	}
 	// TODO
 	return false;

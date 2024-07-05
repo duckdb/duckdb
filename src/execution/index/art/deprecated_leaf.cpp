@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-void Leaf::_deprecated_New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t count) {
+void Leaf::DeprecatedNew(ART &art, reference<Node> &node, const row_t *row_ids, idx_t count) {
 
 	D_ASSERT(count > 1);
 
@@ -30,7 +30,7 @@ void Leaf::_deprecated_New(ART &art, reference<Node> &node, const row_t *row_ids
 	}
 }
 
-void Leaf::_deprecated_Free(ART &art, Node &node) {
+void Leaf::DeprecatedFree(ART &art, Node &node) {
 
 	Node current_node = node;
 	Node next_node;
@@ -43,7 +43,7 @@ void Leaf::_deprecated_Free(ART &art, Node &node) {
 	node.Clear();
 }
 
-void Leaf::_deprecated_InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
+void Leaf::DeprecatedInitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
 	auto merge_buffer_count = flags.merge_buffer_counts[static_cast<uint8_t>(NType::LEAF) - 1];
 
@@ -59,13 +59,13 @@ void Leaf::_deprecated_InitializeMerge(ART &art, Node &node, const ARTFlags &fla
 	}
 }
 
-void Leaf::_deprecated_Merge(ART &art, Node &l_node, Node &r_node) {
+void Leaf::DeprecatedMerge(ART &art, Node &l_node, Node &r_node) {
 
 	D_ASSERT(l_node.HasMetadata() && r_node.HasMetadata());
 
 	// copy inlined row ID of r_node
 	if (r_node.GetType() == NType::LEAF_INLINED) {
-		_deprecated_Insert(art, l_node, r_node.GetRowId());
+		DeprecatedInsert(art, l_node, r_node.GetRowId());
 		r_node.Clear();
 		return;
 	}
@@ -74,7 +74,7 @@ void Leaf::_deprecated_Merge(ART &art, Node &l_node, Node &r_node) {
 	if (l_node.GetType() == NType::LEAF_INLINED) {
 		auto row_id = l_node.GetRowId();
 		l_node = r_node;
-		_deprecated_Insert(art, l_node, row_id);
+		DeprecatedInsert(art, l_node, row_id);
 		r_node.Clear();
 		return;
 	}
@@ -111,19 +111,19 @@ void Leaf::_deprecated_Merge(ART &art, Node &l_node, Node &r_node) {
 		// append the row IDs
 		auto &last_leaf = Node::RefMutable<Leaf>(art, last_leaf_node, NType::LEAF);
 		for (idx_t i = 0; i < last_leaf.count; i++) {
-			l_leaf = l_leaf.get()._deprecated_Append(art, last_leaf.row_ids[i]);
+			l_leaf = l_leaf.get().DeprecatedAppend(art, last_leaf.row_ids[i]);
 		}
 		Node::GetAllocator(art, NType::LEAF).Free(last_leaf_node);
 	}
 }
 
-void Leaf::_deprecated_Insert(ART &art, Node &node, const row_t row_id) {
+void Leaf::DeprecatedInsert(ART &art, Node &node, const row_t row_id) {
 
 	D_ASSERT(node.HasMetadata());
 
 	if (node.GetType() == NType::LEAF_INLINED) {
-		_deprecated_MoveInlinedToLeaf(art, node);
-		_deprecated_Insert(art, node, row_id);
+		DeprecatedMoveInlinedToLeaf(art, node);
+		DeprecatedInsert(art, node, row_id);
 		return;
 	}
 
@@ -132,10 +132,10 @@ void Leaf::_deprecated_Insert(ART &art, Node &node, const row_t row_id) {
 	while (leaf.get().ptr.HasMetadata()) {
 		leaf = Node::RefMutable<Leaf>(art, leaf.get().ptr, NType::LEAF);
 	}
-	leaf.get()._deprecated_Append(art, row_id);
+	leaf.get().DeprecatedAppend(art, row_id);
 }
 
-bool Leaf::_deprecated_Remove(ART &art, reference<Node> &node, const row_t row_id) {
+bool Leaf::DeprecatedRemove(ART &art, reference<Node> &node, const row_t row_id) {
 
 	D_ASSERT(node.get().HasMetadata());
 
@@ -195,7 +195,7 @@ bool Leaf::_deprecated_Remove(ART &art, reference<Node> &node, const row_t row_i
 	return false;
 }
 
-idx_t Leaf::_deprecated_TotalCount(ART &art, const Node &node) {
+idx_t Leaf::DeprecatedTotalCount(ART &art, const Node &node) {
 
 	D_ASSERT(node.HasMetadata());
 	if (node.GetType() == NType::LEAF_INLINED) {
@@ -212,11 +212,11 @@ idx_t Leaf::_deprecated_TotalCount(ART &art, const Node &node) {
 	return count;
 }
 
-bool Leaf::_deprecated_GetRowIds(ART &art, const Node &node, vector<row_t> &result_ids, idx_t max_count) {
+bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, vector<row_t> &result_ids, idx_t max_count) {
 
 	// adding more elements would exceed the maximum count
 	D_ASSERT(node.HasMetadata());
-	if (result_ids.size() + _deprecated_TotalCount(art, node) > max_count) {
+	if (result_ids.size() + DeprecatedTotalCount(art, node) > max_count) {
 		return false;
 	}
 
@@ -239,7 +239,7 @@ bool Leaf::_deprecated_GetRowIds(ART &art, const Node &node, vector<row_t> &resu
 	return true;
 }
 
-bool Leaf::_deprecated_ContainsRowId(ART &art, const Node &node, const row_t row_id) {
+bool Leaf::DeprecatedContainsRowId(ART &art, const Node &node, const row_t row_id) {
 
 	D_ASSERT(node.HasMetadata());
 
@@ -261,7 +261,7 @@ bool Leaf::_deprecated_ContainsRowId(ART &art, const Node &node, const row_t row
 	return false;
 }
 
-string Leaf::_deprecated_VerifyAndToString(ART &art, const Node &node, const bool only_verify) {
+string Leaf::DeprecatedVerifyAndToString(ART &art, const Node &node, const bool only_verify) {
 
 	if (node.GetType() == NType::LEAF_INLINED) {
 		return only_verify ? "" : "Leaf [count: 1, row ID: " + to_string(node.GetRowId()) + "]";
@@ -286,7 +286,7 @@ string Leaf::_deprecated_VerifyAndToString(ART &art, const Node &node, const boo
 	return only_verify ? "" : str;
 }
 
-void Leaf::_deprecated_Vacuum(ART &art, Node &node) {
+void Leaf::DeprecatedVacuum(ART &art, Node &node) {
 
 	auto &allocator = Node::GetAllocator(art, NType::LEAF);
 
@@ -301,7 +301,7 @@ void Leaf::_deprecated_Vacuum(ART &art, Node &node) {
 	}
 }
 
-void Leaf::_deprecated_MoveInlinedToLeaf(ART &art, Node &node) {
+void Leaf::DeprecatedMoveInlinedToLeaf(ART &art, Node &node) {
 
 	D_ASSERT(node.GetType() == NType::LEAF_INLINED);
 	auto row_id = node.GetRowId();
@@ -311,7 +311,7 @@ void Leaf::_deprecated_MoveInlinedToLeaf(ART &art, Node &node) {
 	leaf.row_ids[0] = row_id;
 }
 
-Leaf &Leaf::_deprecated_Append(ART &art, const row_t row_id) {
+Leaf &Leaf::DeprecatedAppend(ART &art, const row_t row_id) {
 
 	reference<Leaf> leaf(*this);
 
