@@ -66,23 +66,21 @@ jobs:
       DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - name: Fix CentOS 7 EOL
+    - name: Handrolled checkout
+      shell: bash
+      env:
+        REPO_NAME: ${{ github.repository }}
+        REPO_REF: ${{ inputs.git_ref }}
       run: |
-        # Workaround the fact that CentOS 7 is EOL
-        sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
-        sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
-        yum-config-manager --disable centos-sclo-rh
-        yum install epel-release -y
+        git config --global --add safe.directory $(pwd)
+        git clone https://github.com/$REPO_NAME .
+        git fetch
+        git checkout $REPO_REF
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
         ninja-build: 1
-        ccache: 1
+        ccache: 0
         python_alias: 1
         aws-cli: 1
 
