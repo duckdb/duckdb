@@ -19,7 +19,7 @@ static hugeint_t GetPreviousPowerOfTen(hugeint_t input) {
 
 enum class NiceRounding { CEILING, ROUND };
 
-hugeint_t MakeNumberNice(hugeint_t input, hugeint_t power_of_ten, NiceRounding rounding) {
+hugeint_t MakeNumberNice(hugeint_t input, hugeint_t step, NiceRounding rounding) {
 	// we consider numbers nice if they are divisible by 2 or 5 times the power-of-ten one lower than the current
 	// e.g. 120 is a nice number because it is divisible by 20
 	//      122 is not a nice number -> we make it nice by turning it into 120 [/20]
@@ -29,8 +29,12 @@ hugeint_t MakeNumberNice(hugeint_t input, hugeint_t power_of_ten, NiceRounding r
 	// now the power of ten is the power BELOW the current number
 	// i.e. for 67, it is not 10
 	// now we can get the 2 or 5 divisors
-	hugeint_t two = power_of_ten / 5;
-	hugeint_t five = power_of_ten / 2;
+	hugeint_t power_of_ten = GetPreviousPowerOfTen(step);
+	hugeint_t two = power_of_ten * 2;
+	hugeint_t five = power_of_ten * 5;
+	if (power_of_ten * 5 <= step) {
+		two *= 10;
+	}
 
 	// compute the closest round number by adding the divisor / 2 and truncating
 	// do this for both divisors
@@ -66,15 +70,19 @@ static double GetPreviousPowerOfTen(double input) {
 	return power_of_ten / 10;
 }
 
-double MakeNumberNice(double input, const double power_of_ten, NiceRounding rounding) {
+double MakeNumberNice(double input, const double step, NiceRounding rounding) {
 	if (input == 0) {
 		return 0;
 	}
 	// now the power of ten is the power BELOW the current number
 	// i.e. for 67, it is not 10
 	// now we can get the 2 or 5 divisors
-	const double two = power_of_ten / 5;
-	const double five = power_of_ten / 2;
+	double power_of_ten = GetPreviousPowerOfTen(step);
+	double two = power_of_ten * 2;
+	double five = power_of_ten * 5;
+	if (power_of_ten * 5 <= step) {
+		two *= 10;
+	}
 
 	double round_to_two, round_to_five;
 	if (rounding == NiceRounding::ROUND) {
@@ -109,18 +117,17 @@ struct EquiWidthBinsInteger {
 
 		const hugeint_t span = max - min;
 		hugeint_t step = span / Hugeint::Convert(bin_count);
-		hugeint_t power_of_ten = GetPreviousPowerOfTen(step);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
-			step = MakeNumberNice(step, power_of_ten, NiceRounding::ROUND);
-			max = MakeNumberNice(max, power_of_ten, NiceRounding::CEILING);
+			step = MakeNumberNice(step, step, NiceRounding::ROUND);
+			max = MakeNumberNice(max, step, NiceRounding::CEILING);
 		}
 
 		for (hugeint_t bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			const hugeint_t target_boundary = bin_boundary / FACTOR;
 			int64_t real_boundary = Hugeint::Cast<int64_t>(target_boundary);
 			if (!result.empty()) {
-				if (real_boundary < input_min || result.size() >= bin_count) {
+				if (real_boundary < input_min || result.size() >= bin_count * 2) {
 					// we can never generate input_min
 					break;
 				}
@@ -156,8 +163,8 @@ struct EquiWidthBinsDouble {
 		const double step_power_of_ten = GetPreviousPowerOfTen(step);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
-			step = MakeNumberNice(step, step_power_of_ten, NiceRounding::ROUND);
-			max = MakeNumberNice(input_max, step_power_of_ten, NiceRounding::CEILING);
+			step = MakeNumberNice(step, step, NiceRounding::ROUND);
+			max = MakeNumberNice(input_max, step, NiceRounding::CEILING);
 		}
 
 		const double round_multiplication = 10 / step_power_of_ten;
@@ -166,7 +173,7 @@ struct EquiWidthBinsDouble {
 			if (nice_rounding) {
 				bin_boundary = std::round(bin_boundary * round_multiplication) / round_multiplication;
 			}
-			if (bin_boundary < min || result.size() >= bin_count) {
+			if (bin_boundary < min || result.size() >= bin_count * 2) {
 				// we can never generate below input_min
 				break;
 			}
