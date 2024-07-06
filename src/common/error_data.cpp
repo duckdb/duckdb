@@ -48,7 +48,7 @@ ErrorData::ErrorData(const string &message) : initialized(true), type(ExceptionT
 	}
 }
 
-const string &ErrorData::Message() {
+const string &ErrorData::Message() const {
 	if (final_message.empty()) {
 		if (type != ExceptionType::UNKNOWN_TYPE) {
 			final_message = Exception::ExceptionTypeToString(type) + " ";
