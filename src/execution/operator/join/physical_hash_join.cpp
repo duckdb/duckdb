@@ -291,7 +291,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	lstate.join_key_executor.Execute(chunk, lstate.join_keys);
 
 	if (filter_pushdown) {
-		filter_pushdown->Sink(chunk, *lstate.local_filter_state);
+		filter_pushdown->Sink(lstate.join_keys, *lstate.local_filter_state);
 	}
 
 	// build the HT
@@ -599,7 +599,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		ht.Unpartition();
 	}
 
-	if (filter_pushdown) {
+	if (filter_pushdown && ht.Count() > 0) {
 		filter_pushdown->PushFilters(*sink.global_filter_state);
 	}
 

@@ -17,6 +17,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	case JoinType::MARK:
 	case JoinType::SINGLE:
 	case JoinType::LEFT:
+	case JoinType::OUTER:
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
 		// cannot generate join filters for these join types

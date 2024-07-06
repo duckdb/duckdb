@@ -1,5 +1,5 @@
-# name: test/sql/join/pushdown/join_filter_pushdown.test
-# description: Test join filter pushdown in various circumstances
+# name: test/sql/join/pushdown/pushdown_join_types.test
+# description: Test join filter pushdown with various join types
 # group: [join]
 
 statement ok
@@ -28,6 +28,12 @@ SELECT * FROM integers LEFT JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max
 ----
 1000	1
 
+query II
+SELECT COUNT(*), COUNT(max_i) IS NOT NULL FROM (
+SELECT * FROM integers FULL OUTER JOIN (SELECT MAX(i) AS max_i FROM integers) ON i=max_i
+)
+----
+1000	1
 
 # semi join
 query I
