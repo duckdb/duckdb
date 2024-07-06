@@ -54,6 +54,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"hnsw_compact_index", "vss", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"hnsw_index_scan", "vss", CatalogType::TABLE_FUNCTION_ENTRY},
     {"host", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"html_escape", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"html_unescape", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"iceberg_metadata", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_scan", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_snapshots", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
