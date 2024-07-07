@@ -32,6 +32,8 @@ namespace duckdb {
 //	Global sink state
 class WindowGlobalSinkState;
 
+enum WindowGroupStage : uint8_t { SINK, FINALIZE, GETDATA, DONE };
+
 class WindowHashGroup {
 public:
 	using HashGroupPtr = unique_ptr<PartitionGlobalHashGroup>;
@@ -41,12 +43,14 @@ public:
 
 	WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash_bin_p);
 
+	ExecutorGlobalStates &Initialize(WindowGlobalSinkState &gstate);
+
 	// Scan all of the blocks during the build phase
-	unique_ptr<RowDataCollectionScanner> GetBuildScanner() const {
+	unique_ptr<RowDataCollectionScanner> GetBuildScanner(idx_t block_idx) const {
 		if (!rows) {
 			return nullptr;
 		}
-		return make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
+		return make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, block_idx, false);
 	}
 
 	// Scan a single block during the evaluate phase
@@ -56,11 +60,27 @@ public:
 		return make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, block_idx, true);
 	}
 
+	// The processing stage for this group
+	WindowGroupStage GetStage() const {
+		auto result = WindowGroupStage::SINK;
+
+		if (sunk == count) {
+			result = WindowGroupStage::FINALIZE;
+		}
+
+		if (finalized == blocks) {
+			result = WindowGroupStage::GETDATA;
+		}
+
+		return result;
+	}
+
 	//! The hash partition data
 	HashGroupPtr hash_group;
 	//! The size of the group
 	idx_t count = 0;
-	//! The generated input chunks
+	//! The number of blocks in the group
+	idx_t blocks = 0;
 	unique_ptr<RowDataCollection> rows;
 	unique_ptr<RowDataCollection> heap;
 	RowLayout layout;
@@ -77,8 +97,10 @@ public:
 	idx_t hash_bin;
 	//! Single threading lock
 	std::mutex lock;
-	//! The group has been built
-	bool built = false;
+	//! Count of sunk rows
+	std::atomic<idx_t> sunk;
+	//! Count of finalized blocks
+	std::atomic<idx_t> finalized;
 	//! The number of tasks left before we should be deleted
 	std::atomic<idx_t> tasks_remaining;
 	//! The output ordering batch index this hash group starts at
@@ -286,8 +308,10 @@ public:
 	using ScannerPtr = unique_ptr<RowDataCollectionScanner>;
 
 	struct Task {
-		Task(idx_t group_idx, idx_t max_idx) : group_idx(group_idx), max_idx(max_idx) {
+		Task(WindowGroupStage stage, idx_t group_idx, idx_t max_idx)
+		    : stage(stage), group_idx(group_idx), max_idx(max_idx) {
 		}
+		WindowGroupStage stage;
 		idx_t group_idx;
 		idx_t max_idx;
 		idx_t begin_idx = 0;
@@ -297,21 +321,29 @@ public:
 
 	WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p);
 
-	//! Get the next task
-	TaskPtr NextTask();
+	//! Get the next task given the current state
+	bool TryNextTask(TaskPtr &task);
 	//! Finish a task
 	void FinishTask(TaskPtr task);
+	//! Single-threaded manipulation of the interrupt queue
+	bool UpdateBlockedTasks(bool blocked, InterruptState &interrupt_state) const;
 
 	//! Context for executing computations
 	ClientContext &context;
 	//! All the sunk data
 	WindowGlobalSinkState &gsink;
+	//! State mutex
+	mutable mutex lock;
 	//! The list of tasks
 	vector<Task> tasks;
 	//! The the next task
-	std::atomic<idx_t> next_task;
+	idx_t next_task;
+	//! Stop producing tasks
+	atomic<bool> stopped;
 	//! The number of rows returned
 	atomic<idx_t> returned;
+	//! The set of blocked tasks
+	mutable vector<InterruptState> blocked_tasks;
 
 public:
 	idx_t MaxThreads() override {
@@ -320,7 +352,7 @@ public:
 };
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
-    : context(context_p), gsink(gsink_p), next_task(0), returned(0) {
+    : context(context_p), gsink(gsink_p), next_task(0), stopped(false), returned(0) {
 	auto &gpart = gsink.global_partition;
 	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
 
@@ -365,11 +397,15 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 	const auto &max_block = partition_blocks.front();
 	const auto per_thread = (max_block.first + threads - 1) / threads;
 
+	//	TODO: Generate dynamically instead of building a big list?
+	vector<WindowGroupStage> states {WindowGroupStage::SINK, WindowGroupStage::FINALIZE, WindowGroupStage::GETDATA};
 	for (const auto &b : partition_blocks) {
-		for (Task task(b.second, b.first); task.begin_idx < task.max_idx; task.begin_idx += per_thread) {
-			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
-			tasks.emplace_back(task);
-			window_hash_groups[task.group_idx]->tasks_remaining++;
+		for (const auto &state : states) {
+			for (Task task(state, b.second, b.first); task.begin_idx < task.max_idx; task.begin_idx += per_thread) {
+				task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
+				tasks.emplace_back(task);
+				window_hash_groups[task.group_idx]->tasks_remaining++;
+			}
 		}
 	}
 }
@@ -414,7 +450,7 @@ void WindowHashGroup::MaterializeSortedData() {
 }
 
 WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash_bin_p)
-    : hash_bin(hash_bin_p), tasks_remaining(0), batch_base(0) {
+    : count(0), blocks(0), hash_bin(hash_bin_p), sunk(0), finalized(0), tasks_remaining(0), batch_base(0) {
 	// There are three types of partitions:
 	// 1. No partition (no sorting)
 	// 2. One partition (sorting, but no hashing)
@@ -466,24 +502,27 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 		hash_group->ComputeMasks(partition_mask, order_masks);
 		external = hash_group->global_sort->external;
 		MaterializeSortedData();
-	} else {
-		return;
+	}
+
+	if (rows) {
+		blocks = rows->blocks.size();
 	}
 }
 
 // Per-thread scan state
 class WindowLocalSourceState : public LocalSourceState {
 public:
-	using ReadStatePtr = unique_ptr<WindowExecutorLocalState>;
-	using ReadStates = vector<ReadStatePtr>;
+	using LocalStatePtr = unique_ptr<WindowExecutorLocalState>;
+	using LocalStates = vector<LocalStatePtr>;
 	using Task = WindowGlobalSourceState::Task;
 	using TaskPtr = optional_ptr<Task>;
 
 	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
-	void FinishPartition(TaskPtr prev_task);
-	void NextPartition();
-	void BuildPartition();
-	void Scan(DataChunk &chunk);
+	void BeginHashGroup();
+	void Sink();
+	void Finalize();
+	bool GetData(DataChunk &chunk);
+	void FinishHashGroup(TaskPtr prev_task);
 
 	//! The shared source state
 	WindowGlobalSourceState &gsource;
@@ -497,65 +536,102 @@ public:
 	unique_ptr<RowDataCollectionScanner> scanner;
 	//! Buffer for the inputs
 	DataChunk input_chunk;
-	//! Executor read states.
-	ReadStates read_states;
+	//! Executor local states.
+	LocalStates local_states;
 	//! Buffer for window results
 	DataChunk output_chunk;
 };
 
-void WindowLocalSourceState::BuildPartition() {
-	auto &gsink = gsource.gsink;
-	auto &gpart = *gsink.global_partition;
-	window_hash_group = gpart.window_hash_groups[task->group_idx].get();
-
-	//	Single-threaded building for now.
-	lock_guard<mutex> built_guard(window_hash_group->lock);
-	if (window_hash_group->built) {
-		return;
+WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(WindowGlobalSinkState &gsink) {
+	//	Single-threaded building as this is mostly memory allocation
+	lock_guard<mutex> gestate_guard(lock);
+	const auto &executors = gsink.executors;
+	if (gestates.size() == executors.size()) {
+		return gestates;
 	}
 
-	// Create the executor state for each function
 	// These can be large so we defer building them until we are ready.
-	const auto count = window_hash_group->count;
-	auto &gestates = window_hash_group->gestates;
-	const auto &partition_mask = window_hash_group->partition_mask;
-	auto &order_masks = window_hash_group->order_masks;
-	const auto &executors = gsink.executors;
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
 		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
 		gestates.emplace_back(wexec->GetGlobalState(count, partition_mask, order_mask));
 	}
 
-	//	First pass over the input without flushing
-	auto scanner = window_hash_group->GetBuildScanner();
-	if (!scanner) {
+	return gestates;
+}
+
+void WindowLocalSourceState::BeginHashGroup() {
+	if (!task) {
 		return;
 	}
-	idx_t input_idx = 0;
-	while (true) {
-		input_chunk.Reset();
-		scanner->Scan(input_chunk);
-		if (input_chunk.size() == 0) {
+
+	auto &gsink = gsource.gsink;
+	auto &gpart = *gsink.global_partition;
+	window_hash_group = gpart.window_hash_groups[task->group_idx].get();
+
+	// Create the executor state for each function
+	// These can be large so we defer building them until we are ready.
+	auto &gestates = window_hash_group->Initialize(gsink);
+
+	//	Set up the local states
+	const auto &executors = gsink.executors;
+	for (idx_t w = 0; w < executors.size(); ++w) {
+		local_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
+	}
+}
+
+void WindowLocalSourceState::Sink() {
+	D_ASSERT(task->stage == WindowGroupStage::SINK);
+
+	auto &gsink = gsource.gsink;
+	const auto &executors = gsink.executors;
+	auto &gestates = window_hash_group->gestates;
+
+	//	First pass over the input without flushing
+	for (; task->begin_idx < task->end_idx; ++task->begin_idx) {
+		scanner = window_hash_group->GetBuildScanner(task->begin_idx);
+		if (!scanner) {
 			break;
 		}
+		while (true) {
+			//	TODO: Try to align on validity mask boundaries by starting ragged?
+			idx_t input_idx = scanner->Scanned();
+			input_chunk.Reset();
+			scanner->Scan(input_chunk);
+			if (input_chunk.size() == 0) {
+				break;
+			}
 
-		//	TODO: Parallelization opportunity
-		for (idx_t w = 0; w < executors.size(); ++w) {
-			executors[w]->Sink(input_chunk, input_idx, scanner->Count(), *gestates[w]);
+			//	TODO: Stagger functions to reduce contention?
+			for (idx_t w = 0; w < executors.size(); ++w) {
+				executors[w]->Sink(input_chunk, input_idx, scanner->Count(), *gestates[w], *local_states[w]);
+			}
+
+			window_hash_group->sunk += input_chunk.size();
 		}
-		input_idx += input_chunk.size();
-	}
 
-	//	TODO: Parallelization opportunity
+		// External scanning assumes all blocks are swizzled.
+		scanner->SwizzleBlock(task->begin_idx);
+		scanner.reset();
+	}
+}
+
+void WindowLocalSourceState::Finalize() {
+	D_ASSERT(task->stage == WindowGroupStage::FINALIZE);
+
+	// Finalize all the executors.
+	// Parallel finalisation is handled internally by the executor,
+	// and should not return until all threads have completed work.
+	auto &gsink = gsource.gsink;
+	const auto &executors = gsink.executors;
+	auto &gestates = window_hash_group->gestates;
 	for (idx_t w = 0; w < executors.size(); ++w) {
-		executors[w]->Finalize(*gestates[w]);
+		executors[w]->Finalize(*gestates[w], *local_states[w]);
 	}
 
-	// External scanning assumes all blocks are swizzled.
-	scanner->ReSwizzle();
-
-	window_hash_group->built = true;
+	//	Mark this range as done
+	window_hash_group->finalized += (task->end_idx - task->begin_idx);
+	task->begin_idx = task->end_idx;
 }
 
 WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource) : gsource(gsource), batch_index(0) {
@@ -572,12 +648,28 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 	output_chunk.Initialize(global_partition.allocator, output_types);
 }
 
-WindowGlobalSourceState::TaskPtr WindowGlobalSourceState::NextTask() {
-	const auto task_idx = next_task++;
-	if (task_idx < tasks.size()) {
-		return &tasks[task_idx];
+bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
+	lock_guard<mutex> task_guard(lock);
+	if (next_task >= tasks.size() || stopped) {
+		task = nullptr;
+		return true;
 	}
-	return nullptr;
+
+	//	If the next task matches the current state of its group, then we can use it
+	//	Otherwise block.
+	task = &tasks[next_task];
+
+	auto &gpart = *gsink.global_partition;
+	auto &window_hash_group = gpart.window_hash_groups[task->group_idx];
+	auto group_stage = window_hash_group->GetStage();
+
+	if (task->stage == group_stage) {
+		++next_task;
+		return true;
+	}
+
+	task = nullptr;
+	return false;
 }
 
 void WindowGlobalSourceState::FinishTask(TaskPtr task) {
@@ -594,23 +686,14 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 	}
 }
 
-void WindowLocalSourceState::NextPartition() {
-	D_ASSERT(window_hash_group);
-	const auto &executors = gsource.gsink.executors;
-	auto &gestates = window_hash_group->gestates;
-	for (idx_t w = 0; w < executors.size(); ++w) {
-		read_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
-	}
-}
-
-void WindowLocalSourceState::FinishPartition(TaskPtr prev_task) {
+void WindowLocalSourceState::FinishHashGroup(TaskPtr prev_task) {
 	scanner.reset();
-	read_states.clear();
+	local_states.clear();
 
 	gsource.FinishTask(prev_task);
 }
 
-void WindowLocalSourceState::Scan(DataChunk &result) {
+bool WindowLocalSourceState::GetData(DataChunk &result) {
 	// Are we done with this scanner?
 	if (scanner && !scanner->Remaining()) {
 		scanner.reset();
@@ -618,27 +701,44 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 	}
 
 	//	Are we done with this task?
-	if (!task || task->begin_idx >= task->end_idx) {
+	while (!task || task->begin_idx >= task->end_idx || task->stage != WindowGroupStage::GETDATA) {
 		auto prev_task = task;
-		task = gsource.NextTask();
+		while (!gsource.TryNextTask(task)) {
+			FinishHashGroup(prev_task);
+			return false;
+		}
 
-		// Did we start a new group?
-		const bool new_group = (!task || !prev_task || prev_task->group_idx != task->group_idx);
+		const auto new_group = (!task || !prev_task || task->group_idx != prev_task->group_idx);
+		// Release all the old group's data if we started a new group
 		if (new_group) {
-			FinishPartition(prev_task);
+			FinishHashGroup(prev_task);
+			BeginHashGroup();
 		}
 
 		// Are we done?
 		if (!task) {
-			return;
+			return true;
 		}
 
-		// Did we start a new hash group?
-		if (new_group) {
-			BuildPartition();
-			NextPartition();
+		// Process the new state
+		switch (task->stage) {
+		case WindowGroupStage::SINK:
+			Sink();
+			D_ASSERT(task->begin_idx == task->end_idx);
+			continue;
+		case WindowGroupStage::FINALIZE:
+			Finalize();
+			D_ASSERT(task->begin_idx == task->end_idx);
+			continue;
+		case WindowGroupStage::GETDATA:
+			D_ASSERT(task->begin_idx < task->end_idx);
+			break;
+		default:
+			throw InternalException("Invalid window source state.");
 		}
 	}
+
+	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
 
 	if (!scanner) {
 		scanner = window_hash_group->GetEvaluateScanner(task->begin_idx);
@@ -655,7 +755,7 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
 		auto &executor = *executors[expr_idx];
 		auto &gstate = *gestates[expr_idx];
-		auto &lstate = *read_states[expr_idx];
+		auto &lstate = *local_states[expr_idx];
 		auto &result = output_chunk.data[expr_idx];
 		executor.Evaluate(position, input_chunk, result, lstate, gstate);
 	}
@@ -671,6 +771,8 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 		result.data[out_idx++].Reference(output_chunk.data[col_idx]);
 	}
 	result.Verify();
+
+	return true;
 }
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
@@ -710,12 +812,47 @@ idx_t PhysicalWindow::GetBatchIndex(ExecutionContext &context, DataChunk &chunk,
 	return lstate.batch_index;
 }
 
+bool WindowGlobalSourceState::UpdateBlockedTasks(bool blocked, InterruptState &interrupt_state) const {
+	lock_guard<mutex> guard(lock);
+	if (blocked) {
+		blocked_tasks.push_back(interrupt_state);
+	} else {
+		// The pipeline is unblocked, so flush tasks
+		for (auto &state : blocked_tasks) {
+			state.Callback();
+		}
+		blocked_tasks.clear();
+	}
+	return blocked;
+}
+
 SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
 
-	lsource.Scan(chunk);
+#if 1
+	//	Debugging variant
+	try {
+		while (!lsource.GetData(chunk)) {
+			TaskScheduler::GetScheduler(context.client).YieldThread();
+		}
+	} catch (...) {
+		gsource.stopped = true;
+		throw;
+	}
+#else
+	try {
+		const auto blocked = !lsource.GetData(chunk);
+		if (gsource.UpdateBlockedTasks(blocked, input.interrupt_state)) {
+			return SourceResultType::BLOCKED;
+		}
+	} catch (...) {
+		gsource.stopped = true;
+		gsource.UpdateBlockedTasks(false, input.interrupt_state);
+		throw;
+	}
+#endif
 	gsource.returned += chunk.size();
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
