@@ -107,8 +107,9 @@ DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 	header.block_count = source.Read<uint64_t>();
 
 	header.block_alloc_size = source.Read<idx_t>();
+
+	// backwards compatibility
 	if (!header.block_alloc_size) {
-		// backwards compatibility
 		header.block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	}
 
@@ -142,7 +143,7 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size), db(db), path(path_p),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                    Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
+                    Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
 }
 
@@ -264,7 +265,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	// compute the checksum
 	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
-	uint64_t computed_checksum = Checksum(block.buffer, block.size);
+	auto computed_checksum = Checksum(block.buffer, block.size);
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
@@ -293,14 +294,6 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		                            "size: %llu, file block size: %llu",
 		                            GetBlockAllocSize(), header.block_alloc_size);
 	}
-
-	// NOTE: remove this once we start supporting different block sizes.
-	if (Storage::BLOCK_ALLOC_SIZE != header.block_alloc_size) {
-		throw NotImplementedException("cannot initialize a database with a different block size than the default block "
-		                              "size: default block size: %llu, file block size: %llu",
-		                              Storage::BLOCK_ALLOC_SIZE, header.block_alloc_size);
-	}
-
 	SetBlockAllocSize(header.block_alloc_size);
 }
 
@@ -464,7 +457,7 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 		// compute the checksum
 		auto start_ptr = ptr + i * GetBlockAllocSize();
 		auto stored_checksum = Load<uint64_t>(start_ptr);
-		uint64_t computed_checksum = Checksum(start_ptr + Storage::BLOCK_HEADER_SIZE, GetBlockSize());
+		uint64_t computed_checksum = Checksum(start_ptr + Storage::DEFAULT_BLOCK_HEADER_SIZE, GetBlockSize());
 		// verify the checksum
 		if (stored_checksum != computed_checksum) {
 			throw IOException(

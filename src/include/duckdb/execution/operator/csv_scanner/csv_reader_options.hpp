@@ -165,7 +165,7 @@ struct CSVReaderOptions {
 	void ToNamedParameters(named_parameter_map_t &out);
 	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context);
 
-	string ToString() const;
+	string ToString(const string &current_file_path) const;
 	//! If the type for column with idx i was manually set
 	bool WasTypeManuallySet(idx_t i) const;
 

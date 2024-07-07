@@ -111,14 +111,10 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 		metadata->read(file_proto.get());
 	}
 
-	unique_ptr<GeoParquetFileMetadata> geo_meta = nullptr;
+	// Try to read the GeoParquet metadata (if present)
+	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 
-	// Only read the GeoParquet metadata if the spatial extension is installed
-	if (GeoParquetFileMetadata::IsSpatialExtensionInstalled(context)) {
-		geo_meta = GeoParquetFileMetadata::Read(*metadata);
-	}
-
-	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time, std::move(geo_meta));
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time, std::move(geo_metadata));
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
@@ -502,7 +498,8 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	return result;
 }
 
-ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
+ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p,
+                             shared_ptr<ParquetFileMetadataCache> metadata_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       parquet_options(std::move(parquet_options_p)) {
 	file_name = std::move(file_name_p);
@@ -515,17 +512,24 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
-	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
-		metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config);
-	} else {
-		auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
-		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
-		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
+	if (!metadata_p) {
+		if (!ObjectCache::ObjectCacheEnabled(context_p)) {
 			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config);
-			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
+		} else {
+			auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
+			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
+			if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
+				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config);
+				ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
+			}
 		}
+	} else {
+		metadata = std::move(metadata_p);
 	}
 	InitializeSchema(context_p);
+}
+
+ParquetUnionData::~ParquetUnionData() {
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
@@ -572,6 +576,13 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 		}
 	}
 	return column_stats;
+}
+
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
+                                                         shared_ptr<ParquetFileMetadataCache> metadata,
+                                                         const string &name) {
+	ParquetReader reader(context, std::move(parquet_options), std::move(metadata));
+	return reader.ReadStatistics(name);
 }
 
 uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {

@@ -40,5 +40,8 @@ public:
 	static IPAddress FromString(string_t input);
 
 	string ToString() const;
+	IPAddress Netmask() const;
+	IPAddress Network() const;
+	IPAddress Broadcast() const;
 };
 } // namespace duckdb
