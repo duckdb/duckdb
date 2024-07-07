@@ -121,13 +121,15 @@ struct EquiWidthBinsInteger {
 			// when doing nice rounding we try to make the max/step values nicer
 			step = MakeNumberNice(step, step, NiceRounding::ROUND);
 			max = MakeNumberNice(max, step, NiceRounding::CEILING);
+			// we allow for more bins when doing nice rounding since the bin count is approximate
+			bin_count *= 2;
 		}
 
 		for (hugeint_t bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			const hugeint_t target_boundary = bin_boundary / FACTOR;
 			int64_t real_boundary = Hugeint::Cast<int64_t>(target_boundary);
 			if (!result.empty()) {
-				if (real_boundary < input_min || result.size() >= bin_count * 2) {
+				if (real_boundary < input_min || result.size() >= bin_count) {
 					// we can never generate input_min
 					break;
 				}
@@ -165,6 +167,8 @@ struct EquiWidthBinsDouble {
 			// when doing nice rounding we try to make the max/step values nicer
 			step = MakeNumberNice(step, step, NiceRounding::ROUND);
 			max = MakeNumberNice(input_max, step, NiceRounding::CEILING);
+			// we allow for more bins when doing nice rounding since the bin count is approximate
+			bin_count *= 2;
 		}
 
 		const double round_multiplication = 10 / step_power_of_ten;
@@ -173,7 +177,7 @@ struct EquiWidthBinsDouble {
 			if (nice_rounding) {
 				bin_boundary = std::round(bin_boundary * round_multiplication) / round_multiplication;
 			}
-			if (bin_boundary < min || result.size() >= bin_count * 2) {
+			if (bin_boundary < min || result.size() >= bin_count) {
 				// we can never generate below input_min
 				break;
 			}
@@ -380,10 +384,20 @@ unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &
                                                vector<unique_ptr<Expression>> &arguments) {
 	// while internally the bins are computed over a unified type
 	// the equi_width_bins function returns the same type as the input MAX
-	if (arguments[1]->return_type.id() != LogicalTypeId::UNKNOWN &&
-	    arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalType::LIST(arguments[1]->return_type);
+	LogicalType child_type;
+	switch (arguments[1]->return_type.id()) {
+	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::SQLNULL:
+		return nullptr;
+	case LogicalTypeId::DECIMAL:
+		// for decimals we promote to double because
+		child_type = LogicalType::DOUBLE;
+		break;
+	default:
+		child_type = arguments[1]->return_type;
+		break;
 	}
+	bound_function.return_type = LogicalType::LIST(child_type);
 	return nullptr;
 }
 
