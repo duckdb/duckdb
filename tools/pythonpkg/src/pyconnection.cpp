@@ -244,12 +244,12 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
 	      py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
 	      py::arg("normalize_names") = py::none(), py::arg("null_padding") = py::none(), py::arg("names") = py::none(),
-	      py::arg("new_line") = py::none(), py::arg("columns") = py::none(),
+	      py::arg("lineterminator") = py::none(), py::arg("columns") = py::none(),
 	      py::arg("auto_type_candidates") = py::none(), py::arg("max_line_size") = py::none(),
 	      py::arg("ignore_errors") = py::none(), py::arg("store_rejects") = py::none(),
 	      py::arg("rejects_table") = py::none(), py::arg("rejects_scan") = py::none(),
 	      py::arg("rejects_limit") = py::none(), py::arg("force_not_null") = py::none(),
-	      py::arg("buffer_size") = py::none(), py::arg("decimal_separator") = py::none(),
+	      py::arg("buffer_size") = py::none(), py::arg("decimal") = py::none(),
 	      py::arg("allow_quoted_nulls") = py::none(), py::arg("filename") = py::none(),
 	      py::arg("hive_partitioning") = py::none(), py::arg("union_by_name") = py::none(),
 	      py::arg("hive_types") = py::none(), py::arg("hive_types_autocast") = py::none());
@@ -261,12 +261,12 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
 	      py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
 	      py::arg("normalize_names") = py::none(), py::arg("null_padding") = py::none(), py::arg("names") = py::none(),
-	      py::arg("new_line") = py::none(), py::arg("columns") = py::none(),
+	      py::arg("lineterminator") = py::none(), py::arg("columns") = py::none(),
 	      py::arg("auto_type_candidates") = py::none(), py::arg("max_line_size") = py::none(),
 	      py::arg("ignore_errors") = py::none(), py::arg("store_rejects") = py::none(),
 	      py::arg("rejects_table") = py::none(), py::arg("rejects_scan") = py::none(),
 	      py::arg("rejects_limit") = py::none(), py::arg("force_not_null") = py::none(),
-	      py::arg("buffer_size") = py::none(), py::arg("decimal_separator") = py::none(),
+	      py::arg("buffer_size") = py::none(), py::arg("decimal") = py::none(),
 	      py::arg("allow_quoted_nulls") = py::none(), py::arg("filename") = py::none(),
 	      py::arg("hive_partitioning") = py::none(), py::arg("union_by_name") = py::none(),
 	      py::arg("hive_types") = py::none(), py::arg("hive_types_autocast") = py::none());
@@ -988,15 +988,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
     const Optional<py::object> &date_format, const Optional<py::object> &timestamp_format,
     const Optional<py::object> &sample_size, const Optional<py::object> &all_varchar,
     const Optional<py::object> &normalize_names, const Optional<py::object> &null_padding,
-    const Optional<py::object> &names_p, const Optional<py::object> &new_line, const Optional<py::object> &columns,
-    const Optional<py::object> &auto_type_candidates, const Optional<py::object> &max_line_size,
-    const Optional<py::object> &ignore_errors, const Optional<py::object> &store_rejects,
-    const Optional<py::object> &rejects_table, const Optional<py::object> &rejects_scan,
-    const Optional<py::object> &rejects_limit, const Optional<py::object> &force_not_null,
-    const Optional<py::object> &buffer_size, const Optional<py::object> &decimal_separator,
-    const Optional<py::object> &allow_quoted_nulls, const Optional<py::object> &filename,
-    const Optional<py::object> &hive_partitioning, const Optional<py::object> &union_by_name,
-    const Optional<py::object> &hive_types, const Optional<py::object> &hive_types_autocast) {
+    const Optional<py::object> &names_p, const Optional<py::object> &lineterminator,
+    const Optional<py::object> &columns, const Optional<py::object> &auto_type_candidates,
+    const Optional<py::object> &max_line_size, const Optional<py::object> &ignore_errors,
+    const Optional<py::object> &store_rejects, const Optional<py::object> &rejects_table,
+    const Optional<py::object> &rejects_scan, const Optional<py::object> &rejects_limit,
+    const Optional<py::object> &force_not_null, const Optional<py::object> &buffer_size,
+    const Optional<py::object> &decimal, const Optional<py::object> &allow_quoted_nulls,
+    const Optional<py::object> &filename, const Optional<py::object> &hive_partitioning,
+    const Optional<py::object> &union_by_name, const Optional<py::object> &hive_types,
+    const Optional<py::object> &hive_types_autocast) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -1190,12 +1191,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		bind_parameters["null_padding"] = Value::BOOLEAN(py::bool_(null_padding));
 	}
 
-	if (!py::none().is(new_line)) {
-		if (!py::isinstance<py::str>(new_line)) {
-			string actual_type = py::str(new_line.get_type());
-			throw BinderException("read_csv only accepts 'new_line' as a string, not '%s'", actual_type);
+	if (!py::none().is(lineterminator)) {
+		if (!py::isinstance<py::str>(lineterminator)) {
+			string actual_type = py::str(lineterminator.get_type());
+			throw BinderException("read_csv only accepts 'lineterminator' as a string, not '%s'", actual_type);
 		}
-		auto val = TransformPythonValue(new_line, LogicalTypeId::VARCHAR);
+		auto val = TransformPythonValue(lineterminator, LogicalTypeId::VARCHAR);
 		bind_parameters["new_line"] = val;
 	}
 
@@ -1281,12 +1282,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		bind_parameters["buffer_size"] = val;
 	}
 
-	if (!py::none().is(decimal_separator)) {
-		if (!py::isinstance<py::str>(decimal_separator)) {
-			string actual_type = py::str(decimal_separator.get_type());
-			throw BinderException("read_csv only accepts 'decimal_separator' as a string, not '%s'", actual_type);
+	if (!py::none().is(decimal)) {
+		if (!py::isinstance<py::str>(decimal)) {
+			string actual_type = py::str(decimal.get_type());
+			throw BinderException("read_csv only accepts 'decimal' as a string, not '%s'", actual_type);
 		}
-		auto val = TransformPythonValue(decimal_separator, LogicalTypeId::VARCHAR);
+		auto val = TransformPythonValue(decimal, LogicalTypeId::VARCHAR);
 		bind_parameters["decimal_separator"] = val;
 	}
 

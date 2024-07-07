@@ -783,7 +783,7 @@
 				"type": "Optional[List[str]]"
 			},
 			{
-				"name": "new_line",
+				"name": "lineterminator",
 				"default": "None",
 				"type": "Optional[str]"
 			},
@@ -838,7 +838,7 @@
 				"type": "Optional[int]"
 			},
 			{
-				"name": "decimal_separator",
+				"name": "decimal",
 				"default": "None",
 				"type": "Optional[str]"
 			},

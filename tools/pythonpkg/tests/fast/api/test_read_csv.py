@@ -573,8 +573,8 @@ class TestReadCSV(object):
     @pytest.mark.parametrize(
         'options',
         [
-            {'new_line': '\\r\\n'},
-            {'new_line': '\\n'},
+            {'lineterminator': '\\r\\n'},
+            {'lineterminator': '\\n'},
             {'columns': {'id': 'INTEGER', 'name': 'INTEGER', 'c': 'integer', 'd': 'INTEGER'}},
             {'auto_type_candidates': ['INTEGER', 'INTEGER']},
             {'max_line_size': 10000},
@@ -587,7 +587,7 @@ class TestReadCSV(object):
             {'rejects_table': 'my_rejects_table', 'rejects_limit': 50},
             {'force_not_null': ['one', 'two']},
             {'buffer_size': 420000},
-            {'decimal_separator': '.'},
+            {'decimal': '.'},
             {'allow_quoted_nulls': True},
             {'allow_quoted_nulls': False},
             {'filename': True},

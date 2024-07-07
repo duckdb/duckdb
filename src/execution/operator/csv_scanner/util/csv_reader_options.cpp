@@ -138,6 +138,8 @@ string CSVReaderOptions::GetNewline() const {
 		return "\\n";
 	case NewLineIdentifier::NOT_SET:
 		return "";
+	default:
+		throw NotImplementedException("New line type not supported");
 	}
 }
 
