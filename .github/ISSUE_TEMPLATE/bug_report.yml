@@ -46,7 +46,20 @@ body:
   - type: textarea
     attributes:
       label: To Reproduce
-      description: Steps to reproduce the behavior, preferably a [minimal reproducible example](https://en.wikipedia.org/wiki/Minimal_reproducible_example). Please format the code and the output as [code blocks](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks) and add the required imports for scripts (e.g., `import duckdb`). Bonus points if the steps only include SQL queries.
+      description: |
+        Please provide steps to reproduce the behavior, preferably a [minimal reproducible example](https://en.wikipedia.org/wiki/Minimal_reproducible_example). Please adhere the following guidelines:
+
+        * Format the code and the output as [code blocks](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks) using triple backticks:
+
+          ````
+          ```
+          CODE HERE
+          ```
+          ````
+        * Add all required imports for scripts, e.g., `import duckdb`, `import pandas as pd`.
+        * Remove all prompts from the scripts. This include DuckDB's 'D' prompt and Python's `>>>` prompt. Removing these prompts makes reproduction attempts quicker.
+        * Make sure that the script and its outputs are provided in separate code blocks.
+        * If applicable, please check whether the issue is reproducible via running plain SQL queries from the DuckDB CLI client.
     validations:
       required: true
 
