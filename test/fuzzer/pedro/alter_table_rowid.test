@@ -11,15 +11,19 @@ CREATE TABLE t0(c0 INTEGER, c1 INTEGER);
 statement error
 ALTER TABLE t0 DROP COLUMN rowid;
 ----
+<REGEX>:Binder Error.*does not have a column with name.*
 
 statement error
 ALTER TABLE t0 RENAME rowid TO ups;
 ----
+<REGEX>:Binder Error.*does not have a column with name.*
 
 statement error
 ALTER TABLE t0 ALTER rowid TYPE VARCHAR;
 ----
+<REGEX>:Binder Error.*does not have a column with name.*
 
 statement error
 ALTER TABLE t0 ALTER rowidx SET DEFAULT 0;
 ----
+<REGEX>:Binder Error.*does not have a column with name.*
