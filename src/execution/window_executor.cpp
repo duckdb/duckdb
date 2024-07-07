@@ -33,10 +33,11 @@ bool WindowDataChunk::IsSimple(const Vector &v) {
 	case PhysicalType::VARCHAR:
 	case PhysicalType::BIT:
 		return false;
-	case PhysicalType::UNKNOWN:
-	case PhysicalType::INVALID:
-		throw InternalException("Unsupported type for WindowDataChunk");
+	default:
+		break;
 	}
+
+	throw InternalException("Unsupported type for WindowDataChunk");
 }
 
 WindowDataChunk::WindowDataChunk(DataChunk &chunk) : chunk(chunk) {
