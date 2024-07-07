@@ -98,7 +98,7 @@ body:
   - type: input
     attributes:
       label: "Affiliation:"
-      placeholder: e.g., Oracle
+      placeholder: e.g., Acme Corporation
     validations:
       required: true
 
