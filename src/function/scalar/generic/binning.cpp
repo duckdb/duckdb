@@ -39,9 +39,12 @@ hugeint_t MakeNumberNice(hugeint_t input, hugeint_t step, NiceRounding rounding)
 	// now we can get the 2 or 5 divisors
 	hugeint_t power_of_ten = GetPreviousPowerOfTen(step);
 	hugeint_t two = power_of_ten * 2;
-	hugeint_t five = power_of_ten * 5;
+	hugeint_t five = power_of_ten;
 	if (power_of_ten * 3 <= step) {
 		two *= 5;
+	}
+	if (power_of_ten * 2 <= step) {
+		five *= 5;
 	}
 
 	// compute the closest round number by adding the divisor / 2 and truncating
@@ -92,9 +95,12 @@ double MakeNumberNice(double input, const double step, NiceRounding rounding) {
 	// now we can get the 2 or 5 divisors
 	double power_of_ten = GetPreviousPowerOfTen(step);
 	double two = power_of_ten * 2;
-	double five = power_of_ten * 5;
+	double five = power_of_ten;
 	if (power_of_ten * 3 <= step) {
 		two *= 5;
+	}
+	if (power_of_ten * 2 <= step) {
+		five *= 5;
 	}
 
 	double round_to_two = RoundToNumber(input, two, rounding);
