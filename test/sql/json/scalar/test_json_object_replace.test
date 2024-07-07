@@ -1,0 +1,153 @@
+# name: test/sql/json/scalar/test_json_object_replace.test
+# description: Checks whether a given JSON Objects key content is replaced correctly
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values('{}'), ('{"a":42}'), ('{"a":42, "b": true}'), ('{"a":42, "b": true, "b": true}')
+
+query I
+SELECT json_obj_replace(json_obj_replace(j, 'a', true), 'b', false) FROM test
+----
+{}
+{"a":true}
+{"a":true,"b":false}
+{"a":true,"b":false,"b":true}
+
+query I
+SELECT json_obj_replace(j, 'b', 42::UTINYINT) FROM test
+----
+{}
+{"a":42}
+{"a":42,"b":42}
+{"a":42,"b":42,"b":true}
+
+query I
+SELECT json_obj_replace(json_obj_replace(j, 'a', -42::TINYINT), 'b', 42::TINYINT) FROM test
+----
+{}
+{"a":-42}
+{"a":-42,"b":42}
+{"a":-42,"b":42,"b":true}
+
+query I
+SELECT json_obj_replace(j, 'b', 1337::USMALLINT) FROM test
+----
+{}
+{"a":42}
+{"a":42,"b":1337}
+{"a":42,"b":1337,"b":true}
+
+query I
+SELECT json_obj_replace(json_obj_replace(j, 'a', -1337::SMALLINT), 'b', 1337::SMALLINT) FROM test
+----
+{}
+{"a":-1337}
+{"a":-1337,"b":1337}
+{"a":-1337,"b":1337,"b":true}
+
+query I
+SELECT json_obj_replace(j, 'b', 2024::UINTEGER) FROM test
+----
+{}
+{"a":42}
+{"a":42,"b":2024}
+{"a":42,"b":2024,"b":true}
+
+query I
+SELECT json_obj_replace(json_obj_replace(j, 'a', -2024::INTEGER), 'b', 2024::INTEGER) FROM test
+----
+{}
+{"a":-2024}
+{"a":-2024,"b":2024}
+{"a":-2024,"b":2024,"b":true}
+
+query I
+SELECT json_obj_replace(j, 'b', 18446744073709551615::UBIGINT) FROM test
+----
+{}
+{"a":42}
+{"a":42,"b":18446744073709551615}
+{"a":42,"b":18446744073709551615,"b":true}
+
+query I
+SELECT json_obj_replace(json_obj_replace(j, 'a', -1234567891011121314::BIGINT), 'b', 1234567891011121314::BIGINT) FROM test
+----
+{}
+{"a":-1234567891011121314}
+{"a":-1234567891011121314,"b":1234567891011121314}
+{"a":-1234567891011121314,"b":1234567891011121314,"b":true}
+
+query I
+SELECT json_obj_replace(json_obj_replace(j, 'a', pi()::FLOAT), 'b', pi()::DOUBLE) FROM test
+----
+{}
+{"a":3.1415927410125732}
+{"a":3.1415927410125732,"b":3.141592653589793}
+{"a":3.1415927410125732,"b":3.141592653589793,"b":true}
+
+statement ok
+create table test2 (j json)
+
+statement ok
+insert into test2 values('42'), ('"Hello"'), ('true'), ('[1337]'), ('{"a": 42}')
+
+query I
+SELECT json_obj_replace(a.j, 'a', b.j) FROM test AS a, test2 AS b
+----
+{}
+{}
+{}
+{}
+{}
+{"a":42}
+{"a":"Hello"}
+{"a":true}
+{"a":[1337]}
+{"a":{"a":42}}
+{"a":42,"b":true}
+{"a":"Hello","b":true}
+{"a":true,"b":true}
+{"a":[1337],"b":true}
+{"a":{"a":42},"b":true}
+{"a":42,"b":true,"b":true}
+{"a":"Hello","b":true,"b":true}
+{"a":true,"b":true,"b":true}
+{"a":[1337],"b":true,"b":true}
+{"a":{"a":42},"b":true,"b":true}
+
+
+# You would think empty key strings are not allowed. But they are:
+# https://www.json.org/json-en.html
+query I
+SELECT json_obj_replace('{}', '', 42::INTEGER)
+----
+{}
+
+statement error
+SELECT json_obj_replace('', 'k', False)
+----
+
+statement error
+SELECT json_obj_replace('[]', 'k', False)
+----
+
+statement error
+SELECT json_obj_replace('true', 'k', False)
+----
+
+statement error
+SELECT json_obj_replace('"Hello"', 'k', False)
+----
+
+statement error
+SELECT json_obj_replace('42', 'k', False)
+----

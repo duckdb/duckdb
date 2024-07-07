@@ -1,0 +1,59 @@
+# name: test/sql/json/scalar/test_json_object_rename_key.test
+# description: Checks whether a given JSON Objects keys are renamed correctly
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values('{}'), ('{"a":42}'), ('{"a":42, "b": true}'), ('{"a":42, "b": true, "b": true}')
+
+query I
+SELECT json_obj_rename_key(j, 'b', 'c') FROM test
+----
+{}
+{"a":42}
+{"a":42,"c":true}
+{"a":42,"c":true,"c":true}
+
+query I
+SELECT json_obj_rename_key(json_obj_rename_key(j, 'a', 'b'), 'b', 'c') FROM test
+----
+{}
+{"c":42}
+{"c":42,"c":true}
+{"c":42,"c":true,"c":true}
+
+
+# You would think empty key strings are not allowed. But they are:
+# https://www.json.org/json-en.html
+query I
+SELECT json_obj_rename_key('{"":42}', '', 'key')
+----
+{"key":42}
+
+statement error
+SELECT json_obj_rename_key('', 'k', 'no')
+----
+
+statement error
+SELECT json_obj_rename_key('[]', 'k', 'no')
+----
+
+statement error
+SELECT json_obj_rename_key('true', 'k', 'no')
+----
+
+statement error
+SELECT json_obj_rename_key('"Hello"', 'k', 'no')
+----
+
+statement error
+SELECT json_obj_rename_key('42', 'k', 'no')
+----

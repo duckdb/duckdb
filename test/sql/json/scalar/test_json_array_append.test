@@ -1,0 +1,130 @@
+# name: test/sql/json/scalar/test_json_array_append.test
+# description: Checks whether a given JSON Array is appended correctly
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values('[]'), ('[42]'), ('["a", 42, true]')
+
+query I
+SELECT json_array_append(json_array_append(j, True), False) FROM test
+----
+[true,false]
+[42,true,false]
+["a",42,true,true,false]
+
+query I
+SELECT json_array_append(j, 42::UTINYINT) FROM test
+----
+[42]
+[42,42]
+["a",42,true,42]
+
+query I
+SELECT json_array_append(json_array_append(j, -42::TINYINT), 42::TINYINT) FROM test
+----
+[-42,42]
+[42,-42,42]
+["a",42,true,-42,42]
+
+query I
+SELECT json_array_append(j, 1337::USMALLINT) FROM test
+----
+[1337]
+[42,1337]
+["a",42,true,1337]
+
+query I
+SELECT json_array_append(json_array_append(j, -1337::SMALLINT), 1337::SMALLINT) FROM test
+----
+[-1337,1337]
+[42,-1337,1337]
+["a",42,true,-1337,1337]
+
+query I
+SELECT json_array_append(j, 2024::UINTEGER) FROM test
+----
+[2024]
+[42,2024]
+["a",42,true,2024]
+
+query I
+SELECT json_array_append(json_array_append(j, -2024::INTEGER), 2024::INTEGER) FROM test
+----
+[-2024,2024]
+[42,-2024,2024]
+["a",42,true,-2024,2024]
+
+query I
+SELECT json_array_append(j, 18446744073709551615::UBIGINT) FROM test
+----
+[18446744073709551615]
+[42,18446744073709551615]
+["a",42,true,18446744073709551615]
+
+query I
+SELECT json_array_append(json_array_append(j, -1234567891011121314::BIGINT), 1234567891011121314::BIGINT) FROM test
+----
+[-1234567891011121314,1234567891011121314]
+[42,-1234567891011121314,1234567891011121314]
+["a",42,true,-1234567891011121314,1234567891011121314]
+
+query I
+SELECT json_array_append(json_array_append(j, pi()::FLOAT), pi()::DOUBLE) FROM test
+----
+[3.1415927410125732,3.141592653589793]
+[42,3.1415927410125732,3.141592653589793]
+["a",42,true,3.1415927410125732,3.141592653589793]
+
+statement ok
+create table test2 (j json)
+
+statement ok
+insert into test2 values('42'), ('"Hello"'), ('true'), ('[1337]'), ('{"a": 42}')
+
+query I
+SELECT json_array_append(a.j, b.j) FROM test AS a, test2 AS b
+----
+[42]
+["Hello"]
+[true]
+[[1337]]
+[{"a":42}]
+[42,42]
+[42,"Hello"]
+[42,true]
+[42,[1337]]
+[42,{"a":42}]
+["a",42,true,42]
+["a",42,true,"Hello"]
+["a",42,true,true]
+["a",42,true,[1337]]
+["a",42,true,{"a":42}]
+
+statement error
+SELECT json_array_append('', False)
+----
+
+statement error
+SELECT json_array_append('{}', False)
+----
+
+statement error
+SELECT json_array_append('true', False)
+----
+
+statement error
+SELECT json_array_append('"Hello"', False)
+----
+
+statement error
+SELECT json_array_append('42', False)
+----

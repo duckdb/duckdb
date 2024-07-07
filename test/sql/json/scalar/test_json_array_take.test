@@ -1,0 +1,123 @@
+# name: test/sql/json/scalar/test_json_array_take.test
+# description: Checks whether the correct amount of elements are taken from an JSON Array
+# group: [scalar]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table valid (j json)
+
+statement ok
+insert into valid values ('[]'), ('[42]'), ('["a", 42, true]')
+
+# One argument
+query I
+SELECT json_array_take(j, -1) FROM valid 
+----
+[]
+[]
+[]
+
+query I
+SELECT json_array_take(j, 0) FROM valid 
+----
+[]
+[]
+[]
+
+query I
+SELECT json_array_take(j, 1) FROM valid 
+----
+[]
+[42]
+["a"]
+
+query I
+SELECT json_array_take(j, 5) FROM valid 
+----
+[]
+[42]
+["a",42,true]
+
+statement error
+SELECT json_array_take('', 42)
+----
+
+statement error
+SELECT json_array_take('{}', 42)
+----
+
+statement error
+SELECT json_array_take('true', 42)
+----
+
+statement error
+SELECT json_array_take('"Hello"', 42)
+----
+
+statement error
+SELECT json_array_take('42', 42)
+----
+
+
+
+# Range
+query I
+SELECT json_array_take(j, 0, 0) FROM valid
+----
+[]
+[42]
+["a"]
+
+query I
+SELECT json_array_take(j, 0, 1) FROM valid
+----
+[]
+[42]
+["a",42]
+
+query I
+SELECT json_array_take(j, 1, 2) FROM valid
+----
+[]
+[]
+[42,true]
+
+query I
+SELECT json_array_take(j, 1, 3) FROM valid
+----
+[]
+[]
+[42,true]
+
+statement error
+SELECT json_array_take(j, -2, -1)
+----
+
+statement error
+SELECT json_array_take(j, 2, 1)
+----
+
+statement error
+SELECT json_array_take('', 42, 42)
+----
+
+statement error
+SELECT json_array_take('{}', 42, 42)
+----
+
+statement error
+SELECT json_array_take('true', 42, 42)
+----
+
+statement error
+SELECT json_array_take('"Hello"', 42, 42)
+----
+
+statement error
+SELECT json_array_take('42', 42, 42)
+----
