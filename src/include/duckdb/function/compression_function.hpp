@@ -31,7 +31,7 @@ struct SegmentScanState;
 
 class CompressionInfo {
 public:
-	CompressionInfo(const idx_t block_size) : block_size(block_size) {
+	explicit CompressionInfo(const idx_t block_size) : block_size(block_size) {
 	}
 
 public:
