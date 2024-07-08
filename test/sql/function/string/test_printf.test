@@ -78,6 +78,26 @@ SELECT printf('%s', 120381902481294715712::UHUGEINT)
 ----
 120381902481294715712
 
+query I
+select printf('%x', 255::utinyint);
+----
+ff
+
+query I
+select printf('%x', 65535::usmallint);
+----
+ffff
+
+query I
+select printf('%x', 4294967295::uinteger);
+----
+ffffffff
+
+query I
+select printf('%x', 18446744073709551615::ubigint);
+----
+ffffffffffffffff
+
 # decimal
 query T
 SELECT printf('%.3f', '1.234'::DECIMAL)

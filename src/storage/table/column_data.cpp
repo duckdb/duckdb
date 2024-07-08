@@ -479,8 +479,9 @@ void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 
-	auto vector_segment_size = Storage::BLOCK_SIZE;
+	const auto block_size = block_manager.GetBlockSize();
 	const auto type_size = GetTypeIdSize(type.InternalType());
+	auto vector_segment_size = block_size;
 
 	if (start_row == NumericCast<idx_t>(MAX_ROW_ID)) {
 #if STANDARD_VECTOR_SIZE < 1024
@@ -491,9 +492,9 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	}
 
 	// The segment size is bound by the block size, but can be smaller.
-	idx_t segment_size = Storage::BLOCK_SIZE < vector_segment_size ? Storage::BLOCK_SIZE : vector_segment_size;
+	idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
 	allocation_size += segment_size;
-	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
+	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size, block_size);
 	data.AppendSegment(l, std::move(new_segment));
 }
 
@@ -553,7 +554,7 @@ void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &t
 	// Set the stack of the deserializer to load the data pointers.
 	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
 	deserializer.Set<LogicalType &>(type);
-	CompressionInfo compression_info(Storage::BLOCK_SIZE, type.InternalType());
+	CompressionInfo compression_info(block_manager.GetBlockSize(), type.InternalType());
 	deserializer.Set<const CompressionInfo &>(compression_info);
 
 	vector<DataPointer> data_pointers;

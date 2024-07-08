@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   base_scanner.cpp
   column_count_scanner.cpp
+  csv_schema.cpp
   scanner_boundary.cpp
   skip_scanner.cpp
   string_value_scanner.cpp)

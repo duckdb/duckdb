@@ -1,0 +1,43 @@
+# name: test/sql/aggregate/aggregates/max_n_all_types_grouped.test
+# description: Test max "n" aggregate function for multiple types grouped
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE MACRO compute_top_k(table_name, group_col, val_col, k) AS TABLE
+SELECT rs.grp, array_agg(rs.val)
+FROM (
+  SELECT group_col AS grp, val_col AS val, row_number() OVER (PARTITION BY group_col ORDER BY val_col DESC) as rid
+  FROM query_table(table_name::VARCHAR) ORDER BY group_col DESC
+) as rs
+WHERE rid <= k
+GROUP BY ALL
+ORDER BY ALL;
+
+statement ok
+create table all_types as from test_all_types()
+
+foreach val_col bool int bigint hugeint date time timestamp float double dec_4_1 uuid interval varchar
+
+# Create a cross product of the 3 selected types
+statement ok
+CREATE OR REPLACE TABLE tbl AS SELECT * FROM
+		(SELECT ${val_col} as val_col FROM all_types)
+	CROSS JOIN (SELECT i % 2 as grp_col FROM range(5) as r(i));
+
+statement ok
+CREATE OR REPLACE TABLE window_table AS SELECT * FROM compute_top_k(tbl, grp_col, val_col, 2) as rs(grp, res);
+
+statement ok
+CREATE OR REPLACE TABLE agg_table AS SELECT grp_col as grp, max(val_col, 2) as res FROM tbl GROUP BY ALL ORDER BY ALL;
+
+# Check that the two tables are equal (expecting no rows)
+query II
+SELECT * FROM (SELECT * FROM window_table ORDER BY rowid) EXCEPT SELECT * FROM (SELECT * FROM agg_table ORDER BY rowid);
+----
+
+
+
+endloop
