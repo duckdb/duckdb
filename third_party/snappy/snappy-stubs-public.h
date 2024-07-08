@@ -35,6 +35,8 @@
 #ifndef THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_PUBLIC_H_
 #define THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_PUBLIC_H_
 
+#ifdef __clang__
+
 #include <cstddef>
 
 #ifndef _WIN32  // HAVE_SYS_UIO_H
@@ -59,5 +61,47 @@ struct iovec {
 #endif  // !HAVE_SYS_UIO_H
 
 }  // namespace duckdb_snappy
+
+#else // #ifdef __clang__
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+
+#ifndef _WIN32  // HAVE_SYS_UIO_H
+#include <sys/uio.h>
+#endif  // HAVE_SYS_UIO_H
+
+#define SNAPPY_MAJOR 1
+#define SNAPPY_MINOR 1
+#define SNAPPY_PATCHLEVEL 7
+#define SNAPPY_VERSION \
+((SNAPPY_MAJOR << 16) | (SNAPPY_MINOR << 8) | SNAPPY_PATCHLEVEL)
+
+namespace duckdb_snappy {
+
+using int8 = std::int8_t;
+using uint8 = std::uint8_t;
+using int16 = std::int16_t;
+using uint16 = std::uint16_t;
+using int32 = std::int32_t;
+using uint32 = std::uint32_t;
+using int64 = std::int64_t;
+using uint64 = std::uint64_t;
+
+using string = std::string;
+
+#ifdef _WIN32  // !HAVE_SYS_UIO_H
+// Windows does not have an iovec type, yet the concept is universally useful.
+// It is simple to define it ourselves, so we put it inside our own namespace.
+struct iovec {
+  void* iov_base;
+  size_t iov_len;
+};
+#endif  // !HAVE_SYS_UIO_H
+
+}  // namespace duckdb_snappy
+
+#endif // #ifdef __clang__ #else
 
 #endif  // THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_PUBLIC_H_
