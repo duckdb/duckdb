@@ -18,8 +18,9 @@ insert into integers values (84);
 query II
 SELECT * FROM histogram_values(integers, i, bin_count := 2)
 ----
-64	1
-84	1
+60	1
+80	0
+100	1
 
 statement ok
 INSERT INTO integers FROM range(127)
