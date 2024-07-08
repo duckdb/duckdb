@@ -131,6 +131,7 @@ jobs:
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip
 
     - uses: actions/upload-artifact@v3
+      if: ${{ false }}
       with:
         name: duckdb-binaries-linux
         path: |
@@ -182,6 +183,7 @@ jobs:
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip
 
      - uses: actions/upload-artifact@v3
+       if: ${{ false }}
        with:
          name: duckdb-binaries-linux-aarch64
          path: |
