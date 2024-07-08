@@ -10,9 +10,9 @@ require parquet
 
 require tpch
 
-cache tpch_sf100_ingest.duckdb
+cache tpch_sf10_ingest.duckdb
 
-load benchmark/large/ingestion/tpch/load_tpch_sf100.sql
+load benchmark/large/ingestion/tpch/load_tpch_sf10.sql
 
 run
 create or replace table ${table_name}_ingested as select * from ${table_name}_${format};
