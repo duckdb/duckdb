@@ -304,7 +304,8 @@ class TestDuckDBConnection(object):
 
         # Create a registered object called 'vw'
         arrow_result = duckdb_cursor.execute("select 42").arrow()
-        duckdb_cursor.register('vw', arrow_result)
+        with pytest.raises(duckdb.CatalogException, match='View with name "vw" already exists'):
+            duckdb_cursor.register('vw', arrow_result)
 
         # Temporary views take precedence over registered objects
         assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)

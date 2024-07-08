@@ -24,7 +24,6 @@ add_library(
   python_udf.cpp
   pyconnection.cpp
   pystatement.cpp
-  python_context_state.cpp
   python_import_cache.cpp
   python_replacement_scan.cpp
   python_dependency.cpp

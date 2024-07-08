@@ -16,6 +16,7 @@
 #include "duckdb/main/relation/read_csv_relation.hpp"
 #include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
+#include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -56,7 +57,6 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
-#include "duckdb_python/python_context_state.hpp"
 
 #include <random>
 
@@ -657,10 +657,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	auto &connection = con.GetConnection();
 	auto &client = *connection.context;
 	auto object = PythonReplacementScan::ReplacementObject(python_object, name, client);
-	D_ASSERT(object);
-	auto &state = PythonContextState::Get(client);
-	state.RegisterObject(name, std::move(object));
-
+	auto view_rel = make_shared_ptr<ViewRelation>(connection.context, std::move(object));
+	bool replace = registered_objects.count(name);
+	view_rel->CreateView(name, replace, true);
+	registered_objects.insert(name);
 	return shared_from_this();
 }
 
@@ -1343,8 +1343,13 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	auto &connection = con.GetConnection();
-	auto &state = PythonContextState::Get(*connection.context);
-	state.UnregisterObject(name);
+	if (!registered_objects.count(name)) {
+		return shared_from_this();
+	}
+	py::gil_scoped_release release;
+	// FIXME: DROP TEMPORARY VIEW? doesn't exist?
+	connection.Query("DROP VIEW \"" + name + "\"");
+	registered_objects.erase(name);
 	return shared_from_this();
 }
 
@@ -1421,9 +1426,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared_ptr<DuckDBPyConnection>();
 	res->con.SetDatabase(con);
 	res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
-	auto &connection = res->con.GetConnection();
-	auto &client_context = *connection.context;
-	client_context.registered_state["python_state"] = make_shared_ptr<PythonContextState>();
 	cursors.push_back(res);
 	return res;
 }
@@ -1634,7 +1636,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const py::object &dat
 
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->con.GetConnection().context;
-	client_context.registered_state["python_state"] = make_shared_ptr<PythonContextState>();
 	SetDefaultConfigArguments(client_context);
 	return res;
 }
