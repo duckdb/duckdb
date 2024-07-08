@@ -129,7 +129,7 @@ class TestScalarUDF(object):
         con.create_function('test_map', no_op, [map_type], map_type, type=udf_type)
         rel = con.sql("select test_map(map(['non-inlined string', 'test', 'duckdb'], [42, 1337, 123]))")
         res = rel.fetchall()
-        assert res == [({'key': ['non-inlined string', 'test', 'duckdb'], 'value': [42, 1337, 123]},)]
+        assert res == [({'non-inlined string': 42, 'test': 1337, 'duckdb': 123},)]
 
     @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
     def test_exceptions(self, udf_type):
