@@ -108,11 +108,19 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 	}
 }
 
-string LogicalOperator::ToString() const {
-	// TreeRenderer renderer;
-	// return renderer.ToString(*this);
-	JSONRenderer renderer;
-	return renderer.ToString(*this);
+string LogicalOperator::ToString(ExplainFormat format) const {
+	switch (format) {
+	case ExplainFormat::TEXT: {
+		TreeRenderer renderer;
+		return renderer.ToString(*this);
+	}
+	case ExplainFormat::JSON: {
+		JSONRenderer renderer;
+		return renderer.ToString(*this);
+	}
+	default:
+		throw NotImplementedException("ExplainFormat %s not implemented", EnumUtil::ToString(format));
+	}
 }
 
 void LogicalOperator::Verify(ClientContext &context) {

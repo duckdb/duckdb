@@ -33,7 +33,7 @@ unique_ptr<ExplainStatement> Transformer::TransformExplain(duckdb_libpgquery::PG
 		for (auto n = stmt.options->head; n; n = n->next) {
 			auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(n->data.ptr_value);
 			auto def_name = def_elem->defname;
-			string elem(def_name);
+			auto elem = StringUtil::Lower(def_name);
 			if (elem == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;
 			} else if (elem == "format") {
@@ -50,7 +50,7 @@ unique_ptr<ExplainStatement> Transformer::TransformExplain(duckdb_libpgquery::PG
 			}
 		}
 	}
-	return make_uniq<ExplainStatement>(TransformStatement(*stmt.query), explain_type);
+	return make_uniq<ExplainStatement>(TransformStatement(*stmt.query), explain_type, explain_format);
 }
 
 } // namespace duckdb

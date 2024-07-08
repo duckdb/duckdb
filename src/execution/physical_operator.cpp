@@ -19,10 +19,19 @@ string PhysicalOperator::GetName() const {
 	return PhysicalOperatorToString(type);
 }
 
-string PhysicalOperator::ToString() const {
-	// TreeRenderer renderer;
-	JSONRenderer renderer;
-	return renderer.ToString(*this);
+string PhysicalOperator::ToString(ExplainFormat format) const {
+	switch (format) {
+	case ExplainFormat::TEXT: {
+		TreeRenderer renderer;
+		return renderer.ToString(*this);
+	}
+	case ExplainFormat::JSON: {
+		JSONRenderer renderer;
+		return renderer.ToString(*this);
+	}
+	default:
+		throw NotImplementedException("ExplainFormat %s not implemented", EnumUtil::ToString(format));
+	}
 }
 
 // LCOV_EXCL_START
