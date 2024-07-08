@@ -27,8 +27,9 @@ void PhysicalComparisonJoin::ReorderConditions(vector<JoinCondition> &conditions
 	// check if this is already the case
 	bool is_ordered = true;
 	bool seen_non_equal = false;
-	for(auto &cond : conditions) {
-		if (cond.comparison == ExpressionType::COMPARE_EQUAL || cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+	for (auto &cond : conditions) {
+		if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
+		    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			if (seen_non_equal) {
 				is_ordered = false;
 				break;
@@ -44,8 +45,9 @@ void PhysicalComparisonJoin::ReorderConditions(vector<JoinCondition> &conditions
 	// gather lists of equal/other conditions
 	vector<JoinCondition> equal_conditions;
 	vector<JoinCondition> other_conditions;
-	for(auto &cond : conditions) {
-		if (cond.comparison == ExpressionType::COMPARE_EQUAL || cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+	for (auto &cond : conditions) {
+		if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
+		    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			equal_conditions.push_back(std::move(cond));
 		} else {
 			other_conditions.push_back(std::move(cond));
@@ -53,10 +55,10 @@ void PhysicalComparisonJoin::ReorderConditions(vector<JoinCondition> &conditions
 	}
 	conditions.clear();
 	// reconstruct the sorted conditions
-	for(auto &cond : equal_conditions) {
+	for (auto &cond : equal_conditions) {
 		conditions.push_back(std::move(cond));
 	}
-	for(auto &cond : other_conditions) {
+	for (auto &cond : other_conditions) {
 		conditions.push_back(std::move(cond));
 	}
 }

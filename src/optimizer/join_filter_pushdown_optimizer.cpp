@@ -15,7 +15,7 @@ JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) :
 }
 
 void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &join) {
-	switch(join.join_type) {
+	switch (join.join_type) {
 	case JoinType::MARK:
 	case JoinType::SINGLE:
 	case JoinType::LEFT:

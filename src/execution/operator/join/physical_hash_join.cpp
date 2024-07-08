@@ -98,7 +98,8 @@ JoinFilterGlobalState::~JoinFilterGlobalState() {
 JoinFilterLocalState::~JoinFilterLocalState() {
 }
 
-unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context, const PhysicalOperator &op) const {
+unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context,
+                                                                         const PhysicalOperator &op) const {
 	// clear any previously set filters
 	// we can have previous filters for this operator in case of e.g. recursive CTEs
 	dynamic_filters->ClearFilters(op);
@@ -542,8 +543,8 @@ void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate, const Ph
 		auto max_val = final_min_max.data[max_idx].GetValue(0);
 		if (min_val.IsNull() || max_val.IsNull()) {
 			// min/max is NULL
-			// this can happen in case all values in the RHS column are NULL, but they are still pushed into the hash table
-			// e.g. because they are part of a RIGHT join
+			// this can happen in case all values in the RHS column are NULL, but they are still pushed into the hash
+			// table e.g. because they are part of a RIGHT join
 			continue;
 		}
 		if (Value::NotDistinctFrom(min_val, max_val)) {

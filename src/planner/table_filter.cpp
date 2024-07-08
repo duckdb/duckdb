@@ -50,7 +50,9 @@ bool DynamicTableFilterSet::HasFilters() const {
 	return !filters.empty();
 }
 
-unique_ptr<TableFilterSet> DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan, optional_ptr<TableFilterSet> existing_filters) const {
+unique_ptr<TableFilterSet>
+DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
+                                            optional_ptr<TableFilterSet> existing_filters) const {
 	D_ASSERT(HasFilters());
 	auto result = make_uniq<TableFilterSet>();
 	if (existing_filters) {
@@ -59,7 +61,7 @@ unique_ptr<TableFilterSet> DynamicTableFilterSet::GetFinalTableFilters(const Phy
 		}
 	}
 	for (auto &entry : filters) {
-		for(auto &filter : entry.second->filters) {
+		for (auto &filter : entry.second->filters) {
 			if (IsRowIdColumnId(scan.column_ids[filter.first])) {
 				// skip row id filters
 				continue;

@@ -1,6 +1,6 @@
 # name: test/sql/join/pushdown/pushdown_join_subquery.test
 # description: Test join filter pushdown with subqueries
-# group: [join]
+# group: [pushdown]
 
 statement ok
 PRAGMA enable_verification
