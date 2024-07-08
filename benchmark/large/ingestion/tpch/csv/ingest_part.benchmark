@@ -1,0 +1,7 @@
+# name: benchmark/large/ingestion/tpch/csv/ingest_part.benchmark
+# description: benchmark ingestion of part
+# group: [csv]
+
+template benchmark/large/ingestion/tpch/tpch_ingestion_persistent.benchmark.in
+table_name=part
+format=csv
