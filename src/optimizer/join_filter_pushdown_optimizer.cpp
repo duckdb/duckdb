@@ -5,6 +5,7 @@
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/core_functions/aggregate/distributive_functions.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
@@ -21,7 +22,9 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
 		// cannot generate join filters for these join types
-		// mark/single/left - cannot change cardinality of probe side
+		// mark/single - cannot change cardinality of probe side
+		// left/outer always need to include every row from probe side
+		// FIXME: anti/right_anti - we could do this, but need to invert the join conditions
 		return;
 	default:
 		break;

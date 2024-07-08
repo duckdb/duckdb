@@ -98,7 +98,10 @@ JoinFilterGlobalState::~JoinFilterGlobalState() {
 JoinFilterLocalState::~JoinFilterLocalState() {
 }
 
-unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context) const {
+unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context, const PhysicalOperator &op) const {
+	// clear any previously set filters
+	// we can have previous filters for this operator in case of e.g. recursive CTEs
+	dynamic_filters->ClearFilters(op);
 	auto result = make_uniq<JoinFilterGlobalState>();
 	result->global_aggregate_state =
 	    make_uniq<GlobalUngroupedAggregateState>(BufferAllocator::Get(context), min_max_aggregates);
@@ -125,7 +128,7 @@ public:
 		probe_types.emplace_back(LogicalType::HASH);
 
 		if (op.filter_pushdown) {
-			global_filter_state = op.filter_pushdown->GetGlobalState(context);
+			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
 	}
 
@@ -517,7 +520,7 @@ public:
 	}
 };
 
-void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate) const {
+void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate, const PhysicalOperator &op) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
@@ -543,17 +546,17 @@ void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate) const {
 		if (Value::NotDistinctFrom(min_val, max_val)) {
 			// min = max - generate an equality filter
 			auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, std::move(min_val));
-			dynamic_filters->PushFilter(filter_col_idx, std::move(constant_filter));
+			dynamic_filters->PushFilter(op, filter_col_idx, std::move(constant_filter));
 		} else {
 			// min != max - generate a range filter
 			auto greater_equals =
 			    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-			dynamic_filters->PushFilter(filter_col_idx, std::move(greater_equals));
+			dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
 			auto less_equals = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-			dynamic_filters->PushFilter(filter_col_idx, std::move(less_equals));
+			dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
 		}
 		// not null filter
-		dynamic_filters->PushFilter(filter_col_idx, make_uniq<IsNotNullFilter>());
+		dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<IsNotNullFilter>());
 	}
 }
 
@@ -600,7 +603,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 
 	if (filter_pushdown && ht.Count() > 0) {
-		filter_pushdown->PushFilters(*sink.global_filter_state);
+		filter_pushdown->PushFilters(*sink.global_filter_state, *this);
 	}
 
 	// check for possible perfect hash table

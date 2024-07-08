@@ -9,13 +9,15 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 class BaseStatistics;
+class PhysicalOperator;
 
 enum class TableFilterType : uint8_t {
 	CONSTANT_COMPARISON = 0, // constant comparison (e.g. =C, >C, >=C, <C, <=C)
@@ -104,14 +106,15 @@ public:
 
 class DynamicTableFilterSet {
 public:
-	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter);
+	void ClearFilters(const PhysicalOperator &op);
+	void PushFilter(const PhysicalOperator &op, idx_t column_index, unique_ptr<TableFilter> filter);
 
 	bool HasFilters() const;
 	unique_ptr<TableFilterSet> GetFinalTableFilters(optional_ptr<TableFilterSet> existing_filters) const;
 
 private:
 	mutable mutex lock;
-	unique_ptr<TableFilterSet> filters;
+	reference_map_t<const PhysicalOperator, unique_ptr<TableFilterSet>> filters;
 };
 
 } // namespace duckdb

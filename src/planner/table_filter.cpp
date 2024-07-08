@@ -24,17 +24,28 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 	}
 }
 
-void DynamicTableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filter) {
+void DynamicTableFilterSet::ClearFilters(const PhysicalOperator &op) {
 	lock_guard<mutex> l(lock);
-	if (!filters) {
-		filters = make_uniq<TableFilterSet>();
+	filters.erase(op);
+}
+
+void DynamicTableFilterSet::PushFilter(const PhysicalOperator &op, idx_t column_index, unique_ptr<TableFilter> filter) {
+	lock_guard<mutex> l(lock);
+	auto entry = filters.find(op);
+	optional_ptr<TableFilterSet> filter_ptr;
+	if (entry == filters.end()) {
+		auto filter_set = make_uniq<TableFilterSet>();
+		filter_ptr = filter_set.get();
+		filters[op] = std::move(filter_set);
+	} else {
+		filter_ptr = entry->second.get();
 	}
-	filters->PushFilter(column_index, std::move(filter));
+	filter_ptr->PushFilter(column_index, std::move(filter));
 }
 
 bool DynamicTableFilterSet::HasFilters() const {
 	lock_guard<mutex> l(lock);
-	return filters.get();
+	return !filters.empty();
 }
 
 unique_ptr<TableFilterSet> DynamicTableFilterSet::GetFinalTableFilters(optional_ptr<TableFilterSet> existing_filters) const {
@@ -45,8 +56,10 @@ unique_ptr<TableFilterSet> DynamicTableFilterSet::GetFinalTableFilters(optional_
 			result->filters[entry.first] = entry.second->Copy();
 		}
 	}
-	for (auto &entry : filters->filters) {
-		result->filters[entry.first] = entry.second->Copy();
+	for (auto &entry : filters) {
+		for(auto &filter : entry.second->filters) {
+			result->filters[filter.first] = filter.second->Copy();
+		}
 	}
 	return result;
 }

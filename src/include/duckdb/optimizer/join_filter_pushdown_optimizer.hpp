@@ -12,6 +12,8 @@
 #include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
+class Optimizer;
+
 //! The JoinFilterPushdownOptimizer links comparison joins to data sources to enable dynamic execution-time filter
 //! pushdown
 class JoinFilterPushdownOptimizer : public LogicalOperatorVisitor {

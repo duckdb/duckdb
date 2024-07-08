@@ -48,12 +48,12 @@ struct JoinFilterPushdownInfo {
 	vector<unique_ptr<Expression>> min_max_aggregates;
 
 public:
-	unique_ptr<JoinFilterGlobalState> GetGlobalState(ClientContext &context) const;
+	unique_ptr<JoinFilterGlobalState> GetGlobalState(ClientContext &context, const PhysicalOperator &op) const;
 	unique_ptr<JoinFilterLocalState> GetLocalState(JoinFilterGlobalState &gstate) const;
 
 	void Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const;
 	void Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const;
-	void PushFilters(JoinFilterGlobalState &gstate) const;
+	void PushFilters(JoinFilterGlobalState &gstate, const PhysicalOperator &op) const;
 };
 
 } // namespace duckdb
