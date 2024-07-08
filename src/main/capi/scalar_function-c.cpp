@@ -177,17 +177,15 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
-	if (scalar_function.name.empty() || !info.function ||
-	    scalar_function.return_type.id() == duckdb::LogicalTypeId::INVALID) {
+	if (scalar_function.name.empty() || !info.function) {
 		return DuckDBError;
 	}
+	// FIXME: We must check the logical types recursively to detect ANY or INVALID.
 	auto con = reinterpret_cast<duckdb::Connection *>(connection);
 	try {
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateScalarFunctionInfo sf_info(scalar_function);
-
-			// create the function in the catalog
 			catalog.CreateFunction(*con->context, sf_info);
 		});
 	} catch (...) {

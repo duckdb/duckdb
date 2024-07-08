@@ -5,7 +5,7 @@ using namespace std;
 
 void AddVariadicNumbersTogether(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
 	// get the total number of rows in this chunk
-	idx_t input_size = duckdb_data_chunk_get_size(input);
+	auto input_size = duckdb_data_chunk_get_size(input);
 
 	// extract the input vectors
 	auto column_count = duckdb_data_chunk_get_column_count(input);
@@ -70,7 +70,7 @@ static void CAPIRegisterAddition(duckdb_connection connection, const char *name,
 	duckdb_scalar_function_set_name(function, name);
 
 	// add a two bigint parameters
-	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	auto type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	duckdb_scalar_function_add_parameter(nullptr, type);
 	duckdb_scalar_function_add_parameter(function, nullptr);
 	duckdb_scalar_function_add_parameter(function, type);
@@ -129,9 +129,9 @@ TEST_CASE("Test Scalar Functions C API", "[capi]") {
 void ReturnStringInfo(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
 	auto extra_info = string((const char *)duckdb_scalar_function_get_extra_info(info));
 	// get the total number of rows in this chunk
-	idx_t input_size = duckdb_data_chunk_get_size(input);
+	auto input_size = duckdb_data_chunk_get_size(input);
 	// extract the two input vectors
-	duckdb_vector input_vector = duckdb_data_chunk_get_vector(input, 0);
+	auto input_vector = duckdb_data_chunk_get_vector(input, 0);
 	// get the data pointers for the input vectors (both int64 as specified by the parameter types)
 	auto input_data = (duckdb_string_t *)duckdb_vector_get_data(input_vector);
 	// get the validity vectors
@@ -165,7 +165,7 @@ static void CAPIRegisterStringInfo(duckdb_connection connection, const char *nam
 	duckdb_scalar_function_set_name(function, name);
 
 	// add a single varchar parameter
-	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
 	duckdb_scalar_function_add_parameter(function, type);
 
 	// set the return type to varchar
@@ -212,7 +212,7 @@ static void CAPIRegisterVarargsFun(duckdb_connection connection, const char *nam
 	duckdb_scalar_function_set_name(function, name);
 
 	// set the variable arguments
-	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	auto type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	duckdb_scalar_function_set_varargs(function, type);
 
 	// set the return type to bigint
@@ -258,7 +258,7 @@ TEST_CASE("Test Scalar Functions - variadic number of input parameters", "[capi]
 void CountNULLValues(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
 
 	// Get the total number of rows and columns in this chunk.
-	idx_t input_size = duckdb_data_chunk_get_size(input);
+	auto input_size = duckdb_data_chunk_get_size(input);
 	auto column_count = duckdb_data_chunk_get_column_count(input);
 
 	// Extract the validity masks.
@@ -290,7 +290,7 @@ static void CAPIRegisterANYFun(duckdb_connection connection, const char *name, d
 	duckdb_scalar_function_set_name(function, name);
 
 	// set the variable arguments
-	duckdb_logical_type any_type = duckdb_create_logical_type(DUCKDB_TYPE_ANY);
+	auto any_type = duckdb_create_logical_type(DUCKDB_TYPE_ANY);
 	duckdb_scalar_function_set_varargs(function, any_type);
 	duckdb_destroy_logical_type(&any_type);
 
@@ -298,7 +298,7 @@ static void CAPIRegisterANYFun(duckdb_connection connection, const char *name, d
 	duckdb_scalar_function_set_special_handling(function);
 
 	// set the return type uto bigint
-	duckdb_logical_type return_type = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT);
+	auto return_type = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT);
 	duckdb_scalar_function_set_return_type(function, return_type);
 	duckdb_destroy_logical_type(&return_type);
 

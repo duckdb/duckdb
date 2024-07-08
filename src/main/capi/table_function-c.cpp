@@ -248,6 +248,9 @@ void duckdb_table_function_add_parameter(duckdb_table_function function, duckdb_
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
+	if (logical_type->id() == LogicalType::INVALID) {
+		return;
+	}
 	tf.arguments.push_back(*logical_type);
 }
 
@@ -258,6 +261,9 @@ void duckdb_table_function_add_named_parameter(duckdb_table_function function, c
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
+	if (logical_type->id() == LogicalType::INVALID) {
+		return;
+	}
 	tf.named_parameters.insert({name, *logical_type});
 }
 
@@ -326,11 +332,11 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 	if (tf.name.empty() || !info.bind || !info.init || !info.function) {
 		return DuckDBError;
 	}
+	// FIXME: We must check the logical types recursively to detect ANY or INVALID.
 	try {
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateTableFunctionInfo tf_info(tf);
-			// create the function in the catalog
 			catalog.CreateTableFunction(*con->context, tf_info);
 		});
 	} catch (...) { // LCOV_EXCL_START
@@ -358,6 +364,7 @@ void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duck
 	}
 	auto &bind_info = GetCBindInfo(info);
 	bind_info.names.push_back(name);
+	// FIXME: We must check the logical types recursively to detect ANY or INVALID.
 	bind_info.return_types.push_back(*(reinterpret_cast<duckdb::LogicalType *>(type)));
 }
 
