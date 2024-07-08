@@ -114,62 +114,72 @@ void RadixScatterListVector(Vector &v, UnifiedVectorFormat &vdata, const Selecti
 		for (idx_t i = 0; i < add_count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
-			data_ptr_t key_location = key_locations[i] + 1;
+			data_ptr_t &key_location = key_locations[i];
+			const data_ptr_t key_location_start = key_location;
 			// write validity and according value
 			if (validity.RowIsValid(source_idx)) {
-				key_locations[i][0] = valid;
-				key_locations[i]++;
+				*key_location++ = valid;
 				auto &list_entry = list_data[source_idx];
 				if (list_entry.length > 0) {
 					// denote that the list is not empty with a 1
-					key_locations[i][0] = 1;
-					key_locations[i]++;
+					*key_location++ = 1;
 					RowOperations::RadixScatter(child_vector, list_size, *FlatVector::IncrementalSelectionVector(), 1,
 					                            key_locations + i, false, true, false, prefix_len, width - 2,
 					                            list_entry.offset);
 				} else {
 					// denote that the list is empty with a 0
-					key_locations[i][0] = 0;
-					key_locations[i]++;
-					memset(key_locations[i], '\0', width - 2);
+					*key_location++ = 0;
+					// mark rest of bits as empty
+					memset(key_location, '\0', width - 2);
+					key_location += width - 2;
 				}
 				// invert bits if desc
 				if (desc) {
-					for (idx_t s = 0; s < width - 1; s++) {
-						*(key_location + s) = ~*(key_location + s);
+					// skip over validity byte, handled by nulls first/last
+					for (key_location = key_location_start + 1; key_location < key_location_start + width;
+					     key_location++) {
+						*key_location = ~*key_location;
 					}
 				}
 			} else {
-				key_locations[i][0] = invalid;
-				memset(key_locations[i] + 1, '\0', width - 1);
-				key_locations[i] += width;
+				*key_location++ = invalid;
+				memset(key_location, '\0', width - 1);
+				key_location += width - 1;
 			}
+#ifdef DEBUG
+			D_ASSERT(key_location == key_location_start + width);
+#endif
 		}
 	} else {
 		for (idx_t i = 0; i < add_count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
 			auto &list_entry = list_data[source_idx];
-			data_ptr_t key_location = key_locations[i];
+			data_ptr_t &key_location = key_locations[i];
+			const data_ptr_t key_location_start = key_location;
 			if (list_entry.length > 0) {
 				// denote that the list is not empty with a 1
-				key_locations[i][0] = 1;
-				key_locations[i]++;
+				*key_location++ = 1;
 				RowOperations::RadixScatter(child_vector, list_size, *FlatVector::IncrementalSelectionVector(), 1,
 				                            key_locations + i, false, true, false, prefix_len, width - 1,
 				                            list_entry.offset);
 			} else {
 				// denote that the list is empty with a 0
-				key_locations[i][0] = 0;
-				key_locations[i]++;
-				memset(key_locations[i], '\0', width - 1);
+				*key_location++ = 0;
+				// mark rest of bits as empty
+				memset(key_location, '\0', width - 1);
+				key_location += width - 1;
 			}
 			// invert bits if desc
 			if (desc) {
-				for (idx_t s = 0; s < width; s++) {
-					*(key_location + s) = ~*(key_location + s);
+				// skip over validity byte, handled by nulls first/last
+				for (key_location = key_location_start + 1; key_location < key_location_start + width; key_location++) {
+					*key_location = ~*key_location;
 				}
 			}
+#ifdef DEBUG
+			D_ASSERT(key_location == key_location_start + width);
+#endif
 		}
 	}
 }
