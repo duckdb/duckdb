@@ -1,5 +1,5 @@
-# name: test/sql/storage/compact_block_size/compression_functions.test
-# description: Test copying between databases with different block sizes.
+# name: test/sql/storage/compact_block_size/ensure_no_bitpacking.test
+# description: Ensure that we do not serialize a bitpacking segment for 16KB databases.
 # group: [compact_block_size]
 
 require skip_reload

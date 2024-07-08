@@ -43,15 +43,13 @@ static optional_ptr<CompressionFunction> FindCompressionFunction(CompressionFunc
 
 static optional_ptr<CompressionFunction> LoadCompressionFunction(CompressionFunctionSet &set, CompressionType type,
                                                                  const CompressionInfo &info) {
-	for (idx_t index = 0; internal_compression_methods[index].get_function; index++) {
-		const auto &method = internal_compression_methods[index];
+	for (idx_t i = 0; internal_compression_methods[i].get_function; i++) {
+		const auto &method = internal_compression_methods[i];
 		if (method.type == type) {
-			// found the correct compression type
 			if (!method.supports_type(info)) {
-				// but it does not support this data type: bail out
 				return nullptr;
 			}
-			// the type is supported: create the function and insert it into the set
+			// The type is supported. We create the function and insert it into the set of available functions.
 			auto function = method.get_function(info.GetPhysicalType());
 			function.supports_type = method.supports_type;
 			set.functions[type].insert(make_pair(info.GetPhysicalType(), function));
