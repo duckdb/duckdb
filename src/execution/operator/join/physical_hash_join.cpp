@@ -541,7 +541,10 @@ void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate, const Ph
 		auto min_val = final_min_max.data[min_idx].GetValue(0);
 		auto max_val = final_min_max.data[max_idx].GetValue(0);
 		if (min_val.IsNull() || max_val.IsNull()) {
-			throw InternalException("Filter pushdown - min/max is null - should be handled before");
+			// min/max is NULL
+			// this can happen in case all values in the RHS column are NULL, but they are still pushed into the hash table
+			// e.g. because they are part of a RIGHT join
+			continue;
 		}
 		if (Value::NotDistinctFrom(min_val, max_val)) {
 			// min = max - generate an equality filter
