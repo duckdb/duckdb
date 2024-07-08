@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
+struct DistinctAggregateData;
 struct LocalUngroupedAggregateState;
 
 struct UngroupedAggregateState {
