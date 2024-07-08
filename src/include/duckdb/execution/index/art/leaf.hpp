@@ -44,6 +44,18 @@ public:
 	static void New(Node &node, const row_t row_id);
 	//! Get a new leaf node without any data.
 	static Leaf &New(ART &art, Node &node);
+	//! Insert a row ID into a leaf.
+	static void Insert(ART &art, Node &node, const ARTKey &row_id_key);
+	//! Remove a row ID from a leaf. Returns true, if the leaf is empty after the removal.
+	static bool Remove(ART &art, reference<Node> &node, const ARTKey &row_id_key);
+	//! Fill the row_ids vector with the row IDs of this leaf, if the total count does not exceed max_count.
+	static bool GetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, const idx_t max_count);
+	//! Returns true, if the leaf contains the row ID.
+	static bool ContainsRowId(ART &art, const Node &node, const ARTKey &row_id_key);
+	//! TODO
+	static Node &UnnestMutable(ART &art, Node &node);
+	//! TODO
+	static const Node &Unnest(ART &art, const Node &node);
 
 	//! Deprecated code paths.
 
@@ -59,14 +71,15 @@ public:
 
 	//! Insert a row ID into a leaf.
 	static void DeprecatedInsert(ART &art, Node &node, const row_t row_id);
-	//! Remove a row ID from a leaf. Returns true, if the leaf is empty after the removal.
+	//! Remove a row ID from a non-inlined leaf. Returns true, if the leaf is empty after the removal.
 	static bool DeprecatedRemove(ART &art, reference<Node> &node, const row_t row_id);
 
 	//! Get the total count of row IDs in the chain of leaves.
 	static idx_t DeprecatedTotalCount(ART &art, const Node &node);
-	//! Fill the result_ids vector with the row IDs of this leaf chain, if the total count does not exceed max_count.
-	static bool DeprecatedGetRowIds(ART &art, const Node &node, vector<row_t> &result_ids, const idx_t max_count);
-	//! Returns whether the leaf contains the row ID.
+	//! Fill the row_ids vector with the row IDs of this non-inlined leaf chain, if the total count does not exceed
+	//! max_count.
+	static bool DeprecatedGetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, const idx_t max_count);
+	//! Returns true, if the non-inlined leaf contains the row ID.
 	static bool DeprecatedContainsRowId(ART &art, const Node &node, const row_t row_id);
 
 	//! Returns the string representation of the leaf (chain), or only traverses and verifies the leaf (chain).

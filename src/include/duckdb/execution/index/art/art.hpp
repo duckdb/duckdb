@@ -14,7 +14,6 @@
 
 namespace duckdb {
 
-// classes
 enum class VerifyExistenceType : uint8_t {
 	APPEND = 0,    // appends to a table
 	APPEND_FK = 1, // appends to a table that has a foreign key
@@ -24,7 +23,6 @@ class ConflictManager;
 class ARTKey;
 class FixedSizeAllocator;
 
-// structs
 struct ARTIndexScanState;
 struct ARTFlags {
 	vector<bool> vacuum_flags;
@@ -33,13 +31,13 @@ struct ARTFlags {
 
 class ART : public BoundIndex {
 public:
-	// Index type name for the ART
+	// Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
-	//! FixedSizeAllocator count of the ART
+	//! FixedSizeAllocator count of the ART (one for each node type).
 	static constexpr uint8_t ALLOCATOR_COUNT = 6;
 
 public:
-	//! Constructs an ART
+	//! Constructs an ART.
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
@@ -55,17 +53,15 @@ public:
 	//! True, if the ART uses deprecated storage.
 	bool deprecated;
 
-	//! Try to initialize a scan on the index with the given expression and filter
-	unique_ptr<IndexScanState> TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
-	                                             const Expression &filter_expr);
+	//! Try to initialize a scan on the ART with the given expression and filter.
+	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
 
-	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
-	//! and false otherwise
-	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, idx_t max_count,
-	          vector<row_t> &result_ids);
+	//! Performs a lookup on the index, fetching up to max_count row IDs.
+	//! Returns true, if all row IDs were fetched, and false otherwise.
+	bool Scan(IndexScanState &state, idx_t max_count, vector<row_t> &row_ids);
 
 public:
-	//! Create a index instance of this type
+	//! Create a index instance of this type.
 	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
 		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
 		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
@@ -89,7 +85,7 @@ public:
 	bool ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_identifiers);
 
 	//! Search equal values and fetches the row IDs
-	bool SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &result_ids);
+	bool SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &row_ids);
 
 	//! Returns all ART storage information for serialization
 	IndexStorageInfo GetStorageInfo(const bool get_buffers) override;
@@ -120,23 +116,22 @@ public:
 
 	//! Find the node with a matching key, or return nullptr if not found
 	optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
-	//! Insert a key into the tree
-	bool Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id);
+	//! Insert a key into the tree.
+	bool Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
+	//! Erase a key from the tree (non-inlined) or erase the leaf itself (inlined).
+	void Erase(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
 
 private:
-	//! Insert a row ID into a leaf
-	bool InsertToLeaf(Node &leaf, const row_t &row_id);
-	//! Erase a key from the tree (if a leaf has more than one value) or erase the leaf itself
-	void Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id);
+	//! Insert a row ID into a leaf.
+	bool InsertToLeaf(Node &leaf, const ARTKey &row_id_key);
 
-	//! Returns all row IDs belonging to a key greater (or equal) than the search key
-	bool SearchGreater(ARTIndexScanState &state, ARTKey &key, bool equal, idx_t max_count, vector<row_t> &result_ids);
-	//! Returns all row IDs belonging to a key less (or equal) than the upper_bound
-	bool SearchLess(ARTIndexScanState &state, ARTKey &upper_bound, bool equal, idx_t max_count,
-	                vector<row_t> &result_ids);
-	//! Returns all row IDs belonging to a key within the range of lower_bound and upper_bound
-	bool SearchCloseRange(ARTIndexScanState &state, ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal,
-	                      bool right_equal, idx_t max_count, vector<row_t> &result_ids);
+	//! Returns all row IDs greater (or equal) than the search key.
+	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, vector<row_t> &row_ids);
+	//! Returns all row IDs less (or equal) than the upper_bound.
+	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, vector<row_t> &row_ids);
+	//! Returns all row IDs within the range of lower_bound and upper_bound.
+	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
+	                      vector<row_t> &row_ids);
 
 	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
 	void InitializeMerge(ARTFlags &flags);

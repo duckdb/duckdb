@@ -51,6 +51,8 @@ public:
 		key.len = sizeof(element);
 	}
 
+	static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value);
+
 public:
 	data_t &operator[](size_t i) {
 		return data[i];
@@ -69,6 +71,8 @@ public:
 		return len == 0;
 	}
 	void ConcatenateARTKey(ArenaAllocator &allocator, ARTKey &concat_key);
+
+	row_t GetRowID() const;
 
 private:
 	template <class T>

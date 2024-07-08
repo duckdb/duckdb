@@ -41,12 +41,12 @@ bool IteratorKey::operator==(const ARTKey &key) const {
 	return true;
 }
 
-bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row_t> &result_ids, const bool equal) {
+bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row_t> &row_ids, const bool equal) {
 
 	bool has_next;
 	do {
 		if (!upper_bound.Empty()) {
-			// no more row IDs within the key bounds
+			// No more row IDs within the key bounds.
 			if (equal) {
 				if (current_key > upper_bound) {
 					return true;
@@ -61,7 +61,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 		// copy all row IDs of this leaf into the result IDs (if they don't exceed max_count)
 		bool within_max_count = true;
 		if (art->deprecated) {
-			within_max_count = Leaf::DeprecatedGetRowIds(*art, last_leaf, result_ids, max_count);
+			within_max_count = Leaf::DeprecatedGetRowIds(*art, last_leaf, row_ids, max_count);
 		} else {
 			// TODO.
 		}

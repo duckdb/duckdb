@@ -118,9 +118,6 @@ void Leaf::DeprecatedMerge(ART &art, Node &l_node, Node &r_node) {
 }
 
 void Leaf::DeprecatedInsert(ART &art, Node &node, const row_t row_id) {
-
-	D_ASSERT(node.HasMetadata());
-
 	if (node.GetType() == NType::LEAF_INLINED) {
 		DeprecatedMoveInlinedToLeaf(art, node);
 		DeprecatedInsert(art, node, row_id);
@@ -136,16 +133,6 @@ void Leaf::DeprecatedInsert(ART &art, Node &node, const row_t row_id) {
 }
 
 bool Leaf::DeprecatedRemove(ART &art, reference<Node> &node, const row_t row_id) {
-
-	D_ASSERT(node.get().HasMetadata());
-
-	if (node.get().GetType() == NType::LEAF_INLINED) {
-		if (node.get().GetRowId() == row_id) {
-			return true;
-		}
-		return false;
-	}
-
 	reference<Leaf> leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
 
 	// inline the remaining row ID
@@ -212,41 +199,26 @@ idx_t Leaf::DeprecatedTotalCount(ART &art, const Node &node) {
 	return count;
 }
 
-bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, vector<row_t> &result_ids, idx_t max_count) {
-
+bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, idx_t max_count) {
 	// adding more elements would exceed the maximum count
 	D_ASSERT(node.HasMetadata());
-	if (result_ids.size() + DeprecatedTotalCount(art, node) > max_count) {
+	if (row_ids.size() + DeprecatedTotalCount(art, node) > max_count) {
 		return false;
 	}
 
-	if (node.GetType() == NType::LEAF_INLINED) {
-		// push back the inlined row ID of this leaf
-		result_ids.push_back(node.GetRowId());
-
-	} else {
-		// push back all the row IDs of this leaf
-		reference<const Node> last_leaf_ref(node);
-		while (last_leaf_ref.get().HasMetadata()) {
-			auto &leaf = Node::Ref<const Leaf>(art, last_leaf_ref, NType::LEAF);
-			for (idx_t i = 0; i < leaf.count; i++) {
-				result_ids.push_back(leaf.row_ids[i]);
-			}
-			last_leaf_ref = leaf.ptr;
+	// push back all the row IDs of this leaf
+	reference<const Node> last_leaf_ref(node);
+	while (last_leaf_ref.get().HasMetadata()) {
+		auto &leaf = Node::Ref<const Leaf>(art, last_leaf_ref, NType::LEAF);
+		for (idx_t i = 0; i < leaf.count; i++) {
+			row_ids.push_back(leaf.row_ids[i]);
 		}
+		last_leaf_ref = leaf.ptr;
 	}
-
 	return true;
 }
 
 bool Leaf::DeprecatedContainsRowId(ART &art, const Node &node, const row_t row_id) {
-
-	D_ASSERT(node.HasMetadata());
-
-	if (node.GetType() == NType::LEAF_INLINED) {
-		return node.GetRowId() == row_id;
-	}
-
 	reference<const Node> ref_node(node);
 	while (ref_node.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, ref_node, NType::LEAF);
@@ -257,7 +229,6 @@ bool Leaf::DeprecatedContainsRowId(ART &art, const Node &node, const row_t row_i
 		}
 		ref_node = leaf.ptr;
 	}
-
 	return false;
 }
 
