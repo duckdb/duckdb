@@ -10,7 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiling_node.hpp"
 #include "duckdb/common/render_tree.hpp"
 
 namespace duckdb {
@@ -28,12 +28,12 @@ public:
 
 	string ToString(const LogicalOperator &op);
 	string ToString(const PhysicalOperator &op);
-	string ToString(const QueryProfiler::TreeNode &op);
+	string ToString(const ProfilingNode &op);
 	string ToString(const Pipeline &op);
 
 	void Render(const LogicalOperator &op, std::ostream &ss);
 	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const QueryProfiler::TreeNode &op, std::ostream &ss);
+	void Render(const ProfilingNode &op, std::ostream &ss);
 	void Render(const Pipeline &op, std::ostream &ss);
 
 	void ToStream(RenderTree &root, std::ostream &ss);

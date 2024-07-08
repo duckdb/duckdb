@@ -30,7 +30,7 @@ string JSONRenderer::ToString(const PhysicalOperator &op) {
 	return ss.str();
 }
 
-string JSONRenderer::ToString(const QueryProfiler::TreeNode &op) {
+string JSONRenderer::ToString(const ProfilingNode &op) {
 	std::stringstream ss;
 	Render(op, ss);
 	return ss.str();
@@ -52,7 +52,7 @@ void JSONRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void JSONRenderer::Render(const QueryProfiler::TreeNode &op, std::ostream &ss) {
+void JSONRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
