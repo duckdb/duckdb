@@ -15,7 +15,7 @@ cache tpch_sf100_ingest.duckdb
 load benchmark/large/ingestion/tpch/load_tpch_sf100.sql
 
 run
-create table ${table_name}_ingested as select * from ${table_name}_${format};
+create or replace table ${table_name}_ingested as select * from ${table_name}_${format};
 
 cleanup
 DROP TABLE ${table_name}_ingested;
