@@ -42,7 +42,7 @@ public:
 	void UpdateReservation(ClientContext &context);
 	//! Get the reservation of this state
 	idx_t GetReservation() const;
-	//! TODO
+	//! Set the materialization penalty for this state
 	void SetMaterializationPenalty(idx_t new_materialization_penalty);
 
 private:
@@ -55,7 +55,7 @@ private:
 	atomic<idx_t> minimum_reservation;
 	//! How much memory this operator has reserved
 	atomic<idx_t> reservation;
-	//! TODO
+	//! The weight used for determining the reservation for this state
 	atomic<idx_t> materialization_penalty;
 };
 
@@ -74,14 +74,14 @@ private:
 	//! MINIMUM_RESERVATION_PER_STATE_PER_THREAD and MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR.
 
 	//! 512 blocks per state per thread, which is 0.125GB per thread for DEFAULT_BLOCK_ALLOC_SIZE.
-	static constexpr const idx_t MINIMUM_RESERVATION_PER_STATE_PER_THREAD = idx_t(512) * DEFAULT_BLOCK_ALLOC_SIZE;
+	static constexpr idx_t MINIMUM_RESERVATION_PER_STATE_PER_THREAD = 512ULL * DEFAULT_BLOCK_ALLOC_SIZE;
 	//! 1/16th of the available main memory.
-	static constexpr const idx_t MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR = 16;
+	static constexpr idx_t MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR = 16ULL;
 
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager
 	static constexpr double MAXIMUM_MEMORY_LIMIT_RATIO = 0.8;
 	//! The maximum ratio of the remaining memory that we reserve per TemporaryMemoryState
-	static constexpr double MAXIMUM_FREE_MEMORY_RATIO = static_cast<double>(2) / static_cast<double>(3);
+	static constexpr double MAXIMUM_FREE_MEMORY_RATIO = 2.0 / 3.0;
 
 public:
 	//! Get the TemporaryMemoryManager
