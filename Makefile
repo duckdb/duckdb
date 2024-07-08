@@ -103,6 +103,9 @@ endif
 ifeq (${BUILD_ICU}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};icu
 endif
+ifeq (${BUILD_INET}, 1)
+	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};inet
+endif
 ifeq (${BUILD_TPCH}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};tpch
 endif
@@ -437,7 +440,6 @@ generate-files:
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
-	./scripts/generate_micro_extended.sh
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 

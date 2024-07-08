@@ -93,10 +93,8 @@ shared_ptr<DuckDBPyType> DuckDBPyConnection::StringType(const string &collation)
 }
 
 shared_ptr<DuckDBPyType> DuckDBPyConnection::Type(const string &type_str) {
-	if (!connection) {
-		throw ConnectionException("Connection already closed!");
-	}
-	auto &context = *connection->context;
+	auto &connection = con.GetConnection();
+	auto &context = *connection.context;
 	shared_ptr<DuckDBPyType> result;
 	context.RunFunctionInTransaction([&result, &type_str, &context]() {
 		result = make_shared_ptr<DuckDBPyType>(TransformStringToLogicalType(type_str, context));

@@ -60,10 +60,12 @@ end
             sint SMALLINT, 
             int INTEGER, 
             bint BIGINT, 
+            hint HUGEINT,
             utint UTINYINT, 
             usint USMALLINT, 
             uint UINTEGER, 
             ubint UBIGINT, 
+            uhint UHUGEINT,
             float FLOAT, 
             double DOUBLE, 
             date DATE, 
@@ -71,6 +73,7 @@ end
             timestamp TIMESTAMP, 
             missingval INTEGER,
             nothingval INTEGER,
+            uuid UUID,
             varchar VARCHAR)"
     )
 
@@ -83,10 +86,12 @@ end
     DuckDB.append(appender, -2)
     DuckDB.append(appender, -3)
     DuckDB.append(appender, -4)
+    DuckDB.append(appender, Int128(-5))
     DuckDB.append(appender, 1)
     DuckDB.append(appender, 2)
     DuckDB.append(appender, 3)
     DuckDB.append(appender, 4)
+    DuckDB.append(appender, UInt128(5))
     DuckDB.append(appender, 1.0)
     DuckDB.append(appender, 2.0)
     DuckDB.append(appender, Dates.Date("1970-04-11"))
@@ -94,6 +99,8 @@ end
     DuckDB.append(appender, Dates.DateTime("1970-01-02T01:23:45.678"))
     DuckDB.append(appender, missing)
     DuckDB.append(appender, nothing)
+    uuid = Base.UUID("a36a5689-48ec-4104-b147-9fed600d8250")
+    DuckDB.append(appender, uuid)
     DuckDB.append(appender, "Foo")
     # End the row of the appender
     DuckDB.end_row(appender)
@@ -111,10 +118,12 @@ end
     @test df.sint == [Int16(-2)]
     @test df.int == [Int32(-3)]
     @test df.bint == [Int64(-4)]
+    @test df.hint == [Int128(-5)]
     @test df.utint == [UInt8(1)]
     @test df.usint == [UInt16(2)]
     @test df.uint == [UInt32(3)]
     @test df.ubint == [UInt64(4)]
+    @test df.uhint == [UInt128(5)]
     @test df.float == [Float32(1.0)]
     @test df.double == [Float64(2.0)]
     @test df.date == [Dates.Date("1970-04-11")]
@@ -122,6 +131,7 @@ end
     @test df.timestamp == [Dates.DateTime("1970-01-02T01:23:45.678")]
     @test isequal(df.missingval, [missing])
     @test isequal(df.nothingval, [missing])
+    @test df.uuid == [uuid]
     @test df.varchar == ["Foo"]
 
     # close the database 

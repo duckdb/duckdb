@@ -1585,7 +1585,7 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 				i += delta;
 				row_idx += delta;
 			} else {
-				for (; delta--; ++i, ++row_idx) {
+				for (idx_t nulls = MinValue(delta, count - i); nulls--; ++i, ++row_idx) {
 					FlatVector::SetNull(result, i, true);
 				}
 			}
