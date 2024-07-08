@@ -212,8 +212,7 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = expression_heuristics.Rewrite(std::move(plan));
 	});
 
-	// then we perform the join ordering optimization
-	// this also rewrites cross products + filters into joins and performs filter pushdowns
+	// perform join filter pushdown after the dust has settled
 	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
 		join_filter_pushdown.VisitOperator(*plan);

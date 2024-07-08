@@ -30,6 +30,9 @@ public:
 public:
 	string ParamsToString() const override;
 
+	//! Re-order join conditions so that equality predicates are first, followed by other predicates
+	static void ReorderConditions(vector<JoinCondition> &conditions);
+
 	//! Construct the join result of a join with an empty RHS
 	static void ConstructEmptyJoinResult(JoinType type, bool has_null, DataChunk &input, DataChunk &result);
 	//! Construct the remainder of a Full Outer Join based on which tuples in the RHS found no match

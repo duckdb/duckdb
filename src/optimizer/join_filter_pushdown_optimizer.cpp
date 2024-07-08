@@ -7,6 +7,7 @@
 #include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,8 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	default:
 		break;
 	}
+	// re-order conditions here - otherwise this will happen later on and invalidate the indexes we generate
+	PhysicalComparisonJoin::ReorderConditions(join.conditions);
 	auto pushdown_info = make_uniq<JoinFilterPushdownInfo>();
 	for (idx_t cond_idx = 0; cond_idx < join.conditions.size(); cond_idx++) {
 		auto &cond = join.conditions[cond_idx];
