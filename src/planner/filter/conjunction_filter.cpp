@@ -51,7 +51,7 @@ unique_ptr<TableFilter> ConjunctionOrFilter::Copy() const {
 	for (auto &filter : child_filters) {
 		result->child_filters.push_back(filter->Copy());
 	}
-	return result;
+	return std::move(result);
 }
 
 ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_AND) {
@@ -104,7 +104,7 @@ unique_ptr<TableFilter> ConjunctionAndFilter::Copy() const {
 	for (auto &filter : child_filters) {
 		result->child_filters.push_back(filter->Copy());
 	}
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
