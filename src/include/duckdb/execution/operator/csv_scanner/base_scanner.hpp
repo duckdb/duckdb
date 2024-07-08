@@ -19,7 +19,7 @@ namespace duckdb {
 class CSVFileScan;
 class ScannerResult {
 public:
-	ScannerResult(CSVStates &states, CSVStateMachine &state_machine);
+	ScannerResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
 
 	//! Adds a Value to the result
 	static inline void SetQuoted(ScannerResult &result, idx_t quoted_position) {
@@ -32,10 +32,13 @@ public:
 	static inline void SetEscaped(ScannerResult &result) {
 		result.escaped = true;
 	}
-	// Variable to keep information regarding quoted and escaped values
+	//! Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	bool escaped = false;
 	idx_t quoted_position = 0;
+
+	//! Size of the result
+	const idx_t result_size;
 
 	CSVStateMachine &state_machine;
 
@@ -74,8 +77,8 @@ public:
 		return lines_read;
 	}
 
-	idx_t GetIteratorPosition() {
-		return iterator.pos.buffer_pos;
+	CSVPosition GetIteratorPosition() {
+		return iterator.pos;
 	}
 
 	CSVStateMachine &GetStateMachine();
@@ -95,9 +98,13 @@ public:
 
 	bool ever_quoted = false;
 
+	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
+	shared_ptr<CSVBufferManager> buffer_manager;
+
 	//! Skips Notes and/or parts of the data, starting from the top.
 	//! notes are dirty lines on top of the file, before the actual data
-	void SkipCSVRows(idx_t rows_to_skip);
+	static CSVIterator SkipCSVRows(shared_ptr<CSVBufferManager> buffer_manager,
+	                               const shared_ptr<CSVStateMachine> &state_machine, idx_t rows_to_skip);
 
 protected:
 	//! Boundaries of this scanner
@@ -109,9 +116,6 @@ protected:
 
 	//! Hold the current buffer ptr
 	char *buffer_handle_ptr = nullptr;
-
-	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
-	shared_ptr<CSVBufferManager> buffer_manager;
 
 	//! If this scanner has been initialized
 	bool initialized = false;

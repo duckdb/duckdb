@@ -49,7 +49,7 @@
 #  ifdef __or1k__
 #    define LG_QUANTUM		3
 #  endif
-#  ifdef __powerpc__
+#  if defined(__powerpc__) || defined(__ppc__) || defined(__powerpc64__) || defined(__ppc64__)
 #    define LG_QUANTUM		4
 #  endif
 #  if defined(__riscv) || defined(__riscv__)

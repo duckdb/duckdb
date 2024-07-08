@@ -130,7 +130,7 @@ public:
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
+		D_ASSERT(data_byte_offset < segment.GetBlockManager().GetBlockSize());
 
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 
@@ -177,12 +177,11 @@ public:
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
 	void Skip(ColumnSegment &col_segment, idx_t skip_count) {
-
 		if (total_value_count != 0 && !VectorFinished()) {
 			// Finish skipping the current vector
-			idx_t to_skip = LeftInVector();
-			skip_count -= to_skip;
+			idx_t to_skip = MinValue<idx_t>(skip_count, LeftInVector());
 			ScanVector<T, true>(nullptr, to_skip);
+			skip_count -= to_skip;
 		}
 		// Figure out how many entire vectors we can skip
 		// For these vectors, we don't even need to process the metadata or values

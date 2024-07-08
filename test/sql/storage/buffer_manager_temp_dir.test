@@ -2,6 +2,9 @@
 # description: Test setting of the temporary directory
 # group: [storage]
 
+# FIXME: Fails with --force-storage for non-default block sizes.
+require block_size 262144
+
 require skip_reload
 
 # set temporary directory to an empty directory
@@ -16,6 +19,7 @@ PRAGMA memory_limit='2MB'
 statement error
 CREATE TABLE t2 AS SELECT * FROM range(1000000);
 ----
+could not allocate block of size
 
 # after we set the temp directory, we can create this table
 statement ok

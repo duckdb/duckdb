@@ -42,7 +42,11 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 
 Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
-	lock_guard<mutex> start_lock(start_transaction_lock);
+	auto &meta_transaction = MetaTransaction::Get(context);
+	unique_ptr<lock_guard<mutex>> start_lock;
+	if (!meta_transaction.IsReadOnly()) {
+		start_lock = make_uniq<lock_guard<mutex>>(start_transaction_lock);
+	}
 	lock_guard<mutex> lock(transaction_lock);
 	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
 		throw InternalException("Cannot start more transactions, ran out of "
@@ -211,15 +215,41 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			}
 		}
 	}
-	// obtain a commit id for the transaction
-	transaction_t commit_id = GetCommitTimestamp();
 
 	// check if we can checkpoint
 	unique_ptr<StorageLockKey> lock;
 	auto undo_properties = transaction.GetUndoProperties();
 	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
+	ErrorData error;
+	unique_ptr<lock_guard<mutex>> held_wal_lock;
+	unique_ptr<StorageCommitState> commit_state;
+	if (!checkpoint_decision.can_checkpoint && transaction.ShouldWriteToWAL(db)) {
+		// if we are committing changes and we are not checkpointing, we need to write to the WAL
+		// since WAL writes can take a long time - we grab the WAL lock here and unlock the transaction lock
+		// read-only transactions can bypass this branch and start/commit while the WAL write is happening
+		if (!transaction.HasWriteLock()) {
+			// sanity check - this transaction should have a write lock
+			// the write lock prevents other transactions from checkpointing until this transaction is fully finished
+			// if we do not hold the write lock here, other transactions can bypass this branch by auto-checkpoint
+			// this would lead to a checkpoint WHILE this thread is writing to the WAL
+			// this should never happen
+			throw InternalException("Transaction writing to WAL does not have the write lock");
+		}
+		// unlock the transaction lock while we write to the WAL
+		tlock.unlock();
+		// grab the WAL lock and hold it until the entire commit is finished
+		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
+		error = transaction.WriteToWAL(db, commit_state);
+
+		// after we finish writing to the WAL we grab the transaction lock again
+		tlock.lock();
+	}
+	// obtain a commit id for the transaction
+	transaction_t commit_id = GetCommitTimestamp();
 	// commit the UndoBuffer of the transaction
-	auto error = transaction.Commit(db, commit_id, checkpoint_decision.can_checkpoint);
+	if (!error.HasError()) {
+		error = transaction.Commit(db, commit_id, std::move(commit_state));
+	}
 	if (error.HasError()) {
 		// commit unsuccessful: rollback the transaction instead
 		checkpoint_decision = CheckpointDecision(error.Message());
@@ -244,10 +274,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// we can unlock the transaction lock while checkpointing
 		tlock.unlock();
 		// checkpoint the database to disk
-		auto &storage_manager = db.GetStorageManager();
 		CheckpointOptions options;
 		options.action = CheckpointAction::FORCE_CHECKPOINT;
 		options.type = checkpoint_decision.type;
+		auto &storage_manager = db.GetStorageManager();
 		storage_manager.CreateCheckpoint(options);
 	}
 	return error;

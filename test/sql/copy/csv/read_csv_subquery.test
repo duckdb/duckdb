@@ -14,7 +14,7 @@ FROM read_csv_auto((SELECT url FROM urls LIMIT 3), delim=',')
 WHERE properties.height > -1.0
 LIMIT 10
 ----
-Only table-in-out functions can have subquery parameters
+subqueries
 
 statement error
 SELECT *

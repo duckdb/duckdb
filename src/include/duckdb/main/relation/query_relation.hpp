@@ -27,6 +27,7 @@ public:
 	static unique_ptr<SelectStatement> ParseStatement(ClientContext &context, const string &query, const string &error);
 	unique_ptr<QueryNode> GetQueryNode() override;
 	unique_ptr<TableRef> GetTableRef() override;
+	BoundStatement Bind(Binder &binder) override;
 
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;

@@ -27,9 +27,8 @@ string StringUtil::GenerateRandomName(idx_t length) {
 	std::uniform_int_distribution<> dis(0, 15);
 
 	std::stringstream ss;
-	ss << std::hex;
 	for (idx_t i = 0; i < length; i++) {
-		ss << dis(gen);
+		ss << "0123456789abcdef"[dis(gen)];
 	}
 	return ss.str();
 }
@@ -472,8 +471,8 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 
 	yyjson_write_err err;
 	size_t len;
-	yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
-	const char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
+	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
+	char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
 	if (!json) {
 		yyjson_mut_doc_free(doc);
 		throw SerializationException("Failed to write JSON string: %s", err.msg);
@@ -482,7 +481,7 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	string result(json, len);
 
 	// Free the JSON and the document
-	free((void *)json);
+	free(json);
 	yyjson_mut_doc_free(doc);
 
 	// Return the result

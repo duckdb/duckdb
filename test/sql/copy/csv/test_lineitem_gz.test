@@ -1,0 +1,38 @@
+# name: test/sql/copy/csv/test_lineitem_gz.test
+# description: Test small memory limit on gzipped csv files
+# group: [csv]
+
+# No way CI can handle this
+mode skip
+
+statement ok
+PRAGMA enable_verification
+
+
+require tpch
+
+statement ok
+CALL dbgen(sf=10);
+
+statement ok
+copy lineitem to '__TEST_DIR__/lineitem1.csv.gz'
+
+statement ok
+set memory_limit='32gb';
+
+# Run it over 50 TPCHs
+query I
+select count(*) from read_csv([
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
+'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz'
+]);
+----
+0

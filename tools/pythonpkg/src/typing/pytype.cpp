@@ -114,11 +114,12 @@ static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
 	return PythonTypeObject::INVALID;
 }
 
-static LogicalType FromString(const string &type_str, shared_ptr<DuckDBPyConnection> connection) {
-	if (!connection) {
-		connection = DuckDBPyConnection::DefaultConnection();
+static LogicalType FromString(const string &type_str, shared_ptr<DuckDBPyConnection> pycon) {
+	if (!pycon) {
+		pycon = DuckDBPyConnection::DefaultConnection();
 	}
-	return TransformStringToLogicalType(type_str, *connection->connection->context);
+	auto &connection = pycon->con.GetConnection();
+	return TransformStringToLogicalType(type_str, *connection.context);
 }
 
 static bool FromNumpyType(const py::object &type, LogicalType &result) {

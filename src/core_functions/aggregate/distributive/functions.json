@@ -1,10 +1,10 @@
 [
     {
         "name": "approx_count_distinct",
-        "parameters": "x",
+        "parameters": "any",
         "description": "Computes the approximate count of distinct elements using HyperLogLog.",
         "example": "approx_count_distinct(A)",
-        "type": "aggregate_function_set"
+        "type": "aggregate_function"
     },
     {
         "name": "arg_min",

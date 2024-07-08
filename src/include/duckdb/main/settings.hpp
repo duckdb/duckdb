@@ -348,6 +348,15 @@ struct EnableProfilingSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct CustomProfilingSettings {
+	static constexpr const char *Name = "custom_profiling_settings";
+	static constexpr const char *Description = "Accepts a JSON enabling custom metrics";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableProgressBarSetting {
 	static constexpr const char *Name = "enable_progress_bar";
 	static constexpr const char *Description =
@@ -509,6 +518,16 @@ struct MaximumMemorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct StreamingBufferSize {
+	static constexpr const char *Name = "streaming_buffer_size";
+	static constexpr const char *Description =
+	    "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct MaximumTempDirectorySize {
 	static constexpr const char *Name = "max_temp_directory_size";
 	static constexpr const char *Description =
@@ -516,6 +535,25 @@ struct MaximumTempDirectorySize {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct MergeJoinThreshold {
+	static constexpr const char *Name = "merge_join_threshold";
+	static constexpr const char *Description = "The number of rows we need on either table to choose a merge join";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct NestedLoopJoinThreshold {
+	static constexpr const char *Name = "nested_loop_join_threshold";
+	static constexpr const char *Description =
+	    "The number of rows we need on either table to choose a nested loop join";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -532,9 +570,51 @@ struct PartitionedWriteFlushThreshold {
 	static constexpr const char *Name = "partitioned_write_flush_threshold";
 	static constexpr const char *Description =
 	    "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct PartitionedWriteMaxOpenFiles {
+	static constexpr const char *Name = "partitioned_write_max_open_files";
+	static constexpr const char *Description =
+	    "The maximum amount of files the system can keep open before flushing to disk when writing using PARTITION_BY";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct DefaultBlockAllocSize {
+	static constexpr const char *Name = "default_block_size";
+	static constexpr const char *Description =
+	    "The default block size for new duckdb database files (new as-in, they do not yet exist).";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct IndexScanPercentage {
+	static constexpr const char *Name = "index_scan_percentage";
+	static constexpr const char *Description =
+	    "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
+	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::DOUBLE;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct IndexScanMaxCount {
+	static constexpr const char *Name = "index_scan_max_count";
+	static constexpr const char *Description =
+	    "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
+	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -590,6 +670,26 @@ struct PreserveInsertionOrder {
 	static constexpr const char *Description =
 	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
 	    "that do not contain ORDER BY clauses.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ArrowOutputListView {
+	static constexpr const char *Name = "arrow_output_list_view";
+	static constexpr const char *Description =
+	    "If export to arrow format should use ListView as the physical layout for LIST columns";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ProduceArrowStringView {
+	static constexpr const char *Name = "produce_arrow_string_view";
+	static constexpr const char *Description =
+	    "If strings should be produced by DuckDB in Utf8View format instead of Utf8";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -686,6 +786,15 @@ struct FlushAllocatorSetting {
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllocatorBackgroundThreadsSetting {
+	static constexpr const char *Name = "allocator_background_threads";
+	static constexpr const char *Description = "Whether to enable the allocator background thread.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

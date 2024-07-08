@@ -1,0 +1,20 @@
+# name: test/sql/attach/attach_remote.test
+# description: Test attaching of remote database
+# group: [attach]
+
+require httpfs
+
+statement error
+ATTACH 'https://duckdb.org/non_existing.db' AS db2 (READ_ONLY)
+----
+IO Error: Cannot open database "https://duckdb.org/non_existing.db" in read-only mode: database does not exist
+
+statement error
+ATTACH 'https://duckdb.org/non_existing.db' AS db2
+----
+IO Error: Cannot open database "https://duckdb.org/non_existing.db" in read-only mode: database does not exist
+
+statement error
+ATTACH 'https://duckdb.org/non_existing.db' AS db2 (READ_WRITE)
+----
+Not implemented Error: Writing to HTTP files not implemented

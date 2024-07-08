@@ -130,6 +130,10 @@ unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &co
 	return nullptr;
 }
 
+unique_ptr<NodeStatistics> MultiFileList::GetCardinality(ClientContext &context) {
+	return nullptr;
+}
+
 string MultiFileList::GetFirstFile() {
 	return GetFile(0);
 }

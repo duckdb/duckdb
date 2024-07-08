@@ -254,6 +254,14 @@
         "type": "scalar_function_set"
     },
     {
+        "struct": "NanosecondsFun",
+        "name": "nanosecond",
+        "parameters": "tsns",
+        "description": "Extract the nanosecond component from a date or timestamp",
+        "example": "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789') => 44123456789",
+        "type": "scalar_function_set"
+    },
+    {
         "name": "quarter",
         "parameters": "ts",
         "description": "Extract the quarter component from a date or timestamp",

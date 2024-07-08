@@ -60,6 +60,8 @@ enum class ArrowDateTimeType : uint8_t;
 
 enum class ArrowOffsetSize : uint8_t;
 
+enum class ArrowTypeInfoType : uint8_t;
+
 enum class ArrowVariableSizeType : uint8_t;
 
 enum class BinderType : uint8_t;
@@ -98,7 +100,11 @@ enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
 
+enum class CopyFunctionReturnType : uint8_t;
+
 enum class CopyOverwriteMode : uint8_t;
+
+enum class CopyToType : uint8_t;
 
 enum class DataFileType : uint8_t;
 
@@ -188,6 +194,8 @@ enum class MapInvalidReason : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
+enum class MetricsType : uint8_t;
+
 enum class NType : uint8_t;
 
 enum class NewLineIdentifier : uint8_t;
@@ -235,6 +243,8 @@ enum class PreparedParamType : uint8_t;
 enum class PreparedStatementMode : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
+
+enum class ProfilingNodeType : uint8_t;
 
 enum class QuantileSerializationType : uint8_t;
 
@@ -310,6 +320,8 @@ enum class TaskExecutionResult : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
+enum class TransactionModifierType : uint8_t;
+
 enum class TransactionType : uint8_t;
 
 enum class TupleDataPinProperties : uint8_t;
@@ -380,6 +392,9 @@ template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
 
 template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
+
+template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
 
 template<>
@@ -437,7 +452,13 @@ template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
+const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value);
+
+template<>
 const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
+
+template<>
+const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
@@ -572,6 +593,9 @@ template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
 
 template<>
+const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
+
+template<>
 const char* EnumUtil::ToChars<NType>(NType value);
 
 template<>
@@ -642,6 +666,9 @@ const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value
 
 template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
+
+template<>
+const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
@@ -755,6 +782,9 @@ template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
+const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
+
+template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
 
 template<>
@@ -837,6 +867,9 @@ template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
 
 template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
+
+template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
 
 template<>
@@ -894,7 +927,13 @@ template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
+CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value);
+
+template<>
 CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
+
+template<>
+CopyToType EnumUtil::FromString<CopyToType>(const char *value);
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
@@ -1029,6 +1068,9 @@ template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
 
 template<>
+MetricsType EnumUtil::FromString<MetricsType>(const char *value);
+
+template<>
 NType EnumUtil::FromString<NType>(const char *value);
 
 template<>
@@ -1099,6 +1141,9 @@ PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *va
 
 template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
+
+template<>
+ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value);
 
 template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);
@@ -1210,6 +1255,9 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
