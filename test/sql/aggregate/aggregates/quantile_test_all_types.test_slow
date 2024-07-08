@@ -10,7 +10,7 @@ create table all_types as from test_all_types()
 
 # date is not tested here because the extreme date values overflow timestamps
 # and median(date) result sin timestamp
-foreach col <all_types_columns> -date
+foreach col <all_types_columns> !date
 
 # quantile_disc
 query III

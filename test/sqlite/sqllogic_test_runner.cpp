@@ -185,8 +185,8 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 	bool is_signed = is_integral || token_name == "<signed>";
 	bool is_unsigned = is_integral || token_name == "<unsigned>";
 	bool is_all_types_column = token_name == "<all_types_columns>";
-	if (token_name[0] == '-') {
-		// -token tries to remove the token from the list of tokens
+	if (token_name[0] == '!') {
+		// !token tries to remove the token from the list of tokens
 		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
 		if (entry == result.end()) {
 			// not found - insert as-is
