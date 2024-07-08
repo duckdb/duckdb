@@ -404,7 +404,7 @@ void WindowHashGroup::MaterializeSortedData() {
 		heap->blocks = std::move(sd.heap_blocks);
 		hash_group.reset();
 	} else {
-		heap = make_uniq<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U, true);
+		heap = make_uniq<RowDataCollection>(buffer_manager, buffer_manager.GetBlockSize(), 1U, true);
 	}
 	heap->count = std::accumulate(heap->blocks.begin(), heap->blocks.end(), idx_t(0),
 	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });

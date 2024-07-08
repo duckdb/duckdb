@@ -212,7 +212,7 @@ string TreeRenderer::ToString(const PhysicalOperator &op) {
 	return ss.str();
 }
 
-string TreeRenderer::ToString(const QueryProfiler::TreeNode &op) {
+string TreeRenderer::ToString(const ProfilingNode &op) {
 	std::stringstream ss;
 	Render(op, ss);
 	return ss.str();
@@ -234,7 +234,7 @@ void TreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void TreeRenderer::Render(const QueryProfiler::TreeNode &op, std::ostream &ss) {
+void TreeRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }

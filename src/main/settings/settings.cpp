@@ -644,18 +644,23 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	auto &config = ClientConfig::GetConfig(context);
+	config.enable_profiler = true;
+	config.emit_profiler_output = true;
+
 	if (parameter == "json") {
 		config.profiler_print_format = ProfilerPrintFormat::JSON;
 	} else if (parameter == "query_tree") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else if (parameter == "query_tree_optimizer") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	} else if (parameter == "no_output") {
+		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
+		config.emit_profiler_output = false;
 	} else {
 		throw ParserException(
-		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", parameter);
+		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]",
+		    parameter);
 	}
-	config.enable_profiler = true;
-	config.emit_profiler_output = true;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
@@ -670,6 +675,8 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 		return Value("query_tree");
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
 		return Value("query_tree_optimizer");
+	case ProfilerPrintFormat::NO_OUTPUT:
+		return Value("no_output");
 	default:
 		throw InternalException("Unsupported profiler print format");
 	}
@@ -1202,7 +1209,7 @@ Value MaximumTempDirectorySize::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void MergeJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.merge_join_threshold = input.GetValue<int64_t>();
+	config.merge_join_threshold = input.GetValue<idx_t>();
 }
 
 void MergeJoinThreshold::ResetLocal(ClientContext &context) {
@@ -1211,7 +1218,7 @@ void MergeJoinThreshold::ResetLocal(ClientContext &context) {
 
 Value MergeJoinThreshold::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	return Value::BIGINT(config.merge_join_threshold);
+	return Value::UBIGINT(config.merge_join_threshold);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1219,7 +1226,7 @@ Value MergeJoinThreshold::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void NestedLoopJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.nested_loop_join_threshold = input.GetValue<int64_t>();
+	config.nested_loop_join_threshold = input.GetValue<idx_t>();
 }
 
 void NestedLoopJoinThreshold::ResetLocal(ClientContext &context) {
@@ -1228,7 +1235,7 @@ void NestedLoopJoinThreshold::ResetLocal(ClientContext &context) {
 
 Value NestedLoopJoinThreshold::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	return Value::BIGINT(config.nested_loop_join_threshold);
+	return Value::UBIGINT(config.nested_loop_join_threshold);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1260,7 +1267,22 @@ void PartitionedWriteFlushThreshold::SetLocal(ClientContext &context, const Valu
 }
 
 Value PartitionedWriteFlushThreshold::GetSetting(const ClientContext &context) {
-	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).partitioned_write_flush_threshold));
+	return Value::UBIGINT(ClientConfig::GetConfig(context).partitioned_write_flush_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Partitioned Write Flush Threshold
+//===--------------------------------------------------------------------===//
+void PartitionedWriteMaxOpenFiles::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).partitioned_write_max_open_files = ClientConfig().partitioned_write_max_open_files;
+}
+
+void PartitionedWriteMaxOpenFiles::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).partitioned_write_max_open_files = input.GetValue<idx_t>();
+}
+
+Value PartitionedWriteMaxOpenFiles::GetSetting(const ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).partitioned_write_max_open_files);
 }
 
 //===--------------------------------------------------------------------===//

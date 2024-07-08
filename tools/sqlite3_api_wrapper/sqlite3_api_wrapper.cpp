@@ -897,7 +897,15 @@ int sqlite3_changes(sqlite3 *db) {
 	return db->last_changes;
 }
 
+sqlite3_int64 sqlite3_changes64(sqlite3 *db) {
+	return db->last_changes;
+}
+
 int sqlite3_total_changes(sqlite3 *db) {
+	return db->total_changes;
+}
+
+sqlite3_int64 sqlite3_total_changes64(sqlite3 *db) {
 	return db->total_changes;
 }
 

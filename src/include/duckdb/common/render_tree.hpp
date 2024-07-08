@@ -12,6 +12,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiling_node.hpp"
 
 namespace duckdb {
 class LogicalOperator;
@@ -39,7 +40,7 @@ struct RenderTree {
 public:
 	static unique_ptr<RenderTree> CreateRenderTree(const LogicalOperator &op);
 	static unique_ptr<RenderTree> CreateRenderTree(const PhysicalOperator &op);
-	static unique_ptr<RenderTree> CreateRenderTree(const QueryProfiler::TreeNode &op);
+	static unique_ptr<RenderTree> CreateRenderTree(const ProfilingNode &op);
 	static unique_ptr<RenderTree> CreateRenderTree(const Pipeline &op);
 
 public:

@@ -135,7 +135,7 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 	// See if this is the case and we still have a value registered for it
 	auto it = wrapper->values.find(identifier);
 	if (it != wrapper->values.end()) {
-		return ConvertCPPTypeToC(it->second.type());
+		return ConvertCPPTypeToC(it->second.return_type.id());
 	}
 	return DUCKDB_TYPE_INVALID;
 }
@@ -162,7 +162,7 @@ duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx
 		return DuckDBError;
 	}
 	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
-	wrapper->values[identifier] = *value;
+	wrapper->values[identifier] = duckdb::BoundParameterData(*value);
 	return DuckDBSuccess;
 }
 

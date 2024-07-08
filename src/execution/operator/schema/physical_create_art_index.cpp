@@ -178,11 +178,6 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 	auto &index = index_entry->Cast<DuckIndexEntry>();
 	index.initial_index_size = state.global_index->GetInMemorySize();
 
-	index.info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), index.name);
-	for (auto &parsed_expr : info->parsed_expressions) {
-		index.parsed_expressions.push_back(parsed_expr->Copy());
-	}
-
 	// add index to storage
 	storage.AddIndex(std::move(state.global_index));
 	return SinkFinalizeType::READY;

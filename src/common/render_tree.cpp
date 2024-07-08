@@ -105,14 +105,16 @@ static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
 	return CreateNode(op.op);
 }
 
-static unique_ptr<RenderTreeNode> CreateNode(const QueryProfiler::TreeNode &op) {
+static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 	case_insensitive_map_t<string> extra_info;
-	if (op.profiling_info.Enabled(MetricsType::EXTRA_INFO)) {
-		extra_info = op.profiling_info.metrics.extra_info;
+	if (op.GetProfilingInfo().Enabled(MetricsType::EXTRA_INFO)) {
+		extra_info = op.GetProfilingInfo().metrics.extra_info;
 	}
-	auto result = make_uniq<RenderTreeNode>(op.name, extra_info);
-	result->extra_text["Cardinality"] = to_string(op.profiling_info.metrics.operator_cardinality);
-	string timing = StringUtil::Format("%.2f", op.profiling_info.metrics.operator_timing);
+
+	auto node_name = op.node_type == op.GetName();
+	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
+	result->extra_text["Cardinality"] = to_string(op.GetProfilingInfo().metrics.operator_cardinality);
+	string timing = StringUtil::Format("%.2f", op.GetProfilingInfo().metrics.operator_timing);
 	result->extra_text["Timing"] = timing + "s";
 	return result;
 }
@@ -182,8 +184,8 @@ unique_ptr<RenderTree> RenderTree::CreateRenderTree(const PhysicalOperator &op) 
 	return CreateTree<PhysicalOperator>(op);
 }
 
-unique_ptr<RenderTree> RenderTree::CreateRenderTree(const QueryProfiler::TreeNode &op) {
-	return CreateTree<QueryProfiler::TreeNode>(op);
+unique_ptr<RenderTree> RenderTree::CreateRenderTree(const ProfilingNode &op) {
+	return CreateTree<ProfilingNode>(op);
 }
 
 unique_ptr<RenderTree> RenderTree::CreateRenderTree(const Pipeline &pipeline) {
