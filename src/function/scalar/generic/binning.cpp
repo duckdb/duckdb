@@ -19,7 +19,15 @@ static hugeint_t GetPreviousPowerOfTen(hugeint_t input) {
 
 enum class NiceRounding { CEILING, ROUND };
 
-hugeint_t MakeNumberNice(hugeint_t input, hugeint_t power_of_ten, NiceRounding rounding) {
+hugeint_t RoundToNumber(hugeint_t input, hugeint_t num, NiceRounding rounding) {
+	if (rounding == NiceRounding::ROUND) {
+		return (input + (num / 2)) / num * num;
+	} else {
+		return (input + (num - 1)) / num * num;
+	}
+}
+
+hugeint_t MakeNumberNice(hugeint_t input, hugeint_t step, NiceRounding rounding) {
 	// we consider numbers nice if they are divisible by 2 or 5 times the power-of-ten one lower than the current
 	// e.g. 120 is a nice number because it is divisible by 20
 	//      122 is not a nice number -> we make it nice by turning it into 120 [/20]
@@ -29,21 +37,20 @@ hugeint_t MakeNumberNice(hugeint_t input, hugeint_t power_of_ten, NiceRounding r
 	// now the power of ten is the power BELOW the current number
 	// i.e. for 67, it is not 10
 	// now we can get the 2 or 5 divisors
-	hugeint_t two = power_of_ten / 5;
-	hugeint_t five = power_of_ten / 2;
+	hugeint_t power_of_ten = GetPreviousPowerOfTen(step);
+	hugeint_t two = power_of_ten * 2;
+	hugeint_t five = power_of_ten;
+	if (power_of_ten * 3 <= step) {
+		two *= 5;
+	}
+	if (power_of_ten * 2 <= step) {
+		five *= 5;
+	}
 
 	// compute the closest round number by adding the divisor / 2 and truncating
 	// do this for both divisors
-	hugeint_t round_to_two, round_to_five;
-	if (rounding == NiceRounding::ROUND) {
-		// round
-		round_to_two = (input + (two / 2)) / two * two;
-		round_to_five = (input + (five / 2)) / five * five;
-	} else {
-		// ceil
-		round_to_two = (input + (two - 1)) / two * two;
-		round_to_five = (input + (five - 1)) / five * five;
-	}
+	hugeint_t round_to_two = RoundToNumber(input, two, rounding);
+	hugeint_t round_to_five = RoundToNumber(input, five, rounding);
 	// now pick the closest number of the two (i.e. for 147 we pick 150, not 140)
 	if (AbsValue(input - round_to_two) < AbsValue(input - round_to_five)) {
 		return round_to_two;
@@ -66,27 +73,38 @@ static double GetPreviousPowerOfTen(double input) {
 	return power_of_ten / 10;
 }
 
-double MakeNumberNice(double input, const double power_of_ten, NiceRounding rounding) {
+double RoundToNumber(double input, double num, NiceRounding rounding) {
+	double result;
+	if (rounding == NiceRounding::ROUND) {
+		result = std::round(input / num) * num;
+	} else {
+		result = std::ceil(input / num) * num;
+	}
+	if (!Value::IsFinite(result)) {
+		return input;
+	}
+	return result;
+}
+
+double MakeNumberNice(double input, const double step, NiceRounding rounding) {
 	if (input == 0) {
 		return 0;
 	}
 	// now the power of ten is the power BELOW the current number
 	// i.e. for 67, it is not 10
 	// now we can get the 2 or 5 divisors
-	const double two = power_of_ten / 5;
-	const double five = power_of_ten / 2;
+	double power_of_ten = GetPreviousPowerOfTen(step);
+	double two = power_of_ten * 2;
+	double five = power_of_ten;
+	if (power_of_ten * 3 <= step) {
+		two *= 5;
+	}
+	if (power_of_ten * 2 <= step) {
+		five *= 5;
+	}
 
-	double round_to_two, round_to_five;
-	if (rounding == NiceRounding::ROUND) {
-		round_to_two = std::round(input / two) * two;
-		round_to_five = std::round(input / five) * five;
-	} else {
-		round_to_two = std::ceil(input / two) * two;
-		round_to_five = std::ceil(input / five) * five;
-	}
-	if (!Value::IsFinite(round_to_two) || !Value::IsFinite(round_to_five)) {
-		return input;
-	}
+	double round_to_two = RoundToNumber(input, two, rounding);
+	double round_to_five = RoundToNumber(input, five, rounding);
 	// now pick the closest number of the two (i.e. for 147 we pick 150, not 140)
 	if (AbsValue(input - round_to_two) < AbsValue(input - round_to_five)) {
 		return round_to_two;
@@ -109,11 +127,15 @@ struct EquiWidthBinsInteger {
 
 		const hugeint_t span = max - min;
 		hugeint_t step = span / Hugeint::Convert(bin_count);
-		hugeint_t power_of_ten = GetPreviousPowerOfTen(step);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
-			step = MakeNumberNice(step, power_of_ten, NiceRounding::ROUND);
-			max = MakeNumberNice(max, power_of_ten, NiceRounding::CEILING);
+			step = MakeNumberNice(step, step, NiceRounding::ROUND);
+			max = RoundToNumber(max, step, NiceRounding::CEILING);
+			// we allow for more bins when doing nice rounding since the bin count is approximate
+			bin_count *= 2;
+		}
+		if (step == 0) {
+			throw InternalException("step is 0!?");
 		}
 
 		for (hugeint_t bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
@@ -156,21 +178,31 @@ struct EquiWidthBinsDouble {
 		const double step_power_of_ten = GetPreviousPowerOfTen(step);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
-			step = MakeNumberNice(step, step_power_of_ten, NiceRounding::ROUND);
-			max = MakeNumberNice(input_max, step_power_of_ten, NiceRounding::CEILING);
+			step = MakeNumberNice(step, step, NiceRounding::ROUND);
+			max = RoundToNumber(input_max, step, NiceRounding::CEILING);
+			// we allow for more bins when doing nice rounding since the bin count is approximate
+			bin_count *= 2;
+		}
+		if (step == 0) {
+			throw InternalException("step is 0!?");
 		}
 
 		const double round_multiplication = 10 / step_power_of_ten;
 		for (double bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			// because floating point addition adds inaccuracies, we add rounding at every step
+			double real_boundary = bin_boundary;
 			if (nice_rounding) {
-				bin_boundary = std::round(bin_boundary * round_multiplication) / round_multiplication;
+				real_boundary = std::round(bin_boundary * round_multiplication) / round_multiplication;
 			}
-			if (bin_boundary < min || result.size() >= bin_count) {
+			if (!result.empty() && result.back().val == real_boundary) {
+				// skip this step
+				continue;
+			}
+			if (real_boundary <= min || result.size() >= bin_count) {
 				// we can never generate below input_min
 				break;
 			}
-			result.push_back(bin_boundary);
+			result.push_back(real_boundary);
 		}
 		return result;
 	}
@@ -373,10 +405,20 @@ unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &
                                                vector<unique_ptr<Expression>> &arguments) {
 	// while internally the bins are computed over a unified type
 	// the equi_width_bins function returns the same type as the input MAX
-	if (arguments[1]->return_type.id() != LogicalTypeId::UNKNOWN &&
-	    arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalType::LIST(arguments[1]->return_type);
+	LogicalType child_type;
+	switch (arguments[1]->return_type.id()) {
+	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::SQLNULL:
+		return nullptr;
+	case LogicalTypeId::DECIMAL:
+		// for decimals we promote to double because
+		child_type = LogicalType::DOUBLE;
+		break;
+	default:
+		child_type = arguments[1]->return_type;
+		break;
 	}
+	bound_function.return_type = LogicalType::LIST(child_type);
 	return nullptr;
 }
 

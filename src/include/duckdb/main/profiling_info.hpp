@@ -78,6 +78,6 @@ public:
 
 public:
 	string GetMetricAsString(MetricsType setting) const;
-	void PrintAllMetricsToSS(std::ostream &ss, const string &depth);
+	void PrintAllMetricsToSS(std::stringstream &ss, const string &depth);
 };
 } // namespace duckdb

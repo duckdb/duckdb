@@ -75,7 +75,7 @@ string_t StringCast::Operation(double input, Vector &vector) {
 
 template <>
 string_t StringCast::Operation(interval_t input, Vector &vector) {
-	char buffer[70];
+	char buffer[70] = {};
 	idx_t length = IntervalToStringCast::Format(input, buffer);
 	return StringVector::AddString(vector, buffer, length);
 }
@@ -113,7 +113,7 @@ duckdb::string_t StringCast::Operation(dtime_t input, Vector &vector) {
 	int32_t time[4];
 	Time::Convert(input, time[0], time[1], time[2], time[3]);
 
-	char micro_buffer[10];
+	char micro_buffer[10] = {};
 	idx_t length = TimeToStringCast::Length(time, micro_buffer);
 
 	string_t result = StringVector::EmptyString(vector, length);
@@ -152,8 +152,8 @@ duckdb::string_t StringFromTimestamp(timestamp_t input, Vector &vector) {
 	// format for timestamp is DATE TIME (separated by space)
 	idx_t year_length;
 	bool add_bc;
-	char micro_buffer[6];
-	char nano_buffer[6];
+	char micro_buffer[6] = {};
+	char nano_buffer[6] = {};
 	idx_t date_length = DateToStringCast::Length(date, year_length, add_bc);
 	idx_t time_length = TimeToStringCast::Length(time, micro_buffer);
 	idx_t nano_length = 0;
@@ -200,7 +200,7 @@ string_t StringCastTZ::Operation(dtime_tz_t input, Vector &vector) {
 	int32_t time[4];
 	Time::Convert(input.time(), time[0], time[1], time[2], time[3]);
 
-	char micro_buffer[10];
+	char micro_buffer[10] = {};
 	const auto time_length = TimeToStringCast::Length(time, micro_buffer);
 	idx_t length = time_length;
 
@@ -274,7 +274,7 @@ string_t StringCastTZ::Operation(timestamp_t input, Vector &vector) {
 	// format for timestamptz is DATE TIME+00 (separated by space)
 	idx_t year_length;
 	bool add_bc;
-	char micro_buffer[6];
+	char micro_buffer[6] = {};
 	const idx_t date_length = DateToStringCast::Length(date, year_length, add_bc);
 	const idx_t time_length = TimeToStringCast::Length(time, micro_buffer);
 	const idx_t length = date_length + 1 + time_length + 3;
