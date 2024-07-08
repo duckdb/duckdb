@@ -1,21 +1,21 @@
-#include "duckdb/function/table/system_functions.hpp"
-
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/check_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
-#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
-#include "duckdb/planner/constraints/bound_check_constraint.hpp"
-#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
-#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
-#include "duckdb/storage/data_table.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -72,6 +72,7 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
 	unordered_map<UniqueKeyInfo, idx_t> known_fk_unique_constraint_offsets;
+	case_insensitive_set_t constraint_names;
 };
 
 static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
@@ -93,6 +94,9 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, Ta
 
 	names.emplace_back("table_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
+
+	names.emplace_back("constraint_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("constraint_index");
 	return_types.emplace_back(LogicalType::BIGINT);
@@ -138,6 +142,49 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 	};
 
 	return std::move(result);
+}
+
+string GetConstraintName(TableCatalogEntry &table, Constraint &constraint) {
+	string result = table.name + "_";
+	switch (constraint.type) {
+	case ConstraintType::CHECK:
+		result += "check";
+		break;
+	case ConstraintType::NOT_NULL: {
+		auto &not_null_constraint = constraint.Cast<NotNullConstraint>();
+		auto &col = table.GetColumn(LogicalIndex(not_null_constraint.index));
+		result += col.GetName() + "_";
+		result += "not_null";
+		break;
+	}
+	case ConstraintType::UNIQUE: {
+		auto &unique = constraint.Cast<UniqueConstraint>();
+		if (unique.HasIndex()) {
+			auto &col = table.GetColumn(LogicalIndex(unique.GetIndex()));
+			result += col.GetName() + "_";
+		} else {
+			for (auto &name : unique.GetColumnNames()) {
+				result += name + "_";
+			}
+		}
+		result += unique.IsPrimaryKey() ? "pkey" : "key";
+		break;
+	}
+	case ConstraintType::FOREIGN_KEY: {
+		auto &fk = constraint.Cast<ForeignKeyConstraint>();
+		for (auto &col : fk.fk_columns) {
+			result += col + "_";
+		}
+		for (auto &col : fk.pk_columns) {
+			result += col + "_";
+		}
+		result += "fkey";
+		break;
+	}
+	default:
+		throw InternalException("Unsupported type for constraint name");
+	}
+	return result;
 }
 
 void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -203,6 +250,19 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(col++, count, Value(table.name));
 			// table_oid, LogicalType::BIGINT
 			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.oid)));
+
+			// constraint_name, VARCHAR
+			auto constraint_name = GetConstraintName(table, *constraint);
+			if (data.constraint_names.find(constraint_name) != data.constraint_names.end()) {
+				// duplicate constraint name
+				idx_t index = 2;
+				while (data.constraint_names.find(constraint_name + "_" + to_string(index)) !=
+				       data.constraint_names.end()) {
+					index++;
+				}
+				constraint_name += "_" + to_string(index);
+			}
+			output.SetValue(col++, count, Value(std::move(constraint_name)));
 
 			// constraint_index, BIGINT
 			UniqueKeyInfo uk_info;
