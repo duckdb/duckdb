@@ -17,7 +17,7 @@ class SelectBinder : public BaseSelectBinder {
 public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
-	bool IsExtraEntry(ParsedExpression &expr);
+	bool IsOrderbyEntry(ParsedExpression &expr);
 
 protected:
 	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;

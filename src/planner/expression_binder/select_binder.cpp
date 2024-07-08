@@ -49,13 +49,9 @@ bool SelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
 	return false;
 }
 
-bool SelectBinder::IsExtraEntry(ParsedExpression &expr) {
-	auto entry_idx = node.bind_state.projection_map[expr];
-	if (entry_idx >= node.bind_state.original_expressions.size()) {
-		// extra entry added to the select list, it came from OrderBinder
-		return true;
-	}
-	return false;
+bool SelectBinder::IsOrderbyEntry(ParsedExpression &expr) {
+	// true if expr is an extra entry added to the select list from the OrderBinder
+	return (node.bind_state.orderby_select_entry.find(expr) != node.bind_state.orderby_select_entry.end());
 }
 
 } // namespace duckdb

@@ -144,11 +144,10 @@ static bool CanPushCollation(ExpressionBinder *binder, FunctionExpression &funct
 		return false;
 	}
 	SelectBinder *select_binder = dynamic_cast<SelectBinder *>(binder);
-	return select_binder->IsExtraEntry(function);
+	return select_binder->IsOrderbyEntry(function);
 }
 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
-	bool is_select_binder = IsSelectBinder(this);
 	bool push_collation = CanPushCollation(this, function);
 
 	// bind the children of the function expression
