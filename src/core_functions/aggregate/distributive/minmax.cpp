@@ -9,7 +9,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
-#include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/core_functions/aggregate/minmax_n_helpers.hpp"
 
 namespace duckdb {
