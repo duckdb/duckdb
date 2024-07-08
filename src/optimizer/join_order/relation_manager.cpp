@@ -133,7 +133,7 @@ static bool HasNonReorderableChild(LogicalOperator &op) {
 	return tmp->children.empty();
 }
 
-static void ModifyStatsIfLimit(LogicalOperator *limit_op, RelationStats &stats) {
+static void ModifyStatsIfLimit(optional_ptr<LogicalOperator> limit_op, RelationStats &stats) {
 	if (!limit_op) {
 		return;
 	}
@@ -146,7 +146,7 @@ static void ModifyStatsIfLimit(LogicalOperator *limit_op, RelationStats &stats) 
 bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
                                            vector<reference<LogicalOperator>> &filter_operators,
                                            optional_ptr<LogicalOperator> parent) {
-	LogicalOperator *op = &input_op;
+	optional_ptr<LogicalOperator> op = &input_op;
 	vector<reference<LogicalOperator>> datasource_filters;
 	optional_ptr<LogicalOperator> limit_op = nullptr;
 	// pass through single child operators
