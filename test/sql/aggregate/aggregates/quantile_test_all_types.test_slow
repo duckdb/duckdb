@@ -8,7 +8,9 @@ PRAGMA enable_verification
 statement ok
 create table all_types as from test_all_types()
 
-foreach col bool tinyint smallint int bigint hugeint uhugeint utinyint usmallint uint ubigint time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob bit small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map union fixed_int_array fixed_varchar_array fixed_nested_int_array fixed_nested_varchar_array fixed_struct_array struct_of_fixed_array fixed_array_of_int_list list_of_fixed_int_array
+# date is not tested here because the extreme date values overflow timestamps
+# and median(date) result sin timestamp
+foreach col <all_types_columns> -date
 
 # quantile_disc
 query III
