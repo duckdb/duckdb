@@ -76,6 +76,7 @@ public:
 	~TextTreeRenderer() override {
 	}
 
+public:
 	string ToString(const LogicalOperator &op);
 	string ToString(const PhysicalOperator &op);
 	string ToString(const ProfilingNode &op);

@@ -20,8 +20,6 @@ class PhysicalOperator;
 class Pipeline;
 struct PipelineRenderNode;
 
-struct JSONTreeRendererConfig {};
-
 class JSONTreeRenderer : public TreeRenderer {
 public:
 	explicit JSONTreeRenderer(JSONTreeRendererConfig config_p = JSONTreeRendererConfig()) : config(config_p) {
@@ -29,6 +27,7 @@ public:
 	~JSONTreeRenderer() override {
 	}
 
+public:
 	string ToString(const LogicalOperator &op);
 	string ToString(const PhysicalOperator &op);
 	string ToString(const ProfilingNode &op);
@@ -40,10 +39,6 @@ public:
 	void Render(const Pipeline &op, std::ostream &ss);
 
 	void ToStream(RenderTree &root, std::ostream &ss) override;
-
-private:
-	//! The configuration used for rendering
-	JSONTreeRendererConfig config;
 };
 
 } // namespace duckdb
