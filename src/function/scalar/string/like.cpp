@@ -6,6 +6,8 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 
+#include "duckdb/function/scalar/like.hpp"
+
 namespace duckdb {
 
 struct StandardCharacterReader {
@@ -163,7 +165,7 @@ struct LikeMatcher : public FunctionData {
 				// special character, push a constant pattern
 				if (i > last_non_pattern) {
 					auto seg_pattern = like_pattern.substr(last_non_pattern, i - last_non_pattern);
-					segments.emplace_back(seg_pattern, last_non_pattern, i - last_non_pattern);
+					segments.emplace_back(seg_pattern, last_non_pattern, i);
 				}
 				last_non_pattern = i + 1;
 				if (ch == escape || ch == '_') {
@@ -185,7 +187,7 @@ struct LikeMatcher : public FunctionData {
 		}
 		if (last_non_pattern < like_pattern.size()) {
 			auto seg_pattern = like_pattern.substr(last_non_pattern, like_pattern.size() - last_non_pattern);
-			segments.emplace_back(seg_pattern, last_non_pattern, like_pattern.size() - last_non_pattern);
+			segments.emplace_back(seg_pattern, last_non_pattern, like_pattern.size());
 		}
 		if (segments.empty()) {
 			return nullptr;
@@ -214,7 +216,7 @@ struct LikeMatcher : public FunctionData {
 
 	string RebuildStringPattern() {
 		for (auto &segment : segments) {
-			like_pattern.replace(segment.start, segment.start - segment.end + 1, segment.pattern);
+			like_pattern.replace(segment.start, segment.end - segment.start, segment.pattern);
 		}
 		return like_pattern;
 	}
@@ -226,27 +228,6 @@ private:
 	bool has_end_percentage;
 };
 
-static bool GetCollationLikePattern(unique_ptr<Expression> &lhs, unique_ptr<Expression> &rhs,
-                                    LogicalType &result_type) {
-	auto coll_left = StringType::GetCollation(lhs->return_type);
-	auto coll_right = StringType::GetCollation(rhs->return_type);
-	if (coll_left.empty() && coll_right.empty()) {
-		return false;
-	}
-	if (coll_left == coll_right) {
-		result_type = rhs->return_type;
-		return true;
-	}
-	if (coll_left.empty()) {
-		result_type = rhs->return_type;
-	} else if (coll_right.empty()) {
-		result_type = lhs->return_type;
-	} else { // different collations not supported
-		throw SyntaxException("Invalid different collations in the Like Operator.");
-	}
-	return true;
-}
-
 static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
@@ -254,7 +235,7 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		LogicalType result_type;
-		if (GetCollationLikePattern(arguments[0], arguments[1], result_type)) {
+		if (LikeUtil::GetCollationLikePattern(arguments[0], arguments[1], result_type)) {
 			// there is a collation, then pushing it
 			ExpressionBinder::PushCollation(context, arguments[0], arguments[0]->return_type, false);
 			if (arguments.size() == 3) {
@@ -268,9 +249,9 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 				// pattern ending
 				like_matcher = LikeMatcher::CreateLikeMatcher<false>(pattern_str.ToString());
 				like_matcher->PushCollation(context, result_type);
-				string collated_pattern = like_matcher->RebuildStringPattern();
-				arguments[1] = make_uniq<BoundConstantExpression>(Value(collated_pattern));
 			}
+			string collated_pattern = like_matcher->RebuildStringPattern();
+			arguments[1] = make_uniq<BoundConstantExpression>(Value(collated_pattern));
 			return std::move(like_matcher);
 		} else {
 			return LikeMatcher::CreateLikeMatcher<true>(pattern_str.ToString());
