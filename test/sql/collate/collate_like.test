@@ -223,6 +223,35 @@ SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a%a%a%a'
 AAAA
 aaaa
 
+query I
+SELECT * FROM t1 WHERE c1 LIKE 'A_%' COLLATE NOCASE
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE '_A_%' COLLATE NOCASE
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE '%_%A' COLLATE NOCASE
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE '%_%_' COLLATE NOCASE
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE '_%%_' COLLATE NOCASE
+----
+AAAA
+aaaa
 
 ######### !!! test like_escape
 

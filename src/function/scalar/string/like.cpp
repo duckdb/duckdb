@@ -79,13 +79,14 @@ bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx
 }
 
 struct LikeSegment {
-	explicit LikeSegment(string pattern_p, idx_t start_p, idx_t end_p)
-	    : pattern(std::move(pattern_p)), start(start_p), end(end_p) {
+	explicit LikeSegment(string pattern_p, idx_t start_p, idx_t end_p, bool special_ch = false)
+	    : pattern(std::move(pattern_p)), start(start_p), end(end_p), special_char(special_ch) {
 	}
 
 	string pattern;
 	idx_t start;
 	idx_t end;
+	bool special_char; // special chars: '%', '_', escape
 };
 
 struct LikeMatcher : public FunctionData {
@@ -153,7 +154,7 @@ struct LikeMatcher : public FunctionData {
 		}
 	}
 
-	template <bool STOPPLE>
+	template <bool FORCED>
 	static unique_ptr<LikeMatcher> CreateLikeMatcher(string like_pattern, char escape = '\0') {
 		vector<LikeSegment> segments;
 		idx_t last_non_pattern = 0;
@@ -168,10 +169,11 @@ struct LikeMatcher : public FunctionData {
 					segments.emplace_back(seg_pattern, last_non_pattern, i);
 				}
 				last_non_pattern = i + 1;
+
 				if (ch == escape || ch == '_') {
 					// escape or underscore: could not create efficient like matcher
 					// FIXME: we could handle escaped percentages here
-					if (STOPPLE) {
+					if (!FORCED) {
 						return nullptr;
 					}
 				} else {
@@ -183,6 +185,13 @@ struct LikeMatcher : public FunctionData {
 						has_end_percentage = true;
 					}
 				}
+				if (FORCED) {
+					//! we add the special chars into individual segments,
+					//! then during PushCollation and RebuildPattern we bypass it
+					auto special_pattern = like_pattern.substr(i, 1);
+					segments.emplace_back(special_pattern, i, i+1, true);
+				}
+
 			}
 		}
 		if (last_non_pattern < like_pattern.size()) {
@@ -207,17 +216,21 @@ struct LikeMatcher : public FunctionData {
 
 	void PushCollation(ClientContext &context, LogicalType &collation) {
 		for (auto &segment : segments) {
-			unique_ptr<Expression> const_expr = make_uniq<BoundConstantExpression>(Value(segment.pattern));
-			ExpressionBinder::PushCollation(context, const_expr, collation, false);
-			Value collated_pattern = ExpressionExecutor::EvaluateScalar(context, *const_expr);
-			segment.pattern = collated_pattern.ToString();
+			if (!segment.special_char) {
+				unique_ptr<Expression> const_expr = make_uniq<BoundConstantExpression>(Value(segment.pattern));
+				ExpressionBinder::PushCollation(context, const_expr, collation, false);
+				Value collated_pattern = ExpressionExecutor::EvaluateScalar(context, *const_expr);
+				segment.pattern = collated_pattern.ToString();
+			}
 		}
 	}
 
 	string RebuildStringPattern() {
+		string pattern;
 		for (auto &segment : segments) {
-			like_pattern.replace(segment.start, segment.end - segment.start, segment.pattern);
+			pattern += segment.pattern;
 		}
+		like_pattern = pattern;
 		return like_pattern;
 	}
 
@@ -237,24 +250,20 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 		LogicalType result_type;
 		if (LikeUtil::GetCollationLikePattern(arguments[0], arguments[1], result_type)) {
 			// there is a collation, then pushing it
-			ExpressionBinder::PushCollation(context, arguments[0], arguments[0]->return_type, false);
+			ExpressionBinder::PushCollation(context, arguments[0], result_type, false);
 			if (arguments.size() == 3) {
-				ExpressionBinder::PushCollation(context, arguments[2], arguments[2]->return_type, false);
+				ExpressionBinder::PushCollation(context, arguments[2], result_type, false);
 			}
+
 			auto like_matcher = LikeMatcher::CreateLikeMatcher<true>(pattern_str.ToString());
-			if (like_matcher) {
-				like_matcher->PushCollation(context, result_type);
-			} else {
-				// try CreateLikeMatcher again to get the segments, but now it cannot stop, i.e. it reads until the
-				// pattern ending
-				like_matcher = LikeMatcher::CreateLikeMatcher<false>(pattern_str.ToString());
-				like_matcher->PushCollation(context, result_type);
-			}
+			like_matcher->PushCollation(context, result_type);
+			// Replace the original pattern by the segmented pattern with each peace collated individually
 			string collated_pattern = like_matcher->RebuildStringPattern();
 			arguments[1] = make_uniq<BoundConstantExpression>(Value(collated_pattern));
-			return std::move(like_matcher);
+			// with collation we push it and use the regular LikeOpereator
+			return nullptr;
 		} else {
-			return LikeMatcher::CreateLikeMatcher<true>(pattern_str.ToString());
+			return LikeMatcher::CreateLikeMatcher<false>(pattern_str.ToString());
 		}
 	}
 	return nullptr;
