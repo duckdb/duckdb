@@ -23,6 +23,8 @@ duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection) {
 	return reinterpret_cast<duckdb_profiling_info>(profiling_info_ptr);
 }
 
+// FIXME: this should return a duckdb_value, so we can properly display structured data
+// at the moment everything has to be flattened to a string
 const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key) {
 	if (!info) {
 		return nullptr;

@@ -111,7 +111,7 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 		extra_info = op.GetProfilingInfo().metrics.extra_info;
 	}
 
-	auto node_name = op.node_type == op.GetName();
+	auto node_name = op.GetName();
 	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
 	result->extra_text["Cardinality"] = to_string(op.GetProfilingInfo().metrics.operator_cardinality);
 	string timing = StringUtil::Format("%.2f", op.GetProfilingInfo().metrics.operator_timing);
@@ -122,15 +122,20 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 template <class T>
 static idx_t CreateTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y) {
 	auto node = CreateNode(op);
-	result.SetNode(x, y, std::move(node));
 
 	if (!TreeChildrenIterator::HasChildren(op)) {
+		result.SetNode(x, y, std::move(node));
 		return 1;
 	}
 	idx_t width = 0;
 	// render the children of this node
-	TreeChildrenIterator::Iterate<T>(
-	    op, [&](const T &child) { width += CreateTreeRecursive<T>(result, child, x + width, y + 1); });
+	TreeChildrenIterator::Iterate<T>(op, [&](const T &child) {
+		auto child_x = x + width;
+		auto child_y = y + 1;
+		node->AddChildPosition(child_x, child_y);
+		width += CreateTreeRecursive<T>(result, child, child_x, child_y);
+	});
+	result.SetNode(x, y, std::move(node));
 	return width;
 }
 

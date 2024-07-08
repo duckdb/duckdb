@@ -45,8 +45,14 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 	switch (setting) {
 	case MetricsType::CPU_TIME:
 		return to_string(metrics.cpu_time);
-	case MetricsType::EXTRA_INFO:
-		return "\"" + QueryProfiler::JSONSanitize(metrics.extra_info) + "\"";
+	case MetricsType::EXTRA_INFO: {
+		string result = "\"";
+		for (auto &it : QueryProfiler::JSONSanitize(metrics.extra_info)) {
+			result += StringUtil::Format("%s:%s", it.first, it.second);
+		}
+		result += "\"";
+		return result;
+	}
 	case MetricsType::OPERATOR_CARDINALITY:
 		return to_string(metrics.operator_cardinality);
 	case MetricsType::OPERATOR_TIMING:

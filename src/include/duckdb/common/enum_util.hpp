@@ -126,6 +126,8 @@ enum class ExceptionFormatValueType : uint8_t;
 
 enum class ExceptionType : uint8_t;
 
+enum class ExplainFormat : uint8_t;
+
 enum class ExplainOutputType : uint8_t;
 
 enum class ExplainType : uint8_t;
@@ -489,6 +491,9 @@ const char* EnumUtil::ToChars<ExceptionFormatValueType>(ExceptionFormatValueType
 
 template<>
 const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value);
+
+template<>
+const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value);
 
 template<>
 const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value);
@@ -964,6 +969,9 @@ ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const ch
 
 template<>
 ExceptionType EnumUtil::FromString<ExceptionType>(const char *value);
+
+template<>
+ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value);
 
 template<>
 ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value);

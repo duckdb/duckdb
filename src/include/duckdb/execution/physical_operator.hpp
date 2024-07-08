@@ -12,6 +12,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
@@ -63,7 +64,7 @@ public:
 	virtual case_insensitive_map_t<string> ParamsToString() const {
 		return case_insensitive_map_t<string>();
 	}
-	virtual string ToString() const;
+	virtual string ToString(ExplainFormat format = ExplainFormat::TEXT) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 
