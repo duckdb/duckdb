@@ -7,7 +7,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
-#include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/execution/operator/join/physical_left_delim_join.hpp"
@@ -622,7 +622,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 }
 
 void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
-	TreeRenderer renderer;
+	TextTreeRenderer renderer;
 	if (IsDetailedEnabled()) {
 		renderer.EnableDetailed();
 	} else {

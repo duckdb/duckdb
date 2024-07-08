@@ -6,7 +6,6 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/common/json_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
@@ -109,18 +108,11 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 }
 
 string LogicalOperator::ToString(ExplainFormat format) const {
-	switch (format) {
-	case ExplainFormat::TEXT: {
-		TreeRenderer renderer;
-		return renderer.ToString(*this);
-	}
-	case ExplainFormat::JSON: {
-		JSONRenderer renderer;
-		return renderer.ToString(*this);
-	}
-	default:
-		throw NotImplementedException("ExplainFormat %s not implemented", EnumUtil::ToString(format));
-	}
+	auto renderer = TreeRenderer::CreateRenderer(format);
+	stringstream ss;
+	auto tree = RenderTree::CreateRenderTree(*this);
+	renderer->ToStream(*tree, ss);
+	return ss.str();
 }
 
 void LogicalOperator::Verify(ClientContext &context) {

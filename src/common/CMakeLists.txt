@@ -8,6 +8,7 @@ add_subdirectory(enums)
 add_subdirectory(exception)
 add_subdirectory(operator)
 add_subdirectory(progress_bar)
+add_subdirectory(tree_renderer)
 add_subdirectory(row_operations)
 add_subdirectory(serializer)
 add_subdirectory(sort)
@@ -58,7 +59,6 @@ add_library_unity(
   symbols.cpp
   render_tree.cpp
   tree_renderer.cpp
-  json_renderer.cpp
   types.cpp
   virtual_file_system.cpp
   windows_util.cpp)

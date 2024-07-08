@@ -3,7 +3,6 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/common/json_renderer.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -20,18 +19,11 @@ string PhysicalOperator::GetName() const {
 }
 
 string PhysicalOperator::ToString(ExplainFormat format) const {
-	switch (format) {
-	case ExplainFormat::TEXT: {
-		TreeRenderer renderer;
-		return renderer.ToString(*this);
-	}
-	case ExplainFormat::JSON: {
-		JSONRenderer renderer;
-		return renderer.ToString(*this);
-	}
-	default:
-		throw NotImplementedException("ExplainFormat %s not implemented", EnumUtil::ToString(format));
-	}
+	auto renderer = TreeRenderer::CreateRenderer(format);
+	stringstream ss;
+	auto tree = RenderTree::CreateRenderTree(*this);
+	renderer->ToStream(*tree, ss);
+	return ss.str();
 }
 
 // LCOV_EXCL_START

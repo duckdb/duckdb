@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/profiling_node.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/render_tree.hpp"
 
 namespace duckdb {
@@ -19,11 +20,13 @@ class PhysicalOperator;
 class Pipeline;
 struct PipelineRenderNode;
 
-struct JSONRendererConfig {};
+struct JSONTreeRendererConfig {};
 
-class JSONRenderer {
+class JSONTreeRenderer : public TreeRenderer {
 public:
-	explicit JSONRenderer(JSONRendererConfig config_p = JSONRendererConfig()) : config(config_p) {
+	explicit JSONTreeRenderer(JSONTreeRendererConfig config_p = JSONTreeRendererConfig()) : config(config_p) {
+	}
+	~JSONTreeRenderer() override {
 	}
 
 	string ToString(const LogicalOperator &op);
@@ -36,14 +39,11 @@ public:
 	void Render(const ProfilingNode &op, std::ostream &ss);
 	void Render(const Pipeline &op, std::ostream &ss);
 
-	void ToStream(RenderTree &root, std::ostream &ss);
+	void ToStream(RenderTree &root, std::ostream &ss) override;
 
 private:
 	//! The configuration used for rendering
-	JSONRendererConfig config;
-
-private:
-	// TODO: private methods go here
+	JSONTreeRendererConfig config;
 };
 
 } // namespace duckdb

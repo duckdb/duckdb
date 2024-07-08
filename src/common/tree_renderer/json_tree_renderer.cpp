@@ -1,4 +1,4 @@
-#include "duckdb/common/json_renderer.hpp"
+#include "duckdb/common/tree_renderer/json_tree_renderer.hpp"
 
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -18,46 +18,46 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-string JSONRenderer::ToString(const LogicalOperator &op) {
+string JSONTreeRenderer::ToString(const LogicalOperator &op) {
 	std::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-string JSONRenderer::ToString(const PhysicalOperator &op) {
+string JSONTreeRenderer::ToString(const PhysicalOperator &op) {
 	std::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-string JSONRenderer::ToString(const ProfilingNode &op) {
+string JSONTreeRenderer::ToString(const ProfilingNode &op) {
 	std::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-string JSONRenderer::ToString(const Pipeline &op) {
+string JSONTreeRenderer::ToString(const Pipeline &op) {
 	std::stringstream ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void JSONRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
+void JSONTreeRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void JSONRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
+void JSONTreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void JSONRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
+void JSONTreeRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void JSONRenderer::Render(const Pipeline &op, std::ostream &ss) {
+void JSONTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
@@ -78,7 +78,7 @@ static yyjson_mut_val *RenderRecursive(yyjson_mut_doc *doc, RenderTree &tree, id
 	return object;
 }
 
-void JSONRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+void JSONTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
 	auto doc = yyjson_mut_doc_new(nullptr);
 	auto result_obj = yyjson_mut_arr(doc);
 	yyjson_mut_doc_set_root(doc, result_obj);
