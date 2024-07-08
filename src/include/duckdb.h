@@ -442,6 +442,11 @@ typedef struct _duckdb_value {
 	void *__val;
 } * duckdb_value;
 
+//! Holds a recursive tree that matches the query plan.
+typedef struct _duckdb_profiling_info {
+	void *__prof;
+} * duckdb_profiling_info;
+
 //===--------------------------------------------------------------------===//
 // Function types
 //===--------------------------------------------------------------------===//
@@ -2731,6 +2736,62 @@ Report that an error has occurred while executing the replacement scan.
 */
 DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info info, const char *error);
 #endif
+
+//===--------------------------------------------------------------------===//
+// Profiling Info
+//===--------------------------------------------------------------------===//
+
+/*!
+Returns the root node from the profiling information. Returns NULL if profiling is not enabled
+
+* @param connection A connection object
+* @return A profiling information object
+*/
+DUCKDB_API duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection);
+
+/*!
+Returns the value of the setting key of the current profiling info node. If the setting does not exist or is not
+enabled, nullptr is returned.
+
+* @param info A profiling information object
+* @param key The name of the metric setting to return the value for
+* @return The value of the metric setting. Must be freed with `duckdb_free`.
+*/
+DUCKDB_API const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
+
+/*!
+Returns the number of children in the current profiling info node.
+
+* @param info A profiling information object
+* @return The number of children in the current node
+*/
+DUCKDB_API idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info);
+
+/*!
+Returns the child node at the specified index.
+
+* @param info A profiling information object
+* @param index The index of the child node to return
+* @return The child node at the specified index
+*/
+DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
+
+/*! Returns the operator name of the current profiling info node, if the node is an Operator Node.
+ *
+ * @param info A profiling information object
+ * @return The name of the operator of the current node. Returns a nullptr if the node is not an Operator Node. The
+ * result must be freed with `duckdb_free`.
+ */
+DUCKDB_API const char *duckdb_profiling_info_get_name(duckdb_profiling_info info);
+
+/*!
+Returns the query of the current profiling info node, if the node the query root node.
+
+* @param info A profiling information object
+* @return The query of the current node. Returns a nullptr if the node is not a Query Node. The result must be freed
+with `duckdb_free`.
+*/
+DUCKDB_API const char *duckdb_profiling_info_get_query(duckdb_profiling_info info);
 
 //===--------------------------------------------------------------------===//
 // Appender
