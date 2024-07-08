@@ -102,7 +102,6 @@ SinkCombineResultType PhysicalLeftDelimJoin::Combine(ExecutionContext &context, 
 }
 
 void PhysicalLeftDelimJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
-	join->PrepareFinalize(context, *join->sink_state);
 	distinct->PrepareFinalize(context, *distinct->sink_state);
 }
 
