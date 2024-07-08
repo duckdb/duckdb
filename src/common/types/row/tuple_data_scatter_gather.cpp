@@ -20,8 +20,8 @@ constexpr idx_t TupleDataWithinListFixedSize<string_t>() {
 }
 
 template <class T>
-static inline void TupleDataValueStore(const T &source, const data_ptr_t &row_location, const idx_t offset_in_row,
-                                       data_ptr_t &) {
+static void TupleDataValueStore(const T &source, const data_ptr_t &row_location, const idx_t offset_in_row,
+                                data_ptr_t &) {
 	Store<T>(source, row_location + offset_in_row);
 }
 
@@ -42,7 +42,7 @@ inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_lo
 }
 
 template <class T>
-static inline void TupleDataWithinListValueStore(const T &source, const data_ptr_t &location, data_ptr_t &) {
+static void TupleDataWithinListValueStore(const T &source, const data_ptr_t &location, data_ptr_t &) {
 	Store<T>(source, location);
 }
 
@@ -58,7 +58,7 @@ inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr
 }
 
 template <class T>
-inline void TupleDataValueVerify(const LogicalType &, const T &) {
+void TupleDataValueVerify(const LogicalType &, const T &) {
 #ifdef DEBUG
 	// NOP
 #endif
@@ -74,7 +74,7 @@ inline void TupleDataValueVerify(const LogicalType &type, const string_t &value)
 }
 
 template <class T>
-static inline T TupleDataWithinListValueLoad(const data_ptr_t &location, data_ptr_t &) {
+static T TupleDataWithinListValueLoad(const data_ptr_t &location, data_ptr_t &) {
 	return Load<T>(location);
 }
 
@@ -86,7 +86,7 @@ inline string_t TupleDataWithinListValueLoad(const data_ptr_t &location, data_pt
 	return result;
 }
 
-static inline void ResetCombinedListData(vector<TupleDataVectorFormat> &vector_data) {
+static void ResetCombinedListData(vector<TupleDataVectorFormat> &vector_data) {
 #ifdef DEBUG
 	for (auto &vd : vector_data) {
 		vd.combined_list_data = nullptr;
@@ -105,12 +105,11 @@ void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, con
 	for (idx_t col_idx = 0; col_idx < new_chunk.ColumnCount(); col_idx++) {
 		auto &source_v = new_chunk.data[col_idx];
 		auto &source_format = chunk_state.vector_data[col_idx];
-		TupleDataCollection::ComputeHeapSizes(chunk_state.heap_sizes, source_v, source_format, append_sel,
-		                                      append_count);
+		ComputeHeapSizes(chunk_state.heap_sizes, source_v, source_format, append_sel, append_count);
 	}
 }
 
-static inline idx_t StringHeapSize(const string_t &val) {
+static idx_t StringHeapSize(const string_t &val) {
 	return val.IsInlined() ? 0 : val.GetSize();
 }
 
@@ -150,8 +149,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
 			const auto &struct_source = struct_sources[struct_col_idx];
 			auto &struct_format = source_format.children[struct_col_idx];
-			TupleDataCollection::ComputeHeapSizes(heap_sizes_v, *struct_source, struct_format, append_sel,
-			                                      append_count);
+			ComputeHeapSizes(heap_sizes_v, *struct_source, struct_format, append_sel, append_count);
 		}
 		break;
 	}
@@ -168,8 +166,8 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		D_ASSERT(source_format.children.size() == 1);
 		auto &child_source_v = ListVector::GetEntry(source_v);
 		auto &child_format = source_format.children[0];
-		TupleDataCollection::WithinCollectionComputeHeapSizes(heap_sizes_v, child_source_v, child_format, append_sel,
-		                                                      append_count, source_vector_data);
+		WithinCollectionComputeHeapSizes(heap_sizes_v, child_source_v, child_format, append_sel, append_count,
+		                                 source_vector_data);
 		break;
 	}
 	case PhysicalType::ARRAY: {
@@ -185,8 +183,8 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		D_ASSERT(source_format.children.size() == 1);
 		auto &child_source_v = ArrayVector::GetEntry(source_v);
 		auto &child_format = source_format.children[0];
-		TupleDataCollection::WithinCollectionComputeHeapSizes(heap_sizes_v, child_source_v, child_format, append_sel,
-		                                                      append_count, source_vector_data);
+		WithinCollectionComputeHeapSizes(heap_sizes_v, child_source_v, child_format, append_sel, append_count,
+		                                 source_vector_data);
 		break;
 	}
 	default:
@@ -200,26 +198,26 @@ void TupleDataCollection::WithinCollectionComputeHeapSizes(Vector &heap_sizes_v,
                                                            const UnifiedVectorFormat &list_data) {
 	auto type = source_v.GetType().InternalType();
 	if (TypeIsConstantSize(type)) {
-		TupleDataCollection::ComputeFixedWithinCollectionHeapSizes(heap_sizes_v, source_v, source_format, append_sel,
-		                                                           append_count, list_data);
+		ComputeFixedWithinCollectionHeapSizes(heap_sizes_v, source_v, source_format, append_sel, append_count,
+		                                      list_data);
 		return;
 	}
 	switch (type) {
 	case PhysicalType::VARCHAR:
-		TupleDataCollection::StringWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format, append_sel,
-		                                                            append_count, list_data);
+		StringWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format, append_sel, append_count,
+		                                       list_data);
 		break;
 	case PhysicalType::STRUCT:
-		TupleDataCollection::StructWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format, append_sel,
-		                                                            append_count, list_data);
+		StructWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format, append_sel, append_count,
+		                                       list_data);
 		break;
 	case PhysicalType::LIST:
-		TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format,
-		                                                                append_sel, append_count, list_data);
+		CollectionWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format, append_sel, append_count,
+		                                           list_data);
 		break;
 	case PhysicalType::ARRAY:
-		TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format,
-		                                                                append_sel, append_count, list_data);
+		CollectionWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format, append_sel, append_count,
+		                                           list_data);
 		break;
 	default:
 		throw NotImplementedException("WithinListHeapComputeSizes for %s", EnumUtil::ToString(source_v.GetType().id()));
@@ -343,8 +341,8 @@ void TupleDataCollection::StructWithinCollectionComputeHeapSizes(Vector &heap_si
 		auto &struct_source = *struct_sources[struct_col_idx];
 
 		auto &struct_format = source_format.children[struct_col_idx];
-		TupleDataCollection::WithinCollectionComputeHeapSizes(heap_sizes_v, struct_source, struct_format, append_sel,
-		                                                      append_count, list_data);
+		WithinCollectionComputeHeapSizes(heap_sizes_v, struct_source, struct_format, append_sel, append_count,
+		                                 list_data);
 	}
 }
 
@@ -507,26 +505,26 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 	combined_child_list_data.validity.Initialize(combined_validity);
 
 	// Recurse
-	TupleDataCollection::WithinCollectionComputeHeapSizes(heap_sizes_v, child_source, child_format, append_sel,
-	                                                      append_count, combined_child_list_data);
+	WithinCollectionComputeHeapSizes(heap_sizes_v, child_source, child_format, append_sel, append_count,
+	                                 combined_child_list_data);
 }
 
 template <class T>
-static inline void TemplatedInitializeValidityMask(const data_ptr_t row_locations[], const idx_t append_count) {
+static void TemplatedInitializeValidityMask(const data_ptr_t row_locations[], const idx_t append_count) {
 	for (idx_t i = 0; i < append_count; i++) {
 		Store<T>(T(-1), row_locations[i]);
 	}
 }
 
 template <idx_t validity_bytes>
-static inline void TemplatedInitializeValidityMask(const data_ptr_t row_locations[], const idx_t append_count) {
+static void TemplatedInitializeValidityMask(const data_ptr_t row_locations[], const idx_t append_count) {
 	for (idx_t i = 0; i < append_count; i++) {
 		memset(row_locations[i], ~0, validity_bytes);
 	}
 }
 
-static inline void InitializeValidityMask(const data_ptr_t row_locations[], const idx_t append_count,
-                                          const idx_t validity_bytes) {
+static void InitializeValidityMask(const data_ptr_t row_locations[], const idx_t append_count,
+                                   const idx_t validity_bytes) {
 	switch (validity_bytes) {
 	case 1:
 		TemplatedInitializeValidityMask<uint8_t>(row_locations, append_count);
@@ -621,8 +619,8 @@ static void TupleDataTemplatedScatter(const Vector &, const TupleDataVectorForma
 	const auto &validity = source_data.validity;
 
 	// Target
-	auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
-	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -659,7 +657,7 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 	const auto &validity = source_data.validity;
 
 	// Target
-	auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+	const auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -718,8 +716,8 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 	const auto &validity = source_data.validity;
 
 	// Target
-	auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
-	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -767,8 +765,8 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 	const auto &validity = source_data.validity;
 
 	// Target
-	auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
-	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -821,7 +819,7 @@ static void TupleDataTemplatedWithinCollectionScatter(const Vector &, const Tupl
 	const auto &source_validity = source_data.validity;
 
 	// Target
-	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
@@ -878,7 +876,7 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
 	const auto &source_validity = source_data.validity;
 
 	// Target
-	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	// Initialize the validity of the STRUCTs
 	for (idx_t i = 0; i < append_count; i++) {
@@ -942,7 +940,7 @@ static void TupleDataCollectionWithinCollectionScatter(const Vector &child_list,
 	const auto &child_list_validity = child_list_data.validity;
 
 	// Target
-	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
@@ -1108,7 +1106,7 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
                                      const SelectionVector &target_sel, optional_ptr<Vector>,
                                      const vector<TupleDataGatherFunction> &) {
 	// Source
-	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+	const auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Target
 	auto target_data = FlatVector::GetData<T>(target);
@@ -1141,7 +1139,7 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
                                   const SelectionVector &target_sel, optional_ptr<Vector> dummy_vector,
                                   const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
-	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+	const auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Target
 	auto &target_validity = FlatVector::Validity(target);
@@ -1193,10 +1191,10 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
                                 const SelectionVector &target_sel, optional_ptr<Vector>,
                                 const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
-	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+	const auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
 	// Target
-	auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
+	const auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
 	auto &target_list_validity = FlatVector::Validity(target);
 
 	// Precompute mask indexes
@@ -1206,7 +1204,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 
 	// Load pointers to the data from the row
 	Vector heap_locations(LogicalType::POINTER);
-	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	uint64_t target_list_offset = 0;
@@ -1257,10 +1255,10 @@ TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &, Vector &heap_l
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
-	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	// Target
-	auto target_data = FlatVector::GetData<T>(target);
+	const auto target_data = FlatVector::GetData<T>(target);
 	auto &target_validity = FlatVector::Validity(target);
 
 	uint64_t target_offset = list_size_before;
@@ -1309,7 +1307,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
-	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	// Target
 	auto &target_validity = FlatVector::Validity(target);
@@ -1361,17 +1359,17 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 	const auto &list_validity = FlatVector::Validity(*list_vector);
 
 	// Source
-	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	// Target
-	auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
+	const auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
 	auto &target_validity = FlatVector::Validity(target);
 	const auto child_list_size_before = ListVector::GetListSize(target);
 
 	// We need to create a vector that has the combined list sizes (hugeint_t has same size as list_entry_t)
 	Vector combined_list_vector(LogicalType::HUGEINT);
 	FlatVector::SetValidity(combined_list_vector, list_validity); // Has same validity as list parent
-	auto combined_list_entries = FlatVector::GetData<list_entry_t>(combined_list_vector);
+	const auto combined_list_entries = FlatVector::GetData<list_entry_t>(combined_list_vector);
 
 	uint64_t target_offset = list_size_before;
 	uint64_t target_child_offset = child_list_size_before;
@@ -1554,21 +1552,22 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType
 
 	if (TypeVisitor::Contains(type, LogicalTypeId::ARRAY)) {
 		// Special case: we cant handle arrays yet, so we need to replace them with lists when gathering
-		auto new_type = ArrayType::ConvertToList(type);
+		const auto new_type = ArrayType::ConvertToList(type);
 		TupleDataGatherFunction result;
 		// Theres only two cases: Either the array is within a struct, or it is within a list (or has now become a list)
-		if (new_type.InternalType() == PhysicalType::LIST) {
+		switch (new_type.InternalType()) {
+		case PhysicalType::LIST:
 			result.function = TupleDataCastToArrayListGather;
 			result.child_functions.push_back(
 			    TupleDataGetGatherFunctionInternal(ListType::GetChildType(new_type), true));
 			return result;
-		} else if (new_type.InternalType() == PhysicalType::STRUCT) {
+		case PhysicalType::STRUCT:
 			result.function = TupleDataCastToArrayStructGather;
 			for (const auto &child_type : StructType::GetChildTypes(new_type)) {
 				result.child_functions.push_back(TupleDataGetGatherFunctionInternal(child_type.second, false));
 			}
 			return result;
-		} else {
+		default:
 			throw InternalException("Unsupported type for TupleDataCollection::GetGatherFunction");
 		}
 	}
