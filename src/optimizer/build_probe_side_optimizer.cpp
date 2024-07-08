@@ -85,8 +85,8 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 
 		// Don't multiply by cardinalities, the only important metric is the size of the row
 		// in the hash table
-		ret.left_side = left_tuple_layout.GetRowWidth() + MAGIC_RATIO_TO_SWAP_BUILD_SIDES * left_child->types.size();
-		ret.right_side = right_tuple_layout.GetRowWidth() + MAGIC_RATIO_TO_SWAP_BUILD_SIDES * right_child->types.size();
+		ret.left_side = left_tuple_layout.GetRowWidth() + COLUMN_COUNT_PENALTY * left_child->types.size();
+		ret.right_side = right_tuple_layout.GetRowWidth() + COLUMN_COUNT_PENALTY * right_child->types.size();
 		return ret;
 	}
 	default:
@@ -105,16 +105,14 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 
 	auto build_sizes = GetBuildSizes(op);
 	// special math.
-	auto left_side_metric = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
-	auto right_side_metric = rhs_cardinality * build_sizes.right_side;
-
-	const auto flip_coefficient = right_side_metric - left_side_metric;
+	auto left_side_build_cost = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
+	auto right_side_build_cost = rhs_cardinality * build_sizes.right_side;
 
 	bool swap = false;
 	// RHS is build side.
 	// if right_side metric is larger than left_side metric, then right_side is more costly to build on
 	// than the lhs. So we swap
-	if (flip_coefficient > 0) {
+	if (right_side_build_cost > left_side_build_cost) {
 		swap = true;
 	}
 

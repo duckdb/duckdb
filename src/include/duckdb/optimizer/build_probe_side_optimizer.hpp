@@ -16,8 +16,8 @@
 namespace duckdb {
 
 struct BuildSize {
-	idx_t left_side;
-	idx_t right_side;
+	double left_side;
+	double right_side;
 
 	// Initialize with 1 so the build side is just the cardinality if types aren't
 	// known.
@@ -26,7 +26,7 @@ struct BuildSize {
 };
 
 class BuildProbeSideOptimizer : LogicalOperatorVisitor {
-	static constexpr double MAGIC_RATIO_TO_SWAP_BUILD_SIDES = 1.2;
+	static constexpr double COLUMN_COUNT_PENALTY = 1.1;
 
 public:
 	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op);
