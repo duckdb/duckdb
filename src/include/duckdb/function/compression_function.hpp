@@ -31,8 +31,7 @@ struct SegmentScanState;
 
 class CompressionInfo {
 public:
-	CompressionInfo(const idx_t block_size, const PhysicalType &physical_type)
-	    : block_size(block_size), physical_type(physical_type) {
+	CompressionInfo(const idx_t block_size) : block_size(block_size) {
 	}
 
 public:
@@ -44,14 +43,9 @@ public:
 	idx_t GetBlockSize() const {
 		return block_size;
 	}
-	//! The physical type to compress.
-	PhysicalType GetPhysicalType() const {
-		return physical_type;
-	}
 
 private:
 	idx_t block_size;
-	PhysicalType physical_type;
 };
 
 struct AnalyzeState {
@@ -132,11 +126,6 @@ struct CompressionAppendState {
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
-
-//===--------------------------------------------------------------------===//
-// Function selection
-//===--------------------------------------------------------------------===//
-typedef bool (*compression_supports_type_t)(const CompressionInfo &info);
 
 //===--------------------------------------------------------------------===//
 // Analyze
@@ -230,10 +219,6 @@ public:
 	CompressionType type;
 	//! The data type this function can compress
 	PhysicalType data_type;
-
-	//! When selecting a compression function, we first check whether it is already loaded or not.
-	// If it is, we perform an additional check to ensure that the checkpointer can use the function.
-	compression_supports_type_t supports_type;
 
 	//! Analyze step: determine which compression function is the most effective
 	//! init_analyze is called once to set up the analyze state

@@ -32,13 +32,10 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
 
-	CompressionInfo info(block_manager.GetBlockSize(), type.InternalType());
-
 	if (block_id == INVALID_BLOCK) {
-		// constant segment, no need to allocate an actual block
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, info);
+		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
 	} else {
-		function = config.GetCompressionFunction(compression_type, info);
+		function = config.GetCompressionFunction(compression_type, type.InternalType());
 		block = block_manager.RegisterBlock(block_id);
 	}
 
@@ -57,8 +54,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 
 	// Get the segment compression function.
 	auto &config = DBConfig::GetConfig(db);
-	CompressionInfo info(block_size, type.InternalType());
-	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, info);
+	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, *function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
