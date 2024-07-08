@@ -61,6 +61,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	vector<idx_t> partition_cols;
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
+	bool no_partition_columns = false;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
@@ -126,6 +127,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
+		} else if (loption == "no_partition_columns") {
+			no_partition_columns = true;
 		} else {
 			if (loption == "compression") {
 				if (option.second.empty()) {
@@ -162,6 +165,13 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	}
 	if (file_size_bytes.IsValid() && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine FILE_SIZE_BYTES and PARTITION_BY for COPY");
+	}
+	if (no_partition_columns) {
+		if (partition_cols.size() == select_node.names.size()) {
+			throw NotImplementedException(
+			    "There is no column to write due to PARTITION_BY and NO_PARTITION_COLUMNS options.");
+		}
+		bind_input.excluded_columns = partition_cols;
 	}
 	bool is_remote_file = FileSystem::IsRemoteFile(stmt.info->file_path);
 	if (is_remote_file) {

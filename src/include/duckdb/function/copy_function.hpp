@@ -72,6 +72,7 @@ struct CopyFunctionBindInput {
 	const CopyInfo &info;
 
 	string file_extension;
+	vector<column_t> excluded_columns;
 };
 
 struct CopyToSelectInput {
