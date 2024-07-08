@@ -292,17 +292,18 @@ static idx_t GetTupleWidth(const vector<LogicalType> &types, bool &all_constant)
 	return tuple_width + AlignValue(types.size()) / 8 + GetTypeIdSize(PhysicalType::UINT64);
 }
 
-static idx_t GetPartitioningSpaceRequirement(const vector<LogicalType> &types, const idx_t radix_bits,
-                                             const idx_t num_threads) {
+static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vector<LogicalType> &types,
+                                             const idx_t radix_bits, const idx_t num_threads) {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	bool all_constant;
 	idx_t tuple_width = GetTupleWidth(types, all_constant);
 
-	auto tuples_per_block = Storage::BLOCK_SIZE / tuple_width;
+	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width;
 	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
 	if (!all_constant) {
 		blocks_per_chunk += 2;
 	}
-	auto size_per_partition = blocks_per_chunk * Storage::BLOCK_ALLOC_SIZE;
+	auto size_per_partition = blocks_per_chunk * buffer_manager.GetBlockAllocSize();
 	auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 
 	return num_threads * num_partitions * size_per_partition;
@@ -484,7 +485,7 @@ public:
 		sink.total_size = sink.hash_table->GetTotalSize(partition_sizes, partition_counts, sink.max_partition_size,
 		                                                sink.max_partition_count);
 		const auto probe_side_requirement =
-		    GetPartitioningSpaceRequirement(op.types, sink.hash_table->GetRadixBits(), sink.num_threads);
+		    GetPartitioningSpaceRequirement(sink.context, op.types, sink.hash_table->GetRadixBits(), sink.num_threads);
 
 		sink.temporary_memory_state->SetMinimumReservation(sink.max_partition_size +
 		                                                   JoinHashTable::PointerTableSize(sink.max_partition_count) +
@@ -518,7 +519,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		} else {
 			// No repartitioning! We do need some space for partitioning the probe-side, though
 			const auto probe_side_requirement =
-			    GetPartitioningSpaceRequirement(children[0]->types, ht.GetRadixBits(), sink.num_threads);
+			    GetPartitioningSpaceRequirement(context, children[0]->types, ht.GetRadixBits(), sink.num_threads);
 			sink.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + probe_side_requirement);
 			for (auto &local_ht : sink.local_hash_tables) {
 				ht.Merge(*local_ht);
