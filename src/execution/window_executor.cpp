@@ -60,19 +60,11 @@ void WindowDataChunk::Copy(DataChunk &input, idx_t begin) {
 	const idx_t end = begin + source_count;
 	const idx_t count = chunk.size();
 	D_ASSERT(end <= count);
-	// Can we overwrite the validity mask in parallel?
-	bool aligned = IsMaskAligned(begin, end, count);
 	for (column_t i = 0; i < chunk.data.size(); ++i) {
 		auto &src = input.data[i];
 		auto &dst = chunk.data[i];
-		UnifiedVectorFormat sdata;
-		src.ToUnifiedFormat(count, sdata);
-		if (is_simple[i] && aligned && sdata.validity.AllValid()) {
-			VectorOperations::Copy(src, dst, source_count, 0, begin);
-		} else {
-			lock_guard<mutex> column_guard(locks[i]);
-			VectorOperations::Copy(src, dst, source_count, 0, begin);
-		}
+		lock_guard<mutex> column_guard(locks[i]);
+		VectorOperations::Copy(src, dst, source_count, 0, begin);
 	}
 }
 
@@ -1099,7 +1091,6 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 	auto &aggregator = gastate.aggregator;
 	auto &gsink = gastate.gsink;
 
-	// TODO we could evaluate those expressions in parallel
 	idx_t filtered = 0;
 	SelectionVector *filtering = nullptr;
 	if (wexpr.filter_expr) {
@@ -1638,10 +1629,10 @@ void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Wi
 //===--------------------------------------------------------------------===//
 // WindowLeadLagLocalState
 //===--------------------------------------------------------------------===//
-class WindowLeadLagLocalState : public WindowExecutorBoundsState {
+class WindowLeadLagLocalState : public WindowValueLocalState {
 public:
-	explicit WindowLeadLagLocalState(const WindowExecutorGlobalState &gstate)
-	    : WindowExecutorBoundsState(gstate),
+	explicit WindowLeadLagLocalState(const WindowValueGlobalState &gstate)
+	    : WindowValueLocalState(gstate),
 	      leadlag_offset(gstate.executor.wexpr.offset_expr.get(), gstate.executor.context),
 	      leadlag_default(gstate.executor.wexpr.default_expr.get(), gstate.executor.context) {
 	}
@@ -1668,7 +1659,8 @@ WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, Clien
 
 unique_ptr<WindowExecutorLocalState>
 WindowLeadLagExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	return make_uniq<WindowLeadLagLocalState>(gstate);
+	const auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	return make_uniq<WindowLeadLagLocalState>(gvstate);
 }
 
 void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
