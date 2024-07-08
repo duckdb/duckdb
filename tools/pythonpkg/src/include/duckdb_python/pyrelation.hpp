@@ -56,7 +56,7 @@ public:
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
 	unique_ptr<DuckDBPyRelation> Sort(const py::args &args);
 
-	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Aggregate(const py::object &expr, const string &groups = "");
 
 	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name, const string &aggregated_columns,
 	                                               const string &groups = "", const string &function_parameter = "",
