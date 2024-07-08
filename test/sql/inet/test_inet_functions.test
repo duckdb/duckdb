@@ -30,6 +30,54 @@ SELECT family('127.0.0.1/17');
 ----
 4
 
+# netmask
+query I
+SELECT netmask(INET '192.168.1.5/32')
+----
+255.255.255.255
+
+query I
+SELECT netmask(INET '192.168.1.5/24')
+----
+255.255.255.0/24
+
+query I
+SELECT netmask(INET '192.168.1.5/16')
+----
+255.255.0.0/16
+
+query I
+SELECT netmask(INET '192.168.1.5/8')
+----
+255.0.0.0/8
+
+query I
+SELECT netmask(INET '192.168.1.5/0')
+----
+0.0.0.0/0
+
+# network
+query I
+SELECT network(INET '192.168.1.5/24')
+----
+192.168.1.0/24
+
+query I
+SELECT network(INET '192.168.1.5/16')
+----
+192.168.0.0/16
+
+# broadcast
+query I
+SELECT broadcast(INET '192.168.1.5/24')
+----
+192.168.1.255/24
+
+query I
+SELECT broadcast(INET '192.168.1.5/16')
+----
+192.168.255.255/16
+
 # subtract
 query I
 SELECT INET '127.0.0.255' - 32;
@@ -60,3 +108,10 @@ statement error
 select INET '255.255.255.255' + 1
 ----
 Out of Range Error: Cannot add 1
+
+query I
+SELECT * FROM (VALUES (netmask('10.10.10.1/12')), (broadcast('10.10.10.2/8')), (network('10.10.10.3')));
+----
+255.240.0.0/12
+10.255.255.255/8
+10.10.10.3

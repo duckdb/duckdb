@@ -56,7 +56,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 
 	unique_ptr<LogicalOperator> result;
 	for (auto &table_ref : entries.tables) {
-		auto &table = table_ref.get();
+		auto &table = table_ref.get().Cast<TableCatalogEntry>();
 		// generate the insert statement
 		InsertStatement insert_stmt;
 		insert_stmt.catalog = target_database_name;
@@ -69,7 +69,11 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		from_tbl->table_name = table.name;
 
 		auto select_node = make_uniq<SelectNode>();
-		select_node->select_list.push_back(make_uniq<StarExpression>());
+		auto &select_list = select_node->select_list;
+		for (auto &col : table.GetColumns().Physical()) {
+			select_list.push_back(make_uniq<ColumnRefExpression>(col.Name(), table.name));
+		}
+
 		select_node->from_table = std::move(from_tbl);
 
 		auto select_stmt = make_uniq<SelectStatement>();

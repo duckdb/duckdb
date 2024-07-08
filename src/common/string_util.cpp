@@ -27,9 +27,8 @@ string StringUtil::GenerateRandomName(idx_t length) {
 	std::uniform_int_distribution<> dis(0, 15);
 
 	std::stringstream ss;
-	ss << std::hex;
 	for (idx_t i = 0; i < length; i++) {
-		ss << dis(gen);
+		ss << "0123456789abcdef"[dis(gen)];
 	}
 	return ss.str();
 }
