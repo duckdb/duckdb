@@ -25,7 +25,7 @@ class TableScanGlobalSourceState : public GlobalSourceState {
 public:
 	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
 		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
-			table_filters = op.dynamic_filters->GetFinalTableFilters(op.table_filters.get());
+			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
 		}
 		if (op.function.init_global) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op));
