@@ -525,7 +525,7 @@ unique_ptr<FunctionData> MinMaxNBind(ClientContext &context, AggregateFunction &
 template <class COMPARATOR>
 static AggregateFunction GetMinMaxNFunction() {
 	return AggregateFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::ANY), nullptr,
-	                           nullptr, nullptr, nullptr, nullptr, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
+	                         nullptr, nullptr, nullptr, nullptr, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
 }
 
 //---------------------------------------------------
