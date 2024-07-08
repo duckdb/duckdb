@@ -2,7 +2,7 @@ import duckdb
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
-closed = lambda: pytest.raises(duckdb.ConnectionException, match='Connection has already been closed')
+closed = lambda: pytest.raises(duckdb.ConnectionException, match='Connection already closed')
 no_result_set = lambda: pytest.raises(duckdb.InvalidInputException, match='No open result set')
 
 

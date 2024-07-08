@@ -2,6 +2,8 @@
 # description: Test CREATE TABLE using compression options
 # group: [compact_block_size]
 
+# This test defaults to another compression function for larger block sizes,
+# because the bitpacking groups fit the blocks.
 require block_size 16384
 
 require skip_reload

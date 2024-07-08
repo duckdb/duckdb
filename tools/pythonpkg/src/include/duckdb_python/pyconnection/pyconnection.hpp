@@ -40,11 +40,87 @@ public:
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 };
 
-struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
+struct ConnectionGuard {
 public:
+	ConnectionGuard() {
+	}
+	~ConnectionGuard() {
+	}
+
+public:
+	DuckDB &GetDatabase() {
+		if (!database) {
+			ThrowConnectionException();
+		}
+		return *database;
+	}
+	const DuckDB &GetDatabase() const {
+		if (!database) {
+			ThrowConnectionException();
+		}
+		return *database;
+	}
+	Connection &GetConnection() {
+		if (!connection) {
+			ThrowConnectionException();
+		}
+		return *connection;
+	}
+	const Connection &GetConnection() const {
+		if (!connection) {
+			ThrowConnectionException();
+		}
+		return *connection;
+	}
+	DuckDBPyRelation &GetResult() {
+		if (!result) {
+			ThrowConnectionException();
+		}
+		return *result;
+	}
+	const DuckDBPyRelation &GetResult() const {
+		if (!result) {
+			ThrowConnectionException();
+		}
+		return *result;
+	}
+
+public:
+	bool HasResult() const {
+		return result != nullptr;
+	}
+
+public:
+	void SetDatabase(shared_ptr<DuckDB> db) {
+		database = std::move(db);
+	}
+	void SetDatabase(ConnectionGuard &con) {
+		if (!con.database) {
+			ThrowConnectionException();
+		}
+		database = con.database;
+	}
+	void SetConnection(unique_ptr<Connection> con) {
+		connection = std::move(con);
+	}
+	void SetResult(unique_ptr<DuckDBPyRelation> res) {
+		result = std::move(res);
+	}
+
+private:
+	void ThrowConnectionException() const {
+		throw ConnectionException("Connection already closed!");
+	}
+
+private:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
 	unique_ptr<DuckDBPyRelation> result;
+};
+
+struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
+public:
+	ConnectionGuard con;
 	vector<weak_ptr<DuckDBPyConnection>> cursors;
 	std::mutex py_connection_lock;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
@@ -203,7 +279,7 @@ public:
 
 	py::dict FetchNumpy();
 	PandasDataFrame FetchDF(bool date_as_object);
-	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
+	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false);
 
 	duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch);
 	PolarsDataFrame FetchPolars(idx_t rows_per_batch);
@@ -212,9 +288,9 @@ public:
 
 	py::dict FetchTF();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t rows_per_batch) const;
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t rows_per_batch);
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
+	static shared_ptr<DuckDBPyConnection> Connect(const py::object &database, bool read_only, const py::dict &config);
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
 	static case_insensitive_map_t<BoundParameterData> TransformPythonParamDict(const py::dict &params);
