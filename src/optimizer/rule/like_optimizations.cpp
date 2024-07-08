@@ -6,6 +6,8 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
+#include "duckdb/function/scalar/like.hpp"
+
 namespace duckdb {
 
 LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -146,15 +148,16 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &
 	auto new_function =
 	    make_uniq<BoundFunctionExpression>(expr.return_type, std::move(function), std::move(expr.children), nullptr);
 
-	ExpressionBinder::PushCollation(GetContext(), new_function->children[0], new_function->children[0]->return_type,
-	                                false);
+	LogicalType result_type;
+	LikeUtil::GetCollationLikePattern(new_function->children[0], new_function->children[1], result_type);
+
+	ExpressionBinder::PushCollation(GetContext(), new_function->children[0], result_type, false);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
-	auto constant_ret_type = new_function->children[1]->return_type;
 	new_function->children[1] = make_uniq<BoundConstantExpression>(Value(std::move(pattern)));
-	ExpressionBinder::PushCollation(GetContext(), new_function->children[1], constant_ret_type, false);
+	ExpressionBinder::PushCollation(GetContext(), new_function->children[1], result_type, false);
 
 	result = std::move(new_function);
 	if (is_not_like) {
