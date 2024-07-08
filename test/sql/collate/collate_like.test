@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET explain_output='all'
+
 query I
 SELECT 'a' LIKE 'A'
 ----
@@ -79,6 +82,7 @@ A
 query I
 SELECT * FROM t1 WHERE c1 LIKE 'A' COLLATE NOCASE
 ----
+A
 a
 
 query I
@@ -95,6 +99,7 @@ a
 query I
 SELECT * FROM t1 WHERE c1 LIKE 'a' COLLATE NOCASE
 ----
+A
 a
 
 query I
@@ -111,6 +116,7 @@ AAAA
 query I
 SELECT * FROM t1 WHERE c1 LIKE 'AAAA' COLLATE NOCASE
 ----
+AAAA
 aaaa
 
 query I
@@ -124,6 +130,7 @@ aaaa
 query I
 SELECT * FROM t1 WHERE c1 LIKE '%A_A' COLLATE NOCASE
 ----
+AAAA
 aaaa
 
 query I
@@ -135,6 +142,8 @@ aaaa
 query I
 SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A_A'
 ----
+AAAA
+aaaa
 
 query I
 SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a_a'
@@ -142,10 +151,10 @@ SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a_a'
 AAAA
 aaaa
 
-
 query I
 SELECT * FROM t1 WHERE c1 LIKE '%A%A' COLLATE NOCASE
 ----
+AAAA
 aaaa
 
 query I
@@ -157,6 +166,8 @@ aaaa
 query I
 SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A%A'
 ----
+AAAA
+aaaa
 
 query I
 SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a%a'
@@ -167,6 +178,7 @@ aaaa
 query I
 SELECT * FROM t1 WHERE c1 LIKE '%A_A_' COLLATE NOCASE
 ----
+AAAA
 aaaa
 
 query I
@@ -178,6 +190,8 @@ aaaa
 query I
 SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A_A_'
 ----
+AAAA
+aaaa
 
 query I
 SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a_a_'
@@ -188,6 +202,7 @@ aaaa
 query I
 SELECT * FROM t1 WHERE c1 LIKE '%A%A%A%A' COLLATE NOCASE
 ----
+AAAA
 aaaa
 
 query I
@@ -199,6 +214,8 @@ aaaa
 query I
 SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A%A%A%A'
 ----
+AAAA
+aaaa
 
 query I
 SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a%a%a%a'
@@ -217,12 +234,12 @@ true
 query I
 SELECT like_escape('a%ö' COLLATE NOACCENT, 'a$%ö', '$')
 ----
-false
+true
 
 query I
 SELECT like_escape('a%ö', 'a$%ö' COLLATE NOACCENT, '$')
 ----
-false
+true
 
 query I
 SELECT like_escape('a%ö' COLLATE NOACCENT, 'a$%ö' COLLATE NOACCENT, '$')
