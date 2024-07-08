@@ -1379,8 +1379,13 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 			continue;
 		}
 
+		// Set the offset of the combined list entry
+		auto &combined_list_entry = combined_list_entries[target_idx];
+		combined_list_entry.offset = target_child_offset;
+
 		const auto &list_length = list_entries[target_idx].length;
 		if (list_length == 0) {
+			combined_list_entry.length = 0;
 			continue;
 		}
 
@@ -1392,10 +1397,6 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 		// Get the start to the fixed-size data and skip the heap pointer over it
 		const auto source_data_location = source_heap_location;
 		source_heap_location += list_length * sizeof(uint64_t);
-
-		// Set the offset of the combined list entry
-		auto &combined_list_entry = combined_list_entries[target_sel.get_index(i)];
-		combined_list_entry.offset = target_child_offset;
 
 		// Load the child validity and data belonging to this list entry
 		for (idx_t child_i = 0; child_i < list_length; child_i++) {
