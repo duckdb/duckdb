@@ -33,6 +33,7 @@ public:
 	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
 	//! If this is a DelimJoin, whether it has been flipped to de-duplicating the RHS instead
 	bool delim_flipped = false;
+	bool convert_mark_to_semi = true;
 
 public:
 	string ParamsToString() const override;

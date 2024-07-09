@@ -91,6 +91,7 @@ logical_opt	<!REGEX>:.*SEMI.*
 
 statement ok
 create table t0 as select range a from range(300);
+
 statement ok
 create table t2 as select range b from range(50000);
 

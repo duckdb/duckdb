@@ -17,8 +17,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
 
 	right_bindings.insert(comp_join.mark_index);
-	FilterPushdown left_pushdown(optimizer, projected_mark_indexes, convert_mark_joins),
-	    right_pushdown(optimizer, projected_mark_indexes, convert_mark_joins);
+	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
 #ifdef DEBUG
 	bool simplified_mark_join = false;
 #endif
@@ -38,7 +37,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// this filter references the marker
 			// we can turn this into a SEMI join if the filter is on only the marker
 			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF && convert_mark_joins &&
-			    projected_mark_indexes.find(join.mark_index) == projected_mark_indexes.end()) {
+			    comp_join.convert_mark_to_semi) {
 				// filter just references the marker: turn into semi join
 #ifdef DEBUG
 				simplified_mark_join = true;
@@ -64,8 +63,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 							break;
 						}
 					}
-					if (all_null_values_are_equal && convert_mark_joins &&
-					    projected_mark_indexes.find(join.mark_index) == projected_mark_indexes.end()) {
+					if (all_null_values_are_equal && convert_mark_joins && comp_join.convert_mark_to_semi) {
 #ifdef DEBUG
 						simplified_mark_join = true;
 #endif

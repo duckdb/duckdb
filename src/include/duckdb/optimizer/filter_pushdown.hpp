@@ -18,14 +18,14 @@ class Optimizer;
 
 class FilterPushdown {
 public:
-	explicit FilterPushdown(Optimizer &optimizer, LogicalOperator &plan, bool convert_mark_joins = true);
-	FilterPushdown(Optimizer &optimizer, const unordered_set<idx_t> &projected_mark_indexes,
-	               bool convert_mark_joins = true);
+	explicit FilterPushdown(Optimizer &optimizer, bool convert_mark_joins = true);
 
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 	//! Return a reference to the client context (from the optimizer)
 	ClientContext &GetContext();
+
+	void CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings);
 
 	struct Filter {
 		unordered_set<idx_t> bindings;
