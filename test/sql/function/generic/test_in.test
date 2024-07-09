@@ -203,11 +203,11 @@ EXECUTE v1(MAP {2: 'b', 3: 'c'});
 false
 
 query I
-SELECT 1 IN (MAP {1: 'a', 2: 'b', 3: 'c'});
+SELECT 1 IN MAP {1: 'a', 2: 'b', 3: 'c'};
 ----
 true
 
 query I
-SELECT 1 IN (MAP {2: 'b', 3: 'c'});
+SELECT 1 IN MAP {2: 'b', 3: 'c'};
 ----
 false
