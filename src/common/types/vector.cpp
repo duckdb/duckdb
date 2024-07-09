@@ -1905,7 +1905,7 @@ string_t StringVector::AddString(Vector &vector, string_t data) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
 	return string_buffer.AddString(data);
 }
 
@@ -1986,7 +1986,7 @@ string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
 		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
-	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();
+	auto &fsst_string_buffer = vector.auxiliary.get()->Cast<VectorFSSTStringBuffer>();
 	return fsst_string_buffer.AddBlob(data);
 }
 
@@ -2271,7 +2271,7 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 }
 
 void ListVector::PushBack(Vector &target, const Value &insert) {
-	auto &target_buffer = target.auxiliary->Cast<VectorListBuffer>();
+	auto &target_buffer = target.auxiliary.get()->Cast<VectorListBuffer>();
 	target_buffer.PushBack(insert);
 }
 
