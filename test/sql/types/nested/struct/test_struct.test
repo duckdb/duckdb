@@ -96,6 +96,21 @@ SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e//2), 'xx')*2 as s FROM struct_data 
 5	4
 6	6
 
+query III
+SELECT {field1: 1, field2: 2} as strct, strct.field1, strct.field2
+----
+{'field1': 1, 'field2': 2}	1	2
+
+query III
+SELECT {field1: 1, field2: 2} as strct, strct['field1'], strct['field2']
+----
+{'field1': 1, 'field2': 2}	1	2
+
+query IIII
+SELECT {field1: {a: 11, b: 12}, field2: 2} as strct, strct.field1, strct.field2, strct.field1.a
+----
+{'field1': {'a': 11, 'b': 12}, 'field2': 2}	{'a': 11, 'b': 12}	2	11
+
 query II
 SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as ee FROM struct_data ORDER BY e DESC
 ----
