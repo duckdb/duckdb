@@ -60,11 +60,19 @@ void WindowDataChunk::Copy(DataChunk &input, idx_t begin) {
 	const idx_t end = begin + source_count;
 	const idx_t count = chunk.size();
 	D_ASSERT(end <= count);
+	// Can we overwrite the validity mask in parallel?
+	bool aligned = IsMaskAligned(begin, end, count);
 	for (column_t i = 0; i < chunk.data.size(); ++i) {
 		auto &src = input.data[i];
 		auto &dst = chunk.data[i];
-		lock_guard<mutex> column_guard(locks[i]);
-		VectorOperations::Copy(src, dst, source_count, 0, begin);
+		UnifiedVectorFormat sdata;
+		src.ToUnifiedFormat(count, sdata);
+		if (is_simple[i] && aligned && sdata.validity.AllValid()) {
+			VectorOperations::Copy(src, dst, source_count, 0, begin);
+		} else {
+			lock_guard<mutex> column_guard(locks[i]);
+			VectorOperations::Copy(src, dst, source_count, 0, begin);
+		}
 	}
 }
 

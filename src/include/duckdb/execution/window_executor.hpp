@@ -22,10 +22,7 @@ public:
 	static bool IsSimple(const Vector &v);
 
 	static inline bool IsMaskAligned(idx_t begin, idx_t end, idx_t count) {
-		const bool begin_aligned = (begin % ValidityMask::BITS_PER_VALUE == 0);
-		const bool end_aligned = (end % ValidityMask::BITS_PER_VALUE == 0);
-
-		return begin_aligned && (end_aligned || (end == count));
+		return ValidityMask::IsAligned(begin) && (ValidityMask::IsAligned(end) || (end == count));
 	}
 
 	explicit WindowDataChunk(DataChunk &chunk);
