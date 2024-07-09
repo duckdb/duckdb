@@ -106,8 +106,18 @@ SELECT {field1: 1, field2: 2} as strct, strct['field1'], strct['field2']
 ----
 {'field1': 1, 'field2': 2}	1	2
 
+statement error
+SELECT {field1: 1, field2: 2} as strct, strct.field1, strct.field3
+----
+Binder Error: Could not find key "field3" in struct
+
 query IIII
 SELECT {field1: {a: 11, b: 12}, field2: 2} as strct, strct.field1, strct.field2, strct.field1.a
+----
+{'field1': {'a': 11, 'b': 12}, 'field2': 2}	{'a': 11, 'b': 12}	2	11
+
+query IIII
+SELECT STRUCT_PACK(field1:= STRUCT_PACK(a:= 11, b:= 12), field2:= 2) as strct, strct.field1, strct.field2, strct.field1.a
 ----
 {'field1': {'a': 11, 'b': 12}, 'field2': 2}	{'a': 11, 'b': 12}	2	11
 
