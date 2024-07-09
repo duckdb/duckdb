@@ -129,9 +129,8 @@ void ExtractReferencedColumns(const ParsedExpression &expr, vector<string> &resu
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		result.push_back(colref.GetColumnName());
 	}
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		ExtractReferencedColumns(child, result);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { ExtractReferencedColumns(child, result); });
 }
 
 ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const Constraint &constraint) {
@@ -168,12 +167,12 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 	}
 	if (result.column_indexes.empty()) {
 		// generate column indexes from names
-		for(auto &name : result.column_names) {
+		for (auto &name : result.column_names) {
 			result.column_indexes.push_back(table.GetColumnIndex(name));
 		}
 	} else {
 		// generate names from column indexes
-		for(auto &index : result.column_indexes) {
+		for (auto &index : result.column_indexes) {
 			result.column_names.push_back(table.GetColumn(index).GetName());
 		}
 	}
@@ -182,10 +181,10 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 
 string GetConstraintName(const TableCatalogEntry &table, Constraint &constraint, const ExtraConstraintInfo &info) {
 	string result = table.name + "_";
-	for(auto &col : info.column_names) {
+	for (auto &col : info.column_names) {
 		result += StringUtil::Lower(col) + "_";
 	}
-	for(auto &col : info.referenced_columns) {
+	for (auto &col : info.referenced_columns) {
 		result += StringUtil::Lower(col) + "_";
 	}
 	switch (constraint.type) {
@@ -282,10 +281,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			output.SetValue(col++, count, Value(std::move(constraint_name)));
 
-
 			// constraint_index, BIGINT
 			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(data.unique_constraint_offset++)));
-
 
 			// constraint_type, VARCHAR
 			output.SetValue(col++, count, Value(constraint_type));
@@ -304,13 +301,13 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			vector<Value> column_index_list;
 			vector<Value> column_name_list;
 			vector<Value> referenced_column_name_list;
-			for(auto &col_index : info.column_indexes) {
+			for (auto &col_index : info.column_indexes) {
 				column_index_list.push_back(Value::UBIGINT(col_index.index));
 			}
-			for(auto &name : info.column_names) {
+			for (auto &name : info.column_names) {
 				column_name_list.push_back(Value(std::move(name)));
 			}
-			for(auto &name : info.referenced_columns) {
+			for (auto &name : info.referenced_columns) {
 				referenced_column_name_list.push_back(Value(std::move(name)));
 			}
 
@@ -321,7 +318,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
 
 			// referenced_table, VARCHAR
-			output.SetValue(col++, count, info.referenced_table.empty() ? Value() : Value(std::move(info.referenced_table)));
+			output.SetValue(col++, count,
+			                info.referenced_table.empty() ? Value() : Value(std::move(info.referenced_table)));
 
 			// referenced_column_names, LIST
 			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
