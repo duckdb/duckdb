@@ -40,8 +40,8 @@ CompressionFunction PatasCompressionFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool PatasCompressionFun::TypeIsSupported(const CompressionInfo &info) {
-	switch (info.GetPhysicalType()) {
+bool PatasCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return true;

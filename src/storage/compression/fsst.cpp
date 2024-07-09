@@ -92,7 +92,7 @@ struct FSSTAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<FSSTAnalyzeState>(info);
 }
 
@@ -706,8 +706,8 @@ CompressionFunction FSSTFun::GetFunction(PhysicalType data_type) {
 	    FSSTStorage::StringScanPartial<false>, FSSTStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
-bool FSSTFun::TypeIsSupported(const CompressionInfo &info) {
-	return info.GetPhysicalType() == PhysicalType::VARCHAR;
+bool FSSTFun::TypeIsSupported(const PhysicalType physical_type) {
+	return physical_type == PhysicalType::VARCHAR;
 }
 
 //===--------------------------------------------------------------------===//

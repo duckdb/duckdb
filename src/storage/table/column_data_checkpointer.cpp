@@ -15,8 +15,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
       checkpoint_info(checkpoint_info_p) {
 
 	auto &config = DBConfig::GetConfig(GetDatabase());
-	CompressionInfo info(col_data_p.GetBlockManager().GetBlockSize(), GetType().InternalType());
-	auto functions = config.GetCompressionFunctions(info);
+	auto functions = config.GetCompressionFunctions(GetType().InternalType());
 	for (auto &func : functions) {
 		compression_functions.push_back(&func.get());
 	}
@@ -269,8 +268,7 @@ CompressionFunction &ColumnDataCheckpointer::GetCompressionFunction(CompressionT
 	auto &db = GetDatabase();
 	auto &column_type = GetType();
 	auto &config = DBConfig::GetConfig(db);
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), column_type.InternalType());
-	return *config.GetCompressionFunction(compression_type, info);
+	return *config.GetCompressionFunction(compression_type, column_type.InternalType());
 }
 
 } // namespace duckdb

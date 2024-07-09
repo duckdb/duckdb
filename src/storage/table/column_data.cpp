@@ -554,7 +554,7 @@ void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &t
 	// Set the stack of the deserializer to load the data pointers.
 	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
 	deserializer.Set<LogicalType &>(type);
-	CompressionInfo compression_info(block_manager.GetBlockSize(), type.InternalType());
+	CompressionInfo compression_info(block_manager.GetBlockSize());
 	deserializer.Set<const CompressionInfo &>(compression_info);
 
 	vector<DataPointer> data_pointers;
