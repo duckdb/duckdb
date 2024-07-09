@@ -85,8 +85,8 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 
 		// Don't multiply by cardinalities, the only important metric is the size of the row
 		// in the hash table
-		ret.left_side = left_tuple_layout.GetRowWidth() + COLUMN_COUNT_PENALTY * left_child->types.size();
-		ret.right_side = right_tuple_layout.GetRowWidth() + COLUMN_COUNT_PENALTY * right_child->types.size();
+		ret.left_side = left_tuple_layout.GetRowWidth() * (1 + COLUMN_COUNT_PENALTY * left_child->types.size());
+		ret.right_side = right_tuple_layout.GetRowWidth() * (1 + COLUMN_COUNT_PENALTY * right_child->types.size());
 		return ret;
 	}
 	default:

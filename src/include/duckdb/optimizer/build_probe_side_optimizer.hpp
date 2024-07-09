@@ -26,7 +26,7 @@ struct BuildSize {
 };
 
 class BuildProbeSideOptimizer : LogicalOperatorVisitor {
-	static constexpr double COLUMN_COUNT_PENALTY = 1.1;
+	static constexpr double COLUMN_COUNT_PENALTY = 0.1;
 
 public:
 	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op);
