@@ -327,11 +327,11 @@ public:
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
-	//! Return the list of possible compression functions for the provided compression information.
-	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const CompressionInfo &info);
-	//! Return the compression function matching the compression type and its compression information.
+	//! Returns the list of possible compression functions for the physical type.
+	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const PhysicalType physical_type);
+	//! Returns the compression function matching the compression and physical type.
 	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
-	                                                                    const CompressionInfo &info);
+	                                                                    const PhysicalType physical_type);
 
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
