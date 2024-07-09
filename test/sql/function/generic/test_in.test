@@ -144,6 +144,21 @@ SELECT 1 IN [1, 2, 3];
 ----
 true
 
+query I
+SELECT 1 IN [2, 2, 3];
+----
+false
+
+query I
+SELECT 1 IN ((1, 2, 3));
+----
+true
+
+query I
+SELECT 1 IN ((2, 2, 3));
+----
+false
+
 statement ok
 PREPARE v1 AS SELECT 1 IN ?
 
@@ -154,6 +169,16 @@ true
 
 query I
 EXECUTE v1([2, 2, 3]);
+----
+false
+
+query I
+EXECUTE v1((1, 2, 3));
+----
+true
+
+query I
+EXECUTE v1((2, 2, 3));
 ----
 false
 

@@ -84,7 +84,7 @@ BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	return BindResult("GROUPING function is not supported here");
 }
 
-static bool IsPreparedList(ParsedExpression &bound) {
+static bool ParameterNeedsExpansion(ParsedExpression &bound) {
 	D_ASSERT(bound.expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &expr = BoundExpression::GetExpression(bound);
 	if (expr->type != ExpressionType::VALUE_CONSTANT) {
@@ -92,8 +92,13 @@ static bool IsPreparedList(ParsedExpression &bound) {
 	}
 	auto &value_constant = expr->Cast<BoundConstantExpression>();
 	auto &value = value_constant.value;
-	if (value.type().id() != LogicalTypeId::LIST) {
+	if (value.type().id() != LogicalTypeId::STRUCT && value.type().id() != LogicalTypeId::LIST) {
 		return false;
+	}
+	if (value.type().id() == LogicalTypeId::STRUCT) {
+		if (!StructType::IsUnnamed(value.type())) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -174,7 +179,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	case ExpressionType::COMPARE_IN: {
-		if (bound_children.size() == 2 && IsPreparedList(*bound_children[1])) {
+		if (bound_children.size() == 2 && ParameterNeedsExpansion(*bound_children[1])) {
 			vector<unique_ptr<ParsedExpression>> replacement_bound_expressions;
 			auto &lhs = bound_children[0];
 			auto &rhs = bound_children[1];
@@ -183,15 +188,26 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			// Expand the LIST value
 			auto &bound_expr = BoundExpression::GetExpression(*rhs);
 			auto &bound_constant = bound_expr->Cast<BoundConstantExpression>();
-			auto &list_value = bound_constant.value;
-			D_ASSERT(list_value.type().id() == LogicalTypeId::LIST);
-			auto list_children = ListValue::GetChildren(list_value);
-			if (list_children.empty()) {
-				throw BinderException("Expanded LIST parameter inside IN expression can not be empty");
-			}
-			for (auto &child : list_children) {
-				auto bound_child = make_uniq<BoundConstantExpression>(child);
-				replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));
+			auto &unexpanded_value = bound_constant.value;
+			if (unexpanded_value.type().id() == LogicalTypeId::STRUCT) {
+				auto &struct_children = StructValue::GetChildren(unexpanded_value);
+				if (struct_children.empty()) {
+					throw BinderException("Expanded STRUCT parameter inside IN expression can not be empty");
+				}
+				for (auto &child : struct_children) {
+					auto bound_child = make_uniq<BoundConstantExpression>(child);
+					replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));
+				}
+			} else {
+				D_ASSERT(unexpanded_value.type().id() == LogicalTypeId::LIST);
+				auto &list_children = ListValue::GetChildren(unexpanded_value);
+				if (list_children.empty()) {
+					throw BinderException("Expanded LIST parameter inside IN expression can not be empty");
+				}
+				for (auto &child : list_children) {
+					auto bound_child = make_uniq<BoundConstantExpression>(child);
+					replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));
+				}
 			}
 			bound_children = std::move(replacement_bound_expressions);
 		}
