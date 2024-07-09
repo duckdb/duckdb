@@ -72,7 +72,7 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	}
 }
 
-idx_t ValidityMask::TargetCount() {
+idx_t ValidityMask::TargetCount() const {
 	return target_count;
 }
 
