@@ -44,46 +44,6 @@ unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
 	return result;
 }
 
-// LCOV_EXCL_START
-template <class MAP_TYPE>
-struct UnorderedMapGetter {
-	static inline const typename MAP_TYPE::key_type &GetKey(typename MAP_TYPE::iterator &iterator) {
-		return iterator->first;
-	}
-
-	static inline const typename MAP_TYPE::key_type &GetKey(const typename MAP_TYPE::const_iterator &iterator) {
-		return iterator->first;
-	}
-
-	static inline typename MAP_TYPE::mapped_type &GetValue(typename MAP_TYPE::iterator &iterator) {
-		return iterator->second;
-	}
-
-	static inline const typename MAP_TYPE::mapped_type &GetValue(const typename MAP_TYPE::const_iterator &iterator) {
-		return iterator->second;
-	}
-};
-
-template <class T>
-struct FixedSizeMapGetter {
-	static inline const idx_t &GetKey(fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetKey();
-	}
-
-	static inline const idx_t &GetKey(const const_fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetKey();
-	}
-
-	static inline T &GetValue(fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetValue();
-	}
-
-	static inline const T &GetValue(const const_fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetValue();
-	}
-};
-// LCOV_EXCL_STOP
-
 void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, DataChunk &input) {
 	// Compute partition indices and store them in state.partition_indices
 	ComputePartitionIndices(state, input);
