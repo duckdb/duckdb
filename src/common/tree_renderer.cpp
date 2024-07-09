@@ -8,6 +8,7 @@ namespace duckdb {
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ExplainFormat format) {
 	switch (format) {
+	case ExplainFormat::DEFAULT:
 	case ExplainFormat::TEXT:
 		return make_uniq<TextTreeRenderer>();
 	case ExplainFormat::JSON:

@@ -13,7 +13,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	auto logical_plan_opt = op.children[0]->ToString(op.explain_format);
 	auto plan = CreatePlan(*op.children[0]);
 	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
-		auto result = make_uniq<PhysicalExplainAnalyze>(op.types);
+		auto result = make_uniq<PhysicalExplainAnalyze>(op.types, op.explain_format);
 		result->children.push_back(std::move(plan));
 		return std::move(result);
 	}

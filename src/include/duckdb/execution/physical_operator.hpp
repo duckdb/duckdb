@@ -64,7 +64,7 @@ public:
 	virtual case_insensitive_map_t<string> ParamsToString() const {
 		return case_insensitive_map_t<string>();
 	}
-	virtual string ToString(ExplainFormat format = ExplainFormat::TEXT) const;
+	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 

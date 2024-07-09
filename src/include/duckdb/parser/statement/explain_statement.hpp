@@ -22,7 +22,7 @@ public:
 
 public:
 	explicit ExplainStatement(unique_ptr<SQLStatement> stmt, ExplainType explain_type = ExplainType::EXPLAIN_STANDARD,
-	                          ExplainFormat explain_format = ExplainFormat::TEXT);
+	                          ExplainFormat explain_format = ExplainFormat::DEFAULT);
 
 	unique_ptr<SQLStatement> stmt;
 	ExplainType explain_type;
@@ -33,6 +33,7 @@ protected:
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;
+	string OptionsToString() const;
 	string ToString() const override;
 };
 

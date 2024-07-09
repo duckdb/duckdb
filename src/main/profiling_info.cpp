@@ -46,19 +46,22 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 	case MetricsType::CPU_TIME:
 		return to_string(metrics.cpu_time);
 	case MetricsType::EXTRA_INFO: {
-		string result = "\"";
+		string result;
 		for (auto &it : QueryProfiler::JSONSanitize(metrics.extra_info)) {
-			result += StringUtil::Format("%s:%s", it.first, it.second);
+			if (!result.empty()) {
+				result += ", ";
+			}
+			result += StringUtil::Format("%s: %s", it.first, it.second);
 		}
-		result += "\"";
-		return result;
+		return "\"" + result + "\"";
 	}
 	case MetricsType::OPERATOR_CARDINALITY:
 		return to_string(metrics.operator_cardinality);
 	case MetricsType::OPERATOR_TIMING:
 		return to_string(metrics.operator_timing);
+	default:
+		throw NotImplementedException("MetricsType %s not implemented", EnumUtil::ToString(setting));
 	}
-	return "";
 }
 
 void ProfilingInfo::PrintAllMetricsToSS(std::stringstream &ss, const string &depth) {

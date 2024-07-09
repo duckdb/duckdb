@@ -55,7 +55,7 @@ public:
 
 	virtual string GetName() const;
 	virtual case_insensitive_map_t<string> ParamsToString() const;
-	virtual string ToString(ExplainFormat format = ExplainFormat::TEXT) const;
+	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify(ClientContext &context);
