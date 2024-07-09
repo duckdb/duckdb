@@ -1,4 +1,4 @@
-CALL dsdgen(sf=100);
+CALL dsdgen(sf=10);
 EXPORT DATABASE 'duckdb_benchmark_data/tpcds_parquet_sf10' (FORMAT PARQUET);
 EXPORT DATABASE 'duckdb_benchmark_data/tpcds_csv_sf10' (FORMAT CSV);
 
