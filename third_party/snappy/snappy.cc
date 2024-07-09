@@ -26,7 +26,9 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifdef __clang__
+#include "snappy_version.hpp"
+
+#if SNAPPY_NEW_VERSION
 
 #include "snappy-internal.h"
 #include "snappy-sinksource.h"
@@ -2646,7 +2648,7 @@ bool Uncompress(Source* compressed, Sink* uncompressed) {
 
 }  // namespace duckdb_snappy
 
-#else // #ifdef __clang__
+#else // #if SNAPPY_NEW_VERSION
 
 #include "snappy.h"
 #include "snappy-internal.h"
@@ -4283,4 +4285,4 @@ bool Uncompress(Source* compressed, Sink* uncompressed) {
 
 }  // namespace duckdb_snappy
 
-#endif // #ifdef __clang__ # else
+#endif  // #if SNAPPY_NEW_VERSION # else

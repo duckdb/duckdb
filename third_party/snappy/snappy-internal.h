@@ -31,7 +31,9 @@
 #ifndef THIRD_PARTY_SNAPPY_SNAPPY_INTERNAL_H_
 #define THIRD_PARTY_SNAPPY_SNAPPY_INTERNAL_H_
 
-#ifdef __clang__
+#include "snappy_version.hpp"
+
+#if SNAPPY_NEW_VERSION
 
 #include <utility>
 
@@ -423,7 +425,7 @@ static constexpr uint16_t char_table[256] = {
 }  // end namespace internal
 }  // end namespace duckdb_snappy
 
-#else // #ifdef __clang__
+#else // #if SNAPPY_NEW_VERSION
 
 #include "snappy-stubs-internal.h"
 
@@ -640,6 +642,6 @@ static const size_t kMaxHashTableSize = 1 << kMaxHashTableBits;
 
 }  // end namespace duckdb_snappy
 
-#endif // #ifdef __clang__ #else
+#endif  // #if SNAPPY_NEW_VERSION # else
 
 #endif  // THIRD_PARTY_SNAPPY_SNAPPY_INTERNAL_H_

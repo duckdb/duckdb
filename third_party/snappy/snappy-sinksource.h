@@ -29,7 +29,9 @@
 #ifndef THIRD_PARTY_SNAPPY_SNAPPY_SINKSOURCE_H_
 #define THIRD_PARTY_SNAPPY_SNAPPY_SINKSOURCE_H_
 
-#ifdef __clang__
+#include "snappy_version.hpp"
+
+#if SNAPPY_NEW_VERSION
 
 #include <stddef.h>
 
@@ -181,7 +183,7 @@ class UncheckedByteArraySink : public Sink {
 
 }  // namespace duckdb_snappy
 
-#else // #ifdef __clang__
+#else // #if SNAPPY_NEW_VERSION
 
 #include <stddef.h>
 
@@ -333,6 +335,6 @@ class UncheckedByteArraySink : public Sink {
 
 }  // namespace duckdb_snappy
 
-#endif // #ifdef __clang__ #else
+#endif  // #if SNAPPY_NEW_VERSION # else
 
 #endif  // THIRD_PARTY_SNAPPY_SNAPPY_SINKSOURCE_H_

@@ -31,7 +31,9 @@
 #ifndef THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
 #define THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
 
-#ifdef __clang__
+#include "snappy_version.hpp"
+
+#if SNAPPY_NEW_VERSION
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -538,7 +540,7 @@ inline char* string_as_array(std::string* str) {
 
 }  // namespace duckdb_snappy
 
-#else // #ifdef __clang__
+#else // #if SNAPPY_NEW_VERSION
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -1021,6 +1023,6 @@ inline char* string_as_array(string* str) {
 
 }  // namespace duckdb_snappy
 
-#endif // #ifdef __clang__ #else
+#endif  // #if SNAPPY_NEW_VERSION # else
 
 #endif  // THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
