@@ -1,4 +1,5 @@
-#include "duckdb/common/http_state.hpp"
+#include "http_state.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 
@@ -80,6 +81,29 @@ shared_ptr<HTTPState> HTTPState::TryGetState(optional_ptr<FileOpener> opener, bo
 		return TryGetState(*client_context, create_on_missing);
 	}
 	return nullptr;
+}
+
+void HTTPState::WriteProfilingInformation(std::ostream &ss) {
+	string read = "in: " + StringUtil::BytesToHumanReadableString(total_bytes_received);
+	string written = "out: " + StringUtil::BytesToHumanReadableString(total_bytes_sent);
+	string head = "#HEAD: " + to_string(head_count);
+	string get = "#GET: " + to_string(get_count);
+	string put = "#PUT: " + to_string(put_count);
+	string post = "#POST: " + to_string(post_count);
+
+	constexpr idx_t TOTAL_BOX_WIDTH = 39;
+	ss << "┌─────────────────────────────────────┐\n";
+	ss << "│┌───────────────────────────────────┐│\n";
+	ss << "││            HTTP Stats:            ││\n";
+	ss << "││                                   ││\n";
+	ss << "││" + QueryProfiler::DrawPadded(read, TOTAL_BOX_WIDTH - 4) + "││\n";
+	ss << "││" + QueryProfiler::DrawPadded(written, TOTAL_BOX_WIDTH - 4) + "││\n";
+	ss << "││" + QueryProfiler::DrawPadded(head, TOTAL_BOX_WIDTH - 4) + "││\n";
+	ss << "││" + QueryProfiler::DrawPadded(get, TOTAL_BOX_WIDTH - 4) + "││\n";
+	ss << "││" + QueryProfiler::DrawPadded(put, TOTAL_BOX_WIDTH - 4) + "││\n";
+	ss << "││" + QueryProfiler::DrawPadded(post, TOTAL_BOX_WIDTH - 4) + "││\n";
+	ss << "│└───────────────────────────────────┘│\n";
+	ss << "└─────────────────────────────────────┘\n";
 }
 
 //! Get cache entry, create if not exists

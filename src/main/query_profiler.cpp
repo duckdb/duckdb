@@ -1,7 +1,6 @@
 #include "duckdb/main/query_profiler.hpp"
 
 #include "duckdb/common/fstream.hpp"
-#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/printer.hpp"
@@ -334,7 +333,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	profiler.timings.clear();
 }
 
-static string DrawPadded(const string &str, idx_t width) {
+string QueryProfiler::DrawPadded(const string &str, idx_t width) {
 	if (str.size() > width) {
 		return str.substr(0, width);
 	} else {
@@ -396,28 +395,8 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		return;
 	}
 
-	auto http_state = HTTPState::TryGetState(context, false);
-	if (http_state && !http_state->IsEmpty()) {
-		string read = "in: " + StringUtil::BytesToHumanReadableString(http_state->total_bytes_received);
-		string written = "out: " + StringUtil::BytesToHumanReadableString(http_state->total_bytes_sent);
-		string head = "#HEAD: " + to_string(http_state->head_count);
-		string get = "#GET: " + to_string(http_state->get_count);
-		string put = "#PUT: " + to_string(http_state->put_count);
-		string post = "#POST: " + to_string(http_state->post_count);
-
-		constexpr idx_t TOTAL_BOX_WIDTH = 39;
-		ss << "┌─────────────────────────────────────┐\n";
-		ss << "│┌───────────────────────────────────┐│\n";
-		ss << "││            HTTP Stats:            ││\n";
-		ss << "││                                   ││\n";
-		ss << "││" + DrawPadded(read, TOTAL_BOX_WIDTH - 4) + "││\n";
-		ss << "││" + DrawPadded(written, TOTAL_BOX_WIDTH - 4) + "││\n";
-		ss << "││" + DrawPadded(head, TOTAL_BOX_WIDTH - 4) + "││\n";
-		ss << "││" + DrawPadded(get, TOTAL_BOX_WIDTH - 4) + "││\n";
-		ss << "││" + DrawPadded(put, TOTAL_BOX_WIDTH - 4) + "││\n";
-		ss << "││" + DrawPadded(post, TOTAL_BOX_WIDTH - 4) + "││\n";
-		ss << "│└───────────────────────────────────┘│\n";
-		ss << "└─────────────────────────────────────┘\n";
+	for (auto &it : context.registered_state) {
+		it.second->WriteProfilingInformation(ss);
 	}
 
 	constexpr idx_t TOTAL_BOX_WIDTH = 39;

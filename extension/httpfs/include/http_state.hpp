@@ -1,11 +1,3 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/http_state.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/common/file_opener.hpp"
@@ -102,6 +94,7 @@ public:
 	void QueryEnd(ClientContext &context) override {
 		Reset();
 	}
+	void WriteProfilingInformation(std::ostream &ss) override;
 
 private:
 	//! Mutex to lock when getting the cached file(Parallel Only)
