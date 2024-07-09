@@ -17,7 +17,7 @@ struct PipelineRenderNode {
 
 namespace {
 
-using namespace duckdb;
+using namespace duckdb; // NOLINT
 
 class TreeChildrenIterator {
 public:
