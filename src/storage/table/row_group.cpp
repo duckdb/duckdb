@@ -363,7 +363,8 @@ bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<storage_t> &co
 		auto column_index = entry.first;
 		auto &filter = entry.second;
 		const auto &base_column_index = column_ids[column_index];
-		if (!GetColumn(base_column_index).CheckZonemap(*filter)) {
+		auto prune_result = GetColumn(base_column_index).CheckZonemap(*filter);
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
 	}
@@ -414,9 +415,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		D_ASSERT(entry.first < column_ids.size());
 		auto column_idx = entry.first;
 		const auto &base_column_idx = column_ids[column_idx];
-		bool read_segment = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], *entry.second);
-		if (!read_segment) {
-
+		auto prune_result = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], *entry.second);
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			idx_t target_row = GetFilterScanCount(state.column_scans[column_idx], *entry.second);
 			if (target_row >= state.max_row) {
 				target_row = state.max_row;
