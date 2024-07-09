@@ -63,7 +63,7 @@ public:
 	virtual string ParamsToString() const {
 		return "";
 	}
-	virtual string ToString(ExplainFormat format = ExplainFormat::TEXT) const;
+	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 

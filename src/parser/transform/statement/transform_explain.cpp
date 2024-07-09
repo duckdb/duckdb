@@ -9,6 +9,7 @@ ExplainFormat ParseFormat(const Value &val) {
 	}
 	auto format_val = val.GetValue<string>();
 	case_insensitive_map_t<ExplainFormat> format_mapping {
+	    {"default", ExplainFormat::DEFAULT},
 	    {"text", ExplainFormat::TEXT},
 	    {"json", ExplainFormat::JSON},
 	};
@@ -27,7 +28,7 @@ ExplainFormat ParseFormat(const Value &val) {
 
 unique_ptr<ExplainStatement> Transformer::TransformExplain(duckdb_libpgquery::PGExplainStmt &stmt) {
 	auto explain_type = ExplainType::EXPLAIN_STANDARD;
-	auto explain_format = ExplainFormat::TEXT;
+	auto explain_format = ExplainFormat::DEFAULT;
 	bool format_is_set = false;
 	if (stmt.options) {
 		for (auto n = stmt.options->head; n; n = n->next) {

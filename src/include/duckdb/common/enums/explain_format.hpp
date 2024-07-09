@@ -10,6 +10,6 @@
 
 namespace duckdb {
 
-enum class ExplainFormat : uint8_t { TEXT, JSON };
+enum class ExplainFormat : uint8_t { DEFAULT, TEXT, JSON };
 
 } // namespace duckdb

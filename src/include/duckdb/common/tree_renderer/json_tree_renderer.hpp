@@ -22,7 +22,7 @@ struct PipelineRenderNode;
 
 class JSONTreeRenderer : public TreeRenderer {
 public:
-	explicit JSONTreeRenderer(JSONTreeRendererConfig config_p = JSONTreeRendererConfig()) : config(config_p) {
+	explicit JSONTreeRenderer() {
 	}
 	~JSONTreeRenderer() override {
 	}
