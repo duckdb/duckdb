@@ -71,6 +71,11 @@ SELECT '🦆🍞🦆'
     @test size(df, 1) == 5
     @test isequal(df.s, ["hello world", missing, "this is a long string", "obligatory mühleisen", "🦆🍞🦆"])
 
+    for s in ["foo", "🦆DB", SubString("foobar", 1, 3), SubString("🦆ling", 1, 6)]
+        results = DBInterface.execute(con, "SELECT length(?) as len", [s])
+        @test only(results).len == 3
+    end
+
     DBInterface.close!(con)
 end
 
