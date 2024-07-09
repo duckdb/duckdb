@@ -112,7 +112,7 @@ class TestRuntimeError(object):
         )
         conn.execute("create view x as select * from df_in")
         del df_in
-        with pytest.raises(duckdb.InvalidInputException):
+        with pytest.raises(duckdb.CatalogException, match='Table with name df_in does not exist'):
             conn.execute("select 1; select * from x; select 3;")
 
     def test_conn_prepared_statement_error(self):
