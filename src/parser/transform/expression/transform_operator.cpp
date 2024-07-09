@@ -61,25 +61,18 @@ void Transformer::TransformInExpression(duckdb_libpgquery::PGNode &rhs,
                                         vector<unique_ptr<ParsedExpression>> &in_candidates) {
 	auto expr = TransformExpression(rhs);
 
-	switch (expr->type) {
-	case ExpressionType::FUNCTION: {
+	if (expr->type == ExpressionType::FUNCTION) {
 		auto &func = expr->Cast<FunctionExpression>();
-		if (func.function_name != "list_value" && func.function_name != "row") {
-			break;
+		if (func.function_name == "list_value" || func.function_name == "row") {
+			// These are expanded to their children
+			// i.e IN ([1,2,3,4]) becomes IN (1, 2, 3, 4)
+			for (auto &child : func.children) {
+				in_candidates.push_back(std::move(child));
+			}
+			return;
 		}
-		for (auto &expr : func.children) {
-			in_candidates.push_back(std::move(expr));
-		}
-		return;
 	}
-	case ExpressionType::VALUE_PARAMETER: {
-		in_candidates.push_back(std::move(expr));
-		return;
-	}
-	default:
-		break;
-	}
-	throw ParserException("IN does not support \"%s\" as a valid right hand side", expr->ToString());
+	in_candidates.push_back(std::move(expr));
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgquery::PGAExpr &root) {

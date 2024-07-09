@@ -84,11 +84,7 @@ BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	return BindResult("GROUPING function is not supported here");
 }
 
-static bool IsPreparedList(ParsedExpression &unbound, ParsedExpression &bound) {
-	if (unbound.type != ExpressionType::VALUE_PARAMETER) {
-		// Not a prepared parameter (not one of: ?, $1, $<name>)
-		return false;
-	}
+static bool IsPreparedList(ParsedExpression &bound) {
 	D_ASSERT(bound.expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &expr = BoundExpression::GetExpression(bound);
 	if (expr->type != ExpressionType::VALUE_CONSTANT) {
@@ -110,12 +106,10 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// Bind the children of the operator expression. We already create bound expressions.
 	// Only those children that trigger an error are not yet bound.
 	ErrorData error;
-	vector<unique_ptr<ParsedExpression>> bound_children;
-	for (idx_t i = 0; i < op.children.size(); i++) {
-		bound_children.push_back(op.children[i]->Copy());
+	auto &bound_children = op.children;
+	for (idx_t i = 0; i < bound_children.size(); i++) {
 		BindChild(bound_children[i], depth, error);
 	}
-	D_ASSERT(bound_children.size() == op.children.size());
 
 	if (error.HasError()) {
 		return BindResult(std::move(error));
@@ -180,7 +174,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	case ExpressionType::COMPARE_IN: {
-		if (op.children.size() == 2 && IsPreparedList(*op.children[1], *bound_children[1])) {
+		if (bound_children.size() == 2 && IsPreparedList(*bound_children[1])) {
 			vector<unique_ptr<ParsedExpression>> replacement_bound_expressions;
 			auto &lhs = bound_children[0];
 			auto &rhs = bound_children[1];
@@ -192,6 +186,9 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			auto &list_value = bound_constant.value;
 			D_ASSERT(list_value.type().id() == LogicalTypeId::LIST);
 			auto list_children = ListValue::GetChildren(list_value);
+			if (list_children.empty()) {
+				throw BinderException("Expanded LIST parameter inside IN expression can not be empty");
+			}
 			for (auto &child : list_children) {
 				auto bound_child = make_uniq<BoundConstantExpression>(child);
 				replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));

@@ -139,3 +139,25 @@ NULL	NULL
 2	0
 3	0
 
+query I
+SELECT 1 IN [1, 2, 3];
+----
+true
+
+statement ok
+PREPARE v1 AS SELECT 1 IN ?
+
+query I
+EXECUTE v1([1, 2, 3]);
+----
+true
+
+query I
+EXECUTE v1([2, 2, 3]);
+----
+false
+
+statement error
+EXECUTE v1([]);
+----
+Expanded LIST parameter inside IN expression can not be empty
