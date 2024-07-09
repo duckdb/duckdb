@@ -117,7 +117,6 @@ jobs:
    manylinux-extensions-x64:
     name: Linux Extensions (linux_amd64_gcc4)
     runs-on: ubuntu-latest
-    if: false
     container: quay.io/pypa/manylinux2014_x86_64
     needs: linux-python3-9
     env:
@@ -185,6 +184,7 @@ jobs:
             python_build: 'cp311-*'
           - isRelease: false
             arch: aarch64
+    needs: manylinux-extensions-x64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64'
@@ -230,6 +230,12 @@ jobs:
       run: |
         pip install 'cibuildwheel>=2.16.2' build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
+
+    - uses: actions/download-artifact@v3
+      if: ${{ matrix.arch == 'x86_64' }}
+      with:
+        name: manylinux-extensions-x64
+        path: tools/pythonpkg
 
     - name: List extensions to be tested
       shell: bash
@@ -454,7 +460,6 @@ jobs:
       - osx-python3
       - win-python3
       - linux-python3
-      - manylinux-extensions-x64
     # Note that want to run this by default ONLY if no override_git_describe is provided
     # This means we are not staging a release
     if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
