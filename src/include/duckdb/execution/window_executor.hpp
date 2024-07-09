@@ -99,7 +99,7 @@ struct WindowInputExpression {
 };
 
 struct WindowInputColumn {
-	WindowInputColumn(Expression *expr_p, ClientContext &context, idx_t capacity_p);
+	WindowInputColumn(optional_ptr<Expression> expr_p, ClientContext &context, idx_t count);
 
 	void Copy(DataChunk &input_chunk, idx_t input_idx);
 

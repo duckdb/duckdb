@@ -96,7 +96,7 @@ public:
 	//! The bin number
 	idx_t hash_bin;
 	//! Single threading lock
-	std::mutex lock;
+	mutex lock;
 	//! Count of sunk rows
 	std::atomic<idx_t> sunk;
 	//! Count of finalized blocks

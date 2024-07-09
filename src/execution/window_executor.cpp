@@ -24,10 +24,10 @@ bool WindowDataChunk::IsSimple(const Vector &v) {
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 	case PhysicalType::INTERVAL:
-	case PhysicalType::LIST:
 	case PhysicalType::UINT128:
 	case PhysicalType::INT128:
 		return true;
+	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
 	case PhysicalType::ARRAY:
 	case PhysicalType::VARCHAR:
@@ -165,7 +165,7 @@ static void CopyCell(const DataChunk &chunk, idx_t column, idx_t index, Vector &
 //===--------------------------------------------------------------------===//
 // WindowInputColumn
 //===--------------------------------------------------------------------===//
-WindowInputColumn::WindowInputColumn(Expression *expr_p, ClientContext &context, idx_t count)
+WindowInputColumn::WindowInputColumn(optional_ptr<Expression> expr_p, ClientContext &context, idx_t count)
     : expr(expr_p), scalar(expr ? expr->IsScalar() : true), count(count), wtarget(target) {
 
 	if (expr) {

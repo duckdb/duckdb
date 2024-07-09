@@ -62,7 +62,7 @@ unique_ptr<WindowAggregatorState> WindowAggregator::GetGlobalState(idx_t group_c
 }
 
 void WindowAggregator::Sink(WindowAggregatorState &gsink, DataChunk &payload_chunk, idx_t input_idx,
-                            SelectionVector *filter_sel, idx_t filtered) {
+                            optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
 	auto &gasink = gsink.Cast<WindowAggregatorGlobalState>();
 	auto &winputs = gasink.winputs;
 	auto &filter_mask = gasink.filter_mask;
@@ -90,7 +90,7 @@ public:
 	WindowConstantAggregatorGlobalState(const WindowConstantAggregator &aggregator, idx_t count,
 	                                    const ValidityMask &partition_mask);
 
-	void Sink(DataChunk &payload_chunk, idx_t input_idx, SelectionVector *filter_sel, idx_t filtered);
+	void Sink(DataChunk &payload_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
 	void Finalize(const FrameStats &stats);
 
 	//! Partition starts
@@ -104,7 +104,7 @@ public:
 	//! Reused result state container for the window functions
 	unique_ptr<Vector> statef;
 	//! Single threading lock
-	std::mutex lock;
+	mutex lock;
 };
 
 WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(const WindowConstantAggregator &aggregator,
@@ -174,14 +174,14 @@ unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetGlobalState(idx_t
 }
 
 void WindowConstantAggregator::Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, idx_t input_idx,
-                                    SelectionVector *filter_sel, idx_t filtered) {
+                                    optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
 	auto &gasink = gsink.Cast<WindowConstantAggregatorGlobalState>();
 
 	gasink.Sink(arg_chunk, input_idx, filter_sel, filtered);
 }
 
-void WindowConstantAggregatorGlobalState::Sink(DataChunk &payload_chunk, idx_t row, SelectionVector *filter_sel,
-                                               idx_t filtered) {
+void WindowConstantAggregatorGlobalState::Sink(DataChunk &payload_chunk, idx_t row,
+                                               optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
 	//	Single threaded for now
 	lock_guard<mutex> sink_guard(lock);
 
@@ -1256,7 +1256,7 @@ public:
 	WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator, idx_t group_count);
 	~WindowDistinctAggregatorGlobalState() override;
 
-	void Sink(DataChunk &arg_chunk, idx_t input_idx, SelectionVector *filter_sel, idx_t filtered);
+	void Sink(DataChunk &arg_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
 	void Finalize(const FrameStats &stats);
 
 	//	Single threaded sorting for now
@@ -1317,15 +1317,15 @@ unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetGlobalState(idx_t
 }
 
 void WindowDistinctAggregator::Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, idx_t input_idx,
-                                    SelectionVector *filter_sel, idx_t filtered) {
+                                    optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
 	WindowAggregator::Sink(gsink, arg_chunk, input_idx, filter_sel, filtered);
 
 	auto &gdstate = gsink.Cast<WindowDistinctAggregatorGlobalState>();
 	gdstate.Sink(arg_chunk, input_idx, filter_sel, filtered);
 }
 
-void WindowDistinctAggregatorGlobalState::Sink(DataChunk &arg_chunk, idx_t input_idx, SelectionVector *filter_sel,
-                                               idx_t filtered) {
+void WindowDistinctAggregatorGlobalState::Sink(DataChunk &arg_chunk, idx_t input_idx,
+                                               optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
 	//	Single threaded for now
 	lock_guard<mutex> sink_guard(lock);
 
