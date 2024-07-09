@@ -3,6 +3,10 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/main/query_profiler.hpp"
 
+#include "yyjson.hpp"
+
+using namespace duckdb_yyjson; // NOLINT
+
 namespace duckdb {
 
 void ProfilingInfo::SetSettings(profiler_settings_t const &n_settings) {
@@ -64,10 +68,31 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 	}
 }
 
-void ProfilingInfo::PrintAllMetricsToSS(std::stringstream &ss, const string &depth) {
+void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) {
 	for (auto &metric : settings) {
-		ss << depth << "   \"" << StringUtil::Lower(EnumUtil::ToString(metric)) << "\": " << GetMetricAsString(metric)
-		   << ",\n";
+		switch (metric) {
+		case MetricsType::CPU_TIME:
+			yyjson_mut_obj_add_real(doc, dest, "cpu_time", metrics.cpu_time);
+			break;
+		case MetricsType::EXTRA_INFO: {
+			auto extra_info = yyjson_mut_obj(doc);
+			for (auto &it : metrics.extra_info) {
+				yyjson_mut_obj_add_strcpy(doc, extra_info, it.first.c_str(), it.second.c_str());
+			}
+			yyjson_mut_obj_add_val(doc, dest, "extra_info", extra_info);
+			break;
+		}
+		case MetricsType::OPERATOR_CARDINALITY: {
+			yyjson_mut_obj_add_uint(doc, dest, "operator_cardinality", metrics.operator_cardinality);
+			break;
+		}
+		case MetricsType::OPERATOR_TIMING: {
+			yyjson_mut_obj_add_real(doc, dest, "operator_timing", metrics.operator_timing);
+			break;
+		}
+		default:
+			throw NotImplementedException("MetricsType %s not implemented", EnumUtil::ToString(metric));
+		}
 	}
 }
 

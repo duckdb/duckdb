@@ -106,7 +106,7 @@ public:
 	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::OPERATOR;
 
 public:
-	OperatorProfilingNode(const string &name, PhysicalOperatorType type) : ProfilingNode(TYPE), type(type) {
+	OperatorProfilingNode(const string &name, PhysicalOperatorType type) : ProfilingNode(TYPE), name(name), type(type) {
 	}
 	~OperatorProfilingNode() override {};
 
@@ -116,8 +116,8 @@ public:
 	}
 
 public:
-	PhysicalOperatorType type;
 	string name;
+	PhysicalOperatorType type;
 };
 
 } // namespace duckdb
