@@ -42,7 +42,6 @@ public:
 private:
 	Optimizer &optimizer;
 	FilterCombiner combiner;
-	unordered_set<idx_t> projected_mark_indexes;
 	bool convert_mark_joins;
 
 	vector<unique_ptr<Filter>> filters;

@@ -65,8 +65,6 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &
 
 FilterPushdown::FilterPushdown(Optimizer &optimizer, bool convert_mark_joins)
     : optimizer(optimizer), combiner(optimizer.context), convert_mark_joins(convert_mark_joins) {
-
-	unordered_set<idx_t> table_bindings;
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {

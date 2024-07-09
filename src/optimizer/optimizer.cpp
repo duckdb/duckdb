@@ -1,6 +1,5 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
-#include "../../third_party/catch/catch.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
