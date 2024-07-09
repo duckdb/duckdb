@@ -281,7 +281,6 @@ void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate
 		auto &pushdown = filters[pushdown_idx];
 		for (idx_t i = 0; i < 2; i++) {
 			idx_t aggr_idx = pushdown_idx * 2 + i;
-			// FIXME: payload_column_idxs[pushdown.join_condition]?
 			lstate.local_aggregate_state->Sink(chunk, pushdown.join_condition, aggr_idx);
 		}
 	}
