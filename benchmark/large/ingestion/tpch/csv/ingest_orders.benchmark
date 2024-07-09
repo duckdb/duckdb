@@ -3,7 +3,5 @@
 # group: [csv]
 
 template benchmark/large/ingestion/tpch/tpch_ingestion_persistent.benchmark.in
-table_name=order
-template benchmark/large/ingestion/tpch/csv/tpch_ingestion_persistent.benchmark.in
 table_name=orders
 format=csv
