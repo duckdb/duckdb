@@ -10,7 +10,7 @@ CREATE TABLE a (a1 int, a2 int, PRIMARY KEY (a1, a2));
 statement ok
 CREATE TABLE b (a1 int, a2 int, FOREIGN KEY (a1, a2) REFERENCES a);
 
-query II
+query III
 SELECT table_name, column_name, ordinal_position FROM information_schema.key_column_usage ORDER BY table_name, ordinal_position;
 ----
 a	a1	1
