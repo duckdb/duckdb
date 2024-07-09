@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <duckdb/parser/tableref/delimgetref.hpp>
+#include <duckdb/planner/tableref/bound_delimgetref.hpp>
 
 namespace duckdb {
 
@@ -327,6 +328,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		break;
 	case TableReferenceType::PIVOT:
 		root = CreatePlan(ref.Cast<BoundPivotRef>());
+		break;
+	case TableReferenceType::DELIM_GET:
+		root = CreatePlan(ref.Cast<BoundDelimGetRef>());
 		break;
 	case TableReferenceType::INVALID:
 	default:

@@ -13,6 +13,7 @@ add_library_unity(
   bind_table_function.cpp
   bind_named_parameters.cpp
   plan_basetableref.cpp
+  plan_delimgetref.cpp
   plan_dummytableref.cpp
   plan_expressionlistref.cpp
   plan_column_data_ref.cpp
