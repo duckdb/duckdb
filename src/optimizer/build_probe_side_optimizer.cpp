@@ -78,10 +78,14 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 		// resolve operator types to determine how big the build side is going to be
 		op.ResolveOperatorTypes();
 		auto left_tuple_layout = TupleDataLayout();
-		left_tuple_layout.Initialize(left_child->types);
+		auto left_types = left_child->types;
+		left_types.push_back(LogicalType::HASH);
+		left_tuple_layout.Initialize(left_types);
 
 		auto right_tuple_layout = TupleDataLayout();
-		right_tuple_layout.Initialize(right_child->types);
+		auto right_types = right_child->types;
+		right_types.push_back(LogicalType::HASH);
+		right_tuple_layout.Initialize(left_types);
 
 		// Don't multiply by cardinalities, the only important metric is the size of the row
 		// in the hash table
