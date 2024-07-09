@@ -9,6 +9,12 @@ def is_dunder_method(method_name: str) -> bool:
     return method_name[:2] == '__' and method_name[:-3:-1] == '__'
 
 
+@pytest.fixture(scope="session")
+def tmp_database(tmp_path_factory):
+    database = tmp_path_factory.mktemp("databases", numbered=True) / "tmp.duckdb"
+    return database
+
+
 # This file contains tests for DuckDBPyConnection methods,
 # wrapped by the 'duckdb' module, to execute with the 'default_connection'
 class TestDuckDBConnection(object):
@@ -145,7 +151,7 @@ class TestDuckDBConnection(object):
         assert duckdb.query(statements[1]).fetchall() == [(21,)]
         assert duckdb.execute(statements[1]).fetchall() == [(21,)]
 
-        with pytest.raises(duckdb.InvalidInputException, match='Prepared statement needs 1 parameters, 0 given'):
+        with pytest.raises(duckdb.InvalidInputException, match='Expected 1 parameters, but none were supplied'):
             duckdb.execute(statements[0])
         assert duckdb.execute(statements[0], {'1': 42}).fetchall() == [(42,)]
 
@@ -352,6 +358,18 @@ class TestDuckDBConnection(object):
         for method in filtered_methods:
             # Assert that every method of DuckDBPyConnection is wrapped by the 'duckdb' module
             assert method in dir(duckdb)
+
+    def test_connect_with_path(self, tmp_database):
+        import pathlib
+
+        assert isinstance(tmp_database, pathlib.Path)
+        con = duckdb.connect(tmp_database)
+        assert con.sql("select 42").fetchall() == [(42,)]
+
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Please provide either a str or a pathlib.Path, not <class 'int'>"
+        ):
+            con = duckdb.connect(5)
 
     def test_set_pandas_analyze_sample_size(self):
         con = duckdb.connect(":memory:named", config={"pandas_analyze_sample": 0})

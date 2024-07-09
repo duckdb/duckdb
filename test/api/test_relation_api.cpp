@@ -101,7 +101,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 
 	// filters can also contain conjunctions
-	REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Execute());
+	REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 2, 4, 4}));
 
 	// alias
