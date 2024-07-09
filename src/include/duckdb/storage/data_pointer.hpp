@@ -19,7 +19,6 @@ namespace duckdb {
 
 class Serializer;
 class Deserializer;
-class CompressionInfo;
 
 struct ColumnSegmentState {
 	virtual ~ColumnSegmentState() {

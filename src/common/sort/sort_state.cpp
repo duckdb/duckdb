@@ -269,17 +269,17 @@ unique_ptr<RowDataBlock> LocalSortState::ConcatenateBlocks(RowDataCollection &ro
 		return new_block;
 	}
 	// Create block with the correct capacity
-	auto buffer_manager = &row_data.buffer_manager;
+	auto &buffer_manager = row_data.buffer_manager;
 	const idx_t &entry_size = row_data.entry_size;
-	idx_t capacity = MaxValue((buffer_manager->GetBlockSize() + entry_size - 1) / entry_size, row_data.count);
-	auto new_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager, capacity, entry_size);
+	idx_t capacity = MaxValue((buffer_manager.GetBlockSize() + entry_size - 1) / entry_size, row_data.count);
+	auto new_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, buffer_manager, capacity, entry_size);
 	new_block->count = row_data.count;
-	auto new_block_handle = buffer_manager->Pin(new_block->block);
+	auto new_block_handle = buffer_manager.Pin(new_block->block);
 	data_ptr_t new_block_ptr = new_block_handle.Ptr();
 	// Copy the data of the blocks into a single block
 	for (idx_t i = 0; i < row_data.blocks.size(); i++) {
 		auto &block = row_data.blocks[i];
-		auto block_handle = buffer_manager->Pin(block->block);
+		auto block_handle = buffer_manager.Pin(block->block);
 		memcpy(new_block_ptr, block_handle.Ptr(), block->count * entry_size);
 		new_block_ptr += block->count * entry_size;
 		block.reset();
