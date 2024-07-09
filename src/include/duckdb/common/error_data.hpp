@@ -32,7 +32,9 @@ public:
 	//! Get the internal exception type of the error
 	DUCKDB_API const ExceptionType &Type() const;
 	//! Used in clients like C-API, creates the final message and returns a reference to it
-	DUCKDB_API const string &Message() const;
+	DUCKDB_API const string &Message() const {
+		return final_message;
+	}
 	DUCKDB_API const string &RawMessage() const {
 		return raw_message;
 	}
@@ -61,12 +63,13 @@ private:
 	//! The message the exception was constructed with (does not contain the Exception Type)
 	string raw_message;
 	//! The final message (stored in the preserved error for compatibility reasons with C-API)
-	mutable string final_message;
+	string final_message;
 	//! Extra exception info
 	unordered_map<string, string> extra_info;
 
 private:
 	DUCKDB_API static string SanitizeErrorMessage(string error);
+	DUCKDB_API string ConstructFinalMessage() const;
 };
 
 } // namespace duckdb
