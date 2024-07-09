@@ -45,6 +45,21 @@ SELECT list_zip([1,2,3], [1,2])
 [(1, 1), (2, 2), (3, NULL)]
 
 query I
+SELECT list_zip([1, 2, 3]::int[3], [1, 2]::int[2], true)
+----
+[(1, 1), (2, 2)]
+
+query I
+SELECT list_zip([1, 2, 3]::int[3], [1, 2, 3]::int[3])
+----
+[(1, 1), (2, 2), (3, 3)]
+
+query I
+SELECT list_zip([1, '2', 3]::int[], [1, 2, 3]::int[3])
+----
+[(1, 1), (2, 2), (3, 3)]
+
+query I
 SELECT list_zip([1,2], [1,2,3])
 ----
 [(1, 1), (2, 2), (NULL, 3)]
