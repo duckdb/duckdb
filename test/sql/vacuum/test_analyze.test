@@ -1,5 +1,5 @@
 # name: test/sql/vacuum/test_analyze.test
-# description: Test test ANALYZE statement.
+# description: Test the ANALYZE statement.
 # group: [vacuum]
 
 # The distinct statistics sampling relies on the vector size.
@@ -7,7 +7,7 @@ require vector_size 1024
 
 require skip_reload
 
-# distinct stats sampling is different for different vector sizes
+# Distinct statistics sampling is different for different vector sizes.
 require no_vector_verification
 
 statement ok

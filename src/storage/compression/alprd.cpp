@@ -1,14 +1,10 @@
+#include "duckdb/common/limits.hpp"
+#include "duckdb/function/compression/compression.hpp"
+#include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/compression/alprd/alprd_analyze.hpp"
 #include "duckdb/storage/compression/alprd/alprd_compress.hpp"
 #include "duckdb/storage/compression/alprd/alprd_fetch.hpp"
 #include "duckdb/storage/compression/alprd/alprd_scan.hpp"
-
-#include "duckdb/common/limits.hpp"
-#include "duckdb/function/compression/compression.hpp"
-#include "duckdb/function/compression_function.hpp"
-
-#include <cmath>
-#include <functional>
 
 namespace duckdb {
 
@@ -44,8 +40,8 @@ CompressionFunction AlpRDCompressionFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool AlpRDCompressionFun::TypeIsSupported(PhysicalType type) {
-	switch (type) {
+bool AlpRDCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return true;

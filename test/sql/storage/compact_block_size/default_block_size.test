@@ -2,24 +2,19 @@
 # description: Various tests with a compact block size of 16384 bytes
 # group: [compact_block_size]
 
-require block_size 262144
-
+# The database is written with a vector size of 2048.
 require vector_size 2048
 
-# FIXME: once we support custom block sizes, this test should work, as we detect the block
-# FIXME: size in the database header
-statement error
+statement ok
 ATTACH 'data/storage/block_size_16kb.db' (TYPE DUCKDB, READONLY)
-----
-Not implemented
 
 statement error
 ATTACH 'data/storage/vector_size_512.db' (TYPE DUCKDB, READONLY)
 ----
 Cannot read database file
 
+# Otherwise Linux 32bit CI fails with: No more data remaining in MetadataReader
 require 64bit
-# Otherwise Linux 32bit CI fails with No more data remaining in MetadataReader
 
 statement ok
 ATTACH 'data/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);

@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include "duckdb/storage/block.hpp"
+#include "duckdb/common/enums/scan_vector_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/block.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/common/enums/scan_vector_type.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -60,8 +60,9 @@ public:
 	                                                         idx_t start, idx_t count, CompressionType compression_type,
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
-	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start,
-	                                                        idx_t segment_size = Storage::BLOCK_SIZE);
+	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
+	                                                        const idx_t start, const idx_t segment_size,
+	                                                        const idx_t block_size);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);
@@ -105,6 +106,9 @@ public:
 		return block_id;
 	}
 
+	//! Returns the block manager handling this segment. For transient segments, this might be the temporary block
+	//! manager. Later, we possibly convert this (transient) segment to a persistent segment. In that case, there
+	//! exists another block manager handling the ColumnData, of which this segment is a part.
 	BlockManager &GetBlockManager() const {
 		return block->block_manager;
 	}
@@ -131,7 +135,8 @@ public:
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
 	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
 	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
-	              const idx_t offset, idx_t segment_size_p, unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
+	              const idx_t offset, const idx_t segment_size_p,
+	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
 	ColumnSegment(ColumnSegment &other, const idx_t start);

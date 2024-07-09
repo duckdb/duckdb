@@ -459,6 +459,18 @@ NULL	NULL
 2022-01-01	1640995200000
 infinity	NULL
 
+query II
+SELECT d, nanosecond(d) FROM dates ORDER BY ALL;
+----
+NULL	NULL
+-infinity	NULL
+0044-03-15 (BC)	0
+1992-01-01	0
+1992-03-03	0
+1992-05-05	0
+2022-01-01	0
+infinity	NULL
+
 #
 # Structs
 #

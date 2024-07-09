@@ -240,8 +240,13 @@ Value Value::MinimumValue(const LogicalType &type) {
 		const auto min_us = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
 		return Value::TIMESTAMPMS(timestamp_t(Timestamp::GetEpochMs(min_us)));
 	}
-	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
+	case LogicalTypeId::TIMESTAMP_NS: {
+		// Clear the fractional day.
+		auto min_ns = NumericLimits<int64_t>::Minimum();
+		min_ns /= Interval::NANOS_PER_DAY;
+		min_ns *= Interval::NANOS_PER_DAY;
+		return Value::TIMESTAMPNS(timestamp_t(min_ns));
+	}
 	case LogicalTypeId::TIME_TZ:
 		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
 		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));

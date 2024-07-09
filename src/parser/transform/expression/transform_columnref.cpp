@@ -43,7 +43,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 		D_ASSERT(result->exclude_list.empty());
 		D_ASSERT(result->replace_list.empty());
 		result->expr = TransformExpression(star.expr);
-		if (result->expr->type == ExpressionType::STAR) {
+		if (StarExpression::IsStar(*result->expr)) {
 			auto &child_star = result->expr->Cast<StarExpression>();
 			result->relation_name = child_star.relation_name;
 			result->exclude_list = std::move(child_star.exclude_list);
@@ -58,6 +58,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 		}
 	}
 	result->columns = star.columns;
+	result->unpacked = star.unpacked;
 	SetQueryLocation(*result, star.location);
 	return std::move(result);
 }

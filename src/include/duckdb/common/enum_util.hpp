@@ -104,6 +104,8 @@ enum class CopyFunctionReturnType : uint8_t;
 
 enum class CopyOverwriteMode : uint8_t;
 
+enum class CopyToType : uint8_t;
+
 enum class DataFileType : uint8_t;
 
 enum class DatePartSpecifier : uint8_t;
@@ -242,6 +244,8 @@ enum class PreparedStatementMode : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
 
+enum class ProfilingNodeType : uint8_t;
+
 enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
@@ -315,6 +319,8 @@ enum class TaskExecutionMode : uint8_t;
 enum class TaskExecutionResult : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
+
+enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
 
@@ -450,6 +456,9 @@ const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType val
 
 template<>
 const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
+
+template<>
+const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
@@ -659,6 +668,9 @@ template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
+const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value);
+
+template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
 
 template<>
@@ -768,6 +780,9 @@ const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
+
+template<>
+const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
@@ -916,6 +931,9 @@ CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *
 
 template<>
 CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
+
+template<>
+CopyToType EnumUtil::FromString<CopyToType>(const char *value);
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
@@ -1125,6 +1143,9 @@ template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
 
 template<>
+ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value);
+
+template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);
 
 template<>
@@ -1234,6 +1255,9 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);

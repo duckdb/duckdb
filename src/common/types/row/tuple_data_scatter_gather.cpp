@@ -3,6 +3,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -1508,7 +1509,7 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType
 		return TupleDataGetGatherFunctionInternal(type, false);
 	}
 
-	if (type.Contains(LogicalTypeId::ARRAY)) {
+	if (TypeVisitor::Contains(type, LogicalTypeId::ARRAY)) {
 		// Special case: we cant handle arrays yet, so we need to replace them with lists when gathering
 		auto new_type = ArrayType::ConvertToList(type);
 		TupleDataGatherFunction result;

@@ -84,17 +84,19 @@ void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(op);
 }
 
-unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
-	Verify(*plan_p);
-
-	switch (plan_p->type) {
+void Optimizer::RunBuiltInOptimizers() {
+	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
-		return plan_p; // skip optimizing simple & often-occurring plans unaffected by rewrites
+	case LogicalOperatorType::LOGICAL_PRAGMA:
+	case LogicalOperatorType::LOGICAL_SET:
+	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
+	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		// skip optimizing simple & often-occurring plans unaffected by rewrites
+		return;
 	default:
 		break;
 	}
-
-	this->plan = std::move(plan_p);
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
@@ -208,6 +210,14 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		ExpressionHeuristics expression_heuristics(*this);
 		plan = expression_heuristics.Rewrite(std::move(plan));
 	});
+}
+
+unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+	Verify(*plan_p);
+
+	this->plan = std::move(plan_p);
+
+	RunBuiltInOptimizers();
 
 	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {

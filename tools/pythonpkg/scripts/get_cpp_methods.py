@@ -1,29 +1,16 @@
-import clang.cindex
+# Requires `python3 -m pip install cxxheaderparser pcpp`
 import os
 
+import cxxheaderparser.parser
+import cxxheaderparser.visitor
+import cxxheaderparser.preprocessor
 from typing import List, Dict
 
 scripts_folder = os.path.dirname(os.path.abspath(__file__))
 
-file_contents: str = ''
-
-
-def load_content(path):
-    global file_contents
-    with open(path, 'r') as file:
-        file_contents = file.read()
-
-
-def get_string(input: clang.cindex.SourceRange) -> str:
-    return file_contents[input.start.offset : input.end.offset]
-
 
 class FunctionParam:
     def __init__(self, name: str, proto: str):
-        if proto.endswith('='):
-            # We currently can't retrieve the default value, the definition of the arg just ends in '='
-            # Instead we remove this and rely on the py::arg(...) = ... to set a default value
-            proto = proto[:-2]
         self.proto = proto
         self.name = name
 
@@ -35,44 +22,66 @@ class ConnectionMethod:
         self.is_void = is_void
 
 
-def traverse(class_name, node, methods_dict):
-    if node.kind == clang.cindex.CursorKind.STRUCT_DECL or node.kind == clang.cindex.CursorKind.CLASS_DECL:
-        if node.spelling != class_name:
-            return
-        for child in node.get_children():
-            traverse(class_name, child, methods_dict)
-    elif node.kind == clang.cindex.CursorKind.CXX_METHOD:
-        name = node.spelling
-        return_type = node.type.get_result().spelling
-        is_void = return_type == "void"
-        params = [FunctionParam(x.spelling, get_string(x.extent)) for x in node.get_arguments()]
+class Visitor:
+    def __init__(self, class_name: str):
+        self.methods_dict = {}
+        self.class_name = class_name
 
-        methods_dict[name] = ConnectionMethod(name, params, is_void)
-    else:
-        for child in node.get_children():
-            traverse(class_name, child, methods_dict)
+    def __getattr__(self, name):
+        return lambda *state: True
+
+    def on_class_start(self, state):
+        name = state.class_decl.typename.segments[0].format()
+        return name == self.class_name
+
+    def on_class_method(self, state, node):
+        name = node.name.format()
+        return_type = node.return_type
+        is_void = return_type and return_type.format() == "void"
+        params = [
+            FunctionParam(
+                x.name,
+                x.type.format() + " " + x.name + (" = " + x.default.format() if x.default else ""),
+            )
+            for x in node.parameters
+        ]
+
+        self.methods_dict[name] = ConnectionMethod(name, params, is_void)
 
 
 def get_methods(class_name: str) -> Dict[str, ConnectionMethod]:
     CLASSES = {
-        'DuckDBPyConnection': os.path.join(
-            scripts_folder, '..', 'src', 'include', 'duckdb_python', 'pyconnection', 'pyconnection.hpp'
+        "DuckDBPyConnection": os.path.join(
+            scripts_folder,
+            "..",
+            "src",
+            "include",
+            "duckdb_python",
+            "pyconnection",
+            "pyconnection.hpp",
         ),
-        'DuckDBPyRelation': os.path.join(scripts_folder, '..', 'src', 'include', 'duckdb_python', 'pyrelation.hpp'),
+        "DuckDBPyRelation": os.path.join(scripts_folder, "..", "src", "include", "duckdb_python", "pyrelation.hpp"),
     }
     # Create a dictionary to store method names and prototypes
     methods_dict = {}
 
     path = CLASSES[class_name]
-    load_content(path)
 
-    index = clang.cindex.Index.create()
-    tu = index.parse(path, args=['-std=c++11'])
-    traverse(class_name, tu.cursor, methods_dict)
+    visitor = Visitor(class_name)
+    preprocessor = cxxheaderparser.preprocessor.make_pcpp_preprocessor(retain_all_content=True)
+    tu = cxxheaderparser.parser.CxxParser(
+        path,
+        None,
+        visitor,
+        options=cxxheaderparser.parser.ParserOptions(
+            preprocessor=preprocessor,
+        ),
+    )
+    tu.parse()
 
-    return methods_dict
+    return visitor.methods_dict
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("This module should not called directly, please use `make generate-files` instead")
     exit(1)

@@ -38,7 +38,12 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 
 	switch (join.join_type) {
 	case JoinType::INNER:
-		return PullupInnerJoin(std::move(op));
+		if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			//	We can only move filters through the left side of AsOf joins.
+			return PullupFromLeft(std::move(op));
+		} else {
+			return PullupInnerJoin(std::move(op));
+		}
 	case JoinType::LEFT:
 	case JoinType::ANTI:
 	case JoinType::SEMI: {

@@ -3,36 +3,58 @@
 using namespace duckdb;
 using namespace std;
 
-void AddNumbersTogether(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+void AddVariadicNumbersTogether(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
 	// get the total number of rows in this chunk
 	idx_t input_size = duckdb_data_chunk_get_size(input);
-	// extract the two input vectors
-	duckdb_vector a = duckdb_data_chunk_get_vector(input, 0);
-	duckdb_vector b = duckdb_data_chunk_get_vector(input, 1);
-	// get the data pointers for the input vectors (both int64 as specified by the parameter types)
-	auto a_data = (int64_t *)duckdb_vector_get_data(a);
-	auto b_data = (int64_t *)duckdb_vector_get_data(b);
+
+	// extract the input vectors
+	auto column_count = duckdb_data_chunk_get_column_count(input);
+	std::vector<duckdb_vector> inputs;
+	std::vector<int64_t *> data_ptrs;
+	std::vector<uint64_t *> validity_masks;
+
 	auto result_data = (int64_t *)duckdb_vector_get_data(output);
-	// get the validity vectors
-	auto a_validity = duckdb_vector_get_validity(a);
-	auto b_validity = duckdb_vector_get_validity(b);
-	if (a_validity || b_validity) {
-		// if either a_validity or b_validity is defined there might be NULL values
-		duckdb_vector_ensure_validity_writable(output);
-		auto result_validity = duckdb_vector_get_validity(output);
-		for (idx_t row = 0; row < input_size; row++) {
-			if (duckdb_validity_row_is_valid(a_validity, row) && duckdb_validity_row_is_valid(b_validity, row)) {
-				// not null - do the addition
-				result_data[row] = a_data[row] + b_data[row];
-			} else {
-				// either a or b is NULL - set the result row to NULL
-				duckdb_validity_set_row_invalid(result_validity, row);
+	duckdb_vector_ensure_validity_writable(output);
+	auto result_validity = duckdb_vector_get_validity(output);
+
+	// early-out by setting each row to NULL
+	if (column_count == 0) {
+		for (idx_t row_idx = 0; row_idx < input_size; row_idx++) {
+			duckdb_validity_set_row_invalid(result_validity, row_idx);
+		}
+		return;
+	}
+
+	// setup
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		inputs.push_back(duckdb_data_chunk_get_vector(input, col_idx));
+		auto data_ptr = (int64_t *)duckdb_vector_get_data(inputs.back());
+		data_ptrs.push_back(data_ptr);
+		auto validity_mask = duckdb_vector_get_validity(inputs.back());
+		validity_masks.push_back(validity_mask);
+	}
+
+	// execution
+	for (idx_t row_idx = 0; row_idx < input_size; row_idx++) {
+
+		// validity check
+		auto invalid = false;
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			if (!duckdb_validity_row_is_valid(validity_masks[col_idx], row_idx)) {
+				// not valid, set to NULL
+				duckdb_validity_set_row_invalid(result_validity, row_idx);
+				invalid = true;
+				break;
 			}
 		}
-	} else {
-		// no NULL values - iterate and do the operation directly
-		for (idx_t row = 0; row < input_size; row++) {
-			result_data[row] = a_data[row] + b_data[row];
+		if (invalid) {
+			continue;
+		}
+
+		result_data[row_idx] = 0;
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			auto data = data_ptrs[col_idx][row_idx];
+			result_data[row_idx] += data;
 		}
 	}
 }
@@ -61,9 +83,9 @@ static void CAPIRegisterAddition(duckdb_connection connection, const char *name,
 	duckdb_destroy_logical_type(&type);
 
 	// set up the function
-	duckdb_scalar_function_set_function(nullptr, AddNumbersTogether);
+	duckdb_scalar_function_set_function(nullptr, AddVariadicNumbersTogether);
 	duckdb_scalar_function_set_function(function, nullptr);
-	duckdb_scalar_function_set_function(function, AddNumbersTogether);
+	duckdb_scalar_function_set_function(function, AddVariadicNumbersTogether);
 
 	// register and cleanup
 	status = duckdb_register_scalar_function(connection, function);
@@ -105,7 +127,7 @@ TEST_CASE("Test Scalar Functions C API", "[capi]") {
 }
 
 void ReturnStringInfo(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
-	auto extra_info = string((const char *)info);
+	auto extra_info = string((const char *)duckdb_scalar_function_get_extra_info(info));
 	// get the total number of rows in this chunk
 	idx_t input_size = duckdb_data_chunk_get_size(input);
 	// extract the two input vectors
@@ -159,7 +181,6 @@ static void CAPIRegisterStringInfo(duckdb_connection connection, const char *nam
 	// register and cleanup
 	status = duckdb_register_scalar_function(connection, function);
 	REQUIRE(status == DuckDBSuccess);
-
 	duckdb_destroy_scalar_function(&function);
 }
 
@@ -181,4 +202,55 @@ TEST_CASE("Test Scalar Functions - strings & extra_info", "[capi]") {
 	result = tester.Query("SELECT my_prefix(NULL)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->IsNull(0, 0));
+}
+
+static void CAPIRegisterVarargsFun(duckdb_connection connection, const char *name, duckdb_state expected_outcome) {
+	duckdb_state status;
+
+	// create a scalar function
+	auto function = duckdb_create_scalar_function();
+	duckdb_scalar_function_set_name(function, name);
+
+	// set the variable arguments
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	duckdb_scalar_function_set_varargs(function, type);
+
+	// set the return type to bigint
+	duckdb_scalar_function_set_return_type(function, type);
+	duckdb_destroy_logical_type(&type);
+
+	// set up the function
+	duckdb_scalar_function_set_function(function, AddVariadicNumbersTogether);
+
+	// register and cleanup
+	status = duckdb_register_scalar_function(connection, function);
+	REQUIRE(status == expected_outcome);
+	duckdb_destroy_scalar_function(&function);
+}
+
+TEST_CASE("Test Scalar Functions - variadic number of input parameters", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	CAPIRegisterVarargsFun(tester.connection, "my_addition", DuckDBSuccess);
+
+	result = tester.Query("SELECT my_addition(40, 2, 100, 3)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 145);
+
+	result = tester.Query("SELECT my_addition(40, 42, NULL)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->IsNull(0, 0));
+
+	result = tester.Query("SELECT my_addition(NULL, 2)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->IsNull(0, 0));
+
+	result = tester.Query("SELECT my_addition()");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->IsNull(0, 0));
+
+	result = tester.Query("SELECT my_addition('hello', [1])");
+	REQUIRE_FAIL(result);
 }

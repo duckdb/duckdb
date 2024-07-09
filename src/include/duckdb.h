@@ -144,23 +144,23 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 } duckdb_type;
 //! An enum over the returned state of different functions.
-typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
+typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 //! An enum over the pending state of a pending query result.
-typedef enum {
+typedef enum duckdb_pending_state {
 	DUCKDB_PENDING_RESULT_READY = 0,
 	DUCKDB_PENDING_RESULT_NOT_READY = 1,
 	DUCKDB_PENDING_ERROR = 2,
 	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
 } duckdb_pending_state;
 //! An enum over DuckDB's different result types.
-typedef enum {
+typedef enum duckdb_result_type {
 	DUCKDB_RESULT_TYPE_INVALID = 0,
 	DUCKDB_RESULT_TYPE_CHANGED_ROWS = 1,
 	DUCKDB_RESULT_TYPE_NOTHING = 2,
 	DUCKDB_RESULT_TYPE_QUERY_RESULT = 3,
 } duckdb_result_type;
 //! An enum over DuckDB's different statement types.
-typedef enum {
+typedef enum duckdb_statement_type {
 	DUCKDB_STATEMENT_TYPE_INVALID = 0,
 	DUCKDB_STATEMENT_TYPE_SELECT = 1,
 	DUCKDB_STATEMENT_TYPE_INSERT = 2,
@@ -412,6 +412,12 @@ typedef struct _duckdb_appender {
 	void *__appn;
 } * duckdb_appender;
 
+//! The table description allows querying info about the table.
+//! Must be destroyed with `duckdb_table_description_destroy`.
+typedef struct _duckdb_table_description {
+	void *__tabledesc;
+} * duckdb_table_description;
+
 //! Can be used to provide start-up options for the DuckDB instance.
 //! Must be destroyed with `duckdb_destroy_config`.
 typedef struct _duckdb_config {
@@ -435,6 +441,11 @@ typedef struct _duckdb_data_chunk {
 typedef struct _duckdb_value {
 	void *__val;
 } * duckdb_value;
+
+//! Holds a recursive tree that matches the query plan.
+typedef struct _duckdb_profiling_info {
+	void *__prof;
+} * duckdb_profiling_info;
 
 //===--------------------------------------------------------------------===//
 // Function types
@@ -614,6 +625,9 @@ through `duckdb_open_ext`.
 The duckdb_config must be destroyed using 'duckdb_destroy_config'
 
 This will always succeed unless there is a malloc failure.
+
+Note that `duckdb_destroy_config` should always be called on the resulting config, even if the function returns
+`DuckDBError`.
 
 * out_config: The result configuration object.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
@@ -2287,19 +2301,28 @@ The return value should be destroyed with `duckdb_destroy_scalar_function`.
 DUCKDB_API duckdb_scalar_function duckdb_create_scalar_function();
 
 /*!
-Destroys the given table function object.
+Destroys the given scalar function object.
 
-* table_function: The table function to destroy
+* scalar_function: The scalar function to destroy
 */
 DUCKDB_API void duckdb_destroy_scalar_function(duckdb_scalar_function *scalar_function);
 
 /*!
 Sets the name of the given scalar function.
 
-* table_function: The scalar function
+* scalar_function: The scalar function
 * name: The name of the scalar function
 */
 DUCKDB_API void duckdb_scalar_function_set_name(duckdb_scalar_function scalar_function, const char *name);
+
+/*!
+Sets the parameters of the given scalar function to varargs. Does not require adding parameters with
+duckdb_scalar_function_add_parameter.
+
+* scalar_function: The scalar function
+* type: The type of the arguments
+*/
+DUCKDB_API void duckdb_scalar_function_set_varargs(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 
 /*!
 Adds a parameter to the scalar function.
@@ -2321,7 +2344,7 @@ DUCKDB_API void duckdb_scalar_function_set_return_type(duckdb_scalar_function sc
 /*!
 Assigns extra information to the scalar function that can be fetched during binding, etc.
 
-* scalar_function: The table function
+* scalar_function: The scalar function
 * extra_info: The extra information
 * destroy: The callback that will be called to destroy the bind data (if any)
 */
@@ -2329,9 +2352,9 @@ DUCKDB_API void duckdb_scalar_function_set_extra_info(duckdb_scalar_function sca
                                                       duckdb_delete_callback_t destroy);
 
 /*!
-Sets the main function of the table function.
+Sets the main function of the scalar function.
 
-* table_function: The table function
+* scalar_function: The scalar function
 * function: The function
 */
 DUCKDB_API void duckdb_scalar_function_set_function(duckdb_scalar_function scalar_function,
@@ -2349,6 +2372,23 @@ If the function is incomplete or a function with this name already exists DuckDB
 * returns: Whether or not the registration was successful.
 */
 DUCKDB_API duckdb_state duckdb_register_scalar_function(duckdb_connection con, duckdb_scalar_function scalar_function);
+
+/*!
+Retrieves the extra info of the function as set in `duckdb_scalar_function_set_extra_info`.
+
+* info: The info object
+* returns: The extra info
+*/
+DUCKDB_API void *duckdb_scalar_function_get_extra_info(duckdb_function_info info);
+
+/*!
+Report that an error has occurred while executing the scalar function.
+
+* info: The info object
+* error: The error message
+*/
+DUCKDB_API void duckdb_scalar_function_set_error(duckdb_function_info info, const char *error);
+
 //===--------------------------------------------------------------------===//
 // Table Functions
 //===--------------------------------------------------------------------===//
@@ -2698,6 +2738,62 @@ DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info i
 #endif
 
 //===--------------------------------------------------------------------===//
+// Profiling Info
+//===--------------------------------------------------------------------===//
+
+/*!
+Returns the root node from the profiling information. Returns NULL if profiling is not enabled
+
+* @param connection A connection object
+* @return A profiling information object
+*/
+DUCKDB_API duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection);
+
+/*!
+Returns the value of the setting key of the current profiling info node. If the setting does not exist or is not
+enabled, nullptr is returned.
+
+* @param info A profiling information object
+* @param key The name of the metric setting to return the value for
+* @return The value of the metric setting. Must be freed with `duckdb_free`.
+*/
+DUCKDB_API const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
+
+/*!
+Returns the number of children in the current profiling info node.
+
+* @param info A profiling information object
+* @return The number of children in the current node
+*/
+DUCKDB_API idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info);
+
+/*!
+Returns the child node at the specified index.
+
+* @param info A profiling information object
+* @param index The index of the child node to return
+* @return The child node at the specified index
+*/
+DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
+
+/*! Returns the operator name of the current profiling info node, if the node is an Operator Node.
+ *
+ * @param info A profiling information object
+ * @return The name of the operator of the current node. Returns a nullptr if the node is not an Operator Node. The
+ * result must be freed with `duckdb_free`.
+ */
+DUCKDB_API const char *duckdb_profiling_info_get_name(duckdb_profiling_info info);
+
+/*!
+Returns the query of the current profiling info node, if the node the query root node.
+
+* @param info A profiling information object
+* @return The query of the current node. Returns a nullptr if the node is not a Query Node. The result must be freed
+with `duckdb_free`.
+*/
+DUCKDB_API const char *duckdb_profiling_info_get_query(duckdb_profiling_info info);
+
+//===--------------------------------------------------------------------===//
 // Appender
 //===--------------------------------------------------------------------===//
 
@@ -2927,6 +3023,47 @@ If the append is successful, DuckDBSuccess is returned.
 * returns: The return state.
 */
 DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk);
+
+//===--------------------------------------------------------------------===//
+// TableDescription
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a table description object.
+Note that `duckdb_table_description_destroy` should always be called on the resulting table_description, even if the
+function returns `DuckDBError`.
+* connection: The connection context.
+* schema: The schema of the table, or `nullptr` for the default schema.
+* table: The table name.
+* out: The resulting table description object.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_table_description_create(duckdb_connection connection, const char *schema,
+                                                        const char *table, duckdb_table_description *out);
+
+/*!
+Destroy the TableDescription object.
+* table: The table_description to destroy.
+*/
+DUCKDB_API void duckdb_table_description_destroy(duckdb_table_description *table_description);
+
+/*!
+Returns the error message associated with the given table_description.
+If the table_description has no error message, this returns `nullptr` instead.
+The error message should not be freed. It will be de-allocated when `duckdb_table_description_destroy` is called.
+* table_description: The table_description to get the error from.
+* returns: The error message, or `nullptr` if there is none.
+*/
+DUCKDB_API const char *duckdb_table_description_error(duckdb_table_description table);
+
+/*!
+Check if the column at 'index' index of the table has a DEFAULT expression.
+* table: The table_description to query.
+* index: The index of the column to query.
+* out: The out-parameter used to store the result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
 
 #ifndef DUCKDB_API_NO_DEPRECATED
 //===--------------------------------------------------------------------===//

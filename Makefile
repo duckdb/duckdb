@@ -103,6 +103,9 @@ endif
 ifeq (${BUILD_ICU}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};icu
 endif
+ifeq (${BUILD_INET}, 1)
+	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};inet
+endif
 ifeq (${BUILD_TPCH}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};tpch
 endif
@@ -133,12 +136,6 @@ ifeq (${STATIC_OPENSSL}, 1)
 endif
 ifeq (${BUILD_TPCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_TPCE=1
-endif
-ifeq (${BUILD_ODBC}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_ODBC_DRIVER=1
-endif
-ifneq ($(ODBC_CONFIG),)
-	CMAKE_VARS:=${CMAKE_VARS} -DODBC_CONFIG=${ODBC_CONFIG}
 endif
 ifeq (${BUILD_PYTHON}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_PYTHON=1 -DDUCKDB_EXTENSION_CONFIGS="tools/pythonpkg/duckdb_extension_config.cmake"
@@ -407,6 +404,9 @@ format-changes:
 format-main:
 	python3 scripts/format.py main --fix --noconfirm
 
+format-feature:
+	python3 scripts/format.py feature --fix --noconfirm
+
 third_party/sqllogictest:
 	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
 
@@ -439,8 +439,7 @@ generate-files:
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
-	python3 tools/pythonpkg/scripts/generate_connection_code.py
-	./scripts/generate_micro_extended.sh
+	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 

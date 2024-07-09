@@ -128,6 +128,8 @@ public:
 	idx_t max_row;
 	//! The current batch index
 	idx_t batch_index;
+	//! The valid selection
+	SelectionVector valid_sel;
 
 public:
 	void Initialize(const vector<LogicalType> &types);
@@ -144,7 +146,7 @@ private:
 };
 
 struct TableScanOptions {
-	//! Test config that forces fetching rows one by one instead of regular scans
+	//! Fetch rows one-at-a-time instead of using the regular scans.
 	bool force_fetch_row = false;
 };
 

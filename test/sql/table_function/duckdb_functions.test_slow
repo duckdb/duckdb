@@ -1,0 +1,41 @@
+# name: test/sql/table_function/duckdb_functions.test_slow
+# description: Test duckdb_functions function
+# group: [table_function]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT * FROM duckdb_functions();
+
+statement ok
+CREATE MACRO add_default1(a := 3, b := 5) AS a + b
+
+statement ok
+CREATE MACRO add_default2(a, b := 5) AS a + b
+
+statement ok
+SELECT * FROM duckdb_functions();
+
+statement ok
+SELECT * FROM duckdb_functions() WHERE function_type='table';
+
+query I
+select distinct function_name from duckdb_functions() where function_name='sqrt';
+----
+sqrt
+
+query I
+select function_name from duckdb_functions() where not internal order by 1;
+----
+add_default1
+add_default2
+
+# table functions too
+statement ok
+create macro my_range(x) as table from range(x);
+
+query I
+select macro_definition from duckdb_functions() where function_name = 'my_range';
+----
+SELECT * FROM "range"(x)

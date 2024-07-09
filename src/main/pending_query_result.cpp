@@ -43,6 +43,11 @@ void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	}
 }
 
+void PendingQueryResult::WaitForTask() {
+	auto lock = LockContext();
+	context->WaitForTask(*lock, *this);
+}
+
 PendingExecutionResult PendingQueryResult::ExecuteTask() {
 	auto lock = LockContext();
 	return ExecuteTaskInternal(*lock);
@@ -65,16 +70,20 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	// Busy wait while execution is not finished
-	if (allow_stream_result) {
-		while (!IsFinishedOrBlocked(ExecuteTaskInternal(lock))) {
-		}
-	} else {
-		while (!IsFinished(ExecuteTaskInternal(lock))) {
+
+	PendingExecutionResult execution_result;
+	while (!IsResultReady(execution_result = ExecuteTaskInternal(lock))) {
+		if (execution_result == PendingExecutionResult::BLOCKED) {
+			CheckExecutableInternal(lock);
+			context->WaitForTask(lock, *this);
 		}
 	}
 	if (HasError()) {
-		return make_uniq<MaterializedQueryResult>(error);
+		if (allow_stream_result) {
+			return make_uniq<StreamQueryResult>(error);
+		} else {
+			return make_uniq<MaterializedQueryResult>(error);
+		}
 	}
 	auto result = context->FetchResultInternal(lock, *this);
 	Close();
@@ -90,13 +99,12 @@ void PendingQueryResult::Close() {
 	context.reset();
 }
 
-bool PendingQueryResult::IsFinished(PendingExecutionResult result) {
-	return (result == PendingExecutionResult::RESULT_READY || result == PendingExecutionResult::EXECUTION_ERROR);
+bool PendingQueryResult::IsResultReady(PendingExecutionResult result) {
+	return (IsExecutionFinished(result) || result == PendingExecutionResult::RESULT_READY);
 }
 
-bool PendingQueryResult::IsFinishedOrBlocked(PendingExecutionResult result) {
-	return (result == PendingExecutionResult::RESULT_READY || result == PendingExecutionResult::EXECUTION_ERROR ||
-	        result == PendingExecutionResult::BLOCKED);
+bool PendingQueryResult::IsExecutionFinished(PendingExecutionResult result) {
+	return (result == PendingExecutionResult::EXECUTION_FINISHED || result == PendingExecutionResult::EXECUTION_ERROR);
 }
 
 } // namespace duckdb

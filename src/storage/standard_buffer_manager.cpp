@@ -1,6 +1,7 @@
 #include "duckdb/storage/standard_buffer_manager.hpp"
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -94,6 +95,14 @@ optional_idx StandardBufferManager::GetMaxSwap() const {
 	return temporary_directory.handle->GetTempFile().GetMaxSwapSpace();
 }
 
+idx_t StandardBufferManager::GetBlockAllocSize() const {
+	return temp_block_manager->GetBlockAllocSize();
+}
+
+idx_t StandardBufferManager::GetBlockSize() const {
+	return temp_block_manager->GetBlockSize();
+}
+
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta,
                                                                     unique_ptr<FileBuffer> *buffer, ARGS... args) {
@@ -107,14 +116,12 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 	return std::move(r.reservation);
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(idx_t size) {
-
-	// FIXME: Some transient segments are converted to persistent segments. So, if available,
-	// we need to pass the block size to this function instead of using the global constant,
-	// if we want to support configurable block sizes.
-	const idx_t block_size = Storage::BLOCK_SIZE;
+shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size) {
 	D_ASSERT(size <= block_size);
 
+	// This comparison is the reason behind passing block_size through transient memory creation.
+	// Otherwise, any non-default block size would register as small memory, causing problems when
+	// trying to convert that memory to consistent blocks later on.
 	if (size < block_size) {
 		return RegisterSmallMemory(size);
 	}
@@ -124,17 +131,16 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(idx_t siz
 	return block;
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_size) {
-	D_ASSERT(block_size < Storage::BLOCK_SIZE);
-	auto reservation =
-	    EvictBlocksOrThrow(MemoryTag::BASE_TABLE, block_size, nullptr, "could not allocate block of size %s%s",
-	                       StringUtil::BytesToHumanReadableString(block_size));
+shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t size) {
+	D_ASSERT(size < GetBlockSize());
+	auto reservation = EvictBlocksOrThrow(MemoryTag::BASE_TABLE, size, nullptr, "could not allocate block of size %s%s",
+	                                      StringUtil::BytesToHumanReadableString(size));
 
-	auto buffer = ConstructManagedBuffer(block_size, nullptr, FileBufferType::TINY_BUFFER);
+	auto buffer = ConstructManagedBuffer(size, nullptr, FileBufferType::TINY_BUFFER);
 
-	// create a new block pointer for this block
+	// Create a new block pointer for this block.
 	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
-	                                           std::move(buffer), false, block_size, std::move(reservation));
+	                                           std::move(buffer), false, size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
 	WriteGarbageIntoBuffer(*result->buffer);
@@ -143,16 +149,15 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_s
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy) {
-	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	auto alloc_size = GetAllocSize(block_size);
-	// first evict blocks until we have enough memory to store this buffer
+
+	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;
 	auto res = EvictBlocksOrThrow(tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
+	// Create a new buffer and a block to hold the buffer.
 	auto buffer = ConstructManagedBuffer(block_size, std::move(reusable_buffer));
-
-	// create a new block pointer for this block
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer), can_destroy,
 	                                    alloc_size, std::move(res));
 }
@@ -162,6 +167,7 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	shared_ptr<BlockHandle> local_block;
 	auto block_ptr = block ? block : &local_block;
 	*block_ptr = RegisterMemory(tag, block_size, can_destroy);
+
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
 	WriteGarbageIntoBuffer(*(*block_ptr)->buffer);
@@ -170,7 +176,7 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 }
 
 void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
-	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
+	D_ASSERT(block_size >= GetBlockSize());
 	unique_lock<mutex> lock(handle->lock);
 	D_ASSERT(handle->state == BlockState::BLOCK_LOADED);
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
@@ -215,7 +221,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 #endif
 
 	// allocate a buffer to hold the data of all of the blocks
-	auto intermediate_buffer = Allocate(MemoryTag::BASE_TABLE, block_count * Storage::BLOCK_SIZE);
+	auto intermediate_buffer = Allocate(MemoryTag::BASE_TABLE, block_count * block_manager.GetBlockSize());
 	// perform a batch read of the blocks into the buffer
 	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
 
@@ -244,7 +250,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 				continue;
 			}
 			auto block_ptr =
-			    intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * Storage::BLOCK_ALLOC_SIZE;
+			    intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * block_manager.GetBlockAllocSize();
 			buf = BlockHandle::LoadFromBuffer(handle, block_ptr, std::move(reusable_buffer));
 			handle->readers = 1;
 			handle->memory_charge = std::move(reservation);
@@ -363,7 +369,7 @@ void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) 
 void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
-	                                                handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
+	                                                handle->memory_usage - Storage::DEFAULT_BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
 	WriteGarbageIntoBuffer(*handle->buffer);
 	handle->buffer = std::move(replacement_buffer);
@@ -412,7 +418,7 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 	for (idx_t k = 0; k < MEMORY_TAG_COUNT; k++) {
 		MemoryInformation info;
 		info.tag = MemoryTag(k);
-		info.size = buffer_pool.memory_usage_per_tag[k].load();
+		info.size = buffer_pool.memory_usage.GetUsedMemory(MemoryTag(k), BufferPool::MemoryUsageCaches::FLUSH);
 		info.evicted_data = evicted_data_per_tag[k].load();
 		result.push_back(info);
 	}
@@ -448,17 +454,22 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
+
+	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
-	if (buffer.size == Storage::BLOCK_SIZE) {
-		evicted_data_per_tag[uint8_t(tag)] += Storage::BLOCK_SIZE;
+
+	// Append to a few grouped files.
+	if (buffer.size == GetBlockSize()) {
+		evicted_data_per_tag[uint8_t(tag)] += GetBlockSize();
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
 	}
-	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
-	// get the path to write to
+
+	// Get the path to write to.
 	auto path = GetTemporaryPath(block_id);
-	D_ASSERT(buffer.size > Storage::BLOCK_SIZE);
-	// create the file and write the size followed by the buffer contents
+	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
+
+	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
@@ -470,21 +481,23 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	D_ASSERT(!temporary_directory.path.empty());
 	D_ASSERT(temporary_directory.handle.get());
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
-		evicted_data_per_tag[uint8_t(tag)] -= Storage::BLOCK_SIZE;
+		evicted_data_per_tag[uint8_t(tag)] -= GetBlockSize();
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
 	}
+
+	// Open the temporary file and read its size.
 	idx_t block_size;
-	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	handle->Read(&block_size, sizeof(idx_t), 0);
 	evicted_data_per_tag[uint8_t(tag)] -= block_size;
 
-	// now allocate a buffer of this size and read the data into that buffer
+	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
-
 	handle.reset();
+
+	// Delete the file and return the buffer.
 	DeleteTemporaryFile(id);
 	return buffer;
 }
@@ -576,7 +589,7 @@ void StandardBufferManager::FreeReservedMemory(idx_t size) {
 	if (size == 0) {
 		return;
 	}
-	buffer_pool.current_memory -= size;
+	buffer_pool.memory_usage.UpdateUsedMemory(MemoryTag::EXTENSION, -(int64_t)size);
 }
 
 //===--------------------------------------------------------------------===//

@@ -34,11 +34,12 @@ CREATE SCHEMA s3;
 statement error
 CHECKPOINT;
 ----
+<REGEX>:FATAL Error.*Checkpoint aborted.*checkpoint_abort flag.*
 
-# error Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 statement error
 CHECKPOINT;
 ----
+<REGEX>:FATAL Error.*Checkpoint aborted.*checkpoint_abort flag.*
 
 restart
 
