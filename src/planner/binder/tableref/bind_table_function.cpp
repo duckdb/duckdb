@@ -118,6 +118,9 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 					child = std::move(comp.right);
 				}
 			}
+		} else if (!child->alias.empty()) {
+			// <name> => <expression> will set the alias of <expression> to <name>
+			parameter_name = child->alias;
 		}
 		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION && child->type == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
