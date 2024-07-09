@@ -1,7 +1,0 @@
-# name: benchmark/large/ingestion/tpch/native/ingest_order.benchmark
-# description: benchmark ingestion of order
-# group: [native]
-
-template benchmark/large/ingestion/tpch/tpch_ingestion_persistent.benchmark.in
-table_name=order
-format=native

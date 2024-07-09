@@ -6,6 +6,6 @@ create view lineitem_csv as select * from read_csv('duckdb_benchmark_data/tpch_c
 create view lineitem_parquet as select * from read_parquet('duckdb_benchmark_data/tpch_parquet_sf10/lineitem.parquet');
 create view lineitem_native as select * from lineitem;
 
-create view order_csv as select * from read_csv('duckdb_benchmark_data/tpch_csv_sf10/order.csv');
-create view order_parquet as select * from read_parquet('duckdb_benchmark_data/tpch_parquet_sf10/order.parquet');
-create view order_native as select * from order;
+create view orders_csv as select * from read_csv('duckdb_benchmark_data/tpch_csv_sf10/order.csv');
+create view orders_parquet as select * from read_parquet('duckdb_benchmark_data/tpch_parquet_sf10/order.parquet');
+create view orders_native as select * from order;
