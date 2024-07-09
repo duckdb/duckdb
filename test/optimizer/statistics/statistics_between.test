@@ -192,4 +192,3 @@ SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AN
 1
 2
 3
-
