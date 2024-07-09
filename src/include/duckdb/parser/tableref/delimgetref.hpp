@@ -15,8 +15,15 @@ namespace duckdb {
 class DelimGetRef : public TableRef {
 
 public:
-	DelimGetRef() : TableRef(TableReferenceType::DELIM_GET) {
+	explicit DelimGetRef(const vector<LogicalType> &types_p) : TableRef(TableReferenceType::DELIM_GET), types(types_p) {
+		for (idx_t i = 0; i < types.size(); i++) {
+			string column_name = "column_" + std::to_string(i);
+			fake_aliases.emplace_back(column_name);
+		}
 	}
+
+	vector<string> fake_aliases;
+	vector<LogicalType> types;
 
 public:
 	string ToString() const override;
@@ -24,7 +31,6 @@ public:
 
 	unique_ptr<TableRef> Copy() override;
 
-	//! Deserializes a blob back into a DummyTableRef
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 };

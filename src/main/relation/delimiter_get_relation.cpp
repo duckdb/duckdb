@@ -19,7 +19,7 @@ unique_ptr<QueryNode> DelimiterGetRelation::GetQueryNode() {
 }
 
 unique_ptr<TableRef> DelimiterGetRelation::GetTableRef() {
-	auto delim_get_ref = make_uniq<DelimGetRef>();
+	auto delim_get_ref = make_uniq<DelimGetRef>(chunk_types);
 	return std::move(delim_get_ref);
 }
 

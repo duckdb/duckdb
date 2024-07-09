@@ -11,15 +11,18 @@ bool DelimGetRef::Equals(const TableRef &other) const {
 }
 
 unique_ptr<TableRef> DelimGetRef::Copy() {
-	return make_uniq<DelimGetRef>();
+	return make_uniq<DelimGetRef>(types);
 }
 
 void DelimGetRef::Serialize(Serializer &serializer) const {
+	// FIXME: Serialize Types
 	TableRef::Serialize(serializer);
 }
 
 unique_ptr<TableRef> DelimGetRef::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<DelimGetRef>(new DelimGetRef());
+	// FIXME: Deserliaze Types
+	vector<LogicalType> types;
+	auto result = duckdb::unique_ptr<DelimGetRef>(new DelimGetRef(types));
 	return std::move(result);
 }
 

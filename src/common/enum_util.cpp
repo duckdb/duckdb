@@ -6997,6 +6997,8 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 		return "SHOW_REF";
 	case TableReferenceType::COLUMN_DATA:
 		return "COLUMN_DATA";
+	case TableReferenceType::DELIM_GET:
+		return "DELIM_GET";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
