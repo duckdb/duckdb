@@ -1,4 +1,6 @@
 #include "duckdb/parser/tableref/delimgetref.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
@@ -15,13 +17,12 @@ unique_ptr<TableRef> DelimGetRef::Copy() {
 }
 
 void DelimGetRef::Serialize(Serializer &serializer) const {
-	// FIXME: Serialize Types
 	TableRef::Serialize(serializer);
+	serializer.WriteProperty<vector<LogicalType>>(105, "chunk_types", types);
 }
 
 unique_ptr<TableRef> DelimGetRef::Deserialize(Deserializer &deserializer) {
-	// FIXME: Deserliaze Types
-	vector<LogicalType> types;
+	vector<LogicalType> types = deserializer.ReadProperty<vector<LogicalType>>(105, "chunk_types");
 	auto result = duckdb::unique_ptr<DelimGetRef>(new DelimGetRef(types));
 	return std::move(result);
 }
