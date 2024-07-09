@@ -134,6 +134,14 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	result->type = ref.type;
 	result->left = left_binder.BindJoin(*this, *ref.left);
+	result->delim_flipped = ref.delim_flipped;
+	// I have to get the columns here, but to bind these I need the table index generated in the
+	// ExpressionBinder expression_binder(*this, context);
+	ExpressionBinder expr_binder(left_binder, context);
+	// auto left = BindColumn(left_binder, context, left_alias, column_name);
+	for (auto &col : ref.duplicate_eliminated_columns) {
+		result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+	}
 	{
 		LateralBinder binder(left_binder, context);
 		result->right = right_binder.BindJoin(*this, *ref.right);

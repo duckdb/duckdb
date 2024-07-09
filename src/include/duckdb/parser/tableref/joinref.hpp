@@ -42,7 +42,7 @@ public:
 	//! Duplicate eliminated columns (if any)
 	vector<unique_ptr<ParsedExpression>> duplicate_eliminated_columns;
 	//! If we have duplicate eliminated columns if the delim is flipped
-	bool delim_flipped;
+	bool delim_flipped = false;
 
 public:
 	string ToString() const override;

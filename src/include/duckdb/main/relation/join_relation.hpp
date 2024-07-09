@@ -30,7 +30,8 @@ public:
 	vector<ColumnDefinition> columns;
 
 	vector<unique_ptr<ParsedExpression>> duplicate_eliminated_columns;
-	bool delim_flipped;
+	bool delim_flipped = false;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 
