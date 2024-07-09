@@ -22,6 +22,8 @@ public:
 
 	ConstraintType type;
 
+	virtual vector<PhysicalIndex> GetColumnIndices() const = 0;
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {

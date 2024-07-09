@@ -19,7 +19,7 @@ public:
 	static constexpr const ConstraintType TYPE = ConstraintType::UNIQUE;
 
 public:
-	BoundUniqueConstraint(vector<LogicalIndex> keys, logical_index_set_t key_set, bool is_primary_key)
+	BoundUniqueConstraint(vector<PhysicalIndex> keys, physical_index_set_t key_set, bool is_primary_key)
 	    : BoundConstraint(ConstraintType::UNIQUE), keys(std::move(keys)), key_set(std::move(key_set)),
 	      is_primary_key(is_primary_key) {
 #ifdef DEBUG
@@ -30,10 +30,14 @@ public:
 #endif
 	}
 
+	vector<PhysicalIndex> GetColumnIndices() const final {
+		return keys;
+	}
+
 	//! The keys that define the unique constraint
-	vector<LogicalIndex> keys;
+	vector<PhysicalIndex> keys;
 	//! The same keys but stored as an unordered set
-	logical_index_set_t key_set;
+	physical_index_set_t key_set;
 	//! Whether or not the unique constraint is a primary key
 	bool is_primary_key;
 };

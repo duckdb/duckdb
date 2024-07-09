@@ -33,6 +33,7 @@ struct AlterForeignKeyInfo;
 struct SetNotNullInfo;
 struct DropNotNullInfo;
 struct SetColumnCommentInfo;
+struct AddConstraintInfo;
 
 class TableFunction;
 struct FunctionData;
@@ -106,6 +107,9 @@ public:
 
 	virtual void BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
 	                                   ClientContext &context);
+
+	Constraint *GetPrimaryKey() const;
+	bool HasPrimaryKey() const;
 
 protected:
 	//! A list of columns that are part of this table
