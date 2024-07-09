@@ -57,16 +57,30 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 	}
 }
 
+static vector<unique_ptr<ParsedExpression>> &GetItemsToExpand(FunctionExpression &func) {
+	if (func.function_name == "map") {
+		D_ASSERT(func.children.size() == 2);
+		// Return the keys list
+		auto &keys_list = func.children[0]->Cast<FunctionExpression>();
+		return keys_list.children;
+	}
+	return func.children;
+}
+
 void Transformer::TransformInExpression(duckdb_libpgquery::PGNode &rhs,
                                         vector<unique_ptr<ParsedExpression>> &in_candidates) {
 	auto expr = TransformExpression(rhs);
 
 	if (expr->type == ExpressionType::FUNCTION) {
 		auto &func = expr->Cast<FunctionExpression>();
-		if (func.function_name == "list_value" || func.function_name == "row") {
+		if (func.function_name == "list_value" || func.function_name == "row" || func.function_name == "map") {
 			// These are expanded to their children
 			// i.e IN ([1,2,3,4]) becomes IN (1, 2, 3, 4)
-			for (auto &child : func.children) {
+			auto &items = GetItemsToExpand(func);
+			if (items.empty()) {
+				throw ParserException("IN must contain at least 1 item");
+			}
+			for (auto &child : items) {
 				in_candidates.push_back(std::move(child));
 			}
 			return;

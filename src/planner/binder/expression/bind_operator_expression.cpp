@@ -92,13 +92,15 @@ static bool ParameterNeedsExpansion(ParsedExpression &bound) {
 	}
 	auto &value_constant = expr->Cast<BoundConstantExpression>();
 	auto &value = value_constant.value;
-	if (value.type().id() != LogicalTypeId::STRUCT && value.type().id() != LogicalTypeId::LIST) {
+	auto id = value.type().id();
+	const bool is_struct = id == LogicalTypeId::STRUCT;
+	const bool is_map = id == LogicalTypeId::MAP;
+	const bool is_list = id == LogicalTypeId::LIST;
+	if (!is_struct && !is_map && !is_list) {
 		return false;
 	}
-	if (value.type().id() == LogicalTypeId::STRUCT) {
-		if (!StructType::IsUnnamed(value.type())) {
-			return false;
-		}
+	if (is_struct && !StructType::IsUnnamed(value.type())) {
+		return false;
 	}
 	return true;
 }
@@ -196,6 +198,17 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 				}
 				for (auto &child : struct_children) {
 					auto bound_child = make_uniq<BoundConstantExpression>(child);
+					replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));
+				}
+			} else if (unexpanded_value.type().id() == LogicalTypeId::MAP) {
+				auto &map_children = MapValue::GetChildren(unexpanded_value);
+				if (map_children.empty()) {
+					throw BinderException("Expanded MAP parameter inside IN expression can not be empty");
+				}
+				for (auto &child : map_children) {
+					auto &key_value = StructValue::GetChildren(child);
+					auto &key = key_value[0];
+					auto bound_child = make_uniq<BoundConstantExpression>(key);
 					replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));
 				}
 			} else {
