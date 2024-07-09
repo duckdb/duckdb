@@ -10,6 +10,6 @@ benchmark/large/ingestion/tpch/csv/ingest_lineitem.benchmark
 benchmark/large/ingestion/tpch/parquet/ingest_lineitem.benchmark
 benchmark/large/ingestion/tpch/native/ingest_lineitem.benchmark
 
-benchmark/large/ingestion/tpch/csv/ingest_part.benchmark
-benchmark/large/ingestion/tpch/parquet/ingest_part.benchmark
-benchmark/large/ingestion/tpch/native/ingest_part.benchmark
+benchmark/large/ingestion/tpch/csv/ingest_order.benchmark
+benchmark/large/ingestion/tpch/parquet/ingest_order.benchmark
+benchmark/large/ingestion/tpch/native/ingest_order.benchmark
