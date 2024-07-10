@@ -104,3 +104,15 @@ SELECT * FROM information_schema.key_column_usage
 
 statement ok
 SELECT * FROM information_schema.table_constraints
+
+statement ok
+SELECT * FROM information_schema.constraint_column_usage
+
+statement ok
+SELECT * FROM information_schema.constraint_table_usage
+
+statement ok
+SELECT * FROM information_schema.check_constraints
+
+statement ok
+SELECT * FROM information_schema.views
