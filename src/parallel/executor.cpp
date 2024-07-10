@@ -264,7 +264,7 @@ void Executor::ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipel
 }
 
 void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
-	// #ifdef DEBUG
+#ifdef DEBUG
 	const idx_t count = event_data.events.size();
 	vector<reference<Event>> vertices;
 	vertices.reserve(count);
@@ -276,7 +276,7 @@ void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
 	for (idx_t i = 0; i < count; i++) {
 		VerifyScheduledEventsInternal(i, vertices, visited, recursion_stack);
 	}
-	// #endif
+#endif
 }
 
 void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<reference<Event>> &vertices,
