@@ -1,3 +1,5 @@
+#include "capi_tester.hpp"
+
 using namespace duckdb;
 using namespace std;
 

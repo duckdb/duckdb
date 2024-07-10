@@ -1,3 +1,5 @@
+#include "capi_tester.hpp"
+
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
