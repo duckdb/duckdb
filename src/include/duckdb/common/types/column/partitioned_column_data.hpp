@@ -110,11 +110,11 @@ protected:
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
 	static void BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count,
 	                              const bool use_fixed_size_map);
-	template <class MAP_TYPE, class GETTER>
+	template <typename MAP_TYPE, class GETTER>
 	static void BuildPartitionSel(PartitionedColumnDataAppendState &state, MAP_TYPE &partition_entries,
 	                              const idx_t append_count);
 	//! Appends a DataChunk to this PartitionedColumnData
-	template <class MAP_TYPE, class GETTER>
+	template <typename MAP_TYPE, class GETTER>
 	void AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input, const MAP_TYPE &partition_entries);
 	//! Create a collection for a specific a partition
 	unique_ptr<ColumnDataCollection> CreatePartitionCollection(idx_t partition_index) const {

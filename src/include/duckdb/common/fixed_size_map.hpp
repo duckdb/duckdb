@@ -208,7 +208,7 @@ private:
 //! Some helper functors so we can template functions to use either an unordered map or a fixed size map
 
 // LCOV_EXCL_START
-template <class MAP_TYPE>
+template <typename MAP_TYPE>
 struct UnorderedMapGetter {
 	static inline const typename MAP_TYPE::key_type &GetKey(typename MAP_TYPE::iterator &iterator) {
 		return iterator->first;
