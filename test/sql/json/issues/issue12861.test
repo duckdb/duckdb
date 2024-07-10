@@ -1,0 +1,30 @@
+# name: test/sql/json/issues/issue12861.test
+# description: Test issue 12861 - Autodetected type of nested JSON field in read_json_auto depends on amount of null values in input
+# group: [issues]
+
+require json
+
+statement ok
+create table tbl (test struct(one bigint, two varchar));
+
+statement ok
+insert into tbl values ({'one': 1, 'two': 2}), (null)
+
+statement ok
+copy tbl to '__TEST_DIR__/fewnulls.json'
+
+statement ok
+insert into tbl select null from range(9)
+
+statement ok
+copy tbl to '__TEST_DIR__/manynulls.json'
+
+query I
+select typeof(test) from '__TEST_DIR__/fewnulls.json' limit 1
+----
+STRUCT(one BIGINT, two VARCHAR)
+
+query I
+select typeof(test) from '__TEST_DIR__/manynulls.json' limit 1
+----
+STRUCT(one BIGINT, two VARCHAR)
