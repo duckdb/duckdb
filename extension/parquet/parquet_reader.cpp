@@ -6,6 +6,7 @@
 #include "column_reader.hpp"
 #include "duckdb.hpp"
 #include "expression_column_reader.hpp"
+#include "geo_parquet.hpp"
 #include "list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -15,7 +16,6 @@
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
-#include "geo_parquet.hpp"
 #include "thrift_tools.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
@@ -671,6 +671,20 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 	return min_offset;
 }
 
+static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
+                                                      TableFilter &filter) {
+	if (filter.filter_type == TableFilterType::CONSTANT_COMPARISON) {
+		auto &constant_filter = filter.Cast<ConstantFilter>();
+		auto &min_value = pq_col_stats.min_value;
+		auto &max_value = pq_col_stats.max_value;
+		return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
+		                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
+		                                 constant_filter.comparison_type, StringValue::Get(constant_filter.constant));
+	} else {
+		return filter.CheckStatistics(stats);
+	}
+}
+
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx) {
 	auto &group = GetGroup(state);
 	auto column_id = reader_data.column_ids[col_idx];
@@ -685,7 +699,34 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 		if (stats && filter_entry != reader_data.filters->filters.end()) {
 			bool skip_chunk = false;
 			auto &filter = *filter_entry->second;
-			auto prune_result = filter.CheckStatistics(*stats);
+			const auto &pq_col_stats = group.columns[column_reader->FileIdx()].meta_data.statistics;
+
+			FilterPropagateResult prune_result;
+			if (column_reader->Type().id() == LogicalTypeId::VARCHAR && pq_col_stats.__isset.min_value &&
+			    pq_col_stats.__isset.max_value) {
+				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
+				// however, when reading remote Parquet files, skipping row groups is really important
+				// here, we implement a special case to check the full length for string filters
+				if (filter.filter_type == TableFilterType::CONJUNCTION_AND) {
+					const auto &and_filter = filter.Cast<ConjunctionAndFilter>();
+					auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+					for (auto &child_filter : and_filter.child_filters) {
+						auto child_prune_result = CheckParquetStringFilter(*stats, pq_col_stats, *child_filter);
+						if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+							and_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+							break;
+						} else if (child_prune_result != and_result) {
+							and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+						}
+					}
+					prune_result = and_result;
+				} else {
+					prune_result = CheckParquetStringFilter(*stats, pq_col_stats, filter);
+				}
+			} else {
+				prune_result = filter.CheckStatistics(*stats);
+			}
+
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 				skip_chunk = true;
 			}
