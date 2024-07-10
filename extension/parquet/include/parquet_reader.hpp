@@ -135,6 +135,8 @@ public:
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! Parquet schema for the generated columns
 	vector<duckdb_parquet::format::SchemaElement> generated_column_schema;
+	//! Table column names - set when using COPY tbl FROM file.parquet
+	vector<string> table_columns;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);

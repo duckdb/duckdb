@@ -151,7 +151,7 @@ class TestDuckDBConnection(object):
         assert duckdb.query(statements[1]).fetchall() == [(21,)]
         assert duckdb.execute(statements[1]).fetchall() == [(21,)]
 
-        with pytest.raises(duckdb.InvalidInputException, match='Prepared statement needs 1 parameters, 0 given'):
+        with pytest.raises(duckdb.InvalidInputException, match='Expected 1 parameters, but none were supplied'):
             duckdb.execute(statements[0])
         assert duckdb.execute(statements[0], {'1': 42}).fetchall() == [(42,)]
 

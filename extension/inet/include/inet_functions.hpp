@@ -23,6 +23,8 @@ struct INetFunctions {
 	static void Netmask(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Network(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Broadcast(DataChunk &args, ExpressionState &state, Vector &result);
+	static void Escape(DataChunk &args, ExpressionState &state, Vector &result);
+	static void Unescape(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Subtract(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Add(DataChunk &args, ExpressionState &state, Vector &result);
 	static void ContainsLeft(DataChunk &args, ExpressionState &state, Vector &result);

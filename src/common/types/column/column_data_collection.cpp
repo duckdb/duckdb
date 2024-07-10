@@ -467,6 +467,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 
 	auto current_index = meta_data.vector_data_index;
 	idx_t remaining = copy_count;
+	auto block_size = meta_data.segment.allocator->GetBufferManager().GetBlockSize();
 	while (remaining > 0) {
 		// how many values fit in the current string vector
 		idx_t vector_remaining =
@@ -485,7 +486,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			if (entry.IsInlined()) {
 				continue;
 			}
-			if (heap_size + entry.GetSize() > Storage::DEFAULT_BLOCK_SIZE) {
+			if (heap_size + entry.GetSize() > block_size) {
 				break;
 			}
 			heap_size += entry.GetSize();
@@ -496,7 +497,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			auto source_idx = source_data.sel->get_index(offset + append_count);
 			D_ASSERT(source_data.validity.RowIsValid(source_idx));
 			D_ASSERT(!source_entries[source_idx].IsInlined());
-			D_ASSERT(source_entries[source_idx].GetSize() > Storage::DEFAULT_BLOCK_SIZE);
+			D_ASSERT(source_entries[source_idx].GetSize() > block_size);
 			heap_size += source_entries[source_idx].GetSize();
 			append_count++;
 		}
