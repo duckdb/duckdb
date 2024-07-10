@@ -188,7 +188,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 				continue;
 			}
 
-			const auto idx = idata.sel->get_index(i);
+			const auto idx = idata.sel->get_index(assign_sel[i]);
 			bool is_null = !idata.validity.RowIsValid(idx);
 			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE>(state, input_data, sort_key_data[i],
 			                                                                    is_null);
