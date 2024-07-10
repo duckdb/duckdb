@@ -13,6 +13,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 
 namespace duckdb {
 
@@ -33,6 +34,8 @@ public:
 	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
 	//! If this is a DelimJoin, whether it has been flipped to de-duplicating the RHS instead
 	bool delim_flipped = false;
+	//! Scans where we should push generated filters into (if any)
+	unique_ptr<JoinFilterPushdownInfo> filter_pushdown;
 
 public:
 	string ParamsToString() const override;

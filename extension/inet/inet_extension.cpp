@@ -46,6 +46,8 @@ void InetExtension::Load(DuckDB &db) {
 	                                ScalarFunction("network", {inet_type}, {inet_type}, INetFunctions::Network));
 	ExtensionUtil::RegisterFunction(*db.instance,
 	                                ScalarFunction("broadcast", {inet_type}, {inet_type}, INetFunctions::Broadcast));
+	ExtensionUtil::RegisterFunction(*db.instance, GetEscapeFunctionSet());
+	ExtensionUtil::RegisterFunction(*db.instance, GetUnescapeFunction());
 
 	// Add - function with ALTER_ON_CONFLICT
 	ScalarFunction substract_fun("-", {inet_type, LogicalType::HUGEINT}, inet_type, INetFunctions::Subtract);

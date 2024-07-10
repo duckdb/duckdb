@@ -325,7 +325,7 @@ template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
 
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
 	state->state.mode = config.options.force_bitpacking_mode;
 
@@ -335,6 +335,15 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
+
+	// We use BITPACKING_METADATA_GROUP_SIZE tuples, which can exceed the block size.
+	// In that case, we disable bitpacking.
+	// we are conservative here by multiplying by 2
+	auto type_size = GetTypeIdSize(input.GetType().InternalType());
+	if (type_size * BITPACKING_METADATA_GROUP_SIZE * 2 > state.info.GetBlockSize()) {
+		return false;
+	}
+
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
@@ -980,17 +989,8 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool BitpackingFun::TypeIsSupported(const CompressionInfo &info) {
-
-	// we calculate on BITPACKING_METADATA_GROUP_SIZE tuples, but they can exceed the block size,
-	// in which case we have to disable bitpacking for that data type
-	// we are conservative here by multiplying by 2
-	auto type_size = GetTypeIdSize(info.GetPhysicalType());
-	if (type_size * BITPACKING_METADATA_GROUP_SIZE * 2 > info.GetBlockSize()) {
-		return false;
-	}
-
-	switch (info.GetPhysicalType()) {
+bool BitpackingFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:

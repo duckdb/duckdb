@@ -22,7 +22,7 @@ struct FixedSizeAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FixedSizeInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<FixedSizeAnalyzeState>(info);
 }
 
