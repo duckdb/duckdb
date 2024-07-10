@@ -103,6 +103,7 @@ TEST_CASE("Test LIST and ARRAY with INVALID and ANY", "[capi]") {
 	REQUIRE(any_array == nullptr);
 
 	// Clean-up.
+	duckdb_destroy_value(&value);
 	duckdb_destroy_logical_type(&int_type);
 	duckdb_destroy_logical_type(&any_type);
 	duckdb_destroy_logical_type(&invalid_type);
@@ -112,6 +113,7 @@ TEST_CASE("Test STRUCT with INVALID and ANY", "[capi]") {
 	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	auto any_type = duckdb_create_logical_type(DUCKDB_TYPE_ANY);
 	auto invalid_type = duckdb_create_logical_type(DUCKDB_TYPE_INVALID);
+
 	auto value = duckdb_create_int64(42);
 	duckdb::vector<duckdb_value> struct_values {value, value};
 
@@ -137,6 +139,7 @@ TEST_CASE("Test STRUCT with INVALID and ANY", "[capi]") {
 	duckdb_destroy_logical_type(&struct_type);
 
 	// Clean-up.
+	duckdb_destroy_value(&value);
 	duckdb_destroy_logical_type(&int_type);
 	duckdb_destroy_logical_type(&any_type);
 	duckdb_destroy_logical_type(&invalid_type);
