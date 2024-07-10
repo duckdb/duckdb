@@ -699,11 +699,11 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 		if (stats && filter_entry != reader_data.filters->filters.end()) {
 			bool skip_chunk = false;
 			auto &filter = *filter_entry->second;
-			const auto &pq_col_stats = group.columns[column_reader->FileIdx()].meta_data.statistics;
 
 			FilterPropagateResult prune_result;
-			if (column_reader->Type().id() == LogicalTypeId::VARCHAR && pq_col_stats.__isset.min_value &&
-			    pq_col_stats.__isset.max_value) {
+			if (column_reader->Type().id() == LogicalTypeId::VARCHAR &&
+			    group.columns[column_reader->FileIdx()].meta_data.statistics.__isset.min_value &&
+			    group.columns[column_reader->FileIdx()].meta_data.statistics.__isset.max_value) {
 				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
 				// however, when reading remote Parquet files, skipping row groups is really important
 				// here, we implement a special case to check the full length for string filters
@@ -711,7 +711,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 					const auto &and_filter = filter.Cast<ConjunctionAndFilter>();
 					auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 					for (auto &child_filter : and_filter.child_filters) {
-						auto child_prune_result = CheckParquetStringFilter(*stats, pq_col_stats, *child_filter);
+						auto child_prune_result = CheckParquetStringFilter(
+						    *stats, group.columns[column_reader->FileIdx()].meta_data.statistics, *child_filter);
 						if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 							and_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 							break;
@@ -721,7 +722,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 					}
 					prune_result = and_result;
 				} else {
-					prune_result = CheckParquetStringFilter(*stats, pq_col_stats, filter);
+					prune_result = CheckParquetStringFilter(
+					    *stats, group.columns[column_reader->FileIdx()].meta_data.statistics, filter);
 				}
 			} else {
 				prune_result = filter.CheckStatistics(*stats);
