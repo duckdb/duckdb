@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/list/contains_or_position.hpp"
 
 namespace duckdb {
 
@@ -40,7 +41,6 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<StructExtractFun>();
 	Register<ListConcatFun>();
-	Register<ListContainsFun>();
 	Register<ListPositionFun>();
 	Register<ListExtractFun>();
 	Register<ListResizeFun>();
