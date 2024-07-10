@@ -14,6 +14,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -32,6 +33,7 @@ class TableFilterSet;
 class ColumnData;
 class DuckTransaction;
 class RowGroupSegmentTree;
+class TableFilter;
 struct AdaptiveFilterState;
 struct TableScanOptions;
 
