@@ -8,6 +8,7 @@ PRAGMA enable_verification;
 statement error
 select 1 - any(select 1);
 ----
+<REGEX>:Parser Error.*operators require.*comparisons.*
 
 query I
 select 1 = all(select 1);
