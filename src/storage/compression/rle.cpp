@@ -88,7 +88,7 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<RLEAnalyzeState<T>>(info);
 }
 
@@ -433,8 +433,8 @@ CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool RLEFun::TypeIsSupported(const CompressionInfo &info) {
-	switch (info.GetPhysicalType()) {
+bool RLEFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:

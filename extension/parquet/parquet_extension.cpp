@@ -60,6 +60,8 @@ struct ParquetReadBindData : public TableFunctionData {
 	atomic<idx_t> chunk_count;
 	vector<string> names;
 	vector<LogicalType> types;
+	//! Table column names - set when using COPY tbl FROM file.parquet
+	vector<string> table_columns;
 
 	// The union readers are created (when parquet union_by_name option is on) during binding
 	// Those readers can be re-used during ParquetParallelStateNext
@@ -277,6 +279,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	auto &parquet_options = bind_data.parquet_options;
 	auto &reader_data = reader.reader_data;
 
+	reader.table_columns = bind_data.table_columns;
 	// Mark the file in the file list we are scanning here
 	reader_data.file_list_idx = file_idx;
 
@@ -536,12 +539,31 @@ public:
 			if (return_types.size() != result->types.size()) {
 				auto file_string = bound_on_first_file ? result->file_list->GetFirstFile()
 				                                       : StringUtil::Join(result->file_list->GetPaths(), ",");
-				throw std::runtime_error(StringUtil::Format(
-				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d",
-				    file_string, return_types.size(), result->types.size()));
+				string extended_error;
+				extended_error = "Table schema: ";
+				for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
+					if (col_idx > 0) {
+						extended_error += ", ";
+					}
+					extended_error += names[col_idx] + " " + return_types[col_idx].ToString();
+				}
+				extended_error += "\nParquet schema: ";
+				for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
+					if (col_idx > 0) {
+						extended_error += ", ";
+					}
+					extended_error += result->names[col_idx] + " " + result->types[col_idx].ToString();
+				}
+				extended_error += "\n\nPossible solutions:";
+				extended_error += "\n* Manually specify which columns to insert using \"INSERT INTO tbl SELECT ... "
+				                  "FROM read_parquet(...)\"";
+				throw ConversionException(
+				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d\n%s",
+				    file_string, return_types.size(), result->types.size(), extended_error);
 			}
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
+			result->table_columns = names;
 		}
 		result->parquet_options = parquet_options;
 		return std::move(result);
@@ -725,6 +747,9 @@ public:
 		serializer.WriteProperty(101, "types", bind_data.types);
 		serializer.WriteProperty(102, "names", bind_data.names);
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
+		if (serializer.ShouldSerialize(3)) {
+			serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
+		}
 	}
 
 	static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserializer, TableFunction &function) {
@@ -733,6 +758,8 @@ public:
 		auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
 		auto names = deserializer.ReadProperty<vector<string>>(102, "names");
 		auto parquet_options = deserializer.ReadProperty<ParquetOptions>(103, "parquet_options");
+		auto table_columns =
+		    deserializer.ReadPropertyWithDefault<vector<string>>(104, "table_columns", vector<string> {});
 
 		vector<Value> file_path;
 		for (auto &path : files) {
@@ -742,8 +769,10 @@ public:
 		auto multi_file_reader = MultiFileReader::Create(function);
 		auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
 		                                                   FileGlobOptions::DISALLOW_EMPTY);
-		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), types, names,
-		                               parquet_options);
+		auto bind_data = ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), types,
+		                                         names, parquet_options);
+		bind_data->Cast<ParquetReadBindData>().table_columns = std::move(table_columns);
+		return bind_data;
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
