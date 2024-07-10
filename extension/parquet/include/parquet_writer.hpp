@@ -121,7 +121,6 @@ private:
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
 	vector<column_t> columns_to_write;
-	vector<column_t> excluded_columns;
 	duckdb_parquet::format::CompressionCodec::type codec;
 	ChildFieldIDs field_ids;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;

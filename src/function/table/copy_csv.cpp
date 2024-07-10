@@ -117,6 +117,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 
 	// Create the ParsedExpressions (cast, strftime, etc..)
 	vector<unique_ptr<ParsedExpression>> unbound_expressions;
+	// Expressions are executed for all columns of data chunk
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		auto &type = sql_types[i];
 		auto &name = names[i];
@@ -156,8 +157,9 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
-                                             const vector<string> &names, const vector<LogicalType> &sql_types) {
-	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names);
+                                             const vector<string> &names, const vector<LogicalType> &sql_types,
+                                             const vector<column_t> columns_to_copy) {
+	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names, columns_to_copy);
 
 	// check all the options in the copy info
 	for (auto &option : input.info.options) {
@@ -415,12 +417,13 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	if (!(options.dialect_options.header.IsSetByUser() && !options.dialect_options.header.GetValue())) {
 		MemoryStream stream;
 		// write the header line to the file
-		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
+		for (idx_t i = 0; i < csv_data.options.columns_to_write.size(); i++) {
 			if (i != 0) {
 				WriteQuoteOrEscape(stream, options.dialect_options.state_machine_options.delimiter.GetValue());
 			}
-			WriteQuotedString(stream, csv_data, csv_data.options.name_list[i].c_str(),
-			                  csv_data.options.name_list[i].size(), false);
+			column_t col_idx = csv_data.options.columns_to_write[i];
+			WriteQuotedString(stream, csv_data, csv_data.options.name_list[col_idx].c_str(),
+			                  csv_data.options.name_list[col_idx].size(), false);
 		}
 		stream.WriteData(const_data_ptr_cast(csv_data.newline.c_str()), csv_data.newline.size());
 
@@ -452,8 +455,9 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		}
 		// write values
 		D_ASSERT(options.null_str.size() == 1);
-		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
-			if (col_idx != 0) {
+		for (idx_t i = 0; i < csv_data.options.columns_to_write.size(); i++) {
+			idx_t col_idx = csv_data.options.columns_to_write[i];
+			if (i != 0) {
 				WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.delimiter.GetValue());
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {

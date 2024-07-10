@@ -115,6 +115,7 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
+	vector<column_t> columns_to_write;
 	//! True, if column with that index must be quoted
 	vector<bool> force_quote;
 	//! Prefix/suffix/custom newline the entire file once (enables writing of files as JSON arrays)

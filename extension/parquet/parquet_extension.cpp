@@ -168,7 +168,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
-	vector<column_t> excluded_columns;
+	vector<column_t> columns_to_write;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	vector<pair<string, string>> kv_metadata;
 	idx_t row_group_size = Storage::ROW_GROUP_SIZE;
@@ -1105,7 +1105,8 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 }
 
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
-                                          const vector<string> &names, const vector<LogicalType> &sql_types) {
+                                          const vector<string> &names, const vector<LogicalType> &sql_types,
+                                          const vector<column_t> columns_to_copy) {
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
@@ -1211,7 +1212,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
-	bind_data->excluded_columns = input.excluded_columns;
+	bind_data->columns_to_write = columns_to_copy;
 	return std::move(bind_data);
 }
 
@@ -1222,7 +1223,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer = make_uniq<ParquetWriter>(
-	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.excluded_columns,
+	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.columns_to_write,
 	    parquet_bind.codec, parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
 	    parquet_bind.dictionary_compression_ratio_threshold, parquet_bind.compression_level);
 	return std::move(global_state);
@@ -1347,6 +1348,7 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                         bind_data.dictionary_compression_ratio_threshold);
 	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", bind_data.compression_level);
 	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
+	serializer.WriteProperty(111, "columns_to_write", bind_data.columns_to_write);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1365,6 +1367,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", data->compression_level);
 	data->row_groups_per_file =
 	    deserializer.ReadPropertyWithDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
+	deserializer.ReadPropertyWithDefault<vector<column_t>>(111, "columns_to_write", data->columns_to_write);
 	return std::move(data);
 }
 // LCOV_EXCL_STOP

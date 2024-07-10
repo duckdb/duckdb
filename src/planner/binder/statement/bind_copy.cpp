@@ -171,7 +171,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			throw NotImplementedException(
 			    "There is no column to write due to PARTITION_BY and NO_PARTITION_COLUMNS options.");
 		}
-		bind_input.excluded_columns = partition_cols;
 	}
 	bool is_remote_file = FileSystem::IsRemoteFile(stmt.info->file_path);
 	if (is_remote_file) {
@@ -222,9 +221,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	auto unique_column_names = select_node.names;
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
+	auto columns_to_copy = GetColumnsToCopy(select_node.types, partition_cols, no_partition_columns);
 
-	auto function_data =
-	    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
+	auto function_data = copy_function.function.copy_to_bind(context, bind_input, unique_column_names,
+	                                                         select_node.types, columns_to_copy);
 
 	const auto rotate =
 	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);
@@ -244,6 +244,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
+	copy->columns_to_copy = columns_to_copy;
 	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_mode = overwrite_mode;

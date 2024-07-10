@@ -72,7 +72,6 @@ struct CopyFunctionBindInput {
 	const CopyInfo &info;
 
 	string file_extension;
-	vector<column_t> excluded_columns;
 };
 
 struct CopyToSelectInput {
@@ -86,7 +85,8 @@ enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FI
 
 typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
 typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, CopyFunctionBindInput &input,
-                                                   const vector<string> &names, const vector<LogicalType> &sql_types);
+                                                   const vector<string> &names, const vector<LogicalType> &sql_types,
+                                                   const vector<column_t> columns_to_copy);
 typedef unique_ptr<LocalFunctionData> (*copy_to_initialize_local_t)(ExecutionContext &context, FunctionData &bind_data);
 typedef unique_ptr<GlobalFunctionData> (*copy_to_initialize_global_t)(ClientContext &context, FunctionData &bind_data,
                                                                       const string &file_path);
@@ -123,6 +123,7 @@ typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &in
 enum class CopyFunctionReturnType : uint8_t { CHANGED_ROWS = 0, CHANGED_ROWS_AND_FILE_LIST = 1 };
 vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
 vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type);
+vector<idx_t> GetColumnsToCopy(vector<LogicalType> &types, vector<idx_t> &excluded_columns, bool no_partition_columns);
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
