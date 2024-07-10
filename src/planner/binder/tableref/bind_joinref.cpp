@@ -88,6 +88,7 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const str
 		set.primary_binding = left_binding;
 		break;
 	case JoinType::RIGHT:
+	case JoinType::RIGHT_SEMI:
 		set.primary_binding = right_binding;
 		break;
 	default:
@@ -134,17 +135,29 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	result->type = ref.type;
 	result->left = left_binder.BindJoin(*this, *ref.left);
+
 	result->delim_flipped = ref.delim_flipped;
-	// I have to get the columns here, but to bind these I need the table index generated in the
-	// ExpressionBinder expression_binder(*this, context);
-	ExpressionBinder expr_binder(left_binder, context);
-	// auto left = BindColumn(left_binder, context, left_alias, column_name);
-	for (auto &col : ref.duplicate_eliminated_columns) {
-		result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+
+	result->right = right_binder.BindJoin(*this, *ref.right);
+
+	if (!ref.duplicate_eliminated_columns.empty()) {
+		if (ref.delim_flipped) {
+			// We gotta use the expression binder of the right side
+			ExpressionBinder expr_binder(right_binder, context);
+			for (auto &col : ref.duplicate_eliminated_columns) {
+				result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+			}
+		} else {
+			// We use the left side
+			ExpressionBinder expr_binder(left_binder, context);
+			for (auto &col : ref.duplicate_eliminated_columns) {
+				result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+			}
+		}
 	}
+
 	{
 		LateralBinder binder(left_binder, context);
-		result->right = right_binder.BindJoin(*this, *ref.right);
 		bool is_lateral = false;
 		// Store the correlated columns in the right binder in bound ref for planning of LATERALs
 		// Ignore the correlated columns in the left binder, flattening handles those correlations
@@ -291,6 +304,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	}
 
 	auto right_bindings_list_copy = right_binder.bind_context.GetBindingsList();
+	auto left_bindings_list_copy = left_binder.bind_context.GetBindingsList();
 
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
@@ -334,6 +348,9 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			                               {LogicalType::BOOLEAN});
 			result->mark_index = mark_join_idx;
 		}
+	}
+	if (result->type == JoinType::RIGHT_SEMI) {
+		bind_context.RemoveContext(left_bindings_list_copy);
 	}
 
 	return std::move(result);

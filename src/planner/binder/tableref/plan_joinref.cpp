@@ -350,15 +350,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	} else {
 		join = result.get();
 	}
-	if (!ref.duplicate_eliminated_columns.empty()) {
-		// Is this hacky?
-		auto &comp_join = join->Cast<LogicalComparisonJoin>();
-		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
-		comp_join.delim_flipped = ref.delim_flipped;
-		for (auto &col : ref.duplicate_eliminated_columns) {
-			comp_join.duplicate_eliminated_columns.emplace_back(col->Copy());
-		}
-	}
 
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
@@ -396,6 +387,15 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	default:
 		break;
+	}
+	if (!ref.duplicate_eliminated_columns.empty()) {
+		// Is this hacky?
+		auto &comp_join = join->Cast<LogicalComparisonJoin>();
+		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
+		comp_join.delim_flipped = ref.delim_flipped;
+		for (auto &col : ref.duplicate_eliminated_columns) {
+			comp_join.duplicate_eliminated_columns.emplace_back(col->Copy());
+		}
 	}
 	return result;
 }

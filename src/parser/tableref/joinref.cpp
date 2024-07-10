@@ -31,6 +31,7 @@ string JoinRef::ToString() const {
 		result += "DEPENDENT JOIN ";
 		break;
 	}
+	result += JoinTypeToString(type) + " ";
 	result += right->ToString();
 	if (condition) {
 		D_ASSERT(using_columns.empty());
@@ -78,6 +79,10 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	copy->ref_type = ref_type;
 	copy->alias = alias;
 	copy->using_columns = using_columns;
+	copy->delim_flipped = delim_flipped;
+	for (auto &col : duplicate_eliminated_columns) {
+		copy->duplicate_eliminated_columns.emplace_back(col->Copy());
+	}
 	return std::move(copy);
 }
 

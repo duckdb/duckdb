@@ -29,7 +29,15 @@ const vector<ColumnDefinition> &DelimiterGetRelation::Columns() {
 
 string DelimiterGetRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth);
-	str = "DelimiterGet";
+	str += "Delimiter Get [";
+	for (idx_t i = 0; i < chunk_types.size(); i++) {
+		str += chunk_types[i].ToString();
+		if (i + 1 < chunk_types.size()) {
+			str += ", ";
+		}
+	}
+	str += "]";
+
 	return str;
 }
 
