@@ -79,7 +79,6 @@ pthread_create_fptr_init(void) {
 
 	return false;
 }
-
 #endif /* JEMALLOC_PTHREAD_CREATE_WRAPPER */
 
 #ifndef JEMALLOC_BACKGROUND_THREAD
