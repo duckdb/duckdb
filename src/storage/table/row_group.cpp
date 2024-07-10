@@ -557,6 +557,9 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					                result.data[scan_idx], sel, approved_tuple_count, filter.filter);
 				}
 				for (auto &table_filter : filter_list) {
+					if (table_filter.IsAlwaysTrue()) {
+						continue;
+					}
 					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
 				}
 			}
