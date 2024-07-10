@@ -90,8 +90,12 @@ unique_ptr<ParsedExpression> Transformer::TransformInExpression(const string &na
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(expr));
 		children.push_back(std::move(left_expr));
-		auto result = make_uniq<FunctionExpression>("contains", std::move(children));
-		return std::move(result);
+		auto result = make_uniq_base<ParsedExpression, FunctionExpression>("contains", std::move(children));
+		if (operator_type == ExpressionType::COMPARE_NOT_IN) {
+			result =
+			    make_uniq_base<ParsedExpression, OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(result));
+		}
+		return result;
 	}
 
 	auto result = make_uniq<OperatorExpression>(operator_type, std::move(left_expr));
