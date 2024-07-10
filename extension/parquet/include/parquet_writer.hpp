@@ -63,7 +63,7 @@ struct FieldID {
 class ParquetWriter {
 public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
-	              vector<string> names, vector<column_t> excluded_columns,
+	              vector<string> names, vector<column_t> columns_to_write,
 	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, double dictionary_compression_ratio_threshold,
