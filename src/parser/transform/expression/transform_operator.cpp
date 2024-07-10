@@ -57,36 +57,41 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 	}
 }
 
-static vector<unique_ptr<ParsedExpression>> &GetItemsToExpand(FunctionExpression &func) {
-	if (func.function_name == "map") {
-		D_ASSERT(func.children.size() == 2);
-		// Return the keys list
-		auto &keys_list = func.children[0]->Cast<FunctionExpression>();
-		return keys_list.children;
+unique_ptr<ParsedExpression> Transformer::TransformInExpression(const string &name, duckdb_libpgquery::PGAExpr &root) {
+	auto left_expr = TransformExpression(root.lexpr);
+	ExpressionType operator_type;
+	// this looks very odd, but seems to be the way to find out its NOT IN
+	if (name == "<>") {
+		// NOT IN
+		operator_type = ExpressionType::COMPARE_NOT_IN;
+	} else {
+		// IN
+		operator_type = ExpressionType::COMPARE_IN;
 	}
-	return func.children;
-}
 
-void Transformer::TransformInExpression(duckdb_libpgquery::PGNode &rhs,
-                                        vector<unique_ptr<ParsedExpression>> &in_candidates) {
-	auto expr = TransformExpression(rhs);
+	auto expr = TransformExpression(*root.rexpr);
 
+	bool rewrite_to_contains = false;
 	if (expr->type == ExpressionType::FUNCTION) {
 		auto &func = expr->Cast<FunctionExpression>();
-		if (func.function_name == "list_value" || func.function_name == "row" || func.function_name == "map") {
-			// These are expanded to their children
-			// i.e IN ([1,2,3,4]) becomes IN (1, 2, 3, 4)
-			auto &items = GetItemsToExpand(func);
-			if (items.empty()) {
-				throw ParserException("IN must contain at least 1 item");
-			}
-			for (auto &child : items) {
-				in_candidates.push_back(std::move(child));
-			}
-			return;
+		if (func.function_name == "list_value") {
+			rewrite_to_contains = true;
 		}
+	} else if (expr->type == ExpressionType::COLUMN_REF) {
+		rewrite_to_contains = true;
 	}
-	in_candidates.push_back(std::move(expr));
+
+	if (rewrite_to_contains) {
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(std::move(expr));
+		children.push_back(std::move(left_expr));
+		auto result = make_uniq<FunctionExpression>("contains", std::move(children));
+		return std::move(result);
+	}
+
+	auto result = make_uniq<OperatorExpression>(operator_type, std::move(left_expr));
+	result->children.push_back(std::move(expr));
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgquery::PGAExpr &root) {
@@ -128,20 +133,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		return std::move(subquery_expr);
 	}
 	case duckdb_libpgquery::PG_AEXPR_IN: {
-		auto left_expr = TransformExpression(root.lexpr);
-		ExpressionType operator_type;
-		// this looks very odd, but seems to be the way to find out its NOT IN
-		if (name == "<>") {
-			// NOT IN
-			operator_type = ExpressionType::COMPARE_NOT_IN;
-		} else {
-			// IN
-			operator_type = ExpressionType::COMPARE_IN;
-		}
-		auto result = make_uniq<OperatorExpression>(operator_type, std::move(left_expr));
-		SetQueryLocation(*result, root.location);
-		TransformInExpression(*root.rexpr, result->children);
-		return std::move(result);
+		return TransformInExpression(name, root);
 	}
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case duckdb_libpgquery::PG_AEXPR_NULLIF: {

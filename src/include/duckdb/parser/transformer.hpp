@@ -337,7 +337,7 @@ private:
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
 
 	//! Transform the rhs expression of IN
-	void TransformInExpression(duckdb_libpgquery::PGNode &rhs, vector<unique_ptr<ParsedExpression>> &in_candidates);
+	unique_ptr<ParsedExpression> TransformInExpression(const string &name, duckdb_libpgquery::PGAExpr &root);
 
 	//! Transform a Postgres SELECT clause into a list of Expressions
 	void TransformExpressionList(duckdb_libpgquery::PGList &list, vector<unique_ptr<ParsedExpression>> &result);
