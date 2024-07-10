@@ -1,16 +1,17 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
+#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
 
-TableScanState::TableScanState() : table_state(*this), local_state(*this) {}
+TableScanState::TableScanState() : table_state(*this), local_state(*this) {
+}
 
 TableScanState::~TableScanState() {
 }
@@ -27,14 +28,15 @@ const vector<column_t> &TableScanState::GetColumnIds() {
 	return column_ids;
 }
 
-ScanFilterInfo::~ScanFilterInfo() {}
+ScanFilterInfo::~ScanFilterInfo() {
+}
 
 ScanFilterInfo &TableScanState::GetFilterInfo() {
 	return filters;
 }
 
-ScanFilter::ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter) :
-	scan_column_index(index), table_column_index(column_ids[index]), filter(filter) {
+ScanFilter::ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter)
+    : scan_column_index(index), table_column_index(column_ids[index]), filter(filter), always_true(false) {
 }
 
 void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<column_t> &column_ids) {
@@ -42,19 +44,51 @@ void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<column_t> 
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
 	filter_list.reserve(filters.filters.size());
-	for(auto &entry : filters.filters) {
+	for (auto &entry : filters.filters) {
 		filter_list.emplace_back(entry.first, column_ids, *entry.second);
 	}
+	column_has_filter.reserve(column_ids.size());
+	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		bool has_filter = table_filters->filters.find(col_idx) != table_filters->filters.end();
+		column_has_filter.push_back(has_filter);
+	}
+	base_column_has_filter = column_has_filter;
 }
 
 bool ScanFilterInfo::ColumnHasFilters(idx_t column_idx) {
-	if (!table_filters) {
+	if (column_idx < column_has_filter.size()) {
+		return column_has_filter[column_idx];
+	} else {
 		return false;
 	}
-	if (table_filters->filters.find(column_idx) != table_filters->filters.end()) {
-		return true;
+}
+
+bool ScanFilterInfo::HasFilters() const {
+	if (!table_filters) {
+		// no filters
+		return false;
 	}
-	return false;
+	// if we have filters - check if we need to check any of them
+	return always_true_filters < filter_list.size();
+}
+
+void ScanFilterInfo::CheckAllFilters() {
+	always_true_filters = 0;
+	// reset the "column_has_filter" bitmask to the original
+	for (idx_t col_idx = 0; col_idx < column_has_filter.size(); col_idx++) {
+		column_has_filter[col_idx] = base_column_has_filter[col_idx];
+	}
+	// set "always_true" in the individual filters to false
+	for (auto &filter : filter_list) {
+		filter.always_true = false;
+	}
+}
+
+void ScanFilterInfo::SetFilterAlwaysTrue(idx_t filter_idx) {
+	auto &filter = filter_list[filter_idx];
+	filter.always_true = true;
+	column_has_filter[filter.scan_column_index] = false;
+	always_true_filters++;
 }
 
 optional_ptr<AdaptiveFilter> ScanFilterInfo::GetAdaptiveFilter() {
@@ -103,7 +137,7 @@ const vector<storage_t> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
 
-	TableFilterSet &GetFilters();
+TableFilterSet &GetFilters();
 
 ScanFilterInfo &CollectionScanState::GetFilterInfo() {
 	return parent.GetFilterInfo();

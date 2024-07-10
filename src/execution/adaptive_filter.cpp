@@ -6,8 +6,7 @@
 
 namespace duckdb {
 
-AdaptiveFilter::AdaptiveFilter(const Expression &expr)
-    : observe_interval(10), execute_interval(20), warmup(true) {
+AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), execute_interval(20), warmup(true) {
 	auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 	D_ASSERT(conj_expr.children.size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
@@ -21,7 +20,7 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr)
 
 AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters)
     : observe_interval(10), execute_interval(20), warmup(true) {
-	for(idx_t idx = 0; idx < table_filters.filters.size(); idx++) {
+	for (idx_t idx = 0; idx < table_filters.filters.size(); idx++) {
 		permutation.push_back(idx);
 		swap_likeliness.push_back(100);
 	}
@@ -46,7 +45,6 @@ void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
 	auto end_time = high_resolution_clock::now();
 	AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - state.start_time).count());
 }
-
 
 void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 	iteration_count++;
@@ -78,7 +76,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			prev_mean = runtime_sum / iteration_count;
 
 			// get swap index and swap likeliness
-			 // a <= i <= b
+			// a <= i <= b
 			auto random_number = generator.NextRandomInteger(1, NumericCast<uint32_t>(right_random_border));
 
 			swap_idx = random_number / 100;                    // index to be swapped

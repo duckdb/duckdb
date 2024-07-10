@@ -117,6 +117,11 @@ struct ScanFilter {
 	idx_t scan_column_index;
 	idx_t table_column_index;
 	TableFilter &filter;
+	bool always_true;
+
+	bool IsAlwaysTrue() const {
+		return always_true;
+	}
 };
 
 class ScanFilterInfo {
@@ -133,11 +138,17 @@ public:
 	AdaptiveFilterState BeginFilter() const;
 	void EndFilter(AdaptiveFilterState state);
 
-	bool HasFilters() const {
-		return table_filters.get();
-	}
+	//! Whether or not there is any filter we need to execute
+	bool HasFilters() const;
 
-	bool ColumnHasFilters(idx_t filters);
+	//! Whether or not there is a filter we need to execute for this column currently
+	bool ColumnHasFilters(idx_t col_idx);
+
+	//! Resets any SetFilterAlwaysTrue flags
+	void CheckAllFilters();
+	//! Labels the filters for this specific column as always true
+	//! We do not need to execute them anymore until CheckAllFilters is called
+	void SetFilterAlwaysTrue(idx_t filter_idx);
 
 private:
 	//! The table filters (if any)
@@ -146,6 +157,12 @@ private:
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	//! The set of filters
 	vector<ScanFilter> filter_list;
+	//! Whether or not the column has a filter active right now
+	unsafe_vector<bool> column_has_filter;
+	//! Whether or not the column has a filter active at all
+	unsafe_vector<bool> base_column_has_filter;
+	//! The amount of filters that are always true currently
+	idx_t always_true_filters = 0;
 };
 
 class CollectionScanState {
