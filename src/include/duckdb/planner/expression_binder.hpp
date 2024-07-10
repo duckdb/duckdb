@@ -120,6 +120,8 @@ public:
 	                          bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
 
+	LogicalType GetResultCollation(const BoundFunctionExpression &function);
+
 	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message);
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error);

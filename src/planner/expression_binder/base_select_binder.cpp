@@ -12,12 +12,30 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
-
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 namespace duckdb {
 
 BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
                                    BoundGroupInformation &info)
     : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {
+}
+
+LogicalType ExpressionBinder::GetResultCollation(const BoundFunctionExpression &function) {
+	LogicalType result_type = function.return_type;
+	string last_collation;
+	for (auto &child: function.children) {
+		auto child_ret_type = child->return_type;
+		if (StringType::IsCollated(child_ret_type)) {
+			auto collation = StringType::GetCollation(child_ret_type);
+			if (!last_collation.empty() && last_collation != collation) {
+				throw BinderException(function, "Function \"%s\" has multiple collations: %s and %s",
+									function.function.name, last_collation, collation);
+			}
+			last_collation = collation;
+			result_type = child_ret_type;
+		}
+	}
+	return result_type;
 }
 
 BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -104,6 +122,16 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_
 		auto uncollated_first_expression =
 		    make_uniq<BoundColumnRefExpression>(expr.GetName(), node.aggregates[aggr_index]->return_type,
 		                                        ColumnBinding(node.aggregate_index, aggr_index), depth);
+
+		auto &group_expr = node.groups.group_expressions[group_index];
+
+		if (uncollated_first_expression->return_type.id() == LogicalTypeId::VARCHAR &&
+			group_expr->expression_class == ExpressionClass::BOUND_FUNCTION) {
+
+			auto &func_expr = group_expr->Cast<BoundFunctionExpression>();
+			LogicalType result_type = ExpressionBinder::GetResultCollation(func_expr);
+			uncollated_first_expression->return_type = result_type;
+		}
 
 		if (node.groups.grouping_sets.size() <= 1) {
 			// if there are no more than two grouping sets, you can return the uncollated first expression.
