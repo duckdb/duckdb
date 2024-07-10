@@ -110,6 +110,41 @@ struct ColumnFetchState {
 	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
 };
 
+struct ScanFilter {
+	ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter);
+
+	idx_t scan_column_index;
+	idx_t table_column_index;
+	TableFilter &filter;
+};
+
+class ScanFilterInfo {
+public:
+	void Initialize(TableFilterSet &filters, const vector<column_t> &column_ids);
+
+	const vector<ScanFilter> &GetFilterList() const {
+		return filter_list;
+	}
+
+	optional_ptr<AdaptiveFilter> GetAdaptiveFilter() {
+		return adaptive_filter.get();
+	}
+
+	bool HasFilters() const {
+		return table_filters.get();
+	}
+
+	bool ColumnHasFilters(idx_t filters);
+
+private:
+	//! The table filters (if any)
+	optional_ptr<TableFilterSet> table_filters;
+	//! Adaptive filter info (if any)
+	unique_ptr<AdaptiveFilter> adaptive_filter;
+	//! The set of filters
+	vector<ScanFilter> filter_list;
+};
+
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
@@ -134,8 +169,7 @@ public:
 public:
 	void Initialize(const vector<LogicalType> &types);
 	const vector<storage_t> &GetColumnIds();
-	TableFilterSet *GetFilters();
-	AdaptiveFilter *GetAdaptiveFilter();
+	ScanFilterInfo &GetFilterInfo();
 	TableScanOptions &GetOptions();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
@@ -152,7 +186,7 @@ struct TableScanOptions {
 
 class TableScanState {
 public:
-	TableScanState() : table_state(*this), local_state(*this), table_filters(nullptr) {};
+	TableScanState() : table_state(*this), local_state(*this) {};
 
 	//! The underlying table scan state
 	CollectionScanState table_state;
@@ -162,21 +196,19 @@ public:
 	TableScanOptions options;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
 	unique_ptr<StorageLockKey> checkpoint_lock;
+	//! Filter info
+	ScanFilterInfo filters;
 
 public:
-	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
+	void Initialize(vector<storage_t> column_ids, optional_ptr<TableFilterSet> table_filters = nullptr);
 
 	const vector<storage_t> &GetColumnIds();
-	TableFilterSet *GetFilters();
-	AdaptiveFilter *GetAdaptiveFilter();
+
+	ScanFilterInfo &GetFilterInfo();
 
 private:
 	//! The column identifiers of the scan
 	vector<storage_t> column_ids;
-	//! The table filters (if any)
-	TableFilterSet *table_filters;
-	//! Adaptive filter info (if any)
-	unique_ptr<AdaptiveFilter> adaptive_filter;
 };
 
 struct ParallelCollectionScanState {

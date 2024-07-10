@@ -8,12 +8,10 @@
 
 namespace duckdb {
 
-void TableScanState::Initialize(vector<column_t> column_ids, TableFilterSet *table_filters) {
-	this->column_ids = std::move(column_ids);
-	this->table_filters = table_filters;
+void TableScanState::Initialize(vector<column_t> column_ids_p, optional_ptr<TableFilterSet> table_filters) {
+	this->column_ids = std::move(column_ids_p);
 	if (table_filters) {
-		D_ASSERT(table_filters->filters.size() > 0);
-		this->adaptive_filter = make_uniq<AdaptiveFilter>(table_filters);
+		filters.Initialize(*table_filters, column_ids);
 	}
 }
 
@@ -22,13 +20,32 @@ const vector<column_t> &TableScanState::GetColumnIds() {
 	return column_ids;
 }
 
-TableFilterSet *TableScanState::GetFilters() {
-	D_ASSERT(!table_filters || adaptive_filter.get());
-	return table_filters;
+ScanFilterInfo &TableScanState::GetFilterInfo() {
+	return filters;
 }
 
-AdaptiveFilter *TableScanState::GetAdaptiveFilter() {
-	return adaptive_filter.get();
+ScanFilter::ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter) :
+	scan_column_index(index), table_column_index(column_ids[index]), filter(filter) {
+}
+
+void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<column_t> &column_ids) {
+	D_ASSERT(!filters.filters.empty());
+	table_filters = &filters;
+	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
+	filter_list.reserve(filters.filters.size());
+	for(auto &entry : filters.filters) {
+		filter_list.emplace_back(entry.first, column_ids, *entry.second);
+	}
+}
+
+bool ScanFilterInfo::ColumnHasFilters(idx_t column_idx) {
+	if (!table_filters) {
+		return false;
+	}
+	if (table_filters->filters.find(column_idx) != table_filters->filters.end()) {
+		return true;
+	}
+	return false;
 }
 
 void ColumnScanState::NextInternal(idx_t count) {
@@ -59,12 +76,10 @@ const vector<storage_t> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
 
-TableFilterSet *CollectionScanState::GetFilters() {
-	return parent.GetFilters();
-}
+	TableFilterSet &GetFilters();
 
-AdaptiveFilter *CollectionScanState::GetAdaptiveFilter() {
-	return parent.GetAdaptiveFilter();
+ScanFilterInfo &CollectionScanState::GetFilterInfo() {
+	return parent.GetFilterInfo();
 }
 
 TableScanOptions &CollectionScanState::GetOptions() {

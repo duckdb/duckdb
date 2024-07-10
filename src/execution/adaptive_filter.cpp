@@ -6,7 +6,7 @@
 namespace duckdb {
 
 AdaptiveFilter::AdaptiveFilter(const Expression &expr)
-    : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
+    : observe_interval(10), execute_interval(20), warmup(true) {
 	auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 	D_ASSERT(conj_expr.children.size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
@@ -18,15 +18,16 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr)
 	right_random_border = 100 * (conj_expr.children.size() - 1);
 }
 
-AdaptiveFilter::AdaptiveFilter(TableFilterSet *table_filters)
-    : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
-	for (auto &table_filter : table_filters->filters) {
-		permutation.push_back(table_filter.first);
+AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters)
+    : observe_interval(10), execute_interval(20), warmup(true) {
+	for(idx_t idx = 0; idx < table_filters.filters.size(); idx++) {
+		permutation.push_back(idx);
 		swap_likeliness.push_back(100);
 	}
 	swap_likeliness.pop_back();
-	right_random_border = 100 * (table_filters->filters.size() - 1);
+	right_random_border = 100 * (table_filters.filters.size() - 1);
 }
+
 void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 	iteration_count++;
 	runtime_sum += duration;
