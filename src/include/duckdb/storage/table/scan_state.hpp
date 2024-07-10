@@ -13,10 +13,10 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
-#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 
 namespace duckdb {
+class AdaptiveFilter;
 class ColumnSegment;
 class LocalTableStorage;
 class CollectionScanState;
@@ -32,6 +32,7 @@ class TableFilterSet;
 class ColumnData;
 class DuckTransaction;
 class RowGroupSegmentTree;
+struct AdaptiveFilterState;
 struct TableScanOptions;
 
 struct SegmentScanState {
@@ -120,15 +121,17 @@ struct ScanFilter {
 
 class ScanFilterInfo {
 public:
+	~ScanFilterInfo();
+
 	void Initialize(TableFilterSet &filters, const vector<column_t> &column_ids);
 
 	const vector<ScanFilter> &GetFilterList() const {
 		return filter_list;
 	}
 
-	optional_ptr<AdaptiveFilter> GetAdaptiveFilter() {
-		return adaptive_filter.get();
-	}
+	optional_ptr<AdaptiveFilter> GetAdaptiveFilter();
+	AdaptiveFilterState BeginFilter() const;
+	void EndFilter(AdaptiveFilterState state);
 
 	bool HasFilters() const {
 		return table_filters.get();
@@ -186,7 +189,8 @@ struct TableScanOptions {
 
 class TableScanState {
 public:
-	TableScanState() : table_state(*this), local_state(*this) {};
+	TableScanState();
+	~TableScanState();
 
 	//! The underlying table scan state
 	CollectionScanState table_state;

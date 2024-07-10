@@ -5,7 +5,6 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/common/chrono.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
@@ -22,6 +21,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
 
@@ -526,7 +526,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
 			//! get runtime statistics
 			auto adaptive_filter = filter_info.GetAdaptiveFilter();
-			auto start_time = high_resolution_clock::now();
+			auto filter_state = filter_info.BeginFilter();
 			if (has_filters) {
 				D_ASSERT(ALLOW_UPDATES);
 				auto &filter_list = filter_info.GetFilterList();
@@ -587,10 +587,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					}
 				}
 			}
-			auto end_time = high_resolution_clock::now();
-			if (adaptive_filter && filter_info.GetFilterList().size() > 1) {
-				adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
-			}
+			filter_info.EndFilter(filter_state);
+
 			D_ASSERT(approved_tuple_count > 0);
 			count = approved_tuple_count;
 		}

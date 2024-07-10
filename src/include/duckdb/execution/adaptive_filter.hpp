@@ -8,11 +8,16 @@
 
 #pragma once
 
-#include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include <random>
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/chrono.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
+
+struct AdaptiveFilterState {
+	time_point<high_resolution_clock> start_time;
+};
 
 class AdaptiveFilter {
 public:
@@ -23,6 +28,9 @@ public:
 
 public:
 	void AdaptRuntimeStatistics(double duration);
+
+	AdaptiveFilterState BeginFilter() const;
+	void EndFilter(AdaptiveFilterState state);
 
 private:
 	//! used for adaptive expression reordering
@@ -36,6 +44,6 @@ private:
 	bool observe = false;
 	bool warmup = false;
 	vector<idx_t> swap_likeliness;
-	std::default_random_engine generator;
+	RandomEngine generator;
 };
 } // namespace duckdb

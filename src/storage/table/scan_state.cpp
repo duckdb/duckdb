@@ -1,12 +1,19 @@
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
+
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
+
+TableScanState::TableScanState() : table_state(*this), local_state(*this) {}
+
+TableScanState::~TableScanState() {
+}
 
 void TableScanState::Initialize(vector<column_t> column_ids_p, optional_ptr<TableFilterSet> table_filters) {
 	this->column_ids = std::move(column_ids_p);
@@ -19,6 +26,8 @@ const vector<column_t> &TableScanState::GetColumnIds() {
 	D_ASSERT(!column_ids.empty());
 	return column_ids;
 }
+
+ScanFilterInfo::~ScanFilterInfo() {}
 
 ScanFilterInfo &TableScanState::GetFilterInfo() {
 	return filters;
@@ -46,6 +55,24 @@ bool ScanFilterInfo::ColumnHasFilters(idx_t column_idx) {
 		return true;
 	}
 	return false;
+}
+
+optional_ptr<AdaptiveFilter> ScanFilterInfo::GetAdaptiveFilter() {
+	return adaptive_filter.get();
+}
+
+AdaptiveFilterState ScanFilterInfo::BeginFilter() const {
+	if (!adaptive_filter) {
+		return AdaptiveFilterState();
+	}
+	return adaptive_filter->BeginFilter();
+}
+
+void ScanFilterInfo::EndFilter(AdaptiveFilterState state) {
+	if (!adaptive_filter) {
+		return;
+	}
+	adaptive_filter->EndFilter(state);
 }
 
 void ColumnScanState::NextInternal(idx_t count) {

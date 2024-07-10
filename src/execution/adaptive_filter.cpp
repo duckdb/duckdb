@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -27,6 +28,25 @@ AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters)
 	swap_likeliness.pop_back();
 	right_random_border = 100 * (table_filters.filters.size() - 1);
 }
+
+AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
+	if (permutation.size() <= 1) {
+		return AdaptiveFilterState();
+	}
+	AdaptiveFilterState state;
+	state.start_time = high_resolution_clock::now();
+	return state;
+}
+
+void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
+	if (permutation.size() <= 1) {
+		// nothing to permute
+		return;
+	}
+	auto end_time = high_resolution_clock::now();
+	AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - state.start_time).count());
+}
+
 
 void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 	iteration_count++;
@@ -58,8 +78,8 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			prev_mean = runtime_sum / iteration_count;
 
 			// get swap index and swap likeliness
-			std::uniform_int_distribution<int> distribution(1, NumericCast<int>(right_random_border)); // a <= i <= b
-			auto random_number = UnsafeNumericCast<idx_t>(distribution(generator) - 1);
+			 // a <= i <= b
+			auto random_number = generator.NextRandomInteger(1, NumericCast<uint32_t>(right_random_border));
 
 			swap_idx = random_number / 100;                    // index to be swapped
 			idx_t likeliness = random_number - 100 * swap_idx; // random number between [0, 100)
