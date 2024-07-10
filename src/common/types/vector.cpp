@@ -981,7 +981,19 @@ void Vector::Flatten(idx_t count) {
 			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
 			auto &new_child = flattened_buffer->GetChild();
 
-			// TODO: implement a fast path for when the array is a constant null
+			// Fast path: The array is a constant null
+			if (is_null) {
+				// Invalidate the parent array
+				validity.SetAllInvalid(count);
+				// Also invalidate the new child array
+				new_child.validity.SetAllInvalid(count * array_size);
+				// Recurse
+				new_child.Flatten(count * array_size);
+				// TODO: the fast path should exit here, but the part below it is somehow required for correctness
+				// Attach the flattened buffer and return
+				// auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+				// return;
+			}
 
 			// Now we need to "unpack" the child vector.
 			// Basically, do this:
