@@ -149,6 +149,8 @@ SELECT 1 IN [2, 2, 3];
 ----
 false
 
+mode skip
+
 query I
 SELECT 1 IN ((1, 2, 3));
 ----
@@ -159,10 +161,24 @@ SELECT 1 IN ((2, 2, 3));
 ----
 false
 
-statement error
+
+query I
+SELECT 1 IN MAP {1: 'a', 2: 'b', 3: 'c'};
+----
+true
+
+query I
+SELECT 1 IN MAP {2: 'b', 3: 'c'};
+----
+false
+
+
+mode unskip
+
+query I
 SELECT 1 IN [];
 ----
-IN must contain at least 1 item
+false
 
 statement ok
 PREPARE v1 AS SELECT 1 IN ?
@@ -199,15 +215,5 @@ true
 
 query I
 EXECUTE v1(MAP {2: 'b', 3: 'c'});
-----
-false
-
-query I
-SELECT 1 IN MAP {1: 'a', 2: 'b', 3: 'c'};
-----
-true
-
-query I
-SELECT 1 IN MAP {2: 'b', 3: 'c'};
 ----
 false

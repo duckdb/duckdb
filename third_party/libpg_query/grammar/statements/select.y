@@ -3685,8 +3685,9 @@ in_expr:	select_with_parens
 					/* other fields will be filled later */
 					$$ = (PGNode *)n;
 				}
-			| columnref						{ $$ = (PGNode *)$1; }
-			| indirection_expr_or_a_expr	{ $$ = (PGNode *)$1; }
+			| '(' expr_list_opt_comma ')'						{ $$ = (PGNode *)$2; }
+			| columnref
+			| indirection_expr { $$ = (PGNode *)$1; }
 		;
 
 /*

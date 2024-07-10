@@ -69,6 +69,11 @@ unique_ptr<ParsedExpression> Transformer::TransformInExpression(const string &na
 		operator_type = ExpressionType::COMPARE_IN;
 	}
 
+	if (root.rexpr->type == duckdb_libpgquery::T_PGList) {
+		auto result = make_uniq<OperatorExpression>(operator_type, std::move(left_expr));
+		TransformExpressionList(*PGPointerCast<duckdb_libpgquery::PGList>(root.rexpr), result->children);
+		return std::move(result);
+	}
 	auto expr = TransformExpression(*root.rexpr);
 
 	bool rewrite_to_contains = false;
