@@ -26,8 +26,8 @@ CompressionFunction ChimpCompressionFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool ChimpCompressionFun::TypeIsSupported(const CompressionInfo &info) {
-	switch (info.GetPhysicalType()) {
+bool ChimpCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return true;

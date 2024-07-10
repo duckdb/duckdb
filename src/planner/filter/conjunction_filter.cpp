@@ -46,6 +46,14 @@ bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
 	return true;
 }
 
+unique_ptr<TableFilter> ConjunctionOrFilter::Copy() const {
+	auto result = make_uniq<ConjunctionOrFilter>();
+	for (auto &filter : child_filters) {
+		result->child_filters.push_back(filter->Copy());
+	}
+	return std::move(result);
+}
+
 ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_AND) {
 }
 
@@ -89,6 +97,14 @@ bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
 		}
 	}
 	return true;
+}
+
+unique_ptr<TableFilter> ConjunctionAndFilter::Copy() const {
+	auto result = make_uniq<ConjunctionAndFilter>();
+	for (auto &filter : child_filters) {
+		result->child_filters.push_back(filter->Copy());
+	}
+	return std::move(result);
 }
 
 } // namespace duckdb

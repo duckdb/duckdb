@@ -22,6 +22,10 @@ string IsNullFilter::ToString(const string &column_name) {
 	return column_name + "IS NULL";
 }
 
+unique_ptr<TableFilter> IsNullFilter::Copy() const {
+	return make_uniq<IsNullFilter>();
+}
+
 IsNotNullFilter::IsNotNullFilter() : TableFilter(TableFilterType::IS_NOT_NULL) {
 }
 
@@ -39,6 +43,10 @@ FilterPropagateResult IsNotNullFilter::CheckStatistics(BaseStatistics &stats) {
 
 string IsNotNullFilter::ToString(const string &column_name) {
 	return column_name + " IS NOT NULL";
+}
+
+unique_ptr<TableFilter> IsNotNullFilter::Copy() const {
+	return make_uniq<IsNotNullFilter>();
 }
 
 } // namespace duckdb
