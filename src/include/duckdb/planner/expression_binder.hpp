@@ -119,6 +119,8 @@ public:
 	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type);
 	static void TestCollation(ClientContext &context, const string &collation);
 
+	LogicalType GetResultCollation(const BoundFunctionExpression &function);
+
 	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message);
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error);

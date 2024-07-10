@@ -14,6 +14,8 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/group_binder.hpp"
+
 
 namespace duckdb {
 
@@ -102,26 +104,12 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	}
 }
 
-static bool IsSelectBinder(ExpressionBinder *binder) {
-	return nullptr != dynamic_cast<SelectBinder *>(binder);
+static bool IsGroupBinder(ExpressionBinder *binder) {
+	return nullptr != dynamic_cast<GroupBinder *>(binder);
 }
 
-static LogicalType GetResultCollation(FunctionExpression &function, vector<unique_ptr<Expression>> &children) {
-	string last_collation;
-	LogicalType result_type;
-	for (auto &child: children) {
-		auto child_ret_type = child->return_type;
-		if (StringType::IsCollated(child_ret_type)) {
-			auto collation = StringType::GetCollation(child_ret_type);
-			if (!last_collation.empty() && last_collation != collation) {
-				throw BinderException(function, "Function \"%s\" has multiple collations: %s and %s",
-				                      function.function_name, last_collation, collation);
-			}
-			last_collation = collation;
-			result_type = child_ret_type;
-		}
-	}
-	return result_type;
+static bool IsSelectBinder(ExpressionBinder *binder) {
+	return nullptr != dynamic_cast<SelectBinder *>(binder);
 }
 
 static bool SkippedLikeFunction(const string &function_name) {
@@ -135,6 +123,10 @@ static bool NotSkippedLikeFunction(const string &function_name) {
 }
 
 static bool CanPushCollation(ExpressionBinder *binder, FunctionExpression &function) {
+	if (IsGroupBinder(binder)) {
+		// not push collation in GroupBinder, the SelectBinder will do
+		return false;
+	}
 	if(!IsSelectBinder(binder) || NotSkippedLikeFunction(function.function_name)) {
 		return true;
 	}
@@ -142,7 +134,7 @@ static bool CanPushCollation(ExpressionBinder *binder, FunctionExpression &funct
 		return false;
 	}
 	SelectBinder *select_binder = dynamic_cast<SelectBinder *>(binder);
-	return select_binder->IsOrderbyEntry(function);
+	return select_binder->IsExtraOrderbyEntry(function);
 }
 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
@@ -170,20 +162,6 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		children.push_back(std::move(child));
 	}
 
-	auto children_res_type = GetResultCollation(function, children);
-	bool is_skipped_like = SkippedLikeFunction(function.function_name);
-	if (push_collation && StringType::IsCollated(children_res_type)) {
-		for (idx_t i = 0; i < children.size(); i++) {
-			if (children[i]->return_type.id() == LogicalTypeId::VARCHAR) {
-				if (!is_skipped_like) {
-					ExpressionBinder::PushCollation(context, children[i], children_res_type, false);
-				} else {
-					children[i]->return_type = children_res_type;
-				}
-			}
-		}
-	}
-
 	FunctionBinder function_binder(context);
 	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
@@ -192,6 +170,21 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 	if (result->type == ExpressionType::BOUND_FUNCTION) {
 		auto &bound_function = result->Cast<BoundFunctionExpression>();
+
+		auto children_res_type = GetResultCollation(bound_function);
+		bool is_skipped_like = SkippedLikeFunction(function.function_name);
+		if (push_collation && StringType::IsCollated(children_res_type)) {
+			for (auto &child: bound_function.children) {
+				if (child->return_type.id() == LogicalTypeId::VARCHAR) {
+					if (!is_skipped_like) {
+						ExpressionBinder::PushCollation(context, child, children_res_type, false);
+					} else {
+						child->return_type = children_res_type;
+					}
+				}
+			}
+		}
+
 		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
 		}
@@ -205,7 +198,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 			bound_function.return_type = children_res_type;
 			// not SelectBinder, we should push collation
 			if (push_collation) {
-				ExpressionBinder::PushCollation(context, result, result->return_type, false);
+				ExpressionBinder::PushCollation(context, result, children_res_type, false);
 			}
 		}
 	}

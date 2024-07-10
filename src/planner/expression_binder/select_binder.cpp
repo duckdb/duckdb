@@ -49,7 +49,7 @@ bool SelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
 	return false;
 }
 
-bool SelectBinder::IsOrderbyEntry(ParsedExpression &expr) {
+bool SelectBinder::IsExtraOrderbyEntry(ParsedExpression &expr) {
 	// true if expr is an extra entry added to the select list from the OrderBinder
 	return (node.bind_state.orderby_select_entry.find(expr) != node.bind_state.orderby_select_entry.end());
 }
