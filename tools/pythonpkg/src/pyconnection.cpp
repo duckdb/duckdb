@@ -526,6 +526,9 @@ case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedS
 	case_insensitive_map_t<BoundParameterData> named_values;
 	if (py::is_list_like(params)) {
 		if (prep.n_param != py::len(params)) {
+			if (py::len(params) == 0) {
+				throw InvalidInputException("Expected %d parameters, but none were supplied", prep.n_param);
+			}
 			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.n_param,
 			                            py::len(params));
 		}
@@ -572,6 +575,9 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 		unique_lock<std::mutex> lock(py_connection_lock);
 
 		auto pending_query = prep.PendingQuery(named_values);
+		if (pending_query->HasError()) {
+			pending_query->ThrowError();
+		}
 		res = CompletePendingQuery(*pending_query);
 
 		if (res->HasError()) {
@@ -1181,6 +1187,9 @@ void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> sta
 			    "separate 'execute' calls if you want to use prepared parameters");
 		}
 		auto pending_query = connection.PendingQuery(std::move(stmt), false);
+		if (pending_query->HasError()) {
+			pending_query->ThrowError();
+		}
 		auto res = CompletePendingQuery(*pending_query);
 
 		if (res->HasError()) {

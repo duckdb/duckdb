@@ -377,9 +377,17 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
-static void AddMinMaxOperator(AggregateFunctionSet &set) {
-	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                  nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>));
+static AggregateFunction GetMinMaxOperator(string name) {
+	return AggregateFunction(std::move(name), {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr,
+	                         nullptr, nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
+}
+
+AggregateFunction MinFun::GetFunction() {
+	return GetMinMaxOperator<MinOperation, MinOperationString, MinOperationVector>("min");
+}
+
+AggregateFunction MaxFun::GetFunction() {
+	return GetMinMaxOperator<MaxOperation, MaxOperationString, MaxOperationVector>("max");
 }
 
 //---------------------------------------------------
@@ -514,11 +522,9 @@ unique_ptr<FunctionData> MinMaxNBind(ClientContext &context, AggregateFunction &
 }
 
 template <class COMPARATOR>
-static void AddMinMaxNFunction(AggregateFunctionSet &set) {
-	AggregateFunction function({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::ANY), nullptr,
-	                           nullptr, nullptr, nullptr, nullptr, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
-
-	return set.AddFunction(function);
+static AggregateFunction GetMinMaxNFunction() {
+	return AggregateFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::ANY), nullptr,
+	                         nullptr, nullptr, nullptr, nullptr, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
 }
 
 //---------------------------------------------------
@@ -527,15 +533,15 @@ static void AddMinMaxNFunction(AggregateFunctionSet &set) {
 
 AggregateFunctionSet MinFun::GetFunctions() {
 	AggregateFunctionSet min("min");
-	AddMinMaxOperator<MinOperation, MinOperationString, MinOperationVector>(min);
-	AddMinMaxNFunction<LessThan>(min);
+	min.AddFunction(GetFunction());
+	min.AddFunction(GetMinMaxNFunction<LessThan>());
 	return min;
 }
 
 AggregateFunctionSet MaxFun::GetFunctions() {
 	AggregateFunctionSet max("max");
-	AddMinMaxOperator<MaxOperation, MaxOperationString, MaxOperationVector>(max);
-	AddMinMaxNFunction<GreaterThan>(max);
+	max.AddFunction(GetFunction());
+	max.AddFunction(GetMinMaxNFunction<GreaterThan>());
 	return max;
 }
 

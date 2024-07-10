@@ -30,4 +30,8 @@ bool StructFilter::Equals(const TableFilter &other_p) const {
 	       other.child_filter->Equals(*child_filter);
 }
 
+unique_ptr<TableFilter> StructFilter::Copy() const {
+	return make_uniq<StructFilter>(child_idx, child_name, child_filter->Copy());
+}
+
 } // namespace duckdb

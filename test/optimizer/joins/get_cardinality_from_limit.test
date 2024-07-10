@@ -1,0 +1,21 @@
+# name: test/optimizer/joins/get_cardinality_from_limit.test
+# description: when a limit is encountered, use the limit to know the cardinality
+# group: [joins]
+
+statement ok
+create table t_left as select (random() * 10000000)::INT a from range(40000);
+
+statement ok
+create table t_right as select range b from range(10000000);
+
+statement ok
+pragma explain_output='optimized_only';
+
+query II
+explain select * from t_left, (select * from t_right limit 10000) where a = b;
+----
+logical_opt	<REGEX>:.*SEQ_SCAN.*LIMIT.*SEQ_SCAN.*
+
+
+
+
