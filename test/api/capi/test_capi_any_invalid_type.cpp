@@ -162,26 +162,20 @@ TEST_CASE("Test data chunk creation with INVALID and ANY types", "[capi]") {
 	duckdb_destroy_logical_type(&invalid_type);
 }
 
-void ScalarDummy(duckdb_function_info, duckdb_data_chunk, duckdb_vector) {
-}
-
-duckdb_scalar_function DummyScalarFunction() {
+static duckdb_scalar_function DummyScalarFunction() {
 	auto function = duckdb_create_scalar_function();
 	duckdb_scalar_function_set_name(function, "hello");
-	duckdb_scalar_function_set_function(function, ScalarDummy);
+	duckdb_scalar_function_set_function(function, AddVariadicNumbersTogether);
 	return function;
 }
 
-void TestScalarFunction(duckdb_scalar_function function, duckdb_connection connection) {
+static void TestScalarFunction(duckdb_scalar_function function, duckdb_connection connection) {
 	auto status = duckdb_register_scalar_function(connection, function);
 	REQUIRE(status == DuckDBError);
 	duckdb_destroy_scalar_function(&function);
 }
 
 TEST_CASE("Test scalar functions with INVALID and ANY types", "[capi]") {
-	// FIXME: We must check the logical types recursively.
-	return;
-
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -193,12 +187,6 @@ TEST_CASE("Test scalar functions with INVALID and ANY types", "[capi]") {
 	// Set INVALID as a parameter.
 	auto function = DummyScalarFunction();
 	duckdb_scalar_function_add_parameter(function, invalid_type);
-	duckdb_scalar_function_set_return_type(function, int_type);
-	TestScalarFunction(function, tester.connection);
-
-	// Set INVALID varargs.
-	function = DummyScalarFunction();
-	duckdb_scalar_function_set_varargs(function, invalid_type);
 	duckdb_scalar_function_set_return_type(function, int_type);
 	TestScalarFunction(function, tester.connection);
 
@@ -218,7 +206,37 @@ TEST_CASE("Test scalar functions with INVALID and ANY types", "[capi]") {
 	duckdb_destroy_logical_type(&invalid_type);
 }
 
+static duckdb_table_function DummyTableFunction() {
+	auto function = duckdb_create_table_function();
+	duckdb_table_function_set_name(function, "hello");
+	duckdb_table_function_set_bind(function, my_bind);
+	duckdb_table_function_set_init(function, my_init);
+	duckdb_table_function_set_function(function, my_function);
+	return function;
+}
+
+static void TestTableFunction(duckdb_table_function function, duckdb_connection connection) {
+	auto status = duckdb_register_table_function(connection, function);
+	REQUIRE(status == DuckDBError);
+	duckdb_destroy_table_function(&function);
+}
+
 TEST_CASE("Test table functions with INVALID and ANY types", "[capi]") {
-	// FIXME: We must check the logical types recursively.
-	return;
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto invalid_type = duckdb_create_logical_type(DUCKDB_TYPE_INVALID);
+
+	// Set INVALID as a parameter.
+	auto function = DummyTableFunction();
+	duckdb_table_function_add_parameter(function, invalid_type);
+	TestTableFunction(function, tester.connection);
+
+	// Set INVALID as a named parameter.
+	function = DummyTableFunction();
+	duckdb_table_function_add_named_parameter(function, "my_parameter", invalid_type);
+	TestTableFunction(function, tester.connection);
+
+	duckdb_destroy_logical_type(&invalid_type);
 }

@@ -177,12 +177,22 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
+
 	if (scalar_function.name.empty() || !info.function) {
 		return DuckDBError;
 	}
-	// FIXME: We must check the logical types recursively to detect ANY or INVALID.
-	auto con = reinterpret_cast<duckdb::Connection *>(connection);
+	if (ContainsLogicalType(scalar_function.return_type, LogicalType::INVALID) ||
+	    ContainsLogicalType(scalar_function.return_type, LogicalType::ANY)) {
+		return DuckDBError;
+	}
+	for (const auto &argument : scalar_function.arguments) {
+		if (ContainsLogicalType(argument, LogicalType::INVALID)) {
+			return DuckDBError;
+		}
+	}
+
 	try {
+		auto con = reinterpret_cast<duckdb::Connection *>(connection);
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateScalarFunctionInfo sf_info(scalar_function);

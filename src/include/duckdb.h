@@ -2339,7 +2339,7 @@ DUCKDB_API void duckdb_scalar_function_set_special_handling(duckdb_scalar_functi
 Adds a parameter to the scalar function.
 
 * @param scalar_function The scalar function.
-* @param type The parameter type.
+* @param type The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_scalar_function_add_parameter(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 
@@ -2347,7 +2347,7 @@ DUCKDB_API void duckdb_scalar_function_add_parameter(duckdb_scalar_function scal
 Sets the return type of the scalar function.
 
 * @param scalar_function The scalar function.
-* @param type The return type.
+* @param type The return type. Cannot contain INVALID or ANY.
 */
 DUCKDB_API void duckdb_scalar_function_set_return_type(duckdb_scalar_function scalar_function,
                                                        duckdb_logical_type type);
@@ -2432,7 +2432,7 @@ DUCKDB_API void duckdb_table_function_set_name(duckdb_table_function table_funct
 Adds a parameter to the table function.
 
 * @param table_function The table function.
-* @param type The parameter type.
+* @param type The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_table_function_add_parameter(duckdb_table_function table_function, duckdb_logical_type type);
 
@@ -2441,7 +2441,7 @@ Adds a named parameter to the table function.
 
 * @param table_function The table function.
 * @param name The parameter name.
-* @param type The parameter type.
+* @param type The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_table_function_add_named_parameter(duckdb_table_function table_function, const char *name,
                                                           duckdb_logical_type type);

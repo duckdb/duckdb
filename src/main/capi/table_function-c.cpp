@@ -248,9 +248,6 @@ void duckdb_table_function_add_parameter(duckdb_table_function function, duckdb_
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	if (logical_type->id() == LogicalType::INVALID) {
-		return;
-	}
 	tf.arguments.push_back(*logical_type);
 }
 
@@ -261,9 +258,6 @@ void duckdb_table_function_add_named_parameter(duckdb_table_function function, c
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	if (logical_type->id() == LogicalType::INVALID) {
-		return;
-	}
 	tf.named_parameters.insert({name, *logical_type});
 }
 
@@ -329,10 +323,21 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 	auto con = reinterpret_cast<duckdb::Connection *>(connection);
 	auto &tf = GetCTableFunction(function);
 	auto &info = tf.function_info->Cast<duckdb::CTableFunctionInfo>();
+
 	if (tf.name.empty() || !info.bind || !info.init || !info.function) {
 		return DuckDBError;
 	}
-	// FIXME: We must check the logical types recursively to detect ANY or INVALID.
+	for (auto it = tf.named_parameters.begin(); it != tf.named_parameters.end(); it++) {
+		if (ContainsLogicalType(it->second, LogicalType::INVALID)) {
+			return DuckDBError;
+		}
+	}
+	for (const auto &argument : tf.arguments) {
+		if (ContainsLogicalType(argument, LogicalType::INVALID)) {
+			return DuckDBError;
+		}
+	}
+
 	try {
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
@@ -362,10 +367,15 @@ void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duck
 	if (!info || !name || !type) {
 		return;
 	}
+	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
+	if (ContainsLogicalType(*logical_type, LogicalType::INVALID) ||
+	    ContainsLogicalType(*logical_type, LogicalType::ANY)) {
+		return;
+	}
+
 	auto &bind_info = GetCBindInfo(info);
 	bind_info.names.push_back(name);
-	// FIXME: We must check the logical types recursively to detect ANY or INVALID.
-	bind_info.return_types.push_back(*(reinterpret_cast<duckdb::LogicalType *>(type)));
+	bind_info.return_types.push_back(*logical_type);
 }
 
 idx_t duckdb_bind_get_parameter_count(duckdb_bind_info info) {
