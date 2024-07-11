@@ -24,9 +24,9 @@ void ListColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	// table filters are not supported yet for list columns
-	return false;
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {

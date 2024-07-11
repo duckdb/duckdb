@@ -122,11 +122,11 @@ struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
 public:
 	ConnectionGuard con;
 	vector<weak_ptr<DuckDBPyConnection>> cursors;
-	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::mutex py_connection_lock;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
 	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;
+	case_insensitive_set_t registered_objects;
 
 public:
 	explicit DuckDBPyConnection() {

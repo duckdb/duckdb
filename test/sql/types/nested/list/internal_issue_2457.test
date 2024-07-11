@@ -16,7 +16,9 @@ statement ok
 INSERT INTO t1 VALUES (1, []), (2, []), (3, [1,2]), (4, []), (5, [1,2]);
 
 query III
-SELECT i, l, row_number() OVER (PARTITION BY l ORDER BY i) as rid FROM t1;
+SELECT i, l, row_number() OVER (PARTITION BY l ORDER BY i) as rid 
+FROM t1
+ORDER BY l, i
 ----
 1	[]	1
 2	[]	2
@@ -28,7 +30,9 @@ statement ok
 INSERT INTO t1 VALUES (6, NULL)
 
 query III
-SELECT i, l, row_number() OVER (PARTITION BY l ORDER BY i) as rid FROM t1;
+SELECT i, l, row_number() OVER (PARTITION BY l ORDER BY i) as rid 
+FROM t1
+ORDER BY l NULLS FIRST, i
 ----
 6	NULL	1
 1	[]	1

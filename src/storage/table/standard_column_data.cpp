@@ -33,33 +33,6 @@ ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx
 	return validity.GetVectorScanType(state.child_states[0], scan_count);
 }
 
-bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	if (!state.segment_checked) {
-		if (!state.current) {
-			return true;
-		}
-		state.segment_checked = true;
-		FilterPropagateResult prune_result;
-		{
-			lock_guard<mutex> l(stats_lock);
-			prune_result = filter.CheckStatistics(state.current->stats.statistics);
-			if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return true;
-			}
-		}
-		lock_guard<mutex> l(update_lock);
-		if (updates) {
-			auto update_stats = updates->GetStatistics();
-			prune_result = filter.CheckStatistics(*update_stats);
-			return prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		} else {
-			return false;
-		}
-	} else {
-		return true;
-	}
-}
-
 void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
 	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
