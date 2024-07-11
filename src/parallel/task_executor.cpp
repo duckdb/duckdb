@@ -1,9 +1,16 @@
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
 
 TaskExecutor::TaskExecutor(TaskScheduler &scheduler)
     : scheduler(scheduler), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
+}
+
+TaskExecutor::TaskExecutor(ClientContext &context) : TaskExecutor(TaskScheduler::GetScheduler(context)) {
+}
+
+TaskExecutor::~TaskExecutor() {
 }
 
 void TaskExecutor::PushError(ErrorData error) {

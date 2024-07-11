@@ -8,15 +8,19 @@
 
 #pragma once
 
-#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/common/common.hpp"
+#include "duckdb/parallel/task.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 
 namespace duckdb {
+class TaskScheduler;
 
 //! The TaskExecutor is a helper class that enables parallel scheduling and execution of tasks
 class TaskExecutor {
 public:
+	explicit TaskExecutor(ClientContext &context);
 	explicit TaskExecutor(TaskScheduler &scheduler);
+	~TaskExecutor();
 
 	//! Push an error into the TaskExecutor
 	void PushError(ErrorData error);
