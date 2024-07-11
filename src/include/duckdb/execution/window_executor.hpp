@@ -15,6 +15,32 @@
 
 namespace duckdb {
 
+// A wrapper for building DataChunks in parallel
+class WindowDataChunk {
+public:
+	// True if the vector data can just be copied to
+	static bool IsSimple(const Vector &v);
+
+	static inline bool IsMaskAligned(idx_t begin, idx_t end, idx_t count) {
+		return ValidityMask::IsAligned(begin) && (ValidityMask::IsAligned(end) || (end == count));
+	}
+
+	explicit WindowDataChunk(DataChunk &chunk);
+
+	void Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity);
+
+	void Copy(DataChunk &src, idx_t begin);
+
+	//! The wrapped chunk
+	DataChunk &chunk;
+
+private:
+	//! True if the column is a scalar only value
+	vector<bool> is_simple;
+	//! Exclusive lock for each column
+	vector<mutex> locks;
+};
+
 struct WindowInputExpression {
 	static void PrepareInputExpression(Expression &expr, ExpressionExecutor &executor, DataChunk &chunk) {
 		vector<LogicalType> types;
@@ -62,7 +88,7 @@ struct WindowInputExpression {
 		D_ASSERT(!chunk.data.empty());
 		auto &source = chunk.data[0];
 		auto source_offset = scalar ? 0 : target_offset;
-		VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
+		VectorOperations::Copy(source, target, source_offset + width, source_offset, target_offset);
 	}
 
 	optional_ptr<Expression> expr;
@@ -73,46 +99,32 @@ struct WindowInputExpression {
 };
 
 struct WindowInputColumn {
-	WindowInputColumn(Expression *expr_p, ClientContext &context, idx_t capacity_p)
-	    : input_expr(expr_p, context), count(0), capacity(capacity_p) {
-		if (input_expr.expr) {
-			target = make_uniq<Vector>(input_expr.chunk.data[0].GetType(), capacity);
-		}
-	}
+	WindowInputColumn(optional_ptr<Expression> expr_p, ClientContext &context, idx_t count);
 
-	void Append(DataChunk &input_chunk) {
-		if (input_expr.expr) {
-			const auto source_count = input_chunk.size();
-			D_ASSERT(count + source_count <= capacity);
-			if (!input_expr.scalar || !count) {
-				input_expr.Execute(input_chunk);
-				auto &source = input_expr.chunk.data[0];
-				VectorOperations::Copy(source, *target, source_count, 0, count);
-			}
-			count += source_count;
-		}
-	}
+	void Copy(DataChunk &input_chunk, idx_t input_idx);
 
 	inline bool CellIsNull(idx_t i) const {
-		D_ASSERT(target);
+		D_ASSERT(!target.data.empty());
 		D_ASSERT(i < count);
-		return FlatVector::IsNull(*target, input_expr.scalar ? 0 : i);
+		return FlatVector::IsNull((target.data[0]), scalar ? 0 : i);
 	}
 
 	template <typename T>
 	inline T GetCell(idx_t i) const {
-		D_ASSERT(target);
+		D_ASSERT(!target.data.empty());
 		D_ASSERT(i < count);
-		const auto data = FlatVector::GetData<T>(*target);
-		return data[input_expr.scalar ? 0 : i];
+		const auto data = FlatVector::GetData<T>(target.data[0]);
+		return data[scalar ? 0 : i];
 	}
 
-	WindowInputExpression input_expr;
+	optional_ptr<Expression> expr;
+	PhysicalType ptype;
+	const bool scalar;
+	const idx_t count;
 
 private:
-	unique_ptr<Vector> target;
-	idx_t count;
-	idx_t capacity;
+	DataChunk target;
+	WindowDataChunk wtarget;
 };
 
 //	Column indexes of the bounds chunk
@@ -148,10 +160,7 @@ public:
 	const idx_t payload_count;
 	const ValidityMask &partition_mask;
 	const ValidityMask &order_mask;
-
-	// Argument evaluation
-	ExpressionExecutor payload_executor;
-	DataChunk payload_chunk;
+	vector<LogicalType> arg_types;
 
 	// evaluate RANGE expressions, if needed
 	WindowInputColumn range;
@@ -159,8 +168,17 @@ public:
 
 class WindowExecutorLocalState : public WindowExecutorState {
 public:
-	explicit WindowExecutorLocalState(const WindowExecutorGlobalState &gstate) {
-	}
+	explicit WindowExecutorLocalState(const WindowExecutorGlobalState &gstate);
+
+	void Sink(WindowExecutorGlobalState &gstate, DataChunk &input_chunk, idx_t input_idx);
+
+	// Argument evaluation
+	ExpressionExecutor payload_executor;
+	DataChunk payload_chunk;
+
+	//! Range evaluation
+	ExpressionExecutor range_executor;
+	DataChunk range_chunk;
 };
 
 class WindowExecutor {
@@ -174,11 +192,9 @@ public:
 	virtual unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const;
 
 	virtual void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
-	                  WindowExecutorGlobalState &gstate) const {
-		gstate.range.Append(input_chunk);
-	}
+	                  WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const;
 
-	virtual void Finalize(WindowExecutorGlobalState &gstate) const {
+	virtual void Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
 	}
 
 	void Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result, WindowExecutorLocalState &lstate,
@@ -197,9 +213,9 @@ class WindowAggregateExecutor : public WindowExecutor {
 public:
 	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowAggregationMode mode);
 
-	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
-	          WindowExecutorGlobalState &gstate) const override;
-	void Finalize(WindowExecutorGlobalState &gstate) const override;
+	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count, WindowExecutorGlobalState &gstate,
+	          WindowExecutorLocalState &lstate) const override;
+	void Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const override;
 
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
 	                                                     const ValidityMask &order_mask) const override;
@@ -269,8 +285,8 @@ class WindowValueExecutor : public WindowExecutor {
 public:
 	WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context);
 
-	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
-	          WindowExecutorGlobalState &gstate) const override;
+	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count, WindowExecutorGlobalState &gstate,
+	          WindowExecutorLocalState &lstate) const override;
 
 	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
 	                                                     const ValidityMask &order_mask) const override;

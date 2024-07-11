@@ -396,7 +396,7 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<DictionaryCompressionAnalyzeState>(info);
 }
 
@@ -660,7 +660,7 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
-bool DictionaryCompressionFun::TypeIsSupported(const CompressionInfo &info) {
-	return info.GetPhysicalType() == PhysicalType::VARCHAR;
+bool DictionaryCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
+	return physical_type == PhysicalType::VARCHAR;
 }
 } // namespace duckdb

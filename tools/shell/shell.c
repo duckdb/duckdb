@@ -14208,7 +14208,8 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc){
   if (zLine[0] == '.') {
     // auto-complete dot command
     // look for all completions in the help file
-	for(size_t line_idx = 0; line_idx < ArraySize(azHelp); line_idx++) {
+    size_t line_idx;
+    for(line_idx = 0; line_idx < ArraySize(azHelp); line_idx++) {
       const char *line = azHelp[line_idx];
       if (line[0] != '.') {
         continue;

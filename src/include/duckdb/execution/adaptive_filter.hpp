@@ -8,31 +8,42 @@
 
 #pragma once
 
-#include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/chrono.hpp"
+#include "duckdb/common/random_engine.hpp"
 
-#include <random>
 namespace duckdb {
+
+struct AdaptiveFilterState {
+	time_point<high_resolution_clock> start_time;
+};
 
 class AdaptiveFilter {
 public:
 	explicit AdaptiveFilter(const Expression &expr);
-	explicit AdaptiveFilter(TableFilterSet *table_filters);
-	void AdaptRuntimeStatistics(double duration);
+	explicit AdaptiveFilter(const TableFilterSet &table_filters);
+
 	vector<idx_t> permutation;
+
+public:
+	void AdaptRuntimeStatistics(double duration);
+
+	AdaptiveFilterState BeginFilter() const;
+	void EndFilter(AdaptiveFilterState state);
 
 private:
 	//! used for adaptive expression reordering
-	idx_t iteration_count;
-	idx_t swap_idx;
-	idx_t right_random_border;
-	idx_t observe_interval;
-	idx_t execute_interval;
-	double runtime_sum;
-	double prev_mean;
-	bool observe;
-	bool warmup;
+	idx_t iteration_count = 0;
+	idx_t swap_idx = 0;
+	idx_t right_random_border = 0;
+	idx_t observe_interval = 0;
+	idx_t execute_interval = 0;
+	double runtime_sum = 0;
+	double prev_mean = 0;
+	bool observe = false;
+	bool warmup = false;
 	vector<idx_t> swap_likeliness;
-	std::default_random_engine generator;
+	RandomEngine generator;
 };
 } // namespace duckdb

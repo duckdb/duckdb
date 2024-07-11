@@ -14,6 +14,7 @@
 #include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
+class DynamicTableFilterSet;
 
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
@@ -53,6 +54,8 @@ public:
 	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
 	//! Stored so the can be included in explain output
 	ExtraOperatorInfo extra_info;
+	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
+	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 
 	string GetName() const override;
 	string ParamsToString() const override;

@@ -33,7 +33,7 @@
 
 namespace duckdb_snappy {
 
-void Varint::Append32(string* s, uint32 value) {
+void Varint::Append32(std::string* s, uint32_t value) {
   char buf[Varint::kMax32];
   const char* p = Varint::Encode32(buf, value);
   s->append(buf, p - buf);
