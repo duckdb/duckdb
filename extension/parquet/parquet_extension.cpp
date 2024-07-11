@@ -645,15 +645,15 @@ public:
 
 	static void ParquetDynamicFilterPushdown(ClientContext &context, ParquetReadGlobalState &gstate, ParquetReadBindData &data, const vector<column_t> &column_ids,
 	                                         optional_ptr<TableFilterSet> filters) {
-		// if (!filters) {
-		// 	return;
-		// }
-		// auto new_list = data.multi_file_reader->DynamicFilterPushdown(context, *data.file_list,
-		//                                                               data.parquet_options.file_options, data.names, column_ids, *filters);
-		// if (new_list) {
-		// 	data.file_list = std::move(new_list);
-		// 	MultiFileReader::PruneReaders(data, *data.file_list);
-		// }
+		if (!filters) {
+			return;
+		}
+		auto new_list = data.multi_file_reader->DynamicFilterPushdown(context, *data.file_list,
+		                                                              data.parquet_options.file_options, data.names, data.types, column_ids, *filters);
+		if (new_list) {
+			data.file_list = std::move(new_list);
+			MultiFileReader::PruneReaders(data, *data.file_list);
+		}
 	}
 
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,

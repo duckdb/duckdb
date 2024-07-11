@@ -16,6 +16,9 @@ namespace duckdb {
 MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get) :
 	table_index(get.table_index), column_names(get.names), column_ids(get.column_ids), extra_info(get.extra_info) {}
 
+MultiFilePushdownInfo::MultiFilePushdownInfo(idx_t table_index, const vector<string> &column_names, const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info) :
+	table_index(table_index), column_names(column_names), column_ids(column_ids), extra_info(extra_info) {}
+
 // Helper method to do Filter Pushdown into a MultiFileList
 bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
                       vector<unique_ptr<Expression>> &filters, vector<string> &expanded_files) {
