@@ -47,6 +47,9 @@ jobs:
           - python: "3.11"
             pyodide-build: "0.25.1"
             node: "18"
+          - python: "3.12"
+            pyodide-build: "0.26.1"
+            node: "20"
     steps:
       - uses: actions/checkout@v4
         with:
