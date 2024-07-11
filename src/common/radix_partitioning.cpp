@@ -88,7 +88,6 @@ struct ComputePartitionIndicesFunctor {
 	static void Operation(Vector &hashes, Vector &partition_indices, const SelectionVector &append_sel,
 	                      const idx_t append_count) {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
-		D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 		if (append_sel.IsSet()) {
 			auto hashes_sliced = Vector(hashes, append_sel, append_count);
 			UnaryExecutor::Execute<hash_t, hash_t>(hashes_sliced, partition_indices, append_count,
