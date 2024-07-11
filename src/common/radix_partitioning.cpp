@@ -26,7 +26,7 @@ public:
 };
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
+RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
 	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	switch (radix_bits) {
 	case 0:
@@ -87,10 +87,9 @@ idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, idx_
 struct ComputePartitionIndicesFunctor {
 	template <idx_t radix_bits>
 	static void Operation(Vector &hashes, Vector &partition_indices, idx_t count) {
-		UnaryExecutor::Execute<hash_t, hash_t>(hashes, partition_indices, count, [&](hash_t hash) {
-			using CONSTANTS = RadixPartitioningConstants<radix_bits>;
-			return CONSTANTS::ApplyMask(hash);
-		});
+		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
+		UnaryExecutor::Execute<hash_t, hash_t>(hashes, partition_indices, count,
+		                                       [&](hash_t hash) { return CONSTANTS::ApplyMask(hash); });
 	}
 };
 
