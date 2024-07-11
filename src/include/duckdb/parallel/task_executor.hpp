@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 
