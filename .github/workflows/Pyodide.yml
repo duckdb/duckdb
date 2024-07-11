@@ -44,9 +44,11 @@ jobs:
           - python: "3.10"
             pyodide-build: "0.22.1"
             node: "16"
+            other_deps: "'pydantic<2'"
           - python: "3.11"
             pyodide-build: "0.25.1"
             node: "18"
+            other_deps: "'pydantic<2'"
           - python: "3.12"
             pyodide-build: "0.26.1"
             node: "20"
@@ -76,7 +78,7 @@ jobs:
         with:
           python-version: ${{ matrix.version.python }}
 
-      - run: pip install 'pyodide-build==${{ matrix.version.pyodide-build }}' 'pydantic<2'
+      - run: pip install 'pyodide-build==${{ matrix.version.pyodide-build }}' ${{ matrix.version.other_deps }}
 
       - name: get emscripten version
         id: emscripten-version
