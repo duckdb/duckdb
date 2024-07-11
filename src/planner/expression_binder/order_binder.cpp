@@ -44,6 +44,7 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 		throw InternalException("CreateExtraReference called without extra_list");
 	}
 	bind_state.projection_map[*expr] = extra_list->size();
+	bind_state.orderby_select_entry.insert(*expr);
 	auto result = CreateProjectionReference(*expr, extra_list->size());
 	extra_list->push_back(std::move(expr));
 	return result;

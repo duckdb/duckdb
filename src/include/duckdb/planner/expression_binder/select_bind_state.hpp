@@ -26,6 +26,8 @@ struct SelectBindState {
 	//! expressions (e.g. when a * clause is present)
 	vector<unique_ptr<ParsedExpression>> original_expressions;
 
+	parsed_expression_set_t orderby_select_entry;
+
 public:
 	unique_ptr<ParsedExpression> BindAlias(idx_t index);
 
