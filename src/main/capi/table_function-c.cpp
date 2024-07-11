@@ -328,12 +328,12 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 		return DuckDBError;
 	}
 	for (auto it = tf.named_parameters.begin(); it != tf.named_parameters.end(); it++) {
-		if (ContainsLogicalType(it->second, LogicalType::INVALID)) {
+		if (ContainsLogicalType(it->second, duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}
 	}
 	for (const auto &argument : tf.arguments) {
-		if (ContainsLogicalType(argument, LogicalType::INVALID)) {
+		if (ContainsLogicalType(argument, duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}
 	}
@@ -368,8 +368,8 @@ void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duck
 		return;
 	}
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	if (ContainsLogicalType(*logical_type, LogicalType::INVALID) ||
-	    ContainsLogicalType(*logical_type, LogicalType::ANY)) {
+	if (ContainsLogicalType(*logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    ContainsLogicalType(*logical_type, duckdb::LogicalTypeId::ANY)) {
 		return;
 	}
 

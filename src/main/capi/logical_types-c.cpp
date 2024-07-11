@@ -63,10 +63,10 @@ static bool ContainsLogicalType(const duckdb::LogicalType &type, duckdb::Logical
 }
 
 duckdb_logical_type duckdb_create_logical_type(duckdb_type type) {
-	if (type == DUCKDB_TYPE_INVALID || type == DUCKDB_TYPE_DECIMAL || type == DUCKDB_TYPE_ENUM ||
-	    type == DUCKDB_TYPE_LIST || type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP ||
-	    type == DUCKDB_TYPE_ARRAY || type == DUCKDB_TYPE_UNION) {
-		return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(LogicalType::INVALID));
+	if (type == DUCKDB_TYPE_DECIMAL || type == DUCKDB_TYPE_ENUM || type == DUCKDB_TYPE_LIST ||
+	    type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP || type == DUCKDB_TYPE_ARRAY ||
+	    type == DUCKDB_TYPE_UNION) {
+		type = DUCKDB_TYPE_INVALID;
 	}
 
 	auto cpp_type = duckdb::ConvertCTypeToCPP(type);

@@ -181,12 +181,12 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 	if (scalar_function.name.empty() || !info.function) {
 		return DuckDBError;
 	}
-	if (ContainsLogicalType(scalar_function.return_type, LogicalType::INVALID) ||
-	    ContainsLogicalType(scalar_function.return_type, LogicalType::ANY)) {
+	if (ContainsLogicalType(scalar_function.return_type, duckdb::LogicalTypeId::INVALID) ||
+	    ContainsLogicalType(scalar_function.return_type, duckdb::LogicalTypeId::ANY)) {
 		return DuckDBError;
 	}
 	for (const auto &argument : scalar_function.arguments) {
-		if (ContainsLogicalType(argument, LogicalType::INVALID)) {
+		if (ContainsLogicalType(argument, duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}
 	}
