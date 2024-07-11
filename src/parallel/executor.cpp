@@ -282,9 +282,6 @@ void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
 void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<reference<Event>> &vertices,
                                              vector<bool> &visited, vector<bool> &recursion_stack) {
 	D_ASSERT(!recursion_stack[vertex]); // this vertex is in the recursion stack: circular dependency!
-	if (recursion_stack[vertex]) {
-		throw InternalException("oops");
-	}
 	if (visited[vertex]) {
 		return; // early out: we already visited this vertex
 	}
@@ -678,8 +675,8 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 	total_cardinality = 0;
 	current_cardinality = 0;
 	for (auto &pipeline : pipelines) {
-		double child_percentage = 0;
-		idx_t child_cardinality = 0;
+		double child_percentage;
+		idx_t child_cardinality;
 
 		if (!pipeline->GetProgress(child_percentage, child_cardinality)) {
 			return false;

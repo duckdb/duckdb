@@ -100,7 +100,7 @@ void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, con
 	ResetCombinedListData(chunk_state.vector_data);
 
 	auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
-	std::fill_n(heap_sizes, new_chunk.size(), 0);
+	std::fill_n(heap_sizes, append_count, 0);
 
 	for (idx_t col_idx = 0; col_idx < new_chunk.ColumnCount(); col_idx++) {
 		auto &source_v = new_chunk.data[col_idx];
@@ -596,7 +596,9 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 		const auto offset_heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
 		for (idx_t i = 0; i < append_count; i++) {
-			D_ASSERT(offset_heap_locations[i] == original_heap_locations[i] + heap_sizes[i]);
+			if (heap_sizes[i] != 0) {
+				D_ASSERT(offset_heap_locations[i] == original_heap_locations[i] + heap_sizes[i]);
+			}
 		}
 	}
 #endif
