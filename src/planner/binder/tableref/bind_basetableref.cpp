@@ -128,6 +128,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					// retry with next candidate CTE
 					continue;
 				}
+
+				// If we have found a materialized CTE, but no corresponding CTE binding,
+				// something is wrong.
+				if (cte.materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+					throw BinderException(
+					    "There is a WITH item named \"%s\", but it cannot be referenced from this part of the query.",
+					    ref.table_name);
+				}
+
 				// Move CTE to subquery and bind recursively
 				SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte.query->Copy()));
 				subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
