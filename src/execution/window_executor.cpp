@@ -398,7 +398,7 @@ static idx_t FindOrderedRangeBound(const WindowInputColumn &over, const OrderTyp
 
 struct WindowBoundariesState {
 	static inline bool IsScalar(const unique_ptr<Expression> &expr) {
-		return expr ? expr->IsScalar() : true;
+		return !expr || expr->IsScalar();
 	}
 
 	static inline bool BoundaryNeedsPeer(const WindowBoundary &boundary) {
@@ -1220,8 +1220,6 @@ public:
 public:
 	// state of aggregator
 	unique_ptr<WindowAggregatorState> aggregator_state;
-
-	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
 };
 
 unique_ptr<WindowExecutorLocalState>

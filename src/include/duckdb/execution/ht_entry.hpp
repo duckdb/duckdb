@@ -23,11 +23,11 @@ public:
 	//! Lower 48 bits are the pointer
 	static constexpr const duckdb::hash_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
 
-	explicit inline ht_entry_t(duckdb::hash_t value_p) : value(value_p) {
+	explicit inline ht_entry_t(duckdb::hash_t value_p) noexcept : value(value_p) {
 	}
 
 	// Add a default constructor for 32-bit linux test case
-	ht_entry_t() : value(0) {
+	ht_entry_t() noexcept : value(0) {
 	}
 
 	inline bool IsOccupied() const {

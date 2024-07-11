@@ -328,7 +328,13 @@ void WindowConstantAggregator::Evaluate(const WindowAggregatorState &gsink, Wind
 
 	//	Flush the last partition
 	if (matched) {
-		VectorOperations::Copy(results, result, lcstate.matches, matched, 0, target_offset);
+		// Optimize constant result
+		if (target_offset == 0 && matched == count) {
+			VectorOperations::Copy(results, result, lcstate.matches, 1, 0, target_offset);
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		} else {
+			VectorOperations::Copy(results, result, lcstate.matches, matched, 0, target_offset);
+		}
 	}
 }
 
