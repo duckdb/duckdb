@@ -144,7 +144,7 @@ struct MultiFileReader {
 	                                                                   const MultiFileReaderOptions &options,
 	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
-	DUCKDB_API virtual unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, MultiFileList &files,
+	DUCKDB_API virtual unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileList &files,
 	                                                                   const MultiFileReaderOptions &options,
 	                                                                   const vector<string> &names,
 	                                                                   const vector<LogicalType> &types,

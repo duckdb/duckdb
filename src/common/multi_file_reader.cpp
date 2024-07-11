@@ -146,29 +146,13 @@ unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &
 	return files.ComplexFilterPushdown(context, options, info, filters);
 }
 
-unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(ClientContext &context, MultiFileList &files,
+unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(ClientContext &context, const MultiFileList &files,
                                                                    const MultiFileReaderOptions &options,
                                                                    const vector<string> &names,
                                                                    const vector<LogicalType> &types,
                                                                    const vector<column_t> &column_ids,
                                                                    TableFilterSet &filters) {
-	// dummy members
-	idx_t table_index = 0;
-	ExtraOperatorInfo extra_info;
-
-	// construct the pushdown info
-	MultiFilePushdownInfo info(table_index, names, column_ids, extra_info);
-
-	// construct the set of expressions from the table filters
-	vector<unique_ptr<Expression>> filter_expressions;
-	for(auto &entry : filters.filters) {
-		auto column_idx = column_ids[entry.first];
-		auto column_ref = make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.first));
-		auto filter_expr = entry.second->ToExpression(*column_ref);
-		filter_expressions.push_back(std::move(filter_expr));
-	}
-
-	return ComplexFilterPushdown(context, files, options, info, filter_expressions);
+	return files.DynamicFilterPushdown(context, options, names, types, column_ids, filters);
 }
 
 bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files, vector<LogicalType> &return_types,

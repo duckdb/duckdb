@@ -90,6 +90,12 @@ public:
 	virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context,
 	                                                        const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
 	                                                        vector<unique_ptr<Expression>> &filters);
+	virtual unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context,
+                                                            const MultiFileReaderOptions &options,
+                                                            const vector<string> &names,
+                                                            const vector<LogicalType> &types,
+                                                            const vector<column_t> &column_ids,
+                                                            TableFilterSet &filters) const;
 
 	virtual vector<string> GetAllFiles() = 0;
 	virtual FileExpandResult GetExpandResult() = 0;
@@ -117,6 +123,12 @@ public:
 	//! Copy `paths` to `filtered_files` and apply the filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
 	                                                MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters) override;
+	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context,
+                                                            const MultiFileReaderOptions &options,
+                                                            const vector<string> &names,
+                                                            const vector<LogicalType> &types,
+                                                            const vector<column_t> &column_ids,
+                                                            TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
 	vector<string> GetAllFiles() override;
@@ -135,6 +147,12 @@ public:
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
 	                                                MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters) override;
+	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context,
+                                                            const MultiFileReaderOptions &options,
+                                                            const vector<string> &names,
+                                                            const vector<LogicalType> &types,
+                                                            const vector<column_t> &column_ids,
+                                                            TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
 	vector<string> GetAllFiles() override;
@@ -148,9 +166,11 @@ protected:
 	//! Get the i-th expanded file
 	string GetFileInternal(idx_t i);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandPathInternal();
+	bool ExpandNextPath();
+	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
+	bool ExpandPathInternal(idx_t &current_path, vector<string> &result) const;
 	//! Whether all files have been expanded
-	bool IsFullyExpanded();
+	bool IsFullyExpanded() const;
 
 	//! The ClientContext for globbing
 	ClientContext &context;
@@ -159,7 +179,7 @@ protected:
 	//! The expanded files
 	vector<string> expanded_files;
 
-	mutex lock;
+	mutable mutex lock;
 };
 
 } // namespace duckdb
