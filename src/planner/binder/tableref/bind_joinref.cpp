@@ -89,6 +89,7 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const str
 		break;
 	case JoinType::RIGHT:
 	case JoinType::RIGHT_SEMI:
+	case JoinType::RIGHT_ANTI:
 		set.primary_binding = right_binding;
 		break;
 	default:
@@ -349,7 +350,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			result->mark_index = mark_join_idx;
 		}
 	}
-	if (result->type == JoinType::RIGHT_SEMI) {
+	if (result->type == JoinType::RIGHT_SEMI || result->type == JoinType::RIGHT_ANTI) {
 		bind_context.RemoveContext(left_bindings_list_copy);
 	}
 
