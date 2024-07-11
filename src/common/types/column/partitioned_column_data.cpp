@@ -105,8 +105,8 @@ template <bool use_fixed_size_map>
 void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count) {
 	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
 	                                           perfect_map_t<list_entry_t>>::type;
-	using GETTER = typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<list_entry_t>,
-	                                         UnorderedMapGetter<MAP_TYPE>>::type;
+	using GETTER =
+	    typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<MAP_TYPE>, UnorderedMapGetter<MAP_TYPE>>::type;
 	auto &partition_entries = PartitionedColumnDataGetMap<MAP_TYPE>(state);
 
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
@@ -157,8 +157,8 @@ template <bool use_fixed_size_map>
 void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input) {
 	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
 	                                           perfect_map_t<list_entry_t>>::type;
-	using GETTER = typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<list_entry_t>,
-	                                         UnorderedMapGetter<MAP_TYPE>>::type;
+	using GETTER =
+	    typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<MAP_TYPE>, UnorderedMapGetter<MAP_TYPE>>::type;
 	const auto &partition_entries = PartitionedColumnDataGetMap<MAP_TYPE>(state);
 
 	// Loop through the partitions to append the new data to the partition buffers, and flush the buffers if necessary

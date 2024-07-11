@@ -13,7 +13,7 @@ PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, Buff
 }
 
 PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
-    : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout.Copy()) {
+    : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout.Copy()), count(0), data_size(0) {
 }
 
 PartitionedTupleData::~PartitionedTupleData() {
@@ -164,8 +164,8 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
                                              const idx_t append_count) {
 	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
 	                                           perfect_map_t<list_entry_t>>::type;
-	using GETTER = typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<list_entry_t>,
-	                                         UnorderedMapGetter<MAP_TYPE>>::type;
+	using GETTER =
+	    typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<MAP_TYPE>, UnorderedMapGetter<MAP_TYPE>>::type;
 	auto &partition_entries = PartitionedTupleDataGetMap<MAP_TYPE>(state);
 
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
@@ -231,8 +231,8 @@ template <bool use_fixed_size_map>
 void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state) {
 	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
 	                                           perfect_map_t<list_entry_t>>::type;
-	using GETTER = typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<list_entry_t>,
-	                                         UnorderedMapGetter<MAP_TYPE>>::type;
+	using GETTER =
+	    typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<MAP_TYPE>, UnorderedMapGetter<MAP_TYPE>>::type;
 	const auto &partition_entries = PartitionedTupleDataGetMap<MAP_TYPE>(state);
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {
 		const auto &partition_index = GETTER::GetKey(it);

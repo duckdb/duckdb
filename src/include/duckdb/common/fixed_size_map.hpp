@@ -8,26 +8,26 @@
 
 #pragma once
 
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
 
-template <typename T>
-struct fixed_size_map_iterator_t; // NOLINT: match stl case
+template <class T>
+class fixed_size_map_iterator; // NOLINT: match stl case
 
-template <typename T>
-struct const_fixed_size_map_iterator_t; // NOLINT: match stl case
+template <class T>
+class fixed_size_map_const_iterator; // NOLINT: match stl case
 
-template <typename T>
+template <class T>
 class fixed_size_map_t { // NOLINT: match stl case
-	friend struct fixed_size_map_iterator_t<T>;
-	friend struct const_fixed_size_map_iterator_t<T>;
+	friend class fixed_size_map_iterator<T>;
+	friend class fixed_size_map_const_iterator<T>;
 
 public:
 	using key_type = idx_t;
 	using mapped_type = T;
+	using iterator = fixed_size_map_iterator<mapped_type>;
+	using const_iterator = fixed_size_map_const_iterator<mapped_type>;
 
 public:
 	explicit fixed_size_map_t(idx_t capacity_p = 0) : capacity(capacity_p) {
@@ -41,7 +41,7 @@ public:
 	void resize(idx_t capacity_p) { // NOLINT: match stl case
 		capacity = capacity_p;
 		occupied = ValidityMask(capacity);
-		values = make_unsafe_uniq_array<T>(capacity + 1);
+		values = make_unsafe_uniq_array<mapped_type>(capacity + 1);
 		clear();
 	}
 
@@ -50,48 +50,40 @@ public:
 		occupied.SetAllInvalid(capacity);
 	}
 
-	T &operator[](const idx_t &key) {
+	mapped_type &operator[](const key_type &key) {
 		D_ASSERT(key < capacity);
 		count += 1 - occupied.RowIsValid(key);
 		occupied.SetValidUnsafe(key);
 		return values[key];
 	}
 
-	const T &operator[](const idx_t &key) const {
+	const mapped_type &operator[](const key_type &key) const {
 		D_ASSERT(key < capacity);
 		return values[key];
 	}
 
-	fixed_size_map_iterator_t<T> begin() { // NOLINT: match stl case
-		return fixed_size_map_iterator_t<T>(begin_internal(), *this);
+	iterator begin() { // NOLINT: match stl case
+		return iterator(begin_internal(), *this);
 	}
 
-	const_fixed_size_map_iterator_t<T> begin() const { // NOLINT: match stl case
-		return const_fixed_size_map_iterator_t<T>(begin_internal(), *this);
+	const_iterator begin() const { // NOLINT: match stl case
+		return const_iterator(begin_internal(), *this);
 	}
 
-	fixed_size_map_iterator_t<T> end() { // NOLINT: match stl case
-		return fixed_size_map_iterator_t<T>(capacity, *this);
+	iterator end() { // NOLINT: match stl case
+		return iterator(capacity, *this);
 	}
 
-	const_fixed_size_map_iterator_t<T> end() const { // NOLINT: match stl case
-		return const_fixed_size_map_iterator_t<T>(capacity, *this);
+	const_iterator end() const { // NOLINT: match stl case
+		return const_iterator(capacity, *this);
 	}
 
-	fixed_size_map_iterator_t<T> find(const idx_t &index) { // NOLINT: match stl case
-		if (occupied.RowIsValid(index)) {
-			return fixed_size_map_iterator_t<T>(index, *this);
-		} else {
-			return end();
-		}
+	iterator find(const idx_t &index) { // NOLINT: match stl case
+		return occupied.RowIsValid(index) ? iterator(index, *this) : end();
 	}
 
-	const_fixed_size_map_iterator_t<T> find(const idx_t &index) const { // NOLINT: match stl case
-		if (occupied.RowIsValid(index)) {
-			return const_fixed_size_map_iterator_t<T>(index, *this);
-		} else {
-			return end();
-		}
+	const_iterator find(const idx_t &index) const { // NOLINT: match stl case
+		return occupied.RowIsValid(index) ? const_iterator(index, *this) : end();
 	}
 
 private:
@@ -110,16 +102,20 @@ private:
 	idx_t count;
 
 	ValidityMask occupied;
-	unsafe_unique_array<T> values;
+	unsafe_unique_array<mapped_type> values;
 };
 
-template <typename T>
-struct fixed_size_map_iterator_t {
+template <class T>
+class fixed_size_map_iterator { // NOLINT: match stl case
 public:
-	fixed_size_map_iterator_t(idx_t index_p, fixed_size_map_t<T> &map_p) : map(map_p), current(index_p) {
+	using key_type = idx_t;
+	using mapped_type = T;
+
+public:
+	fixed_size_map_iterator(idx_t index_p, fixed_size_map_t<mapped_type> &map_p) : map(map_p), current(index_p) {
 	}
 
-	fixed_size_map_iterator_t<T> &operator++() {
+	fixed_size_map_iterator &operator++() {
 		for (current++; current < map.capacity; current++) {
 			if (map.occupied.RowIsValidUnsafe(current)) {
 				break;
@@ -128,48 +124,53 @@ public:
 		return *this;
 	}
 
-	fixed_size_map_iterator_t<T> operator++(int) {
-		fixed_size_map_iterator_t<T> tmp = *this;
+	fixed_size_map_iterator operator++(int) {
+		fixed_size_map_iterator tmp = *this;
 		++(*this);
 		return tmp;
 	}
 
-	idx_t &GetKey() {
+	key_type &GetKey() {
 		return current;
 	}
 
-	const idx_t &GetKey() const {
+	const key_type &GetKey() const {
 		return current;
 	}
 
-	T &GetValue() {
+	mapped_type &GetValue() {
 		return map.values[current];
 	}
 
-	const T &GetValue() const {
+	const mapped_type &GetValue() const {
 		return map.values[current];
 	}
 
-	friend bool operator==(const fixed_size_map_iterator_t<T> &a, const fixed_size_map_iterator_t<T> &b) {
+	friend bool operator==(const fixed_size_map_iterator &a, const fixed_size_map_iterator &b) {
 		return a.current == b.current;
 	}
 
-	friend bool operator!=(const fixed_size_map_iterator_t<T> &a, const fixed_size_map_iterator_t<T> &b) {
+	friend bool operator!=(const fixed_size_map_iterator &a, const fixed_size_map_iterator &b) {
 		return !(a == b);
 	}
 
 private:
-	fixed_size_map_t<T> &map;
+	fixed_size_map_t<mapped_type> &map;
 	idx_t current;
 };
 
-template <typename T>
-struct const_fixed_size_map_iterator_t {
+template <class T>
+class fixed_size_map_const_iterator { // NOLINT: match stl case
 public:
-	const_fixed_size_map_iterator_t(idx_t index_p, const fixed_size_map_t<T> &map_p) : map(map_p), current(index_p) {
+	using key_type = idx_t;
+	using mapped_type = T;
+
+public:
+	fixed_size_map_const_iterator(const idx_t index_p, const fixed_size_map_t<mapped_type> &map_p)
+	    : map(map_p), current(index_p) {
 	}
 
-	const_fixed_size_map_iterator_t<T> &operator++() {
+	fixed_size_map_const_iterator &operator++() {
 		for (current++; current < map.capacity; current++) {
 			if (map.occupied.RowIsValidUnsafe(current)) {
 				break;
@@ -178,30 +179,30 @@ public:
 		return *this;
 	}
 
-	const_fixed_size_map_iterator_t<T> operator++(int) {
-		const_fixed_size_map_iterator_t<T> tmp = *this;
+	fixed_size_map_const_iterator operator++(int) {
+		fixed_size_map_const_iterator tmp = *this;
 		++(*this);
 		return tmp;
 	}
 
-	const idx_t &GetKey() const {
+	const key_type &GetKey() const {
 		return current;
 	}
 
-	const T &GetValue() const {
+	const mapped_type &GetValue() const {
 		return map.values[current];
 	}
 
-	friend bool operator==(const const_fixed_size_map_iterator_t<T> &a, const const_fixed_size_map_iterator_t<T> &b) {
+	friend bool operator==(const fixed_size_map_const_iterator &a, const fixed_size_map_const_iterator &b) {
 		return a.current == b.current;
 	}
 
-	friend bool operator!=(const const_fixed_size_map_iterator_t<T> &a, const const_fixed_size_map_iterator_t<T> &b) {
+	friend bool operator!=(const fixed_size_map_const_iterator &a, const fixed_size_map_const_iterator &b) {
 		return !(a == b);
 	}
 
 private:
-	const fixed_size_map_t<T> &map;
+	const fixed_size_map_t<mapped_type> &map;
 	idx_t current;
 };
 
@@ -210,38 +211,52 @@ private:
 // LCOV_EXCL_START
 template <class MAP_TYPE>
 struct UnorderedMapGetter {
-	static const typename MAP_TYPE::key_type &GetKey(typename MAP_TYPE::iterator &iterator) {
-		return iterator->first;
+private:
+	using key_type = typename MAP_TYPE::key_type;
+	using mapped_type = typename MAP_TYPE::mapped_type;
+	using iterator = typename MAP_TYPE::iterator;
+	using const_iterator = typename MAP_TYPE::const_iterator;
+
+public:
+	static const key_type &GetKey(iterator &it) {
+		return it->first;
 	}
 
-	static const typename MAP_TYPE::key_type &GetKey(const typename MAP_TYPE::const_iterator &iterator) {
-		return iterator->first;
+	static const key_type &GetKey(const const_iterator &it) {
+		return it->first;
 	}
 
-	static typename MAP_TYPE::mapped_type &GetValue(typename MAP_TYPE::iterator &iterator) {
+	static mapped_type &GetValue(iterator &iterator) {
 		return iterator->second;
 	}
 
-	static const typename MAP_TYPE::mapped_type &GetValue(const typename MAP_TYPE::const_iterator &iterator) {
+	static const mapped_type &GetValue(const const_iterator &iterator) {
 		return iterator->second;
 	}
 };
 
-template <class T>
+template <class MAP_TYPE>
 struct FixedSizeMapGetter {
-	static const idx_t &GetKey(fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetKey();
+private:
+	using key_type = typename MAP_TYPE::key_type;
+	using mapped_type = typename MAP_TYPE::mapped_type;
+	using iterator = typename MAP_TYPE::iterator;
+	using const_iterator = typename MAP_TYPE::const_iterator;
+
+public:
+	static const key_type &GetKey(iterator &it) {
+		return it.GetKey();
 	}
 
-	static const idx_t &GetKey(const const_fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetKey();
+	static const idx_t &GetKey(const const_iterator &it) {
+		return it.GetKey();
 	}
 
-	static T &GetValue(fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetValue();
+	static mapped_type &GetValue(iterator &it) {
+		return it.GetValue();
 	}
 
-	static const T &GetValue(const const_fixed_size_map_iterator_t<T> &iterator) {
+	static const mapped_type &GetValue(const const_iterator &iterator) {
 		return iterator.GetValue();
 	}
 };
