@@ -100,9 +100,7 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 
 	unique_ptr<SelectStatement> select;
 	switch (stmt.op) {
-	case duckdb_libpgquery::PG_SETOP_UNION:
-	case duckdb_libpgquery::PG_SETOP_EXCEPT:
-	case duckdb_libpgquery::PG_SETOP_INTERSECT: {
+	case duckdb_libpgquery::PG_SETOP_UNION: {
 		select = make_uniq<SelectStatement>();
 		select->node = make_uniq_base<QueryNode, RecursiveCTENode>();
 		auto &result = select->node->Cast<RecursiveCTENode>();
@@ -111,11 +109,10 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		result.left = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.larg));
 		result.right = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.rarg));
 		result.aliases = info.aliases;
-		if (stmt.op != duckdb_libpgquery::PG_SETOP_UNION) {
-			throw ParserException("Unsupported setop type for recursive CTE: only UNION or UNION ALL are supported");
-		}
 		break;
 	}
+	case duckdb_libpgquery::PG_SETOP_EXCEPT:
+	case duckdb_libpgquery::PG_SETOP_INTERSECT:
 	default:
 		// This CTE is not recursive. Fallback to regular query transformation.
 		return TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(cte.ctequery));

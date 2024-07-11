@@ -105,6 +105,34 @@ TEST_CASE("Test Arrow String View", "[arrow][.]") {
 	    "SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION "
 	    "SELECT NULL UNION SELECT (i*10^i)::varchar str FROM range(10000) tbl(i)");
 }
+
+TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
+	DBConfig config;
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	if (!db.ExtensionIsLoaded("tpch")) {
+		return;
+	}
+	con.SendQuery("CALL dbgen(sf=0.5)");
+
+	// REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM lineitem;", false));
+	// REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT l_orderkey, l_shipdate, l_comment FROM lineitem ORDER BY
+	// l_orderkey DESC;", false)); REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT lineitem FROM lineitem;",
+	// false)); REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT [lineitem] FROM lineitem;", false));
+
+	con.SendQuery("create table lineitem_no_constraint as from lineitem;");
+	con.SendQuery("update lineitem_no_constraint set l_comment=null where l_orderkey%2=0;");
+
+	// REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM lineitem_no_constraint;", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(
+	    con, "SELECT l_orderkey, l_shipdate, l_comment FROM lineitem_no_constraint ORDER BY l_orderkey DESC;", false));
+	REQUIRE(
+	    ArrowTestHelper::RunArrowComparison(con, "SELECT lineitem_no_constraint FROM lineitem_no_constraint;", false));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT [lineitem_no_constraint] FROM lineitem_no_constraint;",
+	                                            false));
+}
+
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {
 	std::vector<std::string> data;
 	// data.emplace_back("data/parquet-testing/7-set.snappy.arrow2.parquet");

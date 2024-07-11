@@ -138,8 +138,8 @@ CompressionFunction ConstantFun::GetFunction(PhysicalType data_type) {
 	}
 }
 
-bool ConstantFun::TypeIsSupported(const CompressionInfo &info) {
-	switch (info.GetPhysicalType()) {
+bool ConstantFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::BIT:
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
