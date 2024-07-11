@@ -4,6 +4,7 @@ import pytest
 import platform
 import duckdb
 from io import StringIO, BytesIO
+from duckdb import CSVLineTerminator
 
 
 def TestFile(name):
@@ -575,6 +576,10 @@ class TestReadCSV(object):
         [
             {'lineterminator': '\\r\\n'},
             {'lineterminator': '\\n'},
+            {'lineterminator': 'LINE_FEED'},
+            {'lineterminator': 'CARRIAGE_RETURN_LINE_FEED'},
+            {'lineterminator': CSVLineTerminator.LINE_FEED},
+            {'lineterminator': CSVLineTerminator.CARRIAGE_RETURN_LINE_FEED},
             {'columns': {'id': 'INTEGER', 'name': 'INTEGER', 'c': 'integer', 'd': 'INTEGER'}},
             {'auto_type_candidates': ['INTEGER', 'INTEGER']},
             {'max_line_size': 10000},

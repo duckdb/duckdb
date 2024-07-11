@@ -23,6 +23,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {

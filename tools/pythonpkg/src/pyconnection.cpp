@@ -1181,12 +1181,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 
 	if (!py::none().is(lineterminator)) {
-		if (!py::isinstance<py::str>(lineterminator)) {
+		PythonCSVLineTerminator::Type new_line_type;
+		if (!py::try_cast<PythonCSVLineTerminator::Type>(lineterminator, new_line_type)) {
 			string actual_type = py::str(lineterminator.get_type());
-			throw BinderException("read_csv only accepts 'lineterminator' as a string, not '%s'", actual_type);
+			throw BinderException("read_csv only accepts 'lineterminator' as a string or CSVLineTerminator, not '%s'",
+			                      actual_type);
 		}
-		auto val = TransformPythonValue(lineterminator, LogicalTypeId::VARCHAR);
-		bind_parameters["new_line"] = val;
+		bind_parameters["new_line"] = Value(PythonCSVLineTerminator::ToString(new_line_type));
 	}
 
 	if (!py::none().is(max_line_size)) {

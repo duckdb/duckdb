@@ -18,6 +18,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 #include "duckdb.hpp"
@@ -1126,8 +1127,12 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	    .export_values();
 
 	RegisterStatementType(m);
-
 	RegisterExpectedResultType(m);
+
+	py::enum_<duckdb::PythonCSVLineTerminator::Type>(m, "CSVLineTerminator")
+	    .value("LINE_FEED", duckdb::PythonCSVLineTerminator::Type::LINE_FEED)
+	    .value("CARRIAGE_RETURN_LINE_FEED", duckdb::PythonCSVLineTerminator::Type::CARRIAGE_RETURN_LINE_FEED)
+	    .export_values();
 
 	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
 	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)
