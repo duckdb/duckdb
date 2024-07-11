@@ -141,17 +141,18 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 }
 
 unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
-                                                                 const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
+                                                                 const MultiFileReaderOptions &options,
+                                                                 MultiFilePushdownInfo &info,
                                                                  vector<unique_ptr<Expression>> &filters) {
 	return files.ComplexFilterPushdown(context, options, info, filters);
 }
 
 unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(ClientContext &context, const MultiFileList &files,
-                                                                   const MultiFileReaderOptions &options,
-                                                                   const vector<string> &names,
-                                                                   const vector<LogicalType> &types,
-                                                                   const vector<column_t> &column_ids,
-                                                                   TableFilterSet &filters) {
+                                                                 const MultiFileReaderOptions &options,
+                                                                 const vector<string> &names,
+                                                                 const vector<LogicalType> &types,
+                                                                 const vector<column_t> &column_ids,
+                                                                 TableFilterSet &filters) {
 	return files.DynamicFilterPushdown(context, options, names, types, column_ids, filters);
 }
 

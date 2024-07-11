@@ -132,8 +132,11 @@ struct ParquetFileReaderData {
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
-	explicit ParquetReadGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {}
-	explicit ParquetReadGlobalState(unique_ptr<MultiFileList> owned_file_list_p) : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {}
+	explicit ParquetReadGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {
+	}
+	explicit ParquetReadGlobalState(unique_ptr<MultiFileList> owned_file_list_p)
+	    : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
+	}
 
 	//! The file list to scan
 	MultiFileList &file_list;
@@ -650,15 +653,16 @@ public:
 		return std::move(result);
 	}
 
-	static unique_ptr<MultiFileList> ParquetDynamicFilterPushdown(ClientContext &context, const ParquetReadBindData &data, const vector<column_t> &column_ids,
-	                                         optional_ptr<TableFilterSet> filters) {
+	static unique_ptr<MultiFileList> ParquetDynamicFilterPushdown(ClientContext &context,
+	                                                              const ParquetReadBindData &data,
+	                                                              const vector<column_t> &column_ids,
+	                                                              optional_ptr<TableFilterSet> filters) {
 		if (!filters) {
 			return nullptr;
 		}
-		auto new_list = data.multi_file_reader->DynamicFilterPushdown(context, *data.file_list,
-		                                                              data.parquet_options.file_options, data.names, data.types, column_ids, *filters);
+		auto new_list = data.multi_file_reader->DynamicFilterPushdown(
+		    context, *data.file_list, data.parquet_options.file_options, data.names, data.types, column_ids, *filters);
 		return new_list;
-
 	}
 
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
@@ -667,7 +671,7 @@ public:
 		unique_ptr<ParquetReadGlobalState> result;
 
 		// before instantiating a scan trigger a dynamic filter pushdown if possible
-		auto new_list = ParquetDynamicFilterPushdown(context,  bind_data, input.column_ids, input.filters);
+		auto new_list = ParquetDynamicFilterPushdown(context, bind_data, input.column_ids, input.filters);
 		if (new_list) {
 			result = make_uniq<ParquetReadGlobalState>(std::move(new_list));
 		} else {
@@ -677,8 +681,8 @@ public:
 		file_list.InitializeScan(result->file_list_scan);
 
 		result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
-		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list,
-		    bind_data.types, bind_data.names, input.column_ids);
+		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, bind_data.types,
+		    bind_data.names, input.column_ids);
 		if (file_list.IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {

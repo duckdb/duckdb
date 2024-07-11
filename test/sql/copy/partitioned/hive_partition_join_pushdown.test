@@ -1,6 +1,6 @@
 # name: test/sql/copy/partitioned/hive_partition_join_pushdown.test
 # description: Test pruning of hive partitions through join conditions
-# group: [pushdown]
+# group: [partitioned]
 
 require parquet
 

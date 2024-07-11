@@ -35,8 +35,9 @@ public:
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
-	                                              unordered_map<string, column_t> &column_map, MultiFilePushdownInfo &info,
-	                                              bool hive_enabled, bool filename_enabled);
+	                                              unordered_map<string, column_t> &column_map,
+	                                              MultiFilePushdownInfo &info, bool hive_enabled,
+	                                              bool filename_enabled);
 
 	//! Returns the compiled regex pattern to match hive partitions
 	DUCKDB_API static const string &RegexString();

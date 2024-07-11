@@ -57,7 +57,7 @@ unique_ptr<TableFilter> ConjunctionOrFilter::Copy() const {
 
 unique_ptr<Expression> ConjunctionOrFilter::ToExpression(const Expression &column) const {
 	auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-	for(auto &filter : child_filters) {
+	for (auto &filter : child_filters) {
 		conjunction->children.push_back(filter->ToExpression(column));
 	}
 	return std::move(conjunction);
@@ -118,7 +118,7 @@ unique_ptr<TableFilter> ConjunctionAndFilter::Copy() const {
 
 unique_ptr<Expression> ConjunctionAndFilter::ToExpression(const Expression &column) const {
 	auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-	for(auto &filter : child_filters) {
+	for (auto &filter : child_filters) {
 		conjunction->children.push_back(filter->ToExpression(column));
 	}
 	return std::move(conjunction);

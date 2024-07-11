@@ -54,7 +54,8 @@ public:
 
 struct MultiFilePushdownInfo {
 	explicit MultiFilePushdownInfo(LogicalGet &get);
-	MultiFilePushdownInfo(idx_t table_index, const vector<string> &column_names, const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info);
+	MultiFilePushdownInfo(idx_t table_index, const vector<string> &column_names, const vector<column_t> &column_ids,
+	                      ExtraOperatorInfo &extra_info);
 
 	idx_t table_index;
 	const vector<string> &column_names;
@@ -88,14 +89,13 @@ public:
 	//! Virtual functions for subclasses
 public:
 	virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context,
-	                                                        const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
+	                                                        const MultiFileReaderOptions &options,
+	                                                        MultiFilePushdownInfo &info,
 	                                                        vector<unique_ptr<Expression>> &filters);
-	virtual unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context,
-                                                            const MultiFileReaderOptions &options,
-                                                            const vector<string> &names,
-                                                            const vector<LogicalType> &types,
-                                                            const vector<column_t> &column_ids,
-                                                            TableFilterSet &filters) const;
+	virtual unique_ptr<MultiFileList>
+	DynamicFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, const vector<string> &names,
+	                      const vector<LogicalType> &types, const vector<column_t> &column_ids,
+	                      TableFilterSet &filters) const;
 
 	virtual vector<string> GetAllFiles() = 0;
 	virtual FileExpandResult GetExpandResult() = 0;
@@ -122,13 +122,12 @@ public:
 	explicit SimpleMultiFileList(vector<string> paths);
 	//! Copy `paths` to `filtered_files` and apply the filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
-	                                                MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters) override;
-	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context,
-                                                            const MultiFileReaderOptions &options,
-                                                            const vector<string> &names,
-                                                            const vector<LogicalType> &types,
-                                                            const vector<column_t> &column_ids,
-                                                            TableFilterSet &filters) const override;
+	                                                MultiFilePushdownInfo &info,
+	                                                vector<unique_ptr<Expression>> &filters) override;
+	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+	                                                const vector<string> &names, const vector<LogicalType> &types,
+	                                                const vector<column_t> &column_ids,
+	                                                TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
 	vector<string> GetAllFiles() override;
@@ -146,13 +145,12 @@ public:
 	GlobMultiFileList(ClientContext &context, vector<string> paths, FileGlobOptions options);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
-	                                                MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters) override;
-	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context,
-                                                            const MultiFileReaderOptions &options,
-                                                            const vector<string> &names,
-                                                            const vector<LogicalType> &types,
-                                                            const vector<column_t> &column_ids,
-                                                            TableFilterSet &filters) const override;
+	                                                MultiFilePushdownInfo &info,
+	                                                vector<unique_ptr<Expression>> &filters) override;
+	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+	                                                const vector<string> &names, const vector<LogicalType> &types,
+	                                                const vector<column_t> &column_ids,
+	                                                TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
 	vector<string> GetAllFiles() override;
