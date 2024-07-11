@@ -142,7 +142,7 @@ struct MultiFileReader {
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                                                   const MultiFileReaderOptions &options,
-	                                                                   LogicalGet &get,
+	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList

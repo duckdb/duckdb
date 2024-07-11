@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 class MultiFileList;
@@ -51,6 +52,15 @@ public:
 	MultiFileListIterator end();   // NOLINT: match stl API
 };
 
+struct MultiFilePushdownInfo {
+	explicit MultiFilePushdownInfo(LogicalGet &get);
+
+	idx_t table_index;
+	const vector<string> &column_names;
+	const vector<column_t> &column_ids;
+	ExtraOperatorInfo &extra_info;
+};
+
 //! Abstract class for lazily generated list of file paths/globs
 //! NOTE: subclasses are responsible for ensuring thread-safety
 class MultiFileList {
@@ -77,7 +87,7 @@ public:
 	//! Virtual functions for subclasses
 public:
 	virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context,
-	                                                        const MultiFileReaderOptions &options, LogicalGet &get,
+	                                                        const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
 	                                                        vector<unique_ptr<Expression>> &filters);
 
 	virtual vector<string> GetAllFiles() = 0;
@@ -105,7 +115,7 @@ public:
 	explicit SimpleMultiFileList(vector<string> paths);
 	//! Copy `paths` to `filtered_files` and apply the filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
-	                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) override;
+	                                                MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters) override;
 
 	//! Main MultiFileList API
 	vector<string> GetAllFiles() override;
@@ -123,7 +133,7 @@ public:
 	GlobMultiFileList(ClientContext &context, vector<string> paths, FileGlobOptions options);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
-	                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) override;
+	                                                MultiFilePushdownInfo &info, vector<unique_ptr<Expression>> &filters) override;
 
 	//! Main MultiFileList API
 	vector<string> GetAllFiles() override;

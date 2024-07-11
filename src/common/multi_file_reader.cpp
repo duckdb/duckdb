@@ -141,9 +141,9 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 }
 
 unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
-                                                                 const MultiFileReaderOptions &options, LogicalGet &get,
+                                                                 const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
                                                                  vector<unique_ptr<Expression>> &filters) {
-	return files.ComplexFilterPushdown(context, options, get, filters);
+	return files.ComplexFilterPushdown(context, options, info, filters);
 }
 
 bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
