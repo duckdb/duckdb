@@ -84,27 +84,6 @@ BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	return BindResult("GROUPING function is not supported here");
 }
 
-static bool ParameterNeedsExpansion(ParsedExpression &bound) {
-	D_ASSERT(bound.expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto &expr = BoundExpression::GetExpression(bound);
-	if (expr->type != ExpressionType::VALUE_CONSTANT) {
-		return false;
-	}
-	auto &value_constant = expr->Cast<BoundConstantExpression>();
-	auto &value = value_constant.value;
-	auto id = value.type().id();
-	const bool is_struct = id == LogicalTypeId::STRUCT;
-	const bool is_map = id == LogicalTypeId::MAP;
-	const bool is_list = id == LogicalTypeId::LIST;
-	if (!is_struct && !is_map && !is_list) {
-		return false;
-	}
-	if (is_struct && !StructType::IsUnnamed(value.type())) {
-		return false;
-	}
-	return true;
-}
-
 BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth) {
 	if (op.type == ExpressionType::GROUPING_FUNCTION) {
 		return BindGroupingFunction(op, depth);
@@ -177,52 +156,6 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			}
 		} else {
 			function_name = "struct_extract";
-		}
-		break;
-	}
-	case ExpressionType::COMPARE_IN: {
-		if (bound_children.size() == 2 && ParameterNeedsExpansion(*bound_children[1])) {
-			vector<unique_ptr<ParsedExpression>> replacement_bound_expressions;
-			auto &lhs = bound_children[0];
-			auto &rhs = bound_children[1];
-			// Move the lhs
-			replacement_bound_expressions.push_back(std::move(lhs));
-			// Expand the LIST value
-			auto &bound_expr = BoundExpression::GetExpression(*rhs);
-			auto &bound_constant = bound_expr->Cast<BoundConstantExpression>();
-			auto &unexpanded_value = bound_constant.value;
-			if (unexpanded_value.type().id() == LogicalTypeId::STRUCT) {
-				auto &struct_children = StructValue::GetChildren(unexpanded_value);
-				if (struct_children.empty()) {
-					throw BinderException("Expanded STRUCT parameter inside IN expression can not be empty");
-				}
-				for (auto &child : struct_children) {
-					auto bound_child = make_uniq<BoundConstantExpression>(child);
-					replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));
-				}
-			} else if (unexpanded_value.type().id() == LogicalTypeId::MAP) {
-				auto &map_children = MapValue::GetChildren(unexpanded_value);
-				if (map_children.empty()) {
-					throw BinderException("Expanded MAP parameter inside IN expression can not be empty");
-				}
-				for (auto &child : map_children) {
-					auto &key_value = StructValue::GetChildren(child);
-					auto &key = key_value[0];
-					auto bound_child = make_uniq<BoundConstantExpression>(key);
-					replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));
-				}
-			} else {
-				D_ASSERT(unexpanded_value.type().id() == LogicalTypeId::LIST);
-				auto &list_children = ListValue::GetChildren(unexpanded_value);
-				if (list_children.empty()) {
-					throw BinderException("Expanded LIST parameter inside IN expression can not be empty");
-				}
-				for (auto &child : list_children) {
-					auto bound_child = make_uniq<BoundConstantExpression>(child);
-					replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));
-				}
-			}
-			bound_children = std::move(replacement_bound_expressions);
 		}
 		break;
 	}

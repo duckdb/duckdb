@@ -76,31 +76,14 @@ unique_ptr<ParsedExpression> Transformer::TransformInExpression(const string &na
 	}
 	auto expr = TransformExpression(*root.rexpr);
 
-	bool rewrite_to_contains = false;
-	if (expr->type == ExpressionType::FUNCTION) {
-		auto &func = expr->Cast<FunctionExpression>();
-		if (func.function_name == "list_value") {
-			rewrite_to_contains = true;
-		}
-	} else if (expr->type == ExpressionType::COLUMN_REF) {
-		rewrite_to_contains = true;
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(expr));
+	children.push_back(std::move(left_expr));
+	auto result = make_uniq_base<ParsedExpression, FunctionExpression>("contains", std::move(children));
+	if (operator_type == ExpressionType::COMPARE_NOT_IN) {
+		result = make_uniq_base<ParsedExpression, OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(result));
 	}
-
-	if (rewrite_to_contains) {
-		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(std::move(expr));
-		children.push_back(std::move(left_expr));
-		auto result = make_uniq_base<ParsedExpression, FunctionExpression>("contains", std::move(children));
-		if (operator_type == ExpressionType::COMPARE_NOT_IN) {
-			result =
-			    make_uniq_base<ParsedExpression, OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(result));
-		}
-		return result;
-	}
-
-	auto result = make_uniq<OperatorExpression>(operator_type, std::move(left_expr));
-	result->children.push_back(std::move(expr));
-	return std::move(result);
+	return result;
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgquery::PGAExpr &root) {
