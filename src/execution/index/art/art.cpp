@@ -673,7 +673,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		auto leaf = Lookup(tree, keys[i], 0);
-		D_ASSERT(!leaf || Leaf::ContainsRowId(*this, *leaf, row_id_keys[i]));
+		D_ASSERT(!leaf || !Leaf::ContainsRowId(*this, *leaf, row_id_keys[i]));
 	}
 #endif
 }
