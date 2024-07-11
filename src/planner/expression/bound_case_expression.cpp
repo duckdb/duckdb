@@ -43,7 +43,7 @@ bool BoundCaseExpression::Equals(const BaseExpression &other_p) const {
 	return true;
 }
 
-unique_ptr<Expression> BoundCaseExpression::Copy() {
+unique_ptr<Expression> BoundCaseExpression::Copy() const {
 	auto new_case = make_uniq<BoundCaseExpression>(return_type);
 	for (auto &check : case_checks) {
 		BoundCaseCheck new_check;

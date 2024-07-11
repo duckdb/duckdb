@@ -73,7 +73,7 @@ hash_t BoundParameterExpression::Hash() const {
 	return result;
 }
 
-unique_ptr<Expression> BoundParameterExpression::Copy() {
+unique_ptr<Expression> BoundParameterExpression::Copy() const {
 	auto result = make_uniq<BoundParameterExpression>(identifier);
 	result->parameter_data = parameter_data;
 	result->return_type = return_type;
