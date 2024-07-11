@@ -92,11 +92,9 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// Bind the children of the operator expression. We already create bound expressions.
 	// Only those children that trigger an error are not yet bound.
 	ErrorData error;
-	auto &bound_children = op.children;
-	for (idx_t i = 0; i < bound_children.size(); i++) {
-		BindChild(bound_children[i], depth, error);
+	for (idx_t i = 0; i < op.children.size(); i++) {
+		BindChild(op.children[i], depth, error);
 	}
-
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
@@ -105,15 +103,15 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	string function_name;
 	switch (op.type) {
 	case ExpressionType::ARRAY_EXTRACT: {
-		D_ASSERT(bound_children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto &b_exp = BoundExpression::GetExpression(*bound_children[0]);
+		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);
 		const auto &b_exp_type = b_exp->return_type;
 		if (b_exp_type.id() == LogicalTypeId::MAP) {
 			function_name = "map_extract";
-		} else if (b_exp_type.IsJSONType() && bound_children.size() == 2) {
+		} else if (b_exp_type.IsJSONType() && op.children.size() == 2) {
 			function_name = "json_extract";
 			// Make sure we only extract array elements, not fields, by adding the $[] syntax
-			auto &i_exp = BoundExpression::GetExpression(*bound_children[1]);
+			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
 				if (!const_exp.value.IsNull()) {
@@ -130,11 +128,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		function_name = "array_slice";
 		break;
 	case ExpressionType::STRUCT_EXTRACT: {
-		D_ASSERT(bound_children.size() == 2);
-		D_ASSERT(bound_children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		D_ASSERT(bound_children[1]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto &extract_exp = BoundExpression::GetExpression(*bound_children[0]);
-		auto &name_exp = BoundExpression::GetExpression(*bound_children[1]);
+		D_ASSERT(op.children.size() == 2);
+		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[1]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
+		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
 		const auto &extract_expr_type = extract_exp->return_type;
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
 		    extract_expr_type.id() != LogicalTypeId::SQLNULL && !extract_expr_type.IsJSONType()) {
@@ -169,14 +167,14 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	if (!function_name.empty()) {
-		auto function = make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(bound_children));
+		auto function = make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(op.children));
 		return BindExpression(function, depth, false);
 	}
 
 	vector<unique_ptr<Expression>> children;
-	for (idx_t i = 0; i < bound_children.size(); i++) {
-		D_ASSERT(bound_children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		children.push_back(std::move(BoundExpression::GetExpression(*bound_children[i])));
+	for (idx_t i = 0; i < op.children.size(); i++) {
+		D_ASSERT(op.children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		children.push_back(std::move(BoundExpression::GetExpression(*op.children[i])));
 	}
 	// now resolve the types
 	LogicalType result_type = ResolveOperatorType(op, children);
