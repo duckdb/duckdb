@@ -562,7 +562,11 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 #ifdef DEBUG
 	Vector heap_locations_copy(LogicalType::POINTER);
 	if (!layout.AllConstant()) {
-		VectorOperations::Copy(chunk_state.heap_locations, heap_locations_copy, append_count, 0, 0);
+		const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+		const auto copied_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);
+		for (idx_t i = 0; i < append_count; i++) {
+			copied_heap_locations[i] = heap_locations[i];
+		}
 	}
 #endif
 

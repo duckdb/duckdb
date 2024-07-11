@@ -678,8 +678,8 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 	total_cardinality = 0;
 	current_cardinality = 0;
 	for (auto &pipeline : pipelines) {
-		double child_percentage;
-		idx_t child_cardinality;
+		double child_percentage = 0;
+		idx_t child_cardinality = 0;
 
 		if (!pipeline->GetProgress(child_percentage, child_cardinality)) {
 			return false;
