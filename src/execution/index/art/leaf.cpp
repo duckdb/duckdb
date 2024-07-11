@@ -1,8 +1,9 @@
 #include "duckdb/execution/index/art/leaf.hpp"
 
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -24,10 +25,71 @@ Leaf &Leaf::New(ART &art, Node &node) {
 	return leaf;
 }
 
-void Leaf::Insert(ART &art, Node &node, const ARTKey &row_id_key) {
+void Leaf::New(ART &art, reference<Node> &node, const vector<ARTKey> &row_ids, const idx_t start, const idx_t count) {
+	if (!art.nested_leaves) {
+		return DeprecatedNew(art, node, row_ids, start, count);
+	}
+
+	auto &leaf = Leaf::New(art, node);
+	ARTKeySection section(start, count - 1, 0, 0);
+	art.Construct(row_ids, row_ids, leaf.ptr, section);
+}
+
+void Leaf::Free(ART &art, Node &node) {
+	if (!art.nested_leaves) {
+		return DeprecatedFree(art, node);
+	}
+
+	auto &inner_art = UnnestMutable(art, node);
+	Node::Free(art, inner_art);
+	Node::GetAllocator(art, NType::LEAF).Free(node);
+	node.Clear();
+}
+
+void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
+	if (!art.nested_leaves) {
+		return DeprecatedInitializeMerge(art, node, flags);
+	}
+
+	auto &inner_art = UnnestMutable(art, node);
+	auto merge_buffer_count = flags.merge_buffer_counts[static_cast<uint8_t>(NType::LEAF) - 1];
+	node.IncreaseBufferId(merge_buffer_count);
+
+	inner_art.InitializeMerge(art, flags);
+}
+
+void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
+	D_ASSERT(l_node.HasMetadata() && r_node.HasMetadata());
+	if (!art.nested_leaves) {
+		return DeprecatedMerge(art, l_node, r_node);
+	}
+
+	// Copy the inlined row ID of r_node into l_node.
+	if (r_node.GetType() == NType::LEAF_INLINED) {
+		return MergeInlinedIntoLeaf(art, l_node, r_node);
+	}
+
+	// l_node has an inlined row ID, swap and insert.
+	if (l_node.GetType() == NType::LEAF_INLINED) {
+		auto temp_node = l_node;
+		l_node = r_node;
+		MergeInlinedIntoLeaf(art, l_node, temp_node);
+		r_node.Clear();
+		return;
+	}
+
+	D_ASSERT(l_node.GetType() != NType::LEAF_INLINED);
+	D_ASSERT(r_node.GetType() != NType::LEAF_INLINED);
+
+	auto &inner_l_art = UnnestMutable(art, l_node);
+	auto &inner_r_art = UnnestMutable(art, r_node);
+	inner_l_art.Merge(art, inner_r_art);
+}
+
+void Leaf::Insert(ART &art, Node &node, const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
-	if (art.deprecated) {
-		return DeprecatedInsert(art, node, row_id_key.GetRowID());
+	if (!art.nested_leaves) {
+		return DeprecatedInsert(art, node, row_id.GetRowID());
 	}
 
 	if (node.GetType() == NType::LEAF_INLINED) {
@@ -38,21 +100,21 @@ void Leaf::Insert(ART &art, Node &node, const ARTKey &row_id_key) {
 	}
 
 	auto &inner_art = UnnestMutable(art, node);
-	art.Insert(inner_art, row_id_key, 0, row_id_key);
+	art.Insert(inner_art, row_id, 0, row_id);
 }
 
-bool Leaf::Remove(ART &art, reference<Node> &node, const ARTKey &row_id_key) {
+bool Leaf::Remove(ART &art, reference<Node> &node, const ARTKey &row_id) {
 	D_ASSERT(node.get().HasMetadata());
 	if (node.get().GetType() == NType::LEAF_INLINED) {
-		return node.get().GetRowId() == row_id_key.GetRowID();
+		return node.get().GetRowId() == row_id.GetRowID();
 	}
 
-	if (art.deprecated) {
-		return DeprecatedRemove(art, node, row_id_key.GetRowID());
+	if (!art.nested_leaves) {
+		return DeprecatedRemove(art, node, row_id.GetRowID());
 	}
 
 	auto &inner_art = UnnestMutable(art, node.get());
-	art.Erase(inner_art, row_id_key, 0, row_id_key);
+	art.Erase(inner_art, row_id, 0, row_id);
 
 	// If the inner ART is an inlined leaf, we inline it.
 	if (inner_art.GetType() == NType::LEAF_INLINED) {
@@ -73,7 +135,7 @@ bool Leaf::GetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, idx_t m
 		return true;
 	}
 
-	if (art.deprecated) {
+	if (!art.nested_leaves) {
 		return DeprecatedGetRowIds(art, node, row_ids, max_count);
 	}
 
@@ -88,19 +150,52 @@ bool Leaf::GetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, idx_t m
 	return it.Scan(empty_key, max_count, row_ids, false);
 }
 
-bool Leaf::ContainsRowId(ART &art, const Node &node, const ARTKey &row_id_key) {
+bool Leaf::ContainsRowId(ART &art, const Node &node, const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
 	if (node.GetType() == NType::LEAF_INLINED) {
-		return node.GetRowId() == row_id_key.GetRowID();
+		return node.GetRowId() == row_id.GetRowID();
 	}
 
-	if (art.deprecated) {
-		return DeprecatedContainsRowId(art, node, row_id_key.GetRowID());
+	if (!art.nested_leaves) {
+		return DeprecatedContainsRowId(art, node, row_id.GetRowID());
 	}
 
 	auto &inner_art = Unnest(art, node);
-	auto leaf = art.Lookup(inner_art, row_id_key, 0);
+	auto leaf = art.Lookup(inner_art, row_id, 0);
 	return leaf != nullptr;
+}
+
+string Leaf::VerifyAndToString(ART &art, const Node &node, const bool only_verify) {
+	if (node.GetType() == NType::LEAF_INLINED) {
+		return only_verify ? "" : "Leaf [count: 1, row ID: " + to_string(node.GetRowId()) + "]";
+	}
+
+	if (!art.nested_leaves) {
+		return DeprecatedVerifyAndToString(art, node, only_verify);
+	}
+
+	auto &inner_art = Unnest(art, node);
+	auto inner_str = inner_art.VerifyAndToString(art, only_verify);
+	return only_verify ? "" : "Leaf [" + inner_str + "]";
+}
+
+void Leaf::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
+	if (!flags.vacuum_flags[static_cast<uint8_t>(NType::LEAF) - 1]) {
+		return;
+	}
+
+	if (!art.nested_leaves) {
+		return DeprecatedVacuum(art, node);
+	}
+
+	auto &inner_art = UnnestMutable(art, node);
+	inner_art.Vacuum(art, flags);
+
+	auto &allocator = Node::GetAllocator(art, NType::LEAF);
+	if (allocator.NeedsVacuum(node)) {
+		node = allocator.VacuumPointer(node);
+		node.SetMetadata(static_cast<uint8_t>(NType::LEAF));
+	}
 }
 
 Node &Leaf::UnnestMutable(ART &art, Node &node) {
@@ -117,6 +212,19 @@ const Node &Leaf::Unnest(ART &art, const Node &node) {
 	D_ASSERT(leaf.count == 0);
 	D_ASSERT(leaf.ptr.HasMetadata());
 	return leaf.ptr;
+}
+
+void Leaf::MergeInlinedIntoLeaf(ART &art, Node &l_node, Node &r_node) {
+
+	// Create an ARTKey from the row ID.
+	ArenaAllocator arena_allocator(Allocator::Get(art.db));
+	LogicalType row_id_type(LogicalType::ROW_TYPE);
+	auto value = Value::UBIGINT(NumericCast<idx_t>(r_node.GetRowId()));
+	auto key = ARTKey::CreateKey(arena_allocator, row_id_type.InternalType(), value);
+
+	// Insert the ARTKey.
+	Insert(art, l_node, key);
+	r_node.Clear();
 }
 
 } // namespace duckdb

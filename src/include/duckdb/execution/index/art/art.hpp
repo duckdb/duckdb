@@ -21,6 +21,7 @@ enum class VerifyExistenceType : uint8_t {
 };
 class ConflictManager;
 class ARTKey;
+class ARTKeySection;
 class FixedSizeAllocator;
 
 struct ARTIndexScanState;
@@ -50,8 +51,8 @@ public:
 	shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data
 	bool owns_data;
-	//! True, if the ART uses deprecated storage.
-	bool deprecated;
+	//! True, if the ART uses nested leaf storage.
+	bool nested_leaves;
 
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
@@ -69,7 +70,7 @@ public:
 	}
 
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-	ErrorData Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids) override;
 	//! Verify that data can be appended to the index without a constraint violation
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
@@ -77,12 +78,14 @@ public:
 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
 	void CommitDrop(IndexLock &index_lock) override;
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
-	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
 	//! Insert a chunk of entries into the index
-	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_identifiers) override;
+	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
-	//! Construct an ART from a vector of sorted keys
-	bool ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_identifiers);
+	//! Construct an ART from a vector of sorted keys and verify the result.
+	bool ConstructFromSorted(const vector<ARTKey> &keys, const vector<ARTKey> &row_id_keys, const idx_t row_count);
+	//! Recursively construct an ART by appending key sections.
+	bool Construct(const vector<ARTKey> &keys, const vector<ARTKey> &row_ids, Node &node, ARTKeySection &section);
 
 	//! Search equal values and fetches the row IDs
 	bool SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &row_ids);
@@ -103,6 +106,8 @@ public:
 	//! Generate ART keys for an input chunk
 	template <bool IS_NOT_NULL = false>
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
+	static void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, vector<ARTKey> &keys,
+	                               vector<ARTKey> &row_id_keys);
 
 	//! Generate a string containing all the expressions and their respective values that violate a constraint
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);

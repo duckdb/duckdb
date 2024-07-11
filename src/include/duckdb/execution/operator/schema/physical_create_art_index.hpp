@@ -55,9 +55,9 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	//! Sink for unsorted data: insert iteratively
-	SinkResultType SinkUnsorted(Vector &row_identifiers, OperatorSinkInput &input) const;
+	SinkResultType SinkUnsorted(OperatorSinkInput &input) const;
 	//! Sink for sorted data: build + merge
-	SinkResultType SinkSorted(Vector &row_identifiers, OperatorSinkInput &input) const;
+	SinkResultType SinkSorted(OperatorSinkInput &input) const;
 
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;

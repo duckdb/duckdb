@@ -40,13 +40,17 @@ struct IndexBufferInfo {
 
 //! Information to serialize an index
 struct IndexStorageInfo {
-	IndexStorageInfo() {};
-	explicit IndexStorageInfo(string name) : name(std::move(name)) {};
+	// TODO: default to true for nested_leaves.
+	IndexStorageInfo() : nested_leaves(false) {};
+	// TODO: default to true for nested_leaves.
+	explicit IndexStorageInfo(string name) : name(std::move(name)), nested_leaves(false) {};
 
 	//! The name of the index
 	string name;
 	//! The root of the index
 	idx_t root;
+	//! Whether the ART uses nested leaf storage or not.
+	bool nested_leaves;
 	//! Information to serialize the index memory held by the fixed-size allocators
 	vector<FixedSizeAllocatorInfo> allocator_infos;
 

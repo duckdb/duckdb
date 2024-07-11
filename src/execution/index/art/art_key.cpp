@@ -2,6 +2,10 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// ARTKey
+//===--------------------------------------------------------------------===//
+
 ARTKey::ARTKey() : len(0) {
 }
 
@@ -135,12 +139,30 @@ void ARTKey::ConcatenateARTKey(ArenaAllocator &allocator, ARTKey &other_key) {
 
 row_t ARTKey::GetRowID() const {
 	D_ASSERT(len == sizeof(row_t));
-	row_t row_id = 0;
-	for (idx_t i = 0; i < 4; i++) {
-		row_id |= data[i];
-		row_id <<= 8;
+	return Radix::DecodeData<row_t>(data);
+}
+
+//===--------------------------------------------------------------------===//
+// ARTKeySection
+//===--------------------------------------------------------------------===//
+
+ARTKeySection::ARTKeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p)
+    : start(start_p), end(end_p), depth(depth_p), key_byte(key_byte_p) {
+}
+
+ARTKeySection::ARTKeySection(idx_t start_p, idx_t end_p, const vector<ARTKey> &keys, ARTKeySection &section)
+    : start(start_p), end(end_p), depth(section.depth + 1), key_byte(keys[end_p].data[section.depth]) {
+}
+
+void ARTKeySection::GetChildSections(vector<ARTKeySection> &child_sections, const vector<ARTKey> &keys) {
+	auto child_start_idx = start;
+	for (idx_t i = start + 1; i <= end; i++) {
+		if (keys[i - 1].data[depth] != keys[i].data[depth]) {
+			child_sections.emplace_back(child_start_idx, i - 1, keys, *this);
+			child_start_idx = i;
+		}
 	}
-	return row_id;
+	child_sections.emplace_back(child_start_idx, end, keys, *this);
 }
 
 } // namespace duckdb

@@ -88,6 +88,7 @@ void IndexStorageInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "name", name);
 	serializer.WritePropertyWithDefault<idx_t>(101, "root", root);
 	serializer.WritePropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", allocator_infos);
+	serializer.WritePropertyWithDefault<bool>(103, "nested_leaves", nested_leaves, false);
 }
 
 IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
@@ -95,6 +96,7 @@ IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result.root);
 	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result.allocator_infos);
+	deserializer.ReadPropertyWithDefault<bool>(103, "nested_leaves", result.nested_leaves, false);
 	return result;
 }
 

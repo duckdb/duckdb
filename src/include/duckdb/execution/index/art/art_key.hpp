@@ -83,6 +83,19 @@ private:
 	}
 };
 
+class ARTKeySection {
+public:
+	ARTKeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p);
+	ARTKeySection(idx_t start_p, idx_t end_p, const vector<ARTKey> &keys, ARTKeySection &section);
+
+	void GetChildSections(vector<ARTKeySection> &child_sections, const vector<ARTKey> &keys);
+
+	idx_t start;
+	idx_t end;
+	idx_t depth;
+	data_t key_byte;
+};
+
 template <>
 ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, string_t value);
 template <>

@@ -44,26 +44,54 @@ public:
 	static void New(Node &node, const row_t row_id);
 	//! Get a new leaf node without any data.
 	static Leaf &New(ART &art, Node &node);
+	//! Get a new non-inlined leaf node, might cause new buffer allocations.
+	static void New(ART &art, reference<Node> &node, const vector<ARTKey> &row_ids, const idx_t start,
+	                const idx_t count);
+	//! Free the leaf.
+	static void Free(ART &art, Node &node);
+
+	//! Initializes a merge by incrementing the buffer IDs of the leaf.
+	static void InitializeMerge(ART &art, Node &node, const ARTFlags &flags);
+	//! Merges two leaves.
+	static void Merge(ART &art, Node &l_node, Node &r_node);
+
 	//! Insert a row ID into a leaf.
-	static void Insert(ART &art, Node &node, const ARTKey &row_id_key);
+	static void Insert(ART &art, Node &node, const ARTKey &row_id);
 	//! Remove a row ID from a leaf. Returns true, if the leaf is empty after the removal.
-	static bool Remove(ART &art, reference<Node> &node, const ARTKey &row_id_key);
+	static bool Remove(ART &art, reference<Node> &node, const ARTKey &row_id);
+
 	//! Fill the row_ids vector with the row IDs of this leaf, if the total count does not exceed max_count.
 	static bool GetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, const idx_t max_count);
 	//! Returns true, if the leaf contains the row ID.
-	static bool ContainsRowId(ART &art, const Node &node, const ARTKey &row_id_key);
-	//! TODO
+	static bool ContainsRowId(ART &art, const Node &node, const ARTKey &row_id);
+
+	//! Returns the string representation of the leaf, or only traverses and verifies the leaf.
+	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
+
+	//! Vacuum the leaf.
+	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
+
+private:
+	//! Unnests a non-inlined leaf node by returning its mutable root node.
 	static Node &UnnestMutable(ART &art, Node &node);
-	//! TODO
+	//! Unnests a non-inlined leaf node by returning its constant root node.
 	static const Node &Unnest(ART &art, const Node &node);
 
-	//! Deprecated code paths.
+	//! Merge an inlined row ID into a leaf.
+	static void MergeInlinedIntoLeaf(ART &art, Node &l_node, Node &r_node);
+
+public:
+	//===--------------------------------------------------------------------===//
+	// Deprecated code paths.
+	//===--------------------------------------------------------------------===//
 
 	//! Get a new chain of leaf nodes, might cause new buffer allocations,
 	//! with the node parameter holding the tail of the chain.
-	static void DeprecatedNew(ART &art, reference<Node> &node, const row_t *row_ids, idx_t count);
+	static void DeprecatedNew(ART &art, reference<Node> &node, const vector<ARTKey> &row_ids, const idx_t start,
+	                          const idx_t count);
 	//! Free the leaf (chain).
 	static void DeprecatedFree(ART &art, Node &node);
+
 	//! Initializes a merge by incrementing the buffer IDs of the leaf (chain).
 	static void DeprecatedInitializeMerge(ART &art, Node &node, const ARTFlags &flags);
 	//! Merge leaf (chains) and free all copied leaf nodes.

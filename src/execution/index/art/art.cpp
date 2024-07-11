@@ -33,14 +33,12 @@ struct ARTIndexScanState : public IndexScanState {
 // ART
 //===--------------------------------------------------------------------===//
 
-// TODO
-
 ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
-      allocators(allocators_ptr), owns_data(false) {
+      allocators(allocators_ptr), owns_data(false), nested_leaves(info.nested_leaves) {
 
 	// Initialize the allocators.
 	if (!allocators) {
@@ -90,10 +88,6 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 			throw InvalidTypeException(logical_types[i], "Invalid type for index key.");
 		}
 	}
-
-	// Determine if this ART uses deprecated leaves.
-	// TODO.
-	deprecated = true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -375,132 +369,102 @@ void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, vector
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
+void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, vector<ARTKey> &keys,
+                             vector<ARTKey> &row_id_keys) {
+	GenerateKeys<>(allocator, input, keys);
+
+	DataChunk row_id_chunk;
+	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, keys.size());
+	row_id_chunk.data[0].Reference(row_ids);
+	row_id_chunk.SetCardinality(keys.size());
+	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
+}
+
 //===--------------------------------------------------------------------===//
 // Construct from sorted data (only during CREATE (UNIQUE) INDEX statements)
 //===--------------------------------------------------------------------===//
 
-// TODO.
+bool ART::Construct(const vector<ARTKey> &keys, const vector<ARTKey> &row_ids, Node &node, ARTKeySection &section) {
 
-struct KeySection {
-	KeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p)
-	    : start(start_p), end(end_p), depth(depth_p), key_byte(key_byte_p) {};
-	KeySection(idx_t start_p, idx_t end_p, vector<ARTKey> &keys, KeySection &key_section)
-	    : start(start_p), end(end_p), depth(key_section.depth + 1), key_byte(keys[end_p].data[key_section.depth]) {};
-	idx_t start;
-	idx_t end;
-	idx_t depth;
-	data_t key_byte;
-};
+	D_ASSERT(section.start < keys.size());
+	D_ASSERT(section.end < keys.size());
+	D_ASSERT(section.start <= section.end);
 
-void GetChildSections(vector<KeySection> &child_sections, vector<ARTKey> &keys, KeySection &key_section) {
-	auto child_start_idx = key_section.start;
-	for (idx_t i = key_section.start + 1; i <= key_section.end; i++) {
-		if (keys[i - 1].data[key_section.depth] != keys[i].data[key_section.depth]) {
-			child_sections.emplace_back(child_start_idx, i - 1, keys, key_section);
-			child_start_idx = i;
-		}
-	}
-	child_sections.emplace_back(child_start_idx, key_section.end, keys, key_section);
-}
+	auto &start_key = keys[section.start];
+	auto &end_key = keys[section.end];
 
-bool ConstructInternal(ART &art, vector<ARTKey> &keys, const row_t *row_ids, Node &node, KeySection &key_section,
-                       bool &has_constraint) {
-
-	D_ASSERT(key_section.start < keys.size());
-	D_ASSERT(key_section.end < keys.size());
-	D_ASSERT(key_section.start <= key_section.end);
-
-	auto &start_key = keys[key_section.start];
-	auto &end_key = keys[key_section.end];
-
-	// increment the depth until we reach a leaf or find a mismatching byte
-	auto prefix_start = key_section.depth;
-	while (start_key.len != key_section.depth &&
-	       start_key.ByteMatches(end_key, UnsafeNumericCast<uint32_t>(key_section.depth))) {
-		key_section.depth++;
+	// Increment the depth until we reach a leaf or find a mismatching byte.
+	auto prefix_start = section.depth;
+	while (start_key.len != section.depth &&
+	       start_key.ByteMatches(end_key, UnsafeNumericCast<uint32_t>(section.depth))) {
+		section.depth++;
 	}
 
-	// we reached a leaf, i.e. all the bytes of start_key and end_key match
-	if (start_key.len == key_section.depth) {
-		// end_idx is inclusive
-		auto num_row_ids = key_section.end - key_section.start + 1;
+	// We reached a leaf, i.e. all the bytes of start_key and end_key match.
+	if (start_key.len == section.depth) {
+		// end_idx is inclusive.
+		auto num_row_ids = section.end - section.start + 1;
 
-		// check for possible constraint violation
-		auto single_row_id = num_row_ids == 1;
-		if (has_constraint && !single_row_id) {
+		// Check for a possible constraint violation.
+		if (IsUnique() && num_row_ids != 1) {
 			return false;
 		}
 
+		// Create the prefix.
 		reference<Node> ref_node(node);
-		Prefix::New(art, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
+		Prefix::New(*this, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
 		            UnsafeNumericCast<uint32_t>(start_key.len - prefix_start));
-		if (single_row_id) {
-			Leaf::New(ref_node, row_ids[key_section.start]);
+
+		// Create the leaf.
+		if (num_row_ids == 1) {
+			Leaf::New(ref_node, row_ids[section.start].GetRowID());
 		} else {
-			if (art.deprecated) {
-				Leaf::DeprecatedNew(art, ref_node, row_ids + key_section.start, num_row_ids);
-			} else {
-				// Transform the row ids.
-				vector<ARTKey> row_id_keys;
-				row_id_keys.resize(num_row_ids);
-				for (idx_t i = 0; i < num_row_ids; i++) {
-				}
-				// TODO.
-			}
+			Leaf::New(*this, ref_node, row_ids, section.start, num_row_ids);
 		}
 		return true;
 	}
 
-	// create a new node and recurse
+	// Create a new node and recurse.
 
-	// we will find at least two child entries of this node, otherwise we'd have reached a leaf
-	vector<KeySection> child_sections;
-	GetChildSections(child_sections, keys, key_section);
+	// There are at least two child entries for this node. Otherwise, we would have reached a leaf.
+	vector<ARTKeySection> child_sections;
+	section.GetChildSections(child_sections, keys);
 
-	// set the prefix
+	// Create the prefix.
 	reference<Node> ref_node(node);
-	auto prefix_length = key_section.depth - prefix_start;
-	Prefix::New(art, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
+	auto prefix_length = section.depth - prefix_start;
+	Prefix::New(*this, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
 	            UnsafeNumericCast<uint32_t>(prefix_length));
 
-	// set the node
+	// Create the node.
 	auto node_type = Node::GetARTNodeTypeByCount(child_sections.size());
-	Node::New(art, ref_node, node_type);
+	Node::New(*this, ref_node, node_type);
 
-	// recurse on each child section
+	// Recurse on each child section.
 	for (auto &child_section : child_sections) {
 		Node new_child;
-		auto no_violation = ConstructInternal(art, keys, row_ids, new_child, child_section, has_constraint);
-		Node::InsertChild(art, ref_node, child_section.key_byte, new_child);
-		if (!no_violation) {
+		auto success = Construct(keys, row_ids, new_child, child_section);
+		Node::InsertChild(*this, ref_node, child_section.key_byte, new_child);
+		if (!success) {
 			return false;
 		}
 	}
 	return true;
 }
 
-bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_identifiers) {
-
-	UnifiedVectorFormat row_id_data;
-	row_identifiers.ToUnifiedFormat(count, row_id_data);
-	auto row_ids = UnifiedVectorFormat::GetData<row_t>(row_id_data);
-
-	auto key_section = KeySection(0, count - 1, 0, 0);
-	auto has_constraint = IsUnique();
-	if (!ConstructInternal(*this, keys, row_ids, tree, key_section, has_constraint)) {
+bool ART::ConstructFromSorted(const vector<ARTKey> &keys, const vector<ARTKey> &row_id_keys, const idx_t row_count) {
+	ARTKeySection section(0, row_count - 1, 0, 0);
+	if (!Construct(keys, row_id_keys, tree, section)) {
 		return false;
 	}
 
 #ifdef DEBUG
 	D_ASSERT(!VerifyAndToStringInternal(true).empty());
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < row_count; i++) {
 		D_ASSERT(!keys[i].Empty());
 		auto leaf = Lookup(tree, keys[i], 0);
-		if (deprecated) {
-			D_ASSERT(Leaf::DeprecatedContainsRowId(*this, *leaf, row_ids[i]));
-		} else {
-			// TODO.
-		}
+		auto contains_row_id = Leaf::ContainsRowId(*this, *leaf, row_id_keys[i]);
+		D_ASSERT(contains_row_id);
 	}
 #endif
 
@@ -511,20 +475,14 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 // Insert / Verification / Constraint Checking
 //===--------------------------------------------------------------------===//
 
-ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) {
+ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
+	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	auto row_count = input.size();
-	D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
-	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
-	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
+	ArenaAllocator allocator(BufferAllocator::Get(db));
 	vector<ARTKey> keys(row_count);
-	GenerateKeys<>(arena_allocator, input, keys);
-
-	DataChunk row_id_chunk;
-	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, row_count);
-	row_id_chunk.data[0].Reference(row_identifiers);
-	vector<ARTKey> row_id_keys(row_id_chunk.size());
-	GenerateKeys<>(arena_allocator, row_id_chunk, row_id_keys);
+	vector<ARTKey> row_id_keys(row_count);
+	GenerateKeyVectors(allocator, input, row_ids, keys, row_id_keys);
 
 	// Insert the entries into the index.
 	idx_t failed_index = DConstants::INVALID_INDEX;
@@ -567,12 +525,12 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers
 	return ErrorData();
 }
 
-ErrorData ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
+ErrorData ART::Append(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	// Execute all column expressions before inserting the data chunk.
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
-	ExecuteExpressions(appended_data, expr_chunk);
-	return Insert(lock, expr_chunk, row_identifiers);
+	ExecuteExpressions(input, expr_chunk);
+	return Insert(lock, expr_chunk, row_ids);
 }
 
 void ART::VerifyAppend(DataChunk &chunk) {
@@ -687,22 +645,17 @@ void ART::CommitDrop(IndexLock &index_lock) {
 	tree.Clear();
 }
 
-void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_identifiers) {
+void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	auto row_count = input.size();
 
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 	ExecuteExpressions(input, expr_chunk);
 
-	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
-	vector<ARTKey> keys(expr_chunk.size());
-	GenerateKeys<>(arena_allocator, expr_chunk, keys);
-
-	DataChunk row_id_chunk;
-	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, row_count);
-	row_id_chunk.data[0].Reference(row_identifiers);
-	vector<ARTKey> row_id_keys(row_id_chunk.size());
-	GenerateKeys<>(arena_allocator, row_id_chunk, row_id_keys);
+	ArenaAllocator allocator(BufferAllocator::Get(db));
+	vector<ARTKey> keys(row_count);
+	vector<ARTKey> row_id_keys(row_count);
+	GenerateKeyVectors(allocator, expr_chunk, row_ids, keys, row_id_keys);
 
 	for (idx_t i = 0; i < row_count; i++) {
 		if (keys[i].Empty()) {
@@ -1059,6 +1012,7 @@ void ART::WritePartialBlocks() {
 void ART::InitAllocators(const IndexStorageInfo &info) {
 	// Set the root node.
 	tree.Set(info.root);
+	nested_leaves = info.nested_leaves;
 
 	// Initialize the allocators.
 	D_ASSERT(info.allocator_infos.size() == ALLOCATOR_COUNT);
@@ -1072,6 +1026,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 	auto &metadata_manager = table_io_manager.GetMetadataManager();
 	MetadataReader reader(metadata_manager, pointer);
 	tree = reader.Read<Node>();
+	nested_leaves = false;
 
 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
 		(*allocators)[i]->Deserialize(metadata_manager, reader.Read<BlockPointer>());

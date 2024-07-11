@@ -5,25 +5,25 @@
 
 namespace duckdb {
 
-void Leaf::DeprecatedNew(ART &art, reference<Node> &node, const row_t *row_ids, idx_t count) {
-
+void Leaf::DeprecatedNew(ART &art, reference<Node> &node, const vector<ARTKey> &row_ids, const idx_t start,
+                         const idx_t count) {
 	D_ASSERT(count > 1);
 
 	idx_t copy_count = 0;
-	while (count) {
+	idx_t remaining_count = count;
+	while (remaining_count) {
 		node.get() = Node::GetAllocator(art, NType::LEAF).New();
 		node.get().SetMetadata(static_cast<uint8_t>(NType::LEAF));
 
 		auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
-
-		leaf.count = UnsafeNumericCast<uint8_t>(MinValue((idx_t)Node::LEAF_SIZE, count));
+		leaf.count = UnsafeNumericCast<uint8_t>(MinValue((idx_t)Node::LEAF_SIZE, remaining_count));
 
 		for (idx_t i = 0; i < leaf.count; i++) {
-			leaf.row_ids[i] = row_ids[copy_count + i];
+			leaf.row_ids[i] = row_ids[start + copy_count + i].GetRowID();
 		}
 
 		copy_count += leaf.count;
-		count -= leaf.count;
+		remaining_count -= leaf.count;
 
 		node = leaf.ptr;
 		leaf.ptr.Clear();
@@ -60,8 +60,6 @@ void Leaf::DeprecatedInitializeMerge(ART &art, Node &node, const ARTFlags &flags
 }
 
 void Leaf::DeprecatedMerge(ART &art, Node &l_node, Node &r_node) {
-
-	D_ASSERT(l_node.HasMetadata() && r_node.HasMetadata());
 
 	// copy inlined row ID of r_node
 	if (r_node.GetType() == NType::LEAF_INLINED) {
@@ -233,16 +231,10 @@ bool Leaf::DeprecatedContainsRowId(ART &art, const Node &node, const row_t row_i
 }
 
 string Leaf::DeprecatedVerifyAndToString(ART &art, const Node &node, const bool only_verify) {
-
-	if (node.GetType() == NType::LEAF_INLINED) {
-		return only_verify ? "" : "Leaf [count: 1, row ID: " + to_string(node.GetRowId()) + "]";
-	}
-
 	string str = "";
-
 	reference<const Node> node_ref(node);
-	while (node_ref.get().HasMetadata()) {
 
+	while (node_ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, node_ref, NType::LEAF);
 		D_ASSERT(leaf.count <= Node::LEAF_SIZE);
 
@@ -251,9 +243,9 @@ string Leaf::DeprecatedVerifyAndToString(ART &art, const Node &node, const bool 
 			str += to_string(leaf.row_ids[i]) + "-";
 		}
 		str += "] ";
-
 		node_ref = leaf.ptr;
 	}
+
 	return only_verify ? "" : str;
 }
 

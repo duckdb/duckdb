@@ -75,6 +75,12 @@
         "id": 102,
         "name": "allocator_infos",
         "type": "vector<FixedSizeAllocatorInfo>"
+      },
+      {
+        "id": 103,
+        "name": "nested_leaves",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "pointer_type": "none"
