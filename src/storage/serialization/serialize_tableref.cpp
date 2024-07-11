@@ -121,7 +121,7 @@ void JoinRef::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<JoinType>(203, "join_type", type);
 	serializer.WriteProperty<JoinRefType>(204, "ref_type", ref_type);
 	serializer.WritePropertyWithDefault<vector<string>>(205, "using_columns", using_columns);
-	serializer.WriteProperty<bool>(206, "delim_flipped", delim_flipped);
+	serializer.WritePropertyWithDefault<bool>(206, "delim_flipped", delim_flipped);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", duplicate_eliminated_columns);
 }
 
@@ -133,7 +133,7 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<JoinType>(203, "join_type", result->type);
 	deserializer.ReadProperty<JoinRefType>(204, "ref_type", result->ref_type);
 	deserializer.ReadPropertyWithDefault<vector<string>>(205, "using_columns", result->using_columns);
-	deserializer.ReadProperty<bool>(206, "delim_flipped", result->delim_flipped);
+	deserializer.ReadPropertyWithDefault<bool>(206, "delim_flipped", result->delim_flipped);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	return std::move(result);
 }
