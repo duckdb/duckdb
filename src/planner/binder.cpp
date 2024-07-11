@@ -146,7 +146,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
 	case StatementType::INSERT_STATEMENT:
-		return Bind(statement.Cast<InsertStatement>());
+		return BindWithCTE(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
 	case StatementType::DELETE_STATEMENT:

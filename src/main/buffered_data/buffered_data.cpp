@@ -13,4 +13,23 @@ BufferedData::BufferedData(Type type, weak_ptr<ClientContext> context_p) : type(
 BufferedData::~BufferedData() {
 }
 
+StreamExecutionResult BufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
+	auto cc = context.lock();
+	if (!cc) {
+		return StreamExecutionResult::EXECUTION_CANCELLED;
+	}
+
+	StreamExecutionResult execution_result;
+	while (!StreamQueryResult::IsChunkReady(execution_result = ExecuteTaskInternal(result, context_lock))) {
+		if (execution_result == StreamExecutionResult::BLOCKED) {
+			UnblockSinks();
+			cc->WaitForTask(context_lock, result);
+		}
+	}
+	if (result.HasError()) {
+		Close();
+	}
+	return execution_result;
+}
+
 } // namespace duckdb

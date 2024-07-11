@@ -48,6 +48,7 @@
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/enums/set_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
@@ -6898,6 +6899,54 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "WEEK_NUMBER_ISO")) {
 		return StrTimeSpecifier::WEEK_NUMBER_ISO;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value) {
+	switch(value) {
+	case StreamExecutionResult::CHUNK_READY:
+		return "CHUNK_READY";
+	case StreamExecutionResult::CHUNK_NOT_READY:
+		return "CHUNK_NOT_READY";
+	case StreamExecutionResult::EXECUTION_ERROR:
+		return "EXECUTION_ERROR";
+	case StreamExecutionResult::EXECUTION_CANCELLED:
+		return "EXECUTION_CANCELLED";
+	case StreamExecutionResult::BLOCKED:
+		return "BLOCKED";
+	case StreamExecutionResult::NO_TASKS_AVAILABLE:
+		return "NO_TASKS_AVAILABLE";
+	case StreamExecutionResult::EXECUTION_FINISHED:
+		return "EXECUTION_FINISHED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value) {
+	if (StringUtil::Equals(value, "CHUNK_READY")) {
+		return StreamExecutionResult::CHUNK_READY;
+	}
+	if (StringUtil::Equals(value, "CHUNK_NOT_READY")) {
+		return StreamExecutionResult::CHUNK_NOT_READY;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_ERROR")) {
+		return StreamExecutionResult::EXECUTION_ERROR;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_CANCELLED")) {
+		return StreamExecutionResult::EXECUTION_CANCELLED;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return StreamExecutionResult::BLOCKED;
+	}
+	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
+		return StreamExecutionResult::NO_TASKS_AVAILABLE;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_FINISHED")) {
+		return StreamExecutionResult::EXECUTION_FINISHED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
