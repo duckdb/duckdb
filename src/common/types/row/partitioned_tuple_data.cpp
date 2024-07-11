@@ -53,7 +53,7 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 	ComputePartitionIndices(state, input);
 
 	// Build the selection vector for the partitions
-	BuildPartitionSel(state, append_sel, actual_append_count, UseFixedSizeMap());
+	BuildPartitionSel(state, append_sel, actual_append_count);
 
 	// Early out: check if everything belongs to a single partition
 	optional_idx partition_index;
@@ -96,7 +96,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	ComputePartitionIndices(input.row_locations, append_count, state.partition_indices);
 
 	// Build the selection vector for the partitions
-	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count, UseFixedSizeMap());
+	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count);
 
 	// Early out: check if everything belongs to a single partition
 	optional_idx partition_index;
@@ -135,23 +135,41 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	Verify();
 }
 
+template <class MAP_TYPE>
+MAP_TYPE &PartitionedTupleDataGetMap(PartitionedTupleDataAppendState &) {
+	throw InternalException("Unknown MAP_TYPE for PartitionedTupleDataGetMap");
+}
+
+template <>
+fixed_size_map_t<list_entry_t> &PartitionedTupleDataGetMap(PartitionedTupleDataAppendState &state) {
+	return state.fixed_partition_entries;
+}
+
+template <>
+perfect_map_t<list_entry_t> &PartitionedTupleDataGetMap(PartitionedTupleDataAppendState &state) {
+	return state.partition_entries;
+}
+
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
-                                             const idx_t append_count, const bool use_fixed_size_map) {
-	if (use_fixed_size_map) {
-		BuildPartitionSel<fixed_size_map_t<list_entry_t>, FixedSizeMapGetter<list_entry_t>>(
-		    state, state.fixed_partition_entries, append_sel, append_count);
+                                             const idx_t append_count) const {
+	if (UseFixedSizeMap()) {
+		BuildPartitionSel<true>(state, append_sel, append_count);
 	} else {
-		BuildPartitionSel<perfect_map_t<list_entry_t>, UnorderedMapGetter<perfect_map_t<list_entry_t>>>(
-		    state, state.partition_entries, append_sel, append_count);
+		BuildPartitionSel<false>(state, append_sel, append_count);
 	}
 }
 
-template <class MAP_TYPE, class GETTER>
-void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries,
-                                             const SelectionVector &append_sel, const idx_t append_count) {
+template <bool use_fixed_size_map>
+void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
+                                             const idx_t append_count) {
+	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
+	                                           perfect_map_t<list_entry_t>>::type;
+	using GETTER = typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<list_entry_t>,
+	                                         UnorderedMapGetter<MAP_TYPE>>::type;
+	auto &partition_entries = PartitionedTupleDataGetMap<MAP_TYPE>(state);
+
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	partition_entries.clear();
-
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		for (idx_t i = 0; i < append_count; i++) {
@@ -204,16 +222,19 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 
 void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state) {
 	if (UseFixedSizeMap()) {
-		BuildBufferSpace<fixed_size_map_t<list_entry_t>, FixedSizeMapGetter<list_entry_t>>(
-		    state, state.fixed_partition_entries);
+		BuildBufferSpace<true>(state);
 	} else {
-		BuildBufferSpace<perfect_map_t<list_entry_t>, UnorderedMapGetter<perfect_map_t<list_entry_t>>>(
-		    state, state.partition_entries);
+		BuildBufferSpace<false>(state);
 	}
 }
 
-template <class MAP_TYPE, class GETTER>
-void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state, const MAP_TYPE &partition_entries) {
+template <bool use_fixed_size_map>
+void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state) {
+	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
+	                                           perfect_map_t<list_entry_t>>::type;
+	using GETTER = typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<list_entry_t>,
+	                                         UnorderedMapGetter<MAP_TYPE>>::type;
+	const auto &partition_entries = PartitionedTupleDataGetMap<MAP_TYPE>(state);
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {
 		const auto &partition_index = GETTER::GetKey(it);
 

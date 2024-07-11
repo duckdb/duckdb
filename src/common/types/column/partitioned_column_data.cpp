@@ -49,7 +49,7 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 	ComputePartitionIndices(state, input);
 
 	// Build the selection vector for the partitions
-	BuildPartitionSel(state, input.size(), UseFixedSizeMap());
+	BuildPartitionSel(state, input.size());
 
 	// Early out: check if everything belongs to a single partition
 	optional_idx partition_index;
@@ -72,28 +72,43 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 	}
 
 	if (UseFixedSizeMap()) {
-		AppendInternal<fixed_size_map_t<list_entry_t>, FixedSizeMapGetter<list_entry_t>>(state, input,
-		                                                                                 state.fixed_partition_entries);
+		AppendInternal<true>(state, input);
 	} else {
-		AppendInternal<perfect_map_t<list_entry_t>, UnorderedMapGetter<perfect_map_t<list_entry_t>>>(
-		    state, input, state.partition_entries);
+		AppendInternal<false>(state, input);
 	}
 }
 
-void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count,
-                                              const bool use_fixed_size_map) {
-	if (use_fixed_size_map) {
-		BuildPartitionSel<fixed_size_map_t<list_entry_t>, FixedSizeMapGetter<list_entry_t>>(
-		    state, state.fixed_partition_entries, append_count);
+void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count) const {
+	if (UseFixedSizeMap()) {
+		BuildPartitionSel<true>(state, append_count);
 	} else {
-		BuildPartitionSel<perfect_map_t<list_entry_t>, UnorderedMapGetter<perfect_map_t<list_entry_t>>>(
-		    state, state.partition_entries, append_count);
+		BuildPartitionSel<false>(state, append_count);
 	}
 }
 
-template <class MAP_TYPE, class GETTER>
-void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &state, MAP_TYPE &partition_entries,
-                                              const idx_t append_count) {
+template <class MAP_TYPE>
+MAP_TYPE &PartitionedColumnDataGetMap(PartitionedColumnDataAppendState &) {
+	throw InternalException("Unknown MAP_TYPE for PartitionedTupleDataGetMap");
+}
+
+template <>
+fixed_size_map_t<list_entry_t> &PartitionedColumnDataGetMap(PartitionedColumnDataAppendState &state) {
+	return state.fixed_partition_entries;
+}
+
+template <>
+perfect_map_t<list_entry_t> &PartitionedColumnDataGetMap(PartitionedColumnDataAppendState &state) {
+	return state.partition_entries;
+}
+
+template <bool use_fixed_size_map>
+void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count) {
+	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
+	                                           perfect_map_t<list_entry_t>>::type;
+	using GETTER = typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<list_entry_t>,
+	                                         UnorderedMapGetter<MAP_TYPE>>::type;
+	auto &partition_entries = PartitionedColumnDataGetMap<MAP_TYPE>(state);
+
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	partition_entries.clear();
 
@@ -138,9 +153,14 @@ void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &
 	}
 }
 
-template <class MAP_TYPE, class GETTER>
-void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input,
-                                           const MAP_TYPE &partition_entries) {
+template <bool use_fixed_size_map>
+void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input) {
+	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
+	                                           perfect_map_t<list_entry_t>>::type;
+	using GETTER = typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<list_entry_t>,
+	                                         UnorderedMapGetter<MAP_TYPE>>::type;
+	const auto &partition_entries = PartitionedColumnDataGetMap<MAP_TYPE>(state);
+
 	// Loop through the partitions to append the new data to the partition buffers, and flush the buffers if necessary
 	SelectionVector partition_sel;
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {

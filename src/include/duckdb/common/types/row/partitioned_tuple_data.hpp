@@ -142,15 +142,15 @@ protected:
 	bool UseFixedSizeMap() const;
 	//! Builds a selection vector in the Append state for the partitions
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
+	void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
+	                       const idx_t append_count) const;
+	template <bool use_fixed_size_map>
 	static void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
-	                              const idx_t append_count, const bool use_fixed_size_map);
-	template <typename MAP_TYPE, class GETTER>
-	static void BuildPartitionSel(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries,
-	                              const SelectionVector &append_sel, const idx_t append_count);
+	                              const idx_t append_count);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
-	template <typename MAP_TYPE, class GETTER>
-	void BuildBufferSpace(PartitionedTupleDataAppendState &state, const MAP_TYPE &partition_entries);
+	template <bool use_fixed_size_map>
+	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		if (allocators) {

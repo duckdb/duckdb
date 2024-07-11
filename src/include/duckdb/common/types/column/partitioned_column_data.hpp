@@ -108,14 +108,12 @@ protected:
 	bool UseFixedSizeMap() const;
 	//! Builds a selection vector in the Append state for the partitions
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
-	static void BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count,
-	                              const bool use_fixed_size_map);
-	template <typename MAP_TYPE, class GETTER>
-	static void BuildPartitionSel(PartitionedColumnDataAppendState &state, MAP_TYPE &partition_entries,
-	                              const idx_t append_count);
+	void BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count) const;
+	template <bool use_fixed_size_map>
+	static void BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count);
 	//! Appends a DataChunk to this PartitionedColumnData
-	template <typename MAP_TYPE, class GETTER>
-	void AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input, const MAP_TYPE &partition_entries);
+	template <bool use_fixed_size_map>
+	void AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input);
 	//! Create a collection for a specific a partition
 	unique_ptr<ColumnDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		return make_uniq<ColumnDataCollection>(allocators->allocators[partition_index], types);
