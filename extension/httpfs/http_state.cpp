@@ -59,15 +59,11 @@ void HTTPState::Reset() {
 	cached_files.clear();
 }
 
-shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context, bool create_on_missing) {
+shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context) {
 	auto lookup = context.registered_state.find("http_state");
 
 	if (lookup != context.registered_state.end()) {
 		return shared_ptr_cast<ClientContextState, HTTPState>(lookup->second);
-	}
-
-	if (!create_on_missing) {
-		return nullptr;
 	}
 
 	auto http_state = make_shared_ptr<HTTPState>();
@@ -75,10 +71,10 @@ shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context, bool create
 	return http_state;
 }
 
-shared_ptr<HTTPState> HTTPState::TryGetState(optional_ptr<FileOpener> opener, bool create_on_missing) {
+shared_ptr<HTTPState> HTTPState::TryGetState(optional_ptr<FileOpener> opener) {
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
-		return TryGetState(*client_context, create_on_missing);
+		return TryGetState(*client_context);
 	}
 	return nullptr;
 }
