@@ -33,7 +33,7 @@ public:
 		return "DEFAULT";
 	}
 
-	unique_ptr<Expression> Copy() override {
+	unique_ptr<Expression> Copy() const override {
 		return make_uniq<BoundDefaultExpression>(return_type);
 	}
 

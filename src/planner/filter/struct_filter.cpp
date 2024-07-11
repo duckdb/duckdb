@@ -2,6 +2,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -34,4 +35,7 @@ unique_ptr<TableFilter> StructFilter::Copy() const {
 	return make_uniq<StructFilter>(child_idx, child_name, child_filter->Copy());
 }
 
+unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) const {
+	throw NotImplementedException("StructFilter::ToExpression not yet supported");
+}
 } // namespace duckdb
