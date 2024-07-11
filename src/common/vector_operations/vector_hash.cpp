@@ -184,13 +184,6 @@ static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionV
 	hashes.Flatten(count);
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
-	if (FIRST_HASH) {
-		for (idx_t i = 0; i < count; i++) {
-			const auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-			hdata[ridx] = 0;
-		}
-	}
-
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
@@ -213,6 +206,9 @@ static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionV
 		for (idx_t i = 0; i < count; i++) {
 			auto lidx = idata.sel->get_index(i);
 			if (idata.validity.RowIsValid(lidx)) {
+				if (FIRST_HASH) {
+					hdata[i] = 0;
+				}
 				for (idx_t j = 0; j < array_size; j++) {
 					auto offset = lidx * array_size + j;
 					hdata[i] = CombineHashScalar(hdata[i], chdata[offset]);
@@ -240,6 +236,9 @@ static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionV
 				VectorOperations::Hash(dict_vec, array_hashes, array_size);
 				auto ahdata = FlatVector::GetData<hash_t>(array_hashes);
 
+				if (FIRST_HASH) {
+					hdata[ridx] = 0;
+				}
 				// Combine the hashes of the array
 				for (idx_t j = 0; j < array_size; j++) {
 					hdata[ridx] = CombineHashScalar(hdata[ridx], ahdata[j]);

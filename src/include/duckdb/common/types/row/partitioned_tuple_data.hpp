@@ -109,7 +109,8 @@ protected:
 	//! Compute the partition indices for this type of partitioning for the input DataChunk and store them in the
 	//! `partition_data` of the local state. If this type creates partitions on the fly (for, e.g., hive), this
 	//! function is also in charge of creating new partitions and mapping the input data to a partition index
-	virtual void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) {
+	virtual void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input,
+	                                     const SelectionVector &append_sel, const idx_t append_count) {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Compute partition indices from rows (similar to function above)

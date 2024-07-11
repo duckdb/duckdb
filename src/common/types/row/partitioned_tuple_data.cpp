@@ -50,7 +50,7 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 	const idx_t actual_append_count = append_count == DConstants::INVALID_INDEX ? input.size() : append_count;
 
 	// Compute partition indices and store them in state.partition_indices
-	ComputePartitionIndices(state, input);
+	ComputePartitionIndices(state, input, append_sel, actual_append_count);
 
 	// Build the selection vector for the partitions
 	BuildPartitionSel(state, append_sel, actual_append_count);
@@ -173,8 +173,7 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		for (idx_t i = 0; i < append_count; i++) {
-			const auto index = append_sel.get_index(i);
-			const auto &partition_index = partition_indices[index];
+			const auto &partition_index = partition_indices[i];
 			auto partition_entry = partition_entries.find(partition_index);
 			if (partition_entry == partition_entries.end()) {
 				partition_entries[partition_index] = list_entry_t(0, 1);
@@ -213,7 +212,7 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	auto &reverse_partition_sel = state.reverse_partition_sel;
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto index = append_sel.get_index(i);
-		const auto &partition_index = partition_indices[index];
+		const auto &partition_index = partition_indices[i];
 		auto &partition_offset = partition_entries[partition_index].offset;
 		reverse_partition_sel[index] = UnsafeNumericCast<sel_t>(partition_offset);
 		partition_sel[partition_offset++] = UnsafeNumericCast<sel_t>(index);

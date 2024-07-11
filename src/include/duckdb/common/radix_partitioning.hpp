@@ -125,7 +125,8 @@ protected:
 	//===--------------------------------------------------------------------===//
 	void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state,
 	                                   TupleDataPinProperties properties) const override;
-	void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) override;
+	void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input,
+	                             const SelectionVector &append_sel, const idx_t append_count) override;
 	void ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices) const override;
 	idx_t MaxPartitionIndex() const override {
 		return RadixPartitioning::NumberOfPartitions(radix_bits) - 1;
