@@ -125,9 +125,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		projection->children.push_back(std::move(node));
 		return std::move(projection);
 	} else {
-		return make_uniq<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types,
-		                                    op.column_ids, op.projection_ids, op.names, std::move(table_filters),
-		                                    op.estimated_cardinality, op.extra_info, std::move(op.parameters));
+		auto node = make_uniq<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types,
+		                                         op.column_ids, op.projection_ids, op.names, std::move(table_filters),
+		                                         op.estimated_cardinality, op.extra_info, std::move(op.parameters));
+		node->dynamic_filters = op.dynamic_filters;
+		return std::move(node);
 	}
 }
 

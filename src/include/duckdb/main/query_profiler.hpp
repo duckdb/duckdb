@@ -21,6 +21,7 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/profiling_node.hpp"
 
 #include <stack>
 
@@ -88,29 +89,14 @@ public:
 	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
-	// Recursive tree that mirrors the operator tree
-	struct TreeNode {
-		PhysicalOperatorType type;
-		string name;
-		ProfilingInfo profiling_info;
-		vector<unique_ptr<TreeNode>> children;
-		idx_t depth = 0;
-	};
-
-	// Holds the top level query info
-	struct QueryInfo {
-		string query;
-		ProfilingInfo settings;
-	};
-
 	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
 	void Propagate(QueryProfiler &qp);
 
-	using TreeMap = reference_map_t<const PhysicalOperator, reference<TreeNode>>;
+	using TreeMap = reference_map_t<const PhysicalOperator, reference<ProfilingNode>>;
 
 private:
-	unique_ptr<TreeNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
-	void Render(const TreeNode &node, std::ostream &str) const;
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
+	void Render(const ProfilingNode &node, std::ostream &str) const;
 
 public:
 	DUCKDB_API bool IsEnabled() const;
@@ -150,7 +136,12 @@ public:
 		return tree_map.size();
 	}
 
-	void Finalize(TreeNode &node);
+	void Finalize(ProfilingNode &node);
+
+	//! Return the root of the query tree
+	optional_ptr<ProfilingNode> GetRoot() {
+		return root.get();
+	}
 
 private:
 	ClientContext &context;
@@ -164,10 +155,7 @@ private:
 	bool query_requires_profiling;
 
 	//! The root of the query tree
-	unique_ptr<TreeNode> root;
-
-	//! The query info
-	unique_ptr<QueryInfo> query_info;
+	unique_ptr<ProfilingNode> root;
 
 	//! The query string
 	string query;

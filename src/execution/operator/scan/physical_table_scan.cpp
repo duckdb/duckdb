@@ -24,8 +24,11 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
 class TableScanGlobalSourceState : public GlobalSourceState {
 public:
 	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
+		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
+			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
+		}
 		if (op.function.init_global) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, op.table_filters.get());
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op));
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
 				max_threads = global_state->MaxThreads();
@@ -51,7 +54,12 @@ public:
 	unique_ptr<GlobalTableFunctionState> global_state;
 	bool in_out_final = false;
 	DataChunk input_chunk;
+	//! Combined table filters, if we have dynamic filters
+	unique_ptr<TableFilterSet> table_filters;
 
+	optional_ptr<TableFilterSet> GetTableFilters(const PhysicalTableScan &op) const {
+		return table_filters ? table_filters.get() : op.table_filters.get();
+	}
 	idx_t MaxThreads() override {
 		return max_threads;
 	}
@@ -62,7 +70,8 @@ public:
 	TableScanLocalSourceState(ExecutionContext &context, TableScanGlobalSourceState &gstate,
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, op.table_filters.get());
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
+			                             gstate.GetTableFilters(op));
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
