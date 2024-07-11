@@ -90,7 +90,7 @@ void HTTPState::WriteProfilingInformation(std::ostream &ss) {
 	constexpr idx_t TOTAL_BOX_WIDTH = 39;
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
-	ss << "││            HTTP Stats:            ││\n";
+	ss << "││" + QueryProfiler::DrawPadded("HTTPFS HTTP Stats", TOTAL_BOX_WIDTH - 4) + "││\n";
 	ss << "││                                   ││\n";
 	ss << "││" + QueryProfiler::DrawPadded(read, TOTAL_BOX_WIDTH - 4) + "││\n";
 	ss << "││" + QueryProfiler::DrawPadded(written, TOTAL_BOX_WIDTH - 4) + "││\n";
