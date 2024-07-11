@@ -220,7 +220,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		vector<shared_ptr<MetaPipeline>> children;
 		meta_pipeline->GetMetaPipelines(children, false, true);
 		for (auto &child1 : children) {
-			if (!child1->IsJoinBuild()) {
+			if (child1->Type() != MetaPipelineType::JOIN_BUILD) {
 				continue;
 			}
 			auto &child1_base = *child1->GetBasePipeline();
@@ -228,7 +228,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			D_ASSERT(child1_entry != event_map.end());
 
 			for (auto &child2 : children) {
-				if (child2->IsJoinBuild() || RefersToSameObject(*child1, *child2)) {
+				if (child2->Type() == MetaPipelineType::JOIN_BUILD || RefersToSameObject(*child1, *child2)) {
 					continue;
 				}
 				auto &child2_base = *child2->GetBasePipeline();

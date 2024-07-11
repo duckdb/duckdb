@@ -5,9 +5,8 @@
 namespace duckdb {
 
 MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, optional_ptr<PhysicalOperator> sink_p,
-                           bool is_join_build_p)
-    : executor(executor_p), state(state_p), sink(sink_p), is_join_build(is_join_build_p), recursive_cte(false),
-      next_batch_index(0) {
+                           MetaPipelineType type_p)
+    : executor(executor_p), state(state_p), sink(sink_p), type(type_p), recursive_cte(false), next_batch_index(0) {
 	CreatePipeline();
 }
 
@@ -53,8 +52,8 @@ optional_ptr<const vector<reference<Pipeline>>> MetaPipeline::GetDependencies(Pi
 	return it == dependencies.end() ? nullptr : &it->second;
 }
 
-bool MetaPipeline::IsJoinBuild() const {
-	return is_join_build;
+MetaPipelineType MetaPipeline::Type() const {
+	return type;
 }
 
 bool MetaPipeline::HasRecursiveCTE() const {
@@ -84,8 +83,8 @@ void MetaPipeline::Ready() const {
 	}
 }
 
-MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, bool is_join_build) {
-	children.push_back(make_shared_ptr<MetaPipeline>(executor, state, &op, is_join_build));
+MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type) {
+	children.push_back(make_shared_ptr<MetaPipeline>(executor, state, &op, type));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
 	current.AddDependency(child_meta_pipeline->GetBasePipeline());

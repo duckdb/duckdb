@@ -11,6 +11,11 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
+enum class MetaPipelineType : uint8_t {
+	REGULAR = 0,   //! The shared sink is regular
+	JOIN_BUILD = 1 //! The shared sink is a join build
+};
+
 namespace duckdb {
 
 //! MetaPipeline represents a set of pipelines that all have the same sink
@@ -27,7 +32,7 @@ class MetaPipeline : public enable_shared_from_this<MetaPipeline> {
 public:
 	//! Create a MetaPipeline with the given sink
 	MetaPipeline(Executor &executor, PipelineBuildState &state, optional_ptr<PhysicalOperator> sink,
-	             bool is_join_build = false);
+	             MetaPipelineType type = MetaPipelineType::REGULAR);
 
 public:
 	//! Get the Executor for this MetaPipeline
@@ -46,7 +51,7 @@ public:
 	//! Get the dependencies (within this MetaPipeline) of the given Pipeline
 	optional_ptr<const vector<reference<Pipeline>>> GetDependencies(Pipeline &dependant) const;
 	//! Whether the sink of this pipeline is a join build
-	bool IsJoinBuild() const;
+	MetaPipelineType Type() const;
 	//! Whether this MetaPipeline has a recursive CTE
 	bool HasRecursiveCTE() const;
 	//! Set the flag that this MetaPipeline is a recursive CTE pipeline
@@ -77,7 +82,8 @@ public:
 	//! where 'last_pipeline' is the last pipeline added before building out 'current'
 	void CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline &last_pipeline);
 	//! Create a MetaPipeline child that 'current' depends on
-	MetaPipeline &CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, bool is_join_build = false);
+	MetaPipeline &CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op,
+	                                      MetaPipelineType type = MetaPipelineType::REGULAR);
 
 private:
 	//! The executor for all MetaPipelines in the query plan
@@ -86,8 +92,8 @@ private:
 	PipelineBuildState &state;
 	//! The sink of all pipelines within this MetaPipeline
 	optional_ptr<PhysicalOperator> sink;
-	//! Whether the sink of this pipeline is a join build
-	bool is_join_build;
+	//! The type of this MetaPipeline (regular, join build)
+	MetaPipelineType type;
 	//! Whether this MetaPipeline is a the recursive pipeline of a recursive CTE
 	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink
