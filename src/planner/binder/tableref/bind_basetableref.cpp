@@ -134,7 +134,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				// something is wrong.
 				if (cte.materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 					throw BinderException(
-					    "There is a WITH item named \"%s\", but it cannot be references from this part of the query.",
+					    "There is a WITH item named \"%s\", but it cannot be referenced from this part of the query.",
 					    ref.table_name);
 				}
 
