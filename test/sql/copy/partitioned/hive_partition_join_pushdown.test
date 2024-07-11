@@ -35,7 +35,7 @@ WHERE partition>5 AND partition=(SELECT MAX(partition) FROM tbl)
 
 # multiple partitions
 statement ok
-CREATE TABLE tbl2 AS SELECT date '2000-01-01' + interval (i//2000) years AS part1, i%2 AS part2, i FROM range(10000) t(i)
+CREATE TABLE tbl2 AS SELECT (date '2000-01-01' + interval (i//2000) years)::DATE AS part1, i%2 AS part2, i FROM range(10000) t(i)
 
 statement ok
 COPY tbl2 TO '__TEST_DIR__/partition_join_pushdown_multi' (FORMAT parquet, PARTITION_BY (part1, part2))
@@ -46,7 +46,7 @@ SELECT COUNT(*), MIN(part1), MAX(part1), MIN(part2), MAX(part2), SUM(i)
 FROM '__TEST_DIR__/partition_join_pushdown_multi/**/*.parquet'
 WHERE part1=(SELECT MAX(part1) FROM tbl2) AND part2=(SELECT MAX(part2) FROM tbl2)
 ----
-1000	2004-01-01 00:00:00	2004-01-01 00:00:00	1	1	9000000
+1000	2004-01-01	2004-01-01	1	1	9000000
 
 # mix of static and join flters
 query IIIIII
@@ -54,7 +54,7 @@ SELECT COUNT(*), MIN(part2), MAX(part2), MIN(part1), MAX(part1), SUM(i)
 FROM '__TEST_DIR__/partition_join_pushdown_multi/**/*.parquet'
 WHERE part2=(SELECT MAX(part2) FROM tbl2) AND part1=date '2004-01-01'
 ----
-1000	1	1	2004-01-01 00:00:00	2004-01-01 00:00:00	9000000
+1000	1	1	2004-01-01	2004-01-01	9000000
 
 # only selecting a single column
 query I
