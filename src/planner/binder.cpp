@@ -18,10 +18,10 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/parser/tableref/delimgetref.hpp"
+#include "duckdb/planner/tableref/bound_delimgetref.hpp"
 
 #include <algorithm>
-#include <duckdb/parser/tableref/delimgetref.hpp>
-#include <duckdb/planner/tableref/bound_delimgetref.hpp>
 
 namespace duckdb {
 
