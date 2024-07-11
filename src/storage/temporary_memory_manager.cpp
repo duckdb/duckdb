@@ -121,7 +121,7 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 		auto upper_bound = MinValue<idx_t>(temporary_memory_state.GetRemainingSize(), query_max_memory);
 		const auto free_memory = memory_limit - (reservation - temporary_memory_state.GetReservation());
 		upper_bound = MinValue<idx_t>(upper_bound,
-		                              NumericCast<idx_t>(MAXIMUM_FREE_MEMORY_RATIO * NumericCast<double>(free_memory)));
+		                              NumericCast<idx_t>(MAXIMUM_FREE_MEMORY_RATIO * static_cast<double>(free_memory)));
 		upper_bound = MinValue<idx_t>(upper_bound, free_memory);
 
 		idx_t new_reservation;
@@ -171,15 +171,15 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 	for (auto &active_state : active_states) {
 		D_ASSERT(active_state.get().GetRemainingSize() != 0);
 		D_ASSERT(active_state.get().GetReservation() != 0);
-		siz[i] = MaxValue<double>(NumericCast<double>(active_state.get().GetRemainingSize()), 1);
-		res[i] = MaxValue<double>(NumericCast<double>(active_state.get().GetReservation()), 1);
-		pen[i] = NumericCast<double>(active_state.get().materialization_penalty.load());
+		siz[i] = MaxValue<double>(static_cast<double>(active_state.get().GetRemainingSize()), 1);
+		res[i] = MaxValue<double>(static_cast<double>(active_state.get().GetReservation()), 1);
+		pen[i] = static_cast<double>(active_state.get().materialization_penalty.load());
 		if (RefersToSameObject(active_state.get(), temporary_memory_state)) {
 			state_index = i;
 			// We can't actually reserve memory for all active operators, only for "temporary_memory_state"
 			// So, we're essentially computing how much of the remaining memory should go to "temporary_memory_state"
 			// We initialize it with its lower bound
-			res[i] = NumericCast<double>(lower_bound);
+			res[i] = static_cast<double>(lower_bound);
 		}
 		i++;
 	}
@@ -200,7 +200,7 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 			prod_res *= res[i];
 			mat_cost += pen[i] * (1 - res[i] / siz[i]); // Materialization cost: sum of (1 - throughput)
 		}
-		const double nd = NumericCast<double>(n); // n as double for convenience
+		const double nd = static_cast<double>(n); // n as double for convenience
 		const double tp_mult =                    // Throughput multiplier: 1 - geometric mean of throughputs
 		    1 - pow(prod_res / prod_siz, 1 / nd);
 
@@ -222,19 +222,19 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 			nonmax_count++;
 		}
 		// We will increase the reservation of every operator with a gradient less than the average gradient
-		const auto avg_of_nonmaxed = sum_of_nonmaxed / NumericCast<double>(nonmax_count);
+		const auto avg_of_nonmaxed = sum_of_nonmaxed / static_cast<double>(nonmax_count);
 
 		// This is how much memory we will distribute in this round
-		const auto iter_memory = NumericCast<idx_t>(NumericCast<double>(remaining_memory) /
-		                                            NumericCast<double>(optimization_iterations - opt_idx));
+		const auto iter_memory = NumericCast<idx_t>(static_cast<double>(remaining_memory) /
+		                                            static_cast<double>(optimization_iterations - opt_idx));
 		for (i = 0; i < n; i++) {
 			if (res[i] == siz[i] || der[i] > avg_of_nonmaxed) {
 				continue;
 			}
 			const auto delta = NumericCast<idx_t>(
-			    MinValue<double>(siz[i] - res[i], (der[i] / sum_of_nonmaxed) * NumericCast<double>(iter_memory)));
+			    MinValue<double>(siz[i] - res[i], (der[i] / sum_of_nonmaxed) * static_cast<double>(iter_memory)));
 			D_ASSERT(delta > 0 && delta <= remaining_memory);
-			res[i] += NumericCast<double>(delta);
+			res[i] += static_cast<double>(delta);
 			remaining_memory -= delta;
 		}
 	}
