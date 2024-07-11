@@ -389,7 +389,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		break;
 	}
 	if (!ref.duplicate_eliminated_columns.empty()) {
-		// Is this hacky?
 		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
 		comp_join.delim_flipped = ref.delim_flipped;

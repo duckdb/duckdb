@@ -9,10 +9,10 @@ string RelationTypeToString(RelationType type) {
 	switch (type) {
 	case RelationType::TABLE_RELATION:
 		return "TABLE_RELATION";
-	case RelationType::DELIMITER_GET_RELATION:
-		return "DELIMITER_GET_RELATION";
-	case RelationType::DELIMITER_JOIN_RELATION:
-		return "DELIMITER_JOIN_RELATION";
+	case RelationType::DELIM_GET_RELATION:
+		return "DELIM_GET_RELATION";
+	case RelationType::DELIM_JOIN_RELATION:
+		return "DELIM_JOIN_RELATION";
 	case RelationType::PROJECTION_RELATION:
 		return "PROJECTION_RELATION";
 	case RelationType::FILTER_RELATION:

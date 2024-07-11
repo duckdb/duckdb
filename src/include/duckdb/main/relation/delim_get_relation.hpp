@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/relation/delimiter_get_relation.hpp
+// duckdb/main/relation/delim_get_relation.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-class DelimiterGetRelation : public Relation {
+class DelimGetRelation : public Relation {
 public:
-	DUCKDB_API DelimiterGetRelation(const shared_ptr<ClientContext> &context, vector<LogicalType> chunk_types);
+	DUCKDB_API DelimGetRelation(const shared_ptr<ClientContext> &context, vector<LogicalType> chunk_types);
 
 	vector<LogicalType> chunk_types;
 	vector<ColumnDefinition> columns;
