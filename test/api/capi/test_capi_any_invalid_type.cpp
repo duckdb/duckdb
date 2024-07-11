@@ -167,10 +167,13 @@ TEST_CASE("Test data chunk creation with INVALID and ANY types", "[capi]") {
 	duckdb_destroy_logical_type(&invalid_type);
 }
 
+void DummyScalar(duckdb_function_info, duckdb_data_chunk, duckdb_vector) {
+}
+
 static duckdb_scalar_function DummyScalarFunction() {
 	auto function = duckdb_create_scalar_function();
 	duckdb_scalar_function_set_name(function, "hello");
-	duckdb_scalar_function_set_function(function, AddVariadicNumbersTogether);
+	duckdb_scalar_function_set_function(function, DummyScalar);
 	return function;
 }
 
@@ -211,12 +214,21 @@ TEST_CASE("Test scalar functions with INVALID and ANY types", "[capi]") {
 	duckdb_destroy_logical_type(&invalid_type);
 }
 
+void my_dummy_bind(duckdb_bind_info) {
+}
+
+void my_dummy_init(duckdb_init_info) {
+}
+
+void my_dummy_function(duckdb_function_info, duckdb_data_chunk) {
+}
+
 static duckdb_table_function DummyTableFunction() {
 	auto function = duckdb_create_table_function();
 	duckdb_table_function_set_name(function, "hello");
-	duckdb_table_function_set_bind(function, my_bind);
-	duckdb_table_function_set_init(function, my_init);
-	duckdb_table_function_set_function(function, my_function);
+	duckdb_table_function_set_bind(function, my_dummy_bind);
+	duckdb_table_function_set_init(function, my_dummy_init);
+	duckdb_table_function_set_function(function, my_dummy_function);
 	return function;
 }
 
