@@ -421,10 +421,10 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	const auto current_radix_bits = RadixPartitioning::RadixBits(partition_count);
 	D_ASSERT(current_radix_bits <= config.GetRadixBits());
 
-	auto block_size = BufferManager::GetBufferManager(context).GetBlockSize();
+	const auto block_size = BufferManager::GetBufferManager(context).GetBlockSize();
 	const auto row_size_per_partition =
 	    partitioned_data->Count() * partitioned_data->GetLayout().GetRowWidth() / partition_count;
-	if (row_size_per_partition > NumericCast<idx_t>(config.BLOCK_FILL_FACTOR * block_size)) {
+	if (row_size_per_partition > NumericCast<idx_t>(config.BLOCK_FILL_FACTOR * static_cast<double>(block_size))) {
 		// We crossed our block filling threshold, try to increment radix bits
 		config.SetRadixBits(current_radix_bits + config.REPARTITION_RADIX_BITS);
 	}

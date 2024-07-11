@@ -510,7 +510,7 @@ public:
 			total_size += sink_collection.SizeInBytes();
 			total_count += sink_collection.Count();
 		}
-		auto total_blocks = NumericCast<idx_t>((double(total_size) + block_size - 1) / block_size);
+		auto total_blocks = (total_size + block_size - 1) / block_size;
 		auto count_per_block = total_count / total_blocks;
 		auto blocks_per_vector = MaxValue<idx_t>(STANDARD_VECTOR_SIZE / count_per_block, 2);
 
@@ -1225,18 +1225,18 @@ double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &
 		return 100.0;
 	}
 
-	double num_partitions = RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits());
-	double partition_start = sink.hash_table->GetPartitionStart();
-	double partition_end = sink.hash_table->GetPartitionEnd();
+	auto num_partitions = static_cast<double>(RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits()));
+	auto partition_start = static_cast<double>(sink.hash_table->GetPartitionStart());
+	auto partition_end = static_cast<double>(sink.hash_table->GetPartitionEnd());
 
 	// This many partitions are fully done
-	auto progress = partition_start / double(num_partitions);
+	auto progress = partition_start / num_partitions;
 
-	double probe_chunk_done = gstate.probe_chunk_done;
-	double probe_chunk_count = gstate.probe_chunk_count;
+	auto probe_chunk_done = static_cast<double>(gstate.probe_chunk_done);
+	auto probe_chunk_count = static_cast<double>(gstate.probe_chunk_count);
 	if (probe_chunk_count != 0) {
 		// Progress of the current round of probing, weighed by the number of partitions
-		auto probe_progress = double(probe_chunk_done) / double(probe_chunk_count);
+		auto probe_progress = probe_chunk_done / probe_chunk_count;
 		// Add it to the progress, weighed by the number of partitions in the current round
 		progress += (partition_end - partition_start) / num_partitions * probe_progress;
 	}

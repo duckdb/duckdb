@@ -11,12 +11,12 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
+namespace duckdb {
+
 enum class MetaPipelineType : uint8_t {
 	REGULAR = 0,   //! The shared sink is regular
 	JOIN_BUILD = 1 //! The shared sink is a join build
 };
-
-namespace duckdb {
 
 //! MetaPipeline represents a set of pipelines that all have the same sink
 class MetaPipeline : public enable_shared_from_this<MetaPipeline> {
