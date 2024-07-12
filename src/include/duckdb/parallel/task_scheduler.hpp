@@ -81,7 +81,8 @@ public:
 
 	//! Get the number of the CPU on which the calling thread is currently executing.
 	//! Fallback to calling thread id if CPU number is not available.
-	static idx_t GetCurrentCPU();
+	//! Result do not need to be exact 'return 0' is a valid fallback strategy
+	static idx_t GetEstimatedCPUId();
 
 private:
 	void RelaunchThreadsInternal(int32_t n);
