@@ -1,6 +1,6 @@
 # name: test/sql/copy/partitioned/hive_partition_duplicate_name.test
 # description: Test partitioning names with duplicate keys
-# group: [parquet]
+# group: [partitioned]
 
 require parquet
 

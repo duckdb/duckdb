@@ -25,16 +25,17 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(idx_t table_index, const vector<str
 // Helper method to do Filter Pushdown into a MultiFileList
 bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
                       vector<unique_ptr<Expression>> &filters, vector<string> &expanded_files) {
-	unordered_map<string, column_t> column_map;
+	HivePartitioningFilterInfo filter_info;
 	for (idx_t i = 0; i < info.column_ids.size(); i++) {
 		if (!IsRowIdColumnId(info.column_ids[i])) {
-			column_map.insert({info.column_names[info.column_ids[i]], i});
+			filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
 		}
 	}
+	filter_info.hive_enabled = options.hive_partitioning;
+	filter_info.filename_enabled = options.filename;
 
 	auto start_files = expanded_files.size();
-	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, column_map, info,
-	                                         options.hive_partitioning, options.filename);
+	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, filter_info, info);
 
 	if (expanded_files.size() != start_files) {
 		return true;

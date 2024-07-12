@@ -21,6 +21,12 @@
 namespace duckdb {
 struct MultiFilePushdownInfo;
 
+struct HivePartitioningFilterInfo {
+	unordered_map<string, column_t> column_map;
+	bool hive_enabled;
+	bool filename_enabled;
+};
+
 class HivePartitioning {
 public:
 	//! Parse a filename that follows the hive partitioning scheme
@@ -30,9 +36,11 @@ public:
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
-	                                              unordered_map<string, column_t> &column_map,
-	                                              MultiFilePushdownInfo &info, bool hive_enabled,
-	                                              bool filename_enabled);
+	                                              const HivePartitioningFilterInfo &filter_info,
+	                                              MultiFilePushdownInfo &info);
+
+	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
+	                                 const LogicalType &type);
 };
 
 struct HivePartitionKey {

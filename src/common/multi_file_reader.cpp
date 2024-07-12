@@ -457,7 +457,7 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 			// partition count mismatch
 			return false;
 		}
-		for(auto &part : new_partitions) {
+		for (auto &part : new_partitions) {
 			auto entry = partitions.find(part.first);
 			if (entry == partitions.end()) {
 				// differing partitions between files
@@ -549,28 +549,13 @@ bool MultiFileReaderOptions::AnySet() {
 	return filename || hive_partitioning || union_by_name;
 }
 
-Value MultiFileReaderOptions::GetHivePartitionValue(const string &base, const string &entry,
+Value MultiFileReaderOptions::GetHivePartitionValue(const string &value, const string &key,
                                                     ClientContext &context) const {
-	Value value(base);
-	auto it = hive_types_schema.find(entry);
+	auto it = hive_types_schema.find(key);
 	if (it == hive_types_schema.end()) {
-		return value;
+		return HivePartitioning::GetValue(context, key, value, LogicalType::VARCHAR);
 	}
-
-	// Handle nulls
-	if (StringUtil::CIEquals(base, "NULL")) {
-		return Value(it->second);
-	}
-	if (it->second.id() != LogicalTypeId::VARCHAR && base.empty()) {
-		// empty strings are NULL for non-string types
-		return Value(it->second);
-	}
-
-	if (!value.TryCastAs(context, it->second)) {
-		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
-		                            StringUtil::Upper(it->first), it->second.ToString());
-	}
-	return value;
+	return HivePartitioning::GetValue(context, key, value, it->second);
 }
 
 } // namespace duckdb
