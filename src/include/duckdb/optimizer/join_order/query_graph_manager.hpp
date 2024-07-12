@@ -74,7 +74,7 @@ public:
 	ClientContext &context;
 
 	//! Extract the join relations, optimizing non-reoderable relations when encountered
-	bool Build(LogicalOperator &op);
+	bool Build(JoinOrderOptimizer &optimizer, LogicalOperator &op);
 
 	//! Reconstruct the logical plan using the plan found by the plan enumerator
 	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan);

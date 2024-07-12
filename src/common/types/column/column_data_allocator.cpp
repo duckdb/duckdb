@@ -61,7 +61,7 @@ BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 
 BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
-	auto max_size = MaxValue<idx_t>(size, Storage::DEFAULT_BLOCK_SIZE);
+	auto max_size = MaxValue<idx_t>(size, GetBufferManager().GetBlockSize());
 	BlockMetaData data;
 	data.size = 0;
 	data.capacity = NumericCast<uint32_t>(max_size);
@@ -225,8 +225,17 @@ void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {
-	return type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ? *alloc.allocator
-	                                                            : alloc.buffer_manager->GetBufferAllocator();
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return *alloc.allocator;
+	}
+	return alloc.buffer_manager->GetBufferAllocator();
+}
+
+BufferManager &ColumnDataAllocator::GetBufferManager() {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		throw InternalException("cannot obtain the buffer manager for in memory allocations");
+	}
+	return *alloc.buffer_manager;
 }
 
 void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, ChunkMetaData &chunk) {

@@ -13,18 +13,27 @@
 
 namespace duckdb {
 
+MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get)
+    : table_index(get.table_index), column_names(get.names), column_ids(get.column_ids), extra_info(get.extra_info) {
+}
+
+MultiFilePushdownInfo::MultiFilePushdownInfo(idx_t table_index, const vector<string> &column_names,
+                                             const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info)
+    : table_index(table_index), column_names(column_names), column_ids(column_ids), extra_info(extra_info) {
+}
+
 // Helper method to do Filter Pushdown into a MultiFileList
-bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
                       vector<unique_ptr<Expression>> &filters, vector<string> &expanded_files) {
 	unordered_map<string, column_t> column_map;
-	for (idx_t i = 0; i < get.column_ids.size(); i++) {
-		if (!IsRowIdColumnId(get.column_ids[i])) {
-			column_map.insert({get.names[get.column_ids[i]], i});
+	for (idx_t i = 0; i < info.column_ids.size(); i++) {
+		if (!IsRowIdColumnId(info.column_ids[i])) {
+			column_map.insert({info.column_names[info.column_ids[i]], i});
 		}
 	}
 
 	auto start_files = expanded_files.size();
-	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, column_map, get,
+	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, column_map, info,
 	                                         options.hive_partitioning, options.filename);
 
 	if (expanded_files.size() != start_files) {
@@ -32,6 +41,29 @@ bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &opti
 	}
 
 	return false;
+}
+
+bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &options, const vector<string> &names,
+                      const vector<LogicalType> &types, const vector<column_t> &column_ids,
+                      const TableFilterSet &filters, vector<string> &expanded_files) {
+	idx_t table_index = 0;
+	ExtraOperatorInfo extra_info;
+
+	// construct the pushdown info
+	MultiFilePushdownInfo info(table_index, names, column_ids, extra_info);
+
+	// construct the set of expressions from the table filters
+	vector<unique_ptr<Expression>> filter_expressions;
+	for (auto &entry : filters.filters) {
+		auto column_idx = column_ids[entry.first];
+		auto column_ref =
+		    make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.first));
+		auto filter_expr = entry.second->ToExpression(*column_ref);
+		filter_expressions.push_back(std::move(filter_expr));
+	}
+
+	// call the original PushdownInternal method
+	return PushdownInternal(context, options, info, filter_expressions, expanded_files);
 }
 
 //===--------------------------------------------------------------------===//
@@ -124,8 +156,17 @@ bool MultiFileList::Scan(MultiFileListScanData &iterator, string &result_file) {
 }
 
 unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &context,
-                                                               const MultiFileReaderOptions &options, LogicalGet &get,
+                                                               const MultiFileReaderOptions &options,
+                                                               MultiFilePushdownInfo &info,
                                                                vector<unique_ptr<Expression>> &filters) {
+	// By default the filter pushdown into a multifilelist does nothing
+	return nullptr;
+}
+
+unique_ptr<MultiFileList>
+MultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+                                     const vector<string> &names, const vector<LogicalType> &types,
+                                     const vector<column_t> &column_ids, TableFilterSet &filters) const {
 	// By default the filter pushdown into a multifilelist does nothing
 	return nullptr;
 }
@@ -151,7 +192,7 @@ SimpleMultiFileList::SimpleMultiFileList(vector<string> paths_p)
 
 unique_ptr<MultiFileList> SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
                                                                      const MultiFileReaderOptions &options,
-                                                                     LogicalGet &get,
+                                                                     MultiFilePushdownInfo &info,
                                                                      vector<unique_ptr<Expression>> &filters) {
 	if (!options.hive_partitioning && !options.filename) {
 		return nullptr;
@@ -159,8 +200,26 @@ unique_ptr<MultiFileList> SimpleMultiFileList::ComplexFilterPushdown(ClientConte
 
 	// FIXME: don't copy list until first file is filtered
 	auto file_copy = paths;
-	auto res = PushdownInternal(context_p, options, get, filters, file_copy);
+	auto res = PushdownInternal(context_p, options, info, filters, file_copy);
 
+	if (res) {
+		return make_uniq<SimpleMultiFileList>(file_copy);
+	}
+
+	return nullptr;
+}
+
+unique_ptr<MultiFileList>
+SimpleMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+                                           const vector<string> &names, const vector<LogicalType> &types,
+                                           const vector<column_t> &column_ids, TableFilterSet &filters) const {
+	if (!options.hive_partitioning && !options.filename) {
+		return nullptr;
+	}
+
+	// FIXME: don't copy list until first file is filtered
+	auto file_copy = paths;
+	auto res = PushdownInternal(context, options, names, types, column_ids, filters, file_copy);
 	if (res) {
 		return make_uniq<SimpleMultiFileList>(file_copy);
 	}
@@ -203,21 +262,20 @@ GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> pa
 
 unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
                                                                    const MultiFileReaderOptions &options,
-                                                                   LogicalGet &get,
+                                                                   MultiFilePushdownInfo &info,
                                                                    vector<unique_ptr<Expression>> &filters) {
 	lock_guard<mutex> lck(lock);
 
 	// Expand all
 	// FIXME: lazy expansion
 	// FIXME: push down filters into glob
-	while (ExpandPathInternal()) {
+	while (ExpandNextPath()) {
 	}
 
 	if (!options.hive_partitioning && !options.filename) {
 		return nullptr;
 	}
-	auto res = PushdownInternal(context, options, get, filters, expanded_files);
-
+	auto res = PushdownInternal(context, options, info, filters, expanded_files);
 	if (res) {
 		return make_uniq<SimpleMultiFileList>(expanded_files);
 	}
@@ -225,16 +283,40 @@ unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext
 	return nullptr;
 }
 
+unique_ptr<MultiFileList>
+GlobMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+                                         const vector<string> &names, const vector<LogicalType> &types,
+                                         const vector<column_t> &column_ids, TableFilterSet &filters) const {
+	if (!options.hive_partitioning && !options.filename) {
+		return nullptr;
+	}
+	lock_guard<mutex> lck(lock);
+
+	// Expand all paths into a copy
+	// FIXME: lazy expansion and push filters into glob
+	idx_t path_index = current_path;
+	auto file_list = expanded_files;
+	while (ExpandPathInternal(path_index, file_list)) {
+	}
+
+	auto res = PushdownInternal(context, options, names, types, column_ids, filters, file_list);
+	if (res) {
+		return make_uniq<SimpleMultiFileList>(file_list);
+	}
+
+	return nullptr;
+}
+
 vector<string> GlobMultiFileList::GetAllFiles() {
 	lock_guard<mutex> lck(lock);
-	while (ExpandPathInternal()) {
+	while (ExpandNextPath()) {
 	}
 	return expanded_files;
 }
 
 idx_t GlobMultiFileList::GetTotalFileCount() {
 	lock_guard<mutex> lck(lock);
-	while (ExpandPathInternal()) {
+	while (ExpandNextPath()) {
 	}
 	return expanded_files.size();
 }
@@ -259,7 +341,7 @@ string GlobMultiFileList::GetFile(idx_t i) {
 
 string GlobMultiFileList::GetFileInternal(idx_t i) {
 	while (expanded_files.size() <= i) {
-		if (!ExpandPathInternal()) {
+		if (!ExpandNextPath()) {
 			return "";
 		}
 	}
@@ -267,22 +349,25 @@ string GlobMultiFileList::GetFileInternal(idx_t i) {
 	return expanded_files[i];
 }
 
-bool GlobMultiFileList::ExpandPathInternal() {
-	if (IsFullyExpanded()) {
+bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<string> &result) const {
+	if (current_path >= paths.size()) {
 		return false;
 	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto glob_files = fs.GlobFiles(paths[current_path], context, glob_options);
 	std::sort(glob_files.begin(), glob_files.end());
-	expanded_files.insert(expanded_files.end(), glob_files.begin(), glob_files.end());
+	result.insert(result.end(), glob_files.begin(), glob_files.end());
 
 	current_path++;
-
 	return true;
 }
 
-bool GlobMultiFileList::IsFullyExpanded() {
+bool GlobMultiFileList::ExpandNextPath() {
+	return ExpandPathInternal(current_path, expanded_files);
+}
+
+bool GlobMultiFileList::IsFullyExpanded() const {
 	return current_path == paths.size();
 }
 

@@ -39,12 +39,13 @@ public:
 	void BlockSink(const InterruptState &blocked_sink, idx_t batch);
 
 	bool ShouldBlockBatch(idx_t batch);
-	bool ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
+	StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 	void UpdateMinBatchIndex(idx_t min_batch_index);
 	bool IsMinimumBatchIndex(lock_guard<mutex> &lock, idx_t batch);
 	void CompleteBatch(idx_t batch);
 	bool BufferIsEmpty();
+	void UnblockSinks() override;
 
 	inline idx_t ReadQueueCapacity() const {
 		return read_queue_capacity;
@@ -55,7 +56,6 @@ public:
 
 private:
 	void ResetReplenishState();
-	void UnblockSinks();
 	void MoveCompletedBatches(lock_guard<mutex> &lock);
 
 private:

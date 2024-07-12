@@ -16,6 +16,13 @@
 #include <queue>
 #endif
 
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__GNUC__)
+#include <sched.h>
+#include <unistd.h>
+#endif
+
 namespace duckdb {
 
 struct SchedulerThread {
@@ -295,6 +302,28 @@ void TaskScheduler::Signal(idx_t n) {
 void TaskScheduler::YieldThread() {
 #ifndef DUCKDB_NO_THREADS
 	std::this_thread::yield();
+#endif
+}
+
+idx_t TaskScheduler::GetCurrentCPU() {
+	// this code comes from jemalloc
+#if defined(_WIN32)
+	return (idx_t)GetCurrentProcessorNumber();
+#elif defined(_GNU_SOURCE)
+	auto cpu = sched_getcpu();
+	if (cpu < 0) {
+		// fallback to thread id
+		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+	}
+	return (idx_t)cpu;
+#elif defined(__aarch64__) && defined(__APPLE__)
+	/* Other oses most likely use tpidr_el0 instead */
+	uintptr_t c;
+	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
+	return (idx_t)(c & (1 << 3) - 1);
+#else
+	// fallback to thread id
+	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
 #endif
 }
 
