@@ -14,6 +14,7 @@
 
 #undef CreateDirectory
 #undef MoveFile
+#undef CopyFile
 #undef RemoveDirectory
 
 #endif
