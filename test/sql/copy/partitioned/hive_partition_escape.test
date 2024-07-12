@@ -1,6 +1,6 @@
 # name: test/sql/copy/partitioned/hive_partition_escape.test
 # description: Test escaping during hive partition read/write
-# group: [parquet]
+# group: [partitioned]
 
 require parquet
 
