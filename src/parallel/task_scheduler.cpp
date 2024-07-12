@@ -306,6 +306,9 @@ void TaskScheduler::YieldThread() {
 }
 
 idx_t TaskScheduler::GetCurrentCPU() {
+#if defined(EMSCRIPTEN)
+	return 1;
+#else
 	// this code comes from jemalloc
 #if defined(_WIN32)
 	return (idx_t)GetCurrentProcessorNumber();
@@ -324,6 +327,7 @@ idx_t TaskScheduler::GetCurrentCPU() {
 #else
 	// fallback to thread id
 	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#endif
 #endif
 }
 
