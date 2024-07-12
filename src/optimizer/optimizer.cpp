@@ -8,12 +8,14 @@
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
+#include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
+#include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -22,7 +24,6 @@
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
@@ -111,7 +112,15 @@ void Optimizer::RunBuiltInOptimizers() {
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
 		FilterPushdown filter_pushdown(*this);
+		unordered_set<idx_t> top_bindings;
+		filter_pushdown.CheckMarkToSemi(*plan, top_bindings);
 		plan = filter_pushdown.Rewrite(std::move(plan));
+	});
+
+	// derive and push filters into materialized CTEs
+	RunOptimizer(OptimizerType::CTE_FILTER_PUSHER, [&]() {
+		CTEFilterPusher cte_filter_pusher(*this);
+		plan = cte_filter_pusher.Optimize(std::move(plan));
 	});
 
 	RunOptimizer(OptimizerType::REGEX_RANGE, [&]() {

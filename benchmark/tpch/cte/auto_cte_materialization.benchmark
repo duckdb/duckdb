@@ -1,0 +1,31 @@
+# name: benchmark/tpch/cte/auto_cte_materialization.benchmark
+# description: Benchmark to check if automatic CTE materialization is working
+# group: [cte]
+
+name Automatic CTE materialization
+group cte
+
+require tpch
+
+# create the CSV file
+load
+CALL dbgen(sf=1);
+
+run
+WITH my_cte AS (
+    SELECT
+        l_returnflag,
+        l_linestatus,
+        sum(l_quantity) AS sum_qty
+    FROM
+        lineitem
+    GROUP BY
+        l_returnflag,
+        l_linestatus
+)
+SELECT
+    (SELECT sum_qty FROM my_cte WHERE l_returnflag = 'A') +
+    (SELECT sum_qty FROM my_cte WHERE l_returnflag = 'R');
+
+result I
+75453860.00
