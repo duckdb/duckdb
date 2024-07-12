@@ -26,7 +26,7 @@ public:
 
 	unique_ptr<SQLStatement> stmt;
 	ExplainType explain_type;
-	ExplainFormat explain_format;
+	ExplainFormat explain_format = ExplainFormat::DEFAULT;
 
 protected:
 	ExplainStatement(const ExplainStatement &other);

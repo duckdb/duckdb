@@ -10,7 +10,8 @@ ExplainStatement::ExplainStatement(unique_ptr<SQLStatement> stmt, ExplainType ex
 }
 
 ExplainStatement::ExplainStatement(const ExplainStatement &other)
-    : SQLStatement(other), stmt(other.stmt->Copy()), explain_type(other.explain_type) {
+    : SQLStatement(other), stmt(other.stmt->Copy()), explain_type(other.explain_type),
+      explain_format(other.explain_format) {
 }
 
 unique_ptr<SQLStatement> ExplainStatement::Copy() const {
