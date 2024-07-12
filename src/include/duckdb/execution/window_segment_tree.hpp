@@ -48,7 +48,8 @@ public:
 	//	Build
 	virtual unique_ptr<WindowAggregatorState> GetGlobalState(idx_t group_count,
 	                                                         const ValidityMask &partition_mask) const;
-	virtual void Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered);
+	virtual void Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, idx_t input_idx,
+	                  optional_ptr<SelectionVector> filter_sel, idx_t filtered);
 	virtual void Finalize(WindowAggregatorState &gsink, const FrameStats &stats);
 
 	//	Probe
@@ -89,7 +90,8 @@ public:
 
 	unique_ptr<WindowAggregatorState> GetGlobalState(idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
-	void Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered) override;
+	void Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, idx_t input_idx,
+	          optional_ptr<SelectionVector> filter_sel, idx_t filtered) override;
 	void Finalize(WindowAggregatorState &gsink, const FrameStats &stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
@@ -145,7 +147,8 @@ public:
 	//	Build
 	unique_ptr<WindowAggregatorState> GetGlobalState(idx_t group_count,
 	                                                 const ValidityMask &partition_mask) const override;
-	void Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered) override;
+	void Sink(WindowAggregatorState &gsink, DataChunk &arg_chunk, idx_t input_idx,
+	          optional_ptr<SelectionVector> filter_sel, idx_t filtered) override;
 	void Finalize(WindowAggregatorState &gsink, const FrameStats &stats) override;
 
 	//	Evaluate

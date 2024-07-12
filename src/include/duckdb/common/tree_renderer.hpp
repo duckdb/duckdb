@@ -10,33 +10,14 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiling_node.hpp"
+#include "duckdb/common/render_tree.hpp"
 
 namespace duckdb {
 class LogicalOperator;
 class PhysicalOperator;
 class Pipeline;
 struct PipelineRenderNode;
-
-struct RenderTreeNode {
-	string name;
-	string extra_text;
-};
-
-struct RenderTree {
-	RenderTree(idx_t width, idx_t height);
-
-	unique_ptr<unique_ptr<RenderTreeNode>[]> nodes;
-	idx_t width;
-	idx_t height;
-
-public:
-	RenderTreeNode *GetNode(idx_t x, idx_t y);
-	void SetNode(idx_t x, idx_t y, unique_ptr<RenderTreeNode> node);
-	bool HasNode(idx_t x, idx_t y);
-
-	idx_t GetPosition(idx_t x, idx_t y);
-};
 
 struct TreeRendererConfig {
 	void EnableDetailed() {
@@ -112,23 +93,11 @@ public:
 	}
 
 private:
-	unique_ptr<RenderTree> CreateTree(const LogicalOperator &op);
-	unique_ptr<RenderTree> CreateTree(const PhysicalOperator &op);
-	unique_ptr<RenderTree> CreateTree(const ProfilingNode &op);
-	unique_ptr<RenderTree> CreateTree(const Pipeline &op);
-
-	string ExtraInfoSeparator();
-	unique_ptr<RenderTreeNode> CreateRenderNode(string name, string extra_info);
-	unique_ptr<RenderTreeNode> CreateNode(const LogicalOperator &op);
-	unique_ptr<RenderTreeNode> CreateNode(const PhysicalOperator &op);
-	unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op);
-	unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op);
-
-private:
 	//! The configuration used for rendering
 	TreeRendererConfig config;
 
 private:
+	string ExtraInfoSeparator();
 	void RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y);
 	void RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y);
 	void RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y);
@@ -138,12 +107,6 @@ private:
 	string RemovePadding(string l);
 	void SplitUpExtraInfo(const string &extra_info, vector<string> &result);
 	void SplitStringBuffer(const string &source, vector<string> &result);
-
-	template <class T>
-	idx_t CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y);
-
-	template <class T>
-	unique_ptr<RenderTree> CreateRenderTree(const T &op);
 };
 
 } // namespace duckdb

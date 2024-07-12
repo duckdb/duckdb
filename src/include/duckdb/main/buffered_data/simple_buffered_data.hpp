@@ -31,14 +31,12 @@ public:
 	void Append(const DataChunk &chunk);
 	void BlockSink(const InterruptState &blocked_sink);
 	bool BufferIsFull();
-	bool ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
+	void UnblockSinks() override;
+	StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 	inline idx_t BufferSize() const {
 		return buffer_size;
 	}
-
-private:
-	void UnblockSinks();
 
 private:
 	//! Our handles to reschedule the blocked sink tasks

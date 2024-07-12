@@ -92,6 +92,7 @@ append(appender::Appender, ::Union{Missing, Nothing}) = duckdb_append_null(appen
 append(appender::Appender, val::AbstractString) = duckdb_append_varchar(appender.handle, val);
 append(appender::Appender, val::Base.UUID) = append(appender, string(val));
 append(appender::Appender, val::Vector{UInt8}) = duckdb_append_blob(appender.handle, val, sizeof(val));
+append(appender::Appender, val::FixedDecimal) = append(appender, string(val));
 # append(appender::Appender, val::WeakRefString{UInt8}) = duckdb_append_varchar(stmt.handle, i, val.ptr, val.len);
 append(appender::Appender, val::Date) =
     duckdb_append_date(appender.handle, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS);

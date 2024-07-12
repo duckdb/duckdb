@@ -182,12 +182,14 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 
 		// now assign sort keys
 		for (idx_t i = 0; i < assign_count; i++) {
-			const auto sidx = sdata.sel->get_index(assign_sel[i]);
-			bool is_null = !idata.validity.RowIsValid(assign_sel[i]);
-			auto &state = *states[sidx];
+			const auto state_idx = sdata.sel->get_index(assign_sel[i]);
+			auto &state = *states[state_idx];
 			if (!LAST && state.is_set) {
 				continue;
 			}
+
+			const auto idx = idata.sel->get_index(assign_sel[i]);
+			bool is_null = !idata.validity.RowIsValid(idx);
 			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE>(state, input_data, sort_key_data[i],
 			                                                                    is_null);
 		}

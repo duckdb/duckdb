@@ -35,12 +35,10 @@ public:
 
 private:
 	ProfilingInfo profiling_info;
-	vector<unique_ptr<ProfilingNode>> children;
-
-	friend class TreeChildrenIterator;
 
 public:
 	idx_t depth = 0;
+	vector<unique_ptr<ProfilingNode>> children;
 	ProfilingNodeType node_type = ProfilingNodeType::OPERATOR;
 
 public:
