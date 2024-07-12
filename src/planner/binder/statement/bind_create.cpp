@@ -572,7 +572,7 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	create_index_info->column_ids = column_ids;
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
-	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	// the logical CREATE INDEX also needs all fields to scan the referenced table
 	auto result = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table);

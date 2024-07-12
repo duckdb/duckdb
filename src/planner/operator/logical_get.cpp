@@ -62,7 +62,15 @@ void LogicalGet::AddColumnId(column_t column_id) {
 	column_ids.push_back(column_id);
 }
 
-vector<column_t> &LogicalGet::GetColumnIds() {
+void LogicalGet::ClearColumnIds() {
+	column_ids.clear();
+}
+
+const vector<column_t> &LogicalGet::GetColumnIds() const {
+	return column_ids;
+}
+
+vector<column_t> &LogicalGet::GetMutableColumnIds() {
 	return column_ids;
 }
 

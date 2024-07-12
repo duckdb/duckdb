@@ -63,7 +63,9 @@ public:
 public:
 	void SetColumnIds(vector<column_t> &&column_ids);
 	void AddColumnId(column_t column_id);
-	vector<column_t> &GetColumnIds();
+	void ClearColumnIds();
+	const vector<column_t> &GetColumnIds() const;
+	vector<column_t> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 

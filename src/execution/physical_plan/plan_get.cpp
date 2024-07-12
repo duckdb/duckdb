@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, vector<column_t> &column_ids) {
+unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, const vector<column_t> &column_ids) {
 	// create the table filter map
 	auto table_filter_set = make_uniq<TableFilterSet>();
 	for (auto &table_filter : table_filters.filters) {
