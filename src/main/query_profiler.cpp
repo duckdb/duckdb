@@ -33,8 +33,20 @@ bool QueryProfiler::IsDetailedEnabled() const {
 	return is_explain_analyze ? false : ClientConfig::GetConfig(context).enable_detailed_profiling;
 }
 
-ProfilerPrintFormat QueryProfiler::GetPrintFormat() const {
-	return ClientConfig::GetConfig(context).profiler_print_format;
+ProfilerPrintFormat QueryProfiler::GetPrintFormat(ExplainFormat format) const {
+	auto print_format = ClientConfig::GetConfig(context).profiler_print_format;
+	if (format == ExplainFormat::DEFAULT) {
+		return print_format;
+	}
+	switch (format) {
+	case ExplainFormat::TEXT:
+		return ProfilerPrintFormat::QUERY_TREE;
+	case ExplainFormat::JSON:
+		return ProfilerPrintFormat::JSON;
+	default:
+		throw NotImplementedException("No mapping from ExplainFormat::%s to ProfilerPrintFormat",
+		                              EnumUtil::ToString(format));
+	}
 }
 
 bool QueryProfiler::PrintOptimizerOutput() const {
@@ -183,8 +195,8 @@ void QueryProfiler::EndQuery() {
 	this->is_explain_analyze = false;
 }
 
-string QueryProfiler::ToString() const {
-	const auto format = GetPrintFormat();
+string QueryProfiler::ToString(ExplainFormat explain_format) const {
+	const auto format = GetPrintFormat(explain_format);
 	switch (format) {
 	case ProfilerPrintFormat::QUERY_TREE:
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
