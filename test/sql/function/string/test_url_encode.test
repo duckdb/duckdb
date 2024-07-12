@@ -31,3 +31,9 @@ query IIII
 SELECT url_decode('%'), url_decode('%5'), url_decode('%X'), url_decode('%%')
 ----
 %	%5	%X	%%
+
+# check invalid UTF8
+statement error
+select url_decode('%FF%FF%FF');
+----
+decoded value is invalid UTF8
