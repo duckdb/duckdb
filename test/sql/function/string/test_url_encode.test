@@ -25,3 +25,9 @@ query I
 SELECT COUNT(*) from range(1000) t(n) WHERE url_decode(url_encode(chr(n::INT))) = chr(n::INT)
 ----
 1000
+
+# partial escapes and invalid escapes are included as literals
+query IIII
+SELECT url_decode('%'), url_decode('%5'), url_decode('%X'), url_decode('%%')
+----
+%	%5	%X	%%

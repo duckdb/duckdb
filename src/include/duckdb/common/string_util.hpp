@@ -139,6 +139,8 @@ public:
 
 	//! Encode special URL characters in a string
 	DUCKDB_API static string URLEncode(const string &str, bool encode_slash = true);
+	DUCKDB_API static idx_t URLEncodeSize(const char *input, idx_t input_size, bool encode_slash = true);
+	DUCKDB_API static void URLEncodeBuffer(const char *input, idx_t input_size, char *output, bool encode_slash = true);
 	//! Decode URL escape sequences (e.g. %20) in a string
 	DUCKDB_API static string URLDecode(const string &str, bool plus_to_space = false);
 

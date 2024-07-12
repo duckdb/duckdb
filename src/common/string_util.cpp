@@ -554,29 +554,57 @@ string StringUtil::GetFilePath(const string &file_path) {
 	return file_path.substr(0, pos + 1);
 }
 
-string StringUtil::URLEncode(const string &input, bool encode_slash) {
+struct URLEncodeLength {
+	using RESULT_TYPE = idx_t;
+
+	static void ProcessCharacter(idx_t &result, char ) {
+		result++;
+	}
+};
+
+struct URLEncodeOperator {
+	using RESULT_TYPE = char*;
+
+	static void ProcessCharacter(char *&result, char c) {
+		*result = c;
+		result++;
+	}
+};
+
+template<class OP>
+void URLEncodeInternal(const char *input, idx_t input_size, typename OP::RESULT_TYPE &result, bool encode_slash) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-	static const char *hex_digit = "0123456789ABCDEF";
-	string result;
-	result.reserve(input.size());
-	for (idx_t i = 0; i < input.length(); i++) {
+	static const char *HEX_DIGIT = "0123456789ABCDEF";
+	for (idx_t i = 0; i < input_size; i++) {
 		char ch = input[i];
 		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
 		    ch == '-' || ch == '~' || ch == '.') {
-			result += ch;
-		} else if (ch == '/') {
-			if (encode_slash) {
-				result += "%2F";
-			} else {
-				result += ch;
-			}
+			OP::ProcessCharacter(result, ch);
+		} else if (ch == '/' && !encode_slash) {
+			OP::ProcessCharacter(result, ch);
 		} else {
-			result += "%";
-			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
-			result += hex_digit[static_cast<unsigned char>(ch) & 15];
+			OP::ProcessCharacter(result, '%');
+			OP::ProcessCharacter(result, HEX_DIGIT[static_cast<unsigned char>(ch) >> 4]);
+			OP::ProcessCharacter(result, HEX_DIGIT[static_cast<unsigned char>(ch) & 15]);
 		}
 	}
-	return result;
+}
+
+idx_t StringUtil::URLEncodeSize(const char *input, idx_t input_size, bool encode_slash) {
+	idx_t result_length = 0;
+	URLEncodeInternal<URLEncodeLength>(input, input_size, result_length, encode_slash);
+	return result_length;
+}
+
+void StringUtil::URLEncodeBuffer(const char *input, idx_t input_size, char *output, bool encode_slash) {
+	URLEncodeInternal<URLEncodeOperator>(input, input_size, output, encode_slash);
+}
+
+string StringUtil::URLEncode(const string &input, bool encode_slash) {
+	idx_t result_size = URLEncodeSize(input.c_str(), input.size(), encode_slash);
+	unique_array<char> result_data = make_uniq_array<char>(result_size);
+	URLEncodeBuffer(input.c_str(), input.size(), result_data.get(), encode_slash);
+	return string(result_data.get(), result_size);
 }
 
 string StringUtil::URLDecode(const string &input, bool plus_to_space) {
