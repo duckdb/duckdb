@@ -18,10 +18,6 @@
 #include <iostream>
 #include <sstream>
 
-namespace duckdb_re2 {
-class RE2;
-} // namespace duckdb_re2
-
 namespace duckdb {
 struct MultiFilePushdownInfo;
 
@@ -29,7 +25,6 @@ class HivePartitioning {
 public:
 	//! Parse a filename that follows the hive partitioning scheme
 	DUCKDB_API static std::map<string, string> Parse(const string &filename);
-	DUCKDB_API static std::map<string, string> Parse(const string &filename, duckdb_re2::RE2 &regex);
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
@@ -38,9 +33,6 @@ public:
 	                                              unordered_map<string, column_t> &column_map,
 	                                              MultiFilePushdownInfo &info, bool hive_enabled,
 	                                              bool filename_enabled);
-
-	//! Returns the compiled regex pattern to match hive partitions
-	DUCKDB_API static const string &RegexString();
 };
 
 struct HivePartitionKey {

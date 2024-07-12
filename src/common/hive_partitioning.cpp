@@ -9,13 +9,12 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file_list.hpp"
-#include "re2/re2.h"
 
 namespace duckdb {
 
 static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
                                                             unordered_map<string, column_t> &column_map,
-                                                            duckdb_re2::RE2 &compiled_regex, bool filename_col,
+                                                            bool filename_col,
                                                             bool hive_partition_cols) {
 	unordered_map<column_t, string> result;
 
@@ -27,7 +26,7 @@ static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
 	}
 
 	if (hive_partition_cols) {
-		auto partitions = HivePartitioning::Parse(filename, compiled_regex);
+		auto partitions = HivePartitioning::Parse(filename);
 		for (auto &partition : partitions) {
 			auto lookup_column_id = column_map.find(partition.first);
 			if (lookup_column_id != column_map.end()) {
@@ -65,26 +64,35 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 // 	- s3://bucket/var1=value1/bla/bla/var2=value2
 //  - http(s)://domain(:port)/lala/kasdl/var1=value1/?not-a-var=not-a-value
 //  - folder/folder/folder/../var1=value1/etc/.//var2=value2
-const string &HivePartitioning::RegexString() {
-	static string REGEX = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]*)";
-	return REGEX;
-}
-
-std::map<string, string> HivePartitioning::Parse(const string &filename, duckdb_re2::RE2 &regex) {
+std::map<string, string> HivePartitioning::Parse(const string &filename) {
+	idx_t partition_start = 0;
+	idx_t equality_sign = 0;
+	bool candidate_partition = true;
 	std::map<string, string> result;
-	duckdb_re2::StringPiece input(filename); // Wrap a StringPiece around it
-
-	string var;
-	string value;
-	while (RE2::FindAndConsume(&input, regex, &var, &value)) {
-		result.insert(std::pair<string, string>(var, value));
+	for(idx_t c = 0; c < filename.size(); c++) {
+		if (filename[c] == '?' || filename[c] == '\n') {
+			// get parameter or newline - not a partition
+			candidate_partition = false;
+		}
+		if (filename[c] == '\\' || filename[c] == '/') {
+			// separator
+			if (candidate_partition && equality_sign > partition_start) {
+				// we found a partition with an equality sign
+				string key = filename.substr(partition_start, equality_sign - partition_start);
+				string value = filename.substr(equality_sign + 1, c - equality_sign - 1);
+				result.insert(make_pair(std::move(key), std::move(value)));
+			}
+			partition_start = c + 1;
+			candidate_partition = true;
+		} else if (filename[c] == '=') {
+			if (equality_sign > partition_start) {
+				// multiple equality signs - not a partition
+				candidate_partition = false;
+			}
+			equality_sign = c;
+		}
 	}
 	return result;
-}
-
-std::map<string, string> HivePartitioning::Parse(const string &filename) {
-	duckdb_re2::RE2 regex(RegexString());
-	return Parse(filename, regex);
 }
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
@@ -98,7 +106,6 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
 	unordered_set<idx_t> filters_applied_to_files;
-	duckdb_re2::RE2 regex(RegexString());
 	auto table_index = info.table_index;
 
 	if ((!filename_enabled && !hive_enabled) || filters.empty()) {
@@ -108,7 +115,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	for (idx_t i = 0; i < files.size(); i++) {
 		auto &file = files[i];
 		bool should_prune_file = false;
-		auto known_values = GetKnownColumnValues(file, column_map, regex, filename_enabled, hive_enabled);
+		auto known_values = GetKnownColumnValues(file, column_map, filename_enabled, hive_enabled);
 
 		FilterCombiner combiner(context);
 
