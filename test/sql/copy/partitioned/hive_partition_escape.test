@@ -23,11 +23,11 @@ INSERT INTO weird_tbl (key) VALUES
 
 
 statement ok
-COPY weird_tbl TO 'escaped_partitions' (FORMAT PARQUET, PARTITION_BY(key))
+COPY weird_tbl TO '__TEST_DIR__/escaped_partitions' (FORMAT PARQUET, PARTITION_BY(key))
 
 query II
 select key, COUNT(*)
-from parquet_scan('escaped_partitions/**/*.parquet')
+from parquet_scan('__TEST_DIR__/escaped_partitions/**/*.parquet')
 GROUP BY ALL
 ORDER BY ALL
 ----
@@ -44,12 +44,12 @@ statement ok
 ALTER TABLE weird_tbl RENAME COLUMN key TO "=/ \\/"
 
 statement ok
-COPY weird_tbl TO 'escaped_partitions_names' (FORMAT PARQUET, PARTITION_BY("=/ \\/"))
+COPY weird_tbl TO '__TEST_DIR__/escaped_partitions_names' (FORMAT PARQUET, PARTITION_BY("=/ \\/"))
 
 
 query II
 select "=/ \\/", COUNT(*)
-from parquet_scan('escaped_partitions_names/**/*.parquet')
+from parquet_scan('__TEST_DIR__/escaped_partitions_names/**/*.parquet')
 GROUP BY ALL
 ORDER BY ALL
 ----
