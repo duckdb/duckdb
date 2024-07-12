@@ -246,7 +246,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			for (auto col_sel_idx : col_sel) {
 				column_ids.push_back(final_column_ids[col_sel_idx]);
 			}
-			get.AddColumnIds(std::move(column_ids));
+			get.SetColumnIds(std::move(column_ids));
 
 			if (get.function.filter_prune) {
 				// Now set the projection cols by matching the "selection vector" that excludes filter columns

@@ -61,7 +61,7 @@ public:
 	optional_ptr<TableCatalogEntry> GetTable() const;
 
 public:
-	void AddColumnIds(vector<column_t> &&column_ids);
+	void SetColumnIds(vector<column_t> &&column_ids);
 	void AddColumnId(column_t column_id);
 	vector<column_t> &GetColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
