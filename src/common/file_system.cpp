@@ -169,6 +169,10 @@ string FileSystem::NormalizeAbsolutePath(const string &path) {
 
 #else
 
+void FileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+	throw NotImplementedException("%s: CopyFile is not implemented!", GetName());
+}
+
 string FileSystem::GetEnvVariable(const string &env) {
 	// first convert the environment variable name to the correct encoding
 	auto env_w = WindowsUtil::UTF8ToUnicode(env.c_str());
