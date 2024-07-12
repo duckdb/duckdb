@@ -656,7 +656,7 @@ class DataFrame:
             raise AttributeError(
                 "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
             )
-        return Column(duckdb.ColumnExpression(name))
+        return Column(duckdb.ColumnExpression([self.relation.alias, name]))
 
     @overload
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":

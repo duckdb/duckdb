@@ -273,20 +273,27 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression(const py::list
 	return make_shared_ptr<DuckDBPyExpression>(std::move(star));
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string &column_name) {
-	if (column_name == "*") {
-		return StarExpression();
-	}
-
-	auto qualified_name = QualifiedName::Parse(column_name);
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const py::args &names) {
 	vector<string> column_names;
-	if (!qualified_name.catalog.empty()) {
-		column_names.push_back(qualified_name.catalog);
+	if (names.size() == 1) {
+		string column_name = std::string(py::str(names[0]));
+		if (column_name == "*") {
+			return StarExpression();
+		}
+
+		auto qualified_name = QualifiedName::Parse(column_name);
+		if (!qualified_name.catalog.empty()) {
+			column_names.push_back(qualified_name.catalog);
+		}
+		if (!qualified_name.schema.empty()) {
+			column_names.push_back(qualified_name.schema);
+		}
+		column_names.push_back(qualified_name.name);
+	} else {
+		for (auto &part : names) {
+			column_names.push_back(std::string(py::str(part)));
+		}
 	}
-	if (!qualified_name.schema.empty()) {
-		column_names.push_back(qualified_name.schema);
-	}
-	column_names.push_back(qualified_name.name);
 
 	return make_shared_ptr<DuckDBPyExpression>(make_uniq<duckdb::ColumnRefExpression>(std::move(column_names)));
 }
