@@ -43,14 +43,13 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 	return false;
 }
 
-unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context, const string &table_name,
-                                                          BaseTableRef &ref) {
+unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context, BaseTableRef &ref) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!context.config.use_replacement_scans) {
 		return nullptr;
 	}
 	for (auto &scan : config.replacement_scans) {
-		ReplacementScanInput input(table_name);
+		ReplacementScanInput input(ref.catalog_name, ref.schema_name, ref.table_name);
 		auto replacement_function = scan.function(context, input, scan.data.get());
 		if (!replacement_function) {
 			continue;
@@ -129,6 +128,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					// retry with next candidate CTE
 					continue;
 				}
+
+				// If we have found a materialized CTE, but no corresponding CTE binding,
+				// something is wrong.
+				if (cte.materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+					throw BinderException(
+					    "There is a WITH item named \"%s\", but it cannot be referenced from this part of the query.",
+					    ref.table_name);
+				}
+
 				// Move CTE to subquery and bind recursively
 				SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte.query->Copy()));
 				subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
@@ -144,13 +152,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 		if (circular_cte) {
-			string table_name = ref.catalog_name;
-			if (!ref.schema_name.empty()) {
-				table_name += (!table_name.empty() ? "." : "") + ref.schema_name;
-			}
-			table_name += (!table_name.empty() ? "." : "") + ref.table_name;
-
-			auto replacement_scan_bind_result = BindWithReplacementScan(context, table_name, ref);
+			auto replacement_scan_bind_result = BindWithReplacementScan(context, ref);
 			if (replacement_scan_bind_result) {
 				return replacement_scan_bind_result;
 			}
@@ -184,22 +186,18 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 	}
 	if (!table_or_view) {
-		string table_name = ref.catalog_name;
-		if (!ref.schema_name.empty()) {
-			table_name += (!table_name.empty() ? "." : "") + ref.schema_name;
-		}
-		table_name += (!table_name.empty() ? "." : "") + ref.table_name;
 		// table could not be found: try to bind a replacement scan
 		// Try replacement scan bind
-		auto replacement_scan_bind_result = BindWithReplacementScan(context, table_name, ref);
+		auto replacement_scan_bind_result = BindWithReplacementScan(context, ref);
 		if (replacement_scan_bind_result) {
 			return replacement_scan_bind_result;
 		}
 
 		// Try autoloading an extension, then retry the replacement scan bind
-		auto extension_loaded = TryLoadExtensionForReplacementScan(context, table_name);
+		auto full_path = ReplacementScan::GetFullPath(ref.catalog_name, ref.schema_name, ref.table_name);
+		auto extension_loaded = TryLoadExtensionForReplacementScan(context, full_path);
 		if (extension_loaded) {
-			replacement_scan_bind_result = BindWithReplacementScan(context, table_name, ref);
+			replacement_scan_bind_result = BindWithReplacementScan(context, ref);
 			if (replacement_scan_bind_result) {
 				return replacement_scan_bind_result;
 			}

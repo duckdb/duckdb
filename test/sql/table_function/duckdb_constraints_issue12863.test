@@ -1,0 +1,32 @@
+# name: test/sql/table_function/duckdb_constraints_issue12863.test
+# description: Issue #12863 - INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS doesn't list foreign keys when declaration case doesn't match reference case
+# group: [table_function]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE a (ID int PRIMARY KEY);
+
+statement ok
+CREATE TABLE b (id int REFERENCES A);
+
+query II
+SELECT constraint_name, unique_constraint_name FROM information_schema.referential_constraints;
+----
+b_id_id_fkey	a_id_pkey
+
+# test multiple schemas with the same table names/references
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE TABLE s1.a (ID int PRIMARY KEY);
+
+statement ok
+CREATE TABLE s1.b (id int REFERENCES s1.A);
+
+query I
+SELECT COUNT(*) FROM information_schema.referential_constraints;
+----
+2

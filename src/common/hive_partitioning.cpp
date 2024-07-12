@@ -7,8 +7,8 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/multi_file_list.hpp"
 #include "re2/re2.h"
 
 namespace duckdb {
@@ -91,7 +91,7 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
                                               vector<unique_ptr<Expression>> &filters,
-                                              unordered_map<string, column_t> &column_map, LogicalGet &get,
+                                              unordered_map<string, column_t> &column_map, MultiFilePushdownInfo &info,
                                               bool hive_enabled, bool filename_enabled) {
 
 	vector<string> pruned_files;
@@ -99,7 +99,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	vector<unique_ptr<Expression>> pruned_filters;
 	unordered_set<idx_t> filters_applied_to_files;
 	duckdb_re2::RE2 regex(RegexString());
-	auto table_index = get.table_index;
+	auto table_index = info.table_index;
 
 	if ((!filename_enabled && !hive_enabled) || filters.empty()) {
 		return;
@@ -131,7 +131,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 				should_prune_file = true;
 				// convert the filter to a table filter.
 				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
-					get.extra_info.file_filters += filter->ToString();
+					info.extra_info.file_filters += filter->ToString();
 					filters_applied_to_files.insert(j);
 				}
 			}
@@ -144,8 +144,8 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 
 	D_ASSERT(filters.size() >= pruned_filters.size());
 
-	get.extra_info.total_files = files.size();
-	get.extra_info.filtered_files = pruned_files.size();
+	info.extra_info.total_files = files.size();
+	info.extra_info.filtered_files = pruned_files.size();
 
 	filters = std::move(pruned_filters);
 	files = std::move(pruned_files);

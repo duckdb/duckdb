@@ -5,7 +5,7 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/http_state.hpp"
+#include "http_state.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"

@@ -131,6 +131,7 @@ public:
 
 	static case_insensitive_map_t<string> JSONSanitize(const case_insensitive_map_t<string> &input);
 	static string JSONSanitize(const string &text);
+	static string DrawPadded(const string &str, idx_t width);
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 

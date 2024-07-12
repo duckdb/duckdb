@@ -80,6 +80,7 @@ case_insensitive_map_t<string> PhysicalProjection::ParamsToString() const {
 		projections += expr->GetName();
 	}
 	result["Projections"] = projections;
+	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
 

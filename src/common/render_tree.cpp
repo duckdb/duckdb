@@ -17,7 +17,13 @@ struct PipelineRenderNode {
 
 namespace {
 
-using namespace duckdb;
+using duckdb::MaxValue;
+using duckdb::PhysicalDelimJoin;
+using duckdb::PhysicalOperator;
+using duckdb::PhysicalOperatorType;
+using duckdb::PhysicalPositionalScan;
+using duckdb::PipelineRenderNode;
+using duckdb::RenderTreeNode;
 
 class TreeChildrenIterator {
 public:
@@ -73,6 +79,10 @@ void TreeChildrenIterator::Iterate(const PipelineRenderNode &op,
 		callback(*op.child);
 	}
 }
+
+} // namespace
+
+namespace duckdb {
 
 template <class T>
 static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
@@ -150,10 +160,6 @@ static unique_ptr<RenderTree> CreateTree(const T &op) {
 	CreateTreeRecursive<T>(*result, op, 0, 0);
 	return result;
 }
-
-} // namespace
-
-namespace duckdb {
 
 RenderTree::RenderTree(idx_t width_p, idx_t height_p) : width(width_p), height(height_p) {
 	nodes = make_uniq_array<unique_ptr<RenderTreeNode>>((width + 1) * (height + 1));

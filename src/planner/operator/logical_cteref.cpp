@@ -4,6 +4,12 @@
 
 namespace duckdb {
 
+case_insensitive_map_t<string> LogicalCTERef::ParamsToString() const {
+	case_insensitive_map_t<string> result;
+	result["CTE Index"] = StringUtil::Format("%llu", cte_index);
+	return result;
+}
+
 vector<idx_t> LogicalCTERef::GetTableIndex() const {
 	return vector<idx_t> {table_index};
 }

@@ -115,6 +115,8 @@ void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel
 
 void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
 	EnsureWritable();
+	const idx_t ragged = count % BITS_PER_VALUE;
+	const idx_t entire_units = count / BITS_PER_VALUE;
 	if (IsAligned(source_offset) && IsAligned(target_offset)) {
 		auto target_validity = GetData();
 		auto source_validity = other.GetData();
@@ -122,16 +124,25 @@ void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, 
 		auto target_offset_entries = EntryCount(target_offset);
 		if (!source_validity) {
 			// if source has no validity mask - set all bytes to 1
-			memset(target_validity + target_offset_entries, 0xFF, sizeof(validity_t) * EntryCount(count));
+			memset(target_validity + target_offset_entries, 0xFF, sizeof(validity_t) * entire_units);
 		} else {
 			memcpy(target_validity + target_offset_entries, source_validity + source_offset_entries,
-			       sizeof(validity_t) * EntryCount(count));
+			       sizeof(validity_t) * entire_units);
+		}
+		if (ragged) {
+			auto src_entry =
+			    source_validity ? source_validity[source_offset_entries + entire_units] : ValidityBuffer::MAX_ENTRY;
+			src_entry &= (ValidityBuffer::MAX_ENTRY >> (BITS_PER_VALUE - ragged));
+
+			target_validity += target_offset_entries + entire_units;
+			auto tgt_entry = *target_validity;
+			tgt_entry &= (ValidityBuffer::MAX_ENTRY << ragged);
+
+			*target_validity = tgt_entry | src_entry;
 		}
 		return;
 	} else if (IsAligned(target_offset)) {
 		//	Simple common case where we are shifting into an aligned mask (e.g., 0 in Slice above)
-		const idx_t entire_units = count / BITS_PER_VALUE;
-		const idx_t ragged = count % BITS_PER_VALUE;
 		const idx_t tail = source_offset % BITS_PER_VALUE;
 		const idx_t head = BITS_PER_VALUE - tail;
 		auto source_validity = other.GetData() + (source_offset / BITS_PER_VALUE);

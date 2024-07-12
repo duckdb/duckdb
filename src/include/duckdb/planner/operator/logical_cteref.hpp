@@ -41,6 +41,7 @@ public:
 	CTEMaterialize materialized_cte;
 
 public:
+	case_insensitive_map_t<string> ParamsToString() const override;
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, chunk_types.size());
 	}

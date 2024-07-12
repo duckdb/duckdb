@@ -920,6 +920,7 @@ case_insensitive_map_t<string> PhysicalHashAggregate::ParamsToString() const {
 		}
 	}
 	result["Aggregates"] = aggregate_info;
+	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
 
