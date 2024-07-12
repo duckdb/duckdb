@@ -1210,8 +1210,9 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
 	}
 
-	bind_data->sql_types = sql_types;
-	bind_data->column_names = names;
+	auto types_and_names = GetTypesAndNamesToCopy(sql_types, names, columns_to_copy);
+	bind_data->sql_types = types_and_names.first;
+	bind_data->column_names = types_and_names.second;
 	bind_data->columns_to_write = columns_to_copy;
 	return std::move(bind_data);
 }
@@ -1223,8 +1224,8 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer = make_uniq<ParquetWriter>(
-	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.columns_to_write,
-	    parquet_bind.codec, parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
+	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
+	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
 	    parquet_bind.dictionary_compression_ratio_threshold, parquet_bind.compression_level);
 	return std::move(global_state);
 }
@@ -1235,8 +1236,14 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 
-	// append data to the local (buffered) chunk collection
-	local_state.buffer.Append(local_state.append_state, input);
+	// in case data chunk has more columns, filter out skipped columns
+	if (input.ColumnCount() > bind_data.columns_to_write.size()) {
+		DataChunk new_input;
+		SetDataToCopy(new_input, input, bind_data.columns_to_write, bind_data.sql_types);
+		local_state.buffer.Append(local_state.append_state, new_input);
+	} else {
+		local_state.buffer.Append(local_state.append_state, input);
+	}
 
 	if (local_state.buffer.Count() >= bind_data.row_group_size ||
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes) {

@@ -124,6 +124,9 @@ enum class CopyFunctionReturnType : uint8_t { CHANGED_ROWS = 0, CHANGED_ROWS_AND
 vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
 vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type);
 vector<idx_t> GetColumnsToCopy(vector<LogicalType> &types, vector<idx_t> &excluded_columns, bool no_partition_columns);
+pair<vector<LogicalType>, vector<string>> GetTypesAndNamesToCopy(vector<LogicalType> types, vector<string> names,
+                                                                 vector<column_t> columns_to_copy);
+void SetDataToCopy(DataChunk &chunk, DataChunk &source, vector<column_t> &column_ids, vector<LogicalType> types);
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
