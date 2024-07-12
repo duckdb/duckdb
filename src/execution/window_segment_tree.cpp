@@ -28,8 +28,7 @@ public:
 		}
 		if (aggregator.aggr.filter) {
 			// 	Start with all invalid and set the ones that pass
-			filter_bits.resize(ValidityMask::ValidityMaskSize(group_count), 0);
-			filter_mask.Initialize(filter_bits.data());
+			filter_mask.Initialize(group_count, false);
 		}
 	}
 
@@ -41,8 +40,7 @@ public:
 	WindowDataChunk winputs;
 
 	//! The filtered rows in inputs.
-	vector<validity_t> filter_bits;
-	ValidityMask filter_mask;
+	ValidityArray filter_mask;
 
 	//! Lock for single threading
 	mutex lock;
@@ -70,9 +68,6 @@ void WindowAggregator::Sink(WindowAggregatorState &gsink, DataChunk &payload_chu
 		winputs.Copy(payload_chunk, input_idx);
 	}
 	if (filter_sel) {
-		//	Single threaded for now.
-		//	TODO: Check for mask boundaries.
-		lock_guard<mutex> sink_guard(gasink.lock);
 		for (idx_t f = 0; f < filtered; ++f) {
 			filter_mask.SetValid(input_idx + filter_sel->get_index(f));
 		}
@@ -395,6 +390,8 @@ public:
 		gcstate = make_uniq<WindowCustomAggregatorState>(aggregator.aggr, aggregator.exclude_mode);
 	}
 
+	//! Traditional packed filter mask for API
+	ValidityMask filter_packed;
 	//! Data pointer that contains a single local state, used for global custom window execution state
 	unique_ptr<WindowCustomAggregatorState> gcstate;
 	//! Partition description for custom window APIs
@@ -429,8 +426,11 @@ void WindowCustomAggregator::Finalize(WindowAggregatorState &gsink, const FrameS
 	auto &gcsink = gsink.Cast<WindowCustomAggregatorGlobalState>();
 	auto &inputs = gcsink.inputs;
 	auto &filter_mask = gcsink.filter_mask;
+	auto &filter_packed = gcsink.filter_packed;
+	filter_mask.Pack(filter_packed, filter_mask.target_count);
+
 	gcsink.partition_input =
-	    make_uniq<WindowPartitionInput>(inputs.data.data(), inputs.ColumnCount(), inputs.size(), filter_mask, stats);
+	    make_uniq<WindowPartitionInput>(inputs.data.data(), inputs.ColumnCount(), inputs.size(), filter_packed, stats);
 
 	if (aggr.function.window_init) {
 		auto &gcstate = *gcsink.gcstate;
@@ -797,7 +797,7 @@ public:
 	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
 
 	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, const DataChunk &inputs,
-	                      const ValidityMask &filter_mask);
+	                      const ValidityArray &filter_mask);
 	~WindowSegmentTreePart();
 
 	unique_ptr<WindowSegmentTreePart> Copy() const {
@@ -835,7 +835,7 @@ public:
 	//! The partition arguments
 	const DataChunk &inputs;
 	//! The filtered rows in inputs
-	const ValidityMask &filter_mask;
+	const ValidityArray &filter_mask;
 	//! The size of a single aggregate state
 	const idx_t state_size;
 	//! Data pointer that contains a vector of states, used for intermediate window segment aggregation
@@ -870,7 +870,7 @@ public:
 };
 
 WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr,
-                                             const DataChunk &inputs, const ValidityMask &filter_mask)
+                                             const DataChunk &inputs, const ValidityArray &filter_mask)
     : allocator(allocator), aggr(aggr),
       order_insensitive(aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT), inputs(inputs),
       filter_mask(filter_mask), state_size(aggr.function.state_size()), state(state_size * STANDARD_VECTOR_SIZE),
