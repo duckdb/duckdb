@@ -183,7 +183,7 @@ WITH RECURSIVE
     SELECT 7
     )
   )
-SELECT * FROM t;
+SELECT * FROM t ORDER BY b;
 ----
 5
 7
@@ -199,7 +199,7 @@ WITH RECURSIVE
     SELECT 7 FROM helper h)
     SELECT * FROM h1)
   )
-SELECT * FROM t;
+SELECT * FROM t ORDER BY b;
 ----
 5
 7
