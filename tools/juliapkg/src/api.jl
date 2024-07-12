@@ -2610,7 +2610,7 @@ Append an int32_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
 """
 function duckdb_append_int32(appender, value)
-    return ccall((:duckdb_append_int16, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_int32, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
 end
 
 """
