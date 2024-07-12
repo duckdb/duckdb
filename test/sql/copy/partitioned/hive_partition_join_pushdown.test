@@ -1,0 +1,65 @@
+# name: test/sql/copy/partitioned/hive_partition_join_pushdown.test
+# description: Test pruning of hive partitions through join conditions
+# group: [partitioned]
+
+require parquet
+
+# partitions
+statement ok
+CREATE TABLE tbl AS SELECT i//1000 AS partition, i FROM range(10000) t(i)
+
+statement ok
+COPY tbl TO '__TEST_DIR__/partition_join_pushdown' (FORMAT parquet, PARTITION_BY (partition))
+
+query IIII
+SELECT COUNT(*), MIN(partition), MAX(partition), SUM(i)
+FROM '__TEST_DIR__/partition_join_pushdown/**/*.parquet'
+WHERE partition=(SELECT MAX(partition) FROM tbl)
+----
+1000	9	9	9499500
+
+query IIII
+SELECT COUNT(*), MIN(partition), MAX(partition), SUM(i)
+FROM '__TEST_DIR__/partition_join_pushdown/**/*.parquet'
+WHERE i>=9980 AND partition=(SELECT MAX(partition) FROM tbl)
+----
+20	9	9	199790
+
+# multiple filters on the same partition
+query IIII
+SELECT COUNT(*), MIN(partition), MAX(partition), SUM(i)
+FROM '__TEST_DIR__/partition_join_pushdown/**/*.parquet'
+WHERE partition>5 AND partition=(SELECT MAX(partition) FROM tbl)
+----
+1000	9	9	9499500
+
+# multiple partitions
+statement ok
+CREATE TABLE tbl2 AS SELECT (date '2000-01-01' + interval (i//2000) years)::DATE AS part1, i%2 AS part2, i FROM range(10000) t(i)
+
+statement ok
+COPY tbl2 TO '__TEST_DIR__/partition_join_pushdown_multi' (FORMAT parquet, PARTITION_BY (part1, part2))
+
+# multiple join filters
+query IIIIII
+SELECT COUNT(*), MIN(part1), MAX(part1), MIN(part2), MAX(part2), SUM(i)
+FROM '__TEST_DIR__/partition_join_pushdown_multi/**/*.parquet'
+WHERE part1=(SELECT MAX(part1) FROM tbl2) AND part2=(SELECT MAX(part2) FROM tbl2)
+----
+1000	2004-01-01	2004-01-01	1	1	9000000
+
+# mix of static and join flters
+query IIIIII
+SELECT COUNT(*), MIN(part2), MAX(part2), MIN(part1), MAX(part1), SUM(i)
+FROM '__TEST_DIR__/partition_join_pushdown_multi/**/*.parquet'
+WHERE part2=(SELECT MAX(part2) FROM tbl2) AND part1=date '2004-01-01'
+----
+1000	1	1	2004-01-01	2004-01-01	9000000
+
+# only selecting a single column
+query I
+SELECT COUNT(*)
+FROM '__TEST_DIR__/partition_join_pushdown_multi/**/*.parquet'
+WHERE part2=(SELECT MAX(part2) FROM tbl2)
+----
+5000

@@ -134,6 +134,7 @@ class QueryResult:
     def row_count(self) -> int:
         return self._row_count
 
+    @property
     def column_count(self) -> int:
         assert self._column_count != 0
         return self._column_count
@@ -163,7 +164,7 @@ class QueryResult:
             context.fail(self.get_error())
 
         row_count = self.row_count()
-        column_count = self.column_count()
+        column_count = self.column_count
         total_value_count = row_count * column_count
 
         if len(values) == 1 and result_is_hash(values[0]):
@@ -179,7 +180,7 @@ class QueryResult:
             logger.output_result(self, result_values_string)
 
         if sort_style == SortStyle.ROW_SORT:
-            ncols = self.column_count()
+            ncols = self.column_count
             nrows = int(total_value_count / ncols)
             rows = [result_values_string[i * ncols : (i + 1) * ncols] for i in range(nrows)]
 
@@ -233,8 +234,8 @@ class QueryResult:
             original_expected_columns = expected_column_count
             column_count_mismatch = False
 
-            if expected_column_count != self.column_count():
-                expected_column_count = self.column_count()
+            if expected_column_count != self.column_count:
+                expected_column_count = self.column_count
                 column_count_mismatch = True
 
             expected_rows = len(comparison_values) / expected_column_count
@@ -249,7 +250,7 @@ class QueryResult:
                 row_wise = True
             elif len(comparison_values) % expected_column_count != 0:
                 if column_count_mismatch:
-                    logger.column_count_mismatch(self, query.values, original_expected_columns, row_wise)
+                    logger.column_count_mismatch(self, values, original_expected_columns, row_wise)
                 else:
                     logger.not_cleanly_divisible(expected_column_count, len(comparison_values))
                 # FIXME: the logger should just create the strings to send to self.fail()/self.skip()
@@ -257,7 +258,7 @@ class QueryResult:
 
             if expected_rows != self.row_count():
                 if column_count_mismatch:
-                    logger.column_count_mismatch(self, query.values, original_expected_columns, row_wise)
+                    logger.column_count_mismatch(self, values, original_expected_columns, row_wise)
                 else:
                     logger.wrong_row_count(
                         expected_rows, result_values_string, comparison_values, expected_column_count, row_wise
@@ -270,7 +271,7 @@ class QueryResult:
                     splits = [x for x in val.split("\t") if x != '']
                     if len(splits) != expected_column_count:
                         if column_count_mismatch:
-                            logger.column_count_mismatch(self, query.values, original_expected_columns, row_wise)
+                            logger.column_count_mismatch(self, values, original_expected_columns, row_wise)
                         logger.split_mismatch(i + 1, expected_column_count, len(splits))
                         context.fail("")
                     for c, split_val in enumerate(splits):
@@ -443,6 +444,12 @@ def matches_regex(input: str, actual_str: str) -> bool:
     else:
         should_match = False
         regex_str = input.replace("<!REGEX>:", "")
+    # The exact match will never be the same, allow leading and trailing messages
+    if regex_str[:2] != '.*':
+        regex_str = ".*" + regex_str
+    if regex_str[-2:] != '.*':
+        regex_str = regex_str + '.*'
+
     re_options = re.DOTALL
     re_pattern = re.compile(regex_str, re_options)
     regex_matches = bool(re_pattern.fullmatch(actual_str))
@@ -528,7 +535,7 @@ def result_is_file(result: str):
 def load_result_from_file(fname, result: QueryResult):
     con = duckdb.connect()
     con.execute(f"PRAGMA threads={os.cpu_count()}")
-    column_count = result.column_count()
+    column_count = result.column_count
 
     fname = fname.replace("<FILE>:", "")
 
@@ -586,7 +593,7 @@ def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool) -> str:
 def duck_db_convert_result(result: QueryResult, is_sqlite_test: bool) -> List[str]:
     out_result = []
     row_count = result.row_count()
-    column_count = result.column_count()
+    column_count = result.column_count
 
     for r in range(row_count):
         for c in range(column_count):
@@ -827,6 +834,10 @@ class SQLLogicContext:
                     if 'returning' not in sql_query.lower():
                         return False
                     return True
+                if statement.type in [duckdb.StatementType.COPY]:
+                    if 'return_files' not in sql_query.lower():
+                        return False
+                    return True
                 return len(statement.expected_result_type) == 1
 
             if is_query_result(sql_query, statement):
@@ -1017,7 +1028,9 @@ class SQLLogicContext:
                 return RequireResult.PRESENT
             if param == 'exact_vector_size':
                 required_vector_size = int(statement.header.parameters[1])
-                return duckdb.__standard_vector_size__ == required_vector_size
+                if duckdb.__standard_vector_size__ == required_vector_size:
+                    return RequireResult.PRESENT
+                return RequireResult.MISSING
             if param == 'skip_reload':
                 self.runner.skip_reload = True
                 return RequireResult.PRESENT

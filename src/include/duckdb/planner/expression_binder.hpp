@@ -190,7 +190,7 @@ protected:
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
 	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
-	LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 	LogicalType ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 
 protected:

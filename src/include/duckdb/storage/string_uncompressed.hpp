@@ -30,9 +30,9 @@ struct StringDictionaryContainer {
 	//! The end of the dictionary, which defaults to the block size.
 	uint32_t end;
 
-	void Verify() {
-		D_ASSERT(size <= Storage::BLOCK_SIZE);
-		D_ASSERT(end <= Storage::BLOCK_SIZE);
+	void Verify(const idx_t block_size) {
+		D_ASSERT(size <= block_size);
+		D_ASSERT(end <= block_size);
 		D_ASSERT(size <= end);
 	}
 };
@@ -117,7 +117,7 @@ public:
 			auto end = handle.Ptr() + *dictionary_end;
 
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify();
+			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
 #endif
 			// Unknown string, continue
 			// non-null value, check if we can fit it within the block
@@ -126,7 +126,8 @@ public:
 			// determine whether or not we have space in the block for this string
 			bool use_overflow_block = false;
 			idx_t required_space = string_length;
-			if (DUCKDB_UNLIKELY(required_space >= StringUncompressed::STRING_BLOCK_LIMIT)) {
+			if (DUCKDB_UNLIKELY(required_space >=
+			                    StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()))) {
 				// string exceeds block limit, store in overflow block and only write a marker here
 				required_space = BIG_STRING_MARKER_SIZE;
 				use_overflow_block = true;
@@ -157,7 +158,7 @@ public:
 				// note: for overflow strings we write negative value
 
 				// dictionary_size is an uint32_t value, so we can cast up.
-				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= Storage::BLOCK_SIZE);
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
 				result_data[target_idx] = -NumericCast<int32_t>((*dictionary_size));
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
@@ -169,13 +170,13 @@ public:
 				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
 				// dictionary_size is an uint32_t value, so we can cast up.
-				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= Storage::BLOCK_SIZE);
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
 				// Place the dictionary offset into the set of vectors.
 				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
-			D_ASSERT(RemainingSpace(segment, handle) <= Storage::BLOCK_SIZE);
+			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockManager().GetBlockSize());
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify();
+			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
 #endif
 		}
 		segment.count += count;

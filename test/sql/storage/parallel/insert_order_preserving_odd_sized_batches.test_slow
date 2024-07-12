@@ -2,8 +2,8 @@
 # description: Test parallel order-preserving insert
 # group: [parallel]
 
-# for smaller block sizes, we see different numbers of distinct blocks
-# because the segment size is bound by the block size
+# There are different numbers of distinct blocks for smaller block sizes,
+# because the segment size is bound by the block size.
 require block_size 262144
 
 require vector_size 512

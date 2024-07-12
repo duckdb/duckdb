@@ -8,6 +8,7 @@ PRAGMA enable_verification
 statement error
 SELECT 1 * (1 < 1);
 ----
+<REGEX>:Binder Error.*No function matches.*
 
 query I
 SELECT 2 * (1 << 2);

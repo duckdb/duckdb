@@ -1,0 +1,19 @@
+# name: benchmark/tpch/aggregate/top_n_in_group_window.benchmark
+# group: [aggregate]
+
+require tpch
+
+cache tpch_sf5.duckdb
+
+load
+CALL dbgen(sf=5);
+
+run
+SELECT rs.grp, array_agg(rs.val ORDER BY rid)
+FROM (
+  SELECT l_suppkey AS grp, l_extendedprice AS val, row_number() OVER (PARTITION BY l_suppkey ORDER BY l_extendedprice DESC) as rid
+  FROM lineitem ORDER BY l_suppkey DESC
+) as rs
+WHERE rid <= 3
+GROUP BY ALL
+ORDER BY ALL;

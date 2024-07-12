@@ -15,6 +15,7 @@
 #include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
+class DynamicTableFilterSet;
 
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
@@ -57,6 +58,8 @@ public:
 	//! User provided types+names, such as: function(...) as (t integer, j boolean)
 	vector<string> user_provided_names;
 	vector<LogicalType> user_provided_types;
+	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
+	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 
 	string GetName() const override;
 	string ParamsToString() const override;

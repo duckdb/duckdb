@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
@@ -43,10 +42,9 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 	random_engine = make_uniq<RandomEngine>();
 	file_opener = make_uniq<ClientContextFileOpener>(context);
 	client_file_system = make_uniq<ClientFileSystem>(context);
-
-	// NOTE: this becomes DEFAULT_BLOCK_ALLOC_SIZE once we start supporting different block sizes.
-	temporary_objects->Initialize(Storage::BLOCK_ALLOC_SIZE);
+	temporary_objects->Initialize(DEFAULT_BLOCK_ALLOC_SIZE);
 }
+
 ClientData::~ClientData() {
 }
 

@@ -15,6 +15,7 @@ add_library_unity(
   common_aggregate_optimizer.cpp
   compressed_materialization.cpp
   cse_optimizer.cpp
+  cte_filter_pusher.cpp
   deliminator.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
@@ -22,6 +23,7 @@ add_library_unity(
   filter_pullup.cpp
   filter_pushdown.cpp
   in_clause_rewriter.cpp
+  join_filter_pushdown_optimizer.cpp
   optimizer.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp

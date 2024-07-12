@@ -22,9 +22,6 @@ class Query(BaseStatement):
         self.sortstyle: Optional[SortStyle] = None
         self.label: Optional[str] = None
 
-    def set_label(self, label: str):
-        self.label = label
-
     def add_lines(self, lines: List[str]):
         self.lines.extend(lines)
 
@@ -37,7 +34,7 @@ class Query(BaseStatement):
     def set_sortstyle(self, sortstyle: SortStyle):
         self.sortstyle = sortstyle
 
-    def get_sortstyle(self) -> SortStyle:
+    def get_sortstyle(self) -> Optional[SortStyle]:
         return self.sortstyle
 
     def set_label(self, label: str):

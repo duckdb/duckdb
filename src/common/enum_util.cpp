@@ -48,6 +48,7 @@
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/enums/set_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
@@ -98,6 +99,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/profiling_node.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
@@ -121,6 +123,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/simplified_token.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
@@ -1411,6 +1414,29 @@ CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_APPEND")) {
 		return CopyOverwriteMode::COPY_APPEND;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CopyToType>(CopyToType value) {
+	switch(value) {
+	case CopyToType::COPY_TO_FILE:
+		return "COPY_TO_FILE";
+	case CopyToType::EXPORT_DATABASE:
+		return "EXPORT_DATABASE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+CopyToType EnumUtil::FromString<CopyToType>(const char *value) {
+	if (StringUtil::Equals(value, "COPY_TO_FILE")) {
+		return CopyToType::COPY_TO_FILE;
+	}
+	if (StringUtil::Equals(value, "EXPORT_DATABASE")) {
+		return CopyToType::EXPORT_DATABASE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4442,6 +4468,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "FILTER_PULLUP";
 	case OptimizerType::FILTER_PUSHDOWN:
 		return "FILTER_PUSHDOWN";
+	case OptimizerType::CTE_FILTER_PUSHER:
+		return "CTE_FILTER_PUSHER";
 	case OptimizerType::REGEX_RANGE:
 		return "REGEX_RANGE";
 	case OptimizerType::IN_CLAUSE:
@@ -4474,6 +4502,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "DUPLICATE_GROUPS";
 	case OptimizerType::REORDER_FILTER:
 		return "REORDER_FILTER";
+	case OptimizerType::JOIN_FILTER_PUSHDOWN:
+		return "JOIN_FILTER_PUSHDOWN";
 	case OptimizerType::EXTENSION:
 		return "EXTENSION";
 	default:
@@ -4494,6 +4524,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "FILTER_PUSHDOWN")) {
 		return OptimizerType::FILTER_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "CTE_FILTER_PUSHER")) {
+		return OptimizerType::CTE_FILTER_PUSHER;
 	}
 	if (StringUtil::Equals(value, "REGEX_RANGE")) {
 		return OptimizerType::REGEX_RANGE;
@@ -4542,6 +4575,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "REORDER_FILTER")) {
 		return OptimizerType::REORDER_FILTER;
+	}
+	if (StringUtil::Equals(value, "JOIN_FILTER_PUSHDOWN")) {
+		return OptimizerType::JOIN_FILTER_PUSHDOWN;
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return OptimizerType::EXTENSION;
@@ -4805,6 +4841,8 @@ const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value) {
 		return "MERGE";
 	case PartitionSortStage::SORTED:
 		return "SORTED";
+	case PartitionSortStage::FINISHED:
+		return "FINISHED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4826,6 +4864,9 @@ PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SORTED")) {
 		return PartitionSortStage::SORTED;
+	}
+	if (StringUtil::Equals(value, "FINISHED")) {
+		return PartitionSortStage::FINISHED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4894,6 +4935,8 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 		return "BLOCKED";
 	case PendingExecutionResult::NO_TASKS_AVAILABLE:
 		return "NO_TASKS_AVAILABLE";
+	case PendingExecutionResult::EXECUTION_FINISHED:
+		return "EXECUTION_FINISHED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4915,6 +4958,9 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 	}
 	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
 		return PendingExecutionResult::NO_TASKS_AVAILABLE;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_FINISHED")) {
+		return PendingExecutionResult::EXECUTION_FINISHED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5523,6 +5569,8 @@ const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value) {
 		return "JSON";
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
 		return "QUERY_TREE_OPTIMIZER";
+	case ProfilerPrintFormat::NO_OUTPUT:
+		return "NO_OUTPUT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5538,6 +5586,32 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	}
 	if (StringUtil::Equals(value, "QUERY_TREE_OPTIMIZER")) {
 		return ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	}
+	if (StringUtil::Equals(value, "NO_OUTPUT")) {
+		return ProfilerPrintFormat::NO_OUTPUT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value) {
+	switch(value) {
+	case ProfilingNodeType::QUERY_ROOT:
+		return "QUERY_ROOT";
+	case ProfilingNodeType::OPERATOR:
+		return "OPERATOR";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value) {
+	if (StringUtil::Equals(value, "QUERY_ROOT")) {
+		return ProfilingNodeType::QUERY_ROOT;
+	}
+	if (StringUtil::Equals(value, "OPERATOR")) {
+		return ProfilingNodeType::OPERATOR;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5627,6 +5701,8 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 		return "STREAM_RESULT";
 	case QueryResultType::PENDING_RESULT:
 		return "PENDING_RESULT";
+	case QueryResultType::ARROW_RESULT:
+		return "ARROW_RESULT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5642,6 +5718,9 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PENDING_RESULT")) {
 		return QueryResultType::PENDING_RESULT;
+	}
+	if (StringUtil::Equals(value, "ARROW_RESULT")) {
+		return QueryResultType::ARROW_RESULT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6825,6 +6904,54 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "WEEK_NUMBER_ISO")) {
 		return StrTimeSpecifier::WEEK_NUMBER_ISO;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value) {
+	switch(value) {
+	case StreamExecutionResult::CHUNK_READY:
+		return "CHUNK_READY";
+	case StreamExecutionResult::CHUNK_NOT_READY:
+		return "CHUNK_NOT_READY";
+	case StreamExecutionResult::EXECUTION_ERROR:
+		return "EXECUTION_ERROR";
+	case StreamExecutionResult::EXECUTION_CANCELLED:
+		return "EXECUTION_CANCELLED";
+	case StreamExecutionResult::BLOCKED:
+		return "BLOCKED";
+	case StreamExecutionResult::NO_TASKS_AVAILABLE:
+		return "NO_TASKS_AVAILABLE";
+	case StreamExecutionResult::EXECUTION_FINISHED:
+		return "EXECUTION_FINISHED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value) {
+	if (StringUtil::Equals(value, "CHUNK_READY")) {
+		return StreamExecutionResult::CHUNK_READY;
+	}
+	if (StringUtil::Equals(value, "CHUNK_NOT_READY")) {
+		return StreamExecutionResult::CHUNK_NOT_READY;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_ERROR")) {
+		return StreamExecutionResult::EXECUTION_ERROR;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_CANCELLED")) {
+		return StreamExecutionResult::EXECUTION_CANCELLED;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return StreamExecutionResult::BLOCKED;
+	}
+	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
+		return StreamExecutionResult::NO_TASKS_AVAILABLE;
+	}
+	if (StringUtil::Equals(value, "EXECUTION_FINISHED")) {
+		return StreamExecutionResult::EXECUTION_FINISHED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -616,10 +616,6 @@ bool LogicalType::IsValid() const {
 	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
 }
 
-bool LogicalType::Contains(LogicalTypeId type_id) const {
-	return Contains([&](const LogicalType &type) { return type.id() == type_id; });
-}
-
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
@@ -768,6 +764,8 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 		return LogicalType::VARCHAR;
 	case LogicalTypeId::INTEGER_LITERAL:
 		return IntegerLiteral::GetType(type);
+	case LogicalTypeId::UNKNOWN:
+		throw ParameterNotResolvedException();
 	default:
 		return type;
 	}
@@ -783,7 +781,7 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		return OP::Operation(left, LogicalType::VARCHAR, result);
 	}
 	// NULL/string literals/unknown (parameter) types always take the other type
-	LogicalTypeId other_types[] = {LogicalTypeId::UNKNOWN, LogicalTypeId::SQLNULL, LogicalTypeId::STRING_LITERAL};
+	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN, LogicalTypeId::STRING_LITERAL};
 	for (auto &other_type : other_types) {
 		if (left.id() == other_type) {
 			result = LogicalType::NormalizeType(right);
