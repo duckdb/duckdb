@@ -55,7 +55,7 @@ string LogicalGet::ParamsToString() const {
 }
 
 void LogicalGet::AddColumnIds(vector<column_t> &&column_ids) {
-	column_ids = std::move(column_ids);
+	this->column_ids = std::move(column_ids);
 }
 
 void LogicalGet::AddColumnId(column_t column_id) {
