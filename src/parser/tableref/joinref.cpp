@@ -31,7 +31,6 @@ string JoinRef::ToString() const {
 		result += "DEPENDENT JOIN ";
 		break;
 	}
-	result += JoinTypeToString(type) + " ";
 	result += right->ToString();
 	if (condition) {
 		D_ASSERT(using_columns.empty());

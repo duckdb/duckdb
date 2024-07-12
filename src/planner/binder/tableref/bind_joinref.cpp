@@ -136,29 +136,26 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	result->type = ref.type;
 	result->left = left_binder.BindJoin(*this, *ref.left);
-
 	result->delim_flipped = ref.delim_flipped;
-
-	result->right = right_binder.BindJoin(*this, *ref.right);
-
-	if (!ref.duplicate_eliminated_columns.empty()) {
-		if (ref.delim_flipped) {
-			// We gotta use the expression binder of the right side
-			ExpressionBinder expr_binder(right_binder, context);
-			for (auto &col : ref.duplicate_eliminated_columns) {
-				result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
-			}
-		} else {
-			// We use the left side
-			ExpressionBinder expr_binder(left_binder, context);
-			for (auto &col : ref.duplicate_eliminated_columns) {
-				result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
-			}
-		}
-	}
 
 	{
 		LateralBinder binder(left_binder, context);
+		result->right = right_binder.BindJoin(*this, *ref.right);
+		if (!ref.duplicate_eliminated_columns.empty()) {
+			if (ref.delim_flipped) {
+				// We gotta use the expression binder of the right side
+				ExpressionBinder expr_binder(right_binder, context);
+				for (auto &col : ref.duplicate_eliminated_columns) {
+					result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+				}
+			} else {
+				// We use the left side
+				ExpressionBinder expr_binder(left_binder, context);
+				for (auto &col : ref.duplicate_eliminated_columns) {
+					result->duplicate_eliminated_columns.emplace_back(expr_binder.Bind(col));
+				}
+			}
+		}
 		bool is_lateral = false;
 		// Store the correlated columns in the right binder in bound ref for planning of LATERALs
 		// Ignore the correlated columns in the left binder, flattening handles those correlations
