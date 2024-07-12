@@ -2045,6 +2045,8 @@ ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
 	switch(value) {
+	case ExplainFormat::DEFAULT:
+		return "DEFAULT";
 	case ExplainFormat::TEXT:
 		return "TEXT";
 	case ExplainFormat::JSON:
@@ -2056,6 +2058,9 @@ const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
 
 template<>
 ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
+	if (StringUtil::Equals(value, "DEFAULT")) {
+		return ExplainFormat::DEFAULT;
+	}
 	if (StringUtil::Equals(value, "TEXT")) {
 		return ExplainFormat::TEXT;
 	}
