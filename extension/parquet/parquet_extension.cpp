@@ -1106,7 +1106,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
                                           const vector<string> &names, const vector<LogicalType> &sql_types,
-                                          const vector<column_t> columns_to_copy) {
+                                          const vector<column_t> columns_to_write) {
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
@@ -1210,10 +1210,9 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
 	}
 
-	auto types_and_names = GetTypesAndNamesToCopy(sql_types, names, columns_to_copy);
-	bind_data->sql_types = types_and_names.first;
-	bind_data->column_names = types_and_names.second;
-	bind_data->columns_to_write = columns_to_copy;
+	bind_data->sql_types = sql_types;
+	bind_data->column_names = names;
+	bind_data->columns_to_write = columns_to_write;
 	return std::move(bind_data);
 }
 

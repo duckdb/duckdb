@@ -43,7 +43,7 @@ vector<idx_t> GetColumnsToCopy(vector<LogicalType> &types, vector<idx_t> &exclud
 }
 
 pair<vector<LogicalType>, vector<string>>
-GetTypesAndNamesToCopy(vector<LogicalType> col_types, vector<string> col_names, vector<column_t> cols_to_copy) {
+GetTypesAndNamesToCopy(vector<LogicalType> &col_types, vector<string> &col_names, vector<column_t> &cols_to_copy) {
 	set<column_t> cols_to_write_set(cols_to_copy.begin(), cols_to_copy.end());
 	vector<LogicalType> types;
 	vector<string> names;
@@ -56,7 +56,7 @@ GetTypesAndNamesToCopy(vector<LogicalType> col_types, vector<string> col_names, 
 	return make_pair(types, names);
 }
 
-void SetDataToCopy(DataChunk &chunk, DataChunk &source, vector<column_t> &cols_to_copy, vector<LogicalType> types) {
+void SetDataToCopy(DataChunk &chunk, DataChunk &source, vector<column_t> &cols_to_copy, vector<LogicalType> &types) {
 	D_ASSERT(cols_to_copy.size() == types.size());
 	chunk.InitializeEmpty(types);
 	for (idx_t i = 0; i < cols_to_copy.size(); i++) {

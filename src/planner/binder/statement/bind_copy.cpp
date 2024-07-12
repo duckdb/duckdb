@@ -222,9 +222,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
 	auto columns_to_copy = GetColumnsToCopy(select_node.types, partition_cols, no_partition_columns);
+	auto types_and_names = no_partition_columns
+	                           ? GetTypesAndNamesToCopy(select_node.types, unique_column_names, columns_to_copy)
+	                           : make_pair(select_node.types, unique_column_names);
 
-	auto function_data = copy_function.function.copy_to_bind(context, bind_input, unique_column_names,
-	                                                         select_node.types, columns_to_copy);
+	auto function_data = copy_function.function.copy_to_bind(context, bind_input, types_and_names.second,
+	                                                         types_and_names.first, columns_to_copy);
 
 	const auto rotate =
 	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);

@@ -157,11 +157,8 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
                                              const vector<string> &names, const vector<LogicalType> &sql_types,
-                                             const vector<column_t> columns_to_copy) {
-	vector<LogicalType> types_to_copy;
-	vector<string> names_to_copy;
-	std::tie(types_to_copy, names_to_copy) = GetTypesAndNamesToCopy(sql_types, names, columns_to_copy);
-	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, types_to_copy, names_to_copy, columns_to_copy);
+                                             const vector<column_t> columns_to_write) {
+	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names, columns_to_write);
 
 	// check all the options in the copy info
 	for (auto &option : input.info.options) {
@@ -172,11 +169,11 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
 		// no FORCE_QUOTE specified: initialize to false
-		bind_data->options.force_quote.resize(names_to_copy.size(), false);
+		bind_data->options.force_quote.resize(names.size(), false);
 	}
 	bind_data->Finalize();
 
-	auto expressions = CreateCastExpressions(*bind_data, context, names_to_copy, types_to_copy);
+	auto expressions = CreateCastExpressions(*bind_data, context, names, sql_types);
 	bind_data->cast_expressions = std::move(expressions);
 
 	bind_data->requires_quotes = make_unsafe_uniq_array<bool>(256);
