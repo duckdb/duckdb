@@ -1,7 +1,6 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/core_functions/scalar/string_functions.hpp"
-
-#include <duckdb.h>
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

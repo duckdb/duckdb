@@ -566,7 +566,7 @@ struct URLEncodeLength {
 	}
 };
 
-struct URLEncodeOperator {
+struct URLEncodeWrite {
 	using RESULT_TYPE = char *;
 
 	static void ProcessCharacter(char *&result, char c) {
@@ -608,7 +608,7 @@ idx_t StringUtil::URLEncodeSize(const char *input, idx_t input_size, bool encode
 }
 
 void StringUtil::URLEncodeBuffer(const char *input, idx_t input_size, char *output, bool encode_slash) {
-	URLEncodeInternal<URLEncodeOperator>(input, input_size, output, encode_slash);
+	URLEncodeInternal<URLEncodeWrite>(input, input_size, output, encode_slash);
 }
 
 string StringUtil::URLEncode(const string &input, bool encode_slash) {
@@ -641,7 +641,7 @@ idx_t StringUtil::URLDecodeSize(const char *input, idx_t input_size, bool plus_t
 }
 
 void StringUtil::URLDecodeBuffer(const char *input, idx_t input_size, char *output, bool plus_to_space) {
-	URLDecodeInternal<URLEncodeOperator>(input, input_size, output, plus_to_space);
+	URLDecodeInternal<URLEncodeWrite>(input, input_size, output, plus_to_space);
 }
 
 string StringUtil::URLDecode(const string &input, bool plus_to_space) {
