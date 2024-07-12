@@ -5,17 +5,54 @@
 statement ok
 PRAGMA enable_verification
 
-# test unnesting of null values a bit
 query T
-SELECT string_split(NULL, NULL)
+select string_split('babcb', 'b');
 ----
-NULL
+[, a, c, ]
 
 query T
-SELECT * FROM (VALUES (string_split('hello world', ' ')), (string_split(NULL, ' ')), (string_split('a b c', NULL)), (string_split('a b c', ' '))) tbl(i)
+select UNNEST(string_split('abc', ','))
+----
+abc
+
+query T
+select UNNEST(string_split('1,2,3,4,,6', ','))
+----
+1
+2
+3
+4
+(empty)
+6
+
+query T
+select UNNEST(string_split('1|2|3', '|'))
+----
+1
+2
+3
+
+query T
+select UNNEST(string_split('1|2|3|', '|'))
+----
+1
+2
+3
+(empty)
+
+query T
+select UNNEST(string_split('1||2|3||', '||'))
+----
+1
+2|3
+(empty)
+
+query T
+SELECT * FROM (VALUES (string_split('hello world', ' ')), (string_split(NULL, ' ')), (string_split('', ' ')), (string_split('a b c', NULL)), (string_split('a b c', ' '))) tbl(i)
 ----
 [hello, world]
 NULL
+[]
 [a b c]
 [a, b, c]
 
@@ -45,16 +82,6 @@ SELECT UNNEST(string_split('üüüüü', '◌̈'))
 
 query T
 SELECT UNNEST(string_split('üüüüü', '◌'))
-----
-üüüüü
-
-query T
-SELECT UNNEST(string_split_regex('üüüüü', '◌̈'))
-----
-üüüüü
-
-query T
-SELECT UNNEST(string_split_regex('üüüüü', '◌'))
 ----
 üüüüü
 
@@ -97,29 +124,9 @@ SELECT UNNEST(string_split('', 'delim'))
 (empty)
 
 query T
-SELECT UNNEST(string_split('aaaaa', ''))
-----
-a
-a
-a
-a
-a
-
-query T
 SELECT UNNEST(string_split('🦆🦆🦆🦆🦆', ''))
 ----
-🦆
-🦆
-🦆
-🦆
-🦆
-
-query T
-SELECT UNNEST(string_split('abab', 'b'))
-----
-a
-a
-(empty)
+🦆🦆🦆🦆🦆
 
 query T
 SELECT UNNEST(string_split('🦆b🦆b', 'b'))
@@ -166,73 +173,32 @@ b🦆🦆bb🦆🦆
 🦆🦆bb🦆🦆b
 🦆b🦆b🦆b🦆b🦆
 
+# empty string delimeter
 query T
-SELECT UNNEST(string_split_regex('a1a11a111a', '[0-9]+'))
+SELECT UNNEST(string_split('abcde', ''))
 ----
-a
-a
-a
-a
+abcde
+
+# test unnesting of null values a bit
+query T
+SELECT string_split(NULL, NULL)
+----
+NULL
 
 query T
-SELECT UNNEST(string_split_regex('aaaaa', ''))
+SELECT string_split('', NULL)
 ----
-a
-a
-a
-a
-a
-
+[]
 
 query T
-SELECT UNNEST(string_split_regex('a a  a   a', '\s+'))
+SELECT string_split(NULL, '')
 ----
-a
-a
-a
-a
+NULL
 
 query T
-SELECT UNNEST(string_split('aaaaa', NULL))
+SELECT string_split('', NULL)
 ----
-aaaaa
-
-# taken from postgres string_to_array tests
-query T
-select UNNEST(string_split('1|2|3', '|'))
-----
-1
-2
-3
-
-query T
-select UNNEST(string_split('1|2|3|', '|'))
-----
-1
-2
-3
-(empty)
-
-query T
-select UNNEST(string_split('1||2|3||', '||'))
-----
-1
-2|3
-(empty)
-
-query T
-select UNNEST(string_split('1|2|3', ''))
-----
-1
-|
-2
-|
-3
-
-query T
-select UNNEST(string_split('', '|'))
-----
-(empty)
+[]
 
 query T
 select UNNEST(string_split('1|2|3', NULL))
@@ -245,11 +211,268 @@ select string_split(NULL, '|') IS NULL
 1
 
 query T
-select UNNEST(string_split('abc', ''))
+SELECT string_split('', '')
+----
+[]
+
+# test incorrect usage
+statement error
+select string_split()
+----
+
+statement error
+select string_split('a')
+----
+
+
+# regexp string split
+query T
+select string_split_regex('babcb', 'b');
+----
+[, a, c, ]
+
+query T
+select UNNEST(string_split_regex('abcd', '(b)'));
+----
+a
+cd
+
+query T
+SELECT string_split_regex('a a a a a', ' ')
+----
+[a, a, a, a, a]
+
+query T
+SELECT UNNEST(string_split_regex('a1a11a111a', '[0-9]+'))
+----
+a
+a
+a
+a
+
+query T
+select UNNEST(string_split_regex('a1b', '\d'))
 ----
 a
 b
-c
+
+query T
+select UNNEST(string_split_regex('a1b', '\\d'))
+----
+a1b
+
+query T
+select UNNEST(string_split_regex('a1b', '(\d)'))
+----
+a
+b
+
+query T
+select UNNEST(string_split_regex('a1b', e'\d'))
+----
+a1b
+
+query T
+select UNNEST(string_split_regex('xyz', '[x]'))
+----
+(empty)
+yz
+
+query T
+select UNNEST(string_split_regex('wΩν', '[^\p{Greek}]'))
+----
+(empty)
+Ων
+
+query T
+select UNNEST(string_split_regex('1|2|3', '|'))
+----
+1
+|
+2
+|
+3
+
+query T
+SELECT UNNEST(string_split_regex('üüüüü', '◌̈'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(string_split_regex('üüüüü', '◌'))
+----
+üüüüü
+
+# empty string regex patterns
+query T
+SELECT string_split_regex('a', '')
+----
+[a]
+
+query T
+SELECT string_split_regex('abc', '')
+----
+[a, b, c]
+
+
+query T
+SELECT string_split_regex('abc', '^a|^ab')
+----
+[, bc]
+
+
+query T
+SELECT UNNEST(string_split_regex('🦆', ''))
+----
+🦆
+
+query T
+SELECT UNNEST(string_split_regex('🦆🦆🦆🦆🦆', ''))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+query T
+SELECT string_split_regex('∯', '')
+----
+[∯]
+
+# ^ matches empty string at beginning of text
+query T
+SELECT string_split_regex('ab', '^\w')
+----
+[, b]
+
+query T
+SELECT string_split_regex('ab', '^')
+----
+[ab]
+
+# $ matches empty string at end of text (like \z not \Z)
+query T
+SELECT string_split_regex('ab', '\w$')
+----
+[a, ]
+
+query T
+SELECT string_split_regex('ab', '$')
+----
+[ab]
+
+# \A  matches at beginning of text
+query T
+SELECT UNNEST(string_split_regex('ab cd', '\A\w'))
+----
+(empty)
+b cd
+
+query T
+SELECT UNNEST(string_split_regex('ab cd', '\A'))
+----
+ab cd
+
+# \b matches ASCII word boundary
+query T
+select string_split_regex('ab cd', '\b');
+----
+[ab,  , cd]
+
+query T
+select UNNEST(string_split_regex('ab cd', '\\b'));
+----
+ab cd
+
+# \B matches not at ASCII word boundary
+query T
+SELECT UNNEST(string_split_regex('ab cd', '\B'))
+----
+a
+b c
+d
+
+query T
+select string_split_regex('\bhello\b', '\b');
+----
+[\, bhello, \, b]
+
+query T
+select string_split('\bhello\b', '\b');
+----
+[, hello, ]
+
+query T
+select UNNEST(string_split_regex('\bhello\b', '\\b'));
+----
+(empty)
+hello
+(empty)
+
+query T
+SELECT UNNEST(string_split_regex('ab cd', '\b(\w+)\b'));
+----
+(empty)
+ 
+(empty)
+
+# \z matches empty string at end of text
+query T
+SELECT UNNEST(string_split_regex('aaa', '\w\z'))
+----
+aa
+(empty)
+
+query T
+SELECT UNNEST(string_split_regex('aaaaa', '\z'))
+----
+aaaaa
+
+# \y - (not supported)
+statement error
+select UNNEST(string_split_regex('ab cd', '\y'));
+----
+Invalid Input Error: invalid escape sequence: \y
+
+# \Z - (not supported)
+statement error
+SELECT UNNEST(string_split_regex('aaaaa', '\Z'))
+----
+Invalid Input Error: invalid escape sequence: \Z
+
+# \g - (not supported)
+statement error
+SELECT UNNEST(string_split_regex('ab cd', '\g'))
+----
+Invalid Input Error: invalid escape sequence: \g
+
+# \G - (not supported)
+statement error
+SELECT UNNEST(string_split_regex('ab cd', '\G'))
+----
+Invalid Input Error: invalid escape sequence: \G
+
+query T
+SELECT UNNEST(string_split_regex('🦆a🦆a', 'a'))
+----
+🦆
+🦆
+(empty)
+
+query T
+SELECT UNNEST(string_split_regex('🦆', '🦆'))
+----
+(empty)
+(empty)
+
+query T
+SELECT UNNEST(string_split_regex('a a  a   a', '\s+'))
+----
+a
+a
+a
+a
 
 query T
 select UNNEST(string_split_regex('abc', '(|abc)'))
@@ -265,11 +488,6 @@ select UNNEST(string_split_regex('abc', '(abc|)'))
 (empty)
 
 query T
-select UNNEST(string_split('abc', ','))
-----
-abc
-
-query T
 select UNNEST(string_split_regex('abc', '(,|abc)'))
 ----
 (empty)
@@ -280,16 +498,6 @@ select UNNEST(string_split_regex('abc', '(abc|,)'))
 ----
 (empty)
 (empty)
-
-query T
-select UNNEST(string_split('1,2,3,4,,6', ','))
-----
-1
-2
-3
-4
-(empty)
-6
 
 query T
 select UNNEST(string_split_regex('1,2,3,4,,6', '(,|)'))
@@ -304,7 +512,6 @@ select UNNEST(string_split_regex('1,2,3,4,,6', '(,|)'))
 (empty)
 (empty)
 6
-
 
 query T
 select UNNEST(string_split_regex('1,2,3,4,,6', '(|,)'))
@@ -342,16 +549,12 @@ select UNNEST(string_split_regex('1,2,3,4,*,6', '(\*|,)'))
 (empty)
 6
 
-# test incorrect usage
-statement error
-select string_split()
+query T
+SELECT UNNEST(string_split_regex('', ''))
 ----
+(empty)
 
-statement error
-select string_split('a')
-----
-
-# incorrect regex
+# test incorrect regex
 statement error
 SELECT string_split_regex(a, '[') FROM test ORDER BY a;
 ----
