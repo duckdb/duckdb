@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
@@ -304,11 +305,32 @@ unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenc
 bool BindContext::CheckExclusionList(StarExpression &expr, const string &column_name,
                                      vector<unique_ptr<ParsedExpression>> &new_select_list,
                                      case_insensitive_set_t &excluded_columns) {
-	if (expr.exclude_list.find(column_name) != expr.exclude_list.end()) {
-		excluded_columns.insert(column_name);
-		return true;
+	return CheckExclusionList(expr, ColumnRefExpression {column_name}, new_select_list, excluded_columns);
+}
+
+bool BindContext::CheckExclusionList(StarExpression &expr, const ColumnRefExpression &columnref,
+                                     vector<unique_ptr<ParsedExpression>> &new_select_list,
+                                     case_insensitive_set_t &excluded_columns) {
+	for (auto &entry : expr.exclude_list) {
+		const auto &excluded = entry->Cast<ColumnRefExpression>().column_names;
+		if (excluded.size() > columnref.column_names.size()) {
+			continue;
+		}
+		bool is_excluded = true;
+		// match suffix
+		for (auto excluded_part = excluded.rbegin(), columnref_part = columnref.column_names.rbegin();
+		     excluded_part != excluded.rend(); excluded_part++, columnref_part++) {
+			if (!StringUtil::CIEquals(*excluded_part, *columnref_part)) {
+				is_excluded = false;
+				break;
+			}
+		}
+		if (is_excluded) {
+			excluded_columns.insert(columnref.ToString());
+			return true;
+		}
 	}
-	auto entry = expr.replace_list.find(column_name);
+	auto entry = expr.replace_list.find(columnref.column_names.back());
 	if (entry != expr.replace_list.end()) {
 		auto new_entry = entry->second->Copy();
 		new_entry->alias = entry->first;
@@ -332,7 +354,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		for (auto &entry : bindings_list) {
 			auto &binding = entry.get();
 			for (auto &column_name : binding.names) {
-				if (CheckExclusionList(expr, column_name, new_select_list, excluded_columns)) {
+				if (CheckExclusionList(expr, ColumnRefExpression {column_name, binding.alias}, new_select_list,
+				                       excluded_columns)) {
 					continue;
 				}
 				// check if this column is a USING column
@@ -412,9 +435,12 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		expr.exclude_list.clear();
 		expr.replace_list.clear();
 	}
-	for (auto &excluded : expr.exclude_list) {
-		if (excluded_columns.find(excluded) == excluded_columns.end()) {
-			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded,
+	for (auto &entry : expr.exclude_list) {
+		auto &excluded = entry->Cast<ColumnRefExpression>();
+		if (std::find_if(excluded_columns.begin(), excluded_columns.end(), [&excluded](const string &name) {
+			    return StringUtil::CIEndsWith(name, excluded.ToString());
+		    }) == excluded_columns.end()) {
+			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded.ToString(),
 			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
 		}
 	}

@@ -1,4 +1,5 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -10,13 +11,11 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 	auto result = make_uniq<StarExpression>(star.relation ? star.relation : string());
 	if (star.except_list) {
 		for (auto head = star.except_list->head; head; head = head->next) {
-			auto value = PGPointerCast<duckdb_libpgquery::PGValue>(head->data.ptr_value);
-			D_ASSERT(value->type == duckdb_libpgquery::T_PGString);
-			string exclude_entry = value->val.str;
-			if (result->exclude_list.find(exclude_entry) != result->exclude_list.end()) {
-				throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", exclude_entry);
+			auto columnref = TransformColumnRef(*PGPointerCast<duckdb_libpgquery::PGColumnRef>(head->data.ptr_value));
+			if (result->exclude_list.find(columnref) != result->exclude_list.end()) {
+				throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", columnref->ToString());
 			}
-			result->exclude_list.insert(std::move(exclude_entry));
+			result->exclude_list.insert(std::move(columnref));
 		}
 	}
 	if (star.replace_list) {
@@ -31,7 +30,12 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			if (result->replace_list.find(exclude_entry) != result->replace_list.end()) {
 				throw ParserException("Duplicate entry \"%s\" in REPLACE list", exclude_entry);
 			}
-			if (result->exclude_list.find(exclude_entry) != result->exclude_list.end()) {
+
+			if (std::find_if(result->exclude_list.begin(), result->exclude_list.end(),
+			                 [&](const unique_ptr<ParsedExpression> &entry) {
+				                 return StringUtil::CIEquals(entry->Cast<ColumnRefExpression>().GetColumnName(),
+				                                             exclude_entry);
+			                 }) != result->exclude_list.end()) {
 				throw ParserException("Column \"%s\" cannot occur in both EXCEPT and REPLACE list", exclude_entry);
 			}
 			result->replace_list.insert(make_pair(std::move(exclude_entry), std::move(replace_expression)));

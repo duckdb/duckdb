@@ -3911,8 +3911,8 @@ target_el:	a_expr AS ColLabelOrString
 				}
 		;
 
-except_list: EXCLUDE '(' name_list_opt_comma ')'					{ $$ = $3; }
-			| EXCLUDE ColId								{ $$ = list_make1(makeString($2)); }
+except_list: EXCLUDE '(' columnref_list_opt_comma ')'	{ $$ = $3; }
+			| EXCLUDE columnref							{ $$ = list_make1($2); }
 		;
 
 opt_except_list: except_list						{ $$ = $1; }
@@ -3935,6 +3935,17 @@ replace_list_opt_comma:
 opt_replace_list: REPLACE '(' replace_list_opt_comma ')'		{ $$ = $3; }
 			| REPLACE replace_list_el				{ $$ = list_make1($2); }
 			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+
+columnref_list_opt_comma:
+			columnref_list							{ $$ = $1; }
+			| columnref_list ','					{ $$ = $1; }
+		;
+
+columnref_list:
+			columnref								{ $$ = list_make1($1); }
+			| columnref_list ',' columnref			{ $$ = lappend($1, $3); }
 		;
 
 /*****************************************************************************

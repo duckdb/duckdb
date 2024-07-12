@@ -195,8 +195,14 @@ public:
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
 
+	//! Case insensitive equals
+	DUCKDB_API static bool CIEquals(const char &l1, const char &l2);
+
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
+
+	//! Returns true if the target string <b>ends</b> with the given suffix.
+	DUCKDB_API static bool CIEndsWith(const string &str, const string &suffix);
 
 	//! Case insensitive find, returns DConstants::INVALID_INDEX if not found
 	DUCKDB_API static idx_t CIFind(vector<string> &vec, const string &str);

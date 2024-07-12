@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -24,7 +25,7 @@ public:
 	//! The relation name in case of tbl.*, or empty if this is a normal *
 	string relation_name;
 	//! List of columns to exclude from the STAR expression
-	case_insensitive_set_t exclude_list;
+	columnref_set_t exclude_list;
 	//! List of columns to replace with another expression
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_list;
 	//! The expression to select the columns (regular expression or list)

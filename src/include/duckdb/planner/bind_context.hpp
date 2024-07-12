@@ -78,6 +78,11 @@ public:
 	bool CheckExclusionList(StarExpression &expr, const string &column_name,
 	                        vector<unique_ptr<ParsedExpression>> &new_select_list,
 	                        case_insensitive_set_t &excluded_columns);
+	//! Check if the given (binding, columnref) is in the exclusion/replacement lists.
+	//! Returns true if it is in one of these lists, and should therefore be skipped.
+	bool CheckExclusionList(StarExpression &expr, const ColumnRefExpression &columnref,
+	                        vector<unique_ptr<ParsedExpression>> &new_select_list,
+	                        case_insensitive_set_t &excluded_columns);
 
 	const vector<reference<Binding>> &GetBindingsList() {
 		return bindings_list;

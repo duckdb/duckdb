@@ -33,7 +33,7 @@ string StarExpression::ToString() const {
 			if (!first_entry) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(entry);
+			result += entry->ToString();
 			first_entry = false;
 		}
 		result += ")";
@@ -59,7 +59,7 @@ string StarExpression::ToString() const {
 }
 
 bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
-	if (a.relation_name != b.relation_name || a.exclude_list != b.exclude_list) {
+	if (a.relation_name != b.relation_name) {
 		return false;
 	}
 	if (a.columns != b.columns) {
@@ -67,6 +67,15 @@ bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
 	}
 	if (a.unpacked != b.unpacked) {
 		return false;
+	}
+	if (a.exclude_list.size() != b.exclude_list.size()) {
+		return false;
+	}
+	for (auto &entry : a.exclude_list) {
+		auto other_entry = b.exclude_list.find(entry);
+		if (other_entry == b.exclude_list.end()) {
+			return false;
+		}
 	}
 	if (a.replace_list.size() != b.replace_list.size()) {
 		return false;
@@ -112,7 +121,9 @@ bool StarExpression::IsColumnsUnpacked(const ParsedExpression &a) {
 
 unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	auto copy = make_uniq<StarExpression>(relation_name);
-	copy->exclude_list = exclude_list;
+	for (auto &entry : exclude_list) {
+		copy->exclude_list.insert(entry->Copy());
+	}
 	for (auto &entry : replace_list) {
 		copy->replace_list[entry.first] = entry.second->Copy();
 	}
