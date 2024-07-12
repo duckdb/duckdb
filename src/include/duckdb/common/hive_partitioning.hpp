@@ -41,6 +41,10 @@ public:
 
 	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
 	                                 const LogicalType &type);
+	//! Escape a hive partition key or value using URL encoding
+	DUCKDB_API static string Escape(const string &input);
+	//! Unescape a hive partition key or value encoded using URL encoding
+	DUCKDB_API static string Unescape(const string &input);
 };
 
 struct HivePartitionKey {

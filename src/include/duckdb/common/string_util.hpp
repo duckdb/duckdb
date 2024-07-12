@@ -51,7 +51,6 @@ public:
 		}
 		throw InvalidInputException("Invalid input for hex digit: %s", string(1, c));
 	}
-
 	static uint8_t GetBinaryValue(char c) {
 		if (c >= '0' && c <= '1') {
 			return UnsafeNumericCast<uint8_t>(c - '0');
@@ -137,6 +136,11 @@ public:
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
 	DUCKDB_API static string Join(const set<string> &input, const string &separator);
+
+	//! Encode special URL characters in a string
+	DUCKDB_API static string URLEncode(const string &str, bool encode_slash = true);
+	//! Decode URL escape sequences (e.g. %20) in a string
+	DUCKDB_API static string URLDecode(const string &str, bool plus_to_space = false);
 
 	template <class T>
 	static string ToString(const vector<T> &input, const string &separator) {

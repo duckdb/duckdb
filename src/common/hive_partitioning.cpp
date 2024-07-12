@@ -80,6 +80,14 @@ static void ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Exp
 	}
 }
 
+string HivePartitioning::Escape(const string &input) {
+	return StringUtil::URLEncode(input);
+}
+
+string HivePartitioning::Unescape(const string &input) {
+	return StringUtil::URLDecode(input);
+}
+
 // matches hive partitions in file name. For example:
 // 	- s3://bucket/var1=value1/bla/bla/var2=value2
 //  - http(s)://domain(:port)/lala/kasdl/var1=value1/?not-a-var=not-a-value
@@ -123,7 +131,7 @@ Value HivePartitioning::GetValue(ClientContext &context, const string &key, cons
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		// for string values we can directly return the type
-		return Value(str_val);
+		return Value(Unescape(str_val));
 	}
 	if (str_val.empty()) {
 		// empty strings are NULL for non-string types
@@ -131,7 +139,7 @@ Value HivePartitioning::GetValue(ClientContext &context, const string &key, cons
 	}
 
 	// cast to the target type
-	Value value(str_val);
+	Value value(Unescape(str_val));
 	if (!value.TryCastAs(context, type)) {
 		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
 		                            StringUtil::Upper(key), type.ToString());

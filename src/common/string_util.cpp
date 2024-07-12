@@ -536,7 +536,6 @@ string StringUtil::GetFileStem(const string &file_name) {
 }
 
 string StringUtil::GetFilePath(const string &file_path) {
-
 	// Trim the trailing slashes
 	auto end = file_path.size() - 1;
 	while (end > 0 && (file_path[end] == '/' || file_path[end] == '\\')) {
@@ -555,4 +554,46 @@ string StringUtil::GetFilePath(const string &file_path) {
 	return file_path.substr(0, pos + 1);
 }
 
+string StringUtil::URLEncode(const string &input, bool encode_slash) {
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+	static const char *hex_digit = "0123456789ABCDEF";
+	string result;
+	result.reserve(input.size());
+	for (idx_t i = 0; i < input.length(); i++) {
+		char ch = input[i];
+		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
+		    ch == '-' || ch == '~' || ch == '.') {
+			result += ch;
+		} else if (ch == '/') {
+			if (encode_slash) {
+				result += "%2F";
+			} else {
+				result += ch;
+			}
+		} else {
+			result += "%";
+			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
+			result += hex_digit[static_cast<unsigned char>(ch) & 15];
+		}
+	}
+	return result;
+}
+
+string StringUtil::URLDecode(const string &input, bool plus_to_space) {
+	string result;
+	result.reserve(input.size());
+	for (idx_t i = 0; i < input.length(); i++) {
+		if (plus_to_space && input[i] == '+') {
+			result += ' ';
+		} else if (input[i] == '%' && i + 2 < input.length() && CharacterIsHex(input[i + 1]) &&
+		           CharacterIsHex(input[i + 2])) {
+			uint32_t hex_value = (uint32_t(GetHexValue(input[i + 1])) << 4) + uint32_t(GetHexValue(input[i + 2]));
+			result += static_cast<char>(hex_value);
+			i += 2;
+		} else {
+			result += input[i];
+		}
+	}
+	return result;
+}
 } // namespace duckdb
