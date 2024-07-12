@@ -557,21 +557,32 @@ string StringUtil::GetFilePath(const string &file_path) {
 struct URLEncodeLength {
 	using RESULT_TYPE = idx_t;
 
-	static void ProcessCharacter(idx_t &result, char ) {
+	static void ProcessCharacter(idx_t &result, char) {
+		result++;
+	}
+
+	static void ProcessHex(idx_t &result, const char *, idx_t) {
 		result++;
 	}
 };
 
 struct URLEncodeOperator {
-	using RESULT_TYPE = char*;
+	using RESULT_TYPE = char *;
 
 	static void ProcessCharacter(char *&result, char c) {
 		*result = c;
 		result++;
 	}
+
+	static void ProcessHex(char *&result, const char *input, idx_t idx) {
+		uint32_t hex_first = StringUtil::GetHexValue(input[idx + 1]);
+		uint32_t hex_second = StringUtil::GetHexValue(input[idx + 2]);
+		uint32_t hex_value = (hex_first << 4) + hex_second;
+		ProcessCharacter(result, static_cast<char>(hex_value));
+	}
 };
 
-template<class OP>
+template <class OP>
 void URLEncodeInternal(const char *input, idx_t input_size, typename OP::RESULT_TYPE &result, bool encode_slash) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 	static const char *HEX_DIGIT = "0123456789ABCDEF";
@@ -602,26 +613,42 @@ void StringUtil::URLEncodeBuffer(const char *input, idx_t input_size, char *outp
 
 string StringUtil::URLEncode(const string &input, bool encode_slash) {
 	idx_t result_size = URLEncodeSize(input.c_str(), input.size(), encode_slash);
-	unique_array<char> result_data = make_uniq_array<char>(result_size);
+	auto result_data = make_uniq_array<char>(result_size);
 	URLEncodeBuffer(input.c_str(), input.size(), result_data.get(), encode_slash);
 	return string(result_data.get(), result_size);
 }
 
-string StringUtil::URLDecode(const string &input, bool plus_to_space) {
-	string result;
-	result.reserve(input.size());
-	for (idx_t i = 0; i < input.length(); i++) {
-		if (plus_to_space && input[i] == '+') {
-			result += ' ';
-		} else if (input[i] == '%' && i + 2 < input.length() && CharacterIsHex(input[i + 1]) &&
-		           CharacterIsHex(input[i + 2])) {
-			uint32_t hex_value = (uint32_t(GetHexValue(input[i + 1])) << 4) + uint32_t(GetHexValue(input[i + 2]));
-			result += static_cast<char>(hex_value);
+template <class OP>
+void URLDecodeInternal(const char *input, idx_t input_size, typename OP::RESULT_TYPE &result, bool plus_to_space) {
+	for (idx_t i = 0; i < input_size; i++) {
+		char ch = input[i];
+		if (plus_to_space && ch == '+') {
+			OP::ProcessCharacter(result, ' ');
+		} else if (ch == '%' && i + 2 < input_size && StringUtil::CharacterIsHex(input[i + 1]) &&
+		           StringUtil::CharacterIsHex(input[i + 2])) {
+			OP::ProcessHex(result, input, i);
 			i += 2;
 		} else {
-			result += input[i];
+			OP::ProcessCharacter(result, ch);
 		}
 	}
-	return result;
 }
+
+idx_t StringUtil::URLDecodeSize(const char *input, idx_t input_size, bool plus_to_space) {
+	idx_t result_length = 0;
+	URLDecodeInternal<URLEncodeLength>(input, input_size, result_length, plus_to_space);
+	return result_length;
+}
+
+void StringUtil::URLDecodeBuffer(const char *input, idx_t input_size, char *output, bool plus_to_space) {
+	URLDecodeInternal<URLEncodeOperator>(input, input_size, output, plus_to_space);
+}
+
+string StringUtil::URLDecode(const string &input, bool plus_to_space) {
+	idx_t result_size = URLDecodeSize(input.c_str(), input.size(), plus_to_space);
+	auto result_data = make_uniq_array<char>(result_size);
+	URLDecodeBuffer(input.c_str(), input.size(), result_data.get(), plus_to_space);
+	return string(result_data.get(), result_size);
+}
+
 } // namespace duckdb

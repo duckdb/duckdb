@@ -29,8 +29,13 @@ ScalarFunction UrlEncodeFun::GetFunction() {
 struct URLDecodeOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		string encoded_string = StringUtil::URLDecode(input.GetString());
-		return StringVector::AddString(result, encoded_string);
+		auto input_str = input.GetData();
+		auto input_size = input.GetSize();
+		idx_t result_length = StringUtil::URLDecodeSize(input_str, input_size);
+		auto result_str = StringVector::EmptyString(result, result_length);
+		StringUtil::URLDecodeBuffer(input_str, input_size, result_str.GetDataWriteable());
+		result_str.Finalize();
+		return result_str;
 	}
 };
 

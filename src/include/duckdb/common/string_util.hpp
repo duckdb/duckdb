@@ -143,6 +143,9 @@ public:
 	DUCKDB_API static void URLEncodeBuffer(const char *input, idx_t input_size, char *output, bool encode_slash = true);
 	//! Decode URL escape sequences (e.g. %20) in a string
 	DUCKDB_API static string URLDecode(const string &str, bool plus_to_space = false);
+	DUCKDB_API static idx_t URLDecodeSize(const char *input, idx_t input_size, bool plus_to_space = false);
+	DUCKDB_API static void URLDecodeBuffer(const char *input, idx_t input_size, char *output,
+	                                       bool plus_to_space = false);
 
 	template <class T>
 	static string ToString(const vector<T> &input, const string &separator) {
