@@ -444,35 +444,23 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 }
 
 bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {
-	std::unordered_set<string> partitions;
-	auto &fs = FileSystem::GetFileSystem(context);
-
 	auto first_file = files.GetFirstFile();
-	auto splits_first_file = StringUtil::Split(first_file, fs.PathSeparator(first_file));
-	if (splits_first_file.size() < 2) {
-		return false;
-	}
-	for (auto &split : splits_first_file) {
-		auto partition = StringUtil::Split(split, "=");
-		if (partition.size() == 2) {
-			partitions.insert(partition.front());
-		}
-	}
+	auto partitions = HivePartitioning::Parse(first_file);
 	if (partitions.empty()) {
+		// no partitions found in first file
 		return false;
 	}
 
 	for (const auto &file : files.Files()) {
-		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
-		if (splits.size() != splits_first_file.size()) {
+		auto new_partitions = HivePartitioning::Parse(file);
+		if (new_partitions.size() != partitions.size()) {
+			// partition count mismatch
 			return false;
 		}
-		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-			auto part = StringUtil::Split(*it, "=");
-			if (part.size() != 2) {
-				continue;
-			}
-			if (partitions.find(part.front()) == partitions.end()) {
+		for (auto &part : new_partitions) {
+			auto entry = partitions.find(part.first);
+			if (entry == partitions.end()) {
+				// differing partitions between files
 				return false;
 			}
 		}
@@ -482,21 +470,9 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context) {
 	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
 
-	auto &fs = FileSystem::GetFileSystem(context);
-
 	unordered_map<string, LogicalType> detected_types;
 	for (const auto &file : files.Files()) {
-		unordered_map<string, string> partitions;
-		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
-		if (splits.size() < 2) {
-			return;
-		}
-		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-			auto part = StringUtil::Split(*it, "=");
-			if (part.size() == 2) {
-				partitions[part.front()] = part.back();
-			}
-		}
+		auto partitions = HivePartitioning::Parse(file);
 		if (partitions.empty()) {
 			return;
 		}
@@ -573,24 +549,13 @@ bool MultiFileReaderOptions::AnySet() {
 	return filename || hive_partitioning || union_by_name;
 }
 
-Value MultiFileReaderOptions::GetHivePartitionValue(const string &base, const string &entry,
+Value MultiFileReaderOptions::GetHivePartitionValue(const string &value, const string &key,
                                                     ClientContext &context) const {
-	Value value(base);
-	auto it = hive_types_schema.find(entry);
+	auto it = hive_types_schema.find(key);
 	if (it == hive_types_schema.end()) {
-		return value;
+		return HivePartitioning::GetValue(context, key, value, LogicalType::VARCHAR);
 	}
-
-	// Handle nulls
-	if (base.empty() || StringUtil::CIEquals(base, "NULL")) {
-		return Value(it->second);
-	}
-
-	if (!value.TryCastAs(context, it->second)) {
-		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
-		                            StringUtil::Upper(it->first), it->second.ToString());
-	}
-	return value;
+	return HivePartitioning::GetValue(context, key, value, it->second);
 }
 
 } // namespace duckdb
