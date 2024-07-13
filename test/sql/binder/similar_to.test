@@ -1,5 +1,5 @@
 # name: test/sql/binder/similar_to.test
-# description: Test table alias with single quotes
+# description: Test similar to suggestions
 # group: [binder]
 
 statement ok

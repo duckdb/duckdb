@@ -507,9 +507,9 @@ SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, con
 
 	SimilarCatalogEntry result;
 	for (auto &kv : map.Entries()) {
-		auto ldist = StringUtil::SimilarityScore(kv.first, name);
-		if (ldist < result.distance) {
-			result.distance = ldist;
+		auto entry_score = StringUtil::SimilarityRating(kv.first, name);
+		if (entry_score > result.score) {
+			result.score = entry_score;
 			result.name = kv.first;
 		}
 	}
