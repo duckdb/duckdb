@@ -110,6 +110,10 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		auto &result = select->node->Cast<RecursiveCTENode>();
 		result.ctename = string(cte.ctename);
 		result.union_all = stmt.all;
+		if (stmt.withClause) {
+			auto with_clause = PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause);
+			TransformCTE(*with_clause, result.cte_map);
+		}
 		result.left = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.larg));
 		result.right = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.rarg));
 		result.aliases = info.aliases;

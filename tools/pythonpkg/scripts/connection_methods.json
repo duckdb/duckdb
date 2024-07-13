@@ -974,7 +974,7 @@
 				"type": "str"
 			}
 		],
-		"return": "List[str]"
+		"return": "Set[str]"
 	},
 	{
 		"name": "install_extension",

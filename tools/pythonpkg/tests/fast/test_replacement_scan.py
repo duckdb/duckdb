@@ -383,11 +383,12 @@ class TestReplacementScan(object):
                 e1.EmployeeName,
                 employees_df.ManagerID
             FROM employees_df e1
-            JOIN employees_df ON e1.ManagerID = employees_df.EmployeeID;
+            JOIN employees_df ON e1.ManagerID = employees_df.EmployeeID
+            ORDER BY ALL;
         """
         rel = duckdb_cursor.sql(query)
         res = rel.fetchall()
-        assert res == [(3, 'Charlie', None), (5, 'Eve', 1.0), (2, 'Bob', None), (4, 'David', 1.0)]
+        assert res == [(2, 'Bob', None), (3, 'Charlie', None), (4, 'David', 1.0), (5, 'Eve', 1.0)]
 
     def test_cte_at_different_levels(self, duckdb_cursor):
         query = """

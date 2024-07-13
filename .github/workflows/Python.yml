@@ -106,6 +106,7 @@ jobs:
       run: |
         pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+
     - name: Build
       shell: bash
       working-directory: tools/pythonpkg

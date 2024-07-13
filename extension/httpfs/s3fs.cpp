@@ -11,9 +11,10 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #endif
 
-#include <duckdb/function/scalar/string_functions.hpp>
-#include <duckdb/main/secret/secret_manager.hpp>
-#include <duckdb/storage/buffer_manager.hpp>
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/string_util.hpp"
 #include <iostream>
 #include <thread>
 
@@ -99,47 +100,11 @@ static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_heade
 }
 
 string S3FileSystem::UrlDecode(string input) {
-	string result;
-	result.reserve(input.size());
-	char ch;
-	replace(input.begin(), input.end(), '+', ' ');
-	for (idx_t i = 0; i < input.length(); i++) {
-		if (int(input[i]) == 37) {
-			unsigned int ii;
-			sscanf(input.substr(i + 1, 2).c_str(), "%x", &ii);
-			ch = static_cast<char>(ii);
-			result += ch;
-			i += 2;
-		} else {
-			result += input[i];
-		}
-	}
-	return result;
+	return StringUtil::URLDecode(input, true);
 }
 
 string S3FileSystem::UrlEncode(const string &input, bool encode_slash) {
-	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-	static const char *hex_digit = "0123456789ABCDEF";
-	string result;
-	result.reserve(input.size());
-	for (idx_t i = 0; i < input.length(); i++) {
-		char ch = input[i];
-		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
-		    ch == '-' || ch == '~' || ch == '.') {
-			result += ch;
-		} else if (ch == '/') {
-			if (encode_slash) {
-				result += string("%2F");
-			} else {
-				result += ch;
-			}
-		} else {
-			result += string("%");
-			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
-			result += hex_digit[static_cast<unsigned char>(ch) & 15];
-		}
-	}
-	return result;
+	return StringUtil::URLEncode(input, encode_slash);
 }
 
 void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, const char *env_var_name) {
