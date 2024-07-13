@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -228,17 +229,28 @@ public:
 	//! with an equal penalty of 3, "depdelay_minutes" is closer to "depdelay" than to "pg_am"
 	DUCKDB_API static idx_t LevenshteinDistance(const string &s1, const string &s2, idx_t not_equal_penalty = 1);
 
-	//! Returns the similarity score between two strings
+	//! Returns the similarity score between two strings (edit distance metric - lower is more similar)
 	DUCKDB_API static idx_t SimilarityScore(const string &s1, const string &s2);
+	//! Returns a normalized similarity rating between 0.0 - 1.0 (higher is more similar)
+	DUCKDB_API static double SimilarityRating(const string &s1, const string &s2);
 	//! Get the top-n strings (sorted by the given score distance) from a set of scores.
+	//! The scores should be normalized between 0.0 and 1.0, where 1.0 is the highest score
 	//! At least one entry is returned (if there is one).
-	//! Strings are only returned if they have a score less than the threshold.
-	DUCKDB_API static vector<string> TopNStrings(vector<std::pair<string, idx_t>> scores, idx_t n = 5,
+	//! Strings are only returned if they have a score higher than the threshold.
+	DUCKDB_API static vector<string> TopNStrings(vector<pair<string, double>> scores, idx_t n = 5,
+	                                             double threshold = 0.5);
+	//! DEPRECATED: old TopNStrings method that uses the levenshtein distance metric instead of the normalized 0.0 - 1.0
+	//! rating
+	DUCKDB_API static vector<string> TopNStrings(const vector<pair<string, idx_t>> &scores, idx_t n = 5,
 	                                             idx_t threshold = 5);
 	//! Computes the levenshtein distance of each string in strings, and compares it to target, then returns TopNStrings
 	//! with the given params.
 	DUCKDB_API static vector<string> TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n = 5,
 	                                                 idx_t threshold = 5);
+	//! Computes the jaro winkler distance of each string in strings, and compares it to target, then returns
+	//! TopNStrings with the given params.
+	DUCKDB_API static vector<string> TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n = 5,
+	                                                 double threshold = 0.5);
 	DUCKDB_API static string CandidatesMessage(const vector<string> &candidates,
 	                                           const string &candidate = "Candidate bindings");
 

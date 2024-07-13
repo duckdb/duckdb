@@ -5,6 +5,7 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "jaro_winkler.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -307,22 +308,43 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	return source;
 }
 
-vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
+vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_t n, double threshold) {
 	if (scores.empty()) {
 		return vector<string>();
 	}
-	sort(scores.begin(), scores.end(), [](const pair<string, idx_t> &a, const pair<string, idx_t> &b) -> bool {
-		return a.second < b.second || (a.second == b.second && a.first.size() < b.first.size());
+	sort(scores.begin(), scores.end(), [](const pair<string, double> &a, const pair<string, double> &b) -> bool {
+		return a.second > b.second || (a.second == b.second && a.first.size() < b.first.size());
 	});
 	vector<string> result;
 	result.push_back(scores[0].first);
 	for (idx_t i = 1; i < MinValue<idx_t>(scores.size(), n); i++) {
-		if (scores[i].second > threshold) {
+		if (scores[i].second < threshold) {
 			break;
 		}
 		result.push_back(scores[i].first);
 	}
 	return result;
+}
+
+static double NormalizeScore(idx_t score, idx_t max_score) {
+	return 1.0 - static_cast<double>(score) / static_cast<double>(max_score);
+}
+
+vector<string> StringUtil::TopNStrings(const vector<pair<string, idx_t>> &scores, idx_t n, idx_t threshold) {
+	// obtain the max score to normalize
+	idx_t max_score = threshold;
+	for (auto &score : scores) {
+		if (score.second > max_score) {
+			max_score = score.second;
+		}
+	}
+
+	// normalize
+	vector<pair<string, double>> normalized_scores;
+	for (auto &score : scores) {
+		normalized_scores.push_back(make_pair(score.first, NormalizeScore(score.second, max_score)));
+	}
+	return TopNStrings(std::move(normalized_scores), n, NormalizeScore(threshold, max_score));
 }
 
 struct LevenshteinArray {
@@ -384,6 +406,11 @@ idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
 	return LevenshteinDistance(s1, s2, 3);
 }
 
+double StringUtil::SimilarityRating(const string &s1, const string &s2) {
+	return duckdb_jaro_winkler::jaro_winkler_similarity(s1.data(), s1.data() + s1.size(), s2.data(),
+	                                                    s2.data() + s2.size());
+}
+
 vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n,
                                            idx_t threshold) {
 	vector<pair<string, idx_t>> scores;
@@ -394,6 +421,16 @@ vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const 
 		} else {
 			scores.emplace_back(str, SimilarityScore(str, target));
 		}
+	}
+	return TopNStrings(scores, n, threshold);
+}
+
+vector<string> StringUtil::TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n,
+                                           double threshold) {
+	vector<pair<string, double>> scores;
+	scores.reserve(strings.size());
+	for (auto &str : strings) {
+		scores.emplace_back(str, SimilarityRating(str, target));
 	}
 	return TopNStrings(scores, n, threshold);
 }
