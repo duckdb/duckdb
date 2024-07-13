@@ -14,6 +14,16 @@
 #include <cstdio>
 #include <sys/stat.h>
 
+#if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
+#include <sys/attr.h>
+#include <sys/clonefile.h>
+#endif
+
+#ifdef LINUX
+#include <linux/fs.h>
+#include <sys/ioctl.h>
+#endif
+
 #ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
@@ -1086,6 +1096,14 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	}
 }
 
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
+	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
+	if (!CopyFileW(source_unicode.c_str(), target_unicode.c_str(), FALSE)) {
+		throw IOException("Could not copy file: %s", GetLastErrorAsString());
+	}
+}
+
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	auto path = handle.Cast<WindowsFileHandle>().path;
 	// pipes in windows are just files in '\\.\pipe\' folder
@@ -1336,5 +1354,24 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 unique_ptr<FileSystem> FileSystem::CreateLocal() {
 	return make_uniq<LocalFileSystem>();
 }
+
+#if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+  int src_fd = src_handle->Cast<UnixFileHandle>().fd;
+  fclonefileat(src_fd, AT_FDCWD, target.c_str(), 0);
+}
+#elif LINUX
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+    int dst_fd = dst_handle->Cast<UnixFileHandle>().fd;
+    int src_fd = src_handle->Cast<UnixFileHandle>().fd;
+    ioctl(dst_fd, FICLONE, src_fd);
+}
+#else
+#ifndef _WIN32
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+    throw NotImplementedException("CopyFile Unsupported");
+}
+#endif
+#endif
 
 } // namespace duckdb

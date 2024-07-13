@@ -313,4 +313,13 @@ bool Connection::HasActiveTransaction() {
 	return context->transaction.HasActiveTransaction();
 }
 
+uint64_t Connection::GetSnapshotId() {
+  return context->GetSnapshotId();
+}
+
+unique_ptr<QueryResult> Connection::CreateSnapshot() {
+  auto result = context->CreateSnapshot();
+  return result;
+}
+
 } // namespace duckdb

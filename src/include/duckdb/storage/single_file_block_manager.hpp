@@ -38,6 +38,7 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	void CreateNewDatabase();
+        unique_ptr<FileHandle> CloneEmptyDatabase();
 	void LoadExistingDatabase();
 
 	//! Creates a new Block using the specified block_id and returns a pointer
@@ -68,6 +69,8 @@ public:
 	idx_t TotalBlocks() override;
 	//! Returns the number of free blocks
 	idx_t FreeBlocks() override;
+        uint64_t GetSnapshotId();
+        unique_ptr<FileHandle>& GetFileHandle();
 
 private:
 	//! Load the free list from the file

@@ -21,6 +21,22 @@ void duckdb_set_hlc_timestamp(uint64_t ts) {
 	duckdb::TimestampManager::SetHLCTimestamp(ts);
 }
 
+uint64_t duckdb_get_snapshot_id(duckdb_connection connection)
+{
+  Connection *conn = reinterpret_cast<Connection *>(connection);
+  return conn->GetSnapshotId();
+}
+
+duckdb_state duckdb_create_snapshot(duckdb_connection connection, duckdb_result *out_result)
+{
+  Connection *conn = reinterpret_cast<Connection *>(connection);
+  auto result = conn->CreateSnapshot();
+  if (! result) {
+    return DuckDBError;
+  }
+  return DuckDBTranslateResult(std::move(result), out_result);
+}
+
 duckdb_state duckdb_result_to_arrow(duckdb_result result, duckdb_arrow_array *out_array) {
 	if (!out_array) {
 		return DuckDBSuccess;

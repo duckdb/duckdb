@@ -190,6 +190,8 @@ public:
 	//! Returns true if execution of the current query is finished
 	DUCKDB_API bool ExecutionIsFinished();
 
+        DUCKDB_API uint64_t GetSnapshotId();
+        DUCKDB_API unique_ptr<QueryResult> CreateSnapshot();
 	//! Process an error for display to the user
 	DUCKDB_API void ProcessError(ErrorData &error, const string &query) const;
 

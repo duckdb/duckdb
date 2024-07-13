@@ -579,4 +579,20 @@ void SingleFileBlockManager::TrimFreeBlocks() {
 	newly_freed_list.clear();
 }
 
+unique_ptr<FileHandle>& SingleFileBlockManager::GetFileHandle() {
+  return handle;
+}
+
+unique_ptr<FileHandle> SingleFileBlockManager::CloneEmptyDatabase() {
+  auto flags = GetFileFlags(true);
+
+  // open the RDBMS handle
+  auto &fs = FileSystem::Get(db);
+  return fs.OpenFile(path, flags);
+}
+
+uint64_t SingleFileBlockManager::GetSnapshotId() {
+  return iteration_count;
+}
+  
 } // namespace duckdb

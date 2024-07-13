@@ -34,6 +34,10 @@
 #undef MoveFile
 #endif
 
+#ifdef CopyFile
+#undef CopyFile
+#endif
+
 #ifdef RemoveDirectory
 #undef RemoveDirectory
 #endif
