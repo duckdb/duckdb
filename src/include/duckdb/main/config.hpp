@@ -326,6 +326,7 @@ public:
 	DUCKDB_API void CheckLock(const string &name);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
+	DUCKDB_API static idx_t ParseMemoryLimitSlurm(const string &arg);
 
 	//! Returns the list of possible compression functions for the physical type.
 	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const PhysicalType physical_type);

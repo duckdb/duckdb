@@ -294,12 +294,25 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 }
 
 void DBConfig::SetDefaultMaxMemory() {
-	auto memory = FileSystem::GetAvailableMemory();
-	if (!memory.IsValid()) {
-		options.maximum_memory = DBConfigOptions().maximum_memory;
-		return;
-	}
-	options.maximum_memory = memory.GetIndex() * 8 / 10;
+    const char* slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
+    const char* slurm_mem_per_cpu = getenv("SLURM_MEM_PER_CPU");
+    const char* slurm_cpu_on_node = getenv("SLURM_CPU_ON_NODE");
+    if (slurm_mem_per_node) {
+        options.maximum_memory = ParseMemoryLimitSlurm(slurm_mem_per_node) * 8 / 10;
+        return;
+    } else if (slurm_mem_per_cpu && slurm_cpu_on_node) {
+        idx_t mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
+        idx_t num_threads = std::stoi(slurm_cpu_on_node);
+        options.maximum_memory = mem_per_cpu * num_threads * 8 / 10;
+        return;
+    } else {
+        auto memory = FileSystem::GetAvailableMemory();
+        if (!memory.IsValid()) {
+            options.maximum_memory = DBConfigOptions().maximum_memory;
+            return;
+        }
+        options.maximum_memory = memory.GetIndex() * 8 / 10;
+    }
 }
 
 void DBConfig::SetDefaultTempDirectory() {
@@ -374,16 +387,19 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
-#ifndef DUCKDB_NO_THREADS
-	idx_t physical_cores = std::thread::hardware_concurrency();
-#ifdef __linux__
-	auto cores_available_per_period = CGroupBandwidthQuota(physical_cores, fs);
-	return MaxValue<idx_t>(cores_available_per_period, 1);
+#ifdef DUCKDB_NO_THREADS
+    return 1;
 #else
-	return physical_cores;
-#endif
-#else
-	return 1;
+    idx_t physical_cores = std::thread::hardware_concurrency();
+    #ifdef __linux__
+        if (const char* slurm_cpus = getenv("SLURM_CPUS_ON_NODE")) {
+            return std::max<idx_t>(std::stoi(slurm_cpus), 1);
+        }
+		auto cores_available_per_period = CGroupBandwidthQuota(physical_cores, fs);
+        return MaxValue<idx_t>(cores_available_per_period, 1);
+    #else
+        return physical_cores;
+    #endif
 #endif
 }
 
@@ -447,6 +463,39 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
 	return NumericCast<idx_t>(multiplier * limit);
+}
+
+idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
+    if (arg.empty()) {
+        return 0;
+    }
+
+    string number_str = arg;
+    idx_t multiplier = 1000LL * 1000LL; // Default to MB if no unit specified
+
+    // Check for SLURM-style suffixes
+    if (arg.back() == 'K' || arg.back() == 'k') {
+        number_str = arg.substr(0, arg.size() - 1);
+        multiplier = 1000LL;
+    } else if (arg.back() == 'M' || arg.back() == 'm') {
+        number_str = arg.substr(0, arg.size() - 1);
+        multiplier = 1000LL * 1000LL;
+    } else if (arg.back() == 'G' || arg.back() == 'g') {
+        number_str = arg.substr(0, arg.size() - 1);
+        multiplier = 1000LL * 1000LL * 1000LL;
+    } else if (arg.back() == 'T' || arg.back() == 't') {
+        number_str = arg.substr(0, arg.size() - 1);
+        multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+    }
+
+    // Parse the number
+    double limit = Cast::Operation<string_t, double>(string_t(number_str));
+
+    if (limit < 0) {
+        return NumericLimits<idx_t>::Maximum();
+    }
+
+    return NumericCast<idx_t>(multiplier * limit);
 }
 
 // Right now we only really care about access mode when comparing DBConfigs
