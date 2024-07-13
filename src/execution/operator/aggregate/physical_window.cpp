@@ -790,11 +790,22 @@ bool PhysicalWindow::SupportsBatchIndex() const {
 	//	We can only preserve order for single partitioning
 	//	or work stealing causes out of order batch numbers
 	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
-	return wexpr.partitions.empty() && !wexpr.orders.empty();
+	return wexpr.partitions.empty();
 }
 
 OrderPreservationType PhysicalWindow::SourceOrder() const {
-	return SupportsBatchIndex() ? OrderPreservationType::FIXED_ORDER : OrderPreservationType::NO_ORDER;
+	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
+	if (!wexpr.partitions.empty()) {
+		// if we have partitions the window order is not defined
+		return OrderPreservationType::NO_ORDER;
+	}
+	// without partitions we can maintain order
+	if (wexpr.orders.empty()) {
+		// if we have no orders we maintain insertion order
+		return OrderPreservationType::INSERTION_ORDER;
+	}
+	// otherwise we can maintain the fixed order
+	return OrderPreservationType::FIXED_ORDER;
 }
 
 double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
