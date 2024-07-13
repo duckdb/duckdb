@@ -249,7 +249,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		    MaxValue((child_array_total_size + array_size) / array_size, format.unified.validity.TargetCount());
 
 		// Create list entries!
-		format.array_list_entries = make_uniq_array<list_entry_t>(list_entry_t_count);
+		format.array_list_entries = make_unsafe_uniq_array<list_entry_t>(list_entry_t_count);
 		for (idx_t i = 0; i < list_entry_t_count; i++) {
 			format.array_list_entries[i].length = array_size;
 			format.array_list_entries[i].offset = i * array_size;

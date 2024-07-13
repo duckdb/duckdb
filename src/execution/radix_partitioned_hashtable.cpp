@@ -878,7 +878,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			for (idx_t i = 0; i < op.aggregates.size(); i++) {
 				D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
-				auto aggr_state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
+				auto aggr_state = make_unsafe_uniq_array_for_override<data_t>(aggr.function.state_size());
 				aggr.function.initialize(aggr_state.get());
 
 				AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);

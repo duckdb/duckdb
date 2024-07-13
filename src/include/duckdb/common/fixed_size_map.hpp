@@ -41,7 +41,7 @@ public:
 	void resize(idx_t capacity_p) { // NOLINT: match stl case
 		capacity = capacity_p;
 		occupied = ValidityMask(capacity);
-		values = make_unsafe_uniq_array<mapped_type>(capacity + 1);
+		values = make_unsafe_uniq_array_for_override<mapped_type>(capacity + 1);
 		clear();
 	}
 

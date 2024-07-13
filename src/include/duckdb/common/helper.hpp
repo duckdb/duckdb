@@ -85,24 +85,28 @@ template<class DATA_TYPE>
 inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
 make_uniq_array(size_t n) // NOLINT: mimic std style
 {
-	if (std::is_pod<DATA_TYPE>()) {
-		// we don't want to call the initializer on plain-old-data
-		return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]);
-	} else {
-		return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]());
-	}
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]());
+}
+
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
+make_uniq_array_for_override(size_t n) // NOLINT: mimic std style
+{
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]);
 }
 
 template<class DATA_TYPE>
 inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
 make_unsafe_uniq_array(size_t n) // NOLINT: mimic std style
 {
-	if (std::is_pod<DATA_TYPE>()) {
-		// we don't want to call the initializer on plain-old-data
-		return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]);
-	} else {
-		return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]());
-	}
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]());
+}
+
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
+make_unsafe_uniq_array_for_override(size_t n) // NOLINT: mimic std style
+{
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]);
 }
 
 template<class DATA_TYPE, class... ARGS>
