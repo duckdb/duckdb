@@ -2067,6 +2067,8 @@ DUCKDB_API void duckdb_destroy_data_chunk(duckdb_data_chunk *chunk);
 
 /*!
 Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.
+After calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current
+data and validity pointers
 
 * chunk: The data chunk to reset.
 */
@@ -2213,6 +2215,9 @@ DUCKDB_API duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t 
 
 /*!
 Sets the total capacity of the underlying child-vector of a list.
+
+After calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current
+data and validity pointers
 
 * vector: The list vector.
 * required_capacity: the total capacity to reserve.
