@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from .session import SparkSession
 
 from ..errors import PySparkValueError
-from .functions import _to_column
+from .functions import _to_column_expr, col
 
 
 class DataFrame:
@@ -263,14 +263,39 @@ class DataFrame:
         |  2|Alice|
         +---+-----+
         """
-        if kwargs:
-            raise ContributionsAcceptedError
+        if not cols:
+            raise ValueError("At least one column must be specified.")
+        if len(cols) == 1 and isinstance(cols[0], list):
+            cols = cols[0]
+
         columns = []
-        for col in cols:
-            if isinstance(col, (str, Column)):
-                columns.append(_to_column(col))
-            else:
-                raise ContributionsAcceptedError
+        for c in cols:
+            _c = c
+            if isinstance(c, str):
+                _c = col(c)
+            elif isinstance(c, int) and not isinstance(c, bool):
+                # ordinal is 1-based
+                if c > 0:
+                    _c = self[c - 1]
+                # negative ordinal means sort by desc
+                elif c < 0:
+                    _c = self[-c - 1].desc()
+                else:
+                    raise IndexError("Index must be non-zero.")
+            columns.append(_c)
+
+        ascending = kwargs.get("ascending", True)
+
+        if isinstance(ascending, (bool, int)):
+            if not ascending:
+                columns = [c.desc() for c in columns]
+        elif isinstance(ascending, list):
+            columns = [c if asc else c.desc() for asc, c in zip(ascending, columns)]
+        else:
+            raise TypeError("Argument `ascending` should be a bool or"
+                            f" list, got {type(ascending).__name__}.")
+       
+        columns = [_to_column_expr(c) for c in columns]
         rel = self.relation.sort(*columns)
         return DataFrame(rel, self.session)
 
@@ -459,7 +484,7 @@ class DataFrame:
         if on is not None:
             assert isinstance(on, list)
             # Get (or create) the Expressions from the list of Columns
-            on = [_to_column(x) for x in on]
+            on = [_to_column_expr(x) for x in on]
 
             # & all the Expressions together to form one Expression
             assert isinstance(
@@ -633,16 +658,15 @@ class DataFrame:
         [Row(age=5, name='Bob')]
         """
         if isinstance(item, str):
-            return self.item
-        # elif isinstance(item, Column):
-        #    return self.filter(item)
-        # elif isinstance(item, (list, tuple)):
-        #    return self.select(*item)
-        # elif isinstance(item, int):
-        #    jc = self._jdf.apply(self.columns[item])
-        #    return Column(jc)
+            return col(item)
+        elif isinstance(item, Column):
+            return self.filter(item)
+        elif isinstance(item, (list, tuple)):
+            return self.select(*item)
+        elif isinstance(item, int):
+            return col(self._schema[item].name)
         else:
-            raise TypeError("unexpected item type: %s" % type(item))
+            raise TypeError(f"Unexpected item type: {type(item)}")
 
     def __getattr__(self, name: str) -> Column:
         """Returns the :class:`Column` denoted by ``name``.
@@ -656,7 +680,7 @@ class DataFrame:
             raise AttributeError(
                 "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
             )
-        return Column(duckdb.ColumnExpression(name))
+        return col(name)
 
     @overload
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":

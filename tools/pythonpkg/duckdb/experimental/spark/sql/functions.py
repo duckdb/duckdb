@@ -19,7 +19,7 @@ def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
     Invokes n-ary JVM function identified by name
     and wraps the result with :class:`~pyspark.sql.Column`.
     """
-    cols = [_to_column(expr) for expr in cols]
+    cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function(name, *cols)
 
 
@@ -87,9 +87,13 @@ def _invoke_function(function: str, *arguments):
     return Column(FunctionExpression(function, *arguments))
 
 
-def _to_column(col: ColumnOrName) -> Expression:
-    return col.expr if isinstance(col, Column) else ColumnExpression(col)
-
+def _to_column_expr(col: ColumnOrName) -> Expression:
+    if isinstance(col, Column):
+        return col.expr
+    elif isinstance(col, str):
+        return ColumnExpression(col)
+    else:
+        raise TypeError(f"col should be a string or a Column got: {type(col)}")
 
 def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Column:
     r"""Replace all substrings of the specified string value that match regexp with rep.
@@ -104,7 +108,7 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     """
     return _invoke_function(
         "regexp_replace",
-        _to_column(str),
+        _to_column_expr(str),
         ConstantExpression(pattern),
         ConstantExpression(replacement),
         ConstantExpression("g"),
@@ -137,7 +141,7 @@ def array_contains(col: "ColumnOrName", value: Any) -> Column:
     [Row(array_contains(data, a)=True), Row(array_contains(data, a)=False)]
     """
     value = _get_expr(value)
-    return _invoke_function("array_contains", _to_column(col), value)
+    return _invoke_function("array_contains", _to_column_expr(col), value)
 
 
 def avg(col: "ColumnOrName") -> Column:
@@ -428,7 +432,7 @@ def concat_ws(sep: str, *cols: "ColumnOrName") -> "Column":
     >>> df.select(concat_ws('-', df.s, df.d).alias('s')).collect()
     [Row(s='abcd-123')]
     """
-    cols = [_to_column(expr) for expr in cols]
+    cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function("concat_ws", ConstantExpression(sep), *cols)
 
 
@@ -692,7 +696,7 @@ def greatest(*cols: "ColumnOrName") -> Column:
     if len(cols) < 2:
         raise ValueError("greatest should take at least 2 columns")
 
-    cols = [_to_column(expr) for expr in cols]
+    cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function("greatest", *cols)
 
 
@@ -725,7 +729,7 @@ def least(*cols: "ColumnOrName") -> Column:
     if len(cols) < 2:
         raise ValueError("least should take at least 2 columns")
 
-    cols = [_to_column(expr) for expr in cols]
+    cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function("least", *cols)
 
 
@@ -901,7 +905,7 @@ def coalesce(*cols: "ColumnOrName") -> Column:
     +----+----+----------------+
     """
 
-    cols = [_to_column(expr) for expr in cols]
+    cols = [_to_column_expr(expr) for expr in cols]
     return Column(CoalesceOperator(*cols))
 
 
