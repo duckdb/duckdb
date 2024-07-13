@@ -296,13 +296,13 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 void DBConfig::SetDefaultMaxMemory() {
 	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
 	const char *slurm_mem_per_cpu = getenv("SLURM_MEM_PER_CPU");
-	const char *slurm_cpu_on_node = getenv("SLURM_CPU_ON_NODE");
+	const char *slurm_cpus_on_node = getenv("SLURM_CPUS_ON_NODE");
 	if (slurm_mem_per_node) {
 		options.maximum_memory = ParseMemoryLimitSlurm(slurm_mem_per_node) * 8 / 10;
 		return;
-	} else if (slurm_mem_per_cpu && slurm_cpu_on_node) {
+	} else if (slurm_mem_per_cpu && slurm_cpus_on_node) {
 		idx_t mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
-		idx_t num_threads = std::stoi(slurm_cpu_on_node);
+		idx_t num_threads = std::stoi(slurm_cpus_on_node);
 		options.maximum_memory = mem_per_cpu * num_threads * 8 / 10;
 		return;
 	} else {
