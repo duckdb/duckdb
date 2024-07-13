@@ -626,9 +626,13 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		return CatalogException(error_message);
 	}
 
+	// entries in other schemas get a penalty
+	// however, if there is an exact match in another schema, we will always show it
+	static constexpr const idx_t UNSEEN_PENALTY = 2;
 	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
 	string did_you_mean;
-	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
+	if (unseen_entry.Found() &&
+	    (unseen_entry.distance == 0 || unseen_entry.distance + UNSEEN_PENALTY < entry.distance)) {
 		// the closest matching entry requires qualification as it is not in the default search path
 		// check how to minimally qualify this entry
 		auto catalog_name = unseen_entry.schema->catalog.GetName();

@@ -5,6 +5,7 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "jaro_winkler.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -381,7 +382,12 @@ idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p, id
 }
 
 idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
-	return LevenshteinDistance(s1, s2, 3);
+	auto jaro_winkler_score = duckdb_jaro_winkler::jaro_winkler_similarity(s1.data(), s1.data() + s1.size(), s2.data(),
+	                                                                       s2.data() + s2.size());
+	// jaro winkler is a score between 0-1.0 where 1.0 is the best
+	// turn this into a score between 0-MAX(len(s1), len(s2)) where 0 is the best (more similar to levenshtein)
+	idx_t max_levenshtein = MaxValue(s1.size(), s2.size());
+	return max_levenshtein - static_cast<idx_t>(jaro_winkler_score * max_levenshtein);
 }
 
 vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n,
