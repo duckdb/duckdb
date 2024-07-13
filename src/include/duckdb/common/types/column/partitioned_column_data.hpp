@@ -109,10 +109,10 @@ protected:
 	//! Builds a selection vector in the Append state for the partitions
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
 	void BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count) const;
-	template <bool use_fixed_size_map>
+	template <bool fixed>
 	static void BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count);
 	//! Appends a DataChunk to this PartitionedColumnData
-	template <bool use_fixed_size_map>
+	template <bool fixed>
 	void AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input);
 	//! Create a collection for a specific a partition
 	unique_ptr<ColumnDataCollection> CreatePartitionCollection(idx_t partition_index) const {

@@ -101,17 +101,12 @@ perfect_map_t<list_entry_t> &PartitionedColumnDataGetMap(PartitionedColumnDataAp
 	return state.partition_entries;
 }
 
-template <bool use_fixed_size_map>
+template <bool fixed>
 void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count) {
-	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
-	                                           perfect_map_t<list_entry_t>>::type;
-	using GETTER =
-	    typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<MAP_TYPE>, UnorderedMapGetter<MAP_TYPE>>::type;
-	auto &partition_entries = PartitionedColumnDataGetMap<MAP_TYPE>(state);
-
-	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	using GETTER = TemplatedMapGetter<list_entry_t>::Functor<fixed>;
+	auto &partition_entries = GETTER::GetMap(state.fixed_partition_entries, state.partition_entries);
 	partition_entries.clear();
-
+	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		for (idx_t i = 0; i < append_count; i++) {
@@ -153,13 +148,10 @@ void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &
 	}
 }
 
-template <bool use_fixed_size_map>
+template <bool fixed>
 void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input) {
-	using MAP_TYPE = typename std::conditional<use_fixed_size_map, fixed_size_map_t<list_entry_t>,
-	                                           perfect_map_t<list_entry_t>>::type;
-	using GETTER =
-	    typename std::conditional<use_fixed_size_map, FixedSizeMapGetter<MAP_TYPE>, UnorderedMapGetter<MAP_TYPE>>::type;
-	const auto &partition_entries = PartitionedColumnDataGetMap<MAP_TYPE>(state);
+	using GETTER = TemplatedMapGetter<list_entry_t>::Functor<fixed>;
+	auto &partition_entries = GETTER::GetMap(state.fixed_partition_entries, state.partition_entries);
 
 	// Loop through the partitions to append the new data to the partition buffers, and flush the buffers if necessary
 	SelectionVector partition_sel;

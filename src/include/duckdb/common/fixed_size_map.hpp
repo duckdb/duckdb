@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
@@ -18,6 +19,7 @@ class fixed_size_map_iterator; // NOLINT: match stl case
 template <class T>
 class fixed_size_map_const_iterator; // NOLINT: match stl case
 
+//! Alternative to perfect_map_t when min/max keys are integral, small, and known
 template <class T>
 class fixed_size_map_t { // NOLINT: match stl case
 	friend class fixed_size_map_iterator<T>;
@@ -130,7 +132,7 @@ public:
 		return tmp;
 	}
 
-	key_type &GetKey() {
+	key_type GetKey() {
 		return current;
 	}
 
@@ -206,59 +208,107 @@ private:
 	idx_t current;
 };
 
-//! Some helper functors so we can template functions to use either an unordered map or a fixed size map
+//! A helper functor so we can template functions to use either a perfect map or a fixed size map
 
 // LCOV_EXCL_START
-template <class MAP_TYPE>
-struct UnorderedMapGetter {
+template <class MAPPED_TYPE>
+struct TemplatedMapGetter {
 private:
-	using key_type = typename MAP_TYPE::key_type;
-	using mapped_type = typename MAP_TYPE::mapped_type;
-	using iterator = typename MAP_TYPE::iterator;
-	using const_iterator = typename MAP_TYPE::const_iterator;
+	using key_type = idx_t;
+	using mapped_type = MAPPED_TYPE;
+	using fixed_size_map_type = fixed_size_map_t<mapped_type>;
+	using perfect_map_type = perfect_map_t<mapped_type>;
 
 public:
-	static const key_type &GetKey(iterator &it) {
-		return it->first;
-	}
+	//! Partial specializations of member function templates are not allowed,
+	//! but partial specializations of member class template are
+	//! https://stackoverflow.com/questions/10178598/specializing-a-templated-member-of-a-template-class/10178791
+	template <bool fixed>
+	struct Functor {
+	private:
+		using map_type = typename std::conditional<fixed, fixed_size_map_type, perfect_map_type>::type;
+		using iterator = typename map_type::iterator;
+		using const_iterator = typename map_type::const_iterator;
 
-	static const key_type &GetKey(const const_iterator &it) {
-		return it->first;
-	}
+	public:
+		static map_type &GetMap(fixed_size_map_type &, perfect_map_type &) {
+			throw NotImplementedException("TemplatedMapGetter::Functor::GetMap for this boolean value");
+		}
 
-	static mapped_type &GetValue(iterator &iterator) {
-		return iterator->second;
-	}
+		static key_type GetKey(const iterator &) {
+			throw NotImplementedException("TemplatedMapGetter::Functor::GetKey for this boolean value");
+		}
 
-	static const mapped_type &GetValue(const const_iterator &iterator) {
-		return iterator->second;
-	}
-};
+		static const key_type &GetKey(const const_iterator &) {
+			throw NotImplementedException("TemplatedMapGetter::Functor::GetKey for this boolean value");
+		}
 
-template <class MAP_TYPE>
-struct FixedSizeMapGetter {
-private:
-	using key_type = typename MAP_TYPE::key_type;
-	using mapped_type = typename MAP_TYPE::mapped_type;
-	using iterator = typename MAP_TYPE::iterator;
-	using const_iterator = typename MAP_TYPE::const_iterator;
+		static mapped_type &GetValue(iterator &) {
+			throw NotImplementedException("TemplatedMapGetter::Functor::GetValue for this boolean value");
+		}
 
-public:
-	static const key_type &GetKey(iterator &it) {
-		return it.GetKey();
-	}
+		static const mapped_type &GetValue(const const_iterator &) {
+			throw NotImplementedException("TemplatedMapGetter::Functor::GetValue for this boolean value");
+		}
+	};
 
-	static const idx_t &GetKey(const const_iterator &it) {
-		return it.GetKey();
-	}
+	template <>
+	struct Functor<true> {
+	private:
+		using map_type = fixed_size_map_type;
+		using iterator = typename map_type::iterator;
+		using const_iterator = typename map_type::const_iterator;
 
-	static mapped_type &GetValue(iterator &it) {
-		return it.GetValue();
-	}
+	public:
+		static map_type &GetMap(fixed_size_map_type &fixed_size_map, perfect_map_type &) {
+			return fixed_size_map;
+		}
 
-	static const mapped_type &GetValue(const const_iterator &iterator) {
-		return iterator.GetValue();
-	}
+		static key_type GetKey(const iterator &it) {
+			return it.GetKey();
+		}
+
+		static const key_type &GetKey(const const_iterator &it) {
+			return it.GetKey();
+		}
+
+		static mapped_type &GetValue(iterator &it) {
+			return it.GetValue();
+		}
+
+		static const mapped_type &GetValue(const const_iterator &it) {
+			return it.GetValue();
+		}
+	};
+
+	template <>
+	struct Functor<false> {
+	private:
+		using map_type = perfect_map_type;
+		using iterator = typename map_type::iterator;
+		using const_iterator = typename map_type::const_iterator;
+
+	public:
+		static map_type &GetMap(fixed_size_map_type &, perfect_map_type &perfect_map) {
+			return perfect_map;
+		}
+
+		static key_type GetKey(const iterator &it) {
+			return it->first;
+		}
+
+		static const key_type &GetKey(const const_iterator &it) {
+			return it->first;
+		}
+
+		static mapped_type &GetValue(iterator &it) {
+			return it->second;
+		}
+
+		static const mapped_type &GetValue(const const_iterator &it) {
+			return it->second;
+		}
+	};
 };
 // LCOV_EXCL_STOP
 
