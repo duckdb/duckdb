@@ -168,7 +168,6 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
-	vector<column_t> columns_to_write;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	vector<pair<string, string>> kv_metadata;
 	idx_t row_group_size = Storage::ROW_GROUP_SIZE;
@@ -1105,8 +1104,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 }
 
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
-                                          const vector<string> &names, const vector<LogicalType> &sql_types,
-                                          const vector<column_t> columns_to_write) {
+                                          const vector<string> &names, const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
@@ -1212,7 +1210,6 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
-	bind_data->columns_to_write = columns_to_write;
 	return std::move(bind_data);
 }
 
@@ -1235,14 +1232,8 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 
-	// in case data chunk has more columns, filter out skipped columns
-	if (input.ColumnCount() > bind_data.columns_to_write.size()) {
-		DataChunk new_input;
-		SetDataToCopy(new_input, input, bind_data.columns_to_write, bind_data.sql_types);
-		local_state.buffer.Append(local_state.append_state, new_input);
-	} else {
-		local_state.buffer.Append(local_state.append_state, input);
-	}
+	// append data to the local (buffered) chunk collection
+	local_state.buffer.Append(local_state.append_state, input);
 
 	if (local_state.buffer.Count() >= bind_data.row_group_size ||
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes) {
@@ -1354,7 +1345,6 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                         bind_data.dictionary_compression_ratio_threshold);
 	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", bind_data.compression_level);
 	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
-	serializer.WriteProperty(111, "columns_to_write", bind_data.columns_to_write);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1373,7 +1363,6 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", data->compression_level);
 	data->row_groups_per_file =
 	    deserializer.ReadPropertyWithDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
-	deserializer.ReadPropertyWithDefault<vector<column_t>>(111, "columns_to_write", data->columns_to_write);
 	return std::move(data);
 }
 // LCOV_EXCL_STOP

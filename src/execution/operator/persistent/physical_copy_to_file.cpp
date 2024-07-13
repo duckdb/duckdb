@@ -7,6 +7,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/copy_function.hpp"
 
 #include <algorithm>
 
@@ -244,7 +245,14 @@ public:
 			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 			// push the chunks into the write state
 			for (auto &chunk : partitions[i]->Chunks()) {
-				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+				if (op.no_partition_columns) {
+					DataChunk filtered_chunk;
+					SetDataToCopy(filtered_chunk, chunk, op.columns_to_write, op.types_to_write);
+					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state,
+					                         filtered_chunk);
+				} else {
+					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+				}
 			}
 			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
 			local_copy_state.reset();

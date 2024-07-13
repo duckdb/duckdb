@@ -41,7 +41,10 @@ public:
 	CopyFunctionReturnType return_type;
 
 	bool partition_output;
+	bool no_partition_columns;
 	vector<idx_t> partition_columns;
+	vector<idx_t> columns_to_write;
+	vector<LogicalType> types_to_write;
 	vector<string> names;
 	vector<LogicalType> expected_types;
 

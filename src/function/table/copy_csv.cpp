@@ -156,9 +156,8 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
-                                             const vector<string> &names, const vector<LogicalType> &sql_types,
-                                             const vector<column_t> columns_to_write) {
-	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names, columns_to_write);
+                                             const vector<string> &names, const vector<LogicalType> &sql_types) {
+	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names);
 
 	// check all the options in the copy info
 	for (auto &option : input.info.options) {
@@ -481,15 +480,8 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
 	// write data into the local buffer
-	if (input.ColumnCount() > csv_data.options.columns_to_write.size()) {
-		DataChunk new_input;
-		SetDataToCopy(new_input, input, csv_data.options.columns_to_write, csv_data.sql_types);
-		WriteCSVChunkInternal(context.client, bind_data, local_data.cast_chunk, local_data.stream, new_input,
-		                      local_data.written_anything, local_data.executor);
-	} else {
-		WriteCSVChunkInternal(context.client, bind_data, local_data.cast_chunk, local_data.stream, input,
-		                      local_data.written_anything, local_data.executor);
-	}
+	WriteCSVChunkInternal(context.client, bind_data, local_data.cast_chunk, local_data.stream, input,
+	                      local_data.written_anything, local_data.executor);
 
 	// check if we should flush what we have currently written
 	auto &writer = local_data.stream;

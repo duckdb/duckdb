@@ -184,13 +184,3 @@ statement error
 COPY test TO '__TEST_DIR__/csv-no-part-cols8' (FORMAT CSV, PARTITION_BY '*', NO_PARTITION_COLUMNS);
 ----
 Not implemented Error: There is no column to write due to PARTITION_BY and NO_PARTITION_COLUMNS options.
-
-# JSON
-
-require JSON
-
-# Currently JSON extension does not support no-part-cols copy
-statement error
-COPY test TO '__TEST_DIR__/csv-no-part-cols8' (FORMAT JSON, PARTITION_BY (part_col), NO_PARTITION_COLUMNS);
-----
-Binder Error: Unknown option for COPY ... TO ... (FORMAT JSON): "partition_by".

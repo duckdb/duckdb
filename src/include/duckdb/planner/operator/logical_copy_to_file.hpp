@@ -30,7 +30,6 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	unique_ptr<CopyInfo> copy_info;
 
-	vector<column_t> columns_to_copy;
 	std::string file_path;
 	bool use_tmp_file;
 	FilenamePattern filename_pattern;
@@ -42,6 +41,7 @@ public:
 	CopyFunctionReturnType return_type;
 
 	bool partition_output;
+	bool no_partition_columns;
 	vector<idx_t> partition_columns;
 	vector<string> names;
 	vector<LogicalType> expected_types;

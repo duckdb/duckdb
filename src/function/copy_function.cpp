@@ -42,21 +42,24 @@ vector<idx_t> GetColumnsToCopy(vector<LogicalType> &types, vector<idx_t> &exclud
 	return result;
 }
 
-pair<vector<LogicalType>, vector<string>>
-GetTypesAndNamesToCopy(vector<LogicalType> &col_types, vector<string> &col_names, vector<column_t> &cols_to_copy) {
-	set<column_t> cols_to_write_set(cols_to_copy.begin(), cols_to_copy.end());
+vector<LogicalType> GetTypesToCopy(const vector<LogicalType> &col_types, const vector<column_t> &cols_to_copy) {
 	vector<LogicalType> types;
-	vector<string> names;
-	for (idx_t i = 0; i < col_types.size(); i++) {
-		if (cols_to_write_set.find(i) != cols_to_write_set.end()) {
-			types.emplace_back(col_types[i]);
-			names.emplace_back(col_names[i]);
-		}
+	for (auto col_idx : cols_to_copy) {
+		types.push_back(col_types[col_idx]);
 	}
-	return make_pair(types, names);
+	return types;
 }
 
-void SetDataToCopy(DataChunk &chunk, DataChunk &source, vector<column_t> &cols_to_copy, vector<LogicalType> &types) {
+vector<string> GetNamesToCopy(const vector<string> &col_names, const vector<column_t> &cols_to_copy) {
+	vector<string> names;
+	for (auto col_idx : cols_to_copy) {
+		names.push_back(col_names[col_idx]);
+	}
+	return names;
+}
+
+void SetDataToCopy(DataChunk &chunk, DataChunk &source, const vector<idx_t> &cols_to_copy,
+                   const vector<LogicalType> &types) {
 	D_ASSERT(cols_to_copy.size() == types.size());
 	chunk.InitializeEmpty(types);
 	for (idx_t i = 0; i < cols_to_copy.size(); i++) {

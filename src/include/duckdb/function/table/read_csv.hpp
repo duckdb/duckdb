@@ -42,12 +42,10 @@ struct BaseCSVData : public TableFunctionData {
 };
 
 struct WriteCSVData : public BaseCSVData {
-	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names,
-	             vector<column_t> columns_to_write)
+	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names)
 	    : sql_types(std::move(sql_types)) {
 		files.push_back(std::move(file_path));
 		options.name_list = std::move(names);
-		options.columns_to_write = std::move(columns_to_write);
 	}
 
 	//! The SQL types to write

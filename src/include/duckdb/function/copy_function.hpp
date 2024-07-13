@@ -85,8 +85,7 @@ enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FI
 
 typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
 typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, CopyFunctionBindInput &input,
-                                                   const vector<string> &names, const vector<LogicalType> &sql_types,
-                                                   const vector<column_t> columns_to_copy);
+                                                   const vector<string> &names, const vector<LogicalType> &sql_types);
 typedef unique_ptr<LocalFunctionData> (*copy_to_initialize_local_t)(ExecutionContext &context, FunctionData &bind_data);
 typedef unique_ptr<GlobalFunctionData> (*copy_to_initialize_global_t)(ClientContext &context, FunctionData &bind_data,
                                                                       const string &file_path);
@@ -124,9 +123,10 @@ enum class CopyFunctionReturnType : uint8_t { CHANGED_ROWS = 0, CHANGED_ROWS_AND
 vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
 vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type);
 vector<idx_t> GetColumnsToCopy(vector<LogicalType> &types, vector<idx_t> &excluded_columns, bool no_partition_columns);
-pair<vector<LogicalType>, vector<string>> GetTypesAndNamesToCopy(vector<LogicalType> &types, vector<string> &names,
-                                                                 vector<column_t> &columns_to_copy);
-void SetDataToCopy(DataChunk &chunk, DataChunk &source, vector<column_t> &column_ids, vector<LogicalType> &types);
+vector<LogicalType> GetTypesToCopy(const vector<LogicalType> &col_types, const vector<column_t> &cols_to_copy);
+vector<string> GetNamesToCopy(const vector<string> &col_names, const vector<column_t> &cols_to_copy);
+void SetDataToCopy(DataChunk &chunk, DataChunk &source, const vector<idx_t> &column_ids,
+                   const vector<LogicalType> &types);
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:

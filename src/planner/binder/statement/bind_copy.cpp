@@ -222,12 +222,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
 	auto columns_to_copy = GetColumnsToCopy(select_node.types, partition_cols, no_partition_columns);
-	auto types_and_names = no_partition_columns
-	                           ? GetTypesAndNamesToCopy(select_node.types, unique_column_names, columns_to_copy)
-	                           : make_pair(select_node.types, unique_column_names);
+	auto names_to_copy =
+	    no_partition_columns ? GetNamesToCopy(unique_column_names, columns_to_copy) : unique_column_names;
+	auto types_to_copy = GetTypesToCopy(select_node.types, columns_to_copy);
 
-	auto function_data = copy_function.function.copy_to_bind(context, bind_input, types_and_names.second,
-	                                                         types_and_names.first, columns_to_copy);
+	auto function_data = copy_function.function.copy_to_bind(context, bind_input, names_to_copy, types_to_copy);
 
 	const auto rotate =
 	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);
@@ -247,7 +246,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
-	copy->columns_to_copy = columns_to_copy;
 	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_mode = overwrite_mode;
@@ -259,6 +257,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	}
 	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
+	copy->no_partition_columns = no_partition_columns;
 	copy->partition_columns = std::move(partition_cols);
 	copy->return_type = return_type;
 
