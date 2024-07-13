@@ -53,6 +53,8 @@ jobs:
       DEBUG_STACKTRACE: 1
       FORCE_WARN_UNUSED: 1
       DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: 'node16'
 
     steps:
     - uses: actions/checkout@v3
@@ -115,6 +117,8 @@ jobs:
      BUILD_ODBC: 1
      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
      DUCKDB_PLATFORM: linux_arm64
+     ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+     ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: 'node16'
 
    steps:
      - uses: actions/checkout@v3
