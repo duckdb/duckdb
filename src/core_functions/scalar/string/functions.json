@@ -344,5 +344,19 @@
         "example": "regexp_escape('https://duckdb.org')",
         "struct": "RegexpEscapeFun",
         "type": "scalar_function"
+    },
+    {
+        "name": "url_encode",
+        "parameters": "input",
+        "description": "Escapes the input string by encoding it so that it can be included in a URL query parameter.",
+        "example": "url_encode('this string has/ special+ characters>')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "url_decode",
+        "parameters": "input",
+        "description": "Unescapes the URL encoded input.",
+        "example": "url_decode('this%20string%20is%2BFencoded')",
+        "type": "scalar_function"
     }
 ]
