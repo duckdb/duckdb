@@ -294,14 +294,14 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 }
 
 void DBConfig::SetDefaultMaxMemory() {
-    auto memory = GetSystemAvailableMemory(*file_system);
-    if (memory == DBConfigOptions().maximum_memory) {
-        // If GetSystemAvailableMemory returned the default, use it as is
-        options.maximum_memory = memory;
-    } else {
-        // Otherwise, use 80% of the available memory
-        options.maximum_memory = memory * 8 / 10;
-    }
+	auto memory = GetSystemAvailableMemory(*file_system);
+	if (memory == DBConfigOptions().maximum_memory) {
+		// If GetSystemAvailableMemory returned the default, use it as is
+		options.maximum_memory = memory;
+	} else {
+		// Otherwise, use 80% of the available memory
+		options.maximum_memory = memory * 8 / 10;
+	}
 }
 
 void DBConfig::SetDefaultTempDirectory() {
@@ -377,40 +377,40 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #ifdef DUCKDB_NO_THREADS
-    return 1;
+	return 1;
 #else
-    idx_t physical_cores = std::thread::hardware_concurrency();
+	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
-    if (const char *slurm_cpus = getenv("SLURM_CPUS_ON_NODE")) {
-        idx_t slurm_threads;
-        if (TryCast::Operation<string_t, idx_t>(string_t(slurm_cpus), slurm_threads)) {
-            return MaxValue<idx_t>(slurm_threads, 1);
-        }
-    }
-    auto cores_available_per_period = CGroupBandwidthQuota(physical_cores, fs);
-    return MaxValue<idx_t>(cores_available_per_period, 1);
+	if (const char *slurm_cpus = getenv("SLURM_CPUS_ON_NODE")) {
+		idx_t slurm_threads;
+		if (TryCast::Operation<string_t, idx_t>(string_t(slurm_cpus), slurm_threads)) {
+			return MaxValue<idx_t>(slurm_threads, 1);
+		}
+	}
+	auto cores_available_per_period = CGroupBandwidthQuota(physical_cores, fs);
+	return MaxValue<idx_t>(cores_available_per_period, 1);
 #else
-    return physical_cores;
+	return physical_cores;
 #endif
 #endif
 }
 
 idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
-    const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
-    const char *slurm_mem_per_cpu = getenv("SLURM_MEM_PER_CPU");
-    if (slurm_mem_per_node) {
-        return ParseMemoryLimitSlurm(slurm_mem_per_node);
-    } else if (slurm_mem_per_cpu) {
-        idx_t mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
-        idx_t num_threads = GetSystemMaxThreads(fs);
-        return mem_per_cpu * num_threads;
-    } else {
-        auto memory = FileSystem::GetAvailableMemory();
-        if (!memory.IsValid()) {
-            return DBConfigOptions().maximum_memory;
-        }
-        return memory.GetIndex();
-    }
+	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
+	const char *slurm_mem_per_cpu = getenv("SLURM_MEM_PER_CPU");
+	if (slurm_mem_per_node) {
+		return ParseMemoryLimitSlurm(slurm_mem_per_node);
+	} else if (slurm_mem_per_cpu) {
+		idx_t mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
+		idx_t num_threads = GetSystemMaxThreads(fs);
+		return mem_per_cpu * num_threads;
+	} else {
+		auto memory = FileSystem::GetAvailableMemory();
+		if (!memory.IsValid()) {
+			return DBConfigOptions().maximum_memory;
+		}
+		return memory.GetIndex();
+	}
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
