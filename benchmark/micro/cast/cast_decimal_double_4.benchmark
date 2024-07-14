@@ -1,4 +1,4 @@
-# name: benchmark/micro/cast/cast_decimal_double_3.benchmark
+# name: benchmark/micro/cast/cast_decimal_double_4.benchmark
 # description: Cast string values to double, range 0-1, converted to DECIMAL(38,8), range is mostly empty
 # group: [cast]
 
