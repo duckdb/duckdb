@@ -1,14 +1,67 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 
 #include "duckdb/optimizer/filter_combiner.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
+
+void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.join_type != JoinType::MARK) {
+			break;
+		}
+		// if the projected table bindings include the mark join index,
+		if (table_bindings.find(join.mark_index) != table_bindings.end()) {
+			join.convert_mark_to_semi = false;
+		}
+		break;
+	}
+	// you need to store table.column index.
+	// if you get to a projection, you need to change the table_bindings passed so they reflect the
+	// table index of the original expression they originated from.
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		// when we encounter a projection, replace the table_bindings with
+		// the tables in the projection
+		auto plan_bindings = op.GetColumnBindings();
+		auto &proj = op.Cast<LogicalProjection>();
+		auto proj_bindings = proj.GetColumnBindings();
+		unordered_set<idx_t> new_table_bindings;
+		for (auto &binding : proj_bindings) {
+			auto col_index = binding.column_index;
+			auto &expr = proj.expressions.at(col_index);
+			vector<ColumnBinding> bindings_to_keep;
+			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
+				if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+					auto &col_ref = expr->Cast<BoundColumnRefExpression>();
+					bindings_to_keep.push_back(col_ref.binding);
+				}
+			});
+			for (auto &expr_binding : bindings_to_keep) {
+				new_table_bindings.insert(expr_binding.table_index);
+			}
+			table_bindings = new_table_bindings;
+		}
+		break;
+	}
+	default:
+		break;
+	}
+
+	// recurse into the children to find mark joins and project their indexes.
+	for (auto &child : op.children) {
+		CheckMarkToSemi(*child, table_bindings);
+	}
+}
 
 FilterPushdown::FilterPushdown(Optimizer &optimizer, bool convert_mark_joins)
     : optimizer(optimizer), combiner(optimizer.context), convert_mark_joins(convert_mark_joins) {

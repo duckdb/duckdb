@@ -40,6 +40,9 @@ public:
 	using OrderMasks = PartitionGlobalHashGroup::OrderMasks;
 	using ExecutorGlobalStatePtr = unique_ptr<WindowExecutorGlobalState>;
 	using ExecutorGlobalStates = vector<ExecutorGlobalStatePtr>;
+	using ExecutorLocalStatePtr = unique_ptr<WindowExecutorLocalState>;
+	using ExecutorLocalStates = vector<ExecutorLocalStatePtr>;
+	using ThreadLocalStates = vector<ExecutorLocalStates>;
 
 	WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash_bin_p);
 
@@ -92,6 +95,8 @@ public:
 	bool external;
 	//! The function global states for this hash group
 	ExecutorGlobalStates gestates;
+	//! Executor local states, one per thread
+	ThreadLocalStates thread_states;
 
 	//! The bin number
 	idx_t hash_bin;
@@ -309,12 +314,18 @@ public:
 
 	struct Task {
 		Task(WindowGroupStage stage, idx_t group_idx, idx_t max_idx)
-		    : stage(stage), group_idx(group_idx), max_idx(max_idx) {
+		    : stage(stage), group_idx(group_idx), thread_idx(0), max_idx(max_idx) {
 		}
 		WindowGroupStage stage;
+		//! The hash group
 		idx_t group_idx;
+		//! The thread index (for local state)
+		idx_t thread_idx;
+		//! The total block index count
 		idx_t max_idx;
+		//! The first block index count
 		idx_t begin_idx = 0;
+		//! The end block index count
 		idx_t end_idx = 0;
 	};
 	using TaskPtr = optional_ptr<Task>;
@@ -400,12 +411,16 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 	//	TODO: Generate dynamically instead of building a big list?
 	vector<WindowGroupStage> states {WindowGroupStage::SINK, WindowGroupStage::FINALIZE, WindowGroupStage::GETDATA};
 	for (const auto &b : partition_blocks) {
+		auto &window_hash_group = *window_hash_groups[b.second];
 		for (const auto &state : states) {
+			idx_t thread_count = 0;
 			for (Task task(state, b.second, b.first); task.begin_idx < task.max_idx; task.begin_idx += per_thread) {
 				task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
 				tasks.emplace_back(task);
-				window_hash_groups[task.group_idx]->tasks_remaining++;
+				window_hash_group.tasks_remaining++;
+				thread_count = ++task.thread_idx;
 			}
+			window_hash_group.thread_states.resize(thread_count);
 		}
 	}
 }
@@ -512,8 +527,6 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 // Per-thread scan state
 class WindowLocalSourceState : public LocalSourceState {
 public:
-	using LocalStatePtr = unique_ptr<WindowExecutorLocalState>;
-	using LocalStates = vector<LocalStatePtr>;
 	using Task = WindowGlobalSourceState::Task;
 	using TaskPtr = optional_ptr<Task>;
 
@@ -536,8 +549,6 @@ public:
 	unique_ptr<RowDataCollectionScanner> scanner;
 	//! Buffer for the inputs
 	DataChunk input_chunk;
-	//! Executor local states.
-	LocalStates local_states;
 	//! Buffer for window results
 	DataChunk output_chunk;
 };
@@ -571,13 +582,7 @@ void WindowLocalSourceState::BeginHashGroup() {
 
 	// Create the executor state for each function
 	// These can be large so we defer building them until we are ready.
-	auto &gestates = window_hash_group->Initialize(gsink);
-
-	//	Set up the local states
-	const auto &executors = gsink.executors;
-	for (idx_t w = 0; w < executors.size(); ++w) {
-		local_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
-	}
+	window_hash_group->Initialize(gsink);
 }
 
 void WindowLocalSourceState::Sink() {
@@ -586,6 +591,14 @@ void WindowLocalSourceState::Sink() {
 	auto &gsink = gsource.gsink;
 	const auto &executors = gsink.executors;
 	auto &gestates = window_hash_group->gestates;
+
+	//	Set up the local states
+	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
+	if (local_states.empty()) {
+		for (idx_t w = 0; w < executors.size(); ++w) {
+			local_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
+		}
+	}
 
 	//	First pass over the input without flushing
 	for (; task->begin_idx < task->end_idx; ++task->begin_idx) {
@@ -625,6 +638,7 @@ void WindowLocalSourceState::Finalize() {
 	auto &gsink = gsource.gsink;
 	const auto &executors = gsink.executors;
 	auto &gestates = window_hash_group->gestates;
+	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	for (idx_t w = 0; w < executors.size(); ++w) {
 		executors[w]->Finalize(*gestates[w], *local_states[w]);
 	}
@@ -688,7 +702,10 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 
 void WindowLocalSourceState::FinishHashGroup(TaskPtr prev_task) {
 	scanner.reset();
-	local_states.clear();
+	if (window_hash_group && prev_task && prev_task->stage == WindowGroupStage::GETDATA) {
+		auto &local_states = window_hash_group->thread_states.at(prev_task->thread_idx);
+		local_states.clear();
+	}
 
 	gsource.FinishTask(prev_task);
 }
@@ -751,6 +768,7 @@ bool WindowLocalSourceState::GetData(DataChunk &result) {
 
 	const auto &executors = gsource.gsink.executors;
 	auto &gestates = window_hash_group->gestates;
+	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	output_chunk.Reset();
 	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
 		auto &executor = *executors[expr_idx];
@@ -790,11 +808,22 @@ bool PhysicalWindow::SupportsBatchIndex() const {
 	//	We can only preserve order for single partitioning
 	//	or work stealing causes out of order batch numbers
 	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
-	return wexpr.partitions.empty() && !wexpr.orders.empty();
+	return wexpr.partitions.empty();
 }
 
 OrderPreservationType PhysicalWindow::SourceOrder() const {
-	return SupportsBatchIndex() ? OrderPreservationType::FIXED_ORDER : OrderPreservationType::NO_ORDER;
+	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
+	if (!wexpr.partitions.empty()) {
+		// if we have partitions the window order is not defined
+		return OrderPreservationType::NO_ORDER;
+	}
+	// without partitions we can maintain order
+	if (wexpr.orders.empty()) {
+		// if we have no orders we maintain insertion order
+		return OrderPreservationType::INSERTION_ORDER;
+	}
+	// otherwise we can maintain the fixed order
+	return OrderPreservationType::FIXED_ORDER;
 }
 
 double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {

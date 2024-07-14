@@ -70,7 +70,9 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		case LogicalOperatorType::LOGICAL_TOP_N:
 		case LogicalOperatorType::LOGICAL_DISTINCT:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 			// does not affect probe side - continue into left child
+			// FIXME: we can probably recurse into more operators here (e.g. window, set operation, unnest)
 			probe_source = *probe_child.children[0];
 			break;
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -90,6 +92,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 				auto &colref = expr.Cast<BoundColumnRefExpression>();
 				filter.probe_column_index = colref.binding;
 			}
+			probe_source = *probe_child.children[0];
 			break;
 		}
 		default:

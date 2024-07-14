@@ -15,6 +15,7 @@ add_library_unity(
   common_aggregate_optimizer.cpp
   compressed_materialization.cpp
   cse_optimizer.cpp
+  cte_filter_pusher.cpp
   deliminator.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
