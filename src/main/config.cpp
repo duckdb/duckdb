@@ -294,12 +294,14 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 }
 
 void DBConfig::SetDefaultMaxMemory() {
-    auto memory = FileSystem::GetSystemAvailableMemory();
-    if (!memory.IsValid()) {
-        options.maximum_memory = DBConfigOptions().maximum_memory;
-        return;
+    auto memory = GetSystemAvailableMemory(*file_system);
+    if (memory == DBConfigOptions().maximum_memory) {
+        // If GetSystemAvailableMemory returned the default, use it as is
+        options.maximum_memory = memory;
+    } else {
+        // Otherwise, use 80% of the available memory
+        options.maximum_memory = memory * 8 / 10;
     }
-    options.maximum_memory = memory.GetIndex() * 8 / 10;
 }
 
 void DBConfig::SetDefaultTempDirectory() {
