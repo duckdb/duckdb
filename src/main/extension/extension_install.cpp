@@ -122,7 +122,7 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	for (idx_t ext_count = ExtensionHelper::ExtensionAliasCount(), i = 0; i < ext_count; i++) {
 		candidates.emplace_back(ExtensionHelper::GetExtensionAlias(i).alias);
 	}
-	auto closest_extensions = StringUtil::TopNLevenshtein(candidates, lowercase_extension_name);
+	auto closest_extensions = StringUtil::TopNJaroWinkler(candidates, lowercase_extension_name);
 	message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");
 	for (auto &closest : closest_extensions) {
 		if (closest == lowercase_extension_name) {
