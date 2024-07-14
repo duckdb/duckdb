@@ -152,13 +152,6 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, const idx_t &count, co
 	}
 }
 
-// uses an AND operation to apply the modulo operation instead of an if condition that could be branch mispredicted
-inline void IncrementAndWrap(idx_t &value, const uint64_t &capacity_mask) {
-	value += 1;
-	// leave the salt bits unchanged
-	value &= capacity_mask;
-}
-
 //! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the key_match_sel
 //! vector and the count argument to the number and position of the matches
 template <bool USE_SALTS>
