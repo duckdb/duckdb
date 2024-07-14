@@ -62,6 +62,8 @@ public:
 	                                          RebindQueryInfo current_rebind) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
+	virtual void WriteProfilingInformation(std::ostream &ss) {
+	}
 
 public:
 	template <class TARGET>

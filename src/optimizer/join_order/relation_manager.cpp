@@ -1,12 +1,13 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
-#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
@@ -39,6 +40,8 @@ void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional
 		}
 	}
 	relations.push_back(std::move(relation));
+	op.estimated_cardinality = stats.cardinality;
+	op.has_estimated_cardinality = true;
 }
 
 void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
@@ -70,6 +73,8 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 		relation_mapping[table_index] = relation_id;
 	}
 	relations.push_back(std::move(relation));
+	op.estimated_cardinality = stats.cardinality;
+	op.has_estimated_cardinality = true;
 }
 
 static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
@@ -91,7 +96,6 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		return true;
@@ -143,7 +147,7 @@ static void ModifyStatsIfLimit(optional_ptr<LogicalOperator> limit_op, RelationS
 	}
 }
 
-bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
+bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, LogicalOperator &input_op,
                                            vector<reference<LogicalOperator>> &filter_operators,
                                            optional_ptr<LogicalOperator> parent) {
 	optional_ptr<LogicalOperator> op = &input_op;
@@ -187,8 +191,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		vector<RelationStats> children_stats;
 		for (auto &child : op->children) {
 			auto stats = RelationStats();
-			JoinOrderOptimizer optimizer(context);
-			child = optimizer.Optimize(std::move(child), &stats);
+			auto child_optimizer = optimizer.CreateChildOptimizer();
+			child = child_optimizer.Optimize(std::move(child), &stats);
 			children_stats.push_back(stats);
 		}
 
@@ -205,8 +209,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// optimize children
 		RelationStats child_stats;
-		JoinOrderOptimizer optimizer(context);
-		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		auto child_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &aggr = op->Cast<LogicalAggregate>();
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats);
 		if (!datasource_filters.empty()) {
@@ -220,8 +224,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		// optimize children
 		RelationStats child_stats;
-		JoinOrderOptimizer optimizer(context);
-		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		auto child_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
 		if (!datasource_filters.empty()) {
@@ -235,8 +239,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// Adding relations to the current join order optimizer
-		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
-		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
+		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
+		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
@@ -267,18 +271,11 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
-	case LogicalOperatorType::LOGICAL_DELIM_GET: {
-		//      Removed until we can extract better stats from delim gets. See #596
-		//		auto &delim_get = op->Cast<LogicalDelimGet>();
-		//		auto stats = RelationStatisticsHelper::ExtractDelimGetStats(delim_get, context);
-		//		AddRelation(input_op, parent, stats);
-		return false;
-	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto child_stats = RelationStats();
+		RelationStats child_stats;
 		// optimize the child and copy the stats
-		JoinOrderOptimizer optimizer(context);
-		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		auto child_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
@@ -292,6 +289,60 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		// Projection can create columns so we need to add them here
 		auto stats = RelationStatisticsHelper::ExtractEmptyResultStats(empty_result);
 		AddRelation(input_op, parent, stats);
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		RelationStats lhs_stats;
+		// optimize the lhs child and copy the stats
+		auto lhs_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
+		// optimize the rhs child
+		auto rhs_optimizer = optimizer.CreateChildOptimizer();
+		auto table_index = op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE
+		                       ? op->Cast<LogicalMaterializedCTE>().table_index
+		                       : op->Cast<LogicalRecursiveCTE>().table_index;
+		rhs_optimizer.AddMaterializedCTEStats(table_index, std::move(lhs_stats));
+		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]));
+		return false;
+	}
+	case LogicalOperatorType::LOGICAL_CTE_REF: {
+		auto &cte_ref = op->Cast<LogicalCTERef>();
+		if (cte_ref.materialized_cte != CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+			return false;
+		}
+		AddRelation(input_op, parent, optimizer.GetMaterializedCTEStats(cte_ref.cte_index));
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+		auto &delim_join = op->Cast<LogicalComparisonJoin>();
+
+		// optimize LHS (duplicate-eliminated) child
+		RelationStats lhs_stats;
+		auto lhs_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
+
+		// create dummy aggregation for the duplicate elimination
+		auto dummy_aggr = make_uniq<LogicalAggregate>(DConstants::INVALID_INDEX - 1, DConstants::INVALID_INDEX,
+		                                              vector<unique_ptr<Expression>>());
+		for (auto &delim_col : delim_join.duplicate_eliminated_columns) {
+			dummy_aggr->groups.push_back(delim_col->Copy());
+		}
+		auto lhs_delim_stats = RelationStatisticsHelper::ExtractAggregationStats(*dummy_aggr, lhs_stats);
+
+		// optimize the other child, which will now have access to the stats
+		RelationStats rhs_stats;
+		auto rhs_optimizer = optimizer.CreateChildOptimizer();
+		rhs_optimizer.AddDelimScanStats(lhs_delim_stats);
+		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]), rhs_stats);
+
+		return false;
+	}
+	case LogicalOperatorType::LOGICAL_DELIM_GET: {
+		// Used to not be possible to reorder these. We added reordering (without stats) before,
+		// but ran into terrible join orders (see internal issue #596), so we removed it again
+		// We now have proper statistics for DelimGets, and get an even better query plan for #596
+		AddAggregateOrWindowRelation(input_op, parent, optimizer.GetDelimScanStats(), op->type);
 		return true;
 	}
 	default:
