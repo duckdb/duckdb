@@ -32,8 +32,9 @@ void Leaf::New(ART &art, reference<Node> &node, const vector<ARTKey> &row_ids, c
 		return DeprecatedNew(art, node, row_ids, start, count);
 	}
 
+	D_ASSERT(count > 0);
 	auto &leaf = Leaf::New(art, node);
-	ARTKeySection section(start, count - 1, 0, 0);
+	ARTKeySection section(start, start + count - 1, 0, 0);
 	art.Construct(row_ids, row_ids, leaf.ptr, section);
 }
 
@@ -94,15 +95,24 @@ void Leaf::Insert(ART &art, Node &node, const ARTKey &row_id) {
 		return DeprecatedInsert(art, node, row_id.GetRowID());
 	}
 
-	if (node.GetType() == NType::LEAF_INLINED) {
-		// Insert a NType::LEAF guard with a count of 0.
-		auto inlined_node = node;
-		auto &new_leaf = Leaf::New(art, node);
-		new_leaf.ptr = inlined_node;
+	if (node.GetType() == NType::LEAF) {
+		auto &inner_art = UnnestMutable(art, node);
+		art.Insert(inner_art, row_id, 0, row_id);
+		return;
 	}
 
-	auto &inner_art = UnnestMutable(art, node);
-	art.Insert(inner_art, row_id, 0, row_id);
+	// Insert a NType::LEAF guard with a count of 0.
+	auto inlined_row_id = node.GetRowId();
+	auto &leaf = Leaf::New(art, node);
+
+	// Create an ARTKey from the row ID.
+	ArenaAllocator arena_allocator(Allocator::Get(art.db));
+	LogicalType row_id_type(LogicalType::ROW_TYPE);
+	auto value = Value::BIGINT(inlined_row_id);
+	auto inlined_row_id_key = ARTKey::CreateKey(arena_allocator, row_id_type.InternalType(), value);
+
+	art.Insert(leaf.ptr, inlined_row_id_key, 0, inlined_row_id_key);
+	art.Insert(leaf.ptr, row_id, 0, row_id);
 }
 
 bool Leaf::Remove(ART &art, reference<Node> &node, const ARTKey &row_id) {
@@ -115,12 +125,21 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const ARTKey &row_id) {
 		return DeprecatedRemove(art, node, row_id.GetRowID());
 	}
 
+	// Erase the row ID.
 	auto &inner_art = UnnestMutable(art, node.get());
 	art.Erase(inner_art, row_id, 0, row_id);
 
+	// Traverse the prefix.
+	reference<const Node> prefix_node(inner_art);
+	while (prefix_node.get().GetType() == NType::PREFIX) {
+		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, NType::PREFIX);
+		prefix_node = prefix.ptr;
+		D_ASSERT(prefix.ptr.HasMetadata());
+	}
+
 	// If the inner ART is an inlined leaf, we inline it.
-	if (inner_art.GetType() == NType::LEAF_INLINED) {
-		auto remaining_row_id = inner_art.GetRowId();
+	if (prefix_node.get().GetType() == NType::LEAF_INLINED) {
+		auto remaining_row_id = prefix_node.get().GetRowId();
 		Node::Free(art, node);
 		New(node, remaining_row_id);
 	}
@@ -169,7 +188,7 @@ bool Leaf::ContainsRowId(ART &art, const Node &node, const ARTKey &row_id) {
 
 string Leaf::VerifyAndToString(ART &art, const Node &node, const bool only_verify) {
 	if (node.GetType() == NType::LEAF_INLINED) {
-		return only_verify ? "" : "Leaf [count: 1, row ID: " + to_string(node.GetRowId()) + "]";
+		return only_verify ? "" : "Leaf Inlined [count: 1, row ID: " + to_string(node.GetRowId()) + "]";
 	}
 
 	if (!art.nested_leaves) {
@@ -221,7 +240,7 @@ void Leaf::MergeInlinedIntoLeaf(ART &art, Node &l_node, Node &r_node) {
 	// Create an ARTKey from the row ID.
 	ArenaAllocator arena_allocator(Allocator::Get(art.db));
 	LogicalType row_id_type(LogicalType::ROW_TYPE);
-	auto value = Value::UBIGINT(NumericCast<idx_t>(r_node.GetRowId()));
+	auto value = Value::BIGINT(r_node.GetRowId());
 	auto key = ARTKey::CreateKey(arena_allocator, row_id_type.InternalType(), value);
 
 	// Insert the ARTKey.

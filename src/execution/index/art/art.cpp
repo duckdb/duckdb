@@ -547,27 +547,33 @@ void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
 }
 
 bool ART::InsertToLeaf(Node &leaf, const ARTKey &row_id_key) {
+	// We're trying to insert another row ID into an existing leaf.
 	if (IsUnique()) {
 		return false;
 	}
+
 	Leaf::Insert(*this, leaf, row_id_key);
+	return true;
+}
+
+bool ART::InsertToEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key) {
+	D_ASSERT(depth <= key.len);
+	reference<Node> ref_node(node);
+
+	// Create the prefix.
+	auto byte = UnsafeNumericCast<uint32_t>(depth);
+	auto count = UnsafeNumericCast<uint32_t>(key.len - depth);
+	Prefix::New(*this, ref_node, key, byte, count);
+
+	// Create the inlined leaf.
+	Leaf::New(ref_node, row_id_key.GetRowID());
 	return true;
 }
 
 bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key) {
 	// If the node is empty, we create a new inlined leaf.
 	if (!node.HasMetadata()) {
-		D_ASSERT(depth <= key.len);
-		reference<Node> ref_node(node);
-
-		// Create the prefix.
-		auto byte = UnsafeNumericCast<uint32_t>(depth);
-		auto count = UnsafeNumericCast<uint32_t>(key.len - depth);
-		Prefix::New(*this, ref_node, key, byte, count);
-
-		// Create the inlined leaf.
-		Leaf::New(ref_node, row_id_key.GetRowID());
-		return true;
+		return InsertToEmptyNode(node, key, depth, row_id_key);
 	}
 
 	auto node_type = node.GetType();

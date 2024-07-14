@@ -40,10 +40,8 @@ struct IndexBufferInfo {
 
 //! Information to serialize an index
 struct IndexStorageInfo {
-	// TODO: default to true for nested_leaves.
-	IndexStorageInfo() : nested_leaves(false) {};
-	// TODO: default to true for nested_leaves.
-	explicit IndexStorageInfo(string name) : name(std::move(name)), nested_leaves(false) {};
+	IndexStorageInfo() : nested_leaves(true) {};
+	explicit IndexStorageInfo(string name) : name(std::move(name)), nested_leaves(true) {};
 
 	//! The name of the index
 	string name;

@@ -129,6 +129,8 @@ public:
 private:
 	//! Insert a row ID into a leaf.
 	bool InsertToLeaf(Node &leaf, const ARTKey &row_id_key);
+	//! Insert a row ID into an empty node.
+	bool InsertToEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
 
 	//! Returns all row IDs greater (or equal) than the search key.
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, vector<row_t> &row_ids);
