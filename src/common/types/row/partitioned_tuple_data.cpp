@@ -56,16 +56,7 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 	BuildPartitionSel(state, append_sel, actual_append_count);
 
 	// Early out: check if everything belongs to a single partition
-	optional_idx partition_index;
-	if (UseFixedSizeMap()) {
-		if (state.fixed_partition_entries.size() == 1) {
-			partition_index = state.fixed_partition_entries.begin().GetKey();
-		}
-	} else {
-		if (state.partition_entries.size() == 1) {
-			partition_index = state.partition_entries.begin()->first;
-		}
-	}
+	const auto partition_index = state.GetPartitionIndexIfSinglePartition(UseFixedSizeMap());
 	if (partition_index.IsValid()) {
 		auto &partition = *partitions[partition_index.GetIndex()];
 		auto &partition_pin_state = *state.partition_pin_states[partition_index.GetIndex()];
@@ -99,17 +90,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count);
 
 	// Early out: check if everything belongs to a single partition
-	optional_idx partition_index;
-	if (UseFixedSizeMap()) {
-		if (state.fixed_partition_entries.size() == 1) {
-			partition_index = state.fixed_partition_entries.begin().GetKey();
-		}
-	} else {
-		if (state.partition_entries.size() == 1) {
-			partition_index = state.partition_entries.begin()->first;
-		}
-	}
-
+	auto partition_index = state.GetPartitionIndexIfSinglePartition(UseFixedSizeMap());
 	if (partition_index.IsValid()) {
 		auto &partition = *partitions[partition_index.GetIndex()];
 		auto &partition_pin_state = *state.partition_pin_states[partition_index.GetIndex()];
@@ -147,8 +128,8 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 template <bool fixed>
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
                                              const idx_t append_count) {
-	using GETTER = TemplatedMapGetter<list_entry_t>::Functor<fixed>;
-	auto &partition_entries = GETTER::GetMap(state.fixed_partition_entries, state.partition_entries);
+	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
+	auto &partition_entries = state.GetMap<fixed>();
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	partition_entries.clear();
 	switch (state.partition_indices.GetVectorType()) {
@@ -210,8 +191,8 @@ void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &sta
 
 template <bool fixed>
 void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state) {
-	using GETTER = TemplatedMapGetter<list_entry_t>::Functor<fixed>;
-	const auto &partition_entries = GETTER::GetMap(state.fixed_partition_entries, state.partition_entries);
+	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
+	const auto &partition_entries = state.GetMap<fixed>();
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {
 		const auto &partition_index = GETTER::GetKey(it);
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/fixed_size_map.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -33,7 +34,37 @@ public:
 
 	vector<unique_ptr<DataChunk>> partition_buffers;
 	vector<unique_ptr<ColumnDataAppendState>> partition_append_states;
+
+public:
+	template <bool fixed>
+	typename std::conditional<fixed, fixed_size_map_t<list_entry_t>, perfect_map_t<list_entry_t>>::type &GetMap() {
+		throw NotImplementedException("PartitionedColumnDataAppendState::GetMap for boolean value");
+	}
+
+	optional_idx GetPartitionIndexIfSinglePartition(const bool use_fixed_size_map) {
+		optional_idx result;
+		if (use_fixed_size_map) {
+			if (fixed_partition_entries.size() == 1) {
+				result = fixed_partition_entries.begin().GetKey();
+			}
+		} else {
+			if (partition_entries.size() == 1) {
+				result = partition_entries.begin()->first;
+			}
+		}
+		return result;
+	}
 };
+
+template <>
+inline perfect_map_t<list_entry_t> &PartitionedColumnDataAppendState::GetMap<false>() {
+	return partition_entries;
+}
+
+template <>
+inline fixed_size_map_t<list_entry_t> &PartitionedColumnDataAppendState::GetMap<true>() {
+	return fixed_partition_entries;
+}
 
 enum class PartitionedColumnDataType : uint8_t {
 	INVALID,

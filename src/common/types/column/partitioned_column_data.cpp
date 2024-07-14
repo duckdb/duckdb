@@ -52,18 +52,7 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 	BuildPartitionSel(state, input.size());
 
 	// Early out: check if everything belongs to a single partition
-	optional_idx partition_index;
-	if (UseFixedSizeMap()) {
-		if (state.fixed_partition_entries.size() == 1) {
-			partition_index = state.fixed_partition_entries.begin().GetKey();
-		}
-	} else {
-		if (state.partition_entries.size() == 1) {
-			partition_index = state.partition_entries.begin()->first;
-		}
-	}
-
-	// Early out: check if everything belongs to a single partition
+	const auto partition_index = state.GetPartitionIndexIfSinglePartition(UseFixedSizeMap());
 	if (partition_index.IsValid()) {
 		auto &partition = *partitions[partition_index.GetIndex()];
 		auto &partition_append_state = *state.partition_append_states[partition_index.GetIndex()];
@@ -103,8 +92,8 @@ perfect_map_t<list_entry_t> &PartitionedColumnDataGetMap(PartitionedColumnDataAp
 
 template <bool fixed>
 void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &state, const idx_t append_count) {
-	using GETTER = TemplatedMapGetter<list_entry_t>::Functor<fixed>;
-	auto &partition_entries = GETTER::GetMap(state.fixed_partition_entries, state.partition_entries);
+	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
+	auto &partition_entries = state.GetMap<fixed>();
 	partition_entries.clear();
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	switch (state.partition_indices.GetVectorType()) {
@@ -150,8 +139,8 @@ void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &
 
 template <bool fixed>
 void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &state, DataChunk &input) {
-	using GETTER = TemplatedMapGetter<list_entry_t>::Functor<fixed>;
-	auto &partition_entries = GETTER::GetMap(state.fixed_partition_entries, state.partition_entries);
+	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
+	const auto &partition_entries = state.GetMap<fixed>();
 
 	// Loop through the partitions to append the new data to the partition buffers, and flush the buffers if necessary
 	SelectionVector partition_sel;
