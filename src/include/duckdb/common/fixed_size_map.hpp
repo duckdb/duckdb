@@ -43,7 +43,6 @@ public:
 
 	void resize(idx_t capacity_p) { // NOLINT: match stl case
 		capacity = capacity_p;
-		D_ASSERT(capacity % occupied_mask::BITS_PER_VALUE == 0);
 		occupied = occupied_mask(capacity);
 		values = make_unsafe_uniq_array_for_override<mapped_type>(capacity + 1);
 		clear();
@@ -119,12 +118,21 @@ public:
 	}
 
 	fixed_size_map_iterator &operator++() {
-		for (Incr(); *this != map.end(); Incr()) {
+		const auto end = map.end();
+		for (Incr(); *this != end; Incr()) {
 			const auto &entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
 			if (entry == ~occupied_mask::ValidityBuffer::MAX_ENTRY) {
-				entry_idx++;
+				if (++entry_idx >= end.entry_idx) {
+					entry_idx = end.entry_idx;
+					idx_in_entry = end.idx_in_entry;
+				}
 				idx_in_entry = 0;
-			} else if (map.occupied.RowIsValid(entry, idx_in_entry)) {
+			} else {
+				for (; *this != end; Incr()) {
+					if (map.occupied.RowIsValid(entry, idx_in_entry)) {
+						break;
+					}
+				}
 				break;
 			}
 		}
@@ -184,12 +192,21 @@ public:
 	}
 
 	fixed_size_map_const_iterator &operator++() {
-		for (Incr(); *this != map.end(); Incr()) {
+		const auto end = map.end();
+		for (Incr(); *this != end; Incr()) {
 			const auto &entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
 			if (entry == ~occupied_mask::ValidityBuffer::MAX_ENTRY) {
-				entry_idx++;
+				if (++entry_idx >= end.entry_idx) {
+					entry_idx = end.entry_idx;
+					idx_in_entry = end.idx_in_entry;
+				}
 				idx_in_entry = 0;
-			} else if (map.occupied.RowIsValid(entry, idx_in_entry)) {
+			} else {
+				for (; *this != end; Incr()) {
+					if (map.occupied.RowIsValid(entry, idx_in_entry)) {
+						break;
+					}
+				}
 				break;
 			}
 		}
