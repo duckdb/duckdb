@@ -22,46 +22,6 @@ static bool AssertInternalType(duckdb_logical_type type, duckdb::PhysicalType ph
 	return true;
 }
 
-static bool ContainsLogicalType(const duckdb::LogicalType &type, duckdb::LogicalTypeId excluded_id) {
-	switch (type.id()) {
-	case duckdb::LogicalTypeId::STRUCT: {
-		auto child_count = duckdb::StructType::GetChildCount(type);
-		for (idx_t i = 0; i < child_count; i++) {
-			auto &child_type = duckdb::StructType::GetChildType(type, i);
-			if (ContainsLogicalType(child_type, excluded_id)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	case duckdb::LogicalTypeId::LIST: {
-		auto &child_type = duckdb::ListType::GetChildType(type);
-		return ContainsLogicalType(child_type, excluded_id);
-	}
-	case duckdb::LogicalTypeId::ARRAY: {
-		auto &child_type = duckdb::ArrayType::GetChildType(type);
-		return ContainsLogicalType(child_type, excluded_id);
-	}
-	case duckdb::LogicalTypeId::MAP: {
-		auto &key_type = duckdb::MapType::KeyType(type);
-		auto &value_type = duckdb::MapType::ValueType(type);
-		return ContainsLogicalType(key_type, excluded_id) || ContainsLogicalType(value_type, excluded_id);
-	}
-	case duckdb::LogicalTypeId::UNION: {
-		auto member_count = duckdb::UnionType::GetMemberCount(type);
-		for (idx_t i = 0; i < member_count; i++) {
-			auto &member_type = duckdb::UnionType::GetMemberType(type, i);
-			if (ContainsLogicalType(member_type, excluded_id)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	default:
-		return type.id() == excluded_id;
-	}
-}
-
 duckdb_logical_type duckdb_create_logical_type(duckdb_type type) {
 	if (type == DUCKDB_TYPE_DECIMAL || type == DUCKDB_TYPE_ENUM || type == DUCKDB_TYPE_LIST ||
 	    type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_MAP || type == DUCKDB_TYPE_ARRAY ||

@@ -1,8 +1,9 @@
-#include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
@@ -328,12 +329,12 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 		return DuckDBError;
 	}
 	for (auto it = tf.named_parameters.begin(); it != tf.named_parameters.end(); it++) {
-		if (ContainsLogicalType(it->second, duckdb::LogicalTypeId::INVALID)) {
+		if (it->second.Contains(duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}
 	}
 	for (const auto &argument : tf.arguments) {
-		if (ContainsLogicalType(argument, duckdb::LogicalTypeId::INVALID)) {
+		if (argument.Contains(duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}
 	}
@@ -368,8 +369,7 @@ void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duck
 		return;
 	}
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	if (ContainsLogicalType(*logical_type, duckdb::LogicalTypeId::INVALID) ||
-	    ContainsLogicalType(*logical_type, duckdb::LogicalTypeId::ANY)) {
+	if (logical_type->Contains(duckdb::LogicalTypeId::INVALID) || logical_type->Contains(duckdb::LogicalTypeId::ANY)) {
 		return;
 	}
 

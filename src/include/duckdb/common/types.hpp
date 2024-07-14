@@ -315,6 +315,7 @@ struct LogicalType {
 	static bool TypeIsTimestamp(const LogicalType &type) {
 		return TypeIsTimestamp(type.id());
 	}
+	bool Contains(const LogicalTypeId other) const;
 	DUCKDB_API string ToString() const;
 	DUCKDB_API bool IsIntegral() const;
 	DUCKDB_API bool IsNumeric() const;

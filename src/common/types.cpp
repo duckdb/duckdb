@@ -1740,4 +1740,44 @@ bool LogicalType::operator==(const LogicalType &rhs) const {
 	return EqualTypeInfo(rhs);
 }
 
+bool LogicalType::Contains(const LogicalTypeId other) const {
+	switch (id()) {
+	case LogicalTypeId::STRUCT: {
+		auto child_count = StructType::GetChildCount(*this);
+		for (idx_t i = 0; i < child_count; i++) {
+			auto &child_type = StructType::GetChildType(*this, i);
+			if (child_type.Contains(other)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case LogicalTypeId::LIST: {
+		auto &child_type = ListType::GetChildType(*this);
+		return child_type.Contains(other);
+	}
+	case LogicalTypeId::ARRAY: {
+		auto &child_type = ArrayType::GetChildType(*this);
+		return child_type.Contains(other);
+	}
+	case LogicalTypeId::MAP: {
+		auto &key_type = MapType::KeyType(*this);
+		auto &value_type = MapType::ValueType(*this);
+		return key_type.Contains(other) || value_type.Contains(other);
+	}
+	case LogicalTypeId::UNION: {
+		auto member_count = UnionType::GetMemberCount(*this);
+		for (idx_t i = 0; i < member_count; i++) {
+			auto &member_type = UnionType::GetMemberType(*this, i);
+			if (member_type.Contains(other)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	default:
+		return id() == other;
+	}
+}
+
 } // namespace duckdb

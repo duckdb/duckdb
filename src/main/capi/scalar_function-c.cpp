@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
@@ -181,12 +182,12 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 	if (scalar_function.name.empty() || !info.function) {
 		return DuckDBError;
 	}
-	if (ContainsLogicalType(scalar_function.return_type, duckdb::LogicalTypeId::INVALID) ||
-	    ContainsLogicalType(scalar_function.return_type, duckdb::LogicalTypeId::ANY)) {
+	if (scalar_function.return_type.Contains(duckdb::LogicalTypeId::INVALID) ||
+	    scalar_function.return_type.Contains(duckdb::LogicalTypeId::ANY)) {
 		return DuckDBError;
 	}
 	for (const auto &argument : scalar_function.arguments) {
-		if (ContainsLogicalType(argument, duckdb::LogicalTypeId::INVALID)) {
+		if (argument.Contains(duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}
 	}
