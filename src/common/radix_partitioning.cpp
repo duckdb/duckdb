@@ -185,7 +185,7 @@ void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDa
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_pin_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
-		state.partition_pin_states.emplace_back(make_uniq<TupleDataPinState>());
+		state.partition_pin_states.emplace_back(make_unsafe_uniq<TupleDataPinState>());
 		partitions[i]->InitializeAppend(*state.partition_pin_states[i], properties);
 	}
 

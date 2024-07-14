@@ -31,7 +31,7 @@ public:
 	perfect_map_t<list_entry_t> partition_entries;
 	fixed_size_map_t<list_entry_t> fixed_partition_entries;
 
-	vector<unique_ptr<TupleDataPinState>> partition_pin_states;
+	unsafe_vector<unsafe_unique_ptr<TupleDataPinState>> partition_pin_states;
 	TupleDataChunkState chunk_state;
 
 public:
@@ -170,7 +170,7 @@ protected:
 
 	//! Create a new shared allocator
 	void CreateAllocator();
-	//! Whether to use fixed size map or regular marp
+	//! Whether to use fixed size map or regular map
 	bool UseFixedSizeMap() const;
 	//! Builds a selection vector in the Append state for the partitions
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx

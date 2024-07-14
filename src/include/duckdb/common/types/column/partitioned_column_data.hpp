@@ -135,7 +135,7 @@ protected:
 	}
 	//! Create a new shared allocator
 	void CreateAllocator();
-	//! Whether to use fixed size map or regular marp
+	//! Whether to use fixed size map or regular map
 	bool UseFixedSizeMap() const;
 	//! Builds a selection vector in the Append state for the partitions
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx

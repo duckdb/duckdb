@@ -13,24 +13,21 @@
 
 namespace duckdb {
 
-template <class T>
+template <class T, bool is_const>
 class fixed_size_map_iterator; // NOLINT: match stl case
-
-template <class T>
-class fixed_size_map_const_iterator; // NOLINT: match stl case
 
 //! Alternative to perfect_map_t when min/max keys are integral, small, and known
 template <class T>
 class fixed_size_map_t { // NOLINT: match stl case
-	friend class fixed_size_map_iterator<T>;
-	friend class fixed_size_map_const_iterator<T>;
+	friend class fixed_size_map_iterator<T, false>;
+	friend class fixed_size_map_iterator<T, true>;
 
 public:
 	using key_type = idx_t;
 	using mapped_type = T;
-	using occupied_mask = TemplatedValidityMask<uint16_t>;
-	using iterator = fixed_size_map_iterator<mapped_type>;
-	using const_iterator = fixed_size_map_const_iterator<mapped_type>;
+	using occupied_mask = TemplatedValidityMask<uint8_t>;
+	using iterator = fixed_size_map_iterator<mapped_type, false>;
+	using const_iterator = fixed_size_map_iterator<mapped_type, true>;
 
 public:
 	explicit fixed_size_map_t(idx_t capacity_p = 0) : capacity(capacity_p) {
@@ -105,37 +102,52 @@ private:
 	unsafe_unique_array<mapped_type> values;
 };
 
-template <class T>
+template <class T, bool is_const>
 class fixed_size_map_iterator { // NOLINT: match stl case
 public:
 	using key_type = idx_t;
 	using mapped_type = T;
+	using fixed_size_map_type = fixed_size_map_t<mapped_type>;
+	using map_type = typename std::conditional<is_const, const fixed_size_map_type, fixed_size_map_type>::type;
 	using occupied_mask = typename fixed_size_map_t<mapped_type>::occupied_mask;
 
 public:
-	fixed_size_map_iterator(fixed_size_map_t<mapped_type> &map_p, idx_t index) : map(map_p) {
+	fixed_size_map_iterator(map_type &map_p, idx_t index) : map(map_p) {
 		occupied_mask::GetEntryIndex(index, entry_idx, idx_in_entry);
 	}
 
 	fixed_size_map_iterator &operator++() {
-		const auto end = map.end();
-		for (Incr(); *this != end; Incr()) {
+		// Prefix increment
+		if (++idx_in_entry == occupied_mask::BITS_PER_VALUE) {
+			NextEntry();
+		}
+		// Loop until we find an occupied index, or until the end
+		auto end = map.end();
+		do {
 			const auto &entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
 			if (entry == ~occupied_mask::ValidityBuffer::MAX_ENTRY) {
-				if (++entry_idx >= end.entry_idx) {
-					entry_idx = end.entry_idx;
+				// Entire entry is unoccupied, skip
+				if (entry_idx == end.entry_idx) {
+					// This is the last entry
 					idx_in_entry = end.idx_in_entry;
+					break;
 				}
-				idx_in_entry = 0;
+				NextEntry();
 			} else {
-				for (; *this != end; Incr()) {
+				// One or more occupied in entry, loop over it
+				const auto idx_to = entry_idx == end.entry_idx ? end.idx_in_entry : occupied_mask::BITS_PER_VALUE;
+				for (; idx_in_entry < idx_to; idx_in_entry++) {
 					if (map.occupied.RowIsValid(entry, idx_in_entry)) {
-						break;
+						// We found an occupied index
+						return *this;
 					}
 				}
-				break;
+				// We did not find an occupied index
+				if (*this != end) {
+					NextEntry();
+				}
 			}
-		}
+		} while (*this != end);
 		return *this;
 	}
 
@@ -166,85 +178,13 @@ public:
 	}
 
 private:
-	void Incr() {
-		if (++idx_in_entry == occupied_mask::BITS_PER_VALUE) {
-			entry_idx++;
-			idx_in_entry = 0;
-		}
+	void NextEntry() {
+		entry_idx++;
+		idx_in_entry = 0;
 	}
 
 private:
-	fixed_size_map_t<mapped_type> &map;
-	idx_t entry_idx;
-	idx_t idx_in_entry;
-};
-
-template <class T>
-class fixed_size_map_const_iterator { // NOLINT: match stl case
-public:
-	using key_type = idx_t;
-	using mapped_type = T;
-	using occupied_mask = typename fixed_size_map_t<mapped_type>::occupied_mask;
-
-public:
-	fixed_size_map_const_iterator(const fixed_size_map_t<mapped_type> &map_p, const idx_t index) : map(map_p) {
-		occupied_mask::GetEntryIndex(index, entry_idx, idx_in_entry);
-	}
-
-	fixed_size_map_const_iterator &operator++() {
-		const auto end = map.end();
-		for (Incr(); *this != end; Incr()) {
-			const auto &entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
-			if (entry == ~occupied_mask::ValidityBuffer::MAX_ENTRY) {
-				if (++entry_idx >= end.entry_idx) {
-					entry_idx = end.entry_idx;
-					idx_in_entry = end.idx_in_entry;
-				}
-				idx_in_entry = 0;
-			} else {
-				for (; *this != end; Incr()) {
-					if (map.occupied.RowIsValid(entry, idx_in_entry)) {
-						break;
-					}
-				}
-				break;
-			}
-		}
-		return *this;
-	}
-
-	fixed_size_map_const_iterator operator++(int) {
-		fixed_size_map_const_iterator tmp = *this;
-		++(*this);
-		return tmp;
-	}
-
-	key_type GetKey() const {
-		return entry_idx * occupied_mask::BITS_PER_VALUE + idx_in_entry;
-	}
-
-	const mapped_type &GetValue() const {
-		return map.values[GetKey()];
-	}
-
-	friend bool operator==(const fixed_size_map_const_iterator &a, const fixed_size_map_const_iterator &b) {
-		return a.entry_idx == b.entry_idx && a.idx_in_entry == b.idx_in_entry;
-	}
-
-	friend bool operator!=(const fixed_size_map_const_iterator &a, const fixed_size_map_const_iterator &b) {
-		return !(a == b);
-	}
-
-private:
-	void Incr() {
-		if (++idx_in_entry == occupied_mask::BITS_PER_VALUE) {
-			entry_idx++;
-			idx_in_entry = 0;
-		}
-	}
-
-private:
-	const fixed_size_map_t<mapped_type> &map;
+	map_type &map;
 	idx_t entry_idx;
 	idx_t idx_in_entry;
 };
