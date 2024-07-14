@@ -2687,6 +2687,17 @@ hugeint_t GetPowerOfTen(hugeint_t input, uint8_t scale) {
 	return Hugeint::POWERS_OF_TEN[scale];
 }
 
+template <class SRC>
+static void GetDivMod(SRC lhs, SRC rhs, SRC &div, SRC &mod) {
+	div = lhs / rhs;
+	mod = lhs % rhs;
+}
+
+template <>
+void GetDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &div, hugeint_t &mod) {
+	div = Hugeint::DivMod(lhs, rhs, mod);
+}
+
 template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
 	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0)) || scale == 0) {
@@ -2695,8 +2706,13 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
 		return true;
 	}
 	auto power_of_ten = GetPowerOfTen(input, scale);
-	result = Cast::Operation<SRC, DST>(input / power_of_ten) +
-	         Cast::Operation<SRC, DST>(input % power_of_ten) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+
+	SRC div = 0;
+	SRC mod = 0;
+	GetDivMod(input, power_of_ten, div, mod);
+
+	result = Cast::Operation<SRC, DST>(div) +
+	         Cast::Operation<SRC, DST>(mod) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 	return true;
 }
 
