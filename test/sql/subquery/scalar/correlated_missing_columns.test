@@ -45,7 +45,6 @@ SELECT * FROM lineitem GROUP BY (SELECT SUM(o_orderke) OVER () FROM orders)
 ----
 o_orderkey
 
-
 # limit
 statement error
 SELECT * FROM lineitem LIMIT (SELECT SUM(o_orderke) FROM orders LIMIT 1)

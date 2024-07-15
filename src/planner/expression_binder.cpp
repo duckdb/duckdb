@@ -127,11 +127,16 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	auto column_name = current_entry->second;
 	current_entry = current_info.find("candidates");
 	new_entry = new_info.find("candidates");
-	if (current_entry == current_info.end() || new_entry == new_info.end()) {
-		// no candidate info in either column
-		return false;
+	if (current_entry == current_info.end()) {
+		// no current candidates - use new candidates
+		current = std::move(new_error);
+		return true;
 	}
-	// combine the candidates
+	if (new_entry == new_info.end()) {
+		// no new candidates - use current candidates
+		return true;
+	}
+	// both errors have candidates - combine the candidates
 	auto current_candidates = StringUtil::Split(current_entry->second, ",");
 	auto new_candidates = StringUtil::Split(new_entry->second, ",");
 	current_candidates.insert(current_candidates.end(), new_candidates.begin(), new_candidates.end());
