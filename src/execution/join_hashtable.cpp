@@ -750,8 +750,9 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 
 ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p)
     : key_state(key_state_p), pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE),
-      chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE), ht(ht_p),
-      found_match(make_unsafe_uniq_array_for_override<bool>(STANDARD_VECTOR_SIZE)), finished(false), is_null(true) {
+      chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE),
+      found_match(make_unsafe_uniq_array_for_override<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
+      is_null(true) {
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
