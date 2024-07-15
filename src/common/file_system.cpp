@@ -627,7 +627,7 @@ FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
 }
 
-DUCKDB_API idx_t FileHandle::GetProgress() {
+idx_t FileHandle::GetProgress() {
 	throw NotImplementedException("GetProgress is not implemented for this file handle");
 }
 
