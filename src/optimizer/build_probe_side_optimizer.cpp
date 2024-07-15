@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 
 namespace duckdb {
@@ -34,7 +35,6 @@ BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, Logical
 	// cardinalities are the same, we prefer to have the child with the rowid bindings in the probe side.
 	GetRowidBindings(op, preferred_on_probe_side);
 }
-
 static void FlipChildren(LogicalOperator &op) {
 	std::swap(op.children[0], op.children[1]);
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
@@ -64,6 +64,41 @@ static inline idx_t ComputeOverlappingBindings(const vector<ColumnBinding> &hays
 	return result;
 }
 
+BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
+	BuildSize ret;
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+
+		auto &left_child = op.children[0];
+		auto &right_child = op.children[1];
+
+		// resolve operator types to determine how big the build side is going to be
+		op.ResolveOperatorTypes();
+		auto left_tuple_layout = TupleDataLayout();
+		auto left_types = left_child->types;
+		left_types.push_back(LogicalType::HASH);
+		left_tuple_layout.Initialize(left_types);
+
+		auto right_tuple_layout = TupleDataLayout();
+		auto right_types = right_child->types;
+		right_types.push_back(LogicalType::HASH);
+		right_tuple_layout.Initialize(right_types);
+
+		// Don't multiply by cardinalities, the only important metric is the size of the row
+		// in the hash table
+		ret.left_side = left_tuple_layout.GetRowWidth() * (1 + COLUMN_COUNT_PENALTY * left_child->types.size());
+		ret.right_side = right_tuple_layout.GetRowWidth() * (1 + COLUMN_COUNT_PENALTY * right_child->types.size());
+		return ret;
+	}
+	default:
+		break;
+	}
+	return ret;
+}
+
 void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio) {
 	auto &left_child = op.children[0];
 	auto &right_child = op.children[1];
@@ -72,21 +107,41 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
 	                                                              : right_child->EstimateCardinality(context);
 
-	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
-		return;
+	auto build_sizes = GetBuildSizes(op);
+	// special math.
+	auto left_side_build_cost = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
+	auto right_side_build_cost = rhs_cardinality * build_sizes.right_side;
+
+	bool swap = false;
+	// RHS is build side.
+	// if right_side metric is larger than left_side metric, then right_side is more costly to build on
+	// than the lhs. So we swap
+	if (right_side_build_cost > left_side_build_cost) {
+		swap = true;
 	}
+
+	// swap for preferred on probe side
 	if (rhs_cardinality == lhs_cardinality * cardinality_ratio && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
 		auto bindings_left = left_child->GetColumnBindings();
 		auto bindings_right = right_child->GetColumnBindings();
 		auto bindings_in_left = ComputeOverlappingBindings(bindings_left, preferred_on_probe_side);
 		auto bindings_in_right = ComputeOverlappingBindings(bindings_right, preferred_on_probe_side);
-		if (bindings_in_right > bindings_in_left) {
-			FlipChildren(op);
+		// (if the sides are planning to be swapped AND
+		// if more projected bindings are in the left (meaning right/build side after the swap)
+		// then swap them back. The projected bindings stay in the left/probe side.)
+		// OR
+		// (if the sides are planning not to be swapped AND
+		// if more projected bindings are in the right (meaning right/build)
+		// then swap them. The projected bindings are swapped to the left/probe side.)
+		if ((swap && bindings_in_left > bindings_in_right) || (!swap && bindings_in_right > bindings_in_left)) {
+			swap = !swap;
 		}
-		return;
 	}
-	FlipChildren(op);
+
+	if (swap) {
+		FlipChildren(op);
+	}
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {

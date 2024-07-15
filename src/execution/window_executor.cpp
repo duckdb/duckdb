@@ -936,10 +936,6 @@ public:
 	unique_ptr<WindowAggregator> aggregator;
 	// aggregate global state
 	unique_ptr<WindowAggregatorState> gsink;
-
-	// Single threaded Finalize
-	mutex lock;
-	bool finalized = false;
 };
 
 bool WindowAggregateExecutorGlobalState::IsConstantAggregate() {
@@ -1088,16 +1084,36 @@ unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(co
 	return make_uniq<WindowAggregateExecutorGlobalState>(*this, payload_count, partition_mask, order_mask);
 }
 
+class WindowAggregateExecutorLocalState : public WindowExecutorBoundsState {
+public:
+	WindowAggregateExecutorLocalState(const WindowExecutorGlobalState &gstate, const WindowAggregator &aggregator)
+	    : WindowExecutorBoundsState(gstate) {
+
+		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
+		aggregator_state = aggregator.GetLocalState(*gastate.gsink);
+	}
+
+public:
+	// state of aggregator
+	unique_ptr<WindowAggregatorState> aggregator_state;
+};
+
+unique_ptr<WindowExecutorLocalState>
+WindowAggregateExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
+	auto res = make_uniq<WindowAggregateExecutorLocalState>(gstate, *gastate.aggregator);
+	return std::move(res);
+}
+
 void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
                                    WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
-	auto &lastate = lstate.Cast<WindowExecutorLocalState>();
+	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
 	auto &filter_sel = gastate.filter_sel;
 	auto &filter_executor = gastate.filter_executor;
 	auto &payload_executor = lastate.payload_executor;
 	auto &payload_chunk = lastate.payload_chunk;
 	auto &aggregator = gastate.aggregator;
-	auto &gsink = gastate.gsink;
 
 	idx_t filtered = 0;
 	SelectionVector *filtering = nullptr;
@@ -1116,7 +1132,9 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 	}
 
 	D_ASSERT(aggregator);
-	aggregator->Sink(*gsink, payload_chunk, input_idx, filtering, filtered);
+	auto &gestate = *gastate.gsink;
+	auto &lestate = *lastate.aggregator_state;
+	aggregator->Sink(gestate, lestate, payload_chunk, input_idx, filtering, filtered);
 
 	WindowExecutor::Sink(input_chunk, input_idx, total_count, gstate, lstate);
 }
@@ -1185,12 +1203,6 @@ void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate, Window
 	auto &gsink = gastate.gsink;
 	D_ASSERT(aggregator);
 
-	//	Single threaded Finalize for now
-	lock_guard<mutex> gestate_guard(gastate.lock);
-	if (gastate.finalized) {
-		return;
-	}
-
 	//	Estimate the frame statistics
 	//	Default to the entire partition if we don't know anything
 	FrameStats stats;
@@ -1206,27 +1218,8 @@ void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate, Window
 	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
 	ApplyWindowStats(wexpr.end, stats[1], base, false);
 
-	aggregator->Finalize(*gsink, stats);
-
-	gastate.finalized = true;
-}
-
-class WindowAggregateExecutorLocalState : public WindowExecutorBoundsState {
-public:
-	WindowAggregateExecutorLocalState(const WindowExecutorGlobalState &gstate, const WindowAggregator &aggregator)
-	    : WindowExecutorBoundsState(gstate), aggregator_state(aggregator.GetLocalState()) {
-	}
-
-public:
-	// state of aggregator
-	unique_ptr<WindowAggregatorState> aggregator_state;
-};
-
-unique_ptr<WindowExecutorLocalState>
-WindowAggregateExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
-	auto res = make_uniq<WindowAggregateExecutorLocalState>(gstate, *gastate.aggregator);
-	return std::move(res);
+	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
+	aggregator->Finalize(*gsink, *lastate.aggregator_state, stats);
 }
 
 void WindowAggregateExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
@@ -1399,7 +1392,7 @@ void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gsta
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		auto denom = NumericCast<int64_t>(partition_end[i] - partition_begin[i] - 1);
+		auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i] - 1));
 		double percent_rank = denom > 0 ? ((double)lpeer.rank - 1) / denom : 0;
 		rdata[i] = percent_rank;
 	}
@@ -1420,7 +1413,7 @@ void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 	auto peer_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PEER_END]);
 	auto rdata = FlatVector::GetData<double>(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		auto denom = NumericCast<int64_t>(partition_end[i] - partition_begin[i]);
+		auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i]));
 		double cume_dist = denom > 0 ? ((double)(peer_end[i] - partition_begin[i])) / denom : 0;
 		rdata[i] = cume_dist;
 	}

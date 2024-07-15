@@ -81,6 +81,7 @@ end
         (; col_name = :timestamp, duck_type = "TIMESTAMP", append_value = Dates.DateTime("1970-01-02T01:23:45.678")),
         (; col_name = :missingval, duck_type = "INTEGER", append_value = missing),
         (; col_name = :nothingval, duck_type = "INTEGER", append_value = nothing, ref_value = missing),
+        (; col_name = :largeval, duck_type = "INTEGER", append_value = Int32(2^16)),
         (; col_name = :uuid, duck_type = "UUID", append_value = uuid),
         (; col_name = :varchar, duck_type = "VARCHAR", append_value = "Foo")
     ]

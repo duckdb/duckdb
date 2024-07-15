@@ -127,21 +127,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
 		} else {
-			if (loption == "compression") {
-				if (option.second.empty()) {
-					// This can't be empty
-					throw BinderException("COMPRESSION option, in the file scanner, can't be empty. It should be set "
-					                      "to AUTO, UNCOMPRESSED, GZIP, SNAPPY or ZSTD. Depending on the file format.");
-				}
-				auto parameter = StringUtil::Lower(option.second[0].ToString());
-				if (parameter == "gzip" && !StringUtil::EndsWith(bind_input.file_extension, ".gz")) {
-					// We just add .gz
-					bind_input.file_extension += ".gz";
-				} else if (parameter == "zstd" && !StringUtil::EndsWith(bind_input.file_extension, ".zst")) {
-					// We just add .zst
-					bind_input.file_extension += ".zst";
-				}
-			}
 			stmt.info->options[option.first] = option.second;
 		}
 	}

@@ -28,8 +28,7 @@ void TransactionContext::BeginTransaction() {
 		throw TransactionException("cannot start a transaction within a transaction");
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
-	auto catalog_version = Catalog::GetSystemCatalog(context).GetCatalogVersion();
-	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, catalog_version);
+	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp);
 
 	// Notify any registered state of transaction begin
 	for (auto const &s : context.registered_state) {

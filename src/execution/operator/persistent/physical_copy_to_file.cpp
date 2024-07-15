@@ -80,7 +80,10 @@ public:
 		for (idx_t i = 0; i < cols.size(); i++) {
 			const auto &partition_col_name = names[cols[i]];
 			const auto &partition_value = values[i];
-			string p_dir = partition_col_name + "=" + partition_value.ToString();
+			string p_dir;
+			p_dir += HivePartitioning::Escape(partition_col_name);
+			p_dir += "=";
+			p_dir += HivePartitioning::Escape(partition_value.ToString());
 			path = fs.JoinPath(path, p_dir);
 			CreateDir(path, fs);
 		}

@@ -1,5 +1,5 @@
 # name: test/sql/binder/similar_to.test
-# description: Test table alias with single quotes
+# description: Test similar to suggestions
 # group: [binder]
 
 statement ok
@@ -30,3 +30,35 @@ statement error
 SELECT * FROM lineitem_long
 ----
 lineitem
+
+statement error
+select jaro_winkler_('x', 'y');
+----
+jaro_winkler_similarity
+
+# check entries in other schemas
+statement ok
+create schema s1;
+
+statement ok
+create table s1.my_lineitem(i int);
+
+# exact match: show it
+statement error
+select * from my_lineitem;
+----
+s1.my_lineitem
+
+# we prefer the current schema even if another schema has a slightly better match
+statement error
+select * from m_lineitem;
+----
+lineitem
+
+statement ok
+create table s1.orders(i int)
+
+statement error
+select * from ord
+----
+s1.orders
