@@ -173,6 +173,8 @@ static int64_t ImplicitCastFloat(const LogicalType &to) {
 
 static int64_t ImplicitCastDouble(const LogicalType &to) {
 	switch (to.id()) {
+	case LogicalTypeId::VARINT:
+		return 101;
 	default:
 		return -1;
 	}
@@ -268,6 +270,15 @@ static int64_t ImplicitCastTimestamp(const LogicalType &to) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return TargetTypeCost(to);
 	case LogicalTypeId::TIMESTAMP_TZ:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastVarint(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::DOUBLE:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -566,6 +577,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastTimestampNS(to);
 	case LogicalTypeId::TIMESTAMP:
 		return ImplicitCastTimestamp(to);
+	case LogicalTypeId::VARINT:
+		return ImplicitCastVarint(to);
 	default:
 		return -1;
 	}

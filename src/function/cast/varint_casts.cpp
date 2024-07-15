@@ -259,7 +259,7 @@ struct HugeintCastToVarInt {
 struct TryCastToVarInt {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
-		return VarcharToVarInt(result, input, result_vector);
+		throw InternalException("Unsupported type for try cast to VARINT");
 	}
 };
 
@@ -397,7 +397,7 @@ bool TryCastToVarInt::Operation(float double_value, string_t &result_value, Vect
 	return DoubleToVarInt(double_value, result_value, result);
 }
 
-struct VarIntTryCastToVarchar {
+struct VarIntCastToVarchar {
 	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
 		return StringVector::AddStringOrBlob(result, VarIntToVarchar(input));
@@ -480,7 +480,7 @@ BoundCastInfo DefaultCasts::VarintCastSwitch(BindCastInput &input, const Logical
 	// now switch on the result type
 	switch (target.id()) {
 	case LogicalTypeId::VARCHAR:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, VarIntTryCastToVarchar>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, VarIntCastToVarchar>);
 	case LogicalTypeId::DOUBLE:
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, double, VarintToDoubleCast>);
 	default:
