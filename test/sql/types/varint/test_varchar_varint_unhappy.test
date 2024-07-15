@@ -18,19 +18,19 @@ select '+0'::VARINT
 statement error
 select '+-0'::VARINT
 ----
-Conversion Error: Could not convert string '+-0' to VARINT
+Conversion Error: Could not convert string '+-0'
 
 
 statement error
 select '-+0'::VARINT
 ----
-Conversion Error: Could not convert string '-+0' to VARINT
+Conversion Error: Could not convert string '-+0'
 
 
 statement error
 select '-'::VARINT
 ----
-Could not convert string '-' to VARINT
+Could not convert string '-'
 
 query I
 select '-0010'::VARINT
@@ -65,7 +65,7 @@ select '0010.4999'::VARINT
 statement error
 select '00-0010'::VARINT
 ----
-Conversion Error: Could not convert string '00-0010' to VARINT
+Conversion Error: Could not convert string '00-0010'
 
 query I
 select '-0010.2'::VARINT
@@ -90,7 +90,7 @@ select '0010.9'::VARINT
 statement error
 select ''::VARINT
 ----
-Conversion Error: Could not convert string '' to VARINT
+Conversion Error: Could not convert string ''
 
 query I
 select (-0)::VARINT
@@ -101,24 +101,24 @@ select (-0)::VARINT
 statement error
 select 'bla'::VARINT
 ----
-Conversion Error: Could not convert string 'bla' to VARINT
+Conversion Error: Could not convert string 'bla'
 
 statement error
 select '1000bla'::VARINT
 ----
-Conversion Error: Could not convert string '1000bla' to VARINT
+Conversion Error: Could not convert string '1000bla'
 
 statement error
 select '1000.bla'::VARINT
 ----
-Conversion Error: Could not convert string '1000.bla' to VARINT
+Conversion Error: Could not convert string '1000.bla'
 
 statement error
 select '1000...'::VARINT
 ----
-Conversion Error: Could not convert string '1000...' to VARINT
+Conversion Error: Could not convert string '1000...'
 
 statement error
 select '1000.0.0'::VARINT
 ----
-Could not convert string '1000.0.0' to VARINT
+Could not convert string '1000.0.0'

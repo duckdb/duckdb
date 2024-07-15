@@ -131,10 +131,11 @@ char DigitToChar(int digit) {
 
 // Function to prepare a varchar for conversion
 // We trim zero's, check for negative values, and what-not
-void VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative, bool &is_zero) {
+// Returns false if this is an invalid varchar
+bool VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative, bool &is_zero) {
 	// If it's empty we error
 	if (value.Empty()) {
-		throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
+		return false;
 	}
 	start_pos = 0;
 	is_zero = false;
@@ -160,10 +161,10 @@ void VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &
 		if (at_least_one_zero) {
 			// This is a 0 value
 			is_zero = true;
-			return;
+			return true;
 		}
 		// This is either a '+' or '-'. Hence invalid.
-		throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
+		return false;
 	}
 	idx_t cur_pos = start_pos;
 	// Verify all is numeric
@@ -176,7 +177,7 @@ void VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &
 		if (int_value_char[cur_pos] == '.') {
 			cur_pos++;
 		} else {
-			throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
+			return false;
 		}
 
 		while (cur_pos < end_pos) {
@@ -184,123 +185,13 @@ void VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &
 				cur_pos++;
 			} else {
 				// By now we can only have numbers, otherwise this is invalid.
-				throw ConversionException("Could not convert string '%s' to VARINT", value.GetString());
+				return false;
 			}
 		}
 		// Floor cast this boy
 		end_pos = possible_end;
 	}
-}
-
-template <class T>
-string_t DoubleToVarInt(Vector &result, T double_value) {
-	// Determine if the number is negative
-	bool is_negative = double_value < 0;
-	// Determine the number of data bytes
-	double abs_value = std::abs(double_value);
-
-	if (abs_value == 0) {
-		// Return Value 0
-		return ZeroBlob(result);
-	}
-	vector<char> value;
-	while (abs_value > 0) {
-		double quotient = abs_value / 256;
-		double truncated = floor(quotient);
-		uint8_t byte = static_cast<uint8_t>(abs_value - truncated * 256);
-		abs_value = truncated;
-		if (is_negative) {
-			value.push_back(~static_cast<char>(byte));
-		} else {
-			value.push_back(static_cast<char>(byte));
-		}
-	}
-	uint32_t data_byte_size = static_cast<uint32_t>(value.size());
-	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
-	auto blob = StringVector::EmptyString(result, blob_size);
-	auto writable_blob = blob.GetDataWriteable();
-	SetHeader(writable_blob, data_byte_size, is_negative);
-	// Add data bytes to the blob, starting off after header bytes
-	idx_t blob_string_idx = value.size() - 1;
-	for (idx_t i = VARINT_HEADER_SIZE; i < blob_size; i++) {
-		writable_blob[i] = value[blob_string_idx--];
-	}
-
-	blob.Finalize();
-	return blob;
-}
-
-// This algorithm is quadratic :(
-string_t VarcharToVarInt(Vector &result, string_t int_value) {
-	idx_t start_pos, end_pos;
-	bool is_negative, is_zero;
-	VarcharFormatting(int_value, start_pos, end_pos, is_negative, is_zero);
-	if (is_zero) {
-		// Return Value 0
-		return ZeroBlob(result);
-	}
-	auto int_value_char = int_value.GetData();
-	idx_t actual_size = end_pos - start_pos;
-	// convert the string to a byte array
-	string blob_string;
-
-	unsafe_vector<uint64_t> digits;
-
-	// The max number a uint64_t can represent is 18.446.744.073.709.551.615
-	// That has 20 digits
-	// In the worst case a remainder of a division will be 255, which is 3 digits
-	// Since the max value is 184, we need to take one more digit out
-	// Hence we end up with a max of 16 digits supported.
-	const uint8_t max_digits = 16;
-	const idx_t number_of_digits = static_cast<idx_t>(std::ceil((double)actual_size / max_digits));
-
-	// lets convert the string to a uint64_t vector
-	idx_t cur_end = end_pos;
-	for (idx_t i = 0; i < number_of_digits; i++) {
-		idx_t cur_start = static_cast<int64_t>(start_pos) > static_cast<int64_t>(cur_end - max_digits)
-		                      ? start_pos
-		                      : cur_end - max_digits;
-		std::string current_number(int_value_char + cur_start, cur_end - cur_start);
-		digits.push_back(std::stoull(current_number));
-		// move cur_end to more digits down the road
-		cur_end = cur_end - max_digits;
-	}
-
-	// Now that we have our uint64_t vector, lets start our division process to figure out the new number and remainder
-	while (!digits.empty()) {
-		idx_t digit_idx = digits.size() - 1;
-		uint8_t remainder = 0;
-		idx_t digits_size = digits.size();
-		for (idx_t i = 0; i < digits_size; i++) {
-			digits[digit_idx] += static_cast<uint64_t>(remainder * pow(10, max_digits));
-			remainder = static_cast<uint8_t>(digits[digit_idx] % 256);
-			digits[digit_idx] /= 256;
-			if (digits[digit_idx] == 0 && digit_idx == digits.size() - 1) {
-				// we can cap this
-				digits.pop_back();
-			}
-			digit_idx--;
-		}
-		if (is_negative) {
-			blob_string.push_back(static_cast<char>(~remainder));
-		} else {
-			blob_string.push_back(static_cast<char>(remainder));
-		}
-	}
-
-	uint32_t blob_size = static_cast<uint32_t>(blob_string.size() + VARINT_HEADER_SIZE);
-	auto blob = StringVector::EmptyString(result, blob_size);
-	auto writable_blob = blob.GetDataWriteable();
-
-	SetHeader(writable_blob, blob_string.size(), is_negative);
-
-	// Write string_blob into blob
-	idx_t blob_string_idx = blob_string.size() - 1;
-	for (idx_t i = VARINT_HEADER_SIZE; i < blob_size; i++) {
-		writable_blob[i] = blob_string[blob_string_idx--];
-	}
-	blob.Finalize();
-	return blob;
+	return true;
 }
 
 void GetByteArray(vector<uint8_t> &byte_array, bool &is_negative, const string_t &blob) {
@@ -365,19 +256,146 @@ struct HugeintCastToVarInt {
 	}
 };
 
-struct DoubleTryCastToVarInt {
-	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
-		return DoubleToVarInt(result, input);
+struct TryCastToVarInt {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
+		return VarcharToVarInt(result, input, result_vector);
 	}
 };
 
-struct VarcharTryCastToVarInt {
-	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
-		return VarcharToVarInt(result, input);
+// Varchar to Varint
+// TODO: This is a slow quadratic algorithm, we can still optimize it further.
+template <>
+bool TryCastToVarInt::Operation(string_t input_value, string_t &result_value, Vector &result,
+                                CastParameters &parameters) {
+	idx_t start_pos, end_pos;
+	bool is_negative, is_zero;
+	if (!VarcharFormatting(input_value, start_pos, end_pos, is_negative, is_zero)) {
+		return false;
 	}
-};
+	if (is_zero) {
+		// Return Value 0
+		result_value = ZeroBlob(result);
+		return true;
+	}
+	auto int_value_char = input_value.GetData();
+	idx_t actual_size = end_pos - start_pos;
+	// convert the string to a byte array
+	string blob_string;
+
+	unsafe_vector<uint64_t> digits;
+
+	// The max number a uint64_t can represent is 18.446.744.073.709.551.615
+	// That has 20 digits
+	// In the worst case a remainder of a division will be 255, which is 3 digits
+	// Since the max value is 184, we need to take one more digit out
+	// Hence we end up with a max of 16 digits supported.
+	const uint8_t max_digits = 16;
+	const idx_t number_of_digits = static_cast<idx_t>(std::ceil((double)actual_size / max_digits));
+
+	// lets convert the string to a uint64_t vector
+	idx_t cur_end = end_pos;
+	for (idx_t i = 0; i < number_of_digits; i++) {
+		idx_t cur_start = static_cast<int64_t>(start_pos) > static_cast<int64_t>(cur_end - max_digits)
+		                      ? start_pos
+		                      : cur_end - max_digits;
+		std::string current_number(int_value_char + cur_start, cur_end - cur_start);
+		digits.push_back(std::stoull(current_number));
+		// move cur_end to more digits down the road
+		cur_end = cur_end - max_digits;
+	}
+
+	// Now that we have our uint64_t vector, lets start our division process to figure out the new number and remainder
+	while (!digits.empty()) {
+		idx_t digit_idx = digits.size() - 1;
+		uint8_t remainder = 0;
+		idx_t digits_size = digits.size();
+		for (idx_t i = 0; i < digits_size; i++) {
+			digits[digit_idx] += static_cast<uint64_t>(remainder * pow(10, max_digits));
+			remainder = static_cast<uint8_t>(digits[digit_idx] % 256);
+			digits[digit_idx] /= 256;
+			if (digits[digit_idx] == 0 && digit_idx == digits.size() - 1) {
+				// we can cap this
+				digits.pop_back();
+			}
+			digit_idx--;
+		}
+		if (is_negative) {
+			blob_string.push_back(static_cast<char>(~remainder));
+		} else {
+			blob_string.push_back(static_cast<char>(remainder));
+		}
+	}
+
+	uint32_t blob_size = static_cast<uint32_t>(blob_string.size() + VARINT_HEADER_SIZE);
+	result_value = StringVector::EmptyString(result, blob_size);
+	auto writable_blob = result_value.GetDataWriteable();
+
+	SetHeader(writable_blob, blob_string.size(), is_negative);
+
+	// Write string_blob into blob
+	idx_t blob_string_idx = blob_string.size() - 1;
+	for (idx_t i = VARINT_HEADER_SIZE; i < blob_size; i++) {
+		writable_blob[i] = blob_string[blob_string_idx--];
+	}
+	result_value.Finalize();
+	return true;
+}
+
+template <class T>
+bool DoubleToVarInt(T double_value, string_t &result_value, Vector &result) {
+	// Check if we can cast it
+	if (!std::isfinite(double_value)) {
+		// We can't cast inf -inf nan
+		return false;
+	}
+	// Determine if the number is negative
+	bool is_negative = double_value < 0;
+	// Determine the number of data bytes
+	double abs_value = std::abs(double_value);
+
+	if (abs_value == 0) {
+		// Return Value 0
+		result_value = ZeroBlob(result);
+		return true;
+	}
+	vector<char> value;
+	while (abs_value > 0) {
+		double quotient = abs_value / 256;
+		double truncated = floor(quotient);
+		uint8_t byte = static_cast<uint8_t>(abs_value - truncated * 256);
+		abs_value = truncated;
+		if (is_negative) {
+			value.push_back(~static_cast<char>(byte));
+		} else {
+			value.push_back(static_cast<char>(byte));
+		}
+	}
+	uint32_t data_byte_size = static_cast<uint32_t>(value.size());
+	uint32_t blob_size = data_byte_size + VARINT_HEADER_SIZE;
+	result_value = StringVector::EmptyString(result, blob_size);
+	auto writable_blob = result_value.GetDataWriteable();
+	SetHeader(writable_blob, data_byte_size, is_negative);
+	// Add data bytes to the blob, starting off after header bytes
+	idx_t blob_string_idx = value.size() - 1;
+	for (idx_t i = VARINT_HEADER_SIZE; i < blob_size; i++) {
+		writable_blob[i] = value[blob_string_idx--];
+	}
+	result_value.Finalize();
+	return true;
+}
+
+template <>
+bool TryCastToVarInt::Operation(double double_value, string_t &result_value, Vector &result,
+                                CastParameters &parameters) {
+	return DoubleToVarInt(double_value, result_value, result);
+}
+
+template <>
+bool TryCastToVarInt::Operation(float double_value, string_t &result_value, Vector &result,
+                                CastParameters &parameters) {
+	return DoubleToVarInt(double_value, result_value, result);
+}
 
 struct VarIntTryCastToVarchar {
 	template <class SRC>
@@ -426,29 +444,29 @@ BoundCastInfo DefaultCasts::ToVarintCastSwitch(BindCastInput &input, const Logic
 	// now switch on the result type
 	switch (source.id()) {
 	case LogicalTypeId::TINYINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<int8_t, duckdb::IntCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int8_t, IntCastToVarInt>);
 	case LogicalTypeId::UTINYINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uint8_t, duckdb::IntCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint8_t, IntCastToVarInt>);
 	case LogicalTypeId::SMALLINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<int16_t, duckdb::IntCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int16_t, IntCastToVarInt>);
 	case LogicalTypeId::USMALLINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uint16_t, duckdb::IntCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint16_t, IntCastToVarInt>);
 	case LogicalTypeId::INTEGER:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<int32_t, duckdb::IntCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int32_t, IntCastToVarInt>);
 	case LogicalTypeId::UINTEGER:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uint32_t, duckdb::IntCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint32_t, IntCastToVarInt>);
 	case LogicalTypeId::BIGINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<int64_t, duckdb::IntCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<int64_t, IntCastToVarInt>);
 	case LogicalTypeId::UBIGINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uint64_t, duckdb::IntCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uint64_t, IntCastToVarInt>);
 	case LogicalTypeId::VARCHAR:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::VarcharTryCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, TryCastToVarInt>);
 	case LogicalTypeId::UHUGEINT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<uhugeint_t, duckdb::HugeintCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<uhugeint_t, HugeintCastToVarInt>);
 	case LogicalTypeId::FLOAT:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<float, duckdb::DoubleTryCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<float, string_t, TryCastToVarInt>);
 	case LogicalTypeId::DOUBLE:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<double, duckdb::DoubleTryCastToVarInt>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<double, string_t, TryCastToVarInt>);
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
 	default:
@@ -462,9 +480,9 @@ BoundCastInfo DefaultCasts::VarintCastSwitch(BindCastInput &input, const Logical
 	// now switch on the result type
 	switch (target.id()) {
 	case LogicalTypeId::VARCHAR:
-		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::VarIntTryCastToVarchar>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, VarIntTryCastToVarchar>);
 	case LogicalTypeId::DOUBLE:
-		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, double, duckdb::VarintToDoubleCast>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, double, VarintToDoubleCast>);
 	default:
 		return TryVectorNullCast;
 	}
