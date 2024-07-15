@@ -74,7 +74,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 }
 
 BindResult HavingBinder::BindWindow(WindowExpression &expr, idx_t depth) {
-	return BindResult("HAVING clause cannot contain window functions!");
+	return BindResult(BinderException::Unsupported(expr, "HAVING clause cannot contain window functions!"));
 }
 
 } // namespace duckdb

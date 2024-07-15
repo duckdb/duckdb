@@ -95,10 +95,22 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindPositionalReference(expr, depth, root_expression);
 	}
 	case ExpressionClass::STAR:
-		return BindResult(BinderException(expr_ref, "STAR expression is not supported here"));
+		return BindResult(BinderException::Unsupported(expr_ref, "STAR expression is not supported here"));
 	default:
 		throw NotImplementedException("Unimplemented expression class");
 	}
+}
+
+static void CombineErrors(ErrorData &current, ErrorData new_error) {
+	// we prefer the new error UNLESS it is an UNSUPPORTED error
+	auto &info = new_error.ExtraInfo();
+	auto entry = info.find("error_subtype");
+	if (entry != info.end() && entry->second == "UNSUPPORTED") {
+		// UNSUPPORTED errors are generally not helpful, so we keep the original error
+		return;
+	}
+	// override the error with the new one
+	current = std::move(new_error);
 }
 
 BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message) {
@@ -113,10 +125,11 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back().get();
 		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
-		bind_error = next_binder.Bind(expr, depth);
-		if (!bind_error.HasError()) {
+		auto next_error = next_binder.Bind(expr, depth);
+		if (!next_error.HasError()) {
 			break;
 		}
+		CombineErrors(bind_error, std::move(next_error));
 		depth++;
 		active_binders.pop_back();
 	}
@@ -228,7 +241,8 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		// aggregate with constant input must be bound to a root node.
 		auto result = BindCorrelatedColumns(expr, error_msg);
 		if (result.HasError()) {
-			result.error.Throw();
+			CombineErrors(error_msg, std::move(result.error));
+			error_msg.Throw();
 		}
 		auto &bound_expr = expr->Cast<BoundExpression>();
 		ExtractCorrelatedExpressions(binder, *bound_expr.expr);

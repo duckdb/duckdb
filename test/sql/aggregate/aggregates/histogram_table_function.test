@@ -22,6 +22,12 @@ SELECT * FROM histogram_values(integers, i, bin_count := 2)
 80	0
 100	1
 
+# missing column
+statement error
+SELECT * FROM histogram_values(integers, k)
+----
+integers.i
+
 statement ok
 INSERT INTO integers FROM range(127)
 

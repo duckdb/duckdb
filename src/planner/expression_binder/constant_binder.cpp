@@ -19,14 +19,14 @@ BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr
 				return BindExpression(expr_ptr, depth, root_expression);
 			}
 		}
-		return BindResult(clause + " cannot contain column names");
+		return BindResult(BinderException::Unsupported(expr, clause + " cannot contain column names"));
 	}
 	case ExpressionClass::SUBQUERY:
 		throw BinderException(clause + " cannot contain subqueries");
 	case ExpressionClass::DEFAULT:
-		return BindResult(clause + " cannot contain DEFAULT clause");
+		return BindResult(BinderException::Unsupported(expr, clause + " cannot contain DEFAULT clause"));
 	case ExpressionClass::WINDOW:
-		return BindResult(clause + " cannot contain window functions!");
+		return BindResult(BinderException::Unsupported(expr, clause + " cannot contain window functions!"));
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
