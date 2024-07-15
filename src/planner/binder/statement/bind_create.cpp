@@ -122,7 +122,7 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	info.schema = schema_obj.name;
 	if (!info.temporary) {
 		auto &properties = GetStatementProperties();
-		properties.modified_databases.insert(schema_obj.catalog.GetName());
+		properties.RegisterDBModify(schema_obj.catalog, context);
 	}
 	return schema_obj;
 }
@@ -590,7 +590,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
 		auto catalog = BindCatalog(base.catalog);
-		properties.modified_databases.insert(catalog);
+		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
 	}
@@ -639,7 +639,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
-		properties.modified_databases.insert(table.catalog.GetName());
+		properties.RegisterDBModify(table.catalog, context);
 
 		// create a plan over the bound table
 		auto plan = CreatePlan(*bound_table);
