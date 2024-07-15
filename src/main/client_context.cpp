@@ -334,7 +334,6 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = std::move(planner.value_map);
-	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
 	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}
@@ -451,7 +450,8 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 	}
 	auto &meta_transaction = MetaTransaction::Get(*this);
 	auto &manager = DatabaseManager::Get(*this);
-	for (auto &modified_database : statement.properties.modified_databases) {
+	for (auto &it : statement.properties.modified_databases) {
+		auto &modified_database = it.first;
 		auto entry = manager.GetDatabase(*this, modified_database);
 		if (!entry) {
 			throw InternalException("Database \"%s\" not found", modified_database);

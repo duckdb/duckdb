@@ -21,7 +21,7 @@ struct UndoBufferProperties;
 class DuckTransaction : public Transaction {
 public:
 	DuckTransaction(DuckTransactionManager &manager, ClientContext &context, transaction_t start_time,
-	                transaction_t transaction_id);
+	                transaction_t transaction_id, idx_t catalog_version);
 	~DuckTransaction() override;
 
 	//! The start timestamp of this transaction
@@ -33,12 +33,14 @@ public:
 	//! Highest active query when the transaction finished, used for cleaning up
 	transaction_t highest_active_query;
 
+	atomic<idx_t> catalog_version;
+
 public:
 	static DuckTransaction &Get(ClientContext &context, AttachedDatabase &db);
 	static DuckTransaction &Get(ClientContext &context, Catalog &catalog);
 	LocalStorage &GetLocalStorage();
 
-	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data = nullptr, idx_t extra_data_size = 0);
+	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data, idx_t extra_data_size);
 
 	void SetReadWrite() override;
 

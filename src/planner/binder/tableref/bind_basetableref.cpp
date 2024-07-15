@@ -216,7 +216,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
 
 		auto &properties = GetStatementProperties();
-		properties.read_databases.insert(table.ParentCatalog().GetName());
+		properties.RegisterDBRead(table.ParentCatalog(), context);
 
 		unique_ptr<FunctionData> bind_data;
 		auto scan_function = table.GetScanFunction(context, bind_data);
