@@ -46,7 +46,7 @@ optional_idx CGroups::GetCGroupV2MemoryLimit(FileSystem &fs) {
 
 optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
 	const char *cgroup_self = "/proc/self/cgroup";
-	const char *MEMORY_LIMIT = "/sys/fs/cgroup/memory/%s/memory.limit_in_bytes";
+	const char *memory_limit = "/sys/fs/cgroup/memory/%s/memory.limit_in_bytes";
 
 	if (!fs.FileExists(cgroup_self)) {
 		return optional_idx();
@@ -58,7 +58,7 @@ optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
 	}
 
 	char memory_limit_path[256];
-	snprintf(memory_limit_path, sizeof(memory_limit_path), MEMORY_LIMIT, memory_cgroup_path.c_str());
+	snprintf(memory_limit_path, sizeof(memory_limit_path), memory_limit, memory_cgroup_path.c_str());
 
 	if (!fs.FileExists(memory_limit_path)) {
 		return optional_idx();
