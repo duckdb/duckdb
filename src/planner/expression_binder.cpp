@@ -141,7 +141,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	auto new_candidates = StringUtil::Split(new_entry->second, ",");
 	current_candidates.insert(current_candidates.end(), new_candidates.begin(), new_candidates.end());
 	// get a new top-n
-	auto top_candidates = StringUtil::TopNLevenshtein(current_candidates, column_name);
+	auto top_candidates = StringUtil::TopNJaroWinkler(current_candidates, column_name);
 	// get query location
 	QueryErrorContext context;
 	current_entry = current_info.find("position");
