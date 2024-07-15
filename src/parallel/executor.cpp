@@ -149,6 +149,12 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 	// set up the dependencies within this MetaPipeline
 	for (auto &pipeline : pipelines) {
+		auto &config = DBConfig::GetConfig(context);
+		auto source = pipeline->GetSource();
+		if (source->type == PhysicalOperatorType::TABLE_SCAN && config.options.initialize_in_main_thread) {
+			// this is a work-around for the R client that requires the init to be called in the main thread
+			pipeline->ResetSource(true);
+		}
 		auto dependencies = meta_pipeline->GetDependencies(*pipeline);
 		if (!dependencies) {
 			continue;

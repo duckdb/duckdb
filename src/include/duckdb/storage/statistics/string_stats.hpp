@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -63,6 +63,9 @@ struct StringStats {
 
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
 	                                                     const string &value);
+	DUCKDB_API static FilterPropagateResult CheckZonemap(const_data_ptr_t min_data, idx_t min_len,
+	                                                     const_data_ptr_t max_data, idx_t max_len,
+	                                                     ExpressionType comparison_type, const string &value);
 
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
