@@ -228,7 +228,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 		function_data = copy_function.function.copy_to_bind(context, bind_input, names_to_copy, types_to_copy);
 	} else {
 		function_data =
-	    	copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
+		    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
 	}
 
 	const auto rotate =
