@@ -97,7 +97,7 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
-IndexStorageInfo BoundIndex::GetStorageInfo(const bool get_buffers) {
+IndexStorageInfoo BoundIndex::GetStorageInfo(const bool get_buffers) {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
 }
 

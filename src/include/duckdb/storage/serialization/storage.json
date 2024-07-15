@@ -78,9 +78,9 @@
       },
       {
         "id": 103,
-        "name": "nested_leaves",
+        "name": "deprecated_storage",
         "type": "bool",
-        "default": "false"
+        "default": "true"
       }
     ],
     "pointer_type": "none"

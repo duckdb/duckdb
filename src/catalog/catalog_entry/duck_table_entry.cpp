@@ -1,10 +1,13 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
@@ -13,7 +16,6 @@
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
@@ -21,13 +23,11 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 
 namespace duckdb {
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vector<PhysicalIndex> &keys,
-                       IndexConstraintType constraint_type, const IndexStorageInfo &info = IndexStorageInfo()) {
+                       IndexConstraintType constraint_type, const IndexStorageInfoo &info) {
 
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
@@ -46,7 +46,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 	}
 	// create an adaptive radix tree around the expressions
 	auto art = make_uniq<ART>(info.name, constraint_type, column_ids, TableIOManager::Get(storage),
-	                          std::move(unbound_expressions), storage.db, nullptr, info);
+	                          std::move(unbound_expressions), storage.db, info);
 	if (!info.IsValid() && !info.name.empty() && !storage.IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
@@ -54,7 +54,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 }
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<LogicalIndex> &keys,
-                       IndexConstraintType constraint_type, const IndexStorageInfo &info = IndexStorageInfo()) {
+                       IndexConstraintType constraint_type, const IndexStorageInfoo &info) {
 	vector<PhysicalIndex> new_keys;
 	new_keys.reserve(keys.size());
 	for (auto &logical_key : keys) {
@@ -63,12 +63,13 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<Log
 	AddDataTableIndex(storage, columns, new_keys, constraint_type, info);
 }
 
-IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, unique_ptr<CreateInfo> &create_info,
-                              idx_t idx) {
+IndexStorageInfoo GetIndexInfo(const IndexConstraintType &constraint_type, unique_ptr<CreateInfo> &create_info,
+                               idx_t idx, bool deprecated_storage) {
 
 	auto &create_table_info = create_info->Cast<CreateTableInfo>();
 	auto constraint_name = EnumUtil::ToString(constraint_type) + "_";
-	return IndexStorageInfo(constraint_name + create_table_info.table + "_" + to_string(idx));
+	auto name = constraint_name + create_table_info.table + "_" + to_string(idx);
+	return IndexStorageInfoo(name, deprecated_storage);
 }
 
 vector<PhysicalIndex> GetUniqueConstraintKeys(const ColumnList &columns, const UniqueConstraint &constraint) {
@@ -84,70 +85,76 @@ vector<PhysicalIndex> GetUniqueConstraintKeys(const ColumnList &columns, const U
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-                               shared_ptr<DataTable> inherited_storage)
+                               bool deprecated_index_storage, shared_ptr<DataTable> inherited_storage)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
       column_dependency_manager(std::move(info.column_dependency_manager)) {
 
-	if (!storage) {
-		// create the physical storage
-		vector<ColumnDefinition> storage_columns;
-		for (auto &col_def : columns.Physical()) {
-			storage_columns.push_back(col_def.Copy());
+	if (storage) {
+		if (!info.indexes.empty()) {
+			storage->SetIndexStorageInfo(std::move(info.indexes));
 		}
-		storage =
-		    make_shared_ptr<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
-		                               schema.name, name, std::move(storage_columns), std::move(info.data));
+		return;
+	}
 
-		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
-		idx_t indexes_idx = 0;
-		for (idx_t i = 0; i < constraints.size(); i++) {
-			auto &constraint = constraints[i];
-			if (constraint->type == ConstraintType::UNIQUE) {
+	// create the physical storage
+	vector<ColumnDefinition> storage_columns;
+	for (auto &col_def : columns.Physical()) {
+		storage_columns.push_back(col_def.Copy());
+	}
+	storage = make_shared_ptr<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
+	                                     schema.name, name, std::move(storage_columns), std::move(info.data));
 
-				// unique constraint: create a unique index
-				auto &unique = constraint->Cast<UniqueConstraint>();
-				IndexConstraintType constraint_type = IndexConstraintType::UNIQUE;
-				if (unique.is_primary_key) {
-					constraint_type = IndexConstraintType::PRIMARY;
-				}
-				auto unique_keys = GetUniqueConstraintKeys(columns, unique);
+	// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
+	idx_t indexes_idx = 0;
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto &constraint = constraints[i];
+		if (constraint->type == ConstraintType::UNIQUE) {
+			// unique constraint: create a unique index
+			auto &unique = constraint->Cast<UniqueConstraint>();
+			IndexConstraintType constraint_type = IndexConstraintType::UNIQUE;
+			if (unique.is_primary_key) {
+				constraint_type = IndexConstraintType::PRIMARY;
+			}
+			auto unique_keys = GetUniqueConstraintKeys(columns, unique);
+			if (info.indexes.empty()) {
+				AddDataTableIndex(*storage, columns, unique_keys, constraint_type,
+				                  GetIndexInfo(constraint_type, info.base, i, deprecated_index_storage));
+				continue;
+			}
+
+			// We read the index from an old storage version applying a dummy name.
+			if (info.indexes[indexes_idx].name.empty()) {
+				auto name_info = GetIndexInfo(constraint_type, info.base, i, true);
+				info.indexes[indexes_idx].name = name_info.name;
+			}
+
+			// now add the index
+			AddDataTableIndex(*storage, columns, unique_keys, constraint_type, info.indexes[indexes_idx++]);
+			continue;
+		}
+
+		if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			// foreign key constraint: create a foreign key index
+			auto &bfk = constraint->Cast<ForeignKeyConstraint>();
+			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+			    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+
 				if (info.indexes.empty()) {
-					AddDataTableIndex(*storage, columns, unique_keys, constraint_type,
-					                  GetIndexInfo(constraint_type, info.base, i));
-				} else {
-					// we read the index from an old storage version, so we have to apply a dummy name
-					if (info.indexes[indexes_idx].name.empty()) {
-						auto name_info = GetIndexInfo(constraint_type, info.base, i);
-						info.indexes[indexes_idx].name = name_info.name;
-					}
-
-					// now add the index
-					AddDataTableIndex(*storage, columns, unique_keys, constraint_type, info.indexes[indexes_idx++]);
+					auto constraint_type = IndexConstraintType::FOREIGN;
+					AddDataTableIndex(*storage, columns, bfk.info.fk_keys, constraint_type,
+					                  GetIndexInfo(constraint_type, info.base, i, deprecated_index_storage));
+					continue;
 				}
 
-			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
-				// foreign key constraint: create a foreign key index
-				auto &bfk = constraint->Cast<ForeignKeyConstraint>();
-				if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
-				    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
-
-					if (info.indexes.empty()) {
-						auto constraint_type = IndexConstraintType::FOREIGN;
-						AddDataTableIndex(*storage, columns, bfk.info.fk_keys, constraint_type,
-						                  GetIndexInfo(constraint_type, info.base, i));
-
-					} else {
-						// we read the index from an old storage version, so we have to apply a dummy name
-						if (info.indexes[indexes_idx].name.empty()) {
-							auto name_info = GetIndexInfo(IndexConstraintType::FOREIGN, info.base, i);
-							info.indexes[indexes_idx].name = name_info.name;
-						}
-
-						// now add the index
-						AddDataTableIndex(*storage, columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN,
-						                  info.indexes[indexes_idx++]);
-					}
+				// We read the index from an old storage version applying a dummy name.
+				if (info.indexes[indexes_idx].name.empty()) {
+					auto name_info = GetIndexInfo(IndexConstraintType::FOREIGN, info.base, i, true);
+					info.indexes[indexes_idx].name = name_info.name;
 				}
+
+				// now add the index
+				AddDataTableIndex(*storage, columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN,
+				                  info.indexes[indexes_idx++]);
 			}
 		}
 	}
@@ -169,20 +176,25 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
-	if (transaction.context) {
-		return AlterEntry(*transaction.context, info);
+	if (transaction.HasContext()) {
+		return AlterEntry(transaction.GetContext(), info);
 	}
-	if (info.type == AlterType::ALTER_TABLE) {
-		auto &table_info = info.Cast<AlterTableInfo>();
-		if (table_info.alter_table_type == AlterTableType::FOREIGN_KEY_CONSTRAINT) {
-			auto &foreign_key_constraint_info = table_info.Cast<AlterForeignKeyInfo>();
-			if (foreign_key_constraint_info.type == AlterForeignKeyType::AFT_ADD) {
-				// for checkpoint loading we support adding foreign key constraints without a client context
-				return AddForeignKeyConstraint(nullptr, foreign_key_constraint_info);
-			}
-		}
+	if (info.type != AlterType::ALTER_TABLE) {
+		return CatalogEntry::AlterEntry(transaction, info);
 	}
-	return CatalogEntry::AlterEntry(transaction, info);
+
+	auto &table_info = info.Cast<AlterTableInfo>();
+	if (table_info.alter_table_type != AlterTableType::FOREIGN_KEY_CONSTRAINT) {
+		return CatalogEntry::AlterEntry(transaction, info);
+	}
+
+	auto &foreign_key_constraint_info = table_info.Cast<AlterForeignKeyInfo>();
+	if (foreign_key_constraint_info.type != AlterForeignKeyType::AFT_ADD) {
+		return CatalogEntry::AlterEntry(transaction, info);
+	}
+
+	// We add foreign key constraints without a client context during checkpoint loading.
+	return AddForeignKeyConstraint(nullptr, foreign_key_constraint_info);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
@@ -340,7 +352,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	}
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {
@@ -373,7 +387,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	vector<unique_ptr<Expression>> bound_defaults;
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, new_storage);
 }
 
 void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index,
@@ -508,12 +523,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	                              dropped_column_is_generated);
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
-		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, storage);
 	}
 	auto new_storage =
 	    make_shared_ptr<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, new_storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
@@ -545,7 +561,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
@@ -575,16 +592,17 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 	}
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
 
 	// Early return
 	if (has_not_null) {
-		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, storage);
 	}
 
 	// Return with new storage info. Note that we need the bound column index here.
 	auto new_storage = make_shared_ptr<DataTable>(
 	    context, *storage, make_uniq<BoundNotNullConstraint>(columns.LogicalToPhysical(LogicalIndex(not_null_idx))));
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, new_storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
@@ -608,7 +626,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
@@ -698,7 +717,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	auto new_storage =
 	    make_shared_ptr<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(change_idx)).index,
 	                               info.target_type, std::move(storage_oids), *bound_expression);
-	auto result = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
+	auto result = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, new_storage);
 	return std::move(result);
 }
 
@@ -727,7 +747,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(optional_ptr<ClientContext> context,
@@ -752,14 +773,16 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(optional_ptr<Cl
 	    make_uniq<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, std::move(fk_info)));
 
 	unique_ptr<BoundCreateTableInfo> bound_create_info;
+	bool deprecated_index_storage = true; // TODO: unsure here
 	if (context) {
 		auto binder = Binder::CreateBinder(*context);
 		bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+		deprecated_index_storage = (*context).db->config.options.serialization_compatibility.serialization_version < 3;
 	} else {
 		bound_create_info = Binder::BindCreateTableCheckpoint(std::move(create_info), schema);
 	}
 
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
@@ -783,8 +806,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {
@@ -800,7 +823,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
+	auto deprecated_index_storage = context.db->config.options.serialization_compatibility.serialization_version < 3;
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, deprecated_index_storage, storage);
 }
 
 void DuckTableEntry::SetAsRoot() {

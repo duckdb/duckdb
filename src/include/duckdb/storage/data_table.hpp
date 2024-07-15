@@ -217,7 +217,7 @@ public:
 	bool HasIndexes() const;
 	void AddIndex(unique_ptr<Index> index);
 	bool HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type);
-	void SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info);
+	void SetIndexStorageInfo(vector<IndexStorageInfoo> index_storage_info);
 	void VacuumIndexes();
 
 	string GetTableName() const;

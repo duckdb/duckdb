@@ -15,7 +15,7 @@
 namespace duckdb {
 
 class ConflictManager;
-struct IndexStorageInfo;
+struct IndexStorageInfoo;
 struct DataTableInfo;
 
 class TableIndexList {
@@ -76,7 +76,7 @@ public:
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
 
 	//! Serialize all indexes of this table
-	vector<IndexStorageInfo> GetStorageInfos();
+	vector<IndexStorageInfoo> GetStorageInfos();
 
 	vector<column_t> GetRequiredColumns();
 

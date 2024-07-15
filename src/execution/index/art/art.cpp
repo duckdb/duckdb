@@ -38,10 +38,10 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
-         AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
-         const IndexStorageInfo &info)
+         AttachedDatabase &db, const IndexStorageInfoo &info,
+         const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
-      allocators(allocators_ptr), owns_data(false), nested_leaves(info.nested_leaves) {
+      allocators(allocators_ptr), owns_data(false), deprecated_storage(info.deprecated_storage) {
 
 	// Initialize the allocators.
 	if (!allocators) {
@@ -985,10 +985,9 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-IndexStorageInfo ART::GetStorageInfo(const bool get_buffers) {
+IndexStorageInfoo ART::GetStorageInfo(const bool get_buffers) {
 	// Set the name and the root node.
-	IndexStorageInfo info;
-	info.name = name;
+	IndexStorageInfoo info(name, deprecated_storage);
 	info.root = tree.Get();
 
 	if (!get_buffers) {
@@ -1018,10 +1017,10 @@ void ART::WritePartialBlocks() {
 	partial_block_manager.FlushPartialBlocks();
 }
 
-void ART::InitAllocators(const IndexStorageInfo &info) {
+void ART::InitAllocators(const IndexStorageInfoo &info) {
 	// Set the root node.
 	tree.Set(info.root);
-	nested_leaves = info.nested_leaves;
+	deprecated_storage = info.deprecated_storage;
 
 	// Initialize the allocators.
 	D_ASSERT(info.allocator_infos.size() == ALLOCATOR_COUNT);
@@ -1035,7 +1034,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 	auto &metadata_manager = table_io_manager.GetMetadataManager();
 	MetadataReader reader(metadata_manager, pointer);
 	tree = reader.Read<Node>();
-	nested_leaves = false;
+	deprecated_storage = true;
 
 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
 		(*allocators)[i]->Deserialize(metadata_manager, reader.Read<BlockPointer>());

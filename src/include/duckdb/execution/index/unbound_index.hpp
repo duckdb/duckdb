@@ -19,10 +19,10 @@ private:
 	unique_ptr<CreateInfo> create_info;
 
 	// The serialized storage info of the index
-	IndexStorageInfo storage_info;
+	IndexStorageInfoo storage_info;
 
 public:
-	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
+	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfoo storage_info, TableIOManager &table_io_manager,
 	             AttachedDatabase &db);
 
 	bool IsBound() const override {
@@ -45,7 +45,7 @@ public:
 		return create_info->Cast<CreateIndexInfo>();
 	}
 
-	const IndexStorageInfo &GetStorageInfo() const {
+	const IndexStorageInfoo &GetStorageInfo() const {
 		return storage_info;
 	}
 

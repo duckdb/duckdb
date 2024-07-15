@@ -167,9 +167,9 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	return result;
 }
 
-vector<IndexStorageInfo> TableIndexList::GetStorageInfos() {
+vector<IndexStorageInfoo> TableIndexList::GetStorageInfos() {
 
-	vector<IndexStorageInfo> index_storage_infos;
+	vector<IndexStorageInfoo> index_storage_infos;
 	for (auto &index : indexes) {
 		if (index->IsBound()) {
 			auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(false);

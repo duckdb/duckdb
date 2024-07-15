@@ -1,11 +1,11 @@
 #include "duckdb/execution/index/art/leaf.hpp"
 
-#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 
@@ -28,7 +28,7 @@ Leaf &Leaf::New(ART &art, Node &node) {
 }
 
 void Leaf::New(ART &art, reference<Node> &node, const vector<ARTKey> &row_ids, const idx_t start, const idx_t count) {
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedNew(art, node, row_ids, start, count);
 	}
 
@@ -39,7 +39,7 @@ void Leaf::New(ART &art, reference<Node> &node, const vector<ARTKey> &row_ids, c
 }
 
 void Leaf::Free(ART &art, Node &node) {
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedFree(art, node);
 	}
 
@@ -50,7 +50,7 @@ void Leaf::Free(ART &art, Node &node) {
 }
 
 void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedInitializeMerge(art, node, flags);
 	}
 
@@ -63,7 +63,7 @@ void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
 void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
 	D_ASSERT(l_node.HasMetadata() && r_node.HasMetadata());
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedMerge(art, l_node, r_node);
 	}
 
@@ -91,7 +91,7 @@ void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
 
 void Leaf::Insert(ART &art, Node &node, const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedInsert(art, node, row_id.GetRowID());
 	}
 
@@ -121,7 +121,7 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const ARTKey &row_id) {
 		return node.get().GetRowId() == row_id.GetRowID();
 	}
 
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedRemove(art, node, row_id.GetRowID());
 	}
 
@@ -156,7 +156,7 @@ bool Leaf::GetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, idx_t m
 		return true;
 	}
 
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedGetRowIds(art, node, row_ids, max_count);
 	}
 
@@ -177,7 +177,7 @@ bool Leaf::ContainsRowId(ART &art, const Node &node, const ARTKey &row_id) {
 		return node.GetRowId() == row_id.GetRowID();
 	}
 
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedContainsRowId(art, node, row_id.GetRowID());
 	}
 
@@ -191,7 +191,7 @@ string Leaf::VerifyAndToString(ART &art, const Node &node, const bool only_verif
 		return only_verify ? "" : "Leaf Inlined [count: 1, row ID: " + to_string(node.GetRowId()) + "]";
 	}
 
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedVerifyAndToString(art, node, only_verify);
 	}
 
@@ -205,7 +205,7 @@ void Leaf::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 		return;
 	}
 
-	if (!art.nested_leaves) {
+	if (art.deprecated_storage) {
 		return DeprecatedVacuum(art, node);
 	}
 

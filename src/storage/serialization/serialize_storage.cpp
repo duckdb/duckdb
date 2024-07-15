@@ -84,19 +84,19 @@ FixedSizeAllocatorInfo FixedSizeAllocatorInfo::Deserialize(Deserializer &deseria
 	return result;
 }
 
-void IndexStorageInfo::Serialize(Serializer &serializer) const {
+void IndexStorageInfoo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "name", name);
 	serializer.WritePropertyWithDefault<idx_t>(101, "root", root);
 	serializer.WritePropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", allocator_infos);
-	serializer.WritePropertyWithDefault<bool>(103, "nested_leaves", nested_leaves, false);
+	serializer.WritePropertyWithDefault<bool>(103, "deprecated_storage", deprecated_storage, true);
 }
 
-IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
-	IndexStorageInfo result;
+IndexStorageInfoo IndexStorageInfoo::Deserialize(Deserializer &deserializer) {
+	IndexStorageInfoo result; 
 	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result.root);
 	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result.allocator_infos);
-	deserializer.ReadPropertyWithDefault<bool>(103, "nested_leaves", result.nested_leaves, false);
+	deserializer.ReadPropertyWithDefault<bool>(103, "deprecated_storage", result.deprecated_storage, true);
 	return result;
 }
 

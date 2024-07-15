@@ -49,14 +49,19 @@ public:
 
 	vector<ARTKey> row_ids;
 	DataChunk row_id_chunk;
+
+	bool deprecated_storage;
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateARTIndex::GetGlobalSinkState(ClientContext &context) const {
 	// Create the global sink state and add the global index.
 	auto state = make_uniq<CreateARTIndexGlobalSinkState>();
 	auto &storage = table.GetStorage();
+	auto &db_config = context.db->config;
+	bool deprecated_storage = db_config.options.serialization_compatibility.serialization_version < 3;
+	IndexStorageInfoo index_info(info->index_name, deprecated_storage);
 	state->global_index = make_uniq<ART>(info->index_name, info->constraint_type, storage_ids,
-	                                     TableIOManager::Get(storage), unbound_expressions, storage.db);
+	                                     TableIOManager::Get(storage), unbound_expressions, storage.db, index_info);
 	return (std::move(state));
 }
 
@@ -64,8 +69,12 @@ unique_ptr<LocalSinkState> PhysicalCreateARTIndex::GetLocalSinkState(ExecutionCo
 	// Create the local sink state and add the local index.
 	auto state = make_uniq<CreateARTIndexLocalSinkState>(context.client);
 	auto &storage = table.GetStorage();
+	auto &db_config = context.client.db->config;
+	bool deprecated_storage = db_config.options.serialization_compatibility.serialization_version < 3;
+	IndexStorageInfoo index_info(info->index_name, deprecated_storage);
 	state->local_index = make_uniq<ART>(info->index_name, info->constraint_type, storage_ids,
-	                                    TableIOManager::Get(storage), unbound_expressions, storage.db);
+	                                    TableIOManager::Get(storage), unbound_expressions, storage.db, index_info);
+	state->deprecated_storage = index_info.deprecated_storage;
 
 	// Initialize the local sink state.
 	state->keys.resize(STANDARD_VECTOR_SIZE);
@@ -101,8 +110,9 @@ SinkResultType PhysicalCreateARTIndex::SinkSorted(OperatorSinkInput &input) cons
 	auto &l_index = l_state.local_index;
 
 	// Construct an ART for this chunk.
+	IndexStorageInfoo index_info(info->index_name, l_state.deprecated_storage);
 	auto art = make_uniq<ART>(info->index_name, l_index->GetConstraintType(), l_index->GetColumnIds(),
-	                          l_index->table_io_manager, l_index->unbound_expressions, storage.db,
+	                          l_index->table_io_manager, l_index->unbound_expressions, storage.db, index_info,
 	                          l_index->Cast<ART>().allocators);
 	if (!art->ConstructFromSorted(l_state.keys, l_state.row_ids, l_state.key_chunk.size())) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");

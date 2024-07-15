@@ -41,9 +41,8 @@ public:
 	//! Constructs an ART.
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
-	    AttachedDatabase &db,
-	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
-	    const IndexStorageInfo &info = IndexStorageInfo());
+	    AttachedDatabase &db, const IndexStorageInfoo &info,
+	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr);
 
 	//! Root of the tree
 	Node tree = Node();
@@ -51,8 +50,8 @@ public:
 	shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data
 	bool owns_data;
-	//! True, if the ART uses nested leaf storage.
-	bool nested_leaves;
+	//! True, if the ART uses deprecated storage. False, if the ART uses nested leaf storage.
+	bool deprecated_storage;
 
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
@@ -65,7 +64,7 @@ public:
 	//! Create a index instance of this type.
 	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
 		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
-		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
+		                          input.unbound_expressions, input.db, input.storage_info, nullptr);
 		return std::move(art);
 	}
 
@@ -91,7 +90,7 @@ public:
 	bool SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &row_ids);
 
 	//! Returns all ART storage information for serialization
-	IndexStorageInfo GetStorageInfo(const bool get_buffers) override;
+	IndexStorageInfoo GetStorageInfo(const bool get_buffers) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -156,7 +155,7 @@ private:
 	string VerifyAndToStringInternal(const bool only_verify);
 
 	//! Initialize the allocators of the ART
-	void InitAllocators(const IndexStorageInfo &info);
+	void InitAllocators(const IndexStorageInfoo &info);
 	//! STABLE STORAGE NOTE: This is for old storage files, to deserialize the allocators of the ART
 	void Deserialize(const BlockPointer &pointer);
 	//! Initializes the serialization of the index by combining the allocator data onto partial blocks

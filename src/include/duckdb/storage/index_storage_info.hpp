@@ -39,16 +39,19 @@ struct IndexBufferInfo {
 };
 
 //! Information to serialize an index
-struct IndexStorageInfo {
-	IndexStorageInfo() : nested_leaves(true) {};
-	explicit IndexStorageInfo(string name) : name(std::move(name)), nested_leaves(true) {};
+struct IndexStorageInfoo {
+	//! Default constructor. We overwrite the deprecated_storage field during deserialization.
+	IndexStorageInfoo() : deprecated_storage(true) {};
+	explicit IndexStorageInfoo(bool deprecated_storage) : deprecated_storage(deprecated_storage) {};
+	IndexStorageInfoo(string name, bool deprecated_storage)
+	    : name(std::move(name)), deprecated_storage(deprecated_storage) {};
 
 	//! The name of the index
 	string name;
 	//! The root of the index
 	idx_t root;
-	//! Whether the ART uses nested leaf storage or not.
-	bool nested_leaves;
+	//! Whether the ART uses the deprecated storage or nested leaf storage.
+	bool deprecated_storage;
 	//! Information to serialize the index memory held by the fixed-size allocators
 	vector<FixedSizeAllocatorInfo> allocator_infos;
 
@@ -65,7 +68,7 @@ struct IndexStorageInfo {
 	}
 
 	void Serialize(Serializer &serializer) const;
-	static IndexStorageInfo Deserialize(Deserializer &deserializer);
+	static IndexStorageInfoo Deserialize(Deserializer &deserializer);
 };
 
 //! Additional index information for tables
