@@ -465,11 +465,8 @@ class TestRelation(object):
         ):
             rel.insert([1, 2, 3, 4])
 
-        with pytest.raises(
-            duckdb.NotImplementedException, match='Creating a VIEW from a MaterializedRelation is not supported'
-        ):
-            query_rel = rel.query('x', "select 42 from x where column0 != 42")
-            assert query_rel.fetchall() == []
+        query_rel = rel.query('x', "select 42 from x where column0 != 42")
+        assert query_rel.fetchall() == []
 
         distinct_rel = rel.distinct()
         assert distinct_rel.fetchall() == [(42, 'test', 'this is a long string', True)]
