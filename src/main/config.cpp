@@ -326,55 +326,6 @@ void DBConfig::CheckLock(const string &name) {
 	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
 
-idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
-	static constexpr const char *CPU_MAX = "/sys/fs/cgroup/cpu.max";
-	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
-	static constexpr const char *CFS_PERIOD = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
-
-	int64_t quota, period;
-	char byte_buffer[1000];
-	unique_ptr<FileHandle> handle;
-	int64_t read_bytes;
-
-	if (fs.FileExists(CPU_MAX)) {
-		// cgroup v2
-		// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
-		handle = fs.OpenFile(CPU_MAX, FileFlags::FILE_FLAGS_READ);
-		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-		byte_buffer[read_bytes] = '\0';
-		if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
-			return physical_cores;
-		}
-	} else if (fs.FileExists(CFS_QUOTA) && fs.FileExists(CFS_PERIOD)) {
-		// cgroup v1
-		// https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
-
-		// Read the quota, this indicates how many microseconds the CPU can be utilized by this cgroup per period
-		handle = fs.OpenFile(CFS_QUOTA, FileFlags::FILE_FLAGS_READ);
-		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-		byte_buffer[read_bytes] = '\0';
-		if (std::sscanf(byte_buffer, "%" SCNd64 "", &quota) != 1) {
-			return physical_cores;
-		}
-
-		// Read the time period, a cgroup can utilize the CPU up to quota microseconds every period
-		handle = fs.OpenFile(CFS_PERIOD, FileFlags::FILE_FLAGS_READ);
-		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-		byte_buffer[read_bytes] = '\0';
-		if (std::sscanf(byte_buffer, "%" SCNd64 "", &period) != 1) {
-			return physical_cores;
-		}
-	} else {
-		// No cgroup quota
-		return physical_cores;
-	}
-	if (quota > 0 && period > 0) {
-		return idx_t(std::ceil((double)quota / (double)period));
-	} else {
-		return physical_cores;
-	}
-}
-
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #ifdef DUCKDB_NO_THREADS
 	return 1;
@@ -387,8 +338,7 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 			return MaxValue<idx_t>(slurm_threads, 1);
 		}
 	}
-	auto cores_available_per_period = CGroupBandwidthQuota(physical_cores, fs);
-	return MaxValue<idx_t>(cores_available_per_period, 1);
+	return MaxValue<idx_t>(CGroups::GetCPULimit(fs, physical_cores), 1);
 #else
 	return physical_cores;
 #endif
@@ -396,21 +346,30 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 }
 
 idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+	// Check SLURM environment variables first
 	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
 	const char *slurm_mem_per_cpu = getenv("SLURM_MEM_PER_CPU");
+
 	if (slurm_mem_per_node) {
 		return ParseMemoryLimitSlurm(slurm_mem_per_node);
 	} else if (slurm_mem_per_cpu) {
 		idx_t mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
 		idx_t num_threads = GetSystemMaxThreads(fs);
 		return mem_per_cpu * num_threads;
-	} else {
-		auto memory = FileSystem::GetAvailableMemory();
-		if (!memory.IsValid()) {
-			return DBConfigOptions().maximum_memory;
-		}
-		return memory.GetIndex();
 	}
+
+	// Check cgroup memory limit
+	auto cgroup_memory_limit = CGroups::GetMemoryLimit(fs);
+	if (cgroup_memory_limit.IsValid()) {
+		return cgroup_memory_limit.GetIndex();
+	}
+
+	// Fall back to system memory detection
+	auto memory = FileSystem::GetAvailableMemory();
+	if (!memory.IsValid()) {
+		return DBConfigOptions().maximum_memory;
+	}
+	return memory.GetIndex();
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
