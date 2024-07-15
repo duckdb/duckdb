@@ -1,5 +1,5 @@
 // taken from: https://github.com/yhirose/cpp-httplib/blob/v0.14.3/httplib.h
-// Note: some modifications are made to file
+// Note: some modifications are made to file (replace std::regex with RE2)
 
 //
 //  httplib.h
@@ -2464,7 +2464,7 @@ inline std::string encode_url(const std::string &s) {
   for (size_t i = 0; s[i]; i++) {
     switch (s[i]) {
     case ' ': result += "%20"; break;
-//    case '+': result += "%2B"; break;
+    case '+': result += "%2B"; break;
     case '\r': result += "%0D"; break;
     case '\n': result += "%0A"; break;
     case '\'': result += "%27"; break;
@@ -2510,12 +2510,7 @@ inline std::string decode_url(const std::string &s,
         auto val = 0;
         if (from_hex_to_i(s, i + 1, 2, val)) {
           // 2 digits hex codes
-          if (static_cast<char>(val) == '+'){
-            // We don't decode +
-            result += "%2B";
-          } else {
-            result += static_cast<char>(val);
-          }
+          result += static_cast<char>(val);
           i += 2; // '00'
         } else {
           result += s[i];
