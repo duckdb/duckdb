@@ -302,49 +302,49 @@ string_t VarcharToVarInt(Vector &result, string_t int_value) {
 	return blob;
 }
 
-// Function to convert VARINT blob to a VARCHAR
-string VarIntToVarchar(const string_t &blob) {
+void GetByteArray(vector<uint8_t> &byte_array, bool &is_negative, const string_t &blob) {
 	if (blob.GetSize() < 4) {
 		throw InvalidInputException("Invalid blob size.");
 	}
 	auto blob_ptr = blob.GetData();
-	std::string decimal_string;
-	std::vector<uint8_t> temp_array;
+
 	// Determine if the number is negative
-	bool is_negative = (blob_ptr[0] & 0x80) == 0;
+	is_negative = (blob_ptr[0] & 0x80) == 0;
 	for (idx_t i = 3; i < blob.GetSize(); i++) {
 		if (is_negative) {
-			temp_array.push_back(static_cast<uint8_t>(~blob_ptr[i]));
+			byte_array.push_back(static_cast<uint8_t>(~blob_ptr[i]));
 		} else {
-			temp_array.push_back(static_cast<uint8_t>(blob_ptr[i]));
+			byte_array.push_back(static_cast<uint8_t>(blob_ptr[i]));
 		}
 	}
-	std::reverse(decimal_string.begin(), decimal_string.end());
+}
 
-	while (!temp_array.empty()) {
-		std::string quotient;
+// Function to convert VARINT blob to a VARCHAR
+string VarIntToVarchar(const string_t &blob) {
+	string decimal_string;
+	vector<uint8_t> byte_array;
+	bool is_negative;
+	GetByteArray(byte_array, is_negative, blob);
+	while (!byte_array.empty()) {
+		string quotient;
 		uint8_t remainder = 0;
-		for (uint8_t byte : temp_array) {
+		for (uint8_t byte : byte_array) {
 			int new_value = remainder * 256 + byte;
 			quotient += DigitToChar(new_value / 10);
 			remainder = static_cast<uint8_t>(new_value % 10);
 		}
-
 		decimal_string += DigitToChar(remainder);
-
 		// Remove leading zeros from the quotient
-		temp_array.clear();
+		byte_array.clear();
 		for (char digit : quotient) {
-			if (digit != '0' || !temp_array.empty()) {
-				temp_array.push_back(static_cast<uint8_t>(CharToDigit(digit)));
+			if (digit != '0' || !byte_array.empty()) {
+				byte_array.push_back(static_cast<uint8_t>(CharToDigit(digit)));
 			}
 		}
 	}
-
 	if (is_negative) {
 		decimal_string += '-';
 	}
-
 	// Reverse the string to get the correct decimal representation
 	std::reverse(decimal_string.begin(), decimal_string.end());
 	return decimal_string;
@@ -385,8 +385,31 @@ struct VarIntTryCastToVarchar {
 	}
 };
 
-bool VarintToDouble(string_t &input, double &result, bool &strict) {
+bool VarintToDouble(string_t &blob, double &result, bool &strict) {
 	result = 0;
+	bool is_negative;
+
+	if (blob.GetSize() < 4) {
+		throw InvalidInputException("Invalid blob size.");
+	}
+	auto blob_ptr = blob.GetData();
+
+	// Determine if the number is negative
+	is_negative = (blob_ptr[0] & 0x80) == 0;
+	idx_t byte_pos = 0;
+	for (idx_t i = blob.GetSize() - 1; i > 2; i--) {
+		if (is_negative) {
+			result += static_cast<uint8_t>(~blob_ptr[i]) * pow(256, byte_pos);
+		} else {
+			result += static_cast<uint8_t>(blob_ptr[i]) * pow(256, byte_pos);
+		}
+		byte_pos++;
+	}
+
+	if (is_negative) {
+		result *= -1;
+	}
+
 	return true;
 }
 

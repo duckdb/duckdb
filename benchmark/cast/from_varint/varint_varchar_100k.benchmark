@@ -1,4 +1,4 @@
-# name: benchmark/cast/varint_varchar_100k.benchmark
+# name: benchmark/cast/from_varint/varint_varchar_100k.benchmark
 # description: Casting of a varint with 100k digits to varchar
 # group: [cast]
 
