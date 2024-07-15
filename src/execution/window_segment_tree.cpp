@@ -931,12 +931,6 @@ void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorS
 	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
 	auto &inputs = gasink.inputs;
 
-	//	Single threaded Finalize for now
-	lock_guard<mutex> gestate_guard(gasink.lock);
-	if (gasink.finalized) {
-		return;
-	}
-
 	WindowAggregator::Finalize(gsink, lstate, stats);
 
 	if (inputs.ColumnCount() > 0) {
@@ -1103,9 +1097,6 @@ WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(const WindowSegmentTr
 	// Start by building from the bottom level
 	build_level = 0;
 	build_complete.resize(levels_flat_start.size(), 0);
-	for (auto &complete : build_complete) {
-		complete = 0;
-	}
 }
 
 void WindowSegmentTreeState::Finalize(WindowSegmentTreeGlobalState &gstate) {
