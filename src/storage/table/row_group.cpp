@@ -55,7 +55,7 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_star
 		column->SetStart(new_start);
 	}
 	if (!HasUnloadedDeletes()) {
-		auto &vinfo = GetVersionInfo();
+		auto vinfo = GetVersionInfo();
 		if (vinfo) {
 			vinfo->SetStart(new_start);
 		}
@@ -269,7 +269,6 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		if (i == changed_idx) {
 			// this is the altered column: use the new column
 			row_group->columns.push_back(std::move(column_data));
-			column_data.reset();
 		} else {
 			// this column was not altered: use the data directly
 			row_group->columns.push_back(cols[i]);
@@ -652,40 +651,55 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	}
 }
 
-shared_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
+optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
 	if (!HasUnloadedDeletes()) {
 		// deletes are loaded - return the version info
 		return version_info;
 	}
 	lock_guard<mutex> lock(row_group_lock);
 	// double-check after obtaining the lock whether or not deletes are still not loaded to avoid double load
-	if (HasUnloadedDeletes()) {
-		// deletes are not loaded - reload
-		auto root_delete = deletes_pointers[0];
-		version_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(), start);
-		deletes_is_loaded = true;
+	if (!HasUnloadedDeletes()) {
+		return version_info;
 	}
+	// deletes are not loaded - reload
+	auto root_delete = deletes_pointers[0];
+	owned_version_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(), start);
+	deletes_is_loaded = true;
+	version_info = owned_version_info.get();
 	return version_info;
+}
+
+shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
+	// version info does not exist - need to create it
+	lock_guard<mutex> lock(row_group_lock);
+	if (!owned_version_info) {
+		owned_version_info = make_shared_ptr<RowVersionManager>(start);
+		version_info = owned_version_info.get();
+	}
+	return owned_version_info;
 }
 
 shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoPtr() {
 	auto vinfo = GetVersionInfo();
-	if (!vinfo) {
-		lock_guard<mutex> lock(row_group_lock);
-		if (!version_info) {
-			version_info = make_shared_ptr<RowVersionManager>(start);
-		}
+	if (vinfo) {
+		// version info exists - return it directly
+		return owned_version_info;
 	}
-	return version_info;
+	return GetOrCreateVersionInfoInternal();
 }
 
 RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
-	return *GetOrCreateVersionInfoPtr();
+	auto vinfo = GetVersionInfo();
+	if (vinfo) {
+		// version info exists - return it directly
+		return *vinfo;
+	}
+	return *GetOrCreateVersionInfoInternal();
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
                              idx_t max_count) {
-	auto &vinfo = GetVersionInfo();
+	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return max_count;
 	}
@@ -694,7 +708,7 @@ idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, Sele
 
 idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
                                       SelectionVector &sel_vector, idx_t max_count) {
-	auto &vinfo = GetVersionInfo();
+	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return max_count;
 	}
@@ -703,7 +717,7 @@ idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t tr
 
 bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
 	D_ASSERT(row < this->count);
-	auto &vinfo = GetVersionInfo();
+	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return true;
 	}
@@ -866,7 +880,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 }
 
 idx_t RowGroup::GetCommittedRowCount() {
-	auto &vinfo = GetVersionInfo();
+	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return count;
 	}
@@ -941,11 +955,12 @@ vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
 		manager.ClearModifiedBlocks(deletes_pointers);
 		return deletes_pointers;
 	}
-	if (!version_info) {
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
 		// no version information: write nothing
 		return vector<MetaBlockPointer>();
 	}
-	return version_info->Checkpoint(manager);
+	return vinfo->Checkpoint(manager);
 }
 
 void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
