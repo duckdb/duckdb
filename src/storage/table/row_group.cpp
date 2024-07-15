@@ -264,7 +264,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = GetOrCreateVersionInfoPtr();
+	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
 		if (i == changed_idx) {
@@ -303,7 +303,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = GetOrCreateVersionInfoPtr();
+	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	row_group->columns = GetColumns();
 	// now add the new column
 	row_group->columns.push_back(std::move(added_column));
@@ -318,7 +318,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 	D_ASSERT(removed_column < columns.size());
 
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = GetOrCreateVersionInfoPtr();
+	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	// copy over all columns except for the removed one
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
@@ -664,18 +664,23 @@ optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
 	}
 	// deletes are not loaded - reload
 	auto root_delete = deletes_pointers[0];
-	owned_version_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(), start);
+	auto loaded_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(), start);
+	SetVersionInfo(std::move(loaded_info));
 	deletes_is_loaded = true;
-	version_info = owned_version_info.get();
 	return version_info;
+}
+
+void RowGroup::SetVersionInfo(shared_ptr<RowVersionManager> version) {
+	owned_version_info = std::move(version);
+	version_info = owned_version_info.get();
 }
 
 shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
 	// version info does not exist - need to create it
 	lock_guard<mutex> lock(row_group_lock);
 	if (!owned_version_info) {
-		owned_version_info = make_shared_ptr<RowVersionManager>(start);
-		version_info = owned_version_info.get();
+		auto new_info = make_shared_ptr<RowVersionManager>(start);
+		SetVersionInfo(std::move(new_info));
 	}
 	return owned_version_info;
 }

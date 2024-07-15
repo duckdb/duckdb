@@ -173,6 +173,7 @@ private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
+	void SetVersionInfo(shared_ptr<RowVersionManager> version);
 
 	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;
