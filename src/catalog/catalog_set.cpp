@@ -11,6 +11,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -186,8 +187,8 @@ bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const strin
 	map.UpdateEntry(std::move(value));
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(value_ptr->Child());
+		DuckTransactionManager::Get(GetCatalog().GetAttached())
+		    .PushCatalogEntry(*transaction.transaction, value_ptr->Child());
 	}
 	return true;
 }
@@ -362,8 +363,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		serializer.WriteProperty(101, "alter_info", &alter_info);
 		serializer.End();
 
-		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(new_entry->Child(), stream.GetData(), stream.GetPosition());
+		DuckTransactionManager::Get(GetCatalog().GetAttached())
+		    .PushCatalogEntry(*transaction.transaction, new_entry->Child(), stream.GetData(), stream.GetPosition());
 	}
 
 	read_lock.unlock();
@@ -414,8 +415,8 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(value_ptr->Child());
+		DuckTransactionManager::Get(GetCatalog().GetAttached())
+		    .PushCatalogEntry(*transaction.transaction, value_ptr->Child());
 	}
 	return true;
 }
@@ -600,8 +601,6 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 		// This was the root of the entry chain
 		map.DropEntry(entry);
 	}
-	// we mark the catalog as being modified, since this action can lead to e.g. tables being dropped
-	catalog.ModifyCatalog();
 }
 
 void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &read_lock) {
