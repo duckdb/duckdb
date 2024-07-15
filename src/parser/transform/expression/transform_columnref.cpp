@@ -1,5 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -11,7 +12,16 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 	auto result = make_uniq<StarExpression>(star.relation ? star.relation : string());
 	if (star.except_list) {
 		for (auto head = star.except_list->head; head; head = head->next) {
-			auto columnref = TransformColumnRef(*PGPointerCast<duckdb_libpgquery::PGColumnRef>(head->data.ptr_value));
+			auto qualified_name =
+			    TransformQualifiedName(*PGPointerCast<duckdb_libpgquery::PGRangeVar>(head->data.ptr_value));
+			vector<string> column_names;
+			if (!qualified_name.schema.empty()) {
+				column_names.push_back(qualified_name.schema);
+			}
+			if (!qualified_name.name.empty()) {
+				column_names.push_back(qualified_name.name);
+			}
+			unique_ptr<ParsedExpression> columnref = make_uniq<ColumnRefExpression>(std::move(column_names));
 			if (result->exclude_list.find(columnref) != result->exclude_list.end()) {
 				throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", columnref->ToString());
 			}

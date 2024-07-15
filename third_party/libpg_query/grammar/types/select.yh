@@ -22,7 +22,7 @@
 
 %type <list>	distinct_clause opt_all_clause name_list_opt_comma opt_name_list name_list_opt_comma_opt_bracket
 				sort_clause opt_sort_clause sortby_list name_list from_clause from_list from_list_opt_comma opt_array_bounds
-				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma c_expr_list c_expr_list_opt_comma
+				qualified_name_list qualified_name_list_opt_comma any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma c_expr_list c_expr_list_opt_comma
 				target_list			 			 opt_indirection target_list_opt_comma opt_target_list_opt_comma
 			 group_clause select_limit
 				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select extended_indirection opt_extended_indirection
@@ -46,7 +46,7 @@
 %type <list>	opt_interval
 %type <node>	overlay_placing substr_from substr_for
 
-%type <list>	except_list opt_except_list replace_list_el replace_list opt_replace_list replace_list_opt_comma columnref_list_opt_comma columnref_list
+%type <list>	except_list opt_except_list replace_list_el replace_list opt_replace_list replace_list_opt_comma
 
 %type <node> limit_clause select_limit_value
 				offset_clause select_offset_value
