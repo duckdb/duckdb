@@ -139,9 +139,12 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	auto top_candidates = StringUtil::TopNLevenshtein(current_candidates, column_name);
 	// get query location
 	QueryErrorContext context;
-	auto entry = current_info.find("position");
-	if (entry == current_info.end()) {
-		context = QueryErrorContext(std::stoull(entry->second));
+	current_entry = current_info.find("position");
+	new_entry = current_info.find("position");
+	if (current_entry != current_info.end()) {
+		context = QueryErrorContext(std::stoull(current_entry->second));
+	} else if (new_entry != new_info.end()) {
+		context = QueryErrorContext(std::stoull(new_entry->second));
 	}
 	// generate a new (combined) error
 	current = BinderException::ColumnNotFound(column_name, top_candidates, context);
@@ -348,9 +351,8 @@ BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, i
 	// since that error might be more descriptive
 	// bind all children
 	ErrorData result;
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<ParsedExpression> &child) {
-		BindChild(child, depth, result);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](unique_ptr<ParsedExpression> &child) { BindChild(child, depth, result); });
 	if (result.HasError()) {
 		return BindResult(std::move(result));
 	}
