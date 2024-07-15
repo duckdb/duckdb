@@ -25,9 +25,12 @@ bool SimpleBufferedData::BufferIsFull() {
 }
 
 void SimpleBufferedData::UnblockSinks() {
-	if (Closed()) {
+	auto cc = context.lock();
+	if (!cc) {
 		return;
 	}
+	(void)cc;
+
 	if (buffered_count >= BufferSize()) {
 		return;
 	}
@@ -44,42 +47,49 @@ void SimpleBufferedData::UnblockSinks() {
 	}
 }
 
-bool SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
-	if (Closed()) {
-		return false;
-	}
-	if (BufferIsFull()) {
-		// The buffer isn't empty yet, just return
-		return true;
-	}
+StreamExecutionResult SimpleBufferedData::ExecuteTaskInternal(StreamQueryResult &result,
+                                                              ClientContextLock &context_lock) {
 	auto cc = context.lock();
 	if (!cc) {
-		return false;
+		return StreamExecutionResult::EXECUTION_CANCELLED;
+	}
+
+	if (BufferIsFull()) {
+		// The buffer isn't empty yet, just return
+		return StreamExecutionResult::CHUNK_READY;
 	}
 	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
-	PendingExecutionResult execution_result;
-	while (!PendingQueryResult::IsExecutionFinished(execution_result = cc->ExecuteTaskInternal(context_lock, result))) {
-		if (buffered_count >= BufferSize()) {
-			break;
-		}
-		if (execution_result == PendingExecutionResult::BLOCKED ||
-		    execution_result == PendingExecutionResult::RESULT_READY) {
-			// Check if we need to unblock more sinks to reach the buffer size
-			UnblockSinks();
-			cc->WaitForTask(context_lock, result);
-		}
+	auto execution_result = cc->ExecuteTaskInternal(context_lock, result);
+	if (buffered_count >= BufferSize()) {
+		return StreamExecutionResult::CHUNK_READY;
+	}
+	if (execution_result == PendingExecutionResult::BLOCKED ||
+	    execution_result == PendingExecutionResult::RESULT_READY) {
+		return StreamExecutionResult::BLOCKED;
 	}
 	if (result.HasError()) {
 		Close();
 	}
-	return execution_result != PendingExecutionResult::EXECUTION_ERROR;
+	switch (execution_result) {
+	case PendingExecutionResult::NO_TASKS_AVAILABLE:
+	case PendingExecutionResult::RESULT_NOT_READY:
+		return StreamExecutionResult::CHUNK_NOT_READY;
+	case PendingExecutionResult::EXECUTION_FINISHED:
+		return StreamExecutionResult::EXECUTION_FINISHED;
+	case PendingExecutionResult::EXECUTION_ERROR:
+		return StreamExecutionResult::EXECUTION_ERROR;
+	default:
+		throw InternalException("No conversion from PendingExecutionResult (%s) -> StreamExecutionResult",
+		                        EnumUtil::ToString(execution_result));
+	}
 }
 
 unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 	if (Closed()) {
 		return nullptr;
 	}
+
 	lock_guard<mutex> lock(glock);
 	if (buffered_chunks.empty()) {
 		Close();

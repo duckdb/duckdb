@@ -2,7 +2,7 @@ import duckdb
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
-closed = lambda: pytest.raises(duckdb.ConnectionException, match='Connection has already been closed')
+closed = lambda: pytest.raises(duckdb.ConnectionException, match='Connection already closed')
 no_result_set = lambda: pytest.raises(duckdb.InvalidInputException, match='No open result set')
 
 
@@ -30,9 +30,7 @@ class TestRuntimeError(object):
     def test_register_error(self):
         con = duckdb.connect()
         py_obj = "this is a string"
-        with pytest.raises(
-            duckdb.InvalidInputException, match='Python Object str not suitable to be registered as a view'
-        ):
+        with pytest.raises(duckdb.InvalidInputException, match='Python Object "this is a string" of type "str"'):
             con.register(py_obj, "v")
 
     def test_arrow_fetch_table_error(self):
@@ -112,7 +110,7 @@ class TestRuntimeError(object):
         )
         conn.execute("create view x as select * from df_in")
         del df_in
-        with pytest.raises(duckdb.InvalidInputException):
+        with pytest.raises(duckdb.CatalogException, match='Table with name df_in does not exist'):
             conn.execute("select 1; select * from x; select 3;")
 
     def test_conn_prepared_statement_error(self):

@@ -36,6 +36,8 @@ public:
 	//! Returns an allocator object to allocate with. This returns the allocator in IN_MEMORY_ALLOCATOR, and a buffer
 	//! allocator in case of BUFFER_MANAGER_ALLOCATOR.
 	Allocator &GetAllocator();
+	//! Returns the buffer manager, if this is not an in-memory allocation.
+	BufferManager &GetBufferManager();
 	//! Returns the allocator type
 	ColumnDataAllocatorType GetType() {
 		return type;

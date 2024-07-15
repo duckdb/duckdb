@@ -259,8 +259,7 @@ private:
 	void MoveCorrelatedExpressions(Binder &other);
 
 	//! Tries to bind the table name with replacement scans
-	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, const string &table_name,
-	                                                  BaseTableRef &ref);
+	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, BaseTableRef &ref);
 
 	template <class T>
 	BoundStatement BindWithCTE(T &statement);
@@ -300,6 +299,9 @@ private:
 
 	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map);
 	unique_ptr<BoundCTENode> BindCTE(CTENode &statement);
+	//! Materializes CTEs if this is expected to improve performance
+	bool OptimizeCTEs(QueryNode &node);
+
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
 	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);

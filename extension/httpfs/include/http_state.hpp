@@ -1,11 +1,3 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/http_state.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/common/file_opener.hpp"
@@ -83,8 +75,8 @@ public:
 	//! Get cache entry, create if not exists
 	shared_ptr<CachedFile> &GetCachedFile(const string &path);
 	//! Helper functions to get the HTTP state
-	static shared_ptr<HTTPState> TryGetState(ClientContext &context, bool create_on_missing = true);
-	static shared_ptr<HTTPState> TryGetState(optional_ptr<FileOpener> opener, bool create_on_missing = true);
+	static shared_ptr<HTTPState> TryGetState(ClientContext &context);
+	static shared_ptr<HTTPState> TryGetState(optional_ptr<FileOpener> opener);
 
 	bool IsEmpty() {
 		return head_count == 0 && get_count == 0 && put_count == 0 && post_count == 0 && total_bytes_received == 0 &&
@@ -102,6 +94,7 @@ public:
 	void QueryEnd(ClientContext &context) override {
 		Reset();
 	}
+	void WriteProfilingInformation(std::ostream &ss) override;
 
 private:
 	//! Mutex to lock when getting the cached file(Parallel Only)
