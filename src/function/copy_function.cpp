@@ -25,45 +25,40 @@ vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType ret
 	}
 }
 
-vector<idx_t> GetColumnsToCopy(vector<LogicalType> &types, vector<idx_t> &excluded_columns, bool no_partition_columns) {
-	vector<column_t> result;
-
-	if (!no_partition_columns) {
-		result.resize(types.size(), 0);
-		std::iota(std::begin(result), std::end(result), 0);
-		return result;
-	}
-	set<column_t> excluded_column_set(excluded_columns.begin(), excluded_columns.end());
-	for (idx_t i = 0; i < types.size(); i++) {
-		if (excluded_column_set.find(i) == excluded_column_set.end()) {
-			result.emplace_back(i);
-		}
-	}
-	return result;
-}
-
-vector<LogicalType> GetTypesToCopy(const vector<LogicalType> &col_types, const vector<column_t> &cols_to_copy) {
+vector<LogicalType> GetTypesToCopy(const vector<LogicalType> &col_types, const vector<idx_t> &part_cols) {
 	vector<LogicalType> types;
-	for (auto col_idx : cols_to_copy) {
-		types.push_back(col_types[col_idx]);
+	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
+	for (idx_t col_idx = 0; col_idx < col_types.size(); col_idx++) {
+		if (part_col_set.find(col_idx) == part_col_set.end()) {
+			types.push_back(col_types[col_idx]);
+		}
 	}
 	return types;
 }
 
-vector<string> GetNamesToCopy(const vector<string> &col_names, const vector<column_t> &cols_to_copy) {
+vector<string> GetNamesToCopy(const vector<string> &col_names, const vector<column_t> &part_cols) {
 	vector<string> names;
-	for (auto col_idx : cols_to_copy) {
-		names.push_back(col_names[col_idx]);
+	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
+	for (idx_t col_idx = 0; col_idx < col_names.size(); col_idx++) {
+		if (part_col_set.find(col_idx) == part_col_set.end()) {
+			names.push_back(col_names[col_idx]);
+		}
 	}
 	return names;
 }
 
-void SetDataToCopy(DataChunk &chunk, DataChunk &source, const vector<idx_t> &cols_to_copy,
-                   const vector<LogicalType> &types) {
-	D_ASSERT(cols_to_copy.size() == types.size());
+void SetDataToCopy(DataChunk &chunk, const DataChunk &source, const vector<LogicalType> &col_types,
+                   const vector<idx_t> &part_cols) {
+	D_ASSERT(source.ColumnCount() == col_types.size());
+	auto types = GetTypesToCopy(col_types, part_cols);
 	chunk.InitializeEmpty(types);
-	for (idx_t i = 0; i < cols_to_copy.size(); i++) {
-		chunk.data[i].Reference(source.data[cols_to_copy[i]]);
+	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
+	idx_t new_col_id = 0;
+	for (idx_t col_idx = 0; col_idx < source.ColumnCount(); col_idx++) {
+		if (part_col_set.find(col_idx) == part_col_set.end()) {
+			chunk.data[new_col_id].Reference(source.data[col_idx]);
+			new_col_id++;
+		}
 	}
 	chunk.SetCardinality(source.size());
 }

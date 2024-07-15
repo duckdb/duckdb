@@ -122,11 +122,10 @@ typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &in
 enum class CopyFunctionReturnType : uint8_t { CHANGED_ROWS = 0, CHANGED_ROWS_AND_FILE_LIST = 1 };
 vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
 vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type);
-vector<idx_t> GetColumnsToCopy(vector<LogicalType> &types, vector<idx_t> &excluded_columns, bool no_partition_columns);
-vector<LogicalType> GetTypesToCopy(const vector<LogicalType> &col_types, const vector<column_t> &cols_to_copy);
-vector<string> GetNamesToCopy(const vector<string> &col_names, const vector<column_t> &cols_to_copy);
-void SetDataToCopy(DataChunk &chunk, DataChunk &source, const vector<idx_t> &column_ids,
-                   const vector<LogicalType> &types);
+vector<LogicalType> GetTypesToCopy(const vector<LogicalType> &col_types, const vector<idx_t> &part_cols);
+vector<string> GetNamesToCopy(const vector<string> &col_names, const vector<column_t> &part_cols);
+void SetDataToCopy(DataChunk &chunk, const DataChunk &source, const vector<LogicalType> &types,
+                   const vector<idx_t> &part_cols);
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
