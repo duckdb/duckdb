@@ -54,14 +54,14 @@ idx_t WriteAheadLog::GetWALSize() {
 }
 
 idx_t WriteAheadLog::GetTotalWritten() {
-	if (!writer) {
+	if (!Initialized()) {
 		return 0;
 	}
 	return writer->GetTotalWritten();
 }
 
 void WriteAheadLog::Truncate(idx_t size) {
-	if (!writer) {
+	if (!Initialized()) {
 		return;
 	}
 	writer->Truncate(size);
@@ -69,7 +69,7 @@ void WriteAheadLog::Truncate(idx_t size) {
 }
 
 void WriteAheadLog::Delete() {
-	if (!writer) {
+	if (!Initialized()) {
 		return;
 	}
 	writer.reset();
