@@ -221,10 +221,15 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	auto unique_column_names = select_node.names;
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
-	auto names_to_copy = GetNamesToCopy(unique_column_names, partition_cols);
-	auto types_to_copy = GetTypesToCopy(select_node.types, partition_cols);
-
-	auto function_data = copy_function.function.copy_to_bind(context, bind_input, names_to_copy, types_to_copy);
+	unique_ptr<FunctionData> function_data;
+	if (no_partition_columns) {
+		auto names_to_copy = GetNamesToCopy(unique_column_names, partition_cols);
+		auto types_to_copy = GetTypesToCopy(select_node.types, partition_cols);
+		function_data = copy_function.function.copy_to_bind(context, bind_input, names_to_copy, types_to_copy);
+	} else {
+		function_data =
+	    	copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
+	}
 
 	const auto rotate =
 	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);
