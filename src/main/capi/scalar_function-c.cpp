@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -182,12 +183,12 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 	if (scalar_function.name.empty() || !info.function) {
 		return DuckDBError;
 	}
-	if (scalar_function.return_type.Contains(duckdb::LogicalTypeId::INVALID) ||
-	    scalar_function.return_type.Contains(duckdb::LogicalTypeId::ANY)) {
+	if (duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::ANY)) {
 		return DuckDBError;
 	}
 	for (const auto &argument : scalar_function.arguments) {
-		if (argument.Contains(duckdb::LogicalTypeId::INVALID)) {
+		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}
 	}
