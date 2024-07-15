@@ -824,14 +824,16 @@ class WindowSegmentTreeGlobalState : public WindowAggregatorGlobalState {
 public:
 	WindowSegmentTreeGlobalState(const WindowSegmentTree &aggregator, idx_t group_count);
 
-	void ConstructTree();
-
 	//! The owning aggregator
 	const WindowSegmentTree &tree;
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	WindowAggregateStates levels_flat_native;
 	//! For each level, the starting location in the levels_flat_native array
 	vector<idx_t> levels_flat_start;
+	//! The level being built (read)
+	std::atomic<idx_t> build_level;
+	//! The number of entries buit so far at this level
+	vector<idx_t> build_complete;
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 16;
@@ -841,28 +843,6 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const vector<LogicalT
                                      const LogicalType &result_type, WindowAggregationMode mode_p,
                                      const WindowExcludeMode exclude_mode_p)
     : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), mode(mode_p) {
-}
-
-void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate, const FrameStats &stats) {
-
-	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
-	auto &inputs = gasink.inputs;
-
-	//	Single threaded Finalize for now
-	lock_guard<mutex> gestate_guard(gasink.lock);
-	if (gasink.finalized) {
-		return;
-	}
-
-	WindowAggregator::Finalize(gsink, lstate, stats);
-
-	if (inputs.ColumnCount() > 0) {
-		if (aggr.function.combine && UseCombineAPI()) {
-			gasink.ConstructTree();
-		}
-	}
-
-	++gasink.finalized;
 }
 
 class WindowSegmentTreePart {
@@ -937,6 +917,7 @@ public:
 	WindowSegmentTreeState() {
 	}
 
+	void Finalize(WindowSegmentTreeGlobalState &gstate);
 	void Evaluate(const WindowSegmentTreeGlobalState &gsink, const DataChunk &bounds, Vector &result, idx_t count,
 	              idx_t row_idx);
 	//! The left (default) segment tree part
@@ -944,6 +925,28 @@ public:
 	//! The right segment tree part (for EXCLUDE)
 	unique_ptr<WindowSegmentTreePart> right_part;
 };
+
+void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate, const FrameStats &stats) {
+
+	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
+	auto &inputs = gasink.inputs;
+
+	//	Single threaded Finalize for now
+	lock_guard<mutex> gestate_guard(gasink.lock);
+	if (gasink.finalized) {
+		return;
+	}
+
+	WindowAggregator::Finalize(gsink, lstate, stats);
+
+	if (inputs.ColumnCount() > 0) {
+		if (aggr.function.combine && UseCombineAPI()) {
+			lstate.Cast<WindowSegmentTreeState>().Finalize(gasink);
+		}
+	}
+
+	++gasink.finalized;
+}
 
 WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr,
                                              const DataChunk &inputs, const ValidityArray &filter_mask)
@@ -1083,7 +1086,6 @@ WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(const WindowSegmentTr
 	while ((level_size =
 	            (level_current == 0 ? inputs.size() : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
-			// compute the aggregate for this entry in the segment tree
 			levels_flat_offset++;
 		}
 
@@ -1097,31 +1099,65 @@ WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(const WindowSegmentTr
 	}
 
 	levels_flat_native.Initialize(levels_flat_offset);
+
+	// Start by building from the bottom level
+	build_level = 0;
+	build_complete.resize(levels_flat_start.size(), 0);
+	for (auto &complete : build_complete) {
+		complete = 0;
+	}
 }
 
-void WindowSegmentTreeGlobalState::ConstructTree() {
-	D_ASSERT(inputs.ColumnCount() > 0);
-
+void WindowSegmentTreeState::Finalize(WindowSegmentTreeGlobalState &gstate) {
 	//	Single part for constructing the tree
+	auto &inputs = gstate.inputs;
+	auto &tree = gstate.tree;
+	auto &filter_mask = gstate.filter_mask;
 	WindowSegmentTreePart gtstate(allocator, tree.aggr, inputs, filter_mask);
 
-	idx_t levels_flat_offset = 0;
-	idx_t level_current = 0;
-	// level 0 is data itself
-	idx_t level_size;
+	auto &levels_flat_native = gstate.levels_flat_native;
+	const auto &levels_flat_start = gstate.levels_flat_start;
 	// iterate over the levels of the segment tree
-	while ((level_size =
-	            (level_current == 0 ? inputs.size() : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
-		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
-			// compute the aggregate for this entry in the segment tree
-			auto state_ptr = levels_flat_native.GetStatePtr(levels_flat_offset);
-			gtstate.WindowSegmentValue(*this, level_current, pos, MinValue(level_size, pos + TREE_FANOUT), state_ptr);
-			gtstate.FlushStates(level_current > 0);
-
-			levels_flat_offset++;
+	for (;;) {
+		const idx_t level_current = gstate.build_level.load();
+		if (level_current >= levels_flat_start.size()) {
+			break;
 		}
 
-		level_current++;
+		// level 0 is data itself
+		const auto level_size =
+		    (level_current == 0 ? inputs.size()
+		                        : levels_flat_start[level_current] - levels_flat_start[level_current - 1]);
+		if (level_size <= 1) {
+			break;
+		}
+		const idx_t build_count = (level_size + gstate.TREE_FANOUT - 1) / gstate.TREE_FANOUT;
+
+		// Build the next fan-in
+		auto build_complete = new (gstate.build_complete.data() + level_current) std::atomic<idx_t>;
+		const idx_t complete = (*build_complete)++;
+		if (complete >= build_count) {
+			//	Nothing left at this level, so wait until other threads are done.
+			//	Since we are only building TREE_FANOUT values at a time, this will be quick.
+			while (level_current == gstate.build_level.load()) {
+				continue;
+			}
+			continue;
+		}
+
+		// compute the aggregate for this entry in the segment tree
+		const idx_t pos = complete * gstate.TREE_FANOUT;
+		const idx_t levels_flat_offset = levels_flat_start[level_current] + complete;
+		auto state_ptr = levels_flat_native.GetStatePtr(levels_flat_offset);
+		gtstate.WindowSegmentValue(gstate, level_current, pos, MinValue(level_size, pos + gstate.TREE_FANOUT),
+		                           state_ptr);
+		gtstate.FlushStates(level_current > 0);
+
+		//	If that was the last one, mark the level as complete.
+		if (complete + 1 == build_count) {
+			gstate.build_level++;
+			continue;
+		}
 	}
 }
 
