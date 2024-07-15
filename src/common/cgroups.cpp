@@ -22,20 +22,20 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 }
 
 optional_idx CGroups::GetCGroupV2MemoryLimit(FileSystem &fs) {
-	const char *CGROUP_SELF = "/proc/self/cgroup";
-	const char *MEMORY_MAX = "/sys/fs/cgroup/%s/memory.max";
+	const char *cgroup_self = "/proc/self/cgroup";
+	const char *memory_max = "/sys/fs/cgroup/%s/memory.max";
 
-	if (!fs.FileExists(CGROUP_SELF)) {
+	if (!fs.FileExists(cgroup_self)) {
 		return optional_idx();
 	}
 
-	string cgroup_path = ReadCGroupPath(fs, CGROUP_SELF);
+	string cgroup_path = ReadCGroupPath(fs, cgroup_self);
 	if (cgroup_path.empty()) {
 		return optional_idx();
 	}
 
 	char memory_max_path[256];
-	snprintf(memory_max_path, sizeof(memory_max_path), MEMORY_MAX, cgroup_path.c_str());
+	snprintf(memory_max_path, sizeof(memory_max_path), memory_max, cgroup_path.c_str());
 
 	if (!fs.FileExists(memory_max_path)) {
 		return optional_idx();
@@ -45,14 +45,14 @@ optional_idx CGroups::GetCGroupV2MemoryLimit(FileSystem &fs) {
 }
 
 optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
-	const char *CGROUP_SELF = "/proc/self/cgroup";
+	const char *cgroup_self = "/proc/self/cgroup";
 	const char *MEMORY_LIMIT = "/sys/fs/cgroup/memory/%s/memory.limit_in_bytes";
 
-	if (!fs.FileExists(CGROUP_SELF)) {
+	if (!fs.FileExists(cgroup_self)) {
 		return optional_idx();
 	}
 
-	string memory_cgroup_path = ReadMemoryCGroupPath(fs, CGROUP_SELF);
+	string memory_cgroup_path = ReadMemoryCGroupPath(fs, cgroup_self);
 	if (memory_cgroup_path.empty()) {
 		return optional_idx();
 	}
@@ -118,33 +118,33 @@ optional_idx CGroups::ReadCGroupValue(FileSystem &fs, const char *file_path) {
 }
 
 idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
-	static constexpr const char *CPU_MAX = "/sys/fs/cgroup/cpu.max";
-	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
-	static constexpr const char *CFS_PERIOD = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
+	static constexpr const char *cpu_max = "/sys/fs/cgroup/cpu.max";
+	static constexpr const char *cfs_quota = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
+	static constexpr const char *cfs_period = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
 
 	int64_t quota, period;
 	char byte_buffer[1000];
 	unique_ptr<FileHandle> handle;
 	int64_t read_bytes;
 
-	if (fs.FileExists(CPU_MAX)) {
+	if (fs.FileExists(cpu_max)) {
 		// cgroup v2
-		handle = fs.OpenFile(CPU_MAX, FileFlags::FILE_FLAGS_READ);
+		handle = fs.OpenFile(cpu_max, FileFlags::FILE_FLAGS_READ);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
 		if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
 			return physical_cores;
 		}
-	} else if (fs.FileExists(CFS_QUOTA) && fs.FileExists(CFS_PERIOD)) {
+	} else if (fs.FileExists(cfs_quota) && fs.FileExists(cfs_period)) {
 		// cgroup v1
-		handle = fs.OpenFile(CFS_QUOTA, FileFlags::FILE_FLAGS_READ);
+		handle = fs.OpenFile(cfs_quota, FileFlags::FILE_FLAGS_READ);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
 		if (std::sscanf(byte_buffer, "%" SCNd64 "", &quota) != 1) {
 			return physical_cores;
 		}
 
-		handle = fs.OpenFile(CFS_PERIOD, FileFlags::FILE_FLAGS_READ);
+		handle = fs.OpenFile(cfs_period, FileFlags::FILE_FLAGS_READ);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
 		if (std::sscanf(byte_buffer, "%" SCNd64 "", &period) != 1) {
