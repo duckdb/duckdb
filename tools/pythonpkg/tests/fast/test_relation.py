@@ -521,16 +521,17 @@ class TestRelation(object):
         assert res == [('0',), ('1',), ('2',), ('3',), ('4',), ('5',), ('6',), ('7',), ('8',), ('9',)]
 
     def test_materialized_relation_view(self, duckdb_cursor):
-        with pytest.raises(
-            duckdb.NotImplementedException, match='Creating a VIEW from a MaterializedRelation is not supported'
-        ):
+        def create_view(duckdb_cursor):
             duckdb_cursor.sql(
                 """
                 create table tbl(a varchar);
                 insert into tbl values ('test') returning *
             """
             ).to_view('vw')
-            res = duckdb_cursor.sql("select * from vw").fetchone()
+
+        create_view(duckdb_cursor)
+        res = duckdb_cursor.sql("select * from vw").fetchone()
+        assert res == ('test',)
 
     def test_materialized_relation_view2(self, duckdb_cursor):
         # This creates a MaterializedRelation
