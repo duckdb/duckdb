@@ -239,8 +239,7 @@ struct DBConfigOptions {
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
-	//! NOTE: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
-	idx_t default_block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
+	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
 	//! The index_scan_percentage sets a threshold for index scans.
@@ -328,11 +327,11 @@ public:
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
-	//! Return the list of possible compression functions for the provided compression information.
-	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const CompressionInfo &info);
-	//! Return the compression function matching the compression type and its compression information.
+	//! Returns the list of possible compression functions for the physical type.
+	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const PhysicalType physical_type);
+	//! Returns the compression function matching the compression and physical type.
 	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
-	                                                                    const CompressionInfo &info);
+	                                                                    const PhysicalType physical_type);
 
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);

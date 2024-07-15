@@ -142,8 +142,12 @@ struct MultiFileReader {
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                                                   const MultiFileReaderOptions &options,
-	                                                                   LogicalGet &get,
+	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
+	DUCKDB_API virtual unique_ptr<MultiFileList>
+	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileReaderOptions &options,
+	                      const vector<string> &names, const vector<LogicalType> &types,
+	                      const vector<column_t> &column_ids, TableFilterSet &filters);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.
@@ -209,7 +213,7 @@ struct MultiFileReader {
 		BindOptions(options.file_options, files, union_col_types, union_col_names, bind_data);
 		names = union_col_names;
 		return_types = union_col_types;
-		result.Initialize(result.union_readers[0]);
+		result.Initialize(context, result.union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
 		return bind_data;
 	}

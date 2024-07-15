@@ -45,11 +45,11 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 }
 
 vector<string> BindContext::GetSimilarBindings(const string &column_name) {
-	vector<pair<string, idx_t>> scores;
+	vector<pair<string, double>> scores;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		for (auto &name : binding->names) {
-			idx_t distance = StringUtil::SimilarityScore(name, column_name);
+			double distance = StringUtil::SimilarityRating(name, column_name);
 			scores.emplace_back(binding->alias + "." + name, distance);
 		}
 	}
@@ -246,7 +246,7 @@ optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out
 			candidates.push_back(kv.first);
 		}
 		string candidate_str =
-		    StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
+		    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, name), "Candidate tables");
 		out_error = ErrorData(ExceptionType::BINDER,
 		                      StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
 		return nullptr;

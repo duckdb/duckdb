@@ -4,16 +4,16 @@
 
 #include "cast_column_reader.hpp"
 #include "duckdb.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "geo_parquet.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
-#include "geo_parquet.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 
@@ -44,10 +44,10 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #endif
 
 namespace duckdb {
@@ -60,10 +60,12 @@ struct ParquetReadBindData : public TableFunctionData {
 	atomic<idx_t> chunk_count;
 	vector<string> names;
 	vector<LogicalType> types;
+	//! Table column names - set when using COPY tbl FROM file.parquet
+	vector<string> table_columns;
 
 	// The union readers are created (when parquet union_by_name option is on) during binding
 	// Those readers can be re-used during ParquetParallelStateNext
-	vector<shared_ptr<ParquetReader>> union_readers;
+	vector<unique_ptr<ParquetUnionData>> union_readers;
 
 	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
 	idx_t initial_file_cardinality;
@@ -77,6 +79,9 @@ struct ParquetReadBindData : public TableFunctionData {
 		initial_file_cardinality = initial_reader->NumRows();
 		initial_file_row_groups = initial_reader->NumRowGroups();
 		parquet_options = initial_reader->parquet_options;
+	}
+	void Initialize(ClientContext &, unique_ptr<ParquetUnionData> &union_data) {
+		Initialize(std::move(union_data->reader));
 	}
 };
 
@@ -102,6 +107,16 @@ struct ParquetFileReaderData {
 	explicit ParquetFileReaderData(shared_ptr<ParquetReader> reader_p)
 	    : reader(std::move(reader_p)), file_state(ParquetFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
+	// Create data for an existing reader
+	explicit ParquetFileReaderData(unique_ptr<ParquetUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
+		if (union_data_p->reader) {
+			reader = std::move(union_data_p->reader);
+			file_state = ParquetFileState::OPEN;
+		} else {
+			union_data = std::move(union_data_p);
+			file_state = ParquetFileState::UNOPENED;
+		}
+	}
 
 	//! Currently opened reader for the file
 	shared_ptr<ParquetReader> reader;
@@ -109,21 +124,33 @@ struct ParquetFileReaderData {
 	ParquetFileState file_state;
 	//! Mutexes to wait for the file when it is being opened
 	unique_ptr<mutex> file_mutex;
+	//! Parquet options for opening the file
+	unique_ptr<ParquetUnionData> union_data;
 
 	//! (only set when file_state is UNOPENED) the file to be opened
 	string file_to_be_opened;
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
+	explicit ParquetReadGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {
+	}
+	explicit ParquetReadGlobalState(unique_ptr<MultiFileList> owned_file_list_p)
+	    : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
+	}
+
+	//! The file list to scan
+	MultiFileList &file_list;
 	//! The scan over the file_list
 	MultiFileListScanData file_list_scan;
+	//! Owned multi file list - if filters have been dynamically pushed into the reader
+	unique_ptr<MultiFileList> owned_file_list;
 
 	unique_ptr<MultiFileReaderGlobalState> multi_file_reader_state;
 
 	mutex lock;
 
 	//! The current set of parquet readers
-	vector<ParquetFileReaderData> readers;
+	vector<unique_ptr<ParquetFileReaderData>> readers;
 
 	//! Signal to other threads that a file failed to open, letting every thread abort.
 	bool error_opening_file = false;
@@ -139,7 +166,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	vector<idx_t> projection_ids;
 	vector<LogicalType> scanned_types;
 	vector<column_t> column_ids;
-	TableFilterSet *filters;
+	optional_ptr<TableFilterSet> filters;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
@@ -262,6 +289,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	auto &parquet_options = bind_data.parquet_options;
 	auto &reader_data = reader.reader_data;
 
+	reader.table_columns = bind_data.table_columns;
 	// Mark the file in the file list we are scanning here
 	reader_data.file_list_idx = file_idx;
 
@@ -464,9 +492,9 @@ public:
 					// for remote files we just avoid reading stats entirely
 					return nullptr;
 				}
-				ParquetReader reader(context, bind_data.parquet_options, metadata);
 				// get and merge stats for file
-				auto file_stats = reader.ReadStatistics(bind_data.names[column_index]);
+				auto file_stats = ParquetReader::ReadStatistics(context, bind_data.parquet_options, metadata,
+				                                                bind_data.names[column_index]);
 				if (!file_stats) {
 					return nullptr;
 				}
@@ -521,12 +549,31 @@ public:
 			if (return_types.size() != result->types.size()) {
 				auto file_string = bound_on_first_file ? result->file_list->GetFirstFile()
 				                                       : StringUtil::Join(result->file_list->GetPaths(), ",");
-				throw std::runtime_error(StringUtil::Format(
-				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d",
-				    file_string, return_types.size(), result->types.size()));
+				string extended_error;
+				extended_error = "Table schema: ";
+				for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
+					if (col_idx > 0) {
+						extended_error += ", ";
+					}
+					extended_error += names[col_idx] + " " + return_types[col_idx].ToString();
+				}
+				extended_error += "\nParquet schema: ";
+				for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
+					if (col_idx > 0) {
+						extended_error += ", ";
+					}
+					extended_error += result->names[col_idx] + " " + result->types[col_idx].ToString();
+				}
+				extended_error += "\n\nPossible solutions:";
+				extended_error += "\n* Manually specify which columns to insert using \"INSERT INTO tbl SELECT ... "
+				                  "FROM read_parquet(...)\"";
+				throw ConversionException(
+				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d\n%s",
+				    file_string, return_types.size(), result->types.size(), extended_error);
 			}
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
+			result->table_columns = names;
 		}
 		result->parquet_options = parquet_options;
 		return std::move(result);
@@ -576,7 +623,7 @@ public:
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 
-		auto total_count = bind_data.file_list->GetTotalFileCount();
+		auto total_count = gstate.file_list.GetTotalFileCount();
 		if (total_count == 0) {
 			return 100.0;
 		}
@@ -606,16 +653,37 @@ public:
 		return std::move(result);
 	}
 
+	static unique_ptr<MultiFileList> ParquetDynamicFilterPushdown(ClientContext &context,
+	                                                              const ParquetReadBindData &data,
+	                                                              const vector<column_t> &column_ids,
+	                                                              optional_ptr<TableFilterSet> filters) {
+		if (!filters) {
+			return nullptr;
+		}
+		auto new_list = data.multi_file_reader->DynamicFilterPushdown(
+		    context, *data.file_list, data.parquet_options.file_options, data.names, data.types, column_ids, *filters);
+		return new_list;
+	}
+
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
 		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
-		auto result = make_uniq<ParquetReadGlobalState>();
-		bind_data.file_list->InitializeScan(result->file_list_scan);
+		unique_ptr<ParquetReadGlobalState> result;
+
+		// before instantiating a scan trigger a dynamic filter pushdown if possible
+		auto new_list = ParquetDynamicFilterPushdown(context, bind_data, input.column_ids, input.filters);
+		if (new_list) {
+			result = make_uniq<ParquetReadGlobalState>(std::move(new_list));
+		} else {
+			result = make_uniq<ParquetReadGlobalState>(*bind_data.file_list);
+		}
+		auto &file_list = result->file_list;
+		file_list.InitializeScan(result->file_list_scan);
 
 		result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
-		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, *bind_data.file_list,
-		    bind_data.types, bind_data.names, input.column_ids);
-		if (bind_data.file_list->IsEmpty()) {
+		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, bind_data.types,
+		    bind_data.names, input.column_ids);
+		if (file_list.IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
 			// TODO: confirm we are not changing behaviour by modifying the order here?
@@ -623,33 +691,38 @@ public:
 				if (!reader) {
 					break;
 				}
-				result->readers.push_back(ParquetFileReaderData(std::move(reader)));
+				result->readers.push_back(make_uniq<ParquetFileReaderData>(std::move(reader)));
 			}
-			if (result->readers.size() != bind_data.file_list->GetTotalFileCount()) {
+			if (result->readers.size() != file_list.GetTotalFileCount()) {
 				// This case happens with recursive CTEs: the first execution the readers have already
 				// been moved out of the bind data.
 				// FIXME: clean up this process and make it more explicit
 				result->readers = {};
 			}
 		} else if (bind_data.initial_reader) {
-			// Ensure the initial reader was actually constructed from the first file
-			if (bind_data.initial_reader->file_name != bind_data.file_list->GetFirstFile()) {
-				throw InternalException("First file from list ('%s') does not match first reader ('%s')",
-				                        bind_data.initial_reader->file_name, bind_data.file_list->GetFirstFile());
+			// we can only use the initial reader if it was constructed from the first file
+			if (bind_data.initial_reader->file_name == file_list.GetFirstFile()) {
+				result->readers.push_back(make_uniq<ParquetFileReaderData>(std::move(bind_data.initial_reader)));
 			}
-			result->readers.emplace_back(std::move(bind_data.initial_reader));
 		}
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {
 			string file_name;
 			idx_t file_idx = result->file_list_scan.current_file_idx;
-			bind_data.file_list->Scan(result->file_list_scan, file_name);
-			if (file_name != reader_data.reader->file_name) {
-				throw InternalException("Mismatch in filename order and reader order in parquet scan");
+			file_list.Scan(result->file_list_scan, file_name);
+			if (reader_data->union_data) {
+				if (file_name != reader_data->union_data->GetFileName()) {
+					throw InternalException("Mismatch in filename order and union reader order in parquet scan");
+				}
+			} else {
+				D_ASSERT(reader_data->reader);
+				if (file_name != reader_data->reader->file_name) {
+					throw InternalException("Mismatch in filename order and reader order in parquet scan");
+				}
+				InitializeParquetReader(*reader_data->reader, bind_data, input.column_ids, input.filters, context,
+				                        file_idx, result->multi_file_reader_state);
 			}
-			InitializeParquetReader(*reader_data.reader, bind_data, input.column_ids, input.filters, context, file_idx,
-			                        result->multi_file_reader_state);
 		}
 
 		result->column_ids = input.column_ids;
@@ -703,6 +776,9 @@ public:
 		serializer.WriteProperty(101, "types", bind_data.types);
 		serializer.WriteProperty(102, "names", bind_data.names);
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
+		if (serializer.ShouldSerialize(3)) {
+			serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
+		}
 	}
 
 	static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserializer, TableFunction &function) {
@@ -711,6 +787,8 @@ public:
 		auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
 		auto names = deserializer.ReadProperty<vector<string>>(102, "names");
 		auto parquet_options = deserializer.ReadProperty<ParquetOptions>(103, "parquet_options");
+		auto table_columns =
+		    deserializer.ReadPropertyWithDefault<vector<string>>(104, "table_columns", vector<string> {});
 
 		vector<Value> file_path;
 		for (auto &path : files) {
@@ -720,8 +798,10 @@ public:
 		auto multi_file_reader = MultiFileReader::Create(function);
 		auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
 		                                                   FileGlobOptions::DISALLOW_EMPTY);
-		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), types, names,
-		                               parquet_options);
+		auto bind_data = ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), types,
+		                                         names, parquet_options);
+		bind_data->Cast<ParquetReadBindData>().table_columns = std::move(table_columns);
+		return bind_data;
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -757,6 +837,12 @@ public:
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
+
+		auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
+		if (file_list_cardinality_estimate) {
+			return file_list_cardinality_estimate;
+		}
+
 		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.file_list->GetTotalFileCount());
 	}
 
@@ -772,14 +858,14 @@ public:
 
 	// Queries the metadataprovider for another file to scan, updating the files/reader lists in the process.
 	// Returns true if resized
-	static bool ResizeFiles(const ParquetReadBindData &bind_data, ParquetReadGlobalState &parallel_state) {
+	static bool ResizeFiles(ParquetReadGlobalState &parallel_state) {
 		string scanned_file;
-		if (!bind_data.file_list->Scan(parallel_state.file_list_scan, scanned_file)) {
+		if (!parallel_state.file_list.Scan(parallel_state.file_list_scan, scanned_file)) {
 			return false;
 		}
 
 		// Push the file in the reader data, to be opened later
-		parallel_state.readers.emplace_back(scanned_file);
+		parallel_state.readers.push_back(make_uniq<ParquetFileReaderData>(scanned_file));
 
 		return true;
 	}
@@ -795,11 +881,11 @@ public:
 				return false;
 			}
 
-			if (parallel_state.file_index >= parallel_state.readers.size() && !ResizeFiles(bind_data, parallel_state)) {
+			if (parallel_state.file_index >= parallel_state.readers.size() && !ResizeFiles(parallel_state)) {
 				return false;
 			}
 
-			auto &current_reader_data = parallel_state.readers[parallel_state.file_index];
+			auto &current_reader_data = *parallel_state.readers[parallel_state.file_index];
 			if (current_reader_data.file_state == ParquetFileState::OPEN) {
 				if (parallel_state.row_group_index < current_reader_data.reader->NumRowGroups()) {
 					// The current reader has rowgroups left to be scanned
@@ -828,7 +914,7 @@ public:
 			}
 
 			// Check if the current file is being opened, in that case we need to wait for it.
-			if (parallel_state.readers[parallel_state.file_index].file_state == ParquetFileState::OPENING) {
+			if (current_reader_data.file_state == ParquetFileState::OPENING) {
 				WaitForFile(parallel_state.file_index, parallel_state, parallel_lock);
 			}
 		}
@@ -838,8 +924,9 @@ public:
 	                                         vector<unique_ptr<Expression>> &filters) {
 		auto &data = bind_data_p->Cast<ParquetReadBindData>();
 
+		MultiFilePushdownInfo info(get);
 		auto new_list = data.multi_file_reader->ComplexFilterPushdown(context, *data.file_list,
-		                                                              data.parquet_options.file_options, get, filters);
+		                                                              data.parquet_options.file_options, info, filters);
 
 		if (new_list) {
 			data.file_list = std::move(new_list);
@@ -851,9 +938,8 @@ public:
 	static void WaitForFile(idx_t file_index, ParquetReadGlobalState &parallel_state,
 	                        unique_lock<mutex> &parallel_lock) {
 		while (true) {
-
 			// Get pointer to file mutex before unlocking
-			auto &file_mutex = *parallel_state.readers[file_index].file_mutex;
+			auto &file_mutex = *parallel_state.readers[file_index]->file_mutex;
 
 			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking. Note that this
 			// requires getting the ref to the file mutex pointer with the lock stil held: readers get be resized
@@ -866,7 +952,7 @@ public:
 			// - the thread opening the file has failed
 			// - the file was somehow scanned till the end while we were waiting
 			if (parallel_state.file_index >= parallel_state.readers.size() ||
-			    parallel_state.readers[parallel_state.file_index].file_state != ParquetFileState::OPENING ||
+			    parallel_state.readers[parallel_state.file_index]->file_state != ParquetFileState::OPENING ||
 			    parallel_state.error_opening_file) {
 				return;
 			}
@@ -877,14 +963,17 @@ public:
 	static bool TryOpenNextFile(ClientContext &context, const ParquetReadBindData &bind_data,
 	                            ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state,
 	                            unique_lock<mutex> &parallel_lock) {
-		const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-
 		const auto file_index_limit =
-		    MinValue<idx_t>(parallel_state.file_index + num_threads, parallel_state.readers.size());
+		    parallel_state.file_index + TaskScheduler::GetScheduler(context).NumberOfThreads();
 
 		for (idx_t i = parallel_state.file_index; i < file_index_limit; i++) {
-			if (parallel_state.readers[i].file_state == ParquetFileState::UNOPENED) {
-				auto &current_reader_data = parallel_state.readers[i];
+			// We check if we can resize files in this loop too otherwise we will only ever open 1 file ahead
+			if (i >= parallel_state.readers.size() && !ResizeFiles(parallel_state)) {
+				return false;
+			}
+
+			auto &current_reader_data = *parallel_state.readers[i];
+			if (current_reader_data.file_state == ParquetFileState::UNOPENED) {
 				current_reader_data.file_state = ParquetFileState::OPENING;
 				auto pq_options = bind_data.parquet_options;
 
@@ -898,7 +987,14 @@ public:
 
 				shared_ptr<ParquetReader> reader;
 				try {
-					reader = make_shared_ptr<ParquetReader>(context, current_reader_data.file_to_be_opened, pq_options);
+					if (current_reader_data.union_data) {
+						auto &union_data = *current_reader_data.union_data;
+						reader = make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options,
+						                                        union_data.metadata);
+					} else {
+						reader =
+						    make_shared_ptr<ParquetReader>(context, current_reader_data.file_to_be_opened, pq_options);
+					}
 					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
 					                        context, i, parallel_state.multi_file_reader_state);
 				} catch (...) {
@@ -909,7 +1005,7 @@ public:
 
 				// Now re-lock the state and add the reader
 				parallel_lock.lock();
-				current_reader_data.reader = reader;
+				current_reader_data.reader = std::move(reader);
 				current_reader_data.file_state = ParquetFileState::OPEN;
 
 				return true;
@@ -1405,7 +1501,7 @@ bool ParquetWriteRotateNextFile(GlobalFunctionData &gstate, FunctionData &bind_d
 //===--------------------------------------------------------------------===//
 unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, ReplacementScanInput &input,
                                             optional_ptr<ReplacementScanData> data) {
-	auto &table_name = input.table_name;
+	auto table_name = ReplacementScan::GetFullPath(input);
 	if (!ReplacementScan::CanReplace(table_name, {"parquet"})) {
 		return nullptr;
 	}

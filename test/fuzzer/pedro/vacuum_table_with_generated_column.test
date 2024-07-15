@@ -13,11 +13,10 @@ require no_vector_verification
 statement ok
 CREATE TABLE test (x INT, y AS (x + 100));
 
-# We cannot vacuum duplicate columns.
 statement error
 ANALYZE test(x, x);
 ----
-cannot vacuum or analyze the same column twice
+<REGEX>:Binder Error.*cannot vacuum.*the same column twice.*
 
 statement ok
 ANALYZE test(y, x);

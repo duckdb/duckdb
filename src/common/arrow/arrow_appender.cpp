@@ -35,6 +35,10 @@ void ArrowAppender::Append(DataChunk &input, idx_t from, idx_t to, idx_t input_s
 	row_count += to - from;
 }
 
+idx_t ArrowAppender::RowCount() const {
+	return row_count;
+}
+
 void ArrowAppender::ReleaseArray(ArrowArray *array) {
 	if (!array || !array->release) {
 		return;

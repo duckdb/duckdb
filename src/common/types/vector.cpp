@@ -19,6 +19,7 @@
 #include "fsst.h"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -385,6 +386,13 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 	}
 }
 
+static bool IsStructOrArrayRecursive(const LogicalType &type) {
+	return TypeVisitor::Contains(type, [](const LogicalType &type) {
+		auto physical_type = type.InternalType();
+		return (physical_type == PhysicalType::STRUCT || physical_type == PhysicalType::ARRAY);
+	});
+}
+
 void Vector::SetValue(idx_t index, const Value &val) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// dictionary: apply dictionary and forward to child
@@ -392,16 +400,16 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
-	if (val.type() != GetType()) {
+	if (!val.IsNull() && val.type() != GetType()) {
 		SetValue(index, val.DefaultCastAs(GetType()));
 		return;
 	}
-	D_ASSERT(val.type().InternalType() == GetType().InternalType());
+	D_ASSERT(val.IsNull() || (val.type().InternalType() == GetType().InternalType()));
 
 	validity.EnsureWritable();
 	validity.Set(index, !val.IsNull());
 	auto physical_type = GetType().InternalType();
-	if (val.IsNull() && physical_type != PhysicalType::STRUCT && physical_type != PhysicalType::ARRAY) {
+	if (val.IsNull() && !IsStructOrArrayRecursive(GetType())) {
 		// for structs and arrays we still need to set the child-entries to NULL
 		// so we do not bail out yet
 		return;
@@ -450,9 +458,12 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case PhysicalType::INTERVAL:
 		reinterpret_cast<interval_t *>(data)[index] = val.GetValueUnsafe<interval_t>();
 		break;
-	case PhysicalType::VARCHAR:
-		reinterpret_cast<string_t *>(data)[index] = StringVector::AddStringOrBlob(*this, StringValue::Get(val));
+	case PhysicalType::VARCHAR: {
+		if (!val.IsNull()) {
+			reinterpret_cast<string_t *>(data)[index] = StringVector::AddStringOrBlob(*this, StringValue::Get(val));
+		}
 		break;
+	}
 	case PhysicalType::STRUCT: {
 		D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
 
@@ -475,16 +486,23 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 	case PhysicalType::LIST: {
 		auto offset = ListVector::GetListSize(*this);
-		auto &val_children = ListValue::GetChildren(val);
-		if (!val_children.empty()) {
-			for (idx_t i = 0; i < val_children.size(); i++) {
-				ListVector::PushBack(*this, val_children[i]);
+		if (val.IsNull()) {
+			auto &entry = reinterpret_cast<list_entry_t *>(data)[index];
+			ListVector::PushBack(*this, Value());
+			entry.length = 1;
+			entry.offset = offset;
+		} else {
+			auto &val_children = ListValue::GetChildren(val);
+			if (!val_children.empty()) {
+				for (idx_t i = 0; i < val_children.size(); i++) {
+					ListVector::PushBack(*this, val_children[i]);
+				}
 			}
+			//! now set the pointer
+			auto &entry = reinterpret_cast<list_entry_t *>(data)[index];
+			entry.length = val_children.size();
+			entry.offset = offset;
 		}
-		//! now set the pointer
-		auto &entry = reinterpret_cast<list_entry_t *>(data)[index];
-		entry.length = val_children.size();
-		entry.offset = offset;
 		break;
 	}
 	case PhysicalType::ARRAY: {

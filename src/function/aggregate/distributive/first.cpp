@@ -139,8 +139,7 @@ template <bool LAST, bool SKIP_NULLS>
 struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	using STATE = FirstState<string_t>;
 
-	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t input_count, Vector &state_vector,
-	                   idx_t count) {
+	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
@@ -172,8 +171,8 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		Vector sort_key(LogicalType::BLOB);
 		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 		// slice with a selection vector and generate sort keys
-		if (assign_count == input_count) {
-			CreateSortKeyHelpers::CreateSortKey(input, input_count, modifiers, sort_key);
+		if (assign_count == count) {
+			CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_key);
 		} else {
 			SelectionVector sel(assign_sel);
 			Vector sliced_input(input, sel, assign_count);
@@ -183,12 +182,14 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 
 		// now assign sort keys
 		for (idx_t i = 0; i < assign_count; i++) {
-			const auto sidx = sdata.sel->get_index(assign_sel[i]);
-			bool is_null = !idata.validity.RowIsValid(assign_sel[i]);
-			auto &state = *states[sidx];
+			const auto state_idx = sdata.sel->get_index(assign_sel[i]);
+			auto &state = *states[state_idx];
 			if (!LAST && state.is_set) {
 				continue;
 			}
+
+			const auto idx = idata.sel->get_index(assign_sel[i]);
+			bool is_null = !idata.validity.RowIsValid(idx);
 			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE>(state, input_data, sort_key_data[i],
 			                                                                    is_null);
 		}

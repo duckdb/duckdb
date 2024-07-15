@@ -6,7 +6,7 @@ RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_
                                      bool keep_pinned)
     : buffer_manager(buffer_manager), count(0), block_capacity(block_capacity), entry_size(entry_size),
       keep_pinned(keep_pinned) {
-	D_ASSERT(block_capacity * entry_size + entry_size > Storage::BLOCK_SIZE);
+	D_ASSERT(block_capacity * entry_size + entry_size > buffer_manager.GetBlockSize());
 }
 
 idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle,
@@ -114,7 +114,7 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 	if (other.count == 0) {
 		return;
 	}
-	RowDataCollection temp(buffer_manager, Storage::BLOCK_SIZE, 1);
+	RowDataCollection temp(buffer_manager, buffer_manager.GetBlockSize(), 1);
 	{
 		//	One lock at a time to avoid deadlocks
 		lock_guard<mutex> read_lock(other.rdc_lock);

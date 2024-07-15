@@ -773,7 +773,7 @@ class TestResolveObjectColumns(object):
         # The dataframe has incompatible struct schemas in the nested child
         # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
         res = duckdb_cursor.sql("select * from x").fetchall()
-        assert res == [({'b': {'key': ['x', 'y'], 'value': ['A', 'B']}},), ({'b': {'key': ['x'], 'value': ['A']}},)]
+        assert res == [({'b': {'x': 'A', 'y': 'B'}},), ({'b': {'x': 'A'}},)]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_struct_deeply_nested_in_list(self, pandas, duckdb_cursor):
@@ -792,7 +792,7 @@ class TestResolveObjectColumns(object):
         # The dataframe has incompatible struct schemas in the nested child
         # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
         res = duckdb_cursor.sql("select * from x").fetchall()
-        assert res == [([{'key': ['x', 'y'], 'value': ['A', 'B']}, {'key': ['x'], 'value': ['A']}],)]
+        assert res == [([{'x': 'A', 'y': 'B'}, {'x': 'A'}],)]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_analyze_sample_too_small(self, pandas, duckdb_cursor):

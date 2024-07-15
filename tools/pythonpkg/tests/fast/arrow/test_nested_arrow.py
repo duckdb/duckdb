@@ -194,7 +194,7 @@ class TestArrowNested(object):
         values = [None, [(5, 42)]]
         arrow_table = pa.table({'detail': pa.array(values, map_type)})
         res = duckdb_cursor.sql("select * from arrow_table").fetchall()
-        assert res == [(None,), ({'key': [5], 'value': [42]},)]
+        assert res == [(None,), ({5: 42},)]
 
     @pytest.mark.parametrize('use_list_view', get_use_list_view_options())
     def test_map_arrow_to_pandas(self, duckdb_cursor, use_list_view):

@@ -169,6 +169,9 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
+	if (other.GetType().id() == LogicalTypeId::SQLNULL) {
+		return;
+	}
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	auto &other_data = StringStats::GetDataUnsafe(other);
 	if (StringValueComparison(other_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.min) < 0) {

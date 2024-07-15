@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
@@ -310,7 +309,7 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 shared_ptr<PreparedStatementData>
 ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
                                                unique_ptr<SQLStatement> statement,
-                                               optional_ptr<case_insensitive_map_t<Value>> values) {
+                                               optional_ptr<case_insensitive_map_t<BoundParameterData>> values) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
@@ -335,7 +334,6 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = std::move(planner.value_map);
-	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
 	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}
@@ -369,7 +367,8 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 
 shared_ptr<PreparedStatementData>
 ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                       optional_ptr<case_insensitive_map_t<Value>> values, PreparedStatementMode mode) {
+                                       optional_ptr<case_insensitive_map_t<BoundParameterData>> values,
+                                       PreparedStatementMode mode) {
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
 	for (auto const &s : registered_state) {
@@ -420,7 +419,7 @@ QueryProgress ClientContext::GetQueryProgress() {
 }
 
 void BindPreparedStatementParameters(PreparedStatementData &statement, const PendingQueryParameters &parameters) {
-	case_insensitive_map_t<Value> owned_values;
+	case_insensitive_map_t<BoundParameterData> owned_values;
 	if (parameters.parameters) {
 		auto &params = *parameters.parameters;
 		for (auto &val : params) {
@@ -451,7 +450,8 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 	}
 	auto &meta_transaction = MetaTransaction::Get(*this);
 	auto &manager = DatabaseManager::Get(*this);
-	for (auto &modified_database : statement.properties.modified_databases) {
+	for (auto &it : statement.properties.modified_databases) {
+		auto &modified_database = it.first;
 		auto entry = manager.GetDatabase(*this, modified_database);
 		if (!entry) {
 			throw InternalException("Database \"%s\" not found", modified_database);
@@ -544,7 +544,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	try {
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
 		if (active_query->progress_bar) {
-			auto is_finished = PendingQueryResult::IsFinishedOrBlocked(query_result);
+			auto is_finished = PendingQueryResult::IsResultReady(query_result);
 			active_query->progress_bar->Update(is_finished);
 			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
@@ -712,7 +712,8 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-                                               case_insensitive_map_t<Value> &values, bool allow_stream_result) {
+                                               case_insensitive_map_t<BoundParameterData> &values,
+                                               bool allow_stream_result) {
 	PendingQueryParameters parameters;
 	parameters.parameters = &values;
 	parameters.allow_stream_result = allow_stream_result;
@@ -729,10 +730,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
 		                                          prepared->properties.parameter_count);
-		return ErrorResult<PendingQueryResult>(ErrorData(error_message), query);
+		return ErrorResult<PendingQueryResult>(InvalidInputException(error_message), query);
 	}
 	if (!prepared->properties.bound_all_parameters) {
-		return ErrorResult<PendingQueryResult>(ErrorData("Not all parameters were bound"), query);
+		return ErrorResult<PendingQueryResult>(InvalidInputException("Not all parameters were bound"), query);
 	}
 	// execute the prepared statement
 	CheckIfPreparedStatementIsExecutable(*prepared);

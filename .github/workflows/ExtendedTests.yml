@@ -43,7 +43,7 @@ jobs:
 
      - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.11'
 
      - name: Install
        shell: bash
@@ -125,7 +125,7 @@ jobs:
 
      - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.11'
 
      - name: Install
        shell: bash
@@ -140,7 +140,7 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         CMAKE_LLVM_PATH='/usr/local/opt/llvm' make
+         CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make
          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
          make
@@ -207,7 +207,7 @@ jobs:
 
        - uses: actions/setup-python@v5
          with:
-           python-version: '3.7'
+           python-version: '3.11'
 
        - name: Install
          shell: bash
@@ -294,7 +294,7 @@ jobs:
 
        - uses: actions/setup-python@v5
          with:
-           python-version: '3.7'
+           python-version: '3.11'
 
        - name: Install
          shell: bash
