@@ -6,6 +6,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -167,9 +168,9 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	current_entry = current_info.find("position");
 	new_entry = current_info.find("position");
 	if (current_entry != current_info.end()) {
-		context = QueryErrorContext(std::stoull(current_entry->second));
+		context = QueryErrorContext(Cast::Operation<string_t, uint64_t>(current_entry->second));
 	} else if (new_entry != new_info.end()) {
-		context = QueryErrorContext(std::stoull(new_entry->second));
+		context = QueryErrorContext(Cast::Operation<string_t, uint64_t>(new_entry->second));
 	}
 	// generate a new (combined) error
 	current = BinderException::ColumnNotFound(column_name, top_candidates, context);
