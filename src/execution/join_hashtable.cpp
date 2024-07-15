@@ -102,7 +102,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 	sink_collection =
 	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 
-	dead_end = make_unsafe_uniq_array_for_override<data_t>(layout.GetRowWidth());
+	dead_end = make_unsafe_uniq_array_uninitialized<data_t>(layout.GetRowWidth());
 	memset(dead_end.get(), 0, layout.GetRowWidth());
 }
 
@@ -751,7 +751,7 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p)
     : key_state(key_state_p), pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE),
       chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE),
-      found_match(make_unsafe_uniq_array_for_override<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
+      found_match(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
       is_null(true) {
 }
 

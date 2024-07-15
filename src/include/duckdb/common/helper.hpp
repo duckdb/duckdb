@@ -90,7 +90,7 @@ make_uniq_array(size_t n) // NOLINT: mimic std style
 
 template<class DATA_TYPE>
 inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
-make_uniq_array_for_override(size_t n) // NOLINT: mimic std style
+make_uniq_array_uninitialized(size_t n) // NOLINT: mimic std style
 {
 	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]);
 }
@@ -104,7 +104,7 @@ make_unsafe_uniq_array(size_t n) // NOLINT: mimic std style
 
 template<class DATA_TYPE>
 inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
-make_unsafe_uniq_array_for_override(size_t n) // NOLINT: mimic std style
+make_unsafe_uniq_array_uninitialized(size_t n) // NOLINT: mimic std style
 {
 	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]);
 }

@@ -98,8 +98,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 
 	// Setup the NullStr information
 	null_str_count = state_machine.options.null_str.size();
-	null_str_ptr = make_unsafe_uniq_array_for_override<const char *>(null_str_count);
-	null_str_size = make_unsafe_uniq_array_for_override<idx_t>(null_str_count);
+	null_str_ptr = make_unsafe_uniq_array_uninitialized<const char *>(null_str_count);
+	null_str_size = make_unsafe_uniq_array_uninitialized<idx_t>(null_str_count);
 	for (idx_t i = 0; i < null_str_count; i++) {
 		null_str_ptr[i] = state_machine.options.null_str[i].c_str();
 		null_str_size[i] = state_machine.options.null_str[i].size();

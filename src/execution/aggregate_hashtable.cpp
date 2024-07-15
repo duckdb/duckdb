@@ -355,7 +355,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	auto &chunk_state = state.append_state.chunk_state;
 	TupleDataCollection::ToUnifiedFormat(chunk_state, state.group_chunk);
 	if (!state.group_data) {
-		state.group_data = make_unsafe_uniq_array_for_override<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
+		state.group_data = make_unsafe_uniq_array_uninitialized<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
 	}
 	TupleDataCollection::GetVectorData(chunk_state, state.group_data.get());
 

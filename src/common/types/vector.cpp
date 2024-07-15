@@ -378,7 +378,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		}
 
 		// Copy the data buffer to a resized buffer.
-		auto new_data = make_unsafe_uniq_array_for_override<data_t>(target_size);
+		auto new_data = make_unsafe_uniq_array_uninitialized<data_t>(target_size);
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
 		resize_info_entry.buffer->SetData(std::move(new_data));
 		resize_info_entry.vec.data = resize_info_entry.buffer->GetData();
@@ -1187,7 +1187,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(logical_type.InternalType()) * count;
-		auto ptr = make_unsafe_uniq_array_for_override<data_t>(write_size);
+		auto ptr = make_unsafe_uniq_array_uninitialized<data_t>(write_size);
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteProperty(102, "data", ptr.get(), write_size);
 	} else {
@@ -1217,7 +1217,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			auto list_size = ListVector::GetListSize(*this);
 
 			// serialize the list entries in a flat array
-			auto entries = make_unsafe_uniq_array_for_override<list_entry_t>(count);
+			auto entries = make_unsafe_uniq_array_uninitialized<list_entry_t>(count);
 			auto source_array = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
@@ -1271,7 +1271,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: read fixed amount of data
 		auto column_size = GetTypeIdSize(logical_type.InternalType()) * count;
-		auto ptr = make_unsafe_uniq_array_for_override<data_t>(column_size);
+		auto ptr = make_unsafe_uniq_array_uninitialized<data_t>(column_size);
 		deserializer.ReadProperty(102, "data", ptr.get(), column_size);
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);

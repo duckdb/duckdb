@@ -10,14 +10,14 @@ namespace duckdb {
 
 BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path, FileLockType lock_type,
                                        optional_ptr<FileOpener> opener)
-    : fs(fs), data(make_unsafe_uniq_array_for_override<data_t>(FILE_BUFFER_SIZE)), offset(0), read_data(0),
+    : fs(fs), data(make_unsafe_uniq_array_uninitialized<data_t>(FILE_BUFFER_SIZE)), offset(0), read_data(0),
       total_read(0) {
 	handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | lock_type, opener.get());
 	file_size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 }
 
 BufferedFileReader::BufferedFileReader(FileSystem &fs, unique_ptr<FileHandle> handle_p)
-    : fs(fs), data(make_unsafe_uniq_array_for_override<data_t>(FILE_BUFFER_SIZE)), offset(0), read_data(0),
+    : fs(fs), data(make_unsafe_uniq_array_uninitialized<data_t>(FILE_BUFFER_SIZE)), offset(0), read_data(0),
       handle(std::move(handle_p)), total_read(0) {
 	file_size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 }
