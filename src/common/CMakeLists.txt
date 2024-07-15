@@ -31,6 +31,7 @@ add_library_unity(
   assert.cpp
   bind_helpers.cpp
   box_renderer.cpp
+  cgroup.cpp
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
