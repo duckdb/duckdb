@@ -140,8 +140,28 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	auto current_candidates = StringUtil::Split(current_entry->second, ",");
 	auto new_candidates = StringUtil::Split(new_entry->second, ",");
 	current_candidates.insert(current_candidates.end(), new_candidates.begin(), new_candidates.end());
+
+	// run the similarity ranking on both sets of candidates
+	unordered_set<string> candidates;
+	vector<pair<string, double>> scores;
+	for (auto &candidate : current_candidates) {
+		// split by "." since the candidates might be in the form "table.column"
+		auto column_splits = StringUtil::Split(candidate, ".");
+		if (column_splits.empty()) {
+			continue;
+		}
+		auto &candidate_column = column_splits.back();
+		auto entry = candidates.find(candidate);
+		if (entry != candidates.end()) {
+			// already found
+			continue;
+		}
+		auto score = StringUtil::SimilarityRating(candidate_column, column_name);
+		candidates.insert(candidate);
+		scores.emplace_back(make_pair(std::move(candidate), score));
+	}
 	// get a new top-n
-	auto top_candidates = StringUtil::TopNJaroWinkler(current_candidates, column_name);
+	auto top_candidates = StringUtil::TopNStrings(scores);
 	// get query location
 	QueryErrorContext context;
 	current_entry = current_info.find("position");
