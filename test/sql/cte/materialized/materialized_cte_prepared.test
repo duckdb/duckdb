@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-require noalternativeverify
+require no_alternative_verify
 
 statement ok
 create table a(i integer);

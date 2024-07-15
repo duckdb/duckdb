@@ -504,8 +504,6 @@ jobs:
       GEN: ninja
       BUILD_ICU: 1
       BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
       LATEST_STORAGE: 1
