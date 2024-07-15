@@ -247,7 +247,7 @@ public:
 			for (auto &chunk : partitions[i]->Chunks()) {
 				if (op.no_partition_columns) {
 					DataChunk filtered_chunk;
-					SetDataToCopy(filtered_chunk, chunk, op.expected_types, op.partition_columns);
+					SetDataWithoutPartitions(filtered_chunk, chunk, op.expected_types, op.partition_columns);
 					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state,
 					                         filtered_chunk);
 				} else {

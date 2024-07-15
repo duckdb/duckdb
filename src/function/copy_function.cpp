@@ -25,7 +25,7 @@ vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType ret
 	}
 }
 
-vector<LogicalType> GetTypesToCopy(const vector<LogicalType> &col_types, const vector<idx_t> &part_cols) {
+vector<LogicalType> GetTypesWithoutPartitions(const vector<LogicalType> &col_types, const vector<idx_t> &part_cols) {
 	vector<LogicalType> types;
 	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
 	for (idx_t col_idx = 0; col_idx < col_types.size(); col_idx++) {
@@ -36,7 +36,7 @@ vector<LogicalType> GetTypesToCopy(const vector<LogicalType> &col_types, const v
 	return types;
 }
 
-vector<string> GetNamesToCopy(const vector<string> &col_names, const vector<column_t> &part_cols) {
+vector<string> GetNamesWithoutPartitions(const vector<string> &col_names, const vector<column_t> &part_cols) {
 	vector<string> names;
 	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
 	for (idx_t col_idx = 0; col_idx < col_names.size(); col_idx++) {
@@ -47,10 +47,10 @@ vector<string> GetNamesToCopy(const vector<string> &col_names, const vector<colu
 	return names;
 }
 
-void SetDataToCopy(DataChunk &chunk, const DataChunk &source, const vector<LogicalType> &col_types,
-                   const vector<idx_t> &part_cols) {
+void SetDataWithoutPartitions(DataChunk &chunk, const DataChunk &source, const vector<LogicalType> &col_types,
+                              const vector<idx_t> &part_cols) {
 	D_ASSERT(source.ColumnCount() == col_types.size());
-	auto types = GetTypesToCopy(col_types, part_cols);
+	auto types = GetTypesWithoutPartitions(col_types, part_cols);
 	chunk.InitializeEmpty(types);
 	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
 	idx_t new_col_id = 0;

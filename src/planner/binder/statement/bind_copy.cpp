@@ -223,8 +223,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	auto file_path = stmt.info->file_path;
 	unique_ptr<FunctionData> function_data;
 	if (no_partition_columns) {
-		auto names_to_copy = GetNamesToCopy(unique_column_names, partition_cols);
-		auto types_to_copy = GetTypesToCopy(select_node.types, partition_cols);
+		auto names_to_copy = GetNamesWithoutPartitions(unique_column_names, partition_cols);
+		auto types_to_copy = GetTypesWithoutPartitions(select_node.types, partition_cols);
 		function_data = copy_function.function.copy_to_bind(context, bind_input, names_to_copy, types_to_copy);
 	} else {
 		function_data =
