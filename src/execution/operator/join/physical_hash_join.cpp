@@ -674,17 +674,17 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class HashJoinOperatorState : public CachingOperatorState {
 public:
-	explicit HashJoinOperatorState(ClientContext &context) : probe_executor(context), initialized(false) {
+	explicit HashJoinOperatorState(ClientContext &context, HashJoinGlobalSinkState &sink)
+	    : probe_executor(context), scan_structure(*sink.hash_table, join_key_state) {
 	}
 
 	DataChunk join_keys;
 	TupleDataChunkState join_key_state;
 
 	ExpressionExecutor probe_executor;
-	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
+	JoinHashTable::ScanStructure scan_structure;
 	unique_ptr<OperatorState> perfect_hash_join_state;
 
-	bool initialized;
 	JoinHashTable::ProbeSpillLocalAppendState spill_state;
 	JoinHashTable::ProbeState probe_state;
 	//! Chunk to sink data into for external join
@@ -699,7 +699,7 @@ public:
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &allocator = BufferAllocator::Get(context.client);
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
-	auto state = make_uniq<HashJoinOperatorState>(context.client);
+	auto state = make_uniq<HashJoinOperatorState>(context.client, sink);
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {
@@ -724,17 +724,12 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	D_ASSERT(sink.finalized);
 	D_ASSERT(!sink.scanned_data);
 
-	// some initialization for external hash join
-	if (sink.external && !state.initialized) {
-		if (!sink.probe_spill) {
-			sink.InitializeProbeSpill();
+	if (sink.hash_table->Count() == 0) {
+		if (EmptyResultIfRHSIsEmpty()) {
+			return OperatorResultType::FINISHED;
 		}
-		state.spill_state = sink.probe_spill->RegisterThread();
-		state.initialized = true;
-	}
-
-	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
-		return OperatorResultType::FINISHED;
+		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, input, chunk);
+		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	if (sink.perfect_join_executor) {
@@ -742,35 +737,35 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, chunk, *state.perfect_hash_join_state);
 	}
 
-	if (state.scan_structure) {
-		// still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
-		state.scan_structure->Next(state.join_keys, input, chunk);
-		if (!state.scan_structure->PointersExhausted() || chunk.size() > 0) {
-			return OperatorResultType::HAVE_MORE_OUTPUT;
+	if (sink.external && !state.initialized) {
+		// some initialization for external hash join
+		if (!sink.probe_spill) {
+			sink.InitializeProbeSpill();
 		}
-		state.scan_structure = nullptr;
+		state.spill_state = sink.probe_spill->RegisterThread();
+		state.initialized = true;
+	}
+
+	if (state.scan_structure.is_null) {
+		// probe the HT, start by resolving the join keys for the left chunk
+		state.join_keys.Reset();
+		state.probe_executor.Execute(input, state.join_keys);
+
+		// perform the actual probe
+		if (sink.external) {
+			sink.hash_table->ProbeAndSpill(state.scan_structure, state.join_keys, state.join_key_state,
+			                               state.probe_state, input, *sink.probe_spill, state.spill_state,
+			                               state.spill_chunk);
+		} else {
+			sink.hash_table->Probe(state.scan_structure, state.join_keys, state.join_key_state, state.probe_state);
+		}
+	}
+	state.scan_structure.Next(state.join_keys, input, chunk);
+
+	if (state.scan_structure.PointersExhausted() && chunk.size() == 0) {
+		state.scan_structure.is_null = true;
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
-
-	// probe the HT
-	if (sink.hash_table->Count() == 0) {
-		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, input, chunk);
-		return OperatorResultType::NEED_MORE_INPUT;
-	}
-
-	// resolve the join keys for the left chunk
-	state.join_keys.Reset();
-	state.probe_executor.Execute(input, state.join_keys);
-
-	// perform the actual probe
-	if (sink.external) {
-		state.scan_structure =
-		    sink.hash_table->ProbeAndSpill(state.join_keys, state.join_key_state, state.probe_state, input,
-		                                   *sink.probe_spill, state.spill_state, state.spill_chunk);
-	} else {
-		state.scan_structure = sink.hash_table->Probe(state.join_keys, state.join_key_state, state.probe_state);
-	}
-	state.scan_structure->Next(state.join_keys, input, chunk);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
@@ -843,12 +838,12 @@ public:
 
 class HashJoinLocalSourceState : public LocalSourceState {
 public:
-	HashJoinLocalSourceState(const PhysicalHashJoin &op, Allocator &allocator);
+	HashJoinLocalSourceState(const PhysicalHashJoin &op, HashJoinGlobalSinkState &sink, Allocator &allocator);
 
 	//! Do the work this thread has been assigned
 	void ExecuteTask(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, DataChunk &chunk);
 	//! Whether this thread has finished the work it has been assigned
-	bool TaskFinished();
+	bool TaskFinished() const;
 	//! Build, probe and scan for external hash join
 	void ExternalBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate);
 	void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, DataChunk &chunk);
@@ -876,7 +871,7 @@ public:
 	vector<idx_t> join_key_indices;
 	vector<idx_t> payload_indices;
 	//! Scan structure for the external probe
-	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
+	JoinHashTable::ScanStructure scan_structure;
 	JoinHashTable::ProbeState probe_state;
 	bool empty_ht_probe_in_progress;
 
@@ -892,7 +887,8 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 
 unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
-	return make_uniq<HashJoinLocalSourceState>(*this, BufferAllocator::Get(context.client));
+	return make_uniq<HashJoinLocalSourceState>(*this, sink_state->Cast<HashJoinGlobalSinkState>(),
+	                                           BufferAllocator::Get(context.client));
 }
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)
@@ -1050,12 +1046,13 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 	return false;
 }
 
-HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, Allocator &allocator)
-    : local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER) {
+HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, HashJoinGlobalSinkState &sink,
+                                                   Allocator &allocator)
+    : local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER),
+      scan_structure(*sink.hash_table, join_key_state) {
 	auto &chunk_state = probe_local_scan.current_chunk_state;
 	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
 
-	auto &sink = op.sink_state->Cast<HashJoinGlobalSinkState>();
 	probe_chunk.Initialize(allocator, sink.probe_types);
 	join_keys.Initialize(allocator, op.condition_types);
 	payload.Initialize(allocator, op.children[0]->types);
@@ -1088,13 +1085,13 @@ void HashJoinLocalSourceState::ExecuteTask(HashJoinGlobalSinkState &sink, HashJo
 	}
 }
 
-bool HashJoinLocalSourceState::TaskFinished() {
+bool HashJoinLocalSourceState::TaskFinished() const {
 	switch (local_stage) {
 	case HashJoinSourceStage::INIT:
 	case HashJoinSourceStage::BUILD:
 		return true;
 	case HashJoinSourceStage::PROBE:
-		return scan_structure == nullptr && !empty_ht_probe_in_progress;
+		return scan_structure.is_null && !empty_ht_probe_in_progress;
 	case HashJoinSourceStage::SCAN_HT:
 		return full_outer_scan_state == nullptr;
 	default:
@@ -1116,17 +1113,17 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
                                              DataChunk &chunk) {
 	D_ASSERT(local_stage == HashJoinSourceStage::PROBE && sink.hash_table->finalized);
 
-	if (scan_structure) {
+	if (!scan_structure.is_null) {
 		// Still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
-		scan_structure->Next(join_keys, payload, chunk);
-		if (chunk.size() != 0 || !scan_structure->PointersExhausted()) {
+		scan_structure.Next(join_keys, payload, chunk);
+		if (chunk.size() != 0 || !scan_structure.PointersExhausted()) {
 			return;
 		}
 	}
 
-	if (scan_structure || empty_ht_probe_in_progress) {
+	if (!scan_structure.is_null || empty_ht_probe_in_progress) {
 		// Previous probe is done
-		scan_structure = nullptr;
+		scan_structure.is_null = true;
 		empty_ht_probe_in_progress = false;
 		sink.probe_spill->consumer->FinishChunk(probe_local_scan);
 		lock_guard<mutex> lock(gstate.lock);
@@ -1149,8 +1146,8 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	}
 
 	// Perform the probe
-	scan_structure = sink.hash_table->Probe(join_keys, join_key_state, probe_state, precomputed_hashes);
-	scan_structure->Next(join_keys, payload, chunk);
+	sink.hash_table->Probe(scan_structure, join_keys, join_key_state, probe_state, precomputed_hashes);
+	scan_structure.Next(join_keys, payload, chunk);
 }
 
 void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
