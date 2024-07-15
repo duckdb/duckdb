@@ -7,7 +7,9 @@
 namespace duckdb {
 
 string ColumnDataRef::ToString() const {
-	auto result = collection->ToString();
+	auto dependency_item = external_dependency->GetDependency("materialized");
+	auto &materialized_dependency = dependency_item->Cast<MaterializedDependency>();
+	auto result = materialized_dependency.collection->ToString();
 	return BaseToString(result, expected_names);
 }
 
@@ -16,8 +18,18 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<ColumnDataRef>();
-	auto expected_types = collection->Types();
-	auto other_expected_types = other.collection->Types();
+
+	auto dependency_item_a = external_dependency->GetDependency("materialized");
+	auto &materialized_a = dependency_item_a->Cast<MaterializedDependency>();
+	auto &collection_a = materialized_a.collection;
+
+	auto dependency_item_b = other.external_dependency->GetDependency("materialized");
+	auto &materialized_b = dependency_item_b->Cast<MaterializedDependency>();
+	auto &collection_b = materialized_b.collection;
+
+	auto expected_types = collection_a->Types();
+	auto other_expected_types = collection_b->Types();
+
 	if (expected_types.size() != other_expected_types.size()) {
 		return false;
 	}
@@ -40,40 +52,26 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 		}
 	}
 	string unused;
-	if (!ColumnDataCollection::ResultEquals(*collection, *other.collection, unused, true)) {
+
+	if (!ColumnDataCollection::ResultEquals(*collection_a, *collection_b, unused, true)) {
 		return false;
 	}
 	return true;
 }
 
+void ColumnDataRef::Serialize(Serializer &serializer) const {
+	throw NotImplementedException(
+	    "ColumnDataRef is made as part of a MaterializedRelation and should never be serialized");
+}
+
+unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &source) {
+	throw InternalException("Can not be serialized");
+}
+
 unique_ptr<TableRef> ColumnDataRef::Copy() {
-	unique_ptr<ColumnDataRef> result;
-	if (collection.is_owned()) {
-		// This collection is owned, the copy should be self sufficient so it needs a copy
-		auto new_collection = make_uniq<ColumnDataCollection>(*collection);
-
-		DataChunk chunk;
-		collection->InitializeScanChunk(chunk);
-
-		ColumnDataScanState scan_state;
-		collection->InitializeScan(scan_state);
-
-		ColumnDataAppendState append_state;
-		new_collection->InitializeAppend(append_state);
-		while (collection->Scan(scan_state, chunk)) {
-			new_collection->Append(append_state, chunk);
-		}
-#ifdef DEBUG
-		string error_message;
-		if (!ColumnDataCollection::ResultEquals(*collection, *new_collection, error_message, true)) {
-			throw InternalException("Copied ColumnDataCollection was not equal: %s", error_message);
-		}
-#endif
-		result = make_uniq<ColumnDataRef>(expected_names, std::move(new_collection));
-	} else {
-		result = make_uniq<ColumnDataRef>(*collection);
-	}
-	result->expected_names = expected_names;
+	auto dependency_item = external_dependency->GetDependency("materialized");
+	auto materialized_dependency = shared_ptr_cast<DependencyItem, MaterializedDependency>(std::move(dependency_item));
+	auto result = make_uniq<ColumnDataRef>(materialized_dependency, expected_names);
 	CopyProperties(*result);
 	return std::move(result);
 }
