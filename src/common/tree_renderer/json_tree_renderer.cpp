@@ -86,8 +86,8 @@ void JSONTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
 	auto plan = RenderRecursive(doc, root, 0, 0);
 	yyjson_mut_arr_append(result_obj, plan);
 
-	auto data =
-	    yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr, nullptr);
+	auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
+	                                      nullptr, nullptr);
 	if (!data) {
 		yyjson_mut_doc_free(doc);
 		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
