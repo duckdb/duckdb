@@ -101,14 +101,60 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	}
 }
 
+static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
+	auto &current_info = current.ExtraInfo();
+	auto &new_info = new_error.ExtraInfo();
+	auto current_entry = current_info.find("error_subtype");
+	auto new_entry = new_info.find("error_subtype");
+	if (current_entry == current_info.end() || new_entry == new_info.end()) {
+		// no subtype info in either expression
+		return false;
+	}
+	if (current_entry->second != "COLUMN_NOT_FOUND" || new_entry->second != "COLUMN_NOT_FOUND") {
+		// either info is not a `COLUMN_NOT_FOUND`
+		return false;
+	}
+	current_entry = current_info.find("name");
+	new_entry = new_info.find("name");
+	if (current_entry == current_info.end() || new_entry == new_info.end()) {
+		// no candidate info in either column
+		return false;
+	}
+	if (current_entry->second != new_entry->second) {
+		// error does not concern the same name/column
+		return false;
+	}
+	auto column_name = current_entry->second;
+	current_entry = current_info.find("candidates");
+	new_entry = new_info.find("candidates");
+	if (current_entry == current_info.end() || new_entry == new_info.end()) {
+		// no candidate info in either column
+		return false;
+	}
+	// combine the candidates
+	auto current_candidates = StringUtil::Split(current_entry->second, ",");
+	auto new_candidates = StringUtil::Split(new_entry->second, ",");
+	current_candidates.insert(current_candidates.end(), new_candidates.begin(), new_candidates.end());
+	// get a new top-n
+	auto top_candidates = StringUtil::TopNLevenshtein(current_candidates, column_name);
+	// get query location
+	QueryErrorContext context;
+	auto entry = current_info.find("position");
+	if (entry == current_info.end()) {
+		context = QueryErrorContext(std::stoull(entry->second));
+	}
+	// generate a new (combined) error
+	current = BinderException::ColumnNotFound(column_name, top_candidates, context);
+	return true;
+}
+
 static void CombineErrors(ErrorData &current, ErrorData new_error) {
-	// we prefer the new error UNLESS it is an UNSUPPORTED error
-	auto &info = new_error.ExtraInfo();
-	auto entry = info.find("error_subtype");
-	if (entry != info.end() && entry->second == "UNSUPPORTED") {
-		// UNSUPPORTED errors are generally not helpful, so we keep the original error
+	// try to combine missing column exceptions in order to pick the most relevant one
+	if (CombineMissingColumns(current, new_error)) {
+		// keep the old info
 		return;
 	}
+
 	// override the error with the new one
 	current = std::move(new_error);
 }
@@ -127,6 +173,7 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
 		auto next_error = next_binder.Bind(expr, depth);
 		if (!next_error.HasError()) {
+			bind_error = std::move(next_error);
 			break;
 		}
 		CombineErrors(bind_error, std::move(next_error));
@@ -294,6 +341,20 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 		be.expr->alias = alias;
 	}
 	return ErrorData();
+}
+
+BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message) {
+	// we always prefer to throw an error if it occurs in a child expression
+	// since that error might be more descriptive
+	// bind all children
+	ErrorData result;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<ParsedExpression> &child) {
+		BindChild(child, depth, result);
+	});
+	if (result.HasError()) {
+		return BindResult(std::move(result));
+	}
+	return BindResult(BinderException::Unsupported(expr, message));
 }
 
 bool ExpressionBinder::IsUnnestFunction(const string &function_name) {

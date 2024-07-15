@@ -26,7 +26,7 @@ SELECT * FROM histogram_values(integers, i, bin_count := 2)
 statement error
 SELECT * FROM histogram_values(integers, k)
 ----
-integers.i
+not found in FROM clause
 
 statement ok
 INSERT INTO integers FROM range(127)

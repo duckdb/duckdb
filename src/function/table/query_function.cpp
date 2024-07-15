@@ -16,15 +16,13 @@ static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOp
 	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
 }
 
-static string UnionTablesQuery(TableFunctionBindInput &input, string &query) {
+static void UnionTablesQuery(TableFunctionBindInput &input, string &query) {
 	string by_name = (input.inputs.size() == 2 &&
 	                  (input.inputs[1].type().id() == LogicalTypeId::BOOLEAN && input.inputs[1].GetValue<bool>()))
 	                     ? "BY NAME "
 	                     : ""; // 'by_name' variable defaults to false
 	if (input.inputs[0].type().id() == LogicalTypeId::VARCHAR) {
-		string table_name = input.inputs[0].ToString();
-		query += "FROM " + KeywordHelper::WriteOptionallyQuoted(table_name);
-		return table_name;
+		query += "FROM " + KeywordHelper::WriteOptionallyQuoted(input.inputs[0].ToString());
 	} else if (input.inputs[0].type() == LogicalType::LIST(LogicalType::VARCHAR)) {
 		string union_all_clause = " UNION ALL " + by_name + "FROM ";
 		const auto &children = ListValue::GetChildren(input.inputs[0]);
@@ -37,7 +35,6 @@ static string UnionTablesQuery(TableFunctionBindInput &input, string &query) {
 			auto child = children[i].ToString();
 			query += union_all_clause + KeywordHelper::WriteOptionallyQuoted(child);
 		}
-		return string();
 	} else {
 		throw InvalidInputException("Expected a table or a list with tables as input");
 	}
@@ -51,10 +48,9 @@ static unique_ptr<TableRef> QueryBindReplace(ClientContext &context, TableFuncti
 
 static unique_ptr<TableRef> TableBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	string query;
-	string alias = UnionTablesQuery(input, query);
+	UnionTablesQuery(input, query);
 	auto subquery_ref =
 	    ParseSubquery(query, context.GetParserOptions(), "Expected a table or a list with tables as input");
-	subquery_ref->alias = std::move(alias);
 	return std::move(subquery_ref);
 }
 
