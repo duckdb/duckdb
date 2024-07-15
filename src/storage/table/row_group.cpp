@@ -652,7 +652,7 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	}
 }
 
-shared_ptr<RowVersionManager> &RowGroup::GetVersionInfo() {
+shared_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
 	if (!HasUnloadedDeletes()) {
 		// deletes are loaded - return the version info
 		return version_info;
@@ -668,7 +668,7 @@ shared_ptr<RowVersionManager> &RowGroup::GetVersionInfo() {
 	return version_info;
 }
 
-shared_ptr<RowVersionManager> &RowGroup::GetOrCreateVersionInfoPtr() {
+shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoPtr() {
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		lock_guard<mutex> lock(row_group_lock);

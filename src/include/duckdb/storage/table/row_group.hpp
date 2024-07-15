@@ -168,8 +168,8 @@ public:
 	static RowGroupPointer Deserialize(Deserializer &deserializer);
 
 private:
-	shared_ptr<RowVersionManager> &GetVersionInfo();
-	shared_ptr<RowVersionManager> &GetOrCreateVersionInfoPtr();
+	shared_ptr<RowVersionManager> GetVersionInfo();
+	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
 
 	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;
