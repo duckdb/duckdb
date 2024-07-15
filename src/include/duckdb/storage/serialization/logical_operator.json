@@ -266,6 +266,12 @@
         "id": 201,
         "name": "chunk_types",
         "type": "vector<LogicalType>"
+      },
+      {
+        "id": 202,
+        "name": "delim_idx",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "constructor": ["table_index", "chunk_types"]

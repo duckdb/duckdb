@@ -30,6 +30,7 @@ public:
 	optionally_owned_ptr<ColumnDataCollection> collection;
 
 	idx_t cte_index;
+	optional_idx delim_index;
 
 public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;

@@ -28,6 +28,8 @@ public:
 	idx_t table_index;
 	//! The types of the chunk
 	vector<LogicalType> chunk_types;
+	//! Delim Join Index
+	optional_idx delim_idx;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

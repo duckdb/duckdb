@@ -20,7 +20,8 @@ public:
 
 public:
 	PhysicalRightDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-	                       vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality);
+	                       vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality,
+	                       optional_idx delim_idx);
 
 public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;

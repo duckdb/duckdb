@@ -12,9 +12,9 @@ namespace duckdb {
 
 PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
                                              vector<const_reference<PhysicalOperator>> delim_scans,
-                                             idx_t estimated_cardinality)
+                                             idx_t estimated_cardinality, optional_idx delim_idx)
     : PhysicalDelimJoin(PhysicalOperatorType::LEFT_DELIM_JOIN, std::move(types), std::move(original_join),
-                        std::move(delim_scans), estimated_cardinality) {
+                        std::move(delim_scans), estimated_cardinality, delim_idx) {
 	D_ASSERT(join->children.size() == 2);
 	// now for the original join
 	// we take its left child, this is the side that we will duplicate eliminate
@@ -24,6 +24,9 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(vector<LogicalType> types, unique_p
 	// the actual chunk collection to scan will be created in the LeftDelimJoinGlobalState
 	auto cached_chunk_scan = make_uniq<PhysicalColumnDataScan>(
 	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
+	if (delim_idx.IsValid()) {
+		cached_chunk_scan->cte_index = delim_idx.GetIndex();
+	}
 	join->children[0] = std::move(cached_chunk_scan);
 }
 
