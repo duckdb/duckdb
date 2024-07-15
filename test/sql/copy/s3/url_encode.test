@@ -118,7 +118,7 @@ set s3_endpoint='s3.some.random.endpoint.com';
 statement error
 SELECT * FROM '${prefix}test-bucket/whatever.parquet';
 ----
-Connection error for HTTP HEAD to 'http://test-bucket.s3.some.random.endpoint.com/whatever.parquet'
+Could not establish connection error for HTTP HEAD 'http://test-bucket.s3.some.random.endpoint.com/whatever.parquet'
 
 statement ok
 set s3_endpoint='${DUCKDB_S3_ENDPOINT}'
