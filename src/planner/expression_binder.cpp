@@ -167,10 +167,12 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	QueryErrorContext context;
 	current_entry = current_info.find("position");
 	new_entry = current_info.find("position");
-	if (current_entry != current_info.end()) {
-		context = QueryErrorContext(Cast::Operation<string_t, uint64_t>(current_entry->second));
-	} else if (new_entry != new_info.end()) {
-		context = QueryErrorContext(Cast::Operation<string_t, uint64_t>(new_entry->second));
+	uint64_t position;
+	if (current_entry != current_info.end() &&
+	    TryCast::Operation<string_t, uint64_t>(current_entry->second, position)) {
+		context = QueryErrorContext(position);
+	} else if (new_entry != new_info.end() && TryCast::Operation<string_t, uint64_t>(new_entry->second, position)) {
+		context = QueryErrorContext(position);
 	}
 	// generate a new (combined) error
 	current = BinderException::ColumnNotFound(column_name, top_candidates, context);
