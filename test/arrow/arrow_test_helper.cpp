@@ -1,6 +1,9 @@
 #include "arrow/arrow_test_helper.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
 #include "duckdb/common/arrow/arrow_query_result.hpp"
+#include "duckdb/main/relation/setop_relation.hpp"
+#include "duckdb/main/relation/materialized_relation.hpp"
+#include "duckdb/common/enums/set_operation_type.hpp"
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
 ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamParameters &parameters) {
@@ -145,20 +148,33 @@ unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector
 	return arrow_result;
 }
 
-bool ArrowTestHelper::CompareResults(unique_ptr<QueryResult> arrow, unique_ptr<MaterializedQueryResult> duck,
-                                     const string &query) {
+bool ArrowTestHelper::CompareResults(Connection &con, unique_ptr<QueryResult> arrow,
+                                     unique_ptr<MaterializedQueryResult> duck, const string &query) {
 	auto &materialized_arrow = (MaterializedQueryResult &)*arrow;
 	// compare the results
 	string error;
-	if (!ColumnDataCollection::ResultEquals(duck->Collection(), materialized_arrow.Collection(), error)) {
+
+	auto arrow_collection = materialized_arrow.TakeCollection();
+	auto arrow_rel = make_shared_ptr<MaterializedRelation>(con.context, std::move(arrow_collection),
+	                                                       materialized_arrow.names, "arrow");
+
+	auto duck_collection = duck->TakeCollection();
+	auto duck_rel = make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection), duck->names, "duck");
+
+	// We perform a SELECT * FROM "duck_rel" EXCEPT ALL SELECT * FROM "arrow_rel"
+	// this will tell us if there are tuples missing from 'arrow_rel' that are present in 'duck_rel'
+	auto except_rel = make_shared_ptr<SetOpRelation>(duck_rel, arrow_rel, SetOperationType::EXCEPT, /*setop_all=*/true);
+	auto except_result_p = except_rel->Execute();
+	auto &except_result = except_result_p->Cast<MaterializedQueryResult>();
+	if (except_result.RowCount() != 0) {
 		printf("-------------------------------------\n");
 		printf("Arrow round-trip failed: %s\n", error.c_str());
 		printf("-------------------------------------\n");
 		printf("Query: %s\n", query.c_str());
 		printf("-----------------DuckDB-------------------\n");
-		duck->Print();
+		Printer::Print(duck_rel->ToString(0));
 		printf("-----------------Arrow--------------------\n");
-		materialized_arrow.Print();
+		Printer::Print(arrow_rel->ToString(0));
 		printf("-------------------------------------\n");
 		return false;
 	}
@@ -189,7 +205,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	// Using the PhysicalArrowCollector, we create a ArrowQueryResult from the result
 	{
 		auto &config = ClientConfig::GetConfig(*con.context);
-		idx_t batch_size = big_result ? NumericLimits<idx_t>::Maximum() : STANDARD_VECTOR_SIZE;
+		idx_t batch_size = big_result ? NumericLimits<idx_t>::Maximum() : 10000;
 		// Set up the result collector to use
 		ScopedConfigSetting setting(
 		    config,
@@ -229,7 +245,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	// This query goes directly from:
 	// query -> MaterializedQueryResult
 	auto expected = con.Query(query);
-	return CompareResults(std::move(arrow_result), std::move(expected), query);
+	return CompareResults(con, std::move(arrow_result), std::move(expected), query);
 }
 
 bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream) {
@@ -245,7 +261,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, A
 		return false;
 	}
 
-	return CompareResults(std::move(arrow_result), con.Query(query), query);
+	return CompareResults(con, std::move(arrow_result), con.Query(query), query);
 }
 
 } // namespace duckdb

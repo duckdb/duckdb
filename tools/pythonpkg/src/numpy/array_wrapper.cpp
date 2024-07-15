@@ -665,7 +665,8 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		} else {
 			throw InternalException("Size not supported on ENUM types");
 		}
-	} break;
+		break;
+	}
 	case LogicalTypeId::BOOLEAN:
 		may_have_null = ConvertColumnRegular<bool>(append_data);
 		break;

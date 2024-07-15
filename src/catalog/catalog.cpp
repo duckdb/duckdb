@@ -364,7 +364,7 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 			// no similar entry found
 			continue;
 		}
-		if (!result.Found() || result.distance > entry.distance) {
+		if (!result.Found() || result.score < entry.score) {
 			result = entry;
 			result.schema = &schema;
 		}
@@ -626,9 +626,12 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		return CatalogException(error_message);
 	}
 
+	// entries in other schemas get a penalty
+	// however, if there is an exact match in another schema, we will always show it
+	static constexpr const double UNSEEN_PENALTY = 0.2;
 	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
 	string did_you_mean;
-	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
+	if (unseen_entry.Found() && (unseen_entry.score == 1.0 || unseen_entry.score - UNSEEN_PENALTY > entry.score)) {
 		// the closest matching entry requires qualification as it is not in the default search path
 		// check how to minimally qualify this entry
 		auto catalog_name = unseen_entry.schema->catalog.GetName();

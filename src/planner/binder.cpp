@@ -1,23 +1,26 @@
 #include "duckdb/planner/binder.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/tableref/list.hpp"
-#include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
-#include "duckdb/parser/query_node/list.hpp"
-#include "duckdb/common/helper.hpp"
-#include "duckdb/common/enum_util.hpp"
+#include "duckdb/planner/query_node/list.hpp"
+#include "duckdb/planner/tableref/list.hpp"
 
 #include <algorithm>
 
@@ -146,7 +149,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
 	case StatementType::INSERT_STATEMENT:
-		return Bind(statement.Cast<InsertStatement>());
+		return BindWithCTE(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
 	case StatementType::DELETE_STATEMENT:
@@ -205,6 +208,116 @@ void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
 	}
 }
 
+static void GetTableRefCountsNode(case_insensitive_map_t<idx_t> &cte_ref_counts, QueryNode &node);
+
+static void GetTableRefCountsExpr(case_insensitive_map_t<idx_t> &cte_ref_counts, ParsedExpression &expr) {
+	if (expr.type == ExpressionType::SUBQUERY) {
+		auto &subquery = expr.Cast<SubqueryExpression>();
+		GetTableRefCountsNode(cte_ref_counts, *subquery.subquery->node);
+	} else {
+		ParsedExpressionIterator::EnumerateChildren(
+		    expr, [&](ParsedExpression &expr) { GetTableRefCountsExpr(cte_ref_counts, expr); });
+	}
+}
+
+static void GetTableRefCountsNode(case_insensitive_map_t<idx_t> &cte_ref_counts, QueryNode &node) {
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    node, [&](unique_ptr<ParsedExpression> &child) { GetTableRefCountsExpr(cte_ref_counts, *child); },
+	    [&](TableRef &ref) {
+		    if (ref.type != TableReferenceType::BASE_TABLE) {
+			    return;
+		    }
+		    auto cte_ref_counts_it = cte_ref_counts.find(ref.Cast<BaseTableRef>().table_name);
+		    if (cte_ref_counts_it != cte_ref_counts.end()) {
+			    cte_ref_counts_it->second++;
+		    }
+	    });
+}
+
+static bool ParsedExpressionIsAggregate(Binder &binder, const ParsedExpression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function = expr.Cast<FunctionExpression>();
+		QueryErrorContext error_context;
+		auto entry = binder.GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		                                    function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+			return true;
+		}
+	}
+	bool is_aggregate = false;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { is_aggregate |= ParsedExpressionIsAggregate(binder, child); });
+	return is_aggregate;
+}
+
+bool Binder::OptimizeCTEs(QueryNode &node) {
+	D_ASSERT(context.config.enable_optimizer);
+
+	// only applies to nodes that have at least one CTE
+	auto &cte_map = node.cte_map.map;
+	if (cte_map.empty()) {
+		return false;
+	}
+
+	// initialize counts with the CTE names
+	case_insensitive_map_t<idx_t> cte_ref_counts;
+	for (auto &cte : cte_map) {
+		cte_ref_counts[cte.first];
+	}
+
+	// count the references of each CTE
+	GetTableRefCountsNode(cte_ref_counts, node);
+
+	// determine for each CTE whether it should be materialized
+	bool result = false;
+	for (auto &cte : cte_map) {
+		if (cte.second->materialized != CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
+			continue; // only triggers when nothing is specified
+		}
+		if (bind_context.GetCTEBinding(cte.first)) {
+			continue; // there's a CTE in the bind context with an overlapping name, we can't also materialize this
+		}
+
+		auto cte_ref_counts_it = cte_ref_counts.find(cte.first);
+		D_ASSERT(cte_ref_counts_it != cte_ref_counts.end());
+
+		// only applies to CTEs that are referenced more than once
+		if (cte_ref_counts_it->second <= 1) {
+			continue;
+		}
+
+		// if the cte is a SELECT node
+		if (cte.second->query->node->type != QueryNodeType::SELECT_NODE) {
+			continue;
+		}
+
+		// we materialize if the CTE ends in an aggregation
+		auto &cte_node = cte.second->query->node->Cast<SelectNode>();
+		bool materialize = !cte_node.groups.group_expressions.empty() || !cte_node.groups.grouping_sets.empty();
+		// or has a distinct modifier
+		for (auto &modifier : cte_node.modifiers) {
+			if (materialize) {
+				break;
+			}
+			if (modifier->type == ResultModifierType::DISTINCT_MODIFIER) {
+				materialize = true;
+			}
+		}
+		for (auto &sel : cte_node.select_list) {
+			if (materialize) {
+				break;
+			}
+			materialize |= ParsedExpressionIsAggregate(*this, *sel);
+		}
+
+		if (materialize) {
+			cte.second->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+			result = true;
+		}
+	}
+	return result;
+}
+
 unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	// first we visit the set of CTEs and add them to the bind context
 	AddCTEMap(node.cte_map);
@@ -229,14 +342,32 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 }
 
 BoundStatement Binder::Bind(QueryNode &node) {
-	auto bound_node = BindNode(node);
-
 	BoundStatement result;
-	result.names = bound_node->names;
-	result.types = bound_node->types;
+	if (context.config.enable_optimizer && OptimizeCTEs(node)) {
+		switch (node.type) {
+		case QueryNodeType::SELECT_NODE:
+			result = BindWithCTE(node.Cast<SelectNode>());
+			break;
+		case QueryNodeType::RECURSIVE_CTE_NODE:
+			result = BindWithCTE(node.Cast<RecursiveCTENode>());
+			break;
+		case QueryNodeType::CTE_NODE:
+			result = BindWithCTE(node.Cast<CTENode>());
+			break;
+		default:
+			D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
+			result = BindWithCTE(node.Cast<SetOperationNode>());
+			break;
+		}
+	} else {
+		auto bound_node = BindNode(node);
 
-	// and plan it
-	result.plan = CreatePlan(*bound_node);
+		result.names = bound_node->names;
+		result.types = bound_node->types;
+
+		// and plan it
+		result.plan = CreatePlan(*bound_node);
+	}
 	return result;
 }
 

@@ -14,9 +14,11 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 class BaseStatistics;
+class Expression;
 class PhysicalOperator;
 class PhysicalTableScan;
 
@@ -47,6 +49,7 @@ public:
 	virtual bool Equals(const TableFilter &other) const {
 		return filter_type != other.filter_type;
 	}
+	virtual unique_ptr<Expression> ToExpression(const Expression &column) const = 0;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
