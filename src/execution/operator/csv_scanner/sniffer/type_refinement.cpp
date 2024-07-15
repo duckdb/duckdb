@@ -8,7 +8,7 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 	// try vector-cast from string to sql_type
 	Vector dummy_result(sql_type);
 	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
-	    sql_type == LogicalTypeId::DATE) {
+	    sql_type.id() == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
 		string error_message;
 		CastParameters parameters(false, &error_message);
@@ -17,12 +17,27 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 		                                  dummy_result, size, parameters, line_error);
 	}
 	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
-	    sql_type == LogicalTypeId::TIMESTAMP) {
+	    sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
 		CastParameters parameters(false, &error_message);
 		return CSVCast::TryCastTimestampVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
 		                                       dummy_result, size, parameters);
+	}
+	if ((sql_type.id() == LogicalTypeId::DOUBLE || sql_type.id() == LogicalTypeId::FLOAT) &&
+	    options.decimal_separator == ",") {
+		string error_message;
+		CastParameters parameters(false, &error_message);
+		idx_t line_error;
+		return CSVCast::TryCastFloatingVectorCommaSeparated(options, parse_chunk_col, dummy_result, size, parameters,
+		                                                    sql_type, line_error);
+	}
+	if (sql_type.id() == LogicalTypeId::DECIMAL && options.decimal_separator == ",") {
+		string error_message;
+		CastParameters parameters(false, &error_message);
+		idx_t line_error;
+		return CSVCast::TryCastDecimalVectorCommaSeparated(options, parse_chunk_col, dummy_result, size, parameters,
+		                                                   sql_type, line_error);
 	}
 	// target type is not varchar: perform a cast
 	string error_message;

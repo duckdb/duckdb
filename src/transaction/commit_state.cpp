@@ -148,8 +148,6 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent().name)) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
 		}
-		// modify catalog on commit
-		duck_catalog.ModifyCatalog();
 
 		// drop any blocks associated with the catalog entry if possible (e.g. in case of a DROP or ALTER)
 		CommitEntryDrop(*catalog_entry, data + sizeof(CatalogEntry *));

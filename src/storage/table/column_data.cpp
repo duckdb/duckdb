@@ -332,17 +332,42 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_c
 	Append(stats->statistics, state, vector, append_count);
 }
 
-bool ColumnData::CheckZonemap(TableFilter &filter) {
+FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+	if (state.segment_checked) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!state.current) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	state.segment_checked = true;
+	FilterPropagateResult prune_result;
+	{
+		lock_guard<mutex> l(stats_lock);
+		prune_result = filter.CheckStatistics(state.current->stats.statistics);
+		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+	}
+	lock_guard<mutex> l(update_lock);
+	if (!updates) {
+		// no updates - return original result
+		return prune_result;
+	}
+	auto update_stats = updates->GetStatistics();
+	// combine the update and original prune result
+	FilterPropagateResult update_result = filter.CheckStatistics(*update_stats);
+	if (prune_result == update_result) {
+		return prune_result;
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+FilterPropagateResult ColumnData::CheckZonemap(TableFilter &filter) {
 	if (!stats) {
 		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
 	}
 	lock_guard<mutex> l(stats_lock);
-	auto propagate_result = filter.CheckStatistics(stats->statistics);
-	if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
-	    propagate_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
-		return false;
-	}
-	return true;
+	return filter.CheckStatistics(stats->statistics);
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetStatistics() {

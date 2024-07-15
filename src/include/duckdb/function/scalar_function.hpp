@@ -53,6 +53,7 @@ class Binder;
 class BoundFunctionExpression;
 class LogicalDependencyList;
 class ScalarFunctionCatalogEntry;
+struct StatementProperties;
 
 struct FunctionStatisticsInput {
 	FunctionStatisticsInput(BoundFunctionExpression &expr_p, optional_ptr<FunctionData> bind_data_p,
@@ -67,12 +68,12 @@ struct FunctionStatisticsInput {
 };
 
 struct FunctionModifiedDatabasesInput {
-	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, unordered_set<string> &modified_databases_p)
-	    : bind_data(bind_data_p), modified_databases(modified_databases_p) {
+	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, StatementProperties &properties)
+	    : bind_data(bind_data_p), properties(properties) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
-	unordered_set<string> &modified_databases;
+	StatementProperties &properties;
 };
 
 struct FunctionBindExpressionInput {
@@ -102,7 +103,7 @@ typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &conte
 //! The type to bind lambda-specific parameter types
 typedef LogicalType (*bind_lambda_function_t)(const idx_t parameter_idx, const LogicalType &list_child_type);
 //! The type to bind lambda-specific parameter types
-typedef void (*get_modified_databases_t)(FunctionModifiedDatabasesInput &input);
+typedef void (*get_modified_databases_t)(ClientContext &context, FunctionModifiedDatabasesInput &input);
 
 typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                      const ScalarFunction &function);

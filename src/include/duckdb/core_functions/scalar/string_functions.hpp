@@ -525,4 +525,22 @@ struct RegexpEscapeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct UrlEncodeFun {
+	static constexpr const char *Name = "url_encode";
+	static constexpr const char *Parameters = "input";
+	static constexpr const char *Description = "Escapes the input string by encoding it so that it can be included in a URL query parameter.";
+	static constexpr const char *Example = "url_encode('this string has/ special+ characters>')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct UrlDecodeFun {
+	static constexpr const char *Name = "url_decode";
+	static constexpr const char *Parameters = "input";
+	static constexpr const char *Description = "Unescapes the URL encoded input.";
+	static constexpr const char *Example = "url_decode('this%20string%20is%2BFencoded')";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

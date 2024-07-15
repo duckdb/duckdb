@@ -26,7 +26,7 @@ statement ok
 INSERT INTO integers FROM range(127)
 
 query II
-SELECT * FROM histogram_values(integers, i, bin_count := 10, technique := 'equi-width')
+SELECT * FROM histogram_values(integers, i, bin_count => 10, technique => 'equi-width')
 ----
 12	13
 25	13

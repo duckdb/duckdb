@@ -52,6 +52,7 @@ jobs:
         arch: [ armeabi-v7a, arm64-v8a ]
 
     env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja

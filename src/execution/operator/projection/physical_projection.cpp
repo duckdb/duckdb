@@ -70,11 +70,13 @@ PhysicalProjection::CreateJoinProjection(vector<LogicalType> proj_types, const v
 }
 
 string PhysicalProjection::ParamsToString() const {
-	string extra_info;
+	string result;
 	for (auto &expr : select_list) {
-		extra_info += expr->GetName() + "\n";
+		result += expr->GetName() + "\n";
 	}
-	return extra_info;
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
+	return result;
 }
 
 } // namespace duckdb

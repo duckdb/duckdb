@@ -43,7 +43,6 @@ add_library_unity(
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
-  http_state.cpp
   pipe_file_system.cpp
   local_file_system.cpp
   multi_file_list.cpp
@@ -56,6 +55,7 @@ add_library_unity(
   string_util.cpp
   enum_util.cpp
   symbols.cpp
+  render_tree.cpp
   tree_renderer.cpp
   types.cpp
   virtual_file_system.cpp

@@ -67,7 +67,7 @@ public:
 	optional_ptr<ColumnData> parent;
 
 public:
-	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
+	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
 
 	BlockManager &GetBlockManager() {
 		return block_manager;
@@ -154,7 +154,7 @@ public:
 	virtual void GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path, vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
-	bool CheckZonemap(TableFilter &filter);
+	FilterPropagateResult CheckZonemap(TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           idx_t start_row, const LogicalType &type,

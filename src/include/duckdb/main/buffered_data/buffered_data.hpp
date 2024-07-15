@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
@@ -31,14 +32,16 @@ public:
 	virtual ~BufferedData();
 
 public:
-	virtual bool ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
+	StreamExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock);
+	virtual StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
+	virtual void UnblockSinks() = 0;
 	shared_ptr<ClientContext> GetContext() {
 		return context.lock();
 	}
 	bool Closed() const {
 		if (context.expired()) {
-			return false;
+			return true;
 		}
 		auto c = context.lock();
 		return c == nullptr;

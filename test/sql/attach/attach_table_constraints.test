@@ -1,0 +1,19 @@
+# name: test/sql/attach/attach_table_constraints.test
+# description: Test information_schema.table_constraints with attach
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/constraint_test.db' as test
+
+statement ok
+CREATE TABLE test.tbl(i INTEGER PRIMARY KEY);
+
+query III
+select constraint_catalog, table_catalog, table_name from information_schema.table_constraints limit 1
+----
+test	test	tbl
