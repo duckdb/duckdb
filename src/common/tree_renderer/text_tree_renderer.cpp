@@ -6,6 +6,7 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 #include <sstream>
 
@@ -85,7 +86,7 @@ string AdjustTextForRendering(string source, idx_t max_render_width) {
 		idx_t char_render_width = Utf8Proc::RenderWidth(source.c_str(), source.size(), cpos);
 		cpos = Utf8Proc::NextGraphemeCluster(source.c_str(), source.size(), cpos);
 		render_width += char_render_width;
-		render_widths.emplace_back(cpos, render_width);
+		render_widths.push_back(StringSegment(cpos, render_width));
 		if (render_width > max_render_width) {
 			break;
 		}
@@ -95,7 +96,7 @@ string AdjustTextForRendering(string source, idx_t max_render_width) {
 		for (idx_t pos = render_widths.size(); pos > 0; pos--) {
 			auto &source_range = render_widths[pos - 1];
 			if (source_range.width < max_render_width - 4) {
-				return source.substr(0, source_range.start) + "..." +
+				return source.substr(0, source_range.start) + string("...") +
 				       string(max_render_width - source_range.width - 3, ' ');
 			}
 		}
