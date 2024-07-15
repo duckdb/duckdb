@@ -31,6 +31,7 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 	if (initialized) {
 		return *writer;
 	}
+	lock_guard<mutex> lock(wal_lock);
 	if (!writer) {
 		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
 		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
