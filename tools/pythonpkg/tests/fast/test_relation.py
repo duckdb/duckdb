@@ -531,3 +531,18 @@ class TestRelation(object):
             """
             ).to_view('vw')
             res = duckdb_cursor.sql("select * from vw").fetchone()
+
+    def test_materialized_relation_view2(self, duckdb_cursor):
+        # This creates a MaterializedRelation
+        rel = duckdb_cursor.sql("select * from (values ($1, $2))", params=[(2,), ("Alice",)])
+
+        # This creates a ProjectionRelation, wrapping the materialized rel
+        rel = rel.project("col0, col1")
+
+        # Create a VIEW that contains a ColumnDataRef
+        rel.create_view("test", True)
+        # Override the existing relation, the original MaterializedRelation has now gone out of scope
+        # The VIEW still works because the CDC that is being referenced is kept alive through the MaterializedDependency item
+        rel = duckdb_cursor.sql("select * from test")
+        res = rel.fetchall()
+        assert res == [([2], ['Alice'])]
