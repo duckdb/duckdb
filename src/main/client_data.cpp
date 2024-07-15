@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"

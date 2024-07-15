@@ -2,6 +2,8 @@ import duckdb
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
+pa = pytest.importorskip("pyarrow")
+
 
 def is_dunder_method(method_name: str) -> bool:
     if len(method_name) < 4:
@@ -294,6 +296,25 @@ class TestDuckDBConnection(object):
 
         con.sql("create table tbl as select * from relation")
         assert con.table('tbl').fetchall() == [([5, 4, 3],)]
+
+    def test_unregister_problematic_behavior(self, duckdb_cursor):
+        # We have a VIEW called 'vw' in the Catalog
+        duckdb_cursor.execute("create temporary view vw as from range(100)")
+        assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
+
+        # Create a registered object called 'vw'
+        arrow_result = duckdb_cursor.execute("select 42").arrow()
+        with pytest.raises(duckdb.CatalogException, match='View with name "vw" already exists'):
+            duckdb_cursor.register('vw', arrow_result)
+
+        # Temporary views take precedence over registered objects
+        assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
+
+        # Decide that we're done with this registered object..
+        duckdb_cursor.unregister('vw')
+
+        # This should not have affected the existing view:
+        assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_relation_out_of_scope(self, pandas):

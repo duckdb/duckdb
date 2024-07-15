@@ -27,7 +27,8 @@ add_library_unity(
   to_base.cpp
   translate.cpp
   trim.cpp
-  unicode.cpp)
+  unicode.cpp
+  url_encode.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>
     PARENT_SCOPE)

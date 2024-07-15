@@ -154,6 +154,8 @@ jobs:
     needs: linux-memory-leaks
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
     - uses: actions/checkout@v3
       with:
@@ -181,6 +183,7 @@ jobs:
     env:
       CC: /usr/bin/gcc
       CXX: /usr/bin/g++
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - uses: actions/checkout@v3
@@ -252,6 +255,7 @@ jobs:
         GEN: ninja
         DUCKDEBUG: 1
         ASAN_OPTIONS: detect_leaks=0
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
      steps:
      - uses: actions/checkout@v3

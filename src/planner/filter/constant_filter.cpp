@@ -1,5 +1,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -33,6 +35,12 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 
 string ConstantFilter::ToString(const string &column_name) {
 	return column_name + ExpressionTypeToOperator(comparison_type) + constant.ToSQLString();
+}
+
+unique_ptr<Expression> ConstantFilter::ToExpression(const Expression &column) const {
+	auto bound_constant = make_uniq<BoundConstantExpression>(constant);
+	auto result = make_uniq<BoundComparisonExpression>(comparison_type, column.Copy(), std::move(bound_constant));
+	return std::move(result);
 }
 
 bool ConstantFilter::Equals(const TableFilter &other_p) const {
