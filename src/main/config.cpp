@@ -1,5 +1,7 @@
 #include "duckdb/main/config.hpp"
 
+#include "duckdb/common/cgroups.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"

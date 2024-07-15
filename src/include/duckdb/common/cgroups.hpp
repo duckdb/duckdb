@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
@@ -24,7 +25,6 @@ private:
 	static string ReadCGroupPath(FileSystem &fs, const char *cgroup_file);
 	static string ReadMemoryCGroupPath(FileSystem &fs, const char *cgroup_file);
 	static optional_idx ReadCGroupValue(FileSystem &fs, const char *file_path);
-	static idx_t CGroupBandwidthQuota(FileSystem &fs, idx_t physical_cores);
 };
 
 } // namespace duckdb
