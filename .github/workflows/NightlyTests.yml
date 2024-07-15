@@ -533,7 +533,6 @@ jobs:
         shell: bash
         run: build/relassert/test/unittest "*"
 
-
   vector-verification:
     name: Vector Verification Tests (${{ matrix.vector_type }})
     runs-on: ubuntu-20.04
