@@ -18,8 +18,8 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DELIM_GET;
 
 public:
-	LogicalDelimGet(idx_t table_index, vector<LogicalType> types)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELIM_GET), table_index(table_index) {
+	LogicalDelimGet(idx_t table_index, vector<LogicalType> types, optional_idx delim_idx)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELIM_GET), table_index(table_index), delim_idx(delim_idx) {
 		D_ASSERT(types.size() > 0);
 		chunk_types = std::move(types);
 	}

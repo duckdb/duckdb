@@ -274,7 +274,7 @@
         "default": "optional_idx()"
       }
     ],
-    "constructor": ["table_index", "chunk_types"]
+    "constructor": ["table_index", "chunk_types", "delim_idx"]
   },
   {
     "class": "LogicalExpressionGet",

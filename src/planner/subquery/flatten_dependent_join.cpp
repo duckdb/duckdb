@@ -17,9 +17,9 @@
 namespace duckdb {
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated,
-                                             bool perform_delim, bool any_join)
+                                             idx_t delim_root_idx, bool perform_delim, bool any_join)
     : binder(binder), delim_offset(DConstants::INVALID_INDEX), correlated_columns(correlated),
-      perform_delim(perform_delim), any_join(any_join) {
+      perform_delim(perform_delim), any_join(any_join), delim_root_idx(delim_root_idx) {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		correlated_map[col.binding] = i;
@@ -145,8 +145,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto left_columns = plan->GetColumnBindings().size();
 		delim_offset = left_columns;
 		data_offset = 0;
-		delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-		delim_scan->delim_idx = optional_idx(delim_root_idx);
+		delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types, optional_idx(delim_root_idx));
 		if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			// we want to keep the logical projection for positionality.
 			exit_projection = true;
@@ -269,8 +268,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				}
 			}
 			auto left_index = binder.GenerateTableIndex();
-			delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
-			delim_scan->delim_idx = optional_idx(delim_root_idx);
+			delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types, optional_idx(delim_root_idx));
 			join->children.push_back(std::move(delim_scan));
 			join->children.push_back(std::move(plan));
 			for (idx_t i = 0; i < new_group_count; i++) {
