@@ -198,9 +198,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 		// Equality join with small number of keys : possible perfect join optimization
 		PerfectHashJoinStats perfect_join_stats;
 		CheckForPerfectJoinOpt(op, perfect_join_stats);
-		plan = make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
-		                                   op.join_type, op.left_projection_map, op.right_projection_map,
-		                                   std::move(op.mark_types), op.estimated_cardinality, perfect_join_stats);
+		plan =
+		    make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(op.conditions), op.join_type,
+		                                op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
+		                                op.estimated_cardinality, perfect_join_stats, std::move(op.filter_pushdown));
 
 	} else {
 		if (left->estimated_cardinality <= client_config.nested_loop_join_threshold ||

@@ -1,0 +1,19 @@
+# name: test/sql/table_function/information_schema_issue12867.test
+# description: Issue #12867: INFORMATION_SCHEMA.KEY_COLUMN_USAGE only lists first column of composite keys
+# group: [table_function]
+
+require skip_reload
+
+statement ok
+CREATE TABLE a (a1 int, a2 int, PRIMARY KEY (a1, a2));
+
+statement ok
+CREATE TABLE b (a1 int, a2 int, FOREIGN KEY (a1, a2) REFERENCES a);
+
+query III
+SELECT table_name, column_name, ordinal_position FROM information_schema.key_column_usage ORDER BY table_name, ordinal_position;
+----
+a	a1	1
+a	a2	2
+b	a1	1
+b	a2	2

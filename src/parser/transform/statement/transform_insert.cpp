@@ -42,7 +42,6 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGIn
 	}
 	if (stmt.selectStmt) {
 		result->select_statement = TransformSelect(stmt.selectStmt, false);
-		result->select_statement->node = TransformMaterializedCTE(std::move(result->select_statement->node));
 	} else {
 		result->default_values = true;
 	}

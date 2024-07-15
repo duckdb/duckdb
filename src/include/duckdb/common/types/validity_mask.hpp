@@ -351,4 +351,88 @@ public:
 	void Read(ReadStream &reader, idx_t count);
 };
 
+//===--------------------------------------------------------------------===//
+// ValidityArray
+//===--------------------------------------------------------------------===//
+struct ValidityArray {
+	inline ValidityArray() {
+	}
+
+	inline bool AllValid() const {
+		return !validity_mask;
+	}
+
+	inline void Initialize(idx_t count, bool initial = true) {
+		target_count = count;
+		validity_data = make_unsafe_uniq_array<bool>(count);
+		validity_mask = validity_data.get();
+		memset(validity_mask, initial, sizeof(bool) * count);
+	}
+
+	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a
+	//! not-null check
+	inline bool RowIsValidUnsafe(idx_t row_idx) const {
+		D_ASSERT(validity_mask);
+		return validity_mask[row_idx];
+	}
+
+	//! Returns true if a row is valid (i.e. not null), false otherwise
+	inline bool RowIsValid(idx_t row_idx) const {
+		if (!validity_mask) {
+			return true;
+		}
+		return RowIsValidUnsafe(row_idx);
+	}
+
+	//! Same as SetValid, but skips a null check on validity_mask
+	inline void SetValidUnsafe(idx_t row_idx) {
+		D_ASSERT(validity_mask);
+		validity_mask[row_idx] = true;
+	}
+
+	//! Marks the entry at the specified row index as valid (i.e. not-null)
+	inline void SetValid(idx_t row_idx) {
+		if (!validity_mask) {
+			// if AllValid() we don't need to do anything
+			// the row is already valid
+			return;
+		}
+
+		SetValidUnsafe(row_idx);
+	}
+
+	inline void Pack(ValidityMask &mask, const idx_t count) const {
+		if (AllValid()) {
+			mask.Reset();
+			return;
+		}
+		mask.Initialize(count);
+
+		const auto entire_entries = count / ValidityMask::BITS_PER_VALUE;
+		const auto ragged = count % ValidityMask::BITS_PER_VALUE;
+		auto bits = mask.GetData();
+		idx_t row_idx = 0;
+		for (idx_t i = 0; i < entire_entries; ++i) {
+			validity_t entry = 0;
+			for (idx_t j = 0; j < ValidityMask::BITS_PER_VALUE; ++j) {
+				if (RowIsValidUnsafe(row_idx++)) {
+					entry |= validity_t(1) << j;
+				}
+			}
+			*bits++ = entry;
+		}
+		validity_t entry = 0;
+		for (idx_t j = 0; j < ragged; ++j) {
+			if (RowIsValidUnsafe(row_idx++)) {
+				entry |= validity_t(1) << j;
+			}
+		}
+		*bits++ = entry;
+	}
+
+	bool *validity_mask = nullptr;
+	unsafe_unique_array<bool> validity_data;
+	idx_t target_count = 0;
+};
+
 } // namespace duckdb

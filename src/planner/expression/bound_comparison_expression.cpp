@@ -27,7 +27,7 @@ bool BoundComparisonExpression::Equals(const BaseExpression &other_p) const {
 	return true;
 }
 
-unique_ptr<Expression> BoundComparisonExpression::Copy() {
+unique_ptr<Expression> BoundComparisonExpression::Copy() const {
 	auto copy = make_uniq<BoundComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return std::move(copy);

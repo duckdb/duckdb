@@ -94,7 +94,7 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 	}
 
 	auto select = make_uniq<SelectStatement>();
-	select->node = std::move(subselect);
+	select->node = TransformMaterializedCTE(std::move(subselect));
 	info->query = std::move(select);
 	info->type = LogicalType::INVALID;
 

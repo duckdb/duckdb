@@ -149,13 +149,6 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 	// set up the dependencies within this MetaPipeline
 	for (auto &pipeline : pipelines) {
-		auto source = pipeline->GetSource();
-		if (source->type == PhysicalOperatorType::TABLE_SCAN) {
-			// we have to reset the source here (in the main thread), because some of our clients (looking at you, R)
-			// do not like it when threads other than the main thread call into R, for e.g., arrow scans
-			pipeline->ResetSource(true);
-		}
-
 		auto dependencies = meta_pipeline->GetDependencies(*pipeline);
 		if (!dependencies) {
 			continue;
@@ -464,7 +457,7 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 }
 
 bool Executor::ResultCollectorIsBlocked() {
-	if (!HasResultCollector()) {
+	if (!HasStreamingResultCollector()) {
 		return false;
 	}
 	if (completed_pipelines + 1 != total_pipelines) {
@@ -675,6 +668,14 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 
 bool Executor::HasResultCollector() {
 	return physical_plan->type == PhysicalOperatorType::RESULT_COLLECTOR;
+}
+
+bool Executor::HasStreamingResultCollector() {
+	if (!HasResultCollector()) {
+		return false;
+	}
+	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
+	return result_collector.IsStreaming();
 }
 
 unique_ptr<QueryResult> Executor::GetResult() {

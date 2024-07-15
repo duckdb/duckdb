@@ -5,6 +5,8 @@ add_library_unity(
   arrow_converter.cpp
   arrow_wrapper.cpp
   physical_arrow_collector.cpp
+  physical_arrow_batch_collector.cpp
+  arrow_merge_event.cpp
   arrow_query_result.cpp)
 add_subdirectory(appender)
 set(ALL_OBJECT_FILES
