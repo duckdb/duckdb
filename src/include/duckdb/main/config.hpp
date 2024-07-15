@@ -11,6 +11,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -47,6 +48,7 @@ class StorageExtension;
 class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
+class EncryptionUtil;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -301,6 +303,8 @@ public:
 	shared_ptr<BufferManager> buffer_manager;
 	//! Set of callbacks that can be installed by extensions
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
+	//! Encryption Util for OpenSSL
+	shared_ptr<EncryptionUtil> encryption_util;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
