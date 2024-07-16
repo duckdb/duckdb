@@ -42,6 +42,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 }
 
 bool PartitionedTupleData::UseFixedSizeMap() const {
+	return false;
 	return MaxPartitionIndex() < PartitionedTupleDataAppendState::MAP_THRESHOLD;
 }
 
