@@ -88,7 +88,6 @@ class GroupedData:
     def __repr__(self) -> str:
         return str(self._df)
 
-    @df_varargs_api
     def count(self) -> DataFrame:
         """Counts the number of records for each group.
 
@@ -116,6 +115,7 @@ class GroupedData:
         |  Bob|    2|
         +-----+-----+
         """
+        return _api_internal(self, "count").withColumnRenamed('count_star()', 'count')
 
     @df_varargs_api
     def mean(self, *cols: str) -> DataFrame:
@@ -130,7 +130,7 @@ class GroupedData:
         """
 
     def avg(self, *cols: str) -> DataFrame:
-        doc = """Computes average values for each numeric columns for each group.
+        """Computes average values for each numeric columns for each group.
 
         :func:`mean` is an alias for :func:`avg`.
 
@@ -173,17 +173,12 @@ class GroupedData:
         |     5.0|      110.0|
         +--------+-----------+
         """
-        columns = list(*cols)
+        columns = list(cols)
         if len(columns) == 0:
             schema = self._df.schema
             # Take only the numeric types of the relation
             columns: List[str] = [x.name for x in schema.fields if isinstance(x.dataType, NumericType)]
-        def _api(self: "GroupedData", *cols: str) -> DataFrame:
-            return _api_internal(self, "avg", *cols)
-
-        _api.__name__ = "avg"
-        _api.__doc__ = doc
-        return _api(self, *columns)
+        return _api_internal(self, "avg", *columns)
 
     @df_varargs_api
     def max(self, *cols: str) -> DataFrame:
