@@ -95,6 +95,10 @@ const DatabaseInstance &DatabaseInstance::GetDatabase(const ClientContext &conte
 	return *context.db;
 }
 
+void DatabaseInstance::SetDatabaseCacheEntry(shared_ptr<DatabaseCacheEntry> entry) {
+	db_cache_entry = std::move(entry);
+}
+
 DatabaseManager &DatabaseInstance::GetDatabaseManager() {
 	if (!db_manager) {
 		throw InternalException("Missing DB manager");
