@@ -26,7 +26,8 @@ struct DBInstanceCacheEntry {
 
 class DBInstanceCache {
 public:
-	DBInstanceCache() {}
+	DBInstanceCache() {
+	}
 
 	//! Either returns an existing entry, or creates and caches a new DB Instance
 	unique_ptr<DBInstanceCacheEntry> GetOrCreate(const string &database, DBConfig &config_dict, bool cache_instance);

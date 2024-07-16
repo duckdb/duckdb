@@ -3,15 +3,16 @@
 
 namespace duckdb {
 
-DBInstanceCacheEntry::DBInstanceCacheEntry(DBInstanceCache &cache, shared_ptr<DuckDB> database_p) :
-	cache(cache), database(std::move(database_p)) {}
+DBInstanceCacheEntry::DBInstanceCacheEntry(DBInstanceCache &cache, shared_ptr<DuckDB> database_p)
+    : cache(cache), database(std::move(database_p)) {
+}
 
 DBInstanceCacheEntry::~DBInstanceCacheEntry() {
 	cache.DropInstance(std::move(database));
 }
 
-
-string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {auto database = FileSystem::ExpandPath(database_p, nullptr);
+string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
+	auto database = FileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
 		return IN_MEMORY_PATH;
 	}
@@ -97,7 +98,8 @@ shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, 
 	return CreateInstanceInternal(database, config_dict, cache_instance);
 }
 
-unique_ptr<DBInstanceCacheEntry> DBInstanceCache::GetOrCreate(const string &database, DBConfig &config_dict, bool cache_instance) {
+unique_ptr<DBInstanceCacheEntry> DBInstanceCache::GetOrCreate(const string &database, DBConfig &config_dict,
+                                                              bool cache_instance) {
 	auto db = GetOrCreateInstance(database, config_dict, cache_instance);
 	return make_uniq<DBInstanceCacheEntry>(*this, std::move(db));
 }

@@ -13,7 +13,7 @@ static void background_thread_connect(DBInstanceCache *instance_cache, std::stri
 		DBConfig config;
 		auto connection = instance_cache->GetOrCreate(*path, config, true);
 		connection.reset();
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		FAIL(ex.what());
 	}
 }
@@ -21,12 +21,11 @@ static void background_thread_connect(DBInstanceCache *instance_cache, std::stri
 TEST_CASE("Test parallel connection and destruction of connections with database instance cache", "[api][.]") {
 	DBInstanceCache instance_cache;
 
-	for(idx_t i = 0; i < 100; i++) {
+	for (idx_t i = 0; i < 100; i++) {
 		auto path = TestCreatePath("instance_cache_parallel.db");
 
 		DBConfig config;
 		auto shared_db = instance_cache.GetOrCreate(path, config, true);
-
 
 		thread background_thread(background_thread_connect, &instance_cache, &path);
 		shared_db.reset();
