@@ -280,7 +280,7 @@ public:
 	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
-	static bool CanDirectlyCast(const LogicalType &type);
+	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
 
 	const idx_t scanner_idx;
 

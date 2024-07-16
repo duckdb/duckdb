@@ -101,6 +101,10 @@ SinkCombineResultType PhysicalLeftDelimJoin::Combine(ExecutionContext &context, 
 	return SinkCombineResultType::FINISHED;
 }
 
+void PhysicalLeftDelimJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
+	distinct->PrepareFinalize(context, *distinct->sink_state);
+}
+
 SinkFinalizeType PhysicalLeftDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
                                                  OperatorSinkFinalizeInput &input) const {
 	// finalize the distinct HT

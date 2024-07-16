@@ -1,0 +1,7 @@
+# name: benchmark/large/ingestion/tpch/parquet/ingest_lineitem.benchmark
+# description: benchmark ingestion of lineitem
+# group: [parquet]
+
+template benchmark/large/ingestion/tpch/tpch_ingestion_persistent.benchmark.in
+table_name=lineitem
+format=parquet

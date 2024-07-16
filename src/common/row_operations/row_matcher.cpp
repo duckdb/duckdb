@@ -8,10 +8,10 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-template <bool NO_MATCH_SEL, class T, class OP>
-static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
-                            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
-                            const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
+template <bool NO_MATCH_SEL, class T, class OP, bool LHS_ALL_VALID>
+static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
+                                const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
+                                SelectionVector *no_match_sel, idx_t &no_match_count) {
 	using COMPARISON_OP = ComparisonOperationWrapper<OP>;
 
 	// LHS
@@ -31,7 +31,7 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 		const auto idx = sel.get_index(i);
 
 		const auto lhs_idx = lhs_sel.get_index(idx);
-		const auto lhs_null = lhs_validity.AllValid() ? false : !lhs_validity.RowIsValid(lhs_idx);
+		const auto lhs_null = LHS_ALL_VALID ? false : !lhs_validity.RowIsValid(lhs_idx);
 
 		const auto &rhs_location = rhs_locations[idx];
 		const ValidityBytes rhs_mask(rhs_location);
@@ -45,6 +45,19 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 		}
 	}
 	return match_count;
+}
+
+template <bool NO_MATCH_SEL, class T, class OP>
+static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
+                            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
+                            const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
+	if (lhs_format.unified.validity.AllValid()) {
+		return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, true>(lhs_format, sel, count, rhs_layout, rhs_row_locations,
+		                                                     col_idx, no_match_sel, no_match_count);
+	} else {
+		return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, false>(lhs_format, sel, count, rhs_layout, rhs_row_locations,
+		                                                      col_idx, no_match_sel, no_match_count);
+	}
 }
 
 template <bool NO_MATCH_SEL, class OP>

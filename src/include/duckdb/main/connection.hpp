@@ -149,7 +149,7 @@ public:
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(const string &query, const string &alias = "queryrelation",
 	                                                  const string &error = "Expected a single SELECT statement");
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(unique_ptr<SelectStatement> select_stmt,
-	                                                  const string &alias = "queryrelation");
+	                                                  const string &alias = "queryrelation", const string &query = "");
 
 	//! Returns a substrait BLOB from a valid query
 	DUCKDB_API string GetSubstrait(const string &query);

@@ -79,6 +79,11 @@ SinkCombineResultType PhysicalRightDelimJoin::Combine(ExecutionContext &context,
 	return SinkCombineResultType::FINISHED;
 }
 
+void PhysicalRightDelimJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
+	join->PrepareFinalize(context, *join->sink_state);
+	distinct->PrepareFinalize(context, *distinct->sink_state);
+}
+
 SinkFinalizeType PhysicalRightDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
                                                   OperatorSinkFinalizeInput &input) const {
 	D_ASSERT(join);

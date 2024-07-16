@@ -4,8 +4,9 @@
 
 namespace duckdb {
 
-MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, optional_ptr<PhysicalOperator> sink_p)
-    : executor(executor_p), state(state_p), sink(sink_p), recursive_cte(false), next_batch_index(0) {
+MetaPipeline::MetaPipeline(Executor &executor_p, PipelineBuildState &state_p, optional_ptr<PhysicalOperator> sink_p,
+                           MetaPipelineType type_p)
+    : executor(executor_p), state(state_p), sink(sink_p), type(type_p), recursive_cte(false), next_batch_index(0) {
 	CreatePipeline();
 }
 
@@ -38,20 +39,21 @@ void MetaPipeline::GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bo
 	if (!skip) {
 		result.push_back(shared_from_this());
 	}
-	if (recursive) {
-		for (auto &child : children) {
-			child->GetMetaPipelines(result, true, false);
+	for (auto &child : children) {
+		result.push_back(child);
+		if (recursive) {
+			child->GetMetaPipelines(result, true, true);
 		}
 	}
 }
 
 optional_ptr<const vector<reference<Pipeline>>> MetaPipeline::GetDependencies(Pipeline &dependant) const {
-	auto it = dependencies.find(dependant);
-	if (it == dependencies.end()) {
-		return nullptr;
-	} else {
-		return &it->second;
-	}
+	const auto it = dependencies.find(dependant);
+	return it == dependencies.end() ? nullptr : &it->second;
+}
+
+MetaPipelineType MetaPipeline::Type() const {
+	return type;
 }
 
 bool MetaPipeline::HasRecursiveCTE() const {
@@ -72,7 +74,7 @@ void MetaPipeline::Build(PhysicalOperator &op) {
 	op.BuildPipelines(*pipelines.back(), *this);
 }
 
-void MetaPipeline::Ready() {
+void MetaPipeline::Ready() const {
 	for (auto &pipeline : pipelines) {
 		pipeline->Ready();
 	}
@@ -81,8 +83,8 @@ void MetaPipeline::Ready() {
 	}
 }
 
-MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op) {
-	children.push_back(make_shared_ptr<MetaPipeline>(executor, state, &op));
+MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type) {
+	children.push_back(make_shared_ptr<MetaPipeline>(executor, state, &op, type));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
 	current.AddDependency(child_meta_pipeline->GetBasePipeline());
@@ -97,7 +99,7 @@ Pipeline &MetaPipeline::CreatePipeline() {
 	return *pipelines.back();
 }
 
-void MetaPipeline::AddDependenciesFrom(Pipeline &dependant, Pipeline &start, bool including) {
+void MetaPipeline::AddDependenciesFrom(Pipeline &dependant, const Pipeline &start, const bool including) {
 	// find 'start'
 	auto it = pipelines.begin();
 	for (; !RefersToSameObject(**it, start); it++) {

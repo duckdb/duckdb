@@ -26,12 +26,13 @@
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t start, idx_t count)
-    : SegmentBase<RowGroup>(start, count), collection(collection_p), allocation_size(0) {
+    : SegmentBase<RowGroup>(start, count), collection(collection_p), version_info(nullptr), allocation_size(0) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
-    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection_p), allocation_size(0) {
+    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection_p), version_info(nullptr),
+      allocation_size(0) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -55,7 +56,7 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_star
 		column->SetStart(new_start);
 	}
 	if (!HasUnloadedDeletes()) {
-		auto &vinfo = GetVersionInfo();
+		auto vinfo = GetVersionInfo();
 		if (vinfo) {
 			vinfo->SetStart(new_start);
 		}
@@ -263,7 +264,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = GetOrCreateVersionInfoPtr();
+	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
 		if (i == changed_idx) {
@@ -303,7 +304,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = GetOrCreateVersionInfoPtr();
+	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	row_group->columns = GetColumns();
 	// now add the new column
 	row_group->columns.push_back(std::move(added_column));
@@ -318,7 +319,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 	D_ASSERT(removed_column < columns.size());
 
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = GetOrCreateVersionInfoPtr();
+	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	// copy over all columns except for the removed one
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
@@ -652,40 +653,60 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	}
 }
 
-shared_ptr<RowVersionManager> &RowGroup::GetVersionInfo() {
+optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
 	if (!HasUnloadedDeletes()) {
 		// deletes are loaded - return the version info
 		return version_info;
 	}
 	lock_guard<mutex> lock(row_group_lock);
 	// double-check after obtaining the lock whether or not deletes are still not loaded to avoid double load
-	if (HasUnloadedDeletes()) {
-		// deletes are not loaded - reload
-		auto root_delete = deletes_pointers[0];
-		version_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(), start);
-		deletes_is_loaded = true;
+	if (!HasUnloadedDeletes()) {
+		return version_info;
 	}
+	// deletes are not loaded - reload
+	auto root_delete = deletes_pointers[0];
+	auto loaded_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(), start);
+	SetVersionInfo(std::move(loaded_info));
+	deletes_is_loaded = true;
 	return version_info;
 }
 
-shared_ptr<RowVersionManager> &RowGroup::GetOrCreateVersionInfoPtr() {
-	auto vinfo = GetVersionInfo();
-	if (!vinfo) {
-		lock_guard<mutex> lock(row_group_lock);
-		if (!version_info) {
-			version_info = make_shared_ptr<RowVersionManager>(start);
-		}
+void RowGroup::SetVersionInfo(shared_ptr<RowVersionManager> version) {
+	owned_version_info = std::move(version);
+	version_info = owned_version_info.get();
+}
+
+shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
+	// version info does not exist - need to create it
+	lock_guard<mutex> lock(row_group_lock);
+	if (!owned_version_info) {
+		auto new_info = make_shared_ptr<RowVersionManager>(start);
+		SetVersionInfo(std::move(new_info));
 	}
-	return version_info;
+	return owned_version_info;
+}
+
+shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoPtr() {
+	auto vinfo = GetVersionInfo();
+	if (vinfo) {
+		// version info exists - return it directly
+		return owned_version_info;
+	}
+	return GetOrCreateVersionInfoInternal();
 }
 
 RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
-	return *GetOrCreateVersionInfoPtr();
+	auto vinfo = GetVersionInfo();
+	if (vinfo) {
+		// version info exists - return it directly
+		return *vinfo;
+	}
+	return *GetOrCreateVersionInfoInternal();
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
                              idx_t max_count) {
-	auto &vinfo = GetVersionInfo();
+	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return max_count;
 	}
@@ -694,7 +715,7 @@ idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, Sele
 
 idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
                                       SelectionVector &sel_vector, idx_t max_count) {
-	auto &vinfo = GetVersionInfo();
+	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return max_count;
 	}
@@ -703,7 +724,7 @@ idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t tr
 
 bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
 	D_ASSERT(row < this->count);
-	auto &vinfo = GetVersionInfo();
+	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return true;
 	}
@@ -866,7 +887,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 }
 
 idx_t RowGroup::GetCommittedRowCount() {
-	auto &vinfo = GetVersionInfo();
+	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return count;
 	}
@@ -941,11 +962,12 @@ vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
 		manager.ClearModifiedBlocks(deletes_pointers);
 		return deletes_pointers;
 	}
-	if (!version_info) {
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
 		// no version information: write nothing
 		return vector<MetaBlockPointer>();
 	}
-	return version_info->Checkpoint(manager);
+	return vinfo->Checkpoint(manager);
 }
 
 void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {

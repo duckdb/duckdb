@@ -226,8 +226,8 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
-			get.column_ids.push_back(check_column_id.index);
+			    column.Type(), ColumnBinding(get.table_index, get.GetColumnIds().size())));
+			get.AddColumnId(check_column_id.index);
 			update.columns.push_back(check_column_id);
 		}
 	}
