@@ -7,6 +7,7 @@
 #include "mbedtls/entropy.h"
 #include "mbedtls/gcm.h"
 #include "mbedtls/pk.h"
+#include "mbedtls/sha1.h"
 #include "mbedtls/sha256.h"
 
 #ifdef MBEDTLS_NO_ENTROPY_SOURCE
@@ -154,6 +155,55 @@ void MbedTlsWrapper::SHA256State::FinishHex(char *out) {
 	}
 
 	MbedTlsWrapper::ToBase16(const_cast<char *>(hash.c_str()), out, MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
+}
+
+MbedTlsWrapper::SHA1State::SHA1State() : sha_context(new mbedtls_sha1_context()) {
+	auto context = reinterpret_cast<mbedtls_sha1_context *>(sha_context);
+
+	mbedtls_sha1_init(context);
+
+	if (mbedtls_sha1_starts(context)) {
+		throw std::runtime_error("SHA1 Error");
+	}
+}
+
+MbedTlsWrapper::SHA1State::~SHA1State() {
+	auto context = reinterpret_cast<mbedtls_sha1_context *>(sha_context);
+	mbedtls_sha1_free(context);
+	delete context;
+}
+
+void MbedTlsWrapper::SHA1State::AddString(const std::string &str) {
+	auto context = reinterpret_cast<mbedtls_sha1_context *>(sha_context);
+	if (mbedtls_sha1_update(context, (unsigned char *)str.data(), str.size())) {
+		throw std::runtime_error("SHA1 Error");
+	}
+}
+
+std::string MbedTlsWrapper::SHA1State::Finalize() {
+	auto context = reinterpret_cast<mbedtls_sha1_context *>(sha_context);
+
+	string hash;
+	hash.resize(MbedTlsWrapper::SHA1_HASH_LENGTH_BYTES);
+
+	if (mbedtls_sha1_finish(context, (unsigned char *)hash.data())) {
+		throw std::runtime_error("SHA1 Error");
+	}
+
+	return hash;
+}
+
+void MbedTlsWrapper::SHA1State::FinishHex(char *out) {
+	auto context = reinterpret_cast<mbedtls_sha1_context *>(sha_context);
+
+	string hash;
+	hash.resize(MbedTlsWrapper::SHA1_HASH_LENGTH_BYTES);
+
+	if (mbedtls_sha1_finish(context, (unsigned char *)hash.data())) {
+		throw std::runtime_error("SHA1 Error");
+	}
+
+	MbedTlsWrapper::ToBase16(const_cast<char *>(hash.c_str()), out, MbedTlsWrapper::SHA1_HASH_LENGTH_BYTES);
 }
 
 MbedTlsWrapper::AESGCMStateMBEDTLS::AESGCMStateMBEDTLS() : gcm_context(new mbedtls_gcm_context()) {
