@@ -63,3 +63,10 @@ class BytesIOWrapper:
             to_return = combined_bytestring[:n]
             self.overflow = combined_bytestring[n:]
             return to_return
+
+    def close(self):
+        # close is a no-op, our FileHandle expects to be able to re-open a file after closing
+        # That is not possible here, as close() will close the file inside the fs store
+        # So even a `open()` call will return a file with `closed` == true
+        self.buffer.seek(0)
+        pass
