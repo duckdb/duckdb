@@ -1,11 +1,12 @@
 #include "duckdb/common/types/selection_vector.hpp"
+
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
 SelectionData::SelectionData(idx_t count) {
-	owned_data = make_unsafe_uniq_array<sel_t>(count);
+	owned_data = make_unsafe_uniq_array_uninitialized<sel_t>(count);
 #ifdef DEBUG
 	for (idx_t i = 0; i < count; i++) {
 		owned_data[i] = std::numeric_limits<sel_t>::max();

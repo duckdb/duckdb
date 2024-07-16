@@ -560,7 +560,8 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	}
 
 	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
-	for (auto &column_id : get.column_ids) {
+	auto &column_ids = get.GetColumnIds();
+	for (auto &column_id : column_ids) {
 		if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 			throw BinderException("Cannot create an index on the rowid!");
 		}
@@ -568,10 +569,10 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	}
 	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
 	create_index_info->names = get.names;
-	create_index_info->column_ids = get.column_ids;
+	create_index_info->column_ids = column_ids;
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
-	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	// the logical CREATE INDEX also needs all fields to scan the referenced table
 	auto result = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table);

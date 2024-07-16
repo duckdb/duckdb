@@ -1101,7 +1101,7 @@ void WindowSegmentTreeGlobalState::ConstructTree() {
 		level_nodes = (level_nodes + (TREE_FANOUT - 1)) / TREE_FANOUT;
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
-	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * tree.state_size);
+	levels_flat_native = make_unsafe_uniq_array_uninitialized<data_t>(internal_nodes * tree.state_size);
 	levels_flat_start.push_back(0);
 
 	idx_t levels_flat_offset = 0;
@@ -1629,7 +1629,7 @@ WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedEl
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		internal_nodes += zipped_tree.tree[level_nr].first.size();
 	}
-	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * state_size);
+	levels_flat_native = make_unsafe_uniq_array_uninitialized<data_t>(internal_nodes * state_size);
 	levels_flat_start.push_back(0);
 	idx_t levels_flat_offset = 0;
 
