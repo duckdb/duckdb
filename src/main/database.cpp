@@ -24,6 +24,7 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/planner/collation_binding.hpp"
+#include "duckdb/main/db_instance_cache.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -65,11 +66,13 @@ DatabaseInstance::~DatabaseInstance() {
 	scheduler.reset();
 	db_manager.reset();
 	buffer_manager.reset();
-	// finally, flush allocations and disable the background thread
+	// flush allocations and disable the background thread
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
 	}
 	Allocator::SetBackgroundThreads(false);
+	// after all destruction is complete clear the cache entry
+	db_cache_entry.reset();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {

@@ -1579,7 +1579,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	auto res = make_shared_ptr<DuckDBPyConnection>();
 	bool cache_instance = database_path != ":memory:" && !database_path.empty();
 	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
-	auto database = instance_cache.GetOrCreate(database_path, config, cache_instance, InstantiateNewInstance);
+	auto database = instance_cache.GetOrCreateInstance(database_path, config, cache_instance, InstantiateNewInstance);
 	res->con.SetDatabase(std::move(database));
 	res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
 	return res;

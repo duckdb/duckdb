@@ -17,25 +17,17 @@
 namespace duckdb {
 class DBInstanceCache;
 
-struct DBInstanceCacheEntry {
-	DBInstanceCacheEntry(DBInstanceCache &cache, shared_ptr<DuckDB> database);
-	~DBInstanceCacheEntry();
+struct DatabaseCacheEntry {
+	explicit DatabaseCacheEntry(const shared_ptr<DuckDB> &database);
+	~DatabaseCacheEntry();
 
-	DBInstanceCache &cache;
-	shared_ptr<DuckDB> database;
-
-public:
-	unique_ptr<DBInstanceCacheEntry> Copy() const;
+	weak_ptr<DuckDB> database;
 };
 
 class DBInstanceCache {
 public:
 	DBInstanceCache() {
 	}
-
-	//! Either returns an existing entry, or creates and caches a new DB Instance
-	unique_ptr<DBInstanceCacheEntry> GetOrCreate(const string &database, DBConfig &config_dict, bool cache_instance,
-	                                             const std::function<void(DuckDB &)> &on_create = nullptr);
 
 	//! Gets a DB Instance from the cache if already exists (Fails if the configurations do not match)
 	shared_ptr<DuckDB> GetInstance(const string &database, const DBConfig &config_dict);
@@ -48,12 +40,9 @@ public:
 	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict, bool cache_instance,
 	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
 
-	//! Destroys a reference to an instance. Note that the database is only closed if all references are destroyed.
-	void DropInstance(shared_ptr<DuckDB> db);
-
 private:
 	//! A map with the cached instances <absolute_path/instance>
-	unordered_map<string, weak_ptr<DuckDB>> db_instances;
+	unordered_map<string, weak_ptr<DatabaseCacheEntry>> db_instances;
 
 	//! Lock to alter cache
 	mutex cache_lock;

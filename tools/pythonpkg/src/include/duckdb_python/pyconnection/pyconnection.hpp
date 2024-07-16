@@ -7,10 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb.hpp"
-#include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb_python/import_cache/python_import_cache.hpp"
@@ -51,16 +49,16 @@ public:
 
 public:
 	DuckDB &GetDatabase() {
-		if (!db_entry) {
+		if (!database) {
 			ThrowConnectionException();
 		}
-		return *db_entry->database;
+		return *database;
 	}
 	const DuckDB &GetDatabase() const {
-		if (!db_entry) {
+		if (!database) {
 			ThrowConnectionException();
 		}
-		return *db_entry->database;
+		return *database;
 	}
 	Connection &GetConnection() {
 		if (!connection) {
@@ -93,14 +91,14 @@ public:
 	}
 
 public:
-	void SetDatabase(unique_ptr<DBInstanceCacheEntry> db) {
-		db_entry = std::move(db);
+	void SetDatabase(shared_ptr<DuckDB> db) {
+		database = std::move(db);
 	}
 	void SetDatabase(ConnectionGuard &con) {
-		if (!con.db_entry) {
+		if (!con.database) {
 			ThrowConnectionException();
 		}
-		db_entry = con.db_entry->Copy();
+		database = con.database;
 	}
 	void SetConnection(unique_ptr<Connection> con) {
 		connection = std::move(con);
@@ -115,7 +113,7 @@ private:
 	}
 
 private:
-	unique_ptr<DBInstanceCacheEntry> db_entry;
+	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
 	unique_ptr<DuckDBPyRelation> result;
 };
