@@ -240,11 +240,6 @@ ifneq (${BLOCK_ALLOC_SIZE}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_ALLOC_SIZE=${BLOCK_ALLOC_SIZE}
 endif
 
-# Build with the latest storage set to the default storage.
-ifneq (${LATEST_STORAGE}, )
-	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=${LATEST_STORAGE}
-endif
-
 # Enable VCPKG for this build
 ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
 	CMAKE_VARS_BUILD:=${CMAKE_VARS_BUILD} -DCMAKE_TOOLCHAIN_FILE='${VCPKG_TOOLCHAIN_PATH}' -DVCPKG_BUILD=1

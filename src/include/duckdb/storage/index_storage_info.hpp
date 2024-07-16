@@ -50,7 +50,7 @@ struct IndexStorageInfoo {
 	string name;
 	//! The root of the index
 	idx_t root;
-	//! Whether the ART uses the deprecated storage or nested leaf storage.
+	//! Whether the ART uses deprecated storage or nested leaf storage.
 	bool deprecated_storage;
 	//! Information to serialize the index memory held by the fixed-size allocators
 	vector<FixedSizeAllocatorInfo> allocator_infos;

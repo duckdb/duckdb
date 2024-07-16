@@ -524,15 +524,9 @@ SerializationCompatibility SerializationCompatibility::Default() {
 	res.manually_set = false;
 	return res;
 #else
-#ifdef DUCKDB_LATEST_STORAGE
-	auto res = FromString("latest");
-	res.manually_set = false;
-	return res;
-#else
 	auto res = FromString("v0.10.2");
 	res.manually_set = false;
 	return res;
-#endif
 #endif
 }
 
