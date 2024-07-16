@@ -118,13 +118,13 @@ private:
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
-	static void ScheduleEventsInternal(ScheduleEventData &event_data);
+	void ScheduleEventsInternal(ScheduleEventData &event_data);
 
 	static void VerifyScheduledEvents(const ScheduleEventData &event_data);
 	static void VerifyScheduledEventsInternal(const idx_t i, const vector<reference<Event>> &vertices,
 	                                          vector<bool> &visited, vector<bool> &recursion_stack);
 
-	static void SchedulePipeline(const shared_ptr<MetaPipeline> &pipeline, ScheduleEventData &event_data);
+	void SchedulePipeline(const shared_ptr<MetaPipeline> &pipeline, ScheduleEventData &event_data);
 
 	bool NextExecutor();
 

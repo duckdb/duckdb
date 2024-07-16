@@ -6,18 +6,22 @@
 #include "column_reader.hpp"
 #include "duckdb.hpp"
 #include "expression_column_reader.hpp"
+#include "geo_parquet.hpp"
 #include "list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_timestamp.hpp"
+#include "mbedtls_wrapper.hpp"
 #include "row_number_column_reader.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
-#include "geo_parquet.hpp"
 #include "thrift_tools.hpp"
+#include "duckdb/main/config.hpp"
+
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
@@ -54,7 +58,8 @@ CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool pre
 
 static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_handle,
-             const shared_ptr<const ParquetEncryptionConfig> &encryption_config) {
+             const shared_ptr<const ParquetEncryptionConfig> &encryption_config,
+             const EncryptionUtil &encryption_util) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
 	auto file_proto = CreateThriftFileProtocol(allocator, file_handle, false);
@@ -106,7 +111,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.path);
 		}
-		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey());
+		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util);
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -509,17 +514,28 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
 		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
 	}
+
+	// set pointer to factory method for AES state
+	auto &config = DBConfig::GetConfig(context_p);
+	if (config.encryption_util && parquet_options.debug_use_openssl) {
+		encryption_util = config.encryption_util;
+	} else {
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
+	}
+
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!metadata_p) {
 		if (!ObjectCache::ObjectCacheEnabled(context_p)) {
-			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config);
+			metadata =
+			    LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, *encryption_util);
 		} else {
 			auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 			if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
-				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config);
+				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
+				                        *encryption_util);
 				ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 			}
 		}
@@ -587,7 +603,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context,
 
 uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
 	if (parquet_options.encryption_config) {
-		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey());
+		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util);
 	} else {
 		return object.read(&iprot);
 	}
@@ -596,7 +612,8 @@ uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &ip
 uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
                                  const uint32_t buffer_size) {
 	if (parquet_options.encryption_config) {
-		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey());
+		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
+		                               *encryption_util);
 	} else {
 		return iprot.getTransport()->read(buffer, buffer_size);
 	}
@@ -671,6 +688,20 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 	return min_offset;
 }
 
+static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
+                                                      TableFilter &filter) {
+	if (filter.filter_type == TableFilterType::CONSTANT_COMPARISON) {
+		auto &constant_filter = filter.Cast<ConstantFilter>();
+		auto &min_value = pq_col_stats.min_value;
+		auto &max_value = pq_col_stats.max_value;
+		return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
+		                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
+		                                 constant_filter.comparison_type, StringValue::Get(constant_filter.constant));
+	} else {
+		return filter.CheckStatistics(stats);
+	}
+}
+
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx) {
 	auto &group = GetGroup(state);
 	auto column_id = reader_data.column_ids[col_idx];
@@ -685,7 +716,36 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 		if (stats && filter_entry != reader_data.filters->filters.end()) {
 			bool skip_chunk = false;
 			auto &filter = *filter_entry->second;
-			auto prune_result = filter.CheckStatistics(*stats);
+
+			FilterPropagateResult prune_result;
+			if (column_reader->Type().id() == LogicalTypeId::VARCHAR &&
+			    group.columns[column_reader->FileIdx()].meta_data.statistics.__isset.min_value &&
+			    group.columns[column_reader->FileIdx()].meta_data.statistics.__isset.max_value) {
+				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
+				// however, when reading remote Parquet files, skipping row groups is really important
+				// here, we implement a special case to check the full length for string filters
+				if (filter.filter_type == TableFilterType::CONJUNCTION_AND) {
+					const auto &and_filter = filter.Cast<ConjunctionAndFilter>();
+					auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+					for (auto &child_filter : and_filter.child_filters) {
+						auto child_prune_result = CheckParquetStringFilter(
+						    *stats, group.columns[column_reader->FileIdx()].meta_data.statistics, *child_filter);
+						if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+							and_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+							break;
+						} else if (child_prune_result != and_result) {
+							and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+						}
+					}
+					prune_result = and_result;
+				} else {
+					prune_result = CheckParquetStringFilter(
+					    *stats, group.columns[column_reader->FileIdx()].meta_data.statistics, filter);
+				}
+			} else {
+				prune_result = filter.CheckStatistics(*stats);
+			}
+
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 				skip_chunk = true;
 			}

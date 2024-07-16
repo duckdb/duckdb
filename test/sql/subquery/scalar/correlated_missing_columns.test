@@ -1,0 +1,57 @@
+# name: test/sql/subquery/scalar/correlated_missing_columns.test
+# description: Test correlated missing columns
+# group: [scalar]
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CALL dbgen(sf=0);
+
+# verify that we can grab missing columns from either the correlated subquery or the outer (uncorrelated) subquery
+statement error
+SELECT (SELECT l_linestat FROM orders) FROM lineitem
+----
+lineitem.l_linestatus
+
+statement error
+SELECT (SELECT l_returnfla FROM orders) FROM lineitem
+----
+lineitem.l_returnflag
+
+statement error
+SELECT (SELECT o_totalp FROM orders) FROM lineitem
+----
+orders.o_totalprice
+
+# column exists in outer query but is used in an aggregate
+statement error
+SELECT * FROM lineitem WHERE (SELECT SUM(l_orderkey) > 0)
+----
+cannot contain aggregates
+
+# prefer missing column over unsupported
+# where clause
+statement error
+SELECT * FROM lineitem WHERE (SELECT SUM(o_orderke) FROM orders)
+----
+o_orderkey
+
+statement error
+SELECT * FROM lineitem WHERE (SELECT SUM(o_orderke) OVER () FROM orders)
+----
+o_orderkey
+
+# group by
+statement error
+SELECT * FROM lineitem GROUP BY (SELECT SUM(o_orderke) OVER () FROM orders)
+----
+o_orderkey
+
+# limit
+statement error
+SELECT * FROM lineitem LIMIT (SELECT SUM(o_orderke) FROM orders LIMIT 1)
+----
+o_orderkey

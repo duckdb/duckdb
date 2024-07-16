@@ -31,6 +31,7 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 	if (initialized) {
 		return *writer;
 	}
+	lock_guard<mutex> lock(wal_lock);
 	if (!writer) {
 		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
 		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
@@ -54,14 +55,14 @@ idx_t WriteAheadLog::GetWALSize() {
 }
 
 idx_t WriteAheadLog::GetTotalWritten() {
-	if (!writer) {
+	if (!Initialized()) {
 		return 0;
 	}
 	return writer->GetTotalWritten();
 }
 
 void WriteAheadLog::Truncate(idx_t size) {
-	if (!writer) {
+	if (!Initialized()) {
 		return;
 	}
 	writer->Truncate(size);
@@ -69,7 +70,7 @@ void WriteAheadLog::Truncate(idx_t size) {
 }
 
 void WriteAheadLog::Delete() {
-	if (!writer) {
+	if (!Initialized()) {
 		return;
 	}
 	writer.reset();

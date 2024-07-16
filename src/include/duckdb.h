@@ -142,6 +142,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
+	// ANY type
+	DUCKDB_TYPE_ANY = 34,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
@@ -1728,31 +1730,33 @@ Creates a value from an int64
 DUCKDB_API duckdb_value duckdb_create_int64(int64_t val);
 
 /*!
-Creates a struct value from a type and an array of values
+Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.
 
-* type: The type of the struct
-* values: The values for the struct fields
-* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+* @param type The type of the struct.
+* @param values The values for the struct fields.
+* @return The struct value, or nullptr, if any child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 */
 DUCKDB_API duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *values);
 
 /*!
-Creates a list value from a type and an array of values of length `value_count`
+Creates a list value from a child (element) type and an array of values of length `value_count`.
+Must be destroyed with `duckdb_destroy_value`.
 
-* type: The type of the list
-* values: The values for the list
-* value_count: The number of values in the list
-* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+* @param type The child type of the list.
+* @param values The values for the list.
+* @param value_count The number of values in the list.
+* @return The list value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 */
 DUCKDB_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
 /*!
-Creates an array value from a type and an array of values of length `value_count`
+Creates an array value from a child (element) type and an array of values of length `value_count`.
+Must be destroyed with `duckdb_destroy_value`.
 
-* type: The type of the array
-* values: The values for the array
-* value_count: The number of values in the array
-* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+* @param type The type of the array.
+* @param values The values for the array.
+* @param value_count The number of values in the array.
+* @return The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 */
 DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
@@ -1778,72 +1782,75 @@ DUCKDB_API int64_t duckdb_get_int64(duckdb_value value);
 //===--------------------------------------------------------------------===//
 
 /*!
-Creates a `duckdb_logical_type` from a standard primitive type.
-The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+Creates a `duckdb_logical_type` from a primitive type.
+The resulting logical type must be destroyed with `duckdb_destroy_logical_type`.
 
-This should not be used with `DUCKDB_TYPE_DECIMAL`.
+Returns an invalid logical type, if type is: `DUCKDB_TYPE_INVALID`, `DUCKDB_TYPE_DECIMAL`, `DUCKDB_TYPE_ENUM`,
+`DUCKDB_TYPE_LIST`, `DUCKDB_TYPE_STRUCT`, `DUCKDB_TYPE_MAP`, `DUCKDB_TYPE_ARRAY`, or `DUCKDB_TYPE_UNION`.
 
-* type: The primitive type to create.
-* returns: The logical type.
+* @param type The primitive type to create.
+* @return The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
 
 /*!
-Returns the alias of a duckdb_logical_type, if one is set, else `NULL`.
+Returns the alias of a duckdb_logical_type, if set, else `nullptr`.
 The result must be destroyed with `duckdb_free`.
 
-* type: The logical type to return the alias of
-* returns: The alias or `NULL`
+* @param type The logical type.
+* @return The alias or `nullptr`.
  */
 DUCKDB_API char *duckdb_logical_type_get_alias(duckdb_logical_type type);
 
 /*!
-Creates a list type from its child type.
-The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+Creates a LIST type from its child type.
+The return type must be destroyed with `duckdb_destroy_logical_type`.
 
-* type: The child type of list type to create.
-* returns: The logical type.
+* @param type The child type of the list.
+* @return The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type);
 
 /*!
-Creates an array type from its child type.
-The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+Creates an ARRAY type from its child type.
+The return type must be destroyed with `duckdb_destroy_logical_type`.
 
-* type: The child type of array type to create.
-* array_size: The number of elements in the array.
-* returns: The logical type.
+* @param type The child type of the array.
+* @param array_size The number of elements in the array.
+* @return The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_array_type(duckdb_logical_type type, idx_t array_size);
 
 /*!
-Creates a map type from its key type and value type.
-The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+Creates a MAP type from its key type and value type.
+The return type must be destroyed with `duckdb_destroy_logical_type`.
 
-* type: The key type and value type of map type to create.
-* returns: The logical type.
+* @param key_type The map's key type.
+* @param value_type The map's value type.
+* @return The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type);
 
 /*!
-Creates a UNION type from the passed types array.
-The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+Creates a UNION type from the passed arrays.
+The return type must be destroyed with `duckdb_destroy_logical_type`.
 
-* types: The array of types that the union should consist of.
-* type_amount: The size of the types array.
-* returns: The logical type.
+* @param member_types The array of union member types.
+* @param member_names The union member names.
+* @param member_count The number of union members.
+* @param return The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_union_type(duckdb_logical_type *member_types, const char **member_names,
                                                         idx_t member_count);
 
 /*!
-Creates a STRUCT type from the passed member name and type arrays.
-The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+Creates a STRUCT type based on the member types and names.
+The resulting type must be destroyed with `duckdb_destroy_logical_type`.
 
-* member_types: The array of types that the struct should consist of.
-* member_names: The array of names that the struct should consist of.
-* member_count: The number of members that were specified for both arrays.
-* returns: The logical type.
+* @param member_types The array of types of the struct members.
+* @param member_names The array of names of the struct members.
+* @param member_count The number of members of the struct.
+* @return The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types, const char **member_names,
                                                          idx_t member_count);
@@ -1860,7 +1867,7 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 DUCKDB_API duckdb_logical_type duckdb_create_enum_type(const char **member_names, idx_t member_count);
 
 /*!
-Creates a `duckdb_logical_type` of type decimal with the specified width and scale.
+Creates a DECIMAL type with the specified width and scale.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
 * width: The width of the decimal type
@@ -1870,10 +1877,10 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 DUCKDB_API duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale);
 
 /*!
-Retrieves the enum type class of a `duckdb_logical_type`.
+Retrieves the enum `duckdb_type` of a `duckdb_logical_type`.
 
-* type: The logical type object
-* returns: The type id
+* @param type The logical type.
+* @return The `duckdb_type` id.
 */
 DUCKDB_API duckdb_type duckdb_get_type_id(duckdb_logical_type type);
 
@@ -1929,22 +1936,20 @@ The result must be freed with `duckdb_free`.
 DUCKDB_API char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t index);
 
 /*!
-Retrieves the child type of the given list type.
-
+Retrieves the child type of the given LIST type. Also accepts MAP types.
 The result must be freed with `duckdb_destroy_logical_type`.
 
-* type: The logical type object
-* returns: The child type of the list type. Must be destroyed with `duckdb_destroy_logical_type`.
+* @param type The logical type, either LIST or MAP.
+* @return The child type of the LIST or MAP type.
 */
 DUCKDB_API duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type);
 
 /*!
-Retrieves the child type of the given array type.
-
+Retrieves the child type of the given ARRAY type.
 The result must be freed with `duckdb_destroy_logical_type`.
 
-* type: The logical type object
-* returns: The child type of the array type. Must be destroyed with `duckdb_destroy_logical_type`.
+* @param type The logical type. Must be ARRAY.
+* @return The child type of the ARRAY type.
 */
 DUCKDB_API duckdb_logical_type duckdb_array_type_child_type(duckdb_logical_type type);
 
@@ -2048,13 +2053,12 @@ DUCKDB_API void duckdb_destroy_logical_type(duckdb_logical_type *type);
 //===--------------------------------------------------------------------===//
 
 /*!
-Creates an empty DataChunk with the specified set of types.
+Creates an empty data chunk with the specified column types.
+The result must be destroyed with `duckdb_destroy_data_chunk`.
 
-Note that the result must be destroyed with `duckdb_destroy_data_chunk`.
-
-* types: An array of types of the data chunk.
-* column_count: The number of columns.
-* returns: The data chunk.
+* @param types An array of column types. Column types can not contain ANY and INVALID types.
+* @param column_count The number of columns.
+* @return The data chunk.
 */
 DUCKDB_API duckdb_data_chunk duckdb_create_data_chunk(duckdb_logical_type *types, idx_t column_count);
 
@@ -2324,24 +2328,31 @@ DUCKDB_API void duckdb_scalar_function_set_name(duckdb_scalar_function scalar_fu
 Sets the parameters of the given scalar function to varargs. Does not require adding parameters with
 duckdb_scalar_function_add_parameter.
 
-* scalar_function: The scalar function
-* type: The type of the arguments
+* @param scalar_function: The scalar function;
+* @param type The type of the arguments.
 */
 DUCKDB_API void duckdb_scalar_function_set_varargs(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 
 /*!
-Adds a parameter to the scalar function.
+Sets the NULL handling of the scalar function to SPECIAL_HANDLING.
 
 * scalar_function: The scalar function
-* type: The type of the parameter to add.
+*/
+DUCKDB_API void duckdb_scalar_function_set_special_handling(duckdb_scalar_function scalar_function);
+
+/*!
+Adds a parameter to the scalar function.
+
+* @param scalar_function The scalar function.
+* @param type The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_scalar_function_add_parameter(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 
 /*!
 Sets the return type of the scalar function.
 
-* scalar_function: The scalar function
-* type: The return type to set
+* @param scalar_function The scalar function.
+* @param type The return type. Cannot contain INVALID or ANY.
 */
 DUCKDB_API void duckdb_scalar_function_set_return_type(duckdb_scalar_function scalar_function,
                                                        duckdb_logical_type type);
@@ -2425,17 +2436,17 @@ DUCKDB_API void duckdb_table_function_set_name(duckdb_table_function table_funct
 /*!
 Adds a parameter to the table function.
 
-* table_function: The table function
-* type: The type of the parameter to add.
+* @param table_function The table function.
+* @param type The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_table_function_add_parameter(duckdb_table_function table_function, duckdb_logical_type type);
 
 /*!
 Adds a named parameter to the table function.
 
-* table_function: The table function
-* name: The name of the parameter
-* type: The type of the parameter to add.
+* @param table_function The table function.
+* @param name The parameter name.
+* @param type The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_table_function_add_named_parameter(duckdb_table_function table_function, const char *name,
                                                           duckdb_logical_type type);
@@ -2524,9 +2535,9 @@ DUCKDB_API void *duckdb_bind_get_extra_info(duckdb_bind_info info);
 /*!
 Adds a result column to the output of the table function.
 
-* info: The info object
-* name: The name of the column
-* type: The logical type of the column
+* @param info The table function's bind info.
+* @param name The column name.
+* @param type The logical column type.
 */
 DUCKDB_API void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duckdb_logical_type type);
 

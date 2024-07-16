@@ -285,7 +285,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 
 uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
 	if (encryption_config) {
-		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey());
+		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey(), *encryption_util);
 	} else {
 		return object.write(protocol.get());
 	}
@@ -293,7 +293,8 @@ uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
 
 uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size) {
 	if (encryption_config) {
-		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey());
+		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey(),
+		                                *encryption_util);
 	} else {
 		protocol->getTransport()->write(buffer, buffer_size);
 		return buffer_size;
@@ -317,14 +318,23 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p,
-                             double dictionary_compression_ratio_threshold_p, optional_idx compression_level_p)
+                             double dictionary_compression_ratio_threshold_p, optional_idx compression_level_p,
+                             bool debug_use_openssl_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
       field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)),
-      dictionary_compression_ratio_threshold(dictionary_compression_ratio_threshold_p) {
+      dictionary_compression_ratio_threshold(dictionary_compression_ratio_threshold_p),
+      debug_use_openssl(debug_use_openssl_p) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	if (encryption_config) {
+		auto &config = DBConfig::GetConfig(context);
+		if (config.encryption_util && debug_use_openssl) {
+			// Use OpenSSL
+			encryption_util = config.encryption_util;
+		} else {
+			encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
+		}
 		// encrypted parquet files start with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);
 		// we only support this one for now, not "AES_GCM_CTR_V1"
