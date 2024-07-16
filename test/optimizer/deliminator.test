@@ -185,7 +185,7 @@ NULL	0
 # FTS
 require fts
 
-require noalternativeverify
+require no_alternative_verify
 
 statement ok
 CREATE TABLE documents(id VARCHAR, body VARCHAR)
