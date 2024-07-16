@@ -143,7 +143,7 @@ typedef enum DUCKDB_TYPE {
 	// duckdb_timestamp
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 	// duckdb_varint
-	DUCKDB_TYPE_VARINT = 32,
+	DUCKDB_TYPE_VARINT = 34,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
