@@ -25,7 +25,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "tableref/bound_delimgetref.hpp"
+#include "duckdb/planner/tableref/bound_delimgetref.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
