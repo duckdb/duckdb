@@ -238,7 +238,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		auto logical_get = make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data),
 		                                         std::move(return_types), std::move(return_names));
-		bind_context.AddBaseTable(table_index, alias, table_names, table_types, logical_get->column_ids,
+		bind_context.AddBaseTable(table_index, alias, table_names, table_types, logical_get->GetMutableColumnIds(),
 		                          logical_get->GetTable().get());
 		return make_uniq_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
 	}
