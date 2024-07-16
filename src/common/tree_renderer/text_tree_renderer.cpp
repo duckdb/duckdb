@@ -10,6 +10,8 @@
 
 #include <sstream>
 
+namespace duckdb {
+
 namespace {
 
 struct StringSegment {
@@ -23,8 +25,6 @@ public:
 };
 
 } // namespace
-
-namespace duckdb {
 
 void TextTreeRenderer::RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y) {
 	for (idx_t x = 0; x < root.width; x++) {
