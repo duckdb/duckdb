@@ -14,17 +14,34 @@
 #include "duckdb/function/replacement_scan.hpp"
 
 namespace duckdb {
+class DBInstanceCache;
+
+struct DBInstanceCacheEntry {
+	DBInstanceCacheEntry(DBInstanceCache &cache, shared_ptr<DuckDB> database);
+	~DBInstanceCacheEntry();
+
+	DBInstanceCache &cache;
+	shared_ptr<DuckDB> database;
+};
+
 class DBInstanceCache {
 public:
-	DBInstanceCache() {};
+	DBInstanceCache() {}
+
+	//! Either returns an existing entry, or creates and caches a new DB Instance
+	unique_ptr<DBInstanceCacheEntry> GetOrCreate(const string &database, DBConfig &config_dict, bool cache_instance);
+
 	//! Gets a DB Instance from the cache if already exists (Fails if the configurations do not match)
 	shared_ptr<DuckDB> GetInstance(const string &database, const DBConfig &config_dict);
 
 	//! Creates and caches a new DB Instance (Fails if a cached instance already exists)
 	shared_ptr<DuckDB> CreateInstance(const string &database, DBConfig &config_dict, bool cache_instance = true);
 
-	//! Creates and caches a new DB Instance (Fails if a cached instance already exists)
+	//! Either returns an existing entry, or creates and caches a new DB Instance
 	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict, bool cache_instance);
+
+	//! Destroys a reference to an instance. Note that the database is only closed if all references are destroyed.
+	void DropInstance(shared_ptr<DuckDB> db);
 
 private:
 	//! A map with the cached instances <absolute_path/instance>
