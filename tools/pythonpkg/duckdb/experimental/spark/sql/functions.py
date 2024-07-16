@@ -9,6 +9,7 @@ from duckdb import (
     FunctionExpression,
 )
 
+from ..errors import PySparkTypeError
 from ..exception import ContributionsAcceptedError
 from ._typing import ColumnOrName
 from .column import Column, _get_expr
@@ -93,7 +94,10 @@ def _to_column_expr(col: ColumnOrName) -> Expression:
     elif isinstance(col, str):
         return ColumnExpression(col)
     else:
-        raise TypeError(f"col should be a string or a Column got: {type(col)}")
+        raise PySparkTypeError(
+            error_class="NOT_COLUMN_OR_STR",
+            message_parameters={"arg_name": "col", "arg_type": type(col).__name__},
+        )
 
 def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Column:
     r"""Replace all substrings of the specified string value that match regexp with rep.

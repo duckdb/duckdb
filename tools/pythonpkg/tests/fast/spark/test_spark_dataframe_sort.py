@@ -1,6 +1,7 @@
 import pytest
 
 from duckdb.experimental.spark.sql.types import Row
+from duckdb.experimental.spark.errors import PySparkTypeError, PySparkValueError, PySparkIndexError
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
@@ -45,3 +46,27 @@ class TestDataFrameSort(object):
 
         df = df.sort(2, 1)
         assert df.collect() == expected
+
+    def test_sort_wrong_asc_params(self, spark):
+        df = spark.createDataFrame(self.data, ["age", "name"])
+
+        with pytest.raises(PySparkTypeError):
+            df = df.sort(["age"], ascending="no")
+
+    def test_sort_empty_params(self, spark):
+        df = spark.createDataFrame(self.data, ["age", "name"])
+
+        with pytest.raises(PySparkValueError):
+            df = df.sort()
+
+    def test_sort_zero_index(self, spark):
+        df = spark.createDataFrame(self.data, ["age", "name"])
+
+        with pytest.raises(PySparkIndexError):
+            df = df.sort(0)
+
+    def test_sort_invalid_column(self, spark):
+        df = spark.createDataFrame(self.data, ["age", "name"])
+
+        with pytest.raises(PySparkTypeError):
+            df = df.sort(dict(a=1))

@@ -16,7 +16,7 @@ import duckdb
 from duckdb import ColumnExpression, Expression, StarExpression
 
 from ._typing import ColumnOrName
-from ..errors import PySparkTypeError
+from ..errors import PySparkTypeError, PySparkValueError, PySparkIndexError
 from ..exception import ContributionsAcceptedError
 from .column import Column
 from .readwriter import DataFrameWriter
@@ -264,7 +264,10 @@ class DataFrame:
         +---+-----+
         """
         if not cols:
-            raise ValueError("At least one column must be specified.")
+            raise PySparkValueError(
+                error_class="CANNOT_BE_EMPTY",
+                message_parameters={"item": "column"},
+            )
         if len(cols) == 1 and isinstance(cols[0], list):
             cols = cols[0]
 
@@ -281,7 +284,10 @@ class DataFrame:
                 elif c < 0:
                     _c = self[-c - 1].desc()
                 else:
-                    raise IndexError("Index must be non-zero.")
+                    raise PySparkIndexError(
+                        error_class="ZERO_INDEX",
+                        message_parameters={},
+                    )
             columns.append(_c)
 
         ascending = kwargs.get("ascending", True)
@@ -292,8 +298,10 @@ class DataFrame:
         elif isinstance(ascending, list):
             columns = [c if asc else c.desc() for asc, c in zip(ascending, columns)]
         else:
-            raise TypeError("Argument `ascending` should be a bool or"
-                            f" list, got {type(ascending).__name__}.")
+            raise PySparkTypeError(
+                error_class="NOT_BOOL_OR_LIST",
+                message_parameters={"arg_name": "ascending", "arg_type": type(ascending).__name__},
+            )
        
         columns = [_to_column_expr(c) for c in columns]
         rel = self.relation.sort(*columns)
