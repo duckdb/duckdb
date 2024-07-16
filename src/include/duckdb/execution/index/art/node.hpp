@@ -56,6 +56,7 @@ public:
 	static constexpr uint8_t LEAF_SIZE = 4;
 	static constexpr uint8_t PREFIX_SIZE = 15;
 	static constexpr idx_t AND_ROW_ID = 0x00FFFFFFFFFFFFFF;
+	//	static constexpr uint8_t AND_GATE = 0x80;
 
 public:
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
@@ -120,10 +121,19 @@ public:
 		Set((Get() & AND_METADATA) | UnsafeNumericCast<idx_t>(row_id));
 	}
 
-	//! Returns the type of the node, which is held in the metadata
+	//! Returns the node type.
 	inline NType GetType() const {
+		//		return NType(GetMetadata() & ~AND_GATE);
 		return NType(GetMetadata());
 	}
+
+	// TODO: gate node.
+	//! Returns true, if the node is a gate node.
+	//	inline bool IsGate() const {
+	//		return GetMetadata() & AND_GATE;
+	//	}
+	//! Turns the node into a gate node.
+	// TODO.
 
 	//! Assign operator
 	inline void operator=(const IndexPointer &ptr) {
