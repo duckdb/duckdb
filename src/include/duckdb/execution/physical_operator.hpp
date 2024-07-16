@@ -141,10 +141,13 @@ public:
 	//! CAN be called in parallel, proper locking is needed when accessing dat
 	//! a inside the GlobalSinkState.
 	virtual SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
-	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
-	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
-	// Combine() calls are active on the same GlobalSinkState.
+	//! The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
+	//! time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
+	//! Combine() calls are active on the same GlobalSinkState.
 	virtual SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
+	//! (optional) function that will be called before Finalize
+	//! For now, its only use is to to communicate memory usage in multi-join pipelines through TemporaryMemoryManager
+	virtual void PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
 	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished

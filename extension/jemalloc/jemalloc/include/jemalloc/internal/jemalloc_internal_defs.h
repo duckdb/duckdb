@@ -2,10 +2,6 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
-#if defined(__GNUC__)
-#define _GNU_SOURCE
-#endif
-
 #include <limits.h>
 
 /*
@@ -40,9 +36,13 @@
  * Hyper-threaded CPUs may need a special instruction inside spin loops in
  * order to yield to another virtual CPU.
  */
-// #define CPU_SPINWAIT __asm__ volatile("isb")
+#if defined(__aarch64__) || defined(__ARM_ARCH)
+#define CPU_SPINWAIT __asm__ volatile("isb")
+#else
+#define CPU_SPINWAIT __asm__ volatile("pause")
+#endif
 /* 1 if CPU_SPINWAIT is defined, 0 otherwise. */
-// #define HAVE_CPU_SPINWAIT 1
+#define HAVE_CPU_SPINWAIT 1
 
 /*
  * Number of significant bits in virtual addresses.  This may be less than the
@@ -77,7 +77,9 @@
 /*
  * Defined if __builtin_clz() and __builtin_clzl() are available.
  */
-// #define JEMALLOC_HAVE_BUILTIN_CLZ
+#ifdef __GNUC__
+#define JEMALLOC_HAVE_BUILTIN_CLZ
+#endif
 
 /*
  * Defined if os_unfair_lock_*() functions are available, as provided by Darwin.
@@ -303,8 +305,10 @@
 /*
  * popcount*() functions to use for bitmapping.
  */
-// #define JEMALLOC_INTERNAL_POPCOUNTL __builtin_popcountl
-// #define JEMALLOC_INTERNAL_POPCOUNT __builtin_popcount
+#ifdef __GNUC__
+#define JEMALLOC_INTERNAL_POPCOUNTL __builtin_popcountl
+#define JEMALLOC_INTERNAL_POPCOUNT  __builtin_popcount
+#endif
 
 /*
  * If defined, explicitly attempt to more uniformly distribute large allocation
@@ -366,7 +370,7 @@
  *                                 system overhead.
  */
 #define JEMALLOC_PURGE_MADVISE_FREE
-// #define JEMALLOC_PURGE_MADVISE_DONTNEED
+#define JEMALLOC_PURGE_MADVISE_DONTNEED
 /* #undef JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */
@@ -447,20 +451,16 @@
 #define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
-#define JEMALLOC_HAVE_DLSYM
+// #define JEMALLOC_HAVE_DLSYM
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
 
 /* GNU specific sched_getcpu support */
-#if defined(__GNUC__)
-#define JEMALLOC_HAVE_SCHED_GETCPU
-#endif
+// #define JEMALLOC_HAVE_SCHED_GETCPU
 
 /* GNU specific sched_setaffinity support */
-#if defined(__GNUC__)
-#define JEMALLOC_HAVE_SCHED_SETAFFINITY
-#endif
+// #define JEMALLOC_HAVE_SCHED_SETAFFINITY
 
 /*
  * If defined, all the features necessary for background threads are present.
