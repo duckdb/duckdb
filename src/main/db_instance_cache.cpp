@@ -3,8 +3,7 @@
 
 namespace duckdb {
 
-DatabaseCacheEntry::DatabaseCacheEntry(const shared_ptr<DuckDB> &database_p)
-    : database(database_p) {
+DatabaseCacheEntry::DatabaseCacheEntry(const shared_ptr<DuckDB> &database_p) : database(database_p) {
 }
 
 DatabaseCacheEntry::~DatabaseCacheEntry() {
@@ -49,7 +48,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 		// if the database does not exist, but the cache entry still exists, the database is being shut down
 		// we need to wait until the database is fully shut down to safely proceed
 		// we do this here using a busy spin
-		while(cache_entry) {
+		while (cache_entry) {
 			// clear our cache entry
 			cache_entry.reset();
 			// try to lock it again
