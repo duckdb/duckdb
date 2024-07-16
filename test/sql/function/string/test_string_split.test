@@ -310,9 +310,9 @@ SELECT string_split_regex('a', '')
 [a]
 
 query T
-SELECT string_split_regex('abc', '')
+SELECT string_split_regex('abcde', '')
 ----
-[a, b, c]
+[a, b, c, d, e]
 
 
 query T

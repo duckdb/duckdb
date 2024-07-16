@@ -139,7 +139,7 @@ statement ok
 INSERT INTO palindromes VALUES ('racecar'), ('civic'), ('defied'), ('repaper'), ('kayak'), ('rotator'), ('tattarrattat'), ('saippuakivikauppias'), ('malayalam');
 
 query I
-SELECT list_aggr(${f}(str_split(s, '')), 'string_agg', '') FROM palindromes ORDER BY s;
+SELECT list_aggr(${f}(string_split_regex(s, '')), 'string_agg', '') FROM palindromes ORDER BY s;
 ----
 civic
 deifed
