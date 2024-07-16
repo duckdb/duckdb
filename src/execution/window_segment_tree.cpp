@@ -931,6 +931,12 @@ void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorS
 	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
 	auto &inputs = gasink.inputs;
 
+	//	Single threaded Finalize for now
+	lock_guard<mutex> gestate_guard(gasink.lock);
+	if (gasink.finalized) {
+		return;
+	}
+
 	WindowAggregator::Finalize(gsink, lstate, stats);
 
 	if (inputs.ColumnCount() > 0) {
