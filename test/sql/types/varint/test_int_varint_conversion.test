@@ -5,6 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
+loop i 0 100
 
 foreach int_type tinyint utinyint smallint usmallint integer uinteger bigint ubigint uhugeint double float hugeint
 
