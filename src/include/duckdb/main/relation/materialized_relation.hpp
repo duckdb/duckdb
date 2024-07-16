@@ -16,7 +16,8 @@ namespace duckdb {
 
 class MaterializedDependency : public DependencyItem {
 public:
-	MaterializedDependency(unique_ptr<ColumnDataCollection> &&collection_p) : collection(std::move(collection_p)) {
+	explicit MaterializedDependency(unique_ptr<ColumnDataCollection> &&collection_p)
+	    : collection(std::move(collection_p)) {
 	}
 	~MaterializedDependency() override {};
 
