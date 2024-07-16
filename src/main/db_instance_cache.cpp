@@ -11,6 +11,10 @@ DBInstanceCacheEntry::~DBInstanceCacheEntry() {
 	cache.DropInstance(std::move(database));
 }
 
+unique_ptr<DBInstanceCacheEntry> DBInstanceCacheEntry::Copy() const {
+	return make_uniq<DBInstanceCacheEntry>(cache, database);
+}
+
 string GetDBAbsolutePath(const string &database_p, FileSystem &fs) {
 	auto database = FileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
@@ -57,7 +61,8 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DB
 }
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
-                                                           bool cache_instance) {
+                                                           bool cache_instance,
+                                                           const std::function<void(DuckDB &)> &on_create) {
 	string abs_database_path;
 	if (config.file_system) {
 		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
@@ -75,19 +80,24 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 		instance_path = IN_MEMORY_PATH;
 	}
 	auto db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
+	if (on_create) {
+		on_create(*db_instance);
+	}
 	if (cache_instance) {
 		db_instances[abs_database_path] = db_instance;
 	}
 	return db_instance;
 }
 
-shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBConfig &config, bool cache_instance) {
+shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBConfig &config, bool cache_instance,
+                                                   const std::function<void(DuckDB &)> &on_create) {
 	lock_guard<mutex> l(cache_lock);
-	return CreateInstanceInternal(database, config, cache_instance);
+	return CreateInstanceInternal(database, config, cache_instance, on_create);
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, DBConfig &config_dict,
-                                                        bool cache_instance) {
+                                                        bool cache_instance,
+                                                        const std::function<void(DuckDB &)> &on_create) {
 	lock_guard<mutex> l(cache_lock);
 	if (cache_instance) {
 		auto instance = GetInstanceInternal(database, config_dict);
@@ -95,12 +105,13 @@ shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, 
 			return instance;
 		}
 	}
-	return CreateInstanceInternal(database, config_dict, cache_instance);
+	return CreateInstanceInternal(database, config_dict, cache_instance, on_create);
 }
 
 unique_ptr<DBInstanceCacheEntry> DBInstanceCache::GetOrCreate(const string &database, DBConfig &config_dict,
-                                                              bool cache_instance) {
-	auto db = GetOrCreateInstance(database, config_dict, cache_instance);
+                                                              bool cache_instance,
+                                                              const std::function<void(DuckDB &)> &on_create) {
+	auto db = GetOrCreateInstance(database, config_dict, cache_instance, on_create);
 	return make_uniq<DBInstanceCacheEntry>(*this, std::move(db));
 }
 

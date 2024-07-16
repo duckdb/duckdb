@@ -12,6 +12,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include <functional>
 
 namespace duckdb {
 class DBInstanceCache;
@@ -22,6 +23,9 @@ struct DBInstanceCacheEntry {
 
 	DBInstanceCache &cache;
 	shared_ptr<DuckDB> database;
+
+public:
+	unique_ptr<DBInstanceCacheEntry> Copy() const;
 };
 
 class DBInstanceCache {
@@ -30,16 +34,19 @@ public:
 	}
 
 	//! Either returns an existing entry, or creates and caches a new DB Instance
-	unique_ptr<DBInstanceCacheEntry> GetOrCreate(const string &database, DBConfig &config_dict, bool cache_instance);
+	unique_ptr<DBInstanceCacheEntry> GetOrCreate(const string &database, DBConfig &config_dict, bool cache_instance,
+	                                             const std::function<void(DuckDB &)> &on_create = nullptr);
 
 	//! Gets a DB Instance from the cache if already exists (Fails if the configurations do not match)
 	shared_ptr<DuckDB> GetInstance(const string &database, const DBConfig &config_dict);
 
 	//! Creates and caches a new DB Instance (Fails if a cached instance already exists)
-	shared_ptr<DuckDB> CreateInstance(const string &database, DBConfig &config_dict, bool cache_instance = true);
+	shared_ptr<DuckDB> CreateInstance(const string &database, DBConfig &config_dict, bool cache_instance = true,
+	                                  const std::function<void(DuckDB &)> &on_create = nullptr);
 
 	//! Either returns an existing entry, or creates and caches a new DB Instance
-	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict, bool cache_instance);
+	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict, bool cache_instance,
+	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
 
 	//! Destroys a reference to an instance. Note that the database is only closed if all references are destroyed.
 	void DropInstance(shared_ptr<DuckDB> db);
@@ -53,6 +60,7 @@ private:
 
 private:
 	shared_ptr<DuckDB> GetInstanceInternal(const string &database, const DBConfig &config_dict);
-	shared_ptr<DuckDB> CreateInstanceInternal(const string &database, DBConfig &config_dict, bool cache_instance);
+	shared_ptr<DuckDB> CreateInstanceInternal(const string &database, DBConfig &config_dict, bool cache_instance,
+	                                          const std::function<void(DuckDB &)> &on_create);
 };
 } // namespace duckdb
