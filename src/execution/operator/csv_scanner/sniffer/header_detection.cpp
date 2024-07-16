@@ -158,7 +158,7 @@ bool EmptyHeader(const string &col_name, bool is_null, bool normalize) {
 	}
 	// check if it's all white spaces
 	for (auto &c : col_name) {
-		if (c != ' ') {
+		if (!StringUtil::CharacterIsSpace(c)) {
 			return false;
 		}
 	}

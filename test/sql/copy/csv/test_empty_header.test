@@ -5,11 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
-foreach path 'data/csv/headers/empty.csv' 'data/csv/headers/empty_2.csv'
+loop i 1 3
 
 query IIIII
 select columns[1].name,columns[2].name,columns[3].name,columns[4].name,columns[5].name
-from sniff_csv(${path})
+from sniff_csv('data/csv/headers/empty_${i}.csv')
 ----
 a	b	c	column3	e
 
