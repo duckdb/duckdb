@@ -1,0 +1,14 @@
+# name: test/sql/function/generic/least_greatest_enum.test
+# description: Test LEAST/GREATEST with enum values
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE t AS ENUM ('z','y','x');
+
+query II
+SELECT greatest('x'::t, 'z'::t), 'x'::t > 'z'::t;
+----
+x	1
