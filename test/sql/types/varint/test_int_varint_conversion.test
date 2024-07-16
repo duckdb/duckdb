@@ -5,9 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
-loop i 0 100
 
-foreach int_type tinyint utinyint smallint usmallint integer uinteger bigint ubigint uhugeint double float
+foreach int_type tinyint utinyint smallint usmallint integer uinteger bigint ubigint uhugeint double float hugeint
 
 query I
 select  ${i}::${int_type}::varint = '${i}'::varint
@@ -17,7 +16,7 @@ true
 endloop
 
 
-foreach int_type tinyint  smallint  integer  bigint double float
+foreach int_type tinyint  smallint  integer  bigint double float hugeint
 
 query I
 select  (-${i})::${int_type}::varint = '-${i}'::varint

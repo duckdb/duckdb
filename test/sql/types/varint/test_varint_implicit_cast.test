@@ -1,5 +1,5 @@
 # name: test/sql/types/varint/test_varint_implicit_cast.test
-# description: Test varint double
+# description: Test varint implicit cast
 # group: [varint]
 
 statement ok
