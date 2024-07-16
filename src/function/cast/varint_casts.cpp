@@ -39,7 +39,11 @@ string_t IntToVarInt(Vector &result, T int_value) {
 	// Determine the number of data bytes
 	uint64_t abs_value;
 	if (is_negative) {
-		abs_value = static_cast<uint64_t>(std::abs(static_cast<int64_t>(int_value)));
+		if (int_value == std::numeric_limits<T>::min()) {
+			abs_value = static_cast<uint64_t>(std::numeric_limits<T>::max()) + 1;
+		} else {
+			abs_value = static_cast<uint64_t>(std::abs(static_cast<int64_t>(int_value)));
+		}
 	} else {
 		abs_value = static_cast<uint64_t>(int_value);
 	}
