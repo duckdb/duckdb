@@ -168,10 +168,10 @@ select (0)::varint::varchar = '0'::ubigint::varchar
 ----
 true
 
-#query I
-#select (18446744073709551615)::varint::varchar = '18446744073709551615'::ubigint::varchar
-#----
-#true
+query I
+select (18446744073709551615)::ubigint::varint::varchar = '18446744073709551615'::ubigint::varchar
+----
+true
 
 # Boundary tests for uhugeint
 query I
@@ -179,20 +179,25 @@ select (0)::uhugeint::varint = '0'::varint
 ----
 true
 
-#query I
-#select (18446744073709551615)::uhugeint::varint = '18446744073709551615'::varint
-#----
-#true
+query I
+select '18446744073709551615'::uhugeint::varint
+----
+18446744073709551615
+
+query I
+select (18446744073709551615)::uhugeint::varint = '18446744073709551615'::varint
+----
+true
 
 query I
 select (0)::varint::varchar = '0'::uhugeint::varchar
 ----
 true
 
-#query I
-#select (18446744073709551615)::varint::varchar = '18446744073709551615'::uhugeint::varchar
-#----
-#true
+query I
+select '18446744073709551615'::uhugeint::varint::varchar = '18446744073709551615'::uhugeint::varchar
+----
+true
 
 # Boundary tests for double
 query I
@@ -226,36 +231,27 @@ select (-3.4028235E+38)::float::varint = '-3402823466385288598117041834845169254
 ----
 true
 
-#query I
-#select '340282346638528859811704183484516925440'::varint::varchar = '3.4028235E+38'::float::varchar
-#----
-#true
-
-#query I
-#select '-340282346638528859811704183484516925440'::varint::varchar = '-3.4028235E+38'::float::varchar
-#----
-#true
 
 # Boundary tests for hugeint
-#query I
-#select (170141183460469231731687303715884105727)::hugeint::varint = '170141183460469231731687303715884105727'::varint
-#----
-#true
+query I
+select (170141183460469231731687303715884105727)::hugeint::varint = '170141183460469231731687303715884105727'::varint
+----
+true
 
-#query I
-#select (-170141183460469231731687303715884105727)::hugeint::varint = '-170141183460469231731687303715884105727'::varint
-#----
-#true
+query I
+select (-170141183460469231731687303715884105727)::hugeint::varint = '-170141183460469231731687303715884105727'::varint
+----
+true
 
-#query I
-#select (170141183460469231731687303715884105727)::varint::varchar = '170141183460469231731687303715884105727'::hugeint::varchar
-#----
-#true
-#
-#query I
-#select (-170141183460469231731687303715884105727)::varint::varchar = '-170141183460469231731687303715884105727'::hugeint::varchar
-#----
-#true
+query I
+select (170141183460469231731687303715884105727)::varint::varchar = '170141183460469231731687303715884105727'::hugeint::varchar
+----
+true
+
+query I
+select (-170141183460469231731687303715884105727)::varint::varchar = '-170141183460469231731687303715884105727'::hugeint::varchar
+----
+true
 
 # Boundary tests for uhugeint
 

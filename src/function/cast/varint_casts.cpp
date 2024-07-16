@@ -225,7 +225,7 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 	}
 
 	uint32_t upper_byte_size = data_byte_size;
-	if (abs_value_upper != NumericLimits<uint64_t>::Maximum()) {
+	if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
 		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
 	} else {
 		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
@@ -268,7 +268,7 @@ string_t HugeintCastToVarInt::Operation(uhugeint_t int_value, Vector &result) {
 	}
 
 	uint32_t upper_byte_size = data_byte_size;
-	if (int_value.upper != NumericLimits<uint64_t>::Maximum()) {
+	if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
 		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
 	} else {
 		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
