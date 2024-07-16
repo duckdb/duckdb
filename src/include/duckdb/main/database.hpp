@@ -28,6 +28,7 @@ class ObjectCache;
 struct AttachInfo;
 struct AttachOptions;
 class DatabaseFileSystem;
+struct DatabaseCacheEntry;
 
 struct ExtensionInfo {
 	bool is_loaded;
@@ -71,6 +72,7 @@ public:
 	                                                    const AttachOptions &options);
 
 	void AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info);
+	void SetDatabaseCacheEntry(shared_ptr<DatabaseCacheEntry> entry);
 
 private:
 	void Initialize(const char *path, DBConfig *config);
@@ -87,6 +89,7 @@ private:
 	unordered_map<string, ExtensionInfo> loaded_extensions_info;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
+	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 };
 
 //! The database object. This object holds the catalog and all the
