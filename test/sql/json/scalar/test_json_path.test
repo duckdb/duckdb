@@ -238,3 +238,29 @@ query T
 select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$..[0]')
 ----
 ["g", {"b":5}]
+
+query T
+with tbl as (
+    select '[{"duck":42},{"duck":{"a":43,"b":null}}]' j
+)
+select json_extract(j, '$[*]..*') from tbl
+----
+[42, {"a":43,"b":null}, 43, NULL]
+
+query T
+with tbl as (
+    select '{"duck":[{"goose":42},{"goose":43}],"goose":null}' j
+)
+select json_extract(j, '$.duck[*]..goose') from tbl
+----
+[42, 43]
+
+query T
+select json_extract(j,'$..[*]') from test
+----
+["goose", "duck"]
+
+query T
+select json_extract('[[{"a":[1,2,3]}], [{"a":[4,5,6]}]]','$[*]..a[*]')
+----
+[1, 2, 3, 4, 5, 6]
