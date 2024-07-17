@@ -14,23 +14,13 @@
 
 namespace duckdb {
 
-class MaterializedDependency : public DependencyItem {
-public:
-	explicit MaterializedDependency(unique_ptr<ColumnDataCollection> &&collection_p)
-	    : collection(std::move(collection_p)) {
-	}
-	~MaterializedDependency() override {};
-
-public:
-	unique_ptr<ColumnDataCollection> collection;
-};
-
 class MaterializedRelation : public Relation {
 public:
 	MaterializedRelation(const shared_ptr<ClientContext> &context, unique_ptr<ColumnDataCollection> &&collection,
 	                     vector<string> names, string alias = "materialized");
 	vector<ColumnDefinition> columns;
 	string alias;
+	shared_ptr<ColumnDataCollection> collection;
 
 public:
 	const vector<ColumnDefinition> &Columns() override;

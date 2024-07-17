@@ -6,11 +6,9 @@
 namespace duckdb {
 
 unique_ptr<BoundTableRef> Binder::Bind(ColumnDataRef &ref) {
-	auto dependency_item = ref.external_dependency->GetDependency("materialized");
-	auto &materialized_dependency = dependency_item->Cast<MaterializedDependency>();
-
-	auto types = materialized_dependency.collection->Types();
-	auto result = make_uniq<BoundColumnDataRef>(*materialized_dependency.collection);
+	auto &collection = *ref.collection;
+	auto types = collection.Types();
+	auto result = make_uniq<BoundColumnDataRef>(collection);
 	result->bind_index = GenerateTableIndex();
 	bind_context.AddGenericBinding(result->bind_index, ref.alias, ref.expected_names, types);
 	return unique_ptr_cast<BoundColumnDataRef, BoundTableRef>(std::move(result));

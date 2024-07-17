@@ -474,7 +474,8 @@ class TestRelation(object):
         limited_rel = rel.limit(50)
         assert len(limited_rel.fetchall()) == 50
 
-        materialized_one = duckdb_cursor.sql("call range(10)").project(
+        # Using parameters also results in a MaterializedRelation
+        materialized_one = duckdb_cursor.sql("select * from range(?)", params=[10]).project(
             ColumnExpression('range').cast(str).alias('range')
         )
         materialized_two = duckdb_cursor.sql("call repeat('a', 5)")

@@ -21,19 +21,19 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::COLUMN_DATA;
 
 public:
-	explicit ColumnDataRef(shared_ptr<MaterializedDependency> collection) : TableRef(TableReferenceType::COLUMN_DATA) {
-		external_dependency = make_shared_ptr<ExternalDependency>();
-		external_dependency->AddDependency("materialized", std::move(collection));
+	explicit ColumnDataRef(shared_ptr<ColumnDataCollection> collection)
+	    : TableRef(TableReferenceType::COLUMN_DATA), collection(std::move(collection)) {
 	}
-	ColumnDataRef(shared_ptr<MaterializedDependency> collection, vector<string> expected_names)
-	    : TableRef(TableReferenceType::COLUMN_DATA), expected_names(std::move(expected_names)) {
-		external_dependency = make_shared_ptr<ExternalDependency>();
-		external_dependency->AddDependency("materialized", std::move(collection));
+	ColumnDataRef(shared_ptr<ColumnDataCollection> collection, vector<string> expected_names)
+	    : TableRef(TableReferenceType::COLUMN_DATA), expected_names(std::move(expected_names)),
+	      collection(std::move(collection)) {
 	}
 
 public:
 	//! The set of expected names
 	vector<string> expected_names;
+	//! The collection to scan
+	shared_ptr<ColumnDataCollection> collection;
 
 public:
 	string ToString() const override;

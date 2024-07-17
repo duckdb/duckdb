@@ -12,15 +12,11 @@ namespace duckdb {
 MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &context,
                                            unique_ptr<ColumnDataCollection> &&collection_p, vector<string> names,
                                            string alias_p)
-    : Relation(context, RelationType::MATERIALIZED_RELATION), alias(std::move(alias_p)) {
+    : Relation(context, RelationType::MATERIALIZED_RELATION), alias(std::move(alias_p)),
+      collection(std::move(collection_p)) {
 	// create constant expressions for the values
-	auto types = collection_p->Types();
+	auto types = collection->Types();
 	D_ASSERT(types.size() == names.size());
-
-	auto external_dependency = make_shared_ptr<ExternalDependency>();
-	external_dependencies.push_back(external_dependency);
-	external_dependency->AddDependency("materialized",
-	                                   make_shared_ptr<MaterializedDependency>(std::move(collection_p)));
 
 	QueryResult::DeduplicateColumns(names);
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -38,18 +34,8 @@ unique_ptr<QueryNode> MaterializedRelation::GetQueryNode() {
 	return std::move(result);
 }
 
-shared_ptr<DependencyItem> MaterializedRelation::GetMaterializedDependency() {
-	D_ASSERT(!external_dependencies.empty());
-	auto &external_dependency = external_dependencies[0];
-	auto dependency_item = external_dependency->GetDependency("materialized");
-	D_ASSERT(dependency_item);
-	return dependency_item;
-}
-
 unique_ptr<TableRef> MaterializedRelation::GetTableRef() {
-	auto dependency_item = GetMaterializedDependency();
-	auto materialized_dependency = shared_ptr_cast<DependencyItem, MaterializedDependency>(std::move(dependency_item));
-	auto table_ref = make_uniq<ColumnDataRef>(materialized_dependency);
+	auto table_ref = make_uniq<ColumnDataRef>(collection);
 	for (auto &col : columns) {
 		table_ref->expected_names.push_back(col.Name());
 	}
@@ -66,9 +52,7 @@ const vector<ColumnDefinition> &MaterializedRelation::Columns() {
 }
 
 string MaterializedRelation::ToString(idx_t depth) {
-	auto dependency_item = GetMaterializedDependency();
-	auto &materialized_dependency = dependency_item->Cast<MaterializedDependency>();
-	return materialized_dependency.collection->ToString();
+	return collection->ToString();
 }
 
 } // namespace duckdb

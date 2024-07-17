@@ -7,9 +7,7 @@
 namespace duckdb {
 
 string ColumnDataRef::ToString() const {
-	auto dependency_item = external_dependency->GetDependency("materialized");
-	auto &materialized_dependency = dependency_item->Cast<MaterializedDependency>();
-	auto result = materialized_dependency.collection->ToString();
+	auto result = collection->ToString();
 	return BaseToString(result, expected_names);
 }
 
@@ -19,13 +17,8 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 	}
 	auto &other = other_p.Cast<ColumnDataRef>();
 
-	auto dependency_item_a = external_dependency->GetDependency("materialized");
-	auto &materialized_a = dependency_item_a->Cast<MaterializedDependency>();
-	auto &collection_a = materialized_a.collection;
-
-	auto dependency_item_b = other.external_dependency->GetDependency("materialized");
-	auto &materialized_b = dependency_item_b->Cast<MaterializedDependency>();
-	auto &collection_b = materialized_b.collection;
+	auto &collection_a = collection;
+	auto &collection_b = other.collection;
 
 	auto expected_types = collection_a->Types();
 	auto other_expected_types = collection_b->Types();
@@ -69,9 +62,7 @@ unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &source) {
 }
 
 unique_ptr<TableRef> ColumnDataRef::Copy() {
-	auto dependency_item = external_dependency->GetDependency("materialized");
-	auto materialized_dependency = shared_ptr_cast<DependencyItem, MaterializedDependency>(std::move(dependency_item));
-	auto result = make_uniq<ColumnDataRef>(materialized_dependency, expected_names);
+	auto result = make_uniq<ColumnDataRef>(collection, expected_names);
 	CopyProperties(*result);
 	return std::move(result);
 }
