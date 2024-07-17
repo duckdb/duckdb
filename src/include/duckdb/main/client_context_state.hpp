@@ -112,7 +112,7 @@ public:
 		auto cache = make_shared_ptr<T>(args...);
 		registered_state[key] = cache;
 		++state_version;
-		return std::move(cache);
+		return cache;
 	}
 
 	template <class T>
@@ -128,6 +128,13 @@ public:
 	void Insert(const string &key, shared_ptr<ClientContextState> state_p) {
 		lock_guard<mutex> l(lock);
 		registered_state.insert(make_pair(key, std::move(state_p)));
+		++state_version;
+	}
+
+	void Remove(const string &key) {
+		lock_guard<mutex> l(lock);
+		registered_state.erase(key);
+		++state_version;
 	}
 
 	RegisteredStateIterator begin(); // NOLINT: match stl API
