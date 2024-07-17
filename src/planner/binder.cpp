@@ -416,6 +416,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::SHOW_REF:
 		result = Bind(ref.Cast<ShowRef>());
 		break;
+	case TableReferenceType::DELIM_GET:
+		result = Bind(ref.Cast<DelimGetRef>());
+		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
 	default:
@@ -454,6 +457,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		break;
 	case TableReferenceType::PIVOT:
 		root = CreatePlan(ref.Cast<BoundPivotRef>());
+		break;
+	case TableReferenceType::DELIM_GET:
+		root = CreatePlan(ref.Cast<BoundDelimGetRef>());
 		break;
 	case TableReferenceType::INVALID:
 	default:
