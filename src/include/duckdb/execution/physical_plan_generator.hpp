@@ -105,6 +105,8 @@ private:
 	bool PreserveInsertionOrder(PhysicalOperator &plan);
 	bool UseBatchIndex(PhysicalOperator &plan);
 
+	idx_t delim_index = 0;
+
 private:
 	ClientContext &context;
 };

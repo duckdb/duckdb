@@ -44,8 +44,6 @@ struct FlattenDependentJoins {
 	bool perform_delim;
 	bool any_join;
 
-	idx_t delim_root_idx;
-
 private:
 	unique_ptr<LogicalOperator> PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
 	                                                          bool &parent_propagate_null_values, idx_t lateral_depth);

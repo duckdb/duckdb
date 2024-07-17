@@ -146,7 +146,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		delim_offset = left_columns;
 		data_offset = 0;
 		delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-		delim_scan->delim_idx = optional_idx(delim_root_idx);
 		if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			// we want to keep the logical projection for positionality.
 			exit_projection = true;
@@ -270,7 +269,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 			auto left_index = binder.GenerateTableIndex();
 			delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
-			delim_scan->delim_idx = optional_idx(delim_root_idx);
 			join->children.push_back(std::move(delim_scan));
 			join->children.push_back(std::move(plan));
 			for (idx_t i = 0; i < new_group_count; i++) {
