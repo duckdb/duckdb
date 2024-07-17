@@ -11,14 +11,14 @@
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
 
@@ -38,35 +38,10 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
-         AttachedDatabase &db, const IndexStorageInfoo &info,
-         const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr)
+         AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
+         const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
-      allocators(allocators_ptr), owns_data(false), deprecated_storage(info.deprecated_storage) {
-
-	// Initialize the allocators.
-	if (!allocators) {
-		owns_data = true;
-		auto &block_manager = table_io_manager.GetIndexBlockManager();
-		array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
-		    make_uniq<FixedSizeAllocator>(sizeof(Prefix), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager)};
-		allocators =
-		    make_shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
-	}
-
-	// We deserialize the ART lazily.
-	if (info.IsValid()) {
-		if (!info.root_block_ptr.IsValid()) {
-			InitAllocators(info);
-		} else {
-			// Backwards compatibility.
-			Deserialize(info.root_block_ptr);
-		}
-	}
+      allocators(allocators_ptr), owns_data(false) {
 
 	// Validate the key column types.
 	// FIXME: Use the new byte representation function to support nested types.
@@ -91,6 +66,39 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 			throw InvalidTypeException(logical_types[i], "Invalid type for index key.");
 		}
 	}
+
+	// Initialize the allocators.
+	if (!allocators) {
+		owns_data = true;
+		auto &block_manager = table_io_manager.GetIndexBlockManager();
+		array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
+		    make_uniq<FixedSizeAllocator>(sizeof(Prefix), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager)};
+		allocators =
+		    make_shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
+	}
+
+	if (!info.IsValid()) {
+		// We are creating a new ART.
+		has_nested_leaves = true;
+		return;
+	}
+
+	if (info.root_block_ptr.IsValid()) {
+		// Backwards compatibility.
+		has_nested_leaves = false;
+		Deserialize(info.root_block_ptr);
+		return;
+	}
+
+	// Set the root node and initialize the allocators.
+	tree.Set(info.root);
+	has_nested_leaves = !info.deprecated_storage;
+	InitAllocators(info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -985,12 +993,18 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-IndexStorageInfoo ART::GetStorageInfo(const bool get_buffers) {
-	// Set the name and the root node.
-	IndexStorageInfoo info(name, deprecated_storage);
-	info.root = tree.Get();
+IndexStorageInfo ART::GetStorageInfo(const bool use_deprecated_storage, const bool to_wal) {
+	// If the storage format uses deprecated leaf storage,
+	// then we need to transform all nested leaves before serialization.
+	if (use_deprecated_storage && has_nested_leaves && tree.HasMetadata()) {
+		Node::TransformToDeprecated(*this, tree);
+	}
 
-	if (!get_buffers) {
+	IndexStorageInfo info(name);
+	info.root = tree.Get();
+	info.deprecated_storage = use_deprecated_storage;
+
+	if (!to_wal) {
 		// Store the data on disk as partial blocks and set the block ids.
 		WritePartialBlocks();
 	} else {
@@ -1017,12 +1031,7 @@ void ART::WritePartialBlocks() {
 	partial_block_manager.FlushPartialBlocks();
 }
 
-void ART::InitAllocators(const IndexStorageInfoo &info) {
-	// Set the root node.
-	tree.Set(info.root);
-	deprecated_storage = info.deprecated_storage;
-
-	// Initialize the allocators.
+void ART::InitAllocators(const IndexStorageInfo &info) {
 	D_ASSERT(info.allocator_infos.size() == ALLOCATOR_COUNT);
 	for (idx_t i = 0; i < info.allocator_infos.size(); i++) {
 		(*allocators)[i]->Init(info.allocator_infos[i]);
@@ -1031,10 +1040,10 @@ void ART::InitAllocators(const IndexStorageInfoo &info) {
 
 void ART::Deserialize(const BlockPointer &pointer) {
 	D_ASSERT(pointer.IsValid());
+
 	auto &metadata_manager = table_io_manager.GetMetadataManager();
 	MetadataReader reader(metadata_manager, pointer);
 	tree = reader.Read<Node>();
-	deprecated_storage = true;
 
 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
 		(*allocators)[i]->Deserialize(metadata_manager, reader.Read<BlockPointer>());

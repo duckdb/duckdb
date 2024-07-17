@@ -66,15 +66,21 @@ public:
 
 	//! Get references to the allocator
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
-	//! Get a (immutable) reference to the node. If dirty is false, then T should be a const class
+
+	//! Get an immutable reference to the node.
 	template <class NODE>
 	static inline const NODE &Ref(const ART &art, const Node ptr, const NType type) {
 		return *(GetAllocator(art, type).Get<const NODE>(ptr, false));
 	}
-	//! Get a (const) reference to the node. If dirty is false, then T should be a const class
+	//! Get a mutable reference to the node.
 	template <class NODE>
 	static inline NODE &RefMutable(const ART &art, const Node ptr, const NType type) {
 		return *(GetAllocator(art, type).Get<NODE>(ptr));
+	}
+	//! Get a node pointer, if the node is in memory, else nullptr.
+	template <class NODE>
+	static inline NODE *GetInMemoryPtr(const ART &art, const Node ptr, const NType type) {
+		return GetAllocator(art, type).GetInMemoryPtr<NODE>(ptr);
 	}
 
 	//! Replace the child node at byte
@@ -111,6 +117,9 @@ public:
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
 	void Vacuum(ART &art, const ARTFlags &flags);
+
+	//! Transform the node storage to deprecated storage.
+	static void TransformToDeprecated(ART &art, Node &node);
 
 	//! Get the row ID (8th to 63rd bit)
 	inline row_t GetRowId() const {

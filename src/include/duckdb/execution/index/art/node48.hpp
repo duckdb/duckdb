@@ -65,5 +65,8 @@ public:
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
+
+	//! Transform the children of the node.
+	void TransformToDeprecated(ART &art);
 };
 } // namespace duckdb

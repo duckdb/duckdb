@@ -70,8 +70,10 @@ public:
 	//! Vacuums the leaf.
 	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
 
-	//! Transforms a deprecated leaf into a nested leaf.
+	//! Transforms a deprecated leaf to a nested leaf.
 	static void TransformToNested(ART &art, Node &node);
+	//! Transforms a nested leaf to a deprecated leaf.
+	static void TransformToDeprecated(ART &art, Node &node);
 
 	//! Returns the string representation of the leaf, if only_verify is true.
 	//! Else, it traverses and verifies the leaf.

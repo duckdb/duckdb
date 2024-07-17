@@ -498,15 +498,66 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 	// recursive functions
 	switch (node_type) {
 	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, NType::NODE_4).Vacuum(art, flags);
+		return RefMutable<Node4>(art, *this, node_type).Vacuum(art, flags);
 	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, NType::NODE_16).Vacuum(art, flags);
+		return RefMutable<Node16>(art, *this, node_type).Vacuum(art, flags);
 	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, NType::NODE_48).Vacuum(art, flags);
+		return RefMutable<Node48>(art, *this, node_type).Vacuum(art, flags);
 	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, NType::NODE_256).Vacuum(art, flags);
+		return RefMutable<Node256>(art, *this, node_type).Vacuum(art, flags);
 	default:
 		throw InternalException("Invalid node type for Vacuum.");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// TransformToDeprecated
+//===--------------------------------------------------------------------===//
+
+void Node::TransformToDeprecated(ART &art, Node &node) {
+	D_ASSERT(node.HasMetadata());
+
+	// TODO: we'll be checking if it is a gate node here.
+	auto node_type = node.GetType();
+	if (node_type == NType::LEAF) {
+		return Leaf::TransformToDeprecated(art, node);
+	}
+
+	switch (node_type) {
+	case NType::PREFIX:
+		return Prefix::TransformToDeprecated(art, node);
+	case NType::LEAF_INLINED:
+		return;
+	case NType::NODE_4: {
+		auto n4_ptr = GetInMemoryPtr<Node4>(art, node, node_type);
+		if (n4_ptr) {
+			n4_ptr->TransformToDeprecated(art);
+		}
+		return;
+	}
+	case NType::NODE_16: {
+		auto n16_ptr = GetInMemoryPtr<Node16>(art, node, node_type);
+		if (n16_ptr) {
+			n16_ptr->TransformToDeprecated(art);
+		}
+		return;
+	}
+	case NType::NODE_48: {
+		auto n48_ptr = GetInMemoryPtr<Node48>(art, node, node_type);
+		if (n48_ptr) {
+			n48_ptr->TransformToDeprecated(art);
+		}
+		return;
+	}
+	case NType::NODE_256: {
+		auto n256_ptr = GetInMemoryPtr<Node256>(art, node, node_type);
+		if (n256_ptr) {
+			n256_ptr->TransformToDeprecated(art);
+		}
+		return;
+	}
+	default:
+		throw InternalException("Invalid node type for TransformToDeprecated.");
 	}
 }
 

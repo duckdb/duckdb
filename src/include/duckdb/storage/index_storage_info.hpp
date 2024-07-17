@@ -38,37 +38,35 @@ struct IndexBufferInfo {
 	idx_t allocation_size;
 };
 
-//! Information to serialize an index
-struct IndexStorageInfoo {
-	//! Default constructor. We overwrite the deprecated_storage field during deserialization.
-	IndexStorageInfoo() : deprecated_storage(true) {};
-	explicit IndexStorageInfoo(bool deprecated_storage) : deprecated_storage(deprecated_storage) {};
-	IndexStorageInfoo(string name, bool deprecated_storage)
-	    : name(std::move(name)), deprecated_storage(deprecated_storage) {};
+//! Index (de)serialization information.
+struct IndexStorageInfo {
+	IndexStorageInfo() {};
+	explicit IndexStorageInfo(const string &name) : name(name) {};
 
-	//! The name of the index
+	//! The name.
 	string name;
-	//! The root of the index
+	//! The storage root.
 	idx_t root;
-	//! Whether the ART uses deprecated storage or nested leaf storage.
+	//! True, if the index uses deprecated storage. Defaults to true during deserialization.
 	bool deprecated_storage;
-	//! Information to serialize the index memory held by the fixed-size allocators
+	//! Serialization information for fixed-size allocator memory.
 	vector<FixedSizeAllocatorInfo> allocator_infos;
 
-	//! Contains all buffer pointers and their allocation size for serializing to the WAL
-	//! First dimension: all fixed-size allocators, second dimension: the buffers of each allocator
+	//! Contains all buffer pointers and their allocation size for serializing to the WAL.
+	//! First dimension: All fixed-size allocators.
+	//! Second dimension: The buffers of each fixed-size allocator.
 	vector<vector<IndexBufferInfo>> buffers;
 
-	//! The root block pointer of the index, which is necessary to support older storage files
+	//! The root block pointer of the index. Necessary to support older storage files.
 	BlockPointer root_block_ptr;
 
-	//! Returns true, if the struct contains index information
+	//! Returns true, if IndexStorageInfo holds information to deserialize an index.
 	bool IsValid() const {
 		return root_block_ptr.IsValid() || !allocator_infos.empty();
 	}
 
 	void Serialize(Serializer &serializer) const;
-	static IndexStorageInfoo Deserialize(Deserializer &deserializer);
+	static IndexStorageInfo Deserialize(Deserializer &deserializer);
 };
 
 //! Additional index information for tables

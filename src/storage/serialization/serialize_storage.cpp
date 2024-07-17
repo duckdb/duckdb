@@ -84,15 +84,15 @@ FixedSizeAllocatorInfo FixedSizeAllocatorInfo::Deserialize(Deserializer &deseria
 	return result;
 }
 
-void IndexStorageInfoo::Serialize(Serializer &serializer) const {
+void IndexStorageInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "name", name);
 	serializer.WritePropertyWithDefault<idx_t>(101, "root", root);
 	serializer.WritePropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", allocator_infos);
 	serializer.WritePropertyWithDefault<bool>(103, "deprecated_storage", deprecated_storage, true);
 }
 
-IndexStorageInfoo IndexStorageInfoo::Deserialize(Deserializer &deserializer) {
-	IndexStorageInfoo result; 
+IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
+	IndexStorageInfo result;
 	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result.root);
 	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result.allocator_infos);

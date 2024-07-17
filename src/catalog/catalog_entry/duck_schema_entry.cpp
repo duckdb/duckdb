@@ -147,12 +147,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
-	bool deprecated_index_storage = true; // TODO: unsure here
-	if (transaction.HasContext()) {
-		deprecated_index_storage =
-		    transaction.GetContext().db->config.options.serialization_compatibility.serialization_version < 3;
-	}
-	auto table = make_uniq<DuckTableEntry>(catalog, *this, info, deprecated_index_storage);
+	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
 
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;

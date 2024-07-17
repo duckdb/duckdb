@@ -31,10 +31,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			IndexStorageInfoo index_storage_info(art.deprecated_storage);
 			indexes.AddIndex(make_uniq<ART>(art.GetIndexName(), art.GetConstraintType(), art.GetColumnIds(),
-			                                art.table_io_manager, std::move(unbound_expressions), art.db,
-			                                index_storage_info));
+			                                art.table_io_manager, std::move(unbound_expressions), art.db));
 		}
 		return false;
 	});

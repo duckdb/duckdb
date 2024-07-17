@@ -252,6 +252,37 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 	leaf.count = 0;
 }
 
+void Leaf::TransformToDeprecated(ART &art, Node &node) {
+
+	// Collect all row IDs and free the nested leaf.
+	vector<row_t> row_ids;
+	GetRowIds(art, node, row_ids, NumericLimits<row_t>().Maximum());
+	Node::Free(art, node);
+	D_ASSERT(row_ids.size() > 1);
+
+	// Create the deprecated leaf.
+	idx_t remaining_count = row_ids.size();
+	idx_t copy_count = 0;
+	reference<Node> ref_node(node);
+	while (remaining_count) {
+		ref_node.get() = Node::GetAllocator(art, NType::LEAF).New();
+		ref_node.get().SetMetadata(static_cast<uint8_t>(NType::LEAF));
+
+		auto &leaf = Node::RefMutable<Leaf>(art, ref_node, NType::LEAF);
+		leaf.count = UnsafeNumericCast<uint8_t>(MinValue((idx_t)Node::LEAF_SIZE, remaining_count));
+
+		for (idx_t i = 0; i < leaf.count; i++) {
+			leaf.row_ids[i] = row_ids[copy_count + i];
+		}
+
+		copy_count += leaf.count;
+		remaining_count -= leaf.count;
+
+		ref_node = leaf.ptr;
+		leaf.ptr.Clear();
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Debug-only functions.
 //===--------------------------------------------------------------------===//

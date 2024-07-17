@@ -2,8 +2,8 @@
 # description: Test ART VARCHAR keys.
 # group: [types]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE strings(i varchar);

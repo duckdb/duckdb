@@ -427,11 +427,12 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	auto &index = schema.CreateIndex(transaction, info, table)->Cast<DuckIndexEntry>();
 	auto &data_table = table.GetStorage();
 
-	IndexStorageInfoo index_storage_info;
+	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
-		// Read older duckdb files. Defaults to deprecated storage.
+		// Read older duckdb files.
 		index_storage_info.name = index.name;
 		index_storage_info.root_block_ptr = root_block_pointer;
+		index_storage_info.deprecated_storage = true;
 
 	} else {
 		// Read the matching index storage info.
@@ -524,11 +525,11 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
 
-	// old file read
+	// Cover reading old storage files.
 	auto index_pointers = deserializer.ReadPropertyWithDefault<vector<BlockPointer>>(103, "index_pointers", {});
-	// new file read
+	// Cover reading new storage files.
 	auto index_storage_infos =
-	    deserializer.ReadPropertyWithDefault<vector<IndexStorageInfoo>>(104, "index_storage_infos", {});
+	    deserializer.ReadPropertyWithDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 
 	if (!index_storage_infos.empty()) {
 		bound_info.indexes = index_storage_infos;
@@ -537,8 +538,9 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 		// This is an old duckdb file containing index pointers and deprecated storage.
 		for (idx_t i = 0; i < index_pointers.size(); i++) {
 			// Deprecated storage is always true for old duckdb files.
-			IndexStorageInfoo index_storage_info;
+			IndexStorageInfo index_storage_info;
 			index_storage_info.root_block_ptr = index_pointers[i];
+			index_storage_info.deprecated_storage = true;
 			bound_info.indexes.push_back(index_storage_info);
 		}
 	}

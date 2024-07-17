@@ -313,7 +313,7 @@ bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKey
 	return info->indexes.FindForeignKeyIndex(keys, type) != nullptr;
 }
 
-void DataTable::SetIndexStorageInfo(vector<IndexStorageInfoo> index_storage_info) {
+void DataTable::SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info) {
 	info->index_storage_infos = std::move(index_storage_info);
 }
 

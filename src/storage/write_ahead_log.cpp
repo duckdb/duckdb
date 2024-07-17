@@ -258,11 +258,12 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 
-void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<Index> &index) {
+void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<Index> &index,
+                         const bool use_deprecated_storage) {
 
 	// We will never write an index to the WAL that is not bound
 	D_ASSERT(index->IsBound());
-	auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(true);
+	auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(use_deprecated_storage, true);
 	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
 
 	serializer.WriteList(103, "index_storage", index_storage_info.buffers.size(), [&](Serializer::List &list, idx_t i) {
@@ -277,6 +278,9 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::CREATE_INDEX);
 	serializer.WriteProperty(101, "index_catalog_entry", &entry);
 
+	auto db_options = database.GetDatabase().config.options;
+	auto use_deprecated_storage = db_options.serialization_compatibility.serialization_version < 3;
+
 	// now serialize the index data to the persistent storage and write the index metadata
 	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
 	auto &indexes = duck_index_entry.GetDataTableInfo().GetIndexes().Indexes();
@@ -284,7 +288,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	// get the matching index and serialize its storage info
 	for (auto const &index : indexes) {
 		if (duck_index_entry.name == index->GetIndexName()) {
-			SerializeIndexToWAL(serializer, index);
+			SerializeIndexToWAL(serializer, index, use_deprecated_storage);
 			break;
 		}
 	}

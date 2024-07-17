@@ -41,7 +41,7 @@ public:
 	TableIndexList &GetIndexes() {
 		return indexes;
 	}
-	const vector<IndexStorageInfoo> &GetIndexStorageInfo() const {
+	const vector<IndexStorageInfo> &GetIndexStorageInfo() const {
 		return index_storage_infos;
 	}
 
@@ -63,7 +63,7 @@ private:
 	//! The physical list of indexes of this table
 	TableIndexList indexes;
 	//! Index storage information of the indexes created by this table
-	vector<IndexStorageInfoo> index_storage_infos;
+	vector<IndexStorageInfo> index_storage_infos;
 	//! Lock held while checkpointing
 	StorageLock checkpoint_lock;
 };

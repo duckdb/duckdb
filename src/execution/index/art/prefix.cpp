@@ -330,6 +330,20 @@ void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 	node_ref.get().Vacuum(art, flags);
 }
 
+void Prefix::TransformToDeprecated(ART &art, Node &node) {
+
+	reference<Node> node_ref(node);
+	while (node_ref.get().GetType() == NType::PREFIX) {
+		auto prefix_ptr = Node::GetInMemoryPtr<Prefix>(art, node_ref, NType::PREFIX);
+		if (!prefix_ptr) {
+			return;
+		}
+		node_ref = prefix_ptr->ptr;
+	}
+
+	Node::TransformToDeprecated(art, node_ref.get());
+}
+
 Prefix &Prefix::Append(ART &art, const uint8_t byte) {
 
 	reference<Prefix> prefix(*this);

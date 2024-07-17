@@ -3,9 +3,10 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,7 @@ CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
                                               Serializer &serializer) {
+
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
 	auto pointer = table_data_writer.GetMetaBlockPointer();
@@ -80,7 +82,10 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	auto index_storage_infos = info->GetIndexes().GetStorageInfos();
+	auto db_options = checkpoint_manager.db.GetDatabase().config.options;
+	auto use_deprecated_storage = db_options.serialization_compatibility.serialization_version < 3;
+	auto index_storage_infos = info->GetIndexes().GetStorageInfos(use_deprecated_storage);
+
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);

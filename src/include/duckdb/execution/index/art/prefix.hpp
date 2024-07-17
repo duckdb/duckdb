@@ -78,6 +78,9 @@ public:
 	//! Vacuum the child of the node
 	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
 
+	//! Transform the child of the node.
+	static void TransformToDeprecated(ART &art, Node &node);
+
 private:
 	//! Appends the byte to this prefix node, or creates a subsequent prefix node,
 	//! if this node is full

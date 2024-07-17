@@ -39,28 +39,28 @@ INSERT INTO art (SELECT * FROM art);
 statement ok
 INSERT INTO art (SELECT * FROM art);
 
-## 86M entries
-#statement ok
-#INSERT INTO art (SELECT * FROM art LIMIT 28400000);
-#
-#query I
-#SELECT count(*) FROM art;
-#----
-#86000000
-#
-#query I
-#SELECT COUNT(DISTINCT id) FROM art;
-#----
-#7200000
-#
-#query II
-#SELECT MIN(length(id)), MAX(length(id)) FROM art;
-#----
-#10	10
-#
-#statement ok
-#CREATE TABLE base AS
-#SELECT mem_to_bytes(memory_usage)::BIGINT AS usage FROM pragma_database_size();
+# 86M entries
+statement ok
+INSERT INTO art (SELECT * FROM art LIMIT 28400000);
+
+query I
+SELECT count(*) FROM art;
+----
+86000000
+
+query I
+SELECT COUNT(DISTINCT id) FROM art;
+----
+7200000
+
+query II
+SELECT MIN(length(id)), MAX(length(id)) FROM art;
+----
+10	10
+
+statement ok
+CREATE TABLE base AS
+SELECT mem_to_bytes(memory_usage)::BIGINT AS usage FROM pragma_database_size();
 
 statement ok
 SET memory_limit='12GB';
@@ -68,9 +68,9 @@ SET memory_limit='12GB';
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
-#query I
-#SELECT mem_to_bytes(current.memory_usage) > base.usage AND
-#       	mem_to_bytes(current.memory_usage) < 4 * base.usage
-#FROM base, pragma_database_size() current;
-#----
-#1
+query I
+SELECT mem_to_bytes(current.memory_usage) > base.usage AND
+       	mem_to_bytes(current.memory_usage) < 4 * base.usage
+FROM base, pragma_database_size() current;
+----
+1

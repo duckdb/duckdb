@@ -193,4 +193,10 @@ void Node16::Vacuum(ART &art, const ARTFlags &flags) {
 	}
 }
 
+void Node16::TransformToDeprecated(ART &art) {
+	for (idx_t i = 0; i < count; i++) {
+		Node::TransformToDeprecated(art, children[i]);
+	}
+}
+
 } // namespace duckdb

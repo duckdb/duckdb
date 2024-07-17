@@ -167,21 +167,22 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	return result;
 }
 
-vector<IndexStorageInfoo> TableIndexList::GetStorageInfos() {
+vector<IndexStorageInfo> TableIndexList::GetStorageInfos(const bool use_deprecated_storage) {
 
-	vector<IndexStorageInfoo> index_storage_infos;
+	vector<IndexStorageInfo> index_storage_infos;
 	for (auto &index : indexes) {
 		if (index->IsBound()) {
-			auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(false);
+			auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(use_deprecated_storage, false);
 			D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 			index_storage_infos.push_back(index_storage_info);
-		} else {
-			// TODO: Will/should this ever happen?
-			auto index_storage_info = index->Cast<UnboundIndex>().GetStorageInfo();
-			D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
-			index_storage_infos.push_back(index_storage_info);
+			continue;
 		}
+
+		auto index_storage_info = index->Cast<UnboundIndex>().GetStorageInfo();
+		D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
+		index_storage_infos.push_back(index_storage_info);
 	}
+
 	return index_storage_infos;
 }
 

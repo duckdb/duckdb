@@ -34,15 +34,18 @@ class ART : public BoundIndex {
 public:
 	// Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
-	//! FixedSizeAllocator count of the ART (one for each node type).
+	//! FixedSizeAllocator count of the ART. One allocator per node type.
 	static constexpr uint8_t ALLOCATOR_COUNT = 6;
+	//! The index of the LEAF allocator.
+	static constexpr idx_t LEAF_ALLOCATOR_IDX = 1;
 
 public:
 	//! Constructs an ART.
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
-	    AttachedDatabase &db, const IndexStorageInfoo &info,
-	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr);
+	    AttachedDatabase &db,
+	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
+	    const IndexStorageInfo &info = IndexStorageInfo());
 
 	//! Root of the tree
 	Node tree = Node();
@@ -50,8 +53,8 @@ public:
 	shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data
 	bool owns_data;
-	//! True, if the ART uses deprecated storage. False, if the ART uses nested leaf storage.
-	bool deprecated_storage;
+	//! True, if the ART contains nested leaves.
+	bool has_nested_leaves;
 
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
@@ -64,7 +67,7 @@ public:
 	//! Create a index instance of this type.
 	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
 		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
-		                          input.unbound_expressions, input.db, input.storage_info, nullptr);
+		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
 		return std::move(art);
 	}
 
@@ -89,8 +92,8 @@ public:
 	//! Search equal values and fetches the row IDs
 	bool SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &row_ids);
 
-	//! Returns all ART storage information for serialization
-	IndexStorageInfoo GetStorageInfo(const bool get_buffers) override;
+	//! Returns ART storage serialization information.
+	IndexStorageInfo GetStorageInfo(const bool use_deprecated_storage, const bool to_wal) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -131,9 +134,9 @@ private:
 	//! Insert a row ID into an empty node.
 	bool InsertToEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
 
-	//! Returns all row IDs greater (or equal) than the search key.
+	//! Returns all row IDs greater than or equal to the search key.
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, vector<row_t> &row_ids);
-	//! Returns all row IDs less (or equal) than the upper_bound.
+	//! Returns all row IDs less than or equal to the upper_bound.
 	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, vector<row_t> &row_ids);
 	//! Returns all row IDs within the range of lower_bound and upper_bound.
 	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
@@ -155,7 +158,7 @@ private:
 	string VerifyAndToStringInternal(const bool only_verify);
 
 	//! Initialize the allocators of the ART
-	void InitAllocators(const IndexStorageInfoo &info);
+	void InitAllocators(const IndexStorageInfo &info);
 	//! STABLE STORAGE NOTE: This is for old storage files, to deserialize the allocators of the ART
 	void Deserialize(const BlockPointer &pointer);
 	//! Initializes the serialization of the index by combining the allocator data onto partial blocks

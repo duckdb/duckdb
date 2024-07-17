@@ -135,4 +135,13 @@ void Node256::Vacuum(ART &art, const ARTFlags &flags) {
 	}
 }
 
+void Node256::TransformToDeprecated(ART &art) {
+
+	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+		if (children[i].HasMetadata()) {
+			Node::TransformToDeprecated(art, children[i]);
+		}
+	}
+}
+
 } // namespace duckdb

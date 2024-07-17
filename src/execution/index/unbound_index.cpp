@@ -10,7 +10,7 @@ namespace duckdb {
 // Unbound index
 //-------------------------------------------------------------------------------
 
-UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfoo storage_info_p,
+UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info_p,
                            TableIOManager &table_io_manager, AttachedDatabase &db)
     : Index(create_info->Cast<CreateIndexInfo>().column_ids, table_io_manager, db), create_info(std::move(create_info)),
       storage_info(std::move(storage_info_p)) {

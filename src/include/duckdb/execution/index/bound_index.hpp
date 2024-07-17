@@ -114,8 +114,8 @@ public: // Index interface
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
 
-	//! Returns all index storage information for serialization
-	virtual IndexStorageInfoo GetStorageInfo(const bool get_buffers);
+	//! Returns ART storage serialization information.
+	virtual IndexStorageInfo GetStorageInfo(const bool use_deprecated_storage, const bool to_wal);
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
