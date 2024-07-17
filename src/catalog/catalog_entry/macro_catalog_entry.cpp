@@ -43,7 +43,7 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	info->catalog = catalog.GetName();
 	info->schema = schema.name;
 	info->name = name;
-	for(auto &function : macros) {
+	for (auto &function : macros) {
 		info->macros.push_back(function->Copy());
 	}
 	info->dependencies = dependencies;

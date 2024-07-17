@@ -101,21 +101,16 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> &expr) {
-	if (macro_func.macros.size() != 1) {
-		throw InternalException("FIXME: support multiple scalar macros");
-	}
-	// recast function so we can access the scalar member function->expression
-	auto &macro_def = macro_func.macros[0]->Cast<ScalarMacroFunction>();
-
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
 
-	string error =
-	    MacroFunction::ValidateArguments(*macro_func.macros[0], macro_func.name, function, positionals, defaults);
-	if (!error.empty()) {
-		throw BinderException(*expr, error);
+	auto bind_result =
+	    MacroFunction::BindMacroFunction(macro_func.macros, macro_func.name, function, positionals, defaults);
+	if (!bind_result.error.empty()) {
+		throw BinderException(*expr, bind_result.error);
 	}
+	auto &macro_def = macro_func.macros[bind_result.function_idx.GetIndex()]->Cast<ScalarMacroFunction>();
 
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types;

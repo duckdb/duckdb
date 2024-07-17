@@ -25,8 +25,24 @@ SELECT multi_add(),
 ----
 0	42	43	44	45	46
 
+# overload not found
+statement error
+SELECT multi_add(1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+----
+does not support 10 parameters
+
 # ambiguity conflict between macros
 statement error
 CREATE MACRO ambiguous_macro
 	(a) AS a,
-	(a) AS a + 1,
+	(a) AS a + 1
+----
+has multiple definitions with 1 parameters
+
+# error in macro overload definition
+statement error
+CREATE MACRO error_in_definition
+	(a) AS a,
+	(a, b) AS a + y
+----
+Referenced column "y" not found in FROM clause

@@ -61,7 +61,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	}
 	PivotEntryCheck("macro");
 
-	auto catalog_type = macros[0]->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY;
+	auto catalog_type =
+	    macros[0]->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY;
 	auto info = make_uniq<CreateMacroInfo>(catalog_type);
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;

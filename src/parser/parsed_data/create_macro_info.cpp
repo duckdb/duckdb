@@ -8,17 +8,18 @@ namespace duckdb {
 CreateMacroInfo::CreateMacroInfo(CatalogType type) : CreateFunctionInfo(type, INVALID_SCHEMA) {
 }
 
-CreateMacroInfo::CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> function, vector<unique_ptr<MacroFunction>> extra_functions) :
-	CreateFunctionInfo(type, INVALID_SCHEMA) {
+CreateMacroInfo::CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> function,
+                                 vector<unique_ptr<MacroFunction>> extra_functions)
+    : CreateFunctionInfo(type, INVALID_SCHEMA) {
 	macros.push_back(std::move(function));
-	for(auto &macro : extra_functions) {
+	for (auto &macro : extra_functions) {
 		macros.push_back(std::move(macro));
 	}
 }
 
 string CreateMacroInfo::ToString() const {
 	string result;
-	for(auto &function : macros) {
+	for (auto &function : macros) {
 		if (!result.empty()) {
 			result += ", ";
 		}
@@ -41,7 +42,7 @@ string CreateMacroInfo::ToString() const {
 
 unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
 	auto result = make_uniq<CreateMacroInfo>(type);
-	for(auto &macro : macros) {
+	for (auto &macro : macros) {
 		result->macros.push_back(macro->Copy());
 	}
 	result->name = name;
@@ -51,7 +52,7 @@ unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
 
 vector<unique_ptr<MacroFunction>> CreateMacroInfo::GetAllButFirstFunction() const {
 	vector<unique_ptr<MacroFunction>> result;
-	for(idx_t i = 1; i < macros.size(); i++) {
+	for (idx_t i = 1; i < macros.size(); i++) {
 		result.push_back(macros[i]->Copy());
 	}
 	return result;

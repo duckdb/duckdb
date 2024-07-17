@@ -172,23 +172,24 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = info.Cast<CreateMacroInfo>();
-	auto &scalar_function = base.macros[0]->Cast<ScalarMacroFunction>();
-
-	if (scalar_function.expression->HasParameter()) {
-		throw BinderException("Parameter expressions within macro's are not supported!");
-	}
 
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, info.catalog);
 	auto &db_config = DBConfig::GetConfig(context);
 	// try to bind each of the included functions
 	unordered_set<idx_t> positional_parameters;
-	for(auto &function : base.macros) {
+	for (auto &function : base.macros) {
+		auto &scalar_function = function->Cast<ScalarMacroFunction>();
+		if (scalar_function.expression->HasParameter()) {
+			throw BinderException("Parameter expressions within macro's are not supported!");
+		}
 		vector<LogicalType> dummy_types;
 		vector<string> dummy_names;
 		auto parameter_count = function->parameters.size();
 		if (positional_parameters.find(parameter_count) != positional_parameters.end()) {
-			throw BinderException("Ambiguity in macro overloads - macro \"%s\" has multiple definitions with %llu parameters", base.name, parameter_count);
+			throw BinderException(
+			    "Ambiguity in macro overloads - macro \"%s\" has multiple definitions with %llu parameters", base.name,
+			    parameter_count);
 		}
 		positional_parameters.insert(parameter_count);
 

@@ -31,7 +31,8 @@ public:
 	//! Extra functions are serialized if present in a separate field
 	vector<unique_ptr<MacroFunction>> GetAllButFirstFunction() const;
 	//! This is a weird constructor that exists only for serialization, similarly to GetAllButFirstFunction
-	CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> function, vector<unique_ptr<MacroFunction>> extra_functions);
+	CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> function,
+	                vector<unique_ptr<MacroFunction>> extra_functions);
 };
 
 } // namespace duckdb
