@@ -83,12 +83,6 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return ImplicitToUnionCast(input, source, target);
 	}
 
-	// now check if we are casting to a varint
-	if (source.id() != LogicalTypeId::VARINT && source.id() != LogicalTypeId::SQLNULL &&
-	    target.id() == LogicalTypeId::VARINT) {
-		return ToVarintCastSwitch(input, source, target);
-	}
-
 	// else, switch on source type
 	switch (source.id()) {
 	case LogicalTypeId::BOOLEAN:

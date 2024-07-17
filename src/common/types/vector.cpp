@@ -1466,7 +1466,6 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel->get_index(i);
 				if (validity.RowIsValid(oidx)) {
-					auto buf = strings[oidx].GetData();
 					Varint::Verify(strings[oidx]);
 				}
 			}
