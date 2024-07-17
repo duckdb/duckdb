@@ -67,6 +67,15 @@ if (NOT MINGW)
             )
 endif()
 
+################# INET
+duckdb_extension_load(inet
+    LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_inet
+    GIT_TAG eca867b2517af06eabc89ccd6234266e9a7d6d71
+    INCLUDE_DIR src/include
+    TEST_DIR test/sql
+    )
+
 ################# POSTGRES_SCANNER
 # Note: tests for postgres_scanner are currently not run. All of them need a postgres server running. One test
 #       uses a remote rds server but that's not something we want to run here.

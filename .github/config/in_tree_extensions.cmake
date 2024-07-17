@@ -8,7 +8,6 @@
 duckdb_extension_load(autocomplete)
 duckdb_extension_load(fts)
 duckdb_extension_load(httpfs)
-duckdb_extension_load(inet)
 duckdb_extension_load(icu)
 duckdb_extension_load(json)
 duckdb_extension_load(parquet)
