@@ -2,22 +2,13 @@
 # description: Test INT Varchar produces same blobs
 # group: [varint]
 
-# For obvious reasons
+# We skip this test since it tests a full integer range, only meant for local - release execution
 mode skip
 
 statement ok
 PRAGMA enable_verification
 
-loop i 0 2147483646
-
 query I
-select '${i}'::varint = ${i}::varint
+select distinct i::varchar::varint = i::varint from range(0, 2147483646) t(i);
 ----
 true
-
-query I
-select '-${i}'::varint = (-${i})::varint
-----
-true
-
-endloop

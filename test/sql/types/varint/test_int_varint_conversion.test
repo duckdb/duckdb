@@ -1,30 +1,25 @@
-# name: test/sql/types/varint/test_int_varint_conversion.test_slow
+# name: test/sql/types/varint/test_int_varint_conversion.test
 # description: Test basics of varint type
 # group: [varint]
 
 statement ok
 PRAGMA enable_verification
 
-loop i 0 100
-
-foreach int_type tinyint utinyint smallint usmallint integer uinteger bigint ubigint uhugeint double float hugeint
+foreach int_type tinyint utinyint smallint usmallint integer uinteger bigint ubigint hugeint uhugeint double float
 
 query I
-select  ${i}::${int_type}::varint = '${i}'::varint
+select distinct i::${int_type}::varint = i::varint from range(0, 100) t(i);
 ----
 true
 
 endloop
 
-
-foreach int_type tinyint  smallint  integer  bigint double float hugeint
+foreach int_type tinyint smallint integer bigint double float hugeint
 
 query I
-select  (-${i})::${int_type}::varint = '-${i}'::varint
+select distinct i::${int_type}::varint = i::varint from range(-100, 0) t(i);
 ----
 true
-
-endloop
 
 endloop
 
