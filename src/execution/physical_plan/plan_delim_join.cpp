@@ -14,9 +14,7 @@ namespace duckdb {
 static void GatherDelimScans(PhysicalOperator &op, vector<const_reference<PhysicalOperator>> &delim_scans,
                              idx_t delim_index) {
 	if (op.type == PhysicalOperatorType::DELIM_SCAN) {
-		// This should be auto &scan = op.Cast<PhysicalColumnDataScan>();, however, Cast<> does
-		// not work for this case currently.
-		PhysicalColumnDataScan &scan = reinterpret_cast<PhysicalColumnDataScan &>(op);
+		auto &scan = op.Cast<PhysicalColumnDataScan>();
 		scan.delim_index = optional_idx(delim_index);
 		delim_scans.push_back(op);
 	}

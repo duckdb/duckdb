@@ -115,7 +115,7 @@ string PhysicalColumnDataScan::ParamsToString() const {
 	case PhysicalOperatorType::DELIM_SCAN:
 		if (delim_index.IsValid()) {
 			result += "\n[INFOSEPARATOR]\n";
-			result += StringUtil::Format("idx: %llu", delim_index.GetIndex());
+			result += StringUtil::Format("delim_idx: %llu", delim_index.GetIndex());
 		}
 		break;
 	case PhysicalOperatorType::CTE_SCAN:
