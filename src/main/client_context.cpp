@@ -197,9 +197,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 	query_progress.Initialize();
 	// Notify any registered state of query begin
-	registered_state->Iterate([&](ClientContextState &state) {
-		state.QueryBegin(*this);
-	});
+	registered_state->Iterate([&](ClientContextState &state) { state.QueryBegin(*this); });
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
@@ -209,9 +207,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		active_query->executor->CancelTasks();
 	}
 	// Notify any registered state of query end
-	registered_state->Iterate([&](ClientContextState &state) {
-		state.QueryEnd(*this);
-	});
+	registered_state->Iterate([&](ClientContextState &state) { state.QueryEnd(*this); });
 	active_query->progress_bar.reset();
 
 	D_ASSERT(active_query.get());

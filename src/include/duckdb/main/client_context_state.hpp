@@ -116,7 +116,7 @@ public:
 
 	void Iterate(std::function<void(ClientContextState &)> callback) {
 		lock_guard<mutex> l(lock);
-		for(auto &entry : registered_state) {
+		for (auto &entry : registered_state) {
 			callback(*entry.second);
 		}
 	}
