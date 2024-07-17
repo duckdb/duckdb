@@ -86,11 +86,11 @@ public:
 		return const_iterator(*this, capacity);
 	}
 
-	iterator find(const idx_t &index) { // NOLINT: match stl case
+	iterator find(const key_type &index) { // NOLINT: match stl case
 		return occupied.RowIsValidUnsafe(index) ? iterator(*this, index) : end();
 	}
 
-	const_iterator find(const idx_t &index) const { // NOLINT: match stl case
+	const_iterator find(const key_type &index) const { // NOLINT: match stl case
 		return occupied.RowIsValidUnsafe(index) ? const_iterator(*this, index) : end();
 	}
 
@@ -112,7 +112,7 @@ public:
 	using occupied_mask = typename fixed_size_map_t<mapped_type>::occupied_mask;
 
 public:
-	fixed_size_map_iterator(map_type &map_p, idx_t index) : map(map_p) {
+	fixed_size_map_iterator(map_type &map_p, key_type index) : map(map_p) {
 		occupied_mask::GetEntryIndex(index, entry_idx, idx_in_entry);
 	}
 
@@ -123,7 +123,7 @@ public:
 		}
 		// Loop until we find an occupied index, or until the end
 		auto end = map.end();
-		do {
+		while (*this < end) {
 			const auto &entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
 			if (entry == ~occupied_mask::ValidityBuffer::MAX_ENTRY) {
 				// Entire entry is unoccupied, skip
@@ -147,7 +147,7 @@ public:
 					NextEntry();
 				}
 			}
-		} while (*this != end);
+		}
 		return *this;
 	}
 
@@ -175,6 +175,16 @@ public:
 
 	friend bool operator!=(const fixed_size_map_iterator &a, const fixed_size_map_iterator &b) {
 		return !(a == b);
+	}
+
+	friend bool operator<(const fixed_size_map_iterator &a, const fixed_size_map_iterator &b) {
+		if (a.entry_idx < b.entry_idx) {
+			return true;
+		}
+		if (a.entry_idx == b.entry_idx) {
+			return a.idx_in_entry < b.idx_in_entry;
+		}
+		return false;
 	}
 
 private:
