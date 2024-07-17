@@ -162,29 +162,29 @@ static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector
 	return ListContainsOrPosition<bool, ContainsFunctor, ListArgFunctor>(args, result);
 }
 
-static ScalarFunction GetListFunction() {
+static ScalarFunction GetListContains() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::BOOLEAN,
 	                      ListContainsFunction, ListContainsBind, nullptr);
 }
 
 ScalarFunctionSet ContainsFun::GetFunctions() {
-	ScalarFunction string_fun("contains", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
-	auto list_fun = GetListFunction();
+	auto string_fun = GetStringContains();
+	auto list_fun = GetListContains();
 	ScalarFunctionSet set("contains");
 	set.AddFunction(string_fun);
 	set.AddFunction(list_fun);
 	return set;
 }
 
-ScalarFunction ContainsFun::GetStringContains(ClientContext &context) {
-	auto set = ContainsFun::GetFunctions();
-	return set.GetFunctionByArguments(context, {LogicalType::VARCHAR, LogicalType::VARCHAR});
+ScalarFunction ContainsFun::GetStringContains() {
+	ScalarFunction string_fun("contains", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
+	return string_fun;
 }
 
 void ContainsFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(GetFunctions());
-	set.AddFunction({"list_contains", "array_contains", "list_has", "array_has"}, GetListFunction());
+	set.AddFunction({"list_contains", "array_contains", "list_has", "array_has"}, GetListContains());
 }
 
 } // namespace duckdb
