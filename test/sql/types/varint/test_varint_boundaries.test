@@ -5,199 +5,43 @@
 statement ok
 PRAGMA enable_verification
 
-# Boundary tests for tinyint
-query I
-select (-128)::tinyint::varint = '-128'::varint
+# Test All Integers
+query IIIIIIIIII
+select tinyint::varchar::varint = tinyint::varint,
+smallint::varchar::varint = smallint::varint,
+int::varchar::varint = int::varint,
+bigint::varchar::varint = bigint::varint,
+hugeint::varchar::varint = hugeint::varint,
+uhugeint::varchar::varint = uhugeint::varint,
+utinyint::varchar::varint = utinyint::varint,
+usmallint::varchar::varint = usmallint::varint,
+uint::varchar::varint = uint::varint,
+ubigint::varchar::varint = ubigint::varint
+FROM test_all_types()
+where tinyint is not null;
 ----
-true
+true	true	true	true	false	true	true	true	true	true
+true	true	true	true	true	true	true	true	true	true
 
-query I
-select (127)::tinyint::varint = '127'::varint
-----
-true
 
-query I
-select (-128)::varint::varchar = '-128'::tinyint::varchar
+query IIIIIIIIII
+select tinyint::varchar = tinyint::varint::varchar ,
+smallint::varchar = smallint::varint::varchar ,
+int::varchar = int::varint::varchar ,
+bigint::varchar = bigint::varint::varchar ,
+hugeint::varchar = hugeint::varint::varchar ,
+uhugeint::varchar = uhugeint::varint::varchar ,
+utinyint::varchar = utinyint::varint::varchar ,
+usmallint::varchar = usmallint::varint::varchar ,
+uint::varchar = uint::varint::varchar ,
+ubigint::varchar::varint = ubigint::varint::varchar
+FROM test_all_types()
+where tinyint is not null;
 ----
-true
+true	true	true	true	false	true	true	true	true	true
+true	true	true	true	true	true	true	true	true	true
 
-query I
-select (127)::varint::varchar = '127'::tinyint::varchar
-----
-true
-
-# Boundary tests for utinyint
-query I
-select (0)::utinyint::varint = '0'::varint
-----
-true
-
-query I
-select (255)::utinyint::varint = '255'::varint
-----
-true
-
-query I
-select (0)::varint::varchar = '0'::utinyint::varchar
-----
-true
-
-query I
-select (255)::varint::varchar = '255'::utinyint::varchar
-----
-true
-
-# Boundary tests for smallint
-query I
-select (-32768)::smallint::varint = '-32768'::varint
-----
-true
-
-query I
-select (32767)::smallint::varint = '32767'::varint
-----
-true
-
-query I
-select (-32768)::varint::varchar = '-32768'::smallint::varchar
-----
-true
-
-query I
-select (32767)::varint::varchar = '32767'::smallint::varchar
-----
-true
-
-# Boundary tests for usmallint
-query I
-select (0)::usmallint::varint = '0'::varint
-----
-true
-
-query I
-select (65535)::usmallint::varint = '65535'::varint
-----
-true
-
-query I
-select (0)::varint::varchar = '0'::usmallint::varchar
-----
-true
-
-query I
-select (65535)::varint::varchar = '65535'::usmallint::varchar
-----
-true
-
-# Boundary tests for integer
-query I
-select (-2147483648)::integer::varint = '-2147483648'::varint
-----
-true
-
-query I
-select (2147483647)::integer::varint = '2147483647'::varint
-----
-true
-
-query I
-select (-2147483648)::varint::varchar::varchar = '-2147483648'::integer::varchar::varchar
-----
-true
-
-query I
-select (2147483647)::varint::varchar::varchar = '2147483647'::integer::varchar::varchar
-----
-true
-
-# Boundary tests for uinteger
-query I
-select (0)::uinteger::varint = '0'::varint
-----
-true
-
-query I
-select (4294967295)::uinteger::varint = '4294967295'::varint
-----
-true
-
-query I
-select (0)::varint::varchar = '0'::uinteger::varchar
-----
-true
-
-query I
-select (4294967295)::varint::varchar = '4294967295'::uinteger::varchar
-----
-true
-
-# Boundary tests for bigint
-query I
-select (-9223372036854775808)::bigint::varint = '-9223372036854775808'::varint
-----
-true
-
-query I
-select (9223372036854775807)::bigint::varint = '9223372036854775807'::varint
-----
-true
-
-query I
-select (-9223372036854775808)::varint::varchar = '-9223372036854775808'::bigint::varchar
-----
-true
-
-query I
-select (9223372036854775807)::varint::varchar = '9223372036854775807'::bigint::varchar
-----
-true
-
-# Boundary tests for ubigint
-query I
-select (0)::ubigint::varint = '0'::varint
-----
-true
-
-query I
-select (18446744073709551615)::ubigint::varint = '18446744073709551615'::varint
-----
-true
-
-query I
-select (0)::varint::varchar = '0'::ubigint::varchar
-----
-true
-
-query I
-select (18446744073709551615)::ubigint::varint::varchar = '18446744073709551615'::ubigint::varchar
-----
-true
-
-# Boundary tests for uhugeint
-query I
-select (0)::uhugeint::varint = '0'::varint
-----
-true
-
-query I
-select '18446744073709551615'::uhugeint::varint
-----
-18446744073709551615
-
-query I
-select (18446744073709551615)::uhugeint::varint = '18446744073709551615'::varint
-----
-true
-
-query I
-select (0)::varint::varchar = '0'::uhugeint::varchar
-----
-true
-
-query I
-select '18446744073709551615'::uhugeint::varint::varchar = '18446744073709551615'::uhugeint::varchar
-----
-true
+# Floats and doubles have more complicated string coversions, hence the tests are separated
 
 # Boundary tests for double
 query I
@@ -228,49 +72,5 @@ true
 
 query I
 select (-3.4028235E+38)::float::varint = '-340282346638528859811704183484516925440'::varint
-----
-true
-
-
-# Boundary tests for hugeint
-query I
-select (170141183460469231731687303715884105727)::hugeint::varint = '170141183460469231731687303715884105727'::varint
-----
-true
-
-query I
-select (-170141183460469231731687303715884105727)::hugeint::varint = '-170141183460469231731687303715884105727'::varint
-----
-true
-
-query I
-select (170141183460469231731687303715884105727)::varint::varchar = '170141183460469231731687303715884105727'::hugeint::varchar
-----
-true
-
-query I
-select (-170141183460469231731687303715884105727)::varint::varchar = '-170141183460469231731687303715884105727'::hugeint::varchar
-----
-true
-
-# Boundary tests for uhugeint
-
-query I
-select (0)::uhugeint::varint = '0'::varint
-----
-true
-
-query I
-select '340282366920938463463374607431768211455'::uhugeint::varint = '340282366920938463463374607431768211455'::varint
-----
-true
-
-query I
-select (0)::varint::varchar = '0'::uhugeint::varchar
-----
-true
-
-query I
-select '340282366920938463463374607431768211455'::varint::varchar = '340282366920938463463374607431768211455'::uhugeint::varchar
 ----
 true
