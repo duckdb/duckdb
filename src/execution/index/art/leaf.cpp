@@ -9,15 +9,7 @@
 
 namespace duckdb {
 
-//! Deserialize a deprecated leaf into a nested leaf.
-//! Serialize a nested leaf into a deprecated leaf.
-
-ARTKey KeyFromRowId(AttachedDatabase &db, const row_t row_id) {
-	ArenaAllocator arena_allocator(Allocator::Get(db));
-	LogicalType row_id_type(LogicalType::ROW_TYPE);
-	auto value = Value::BIGINT(row_id);
-	return ARTKey::CreateKey(arena_allocator, row_id_type.InternalType(), value);
-}
+//! TODO: Serialize a nested leaf into a deprecated leaf.
 
 Node &UnnestMutable(ART &art, Node &node) {
 	D_ASSERT(node.GetType() == NType::LEAF);
@@ -83,9 +75,7 @@ void MergeInlined(ART &art, Node &l_node, Node &r_node) {
 
 	// Create an ARTKey from the row ID.
 	ArenaAllocator arena_allocator(Allocator::Get(art.db));
-	LogicalType row_id_type(LogicalType::ROW_TYPE);
-	auto value = Value::BIGINT(r_node.GetRowId());
-	auto key = ARTKey::CreateKey(arena_allocator, row_id_type.InternalType(), value);
+	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, LogicalType(LogicalType::ROW_TYPE), r_node.GetRowId());
 
 	// Insert the ARTKey.
 	Leaf::Insert(art, l_node, key);
@@ -124,7 +114,9 @@ void InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id) {
 	auto &leaf = Leaf::New(art, node);
 
 	// Insert both row IDs into the nested ART.
-	auto inlined_row_id_key = KeyFromRowId(art.db, inlined_row_id);
+	ArenaAllocator arena_allocator(Allocator::Get(art.db));
+	auto inlined_row_id_key =
+	    ARTKey::CreateARTKey<row_t>(arena_allocator, LogicalType(LogicalType::ROW_TYPE), inlined_row_id);
 	art.Insert(leaf.ptr, inlined_row_id_key, 0, inlined_row_id_key);
 	art.Insert(leaf.ptr, row_id, 0, row_id);
 }
@@ -140,8 +132,7 @@ void Leaf::Insert(ART &art, Node &node, const ARTKey &row_id) {
 	auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
 	if (leaf.count != 0) {
 		// This is a deprecated leaf. We transform it.
-		// TODO: transform.
-		leaf.count = 0;
+		TransformToNested(art, node);
 	}
 
 	art.Insert(leaf.ptr, row_id, 0, row_id);
@@ -158,8 +149,7 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const ARTKey &row_id) {
 	auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
 	if (leaf.count != 0) {
 		// This is a deprecated leaf. We transform it.
-		// TODO: transform.
-		leaf.count = 0;
+		TransformToNested(art, node);
 	}
 
 	// Erase the row ID.
@@ -238,6 +228,30 @@ void Leaf::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 	}
 }
 
+void Leaf::TransformToNested(ART &art, Node &node) {
+
+	ArenaAllocator arena_allocator(Allocator::Get(art.db));
+	Node root = Node();
+
+	// Move all row IDs into the nested leaf.
+	reference<const Node> leaf_ref(node);
+	while (leaf_ref.get().HasMetadata()) {
+		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, NType::LEAF);
+		for (idx_t i = 0; i < leaf.count; i++) {
+			auto row_id =
+			    ARTKey::CreateARTKey<row_t>(arena_allocator, LogicalType(LogicalType::ROW_TYPE), leaf.row_ids[i]);
+			art.Insert(root, row_id, 0, row_id);
+		}
+		leaf_ref = leaf.ptr;
+	}
+
+	auto &leaf = Node::RefMutable<Leaf>(art, leaf_ref, NType::LEAF);
+	Leaf::DeprecatedFree(art, leaf.ptr);
+
+	leaf.ptr = root;
+	leaf.count = 0;
+}
+
 //===--------------------------------------------------------------------===//
 // Debug-only functions.
 //===--------------------------------------------------------------------===//
@@ -277,6 +291,16 @@ bool Leaf::ContainsRowId(ART &art, const Node &node, const ARTKey &row_id) {
 //===--------------------------------------------------------------------===//
 // Deprecated code paths.
 //===--------------------------------------------------------------------===//
+
+void Leaf::DeprecatedFree(ART &art, Node &node) {
+	Node next_node;
+	while (node.HasMetadata()) {
+		next_node = Node::RefMutable<Leaf>(art, node, NType::LEAF).ptr;
+		Node::GetAllocator(art, NType::LEAF).Free(node);
+		node = next_node;
+	}
+	node.Clear();
+}
 
 bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, idx_t max_count) {
 

@@ -70,6 +70,9 @@ public:
 	//! Vacuums the leaf.
 	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
 
+	//! Transforms a deprecated leaf into a nested leaf.
+	static void TransformToNested(ART &art, Node &node);
+
 	//! Returns the string representation of the leaf, if only_verify is true.
 	//! Else, it traverses and verifies the leaf.
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
@@ -77,6 +80,9 @@ public:
 	static bool ContainsRowId(ART &art, const Node &node, const ARTKey &row_id);
 
 public:
+	//! Frees the linked list of leaves.
+	static void DeprecatedFree(ART &art, Node &node);
+
 	//! Fills the row_ids vector with the row IDs of this linked list of leaves.
 	//! Never pushes more than max_count row IDs.
 	static bool DeprecatedGetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, const idx_t max_count);

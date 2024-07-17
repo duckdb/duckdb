@@ -83,6 +83,13 @@ private:
 	}
 };
 
+template <>
+ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, string_t value);
+template <>
+ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, const char *value);
+template <>
+void ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, ARTKey &key, string_t value);
+
 class ARTKeySection {
 public:
 	ARTKeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p);
@@ -95,11 +102,4 @@ public:
 	idx_t depth;
 	data_t key_byte;
 };
-
-template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, string_t value);
-template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, const char *value);
-template <>
-void ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, ARTKey &key, string_t value);
 } // namespace duckdb
