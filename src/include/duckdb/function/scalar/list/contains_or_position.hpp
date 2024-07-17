@@ -87,48 +87,6 @@ static void TemplatedContainsOrPosition(DataChunk &args, Vector &result, bool is
 	}
 }
 
-template <LogicalTypeId RETURN_TYPE>
-unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 2);
-
-	// If the first argument is an array, cast it to a list
-	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-
-	const auto &list = arguments[0]->return_type; // change to list
-	const auto &value = arguments[1]->return_type;
-	if (list.id() == LogicalTypeId::UNKNOWN) {
-		bound_function.return_type = RETURN_TYPE;
-		if (value.id() != LogicalTypeId::UNKNOWN) {
-			// only list is a parameter, cast it to a list of value type
-			bound_function.arguments[0] = LogicalType::LIST(value);
-			bound_function.arguments[1] = value;
-		}
-	} else if (value.id() == LogicalTypeId::UNKNOWN) {
-		// only value is a parameter: we expect the child type of list
-		auto const &child_type = ListType::GetChildType(list);
-		bound_function.arguments[0] = list;
-		bound_function.arguments[1] = child_type;
-		bound_function.return_type = RETURN_TYPE;
-	} else {
-		auto const &child_type = ListType::GetChildType(list);
-		LogicalType max_child_type;
-		if (!LogicalType::TryGetMaxLogicalType(context, child_type, value, max_child_type)) {
-			throw BinderException(
-			    "Cannot get list_position of element of type %s in a list of type %s[] - an explicit cast is required",
-			    value.ToString(), child_type.ToString());
-		}
-		auto list_type = LogicalType::LIST(max_child_type);
-
-		bound_function.arguments[0] = list_type;
-		bound_function.arguments[1] = value == max_child_type ? value : max_child_type;
-
-		// list_contains and list_position only differ in their return type
-		bound_function.return_type = RETURN_TYPE;
-	}
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
-}
-
 template <class T, class OP, class LIST_ACCESSOR>
 void ListContainsOrPosition(DataChunk &args, Vector &result) {
 	const auto physical_type = args.data[1].GetType().InternalType();

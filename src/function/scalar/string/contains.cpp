@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -152,24 +153,9 @@ struct ContainsOperator {
 	}
 };
 
-static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
-	return ListContainsOrPositionBind<LogicalType::BOOLEAN>(context, bound_function, arguments);
-}
-
-static void ListContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	(void)state;
-	return ListContainsOrPosition<bool, ContainsFunctor, ListArgFunctor>(args, result);
-}
-
-static ScalarFunction GetListContains() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::BOOLEAN,
-	                      ListContainsFunction, ListContainsBind, nullptr);
-}
-
 ScalarFunctionSet ContainsFun::GetFunctions() {
 	auto string_fun = GetStringContains();
-	auto list_fun = GetListContains();
+	auto list_fun = ListContainsFun::GetFunction();
 	ScalarFunctionSet set("contains");
 	set.AddFunction(string_fun);
 	set.AddFunction(list_fun);
@@ -184,7 +170,6 @@ ScalarFunction ContainsFun::GetStringContains() {
 
 void ContainsFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(GetFunctions());
-	set.AddFunction({"list_contains", "array_contains", "list_has", "array_has"}, GetListContains());
 }
 
 } // namespace duckdb
