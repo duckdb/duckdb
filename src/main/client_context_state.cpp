@@ -2,9 +2,9 @@
 
 namespace duckdb {
 
-
-RegisteredStateIterator::RegisteredStateIterator(RegisteredStateManager &manager, iterator_type iterator_p, idx_t state_version) :
-	manager_ref(manager), iterator(std::move(iterator_p)), state_version(state_version) {
+RegisteredStateIterator::RegisteredStateIterator(RegisteredStateManager &manager, iterator_type iterator_p,
+                                                 idx_t state_version)
+    : manager_ref(manager), iterator(std::move(iterator_p)), state_version(state_version) {
 }
 RegisteredStateIterator &RegisteredStateIterator::operator++() {
 	auto &manager = manager_ref.get();
@@ -40,4 +40,4 @@ RegisteredStateIterator RegisteredStateManager::end() {
 	return RegisteredStateIterator(*this, registered_state.end(), state_version);
 }
 
-}
+} // namespace duckdb
