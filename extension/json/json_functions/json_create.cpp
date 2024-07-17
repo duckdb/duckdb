@@ -514,7 +514,6 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		TemplatedCreateValues<double, double>(doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		TemplatedCreateValues<string_t, string_t>(doc, vals, value_v, count);

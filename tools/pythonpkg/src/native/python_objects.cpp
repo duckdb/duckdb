@@ -504,7 +504,6 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 	case LogicalTypeId::BLOB:
 		return py::bytes(StringValue::Get(val));
 	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:
 		return py::cast(Bit::ToString(StringValue::Get(val)));
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:

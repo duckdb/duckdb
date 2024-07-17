@@ -173,8 +173,6 @@ static int64_t ImplicitCastFloat(const LogicalType &to) {
 
 static int64_t ImplicitCastDouble(const LogicalType &to) {
 	switch (to.id()) {
-	case LogicalTypeId::VARINT:
-		return 101;
 	default:
 		return -1;
 	}

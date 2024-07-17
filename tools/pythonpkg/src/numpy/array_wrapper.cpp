@@ -729,7 +729,6 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::StringConvert>(append_data);
 		break;
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARINT:
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(append_data);
 		break;
 	case LogicalTypeId::BIT:
