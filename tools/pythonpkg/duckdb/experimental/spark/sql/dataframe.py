@@ -732,8 +732,11 @@ class DataFrame:
         """
         from .group import GroupedData, Grouping
 
-        groups = Grouping(*cols)
-        return GroupedData(groups, self)
+        if len(cols) == 1 and isinstance(cols[0], list):
+            columns = cols[0]
+        else:
+            columns = cols
+        return GroupedData(Grouping(*columns), self)
 
     @property
     def write(self) -> DataFrameWriter:

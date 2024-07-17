@@ -49,9 +49,9 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	auto &expr = *expr_ptr;
 	switch (expr.expression_class) {
 	case ExpressionClass::WINDOW:
-		return BindResult("window functions are not allowed in index expressions");
+		return BindResult(BinderException::Unsupported(expr, "window functions are not allowed in index expressions"));
 	case ExpressionClass::SUBQUERY:
-		return BindResult("cannot use subquery in index expressions");
+		return BindResult(BinderException::Unsupported(expr, "cannot use subquery in index expressions"));
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}

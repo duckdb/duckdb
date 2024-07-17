@@ -54,6 +54,26 @@ string LogicalGet::ParamsToString() const {
 	return result + "\n" + function.to_string(bind_data.get());
 }
 
+void LogicalGet::SetColumnIds(vector<column_t> &&column_ids) {
+	this->column_ids = std::move(column_ids);
+}
+
+void LogicalGet::AddColumnId(column_t column_id) {
+	column_ids.push_back(column_id);
+}
+
+void LogicalGet::ClearColumnIds() {
+	column_ids.clear();
+}
+
+const vector<column_t> &LogicalGet::GetColumnIds() const {
+	return column_ids;
+}
+
+vector<column_t> &LogicalGet::GetMutableColumnIds() {
+	return column_ids;
+}
+
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	if (column_ids.empty()) {
 		return {ColumnBinding(table_index, 0)};

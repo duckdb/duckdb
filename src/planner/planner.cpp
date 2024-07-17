@@ -108,7 +108,6 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	prepared_data->types = types;
 	prepared_data->value_map = std::move(value_map);
 	prepared_data->properties = properties;
-	prepared_data->catalog_version = MetaTransaction::Get(context).catalog_version;
 	return prepared_data;
 }
 

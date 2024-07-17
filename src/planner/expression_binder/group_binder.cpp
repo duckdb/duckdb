@@ -31,9 +31,9 @@ BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	}
 	switch (expr.expression_class) {
 	case ExpressionClass::DEFAULT:
-		return BindResult("GROUP BY clause cannot contain DEFAULT clause");
+		return BindUnsupportedExpression(expr, depth, "GROUP BY clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindResult("GROUP BY clause cannot contain window functions!");
+		return BindUnsupportedExpression(expr, depth, "GROUP BY clause cannot contain window functions!");
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}

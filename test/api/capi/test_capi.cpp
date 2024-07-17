@@ -1,5 +1,4 @@
 #include "capi_tester.hpp"
-
 #include <regex>
 
 using namespace duckdb;

@@ -237,13 +237,12 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
 	if (table_function.in_out_function && !table_function.projection_pushdown) {
-		get->column_ids.reserve(return_types.size());
 		for (idx_t i = 0; i < return_types.size(); i++) {
-			get->column_ids.push_back(i);
+			get->AddColumnId(i);
 		}
 	}
 	// now add the table function to the bind context so its columns can be bound
-	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
+	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
 	                              get->GetTable().get());
 	return std::move(get);
 }
