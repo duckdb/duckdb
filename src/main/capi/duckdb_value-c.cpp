@@ -1,6 +1,7 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 static duckdb_value WrapValue(duckdb::Value *list_value) {
 	return reinterpret_cast<duckdb_value>(list_value);
@@ -61,6 +62,10 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	if (logical_type.id() != duckdb::LogicalTypeId::STRUCT) {
 		return nullptr;
 	}
+	if (duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::ANY)) {
+		return nullptr;
+	}
 
 	auto count = duckdb::StructType::GetChildCount(logical_type);
 	duckdb::vector<duckdb::Value> unwrapped_values;
@@ -87,6 +92,10 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 	}
 	auto &logical_type = UnwrapType(type);
 	duckdb::vector<duckdb::Value> unwrapped_values;
+	if (duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::ANY)) {
+		return nullptr;
+	}
 
 	for (idx_t i = 0; i < value_count; i++) {
 		auto value = values[i];
@@ -113,6 +122,10 @@ duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *v
 		return nullptr;
 	}
 	auto &logical_type = UnwrapType(type);
+	if (duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::ANY)) {
+		return nullptr;
+	}
 	duckdb::vector<duckdb::Value> unwrapped_values;
 
 	for (idx_t i = 0; i < value_count; i++) {

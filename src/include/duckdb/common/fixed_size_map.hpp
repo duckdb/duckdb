@@ -125,7 +125,7 @@ public:
 		auto end = map.end();
 		while (*this < end) {
 			const auto &entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
-			if (entry == ~occupied_mask::ValidityBuffer::MAX_ENTRY) {
+			if (entry == static_cast<uint8_t>(~occupied_mask::ValidityBuffer::MAX_ENTRY)) {
 				// Entire entry is unoccupied, skip
 				if (entry_idx == end.entry_idx) {
 					// This is the last entry
