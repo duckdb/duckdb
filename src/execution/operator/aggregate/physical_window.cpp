@@ -617,7 +617,7 @@ void WindowLocalSourceState::Sink() {
 
 			//	TODO: Stagger functions to reduce contention?
 			for (idx_t w = 0; w < executors.size(); ++w) {
-				executors[w]->Sink(input_chunk, input_idx, scanner->Count(), *gestates[w], *local_states[w]);
+				executors[w]->Sink(input_chunk, input_idx, window_hash_group->count, *gestates[w], *local_states[w]);
 			}
 
 			window_hash_group->sunk += input_chunk.size();
@@ -808,7 +808,7 @@ bool PhysicalWindow::SupportsBatchIndex() const {
 	//	We can only preserve order for single partitioning
 	//	or work stealing causes out of order batch numbers
 	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
-	return wexpr.partitions.empty();
+	return wexpr.partitions.empty(); // NOLINT
 }
 
 OrderPreservationType PhysicalWindow::SourceOrder() const {
