@@ -31,7 +31,7 @@ void TransactionContext::BeginTransaction() {
 	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp);
 
 	// Notify any registered state of transaction begin
-	for (auto const &s : context.registered_state) {
+	for (auto const &s : *context.registered_state) {
 		s.second->TransactionBegin(*current_transaction, context);
 	}
 }
@@ -45,12 +45,12 @@ void TransactionContext::Commit() {
 	auto error = transaction->Commit();
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
-		for (auto const &s : context.registered_state) {
+		for (auto const &s : *context.registered_state) {
 			s.second->TransactionRollback(*transaction, context);
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	} else {
-		for (auto const &s : context.registered_state) {
+		for (auto const &s : *context.registered_state) {
 			s.second->TransactionCommit(*transaction, context);
 		}
 	}
@@ -75,7 +75,7 @@ void TransactionContext::Rollback() {
 	ClearTransaction();
 	transaction->Rollback();
 	// Notify any registered state of transaction rollback
-	for (auto const &s : context.registered_state) {
+	for (auto const &s : *context.registered_state) {
 		s.second->TransactionRollback(*transaction, context);
 	}
 }

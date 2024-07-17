@@ -395,7 +395,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		return;
 	}
 
-	for (auto &it : context.registered_state) {
+	for (auto &it : *context.registered_state) {
 		it.second->WriteProfilingInformation(ss);
 	}
 

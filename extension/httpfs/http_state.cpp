@@ -60,15 +60,7 @@ void HTTPState::Reset() {
 }
 
 shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context) {
-	auto lookup = context.registered_state.find("http_state");
-
-	if (lookup != context.registered_state.end()) {
-		return shared_ptr_cast<ClientContextState, HTTPState>(lookup->second);
-	}
-
-	auto http_state = make_shared_ptr<HTTPState>();
-	context.registered_state["http_state"] = http_state;
-	return http_state;
+	return context.registered_state->GetOrCreate<HTTPState>("http_state");
 }
 
 shared_ptr<HTTPState> HTTPState::TryGetState(optional_ptr<FileOpener> opener) {

@@ -23,12 +23,52 @@ index 42f9323..4050960 100644
  #include "duckdb/common/file_opener.hpp"
  #include "duckdb/common/string_util.hpp"
  #include "duckdb/main/secret/secret.hpp"
+diff --git a/src/azure_filesystem.cpp b/src/azure_filesystem.cpp
+index 6175421..e32b2ca 100644
+--- a/src/azure_filesystem.cpp
++++ b/src/azure_filesystem.cpp
+@@ -169,21 +169,20 @@ shared_ptr<AzureContextState> AzureStorageFileSystem::GetOrCreateStorageContext(
+ 
+ 		auto context_key = GetContextPrefix() + parsed_url.storage_account_name;
+ 
+-		auto &registered_state = client_context->registered_state;
+-		auto storage_account_it = registered_state.find(context_key);
+-		if (storage_account_it == registered_state.end()) {
++		auto &registered_state = *client_context->registered_state;
++		auto azure_context_state = registered_state.Get<AzureContextState>(context_key);
++		if (!azure_context_state) {
+ 			result = CreateStorageContext(opener, path, parsed_url);
+-			registered_state.insert(std::make_pair(context_key, result));
++			registered_state.Insert(context_key, result);
+ 		} else {
+-			auto *azure_context_state = static_cast<AzureContextState *>(storage_account_it->second.get());
+ 			// We keep the context valid until the QueryEnd (cf: AzureBlobContextState#QueryEnd())
+ 			// we do so because between queries the user can change the secret/variable that has been set
+ 			// the side effect of that is that we will reconnect (potentially retrieve a new token) on each request
+ 			if (!azure_context_state->IsValid()) {
+ 				result = CreateStorageContext(opener, path, parsed_url);
+-				registered_state[context_key] = result;
++				registered_state.Insert(context_key, result);
+ 			} else {
+-				result = shared_ptr<AzureContextState>(storage_account_it->second, azure_context_state);
++				result = azure_context_state;
+ 			}
+ 		}
+ 	} else {
+@@ -193,6 +192,7 @@ shared_ptr<AzureContextState> AzureStorageFileSystem::GetOrCreateStorageContext(
+ 	return result;
+ }
+ 
++
+ AzureReadOptions AzureStorageFileSystem::ParseAzureReadOptions(optional_ptr<FileOpener> opener) {
+ 	AzureReadOptions options;
+ 
 diff --git a/src/azure_http_state.cpp b/src/azure_http_state.cpp
 new file mode 100644
-index 0000000..96fe8ce
+index 0000000..c65942f
 --- /dev/null
 +++ b/src/azure_http_state.cpp
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,51 @@
 +#include "azure_http_state.hpp"
 +#include "duckdb/main/client_context.hpp"
 +#include "duckdb/main/query_profiler.hpp"
@@ -45,15 +85,7 @@ index 0000000..96fe8ce
 +}
 +
 +shared_ptr<AzureHTTPState> AzureHTTPState::TryGetState(ClientContext &context) {
-+	auto lookup = context.registered_state.find("azure_http_state");
-+
-+	if (lookup != context.registered_state.end()) {
-+		return shared_ptr_cast<ClientContextState, AzureHTTPState>(lookup->second);
-+	}
-+
-+	auto http_state = make_shared_ptr<AzureHTTPState>();
-+	context.registered_state["azure_http_state"] = http_state;
-+	return http_state;
++	return context.registered_state->GetOrCreate<AzureHTTPState>("azure_http_state");
 +}
 +
 +shared_ptr<AzureHTTPState> AzureHTTPState::TryGetState(optional_ptr<FileOpener> opener) {

@@ -591,14 +591,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 	if (use_shared_cache) {
 		return httpfs.GetGlobalCache();
 	} else if (client_context) {
-		auto lookup = client_context->registered_state.find("http_cache");
-		if (lookup == client_context->registered_state.end()) {
-			auto cache = make_shared_ptr<HTTPMetadataCache>(true, true);
-			client_context->registered_state["http_cache"] = cache;
-			return cache.get();
-		} else {
-			return (HTTPMetadataCache *)lookup->second.get();
-		}
+		return client_context->registered_state->GetOrCreate<HTTPMetadataCache>("http_cache", true, true).get();
 	}
 	return nullptr;
 }

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 
 namespace duckdb {
@@ -18,6 +19,7 @@ class MetaTransaction;
 class PreparedStatementData;
 class SQLStatement;
 struct PendingQueryParameters;
+class RegisteredStateManager;
 
 enum class RebindQueryInfo { DO_NOT_REBIND, ATTEMPT_TO_REBIND };
 
@@ -76,6 +78,65 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+};
+
+class RegisteredStateIterator {
+public:
+	using iterator_type = unordered_map<string, shared_ptr<ClientContextState>>::iterator;
+	using value_type = unordered_map<string, shared_ptr<ClientContextState>>::value_type;
+
+public:
+	RegisteredStateIterator(RegisteredStateManager &manager, iterator_type iterator_p, idx_t state_version);
+
+	reference<RegisteredStateManager> manager_ref;
+	iterator_type iterator;
+	idx_t state_version;
+
+public:
+	RegisteredStateIterator &operator++();
+	bool operator!=(const RegisteredStateIterator &other) const;
+	value_type &operator*() const;
+};
+
+class RegisteredStateManager {
+	friend class RegisteredStateIterator;
+
+public:
+	template <class T, typename... ARGS>
+	shared_ptr<T> GetOrCreate(const string &key, ARGS... args) {
+		lock_guard<mutex> l(lock);
+		auto lookup = registered_state.find(key);
+		if (lookup != registered_state.end()) {
+			return shared_ptr_cast<ClientContextState, T>(lookup->second);
+		}
+		auto cache = make_shared_ptr<T>(args...);
+		registered_state[key] = cache;
+		++state_version;
+		return std::move(cache);
+	}
+
+	template <class T>
+	shared_ptr<T> Get(const string &key) {
+		lock_guard<mutex> l(lock);
+		auto lookup = registered_state.find(key);
+		if (lookup == registered_state.end()) {
+			return nullptr;
+		}
+		return shared_ptr_cast<ClientContextState, T>(lookup->second);
+	}
+
+	void Insert(const string &key, shared_ptr<ClientContextState> state_p) {
+		lock_guard<mutex> l(lock);
+		registered_state.insert(make_pair(key, std::move(state_p)));
+	}
+
+	RegisteredStateIterator begin(); // NOLINT: match stl API
+	RegisteredStateIterator end();   // NOLINT: match stl API
+
+private:
+	mutex lock;
+	unordered_map<string, shared_ptr<ClientContextState>> registered_state;
+	idx_t state_version = 0;
 };
 
 } // namespace duckdb
