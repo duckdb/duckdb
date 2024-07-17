@@ -336,7 +336,7 @@ private:
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
 
-	//! Transform the rhs expression of IN
+	//! Transform to a IN or NOT IN expression
 	unique_ptr<ParsedExpression> TransformInExpression(const string &name, duckdb_libpgquery::PGAExpr &root);
 
 	//! Transform a Postgres SELECT clause into a list of Expressions
