@@ -585,6 +585,10 @@ bool FileHandle::CanSeek() {
 	return file_system.CanSeek();
 }
 
+FileCompressionType FileHandle::GetFileCompressionType() {
+	return FileCompressionType::UNCOMPRESSED;
+}
+
 bool FileHandle::IsPipe() {
 	return file_system.IsPipe(path);
 }
@@ -621,6 +625,10 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+idx_t FileHandle::GetProgress() {
+	throw NotImplementedException("GetProgress is not implemented for this file handle");
 }
 
 bool FileSystem::IsRemoteFile(const string &path) {

@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/test_csv_wrong_file.test_slow
-# description: Test CSV read over wrong file format
+# description: Test CSV read from wrong file format
 # group: [csv]
 
 require tpch
