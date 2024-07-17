@@ -43,7 +43,7 @@ public:
 	                                vector<unique_ptr<ParsedExpression>> &positionals,
 	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
 
-	virtual string ToSQL(const string &schema, const string &name) const;
+	virtual string ToSQL() const;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<MacroFunction> Deserialize(Deserializer &deserializer);

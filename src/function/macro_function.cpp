@@ -80,7 +80,7 @@ void MacroFunction::CopyProperties(MacroFunction &other) const {
 	}
 }
 
-string MacroFunction::ToSQL(const string &schema, const string &name) const {
+string MacroFunction::ToSQL() const {
 	vector<string> param_strings;
 	for (auto &param : parameters) {
 		param_strings.push_back(param->ToString());
@@ -88,8 +88,7 @@ string MacroFunction::ToSQL(const string &schema, const string &name) const {
 	for (auto &named_param : default_parameters) {
 		param_strings.push_back(StringUtil::Format("%s := %s", named_param.first, named_param.second->ToString()));
 	}
-
-	return StringUtil::Format("CREATE MACRO %s.%s(%s) AS ", schema, name, StringUtil::Join(param_strings, ", "));
+	return StringUtil::Format("(%s) AS ", StringUtil::Join(param_strings, ", "));
 }
 
 } // namespace duckdb

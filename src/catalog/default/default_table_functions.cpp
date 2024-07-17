@@ -95,7 +95,7 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 	bind_info->name = default_macro.name;
 	bind_info->temporary = true;
 	bind_info->internal = true;
-	bind_info->function = std::move(function);
+	bind_info->macros.push_back(std::move(function));
 	return bind_info;
 }
 

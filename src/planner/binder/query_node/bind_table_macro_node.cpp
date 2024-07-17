@@ -18,8 +18,11 @@ namespace duckdb {
 
 unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func,
                                              idx_t depth) {
-
-	auto &macro_def = macro_func.function->Cast<TableMacroFunction>();
+	// FIXME: support multiple macros
+	if (macro_func.macros.size() != 1) {
+		throw InternalException("FIXME: support multiple table macros");
+	}
+	auto &macro_def = macro_func.macros[0]->Cast<TableMacroFunction>();
 	auto node = macro_def.query_node->Copy();
 
 	// auto &macro_def = *macro_func->function;
@@ -28,7 +31,7 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
 	string error =
-	    MacroFunction::ValidateArguments(*macro_func.function, macro_func.name, function, positionals, defaults);
+	    MacroFunction::ValidateArguments(*macro_func.macros[0], macro_func.name, function, positionals, defaults);
 	if (!error.empty()) {
 		// cannot use error below as binder rnot in scope
 		// return BindResult(binder. FormatError(*expr->get(), error));
