@@ -1,7 +1,7 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -14,6 +14,29 @@ CreateMacroInfo::CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> fun
 	for(auto &macro : extra_functions) {
 		macros.push_back(std::move(macro));
 	}
+}
+
+string CreateMacroInfo::ToString() const {
+	string result;
+	for(auto &function : macros) {
+		if (!result.empty()) {
+			result += ", ";
+		}
+		result += function->ToSQL();
+	}
+	// prefix with CREATE MACRO
+	string prefix = "CREATE MACRO ";
+	if (!catalog.empty()) {
+		prefix += KeywordHelper::WriteOptionallyQuoted(catalog);
+		prefix += ".";
+	}
+	if (!schema.empty()) {
+		prefix += KeywordHelper::WriteOptionallyQuoted(schema);
+		prefix += ".";
+	}
+	prefix += KeywordHelper::WriteOptionallyQuoted(name);
+	result = prefix + " " + result + ";";
+	return result;
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {

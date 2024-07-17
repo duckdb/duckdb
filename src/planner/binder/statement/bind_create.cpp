@@ -182,9 +182,16 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &catalog = Catalog::GetCatalog(context, info.catalog);
 	auto &db_config = DBConfig::GetConfig(context);
 	// try to bind each of the included functions
+	unordered_set<idx_t> positional_parameters;
 	for(auto &function : base.macros) {
 		vector<LogicalType> dummy_types;
 		vector<string> dummy_names;
+		auto parameter_count = function->parameters.size();
+		if (positional_parameters.find(parameter_count) != positional_parameters.end()) {
+			throw BinderException("Ambiguity in macro overloads - macro \"%s\" has multiple definitions with %llu parameters", base.name, parameter_count);
+		}
+		positional_parameters.insert(parameter_count);
+
 		// positional parameters
 		for (auto &param_expr : function->parameters) {
 			auto param = param_expr->Cast<ColumnRefExpression>();
@@ -228,10 +235,6 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		if (error.HasError()) {
 			error.Throw();
 		}
-	}
-	// TODO - verify that there are no conflicts in parameters between the macros
-	if (base.macros.size() != 1) {
-		throw InternalException("FIXME: support bind multiple table macros");
 	}
 
 	return BindCreateSchema(info);

@@ -53,16 +53,8 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 }
 
 string MacroCatalogEntry::ToSQL() const {
-	string result;
-	for(auto &function : macros) {
-		if (!result.empty()) {
-			result += ", ";
-		}
-		result += function->ToSQL();
-	}
-	// prefix with CREATE MACRO
-	result = StringUtil::Format("CREATE MACRO %s.%s ", schema.name, name) + result + ";";
-	return result;
+	auto create_info = GetInfo();
+	return create_info->ToString();
 }
 
 } // namespace duckdb

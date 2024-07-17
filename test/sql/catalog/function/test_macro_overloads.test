@@ -8,17 +8,25 @@ PRAGMA enable_verification
 # simple overloaded macro
 statement ok
 CREATE MACRO multi_add
+	() AS 0,
 	(a) AS a,
 	(a, b) AS a + b,
 	(a, b, c) AS  a + b + c,
 	(a, b, c, d) AS  a + b + c + d,
 	(a, b, c, d, e) AS  a + b + c + d + e
 
-query IIIII
-SELECT multi_add(42),
+query IIIIII
+SELECT multi_add(),
+       multi_add(42),
        multi_add(42, 1),
        multi_add(42, 1, 1),
        multi_add(42, 1, 1, 1),
        multi_add(42, 1, 1, 1, 1)
 ----
-42	43	44	45	46
+0	42	43	44	45	46
+
+# ambiguity conflict between macros
+statement error
+CREATE MACRO ambiguous_macro
+	(a) AS a,
+	(a) AS a + 1,
