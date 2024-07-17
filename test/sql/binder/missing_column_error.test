@@ -1,0 +1,26 @@
+# name: test/sql/binder/missing_column_error.test
+# description: Correctly report missing column errors instead of lateral joins
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table customers (name varchar, age integer, something_easy_to_type_wrong integer, city varchar);
+
+statement ok
+create table zipcodes (city varchar, zipcode varchar);
+
+statement error
+with cte as (
+  select *,
+	  rank() over (order by something_easy_to_typo_wrong) as rk
+  from customers
+  where age <= 42
+)
+select *
+from zipcodes
+join cte
+using (city);
+----
+something_easy_to_type_wrong

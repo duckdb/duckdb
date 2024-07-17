@@ -249,7 +249,7 @@ static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, const uint8_t
 	for (idx_t i = 0; i < count; i++) {
 		auto bidx = bsel->get_index(i);
 		auto result_idx = sel->get_index(i);
-		if (bdata[bidx] > 0 && (NO_NULL || mask.RowIsValid(bidx))) {
+		if ((NO_NULL || mask.RowIsValid(bidx)) && bdata[bidx] > 0) {
 			if (HAS_TRUE_SEL) {
 				true_sel->set_index(true_count++, result_idx);
 			}

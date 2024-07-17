@@ -116,6 +116,7 @@ public:
 
 protected:
 	AttachedDatabase &database;
+	mutex wal_lock;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
 	atomic<idx_t> wal_size;

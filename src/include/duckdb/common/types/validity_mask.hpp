@@ -19,13 +19,13 @@ struct ValidityMask;
 
 template <typename V>
 struct TemplatedValidityData {
-	static constexpr const int BITS_PER_VALUE = sizeof(V) * 8;
+	static constexpr const idx_t BITS_PER_VALUE = sizeof(V) * 8;
 	static constexpr const V MAX_ENTRY = V(~V(0));
 
 public:
 	inline explicit TemplatedValidityData(idx_t count) {
 		auto entry_count = EntryCount(count);
-		owned_data = make_unsafe_uniq_array<V>(entry_count);
+		owned_data = make_unsafe_uniq_array_uninitialized<V>(entry_count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			owned_data[entry_idx] = MAX_ENTRY;
 		}
@@ -33,7 +33,7 @@ public:
 	inline TemplatedValidityData(const V *validity_mask, idx_t count) {
 		D_ASSERT(validity_mask);
 		auto entry_count = EntryCount(count);
-		owned_data = make_unsafe_uniq_array<V>(entry_count);
+		owned_data = make_unsafe_uniq_array_uninitialized<V>(entry_count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			owned_data[entry_idx] = validity_mask[entry_idx];
 		}
@@ -61,9 +61,9 @@ struct TemplatedValidityMask {
 	using ValidityBuffer = TemplatedValidityData<V>;
 
 public:
-	static constexpr const int BITS_PER_VALUE = ValidityBuffer::BITS_PER_VALUE;
-	static constexpr const int STANDARD_ENTRY_COUNT = (STANDARD_VECTOR_SIZE + (BITS_PER_VALUE - 1)) / BITS_PER_VALUE;
-	static constexpr const int STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(validity_t);
+	static constexpr const idx_t BITS_PER_VALUE = ValidityBuffer::BITS_PER_VALUE;
+	static constexpr const idx_t STANDARD_ENTRY_COUNT = (STANDARD_VECTOR_SIZE + (BITS_PER_VALUE - 1)) / BITS_PER_VALUE;
+	static constexpr const idx_t STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(validity_t);
 
 public:
 	inline TemplatedValidityMask() : validity_mask(nullptr), target_count(STANDARD_VECTOR_SIZE) {
@@ -262,8 +262,9 @@ public:
 		for (idx_t i = 0; i < last_entry_index; i++) {
 			validity_mask[i] = 0;
 		}
-		auto last_entry_bits = count % static_cast<idx_t>(BITS_PER_VALUE);
-		validity_mask[last_entry_index] = (last_entry_bits == 0) ? 0 : (ValidityBuffer::MAX_ENTRY << (last_entry_bits));
+		auto last_entry_bits = count % BITS_PER_VALUE;
+		validity_mask[last_entry_index] =
+		    (last_entry_bits == 0) ? 0 : static_cast<V>(ValidityBuffer::MAX_ENTRY << (last_entry_bits));
 	}
 
 	//! Marks exactly "count" bits in the validity mask as valid (not null)
@@ -276,9 +277,10 @@ public:
 		for (idx_t i = 0; i < last_entry_index; i++) {
 			validity_mask[i] = ValidityBuffer::MAX_ENTRY;
 		}
-		auto last_entry_bits = count % static_cast<idx_t>(BITS_PER_VALUE);
-		validity_mask[last_entry_index] |=
-		    (last_entry_bits == 0) ? ValidityBuffer::MAX_ENTRY : ~(ValidityBuffer::MAX_ENTRY << (last_entry_bits));
+		auto last_entry_bits = count % BITS_PER_VALUE;
+		validity_mask[last_entry_index] |= (last_entry_bits == 0)
+		                                       ? ValidityBuffer::MAX_ENTRY
+		                                       : ~static_cast<V>(ValidityBuffer::MAX_ENTRY << (last_entry_bits));
 	}
 
 	inline bool IsMaskSet() const {
@@ -337,7 +339,7 @@ public:
 
 public:
 	DUCKDB_API void Resize(idx_t old_size, idx_t new_size);
-	DUCKDB_API idx_t TargetCount();
+	DUCKDB_API idx_t TargetCount() const;
 	DUCKDB_API void SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count);
 	DUCKDB_API void Slice(const ValidityMask &other, idx_t source_offset, idx_t count);
 	DUCKDB_API void CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,

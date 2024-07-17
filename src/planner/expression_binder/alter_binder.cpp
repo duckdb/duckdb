@@ -23,9 +23,9 @@ BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
-		return BindResult("window functions are not allowed in alter statement");
+		return BindResult(BinderException::Unsupported(expr, "window functions are not allowed in alter statement"));
 	case ExpressionClass::SUBQUERY:
-		return BindResult("cannot use subquery in alter statement");
+		return BindResult(BinderException::Unsupported(expr, "cannot use subquery in alter statement"));
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth);
 	default:

@@ -104,6 +104,7 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/interrupt.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
@@ -4199,6 +4200,29 @@ MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return MemoryTag::EXTENSION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value) {
+	switch(value) {
+	case MetaPipelineType::REGULAR:
+		return "REGULAR";
+	case MetaPipelineType::JOIN_BUILD:
+		return "JOIN_BUILD";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
+	if (StringUtil::Equals(value, "REGULAR")) {
+		return MetaPipelineType::REGULAR;
+	}
+	if (StringUtil::Equals(value, "JOIN_BUILD")) {
+		return MetaPipelineType::JOIN_BUILD;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
