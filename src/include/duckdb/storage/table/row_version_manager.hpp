@@ -21,7 +21,7 @@ struct MetaBlockPointer;
 
 class RowVersionManager {
 public:
-	explicit RowVersionManager(idx_t start);
+	explicit RowVersionManager(idx_t start) noexcept;
 
 	idx_t GetStart() {
 		return start;
