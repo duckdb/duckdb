@@ -322,7 +322,7 @@ class TestReadCSV(object):
             def __init__(self):
                 pass
 
-            def read(self, amount):
+            def read(self, amount=-1):
                 raise ValueError(amount)
 
             def seek(self, loc):
@@ -332,19 +332,20 @@ class TestReadCSV(object):
             def __init__(self):
                 pass
 
-            def read(self, amount):
+            def read(self, amount=-1):
                 return b'test'
 
             def seek(self, loc):
                 raise ValueError(loc)
 
+        # The MemoryFileSystem reads the content into another object, so this fails instantly
         obj = ReadError()
         with pytest.raises(ValueError):
             res = duckdb_cursor.read_csv(obj).fetchall()
 
+        # For that same reason, this will not error, because the data is retrieved with 'read' and then SeekError is never used again
         obj = SeekError()
-        with pytest.raises(ValueError):
-            res = duckdb_cursor.read_csv(obj).fetchall()
+        res = duckdb_cursor.read_csv(obj).fetchall()
 
     def test_filelike_custom(self, duckdb_cursor):
         _ = pytest.importorskip("fsspec")
@@ -358,8 +359,11 @@ class TestReadCSV(object):
                 self.loc = loc
                 return loc
 
-            def read(self, amount):
-                out = b"c1,c2,c3\na,b,c"[self.loc : self.loc + amount : 1]
+            def read(self, amount=-1):
+                file = b"c1,c2,c3\na,b,c"
+                if amount == -1:
+                    return file
+                out = file[self.loc : self.loc + amount : 1]
                 self.loc += amount
                 return out
 
