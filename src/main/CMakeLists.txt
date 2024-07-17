@@ -20,7 +20,6 @@ add_library_unity(
   client_config.cpp
   client_context_file_opener.cpp
   client_context.cpp
-  client_context_state.cpp
   client_context_wrapper.cpp
   client_data.cpp
   client_verify.cpp

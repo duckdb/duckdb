@@ -80,27 +80,7 @@ public:
 	}
 };
 
-class RegisteredStateIterator {
-public:
-	using iterator_type = unordered_map<string, shared_ptr<ClientContextState>>::iterator;
-	using value_type = unordered_map<string, shared_ptr<ClientContextState>>::value_type;
-
-public:
-	RegisteredStateIterator(RegisteredStateManager &manager, iterator_type iterator_p, idx_t state_version);
-
-	reference<RegisteredStateManager> manager_ref;
-	iterator_type iterator;
-	idx_t state_version;
-
-public:
-	RegisteredStateIterator &operator++();
-	bool operator!=(const RegisteredStateIterator &other) const;
-	value_type &operator*() const;
-};
-
 class RegisteredStateManager {
-	friend class RegisteredStateIterator;
-
 public:
 	template <class T, typename... ARGS>
 	shared_ptr<T> GetOrCreate(const string &key, ARGS... args) {
@@ -111,7 +91,6 @@ public:
 		}
 		auto cache = make_shared_ptr<T>(args...);
 		registered_state[key] = cache;
-		++state_version;
 		return cache;
 	}
 
@@ -128,22 +107,23 @@ public:
 	void Insert(const string &key, shared_ptr<ClientContextState> state_p) {
 		lock_guard<mutex> l(lock);
 		registered_state.insert(make_pair(key, std::move(state_p)));
-		++state_version;
 	}
 
 	void Remove(const string &key) {
 		lock_guard<mutex> l(lock);
 		registered_state.erase(key);
-		++state_version;
 	}
 
-	RegisteredStateIterator begin(); // NOLINT: match stl API
-	RegisteredStateIterator end();   // NOLINT: match stl API
+	void Iterate(std::function<void(ClientContextState &)> callback) {
+		lock_guard<mutex> l(lock);
+		for(auto &entry : registered_state) {
+			callback(*entry.second);
+		}
+	}
 
 private:
 	mutex lock;
 	unordered_map<string, shared_ptr<ClientContextState>> registered_state;
-	idx_t state_version = 0;
 };
 
 } // namespace duckdb
