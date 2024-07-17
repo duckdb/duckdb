@@ -27,7 +27,7 @@ string PhysicalDelimJoin::ParamsToString() const {
 	string result = join->ParamsToString();
 	if (delim_idx.IsValid()) {
 		result += "\n[INFOSEPARATOR]\n";
-		result += StringUtil::Format("idx: %llu", delim_idx.GetIndex());
+		result += StringUtil::Format("delim_idx: %llu", delim_idx.GetIndex());
 	}
 	return result;
 }
