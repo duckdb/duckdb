@@ -7,9 +7,16 @@ import pandas as pd
 import pytest
 from conftest import ArrowPandas, NumpyPandas
 import datetime
+import gc
 from duckdb import ColumnExpression
 
 from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
+
+
+@pytest.fixture(scope="session")
+def tmp_database(tmp_path_factory):
+    database = tmp_path_factory.mktemp("databases", numbered=True) / "tmp.duckdb"
+    return database
 
 
 def get_relation(conn):
@@ -545,3 +552,25 @@ class TestRelation(object):
         rel = duckdb_cursor.sql("select * from test")
         res = rel.fetchall()
         assert res == [([2], ['Alice'])]
+        res = duckdb_cursor.sql("select * from vw").fetchone()
+
+    def test_serialized_materialized_relation(self, tmp_database):
+        con = duckdb.connect(tmp_database)
+
+        def create_view(con, view_name: str):
+            rel = con.sql("select 'this is not a small string ' || range::varchar from range(?)", params=[10])
+            rel.to_view(view_name)
+
+        expected = [(f'this is not a small string {i}',) for i in range(10)]
+
+        create_view(con, 'vw')
+        res = con.sql("select * from vw").fetchall()
+        assert res == expected
+
+        # Make sure the VIEW has to be deserialized from disk
+        con.close()
+        gc.collect()
+        con = duckdb.connect(tmp_database)
+
+        res = con.sql("select * from vw").fetchall()
+        assert res == expected

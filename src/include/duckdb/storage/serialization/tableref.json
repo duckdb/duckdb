@@ -161,7 +161,19 @@
     "class": "ColumnDataRef",
     "base": "TableRef",
     "enum": "COLUMN_DATA",
-	"custom_implementation": true
+    "members": [
+      {
+        "id": 200,
+        "name": "expected_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "collection",
+        "type": "shared_ptr<ColumnDataCollection>"
+      }
+    ],
+    "constructor": ["collection", "expected_names"]
   },
   {
     "class": "PivotRef",

@@ -52,15 +52,6 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 	return true;
 }
 
-void ColumnDataRef::Serialize(Serializer &serializer) const {
-	throw NotImplementedException(
-	    "ColumnDataRef is made as part of a MaterializedRelation and should never be serialized");
-}
-
-unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &source) {
-	throw InternalException("Can not be serialized");
-}
-
 unique_ptr<TableRef> ColumnDataRef::Copy() {
 	auto result = make_uniq<ColumnDataRef>(collection, expected_names);
 	CopyProperties(*result);

@@ -76,6 +76,19 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
+void ColumnDataRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
+	serializer.WritePropertyWithDefault<shared_ptr<ColumnDataCollection>>(202, "collection", collection);
+}
+
+unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {
+	auto expected_names = deserializer.ReadPropertyWithDefault<vector<string>>(200, "expected_names");
+	auto collection = deserializer.ReadPropertyWithDefault<shared_ptr<ColumnDataCollection>>(202, "collection");
+	auto result = duckdb::unique_ptr<ColumnDataRef>(new ColumnDataRef(std::move(collection), std::move(expected_names)));
+	return std::move(result);
+}
+
 void EmptyTableRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 }
