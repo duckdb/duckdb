@@ -251,8 +251,9 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// the right side initially is a DEPENDENT join between the duplicate eliminated scan and the subquery
 		// HOWEVER: we do not explicitly create the dependent join
 		// instead, we eliminate the dependent join by pushing it down into the right side of the plan
-		FlattenDependentJoins flatten(binder, correlated_columns, mark_index, perform_delim);
+		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim);
 
+		flatten.delim_root_idx = mark_index;
 		// first we check which logical operators have correlated expressions in the first place
 		flatten.DetectCorrelatedExpressions(*plan);
 		// now we push the dependent join down
@@ -278,7 +279,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
 		delim_join->mark_index = mark_index;
 		// RHS
-		FlattenDependentJoins flatten(binder, correlated_columns, mark_index, perform_delim, true);
+		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim, true);
+		flatten.delim_root_idx = mark_index;
 		flatten.DetectCorrelatedExpressions(*plan);
 		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
 
@@ -306,7 +308,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
 		delim_join->mark_index = mark_index;
 		// RHS
-		FlattenDependentJoins flatten(binder, correlated_columns, mark_index, true, true);
+		FlattenDependentJoins flatten(binder, correlated_columns, true, true);
+		flatten.delim_root_idx = mark_index;
 		flatten.DetectCorrelatedExpressions(*plan);
 		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
 
@@ -428,7 +431,8 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	auto delim_join = CreateDuplicateEliminatedJoin(correlated, join_type, std::move(left), perform_delim);
 	delim_join->mark_index = delim_idx;
 
-	FlattenDependentJoins flatten(*this, correlated, delim_idx, perform_delim);
+	FlattenDependentJoins flatten(*this, correlated, perform_delim);
+	flatten.delim_root_idx = delim_idx;
 
 	// first we check which logical operators have correlated expressions in the first place
 	flatten.DetectCorrelatedExpressions(*right, true);

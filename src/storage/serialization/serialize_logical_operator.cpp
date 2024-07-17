@@ -383,8 +383,8 @@ void LogicalDelimGet::Serialize(Serializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalDelimGet::Deserialize(Deserializer &deserializer) {
 	auto table_index = deserializer.ReadPropertyWithDefault<idx_t>(200, "table_index");
 	auto chunk_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "chunk_types");
-	auto delim_idx = deserializer.ReadPropertyWithDefault<optional_idx>(202, "delim_idx", optional_idx());
-	auto result = duckdb::unique_ptr<LogicalDelimGet>(new LogicalDelimGet(table_index, std::move(chunk_types), delim_idx));
+	auto result = duckdb::unique_ptr<LogicalDelimGet>(new LogicalDelimGet(table_index, std::move(chunk_types)));
+	deserializer.ReadPropertyWithDefault<optional_idx>(202, "delim_idx", result->delim_idx, optional_idx());
 	return std::move(result);
 }
 
