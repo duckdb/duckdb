@@ -237,39 +237,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "run the query as-is.",
 	      py::arg("query"), py::kw_only(), py::arg("alias") = "", py::arg("params") = py::none());
 	m.def("read_csv", &DuckDBPyConnection::ReadCSV, "Create a relation object from the CSV file in 'name'",
-	      py::arg("path_or_buffer"), py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
-	      py::arg("sep") = py::none(), py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(),
-	      py::arg("na_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
-	      py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none(),
-	      py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
-	      py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
-	      py::arg("normalize_names") = py::none(), py::arg("null_padding") = py::none(), py::arg("names") = py::none(),
-	      py::arg("lineterminator") = py::none(), py::arg("columns") = py::none(),
-	      py::arg("auto_type_candidates") = py::none(), py::arg("max_line_size") = py::none(),
-	      py::arg("ignore_errors") = py::none(), py::arg("store_rejects") = py::none(),
-	      py::arg("rejects_table") = py::none(), py::arg("rejects_scan") = py::none(),
-	      py::arg("rejects_limit") = py::none(), py::arg("force_not_null") = py::none(),
-	      py::arg("buffer_size") = py::none(), py::arg("decimal") = py::none(),
-	      py::arg("allow_quoted_nulls") = py::none(), py::arg("filename") = py::none(),
-	      py::arg("hive_partitioning") = py::none(), py::arg("union_by_name") = py::none(),
-	      py::arg("hive_types") = py::none(), py::arg("hive_types_autocast") = py::none());
+	      py::arg("path_or_buffer"), py::kw_only());
 	m.def("from_csv_auto", &DuckDBPyConnection::ReadCSV, "Create a relation object from the CSV file in 'name'",
-	      py::arg("path_or_buffer"), py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
-	      py::arg("sep") = py::none(), py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(),
-	      py::arg("na_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
-	      py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none(),
-	      py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
-	      py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
-	      py::arg("normalize_names") = py::none(), py::arg("null_padding") = py::none(), py::arg("names") = py::none(),
-	      py::arg("lineterminator") = py::none(), py::arg("columns") = py::none(),
-	      py::arg("auto_type_candidates") = py::none(), py::arg("max_line_size") = py::none(),
-	      py::arg("ignore_errors") = py::none(), py::arg("store_rejects") = py::none(),
-	      py::arg("rejects_table") = py::none(), py::arg("rejects_scan") = py::none(),
-	      py::arg("rejects_limit") = py::none(), py::arg("force_not_null") = py::none(),
-	      py::arg("buffer_size") = py::none(), py::arg("decimal") = py::none(),
-	      py::arg("allow_quoted_nulls") = py::none(), py::arg("filename") = py::none(),
-	      py::arg("hive_partitioning") = py::none(), py::arg("union_by_name") = py::none(),
-	      py::arg("hive_types") = py::none(), py::arg("hive_types_autocast") = py::none());
+	      py::arg("path_or_buffer"), py::kw_only());
 	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the DataFrame in df", py::arg("df"));
 	m.def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
 	      py::arg("arrow_object"));
@@ -971,24 +941,51 @@ PathLike DuckDBPyConnection::GetPathLike(const py::object &object) {
 	return PathLike::Create(object, *this);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
-    const py::object &name_p, const Optional<py::object> &header, const Optional<py::object> &compression,
-    const Optional<py::object> &sep, const Optional<py::object> &delimiter, const Optional<py::object> &dtype,
-    const Optional<py::object> &na_values, const Optional<py::object> &skiprows, const Optional<py::object> &quotechar,
-    const Optional<py::object> &escapechar, const Optional<py::object> &encoding, const Optional<py::object> &parallel,
-    const Optional<py::object> &date_format, const Optional<py::object> &timestamp_format,
-    const Optional<py::object> &sample_size, const Optional<py::object> &all_varchar,
-    const Optional<py::object> &normalize_names, const Optional<py::object> &null_padding,
-    const Optional<py::object> &names_p, const Optional<py::object> &lineterminator,
-    const Optional<py::object> &columns, const Optional<py::object> &auto_type_candidates,
-    const Optional<py::object> &max_line_size, const Optional<py::object> &ignore_errors,
-    const Optional<py::object> &store_rejects, const Optional<py::object> &rejects_table,
-    const Optional<py::object> &rejects_scan, const Optional<py::object> &rejects_limit,
-    const Optional<py::object> &force_not_null, const Optional<py::object> &buffer_size,
-    const Optional<py::object> &decimal, const Optional<py::object> &allow_quoted_nulls,
-    const Optional<py::object> &filename, const Optional<py::object> &hive_partitioning,
-    const Optional<py::object> &union_by_name, const Optional<py::object> &hive_types,
-    const Optional<py::object> &hive_types_autocast) {
+static py::object GetValueOrNone(py::kwargs &kwargs, const string &key) {
+	if (kwargs.contains(key)) {
+		return kwargs[key.c_str()];
+	}
+	return py::none();
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_p, py::kwargs &kwargs) {
+	auto header = GetValueOrNone(kwargs, "header");
+	auto compression = GetValueOrNone(kwargs, "compression");
+	auto sep = GetValueOrNone(kwargs, "sep");
+	auto delimiter = GetValueOrNone(kwargs, "delimiter");
+	auto dtype = GetValueOrNone(kwargs, "dtype");
+	auto na_values = GetValueOrNone(kwargs, "na_values");
+	auto skiprows = GetValueOrNone(kwargs, "skiprows");
+	auto quotechar = GetValueOrNone(kwargs, "quotechar");
+	auto escapechar = GetValueOrNone(kwargs, "escapechar");
+	auto encoding = GetValueOrNone(kwargs, "encoding");
+	auto parallel = GetValueOrNone(kwargs, "parallel");
+	auto date_format = GetValueOrNone(kwargs, "date_format");
+	auto timestamp_format = GetValueOrNone(kwargs, "timestamp_format");
+	auto sample_size = GetValueOrNone(kwargs, "sample_size");
+	auto all_varchar = GetValueOrNone(kwargs, "all_varchar");
+	auto normalize_names = GetValueOrNone(kwargs, "normalize_names");
+	auto null_padding = GetValueOrNone(kwargs, "null_padding");
+	auto names_p = GetValueOrNone(kwargs, "names");
+	auto lineterminator = GetValueOrNone(kwargs, "lineterminator");
+	auto columns = GetValueOrNone(kwargs, "columns");
+	auto auto_type_candidates = GetValueOrNone(kwargs, "auto_type_candidates");
+	auto max_line_size = GetValueOrNone(kwargs, "max_line_size");
+	auto ignore_errors = GetValueOrNone(kwargs, "ignore_errors");
+	auto store_rejects = GetValueOrNone(kwargs, "store_rejects");
+	auto rejects_table = GetValueOrNone(kwargs, "rejects_table");
+	auto rejects_scan = GetValueOrNone(kwargs, "rejects_scan");
+	auto rejects_limit = GetValueOrNone(kwargs, "rejects_limit");
+	auto force_not_null = GetValueOrNone(kwargs, "force_not_null");
+	auto buffer_size = GetValueOrNone(kwargs, "buffer_size");
+	auto decimal = GetValueOrNone(kwargs, "decimal");
+	auto allow_quoted_nulls = GetValueOrNone(kwargs, "allow_quoted_nulls");
+	auto filename = GetValueOrNone(kwargs, "filename");
+	auto hive_partitioning = GetValueOrNone(kwargs, "hive_partitioning");
+	auto union_by_name = GetValueOrNone(kwargs, "union_by_name");
+	auto hive_types = GetValueOrNone(kwargs, "hive_types");
+	auto hive_types_autocast = GetValueOrNone(kwargs, "hive_types_autocast");
+
 	auto &connection = con.GetConnection();
 	CSVReaderOptions options;
 	auto path_like = GetPathLike(name_p);

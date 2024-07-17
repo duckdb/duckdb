@@ -149,26 +149,7 @@ public:
 	static PythonImportCache *ImportCache();
 	static bool IsInteractive();
 
-	unique_ptr<DuckDBPyRelation> ReadCSV(
-	    const py::object &name, const Optional<py::object> &header = py::none(),
-	    const Optional<py::object> &compression = py::none(), const Optional<py::object> &sep = py::none(),
-	    const Optional<py::object> &delimiter = py::none(), const Optional<py::object> &dtype = py::none(),
-	    const Optional<py::object> &na_values = py::none(), const Optional<py::object> &skiprows = py::none(),
-	    const Optional<py::object> &quotechar = py::none(), const Optional<py::object> &escapechar = py::none(),
-	    const Optional<py::object> &encoding = py::none(), const Optional<py::object> &parallel = py::none(),
-	    const Optional<py::object> &date_format = py::none(), const Optional<py::object> &timestamp_format = py::none(),
-	    const Optional<py::object> &sample_size = py::none(), const Optional<py::object> &all_varchar = py::none(),
-	    const Optional<py::object> &normalize_names = py::none(), const Optional<py::object> &null_padding = py::none(),
-	    const Optional<py::object> &names = py::none(), const Optional<py::object> &lineterminator = py::none(),
-	    const Optional<py::object> &columns = py::none(), const Optional<py::object> &auto_type_candidates = py::none(),
-	    const Optional<py::object> &max_line_size = py::none(), const Optional<py::object> &ignore_errors = py::none(),
-	    const Optional<py::object> &store_rejects = py::none(), const Optional<py::object> &rejects_table = py::none(),
-	    const Optional<py::object> &rejects_scan = py::none(), const Optional<py::object> &rejects_limit = py::none(),
-	    const Optional<py::object> &force_not_null = py::none(), const Optional<py::object> &buffer_size = py::none(),
-	    const Optional<py::object> &decimal = py::none(), const Optional<py::object> &allow_quoted_nulls = py::none(),
-	    const Optional<py::object> &filename = py::none(), const Optional<py::object> &hive_partitioning = py::none(),
-	    const Optional<py::object> &union_by_name = py::none(), const Optional<py::object> &hive_types = py::none(),
-	    const Optional<py::object> &hive_types_autocast = py::none());
+	unique_ptr<DuckDBPyRelation> ReadCSV(const py::object &name, py::kwargs &kwargs);
 
 	py::list ExtractStatements(const string &query);
 

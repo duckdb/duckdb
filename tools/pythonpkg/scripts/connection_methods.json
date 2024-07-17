@@ -691,6 +691,7 @@
 				"type": "Union[str, StringIO, TextIOBase]"
 			}
 		],
+		"kwargs_as_dict": true,
 		"kwargs": [
 			{
 				"name": "header",
