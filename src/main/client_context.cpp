@@ -197,7 +197,9 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 	query_progress.Initialize();
 	// Notify any registered state of query begin
-	registered_state->Iterate([&](ClientContextState &state) { state.QueryBegin(*this); });
+	for (auto &state : registered_state->States()) {
+		state->QueryBegin(*this);
+	}
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
@@ -207,7 +209,9 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		active_query->executor->CancelTasks();
 	}
 	// Notify any registered state of query end
-	registered_state->Iterate([&](ClientContextState &state) { state.QueryEnd(*this); });
+	for (auto &state : registered_state->States()) {
+		state->QueryEnd(*this);
+	}
 	active_query->progress_bar.reset();
 
 	D_ASSERT(active_query.get());
@@ -368,11 +372,11 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
                                        PreparedStatementMode mode) {
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
-	registered_state->Iterate([&](ClientContextState &state) {
-		if (state.CanRequestRebind()) {
+	for (auto &state : registered_state->States()) {
+		if (state->CanRequestRebind()) {
 			can_request_rebind = true;
 		}
-	});
+	}
 	if (can_request_rebind) {
 		bool rebind = false;
 		// if any registered state can request a rebind we do the binding on a copy first
@@ -382,24 +386,24 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			// check if any registered client context state wants to try a rebind
-			registered_state->Iterate([&](ClientContextState &state) {
-				auto info = state.OnPlanningError(*this, *statement, error);
+			for (auto &state : registered_state->States()) {
+				auto info = state->OnPlanningError(*this, *statement, error);
 				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 					rebind = true;
 				}
-			});
+			}
 			if (!rebind) {
 				throw;
 			}
 		}
 		if (result) {
 			D_ASSERT(!rebind);
-			registered_state->Iterate([&](ClientContextState &state) {
-				auto info = state.OnFinalizePrepare(*this, *result, mode);
+			for (auto &state : registered_state->States()) {
+				auto info = state->OnFinalizePrepare(*this, *result, mode);
 				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 					rebind = true;
 				}
-			});
+			}
 		}
 		if (!rebind) {
 			return result;
@@ -516,13 +520,13 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
 
-	registered_state->Iterate([&](ClientContextState &state) {
+	for (auto &state : registered_state->States()) {
 		PreparedStatementCallbackInfo info(*prepared, parameters);
-		auto new_rebind = state.OnExecutePrepared(*this, info, rebind);
+		auto new_rebind = state->OnExecutePrepared(*this, info, rebind);
 		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 		}
-	});
+	}
 	if (rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 		RebindPreparedStatement(lock, query, prepared, parameters);
 	}

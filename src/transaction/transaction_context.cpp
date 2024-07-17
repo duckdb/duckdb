@@ -31,8 +31,9 @@ void TransactionContext::BeginTransaction() {
 	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp);
 
 	// Notify any registered state of transaction begin
-	context.registered_state->Iterate(
-	    [&](ClientContextState &state) { state.TransactionBegin(*current_transaction, context); });
+	for (auto &state : context.registered_state->States()) {
+		state->TransactionBegin(*current_transaction, context);
+	}
 }
 
 void TransactionContext::Commit() {
@@ -44,12 +45,14 @@ void TransactionContext::Commit() {
 	auto error = transaction->Commit();
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
-		context.registered_state->Iterate(
-		    [&](ClientContextState &state) { state.TransactionRollback(*transaction, context); });
+		for (auto &state : context.registered_state->States()) {
+			state->TransactionRollback(*transaction, context);
+		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	} else {
-		context.registered_state->Iterate(
-		    [&](ClientContextState &state) { state.TransactionCommit(*transaction, context); });
+		for (auto &state : context.registered_state->States()) {
+			state->TransactionCommit(*transaction, context);
+		}
 	}
 }
 
@@ -72,8 +75,9 @@ void TransactionContext::Rollback() {
 	ClearTransaction();
 	transaction->Rollback();
 	// Notify any registered state of transaction rollback.
-	context.registered_state->Iterate(
-	    [&](ClientContextState &state) { state.TransactionRollback(*transaction, context); });
+	for (auto &state : context.registered_state->States()) {
+		state->TransactionRollback(*transaction, context);
+	}
 }
 
 void TransactionContext::ClearTransaction() {

@@ -114,11 +114,13 @@ public:
 		registered_state.erase(key);
 	}
 
-	void Iterate(std::function<void(ClientContextState &)> callback) {
+	vector<shared_ptr<ClientContextState>> States() {
 		lock_guard<mutex> l(lock);
+		vector<shared_ptr<ClientContextState>> states;
 		for (auto &entry : registered_state) {
-			callback(*entry.second);
+			states.push_back(entry.second);
 		}
+		return states;
 	}
 
 private:
