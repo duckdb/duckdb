@@ -8,6 +8,7 @@
 #include "duckdb/execution/window_executor.hpp"
 
 #include <numeric>
+#include <thread>
 #include <utility>
 
 namespace duckdb {
@@ -95,6 +96,12 @@ struct WindowAggregateStates {
 	}
 	data_ptr_t *GetData() {
 		return FlatVector::GetData<data_ptr_t>(*statef);
+	}
+	data_ptr_t GetStatePtr(idx_t idx) {
+		return states.data() + idx * state_size;
+	}
+	const_data_ptr_t GetStatePtr(idx_t idx) const {
+		return states.data() + idx * state_size;
 	}
 	//! Initialise all the states
 	void Initialize(idx_t count);
@@ -816,21 +823,22 @@ void WindowNaiveAggregator::Evaluate(const WindowAggregatorState &gsink, WindowA
 //===--------------------------------------------------------------------===//
 class WindowSegmentTreeGlobalState : public WindowAggregatorGlobalState {
 public:
-	WindowSegmentTreeGlobalState(const WindowSegmentTree &aggregator, idx_t group_count)
-	    : WindowAggregatorGlobalState(aggregator, group_count), tree(aggregator), internal_nodes(0) {
-	}
-	~WindowSegmentTreeGlobalState() override;
+	using AtomicCounters = vector<std::atomic<idx_t>>;
 
-	void ConstructTree();
+	WindowSegmentTreeGlobalState(const WindowSegmentTree &aggregator, idx_t group_count);
 
 	//! The owning aggregator
 	const WindowSegmentTree &tree;
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
-	unsafe_unique_array<data_t> levels_flat_native;
+	WindowAggregateStates levels_flat_native;
 	//! For each level, the starting location in the levels_flat_native array
 	vector<idx_t> levels_flat_start;
-	//! The total number of internal nodes of the tree, stored in levels_flat_native
-	idx_t internal_nodes;
+	//! The level being built (read)
+	std::atomic<idx_t> build_level;
+	//! The number of entries started so far at each level
+	unique_ptr<AtomicCounters> build_started;
+	//! The number of entries completed so far at each level
+	unique_ptr<AtomicCounters> build_completed;
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 16;
@@ -840,50 +848,6 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const vector<LogicalT
                                      const LogicalType &result_type, WindowAggregationMode mode_p,
                                      const WindowExcludeMode exclude_mode_p)
     : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), mode(mode_p) {
-}
-
-void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate, const FrameStats &stats) {
-
-	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
-	auto &inputs = gasink.inputs;
-
-	//	Single threaded Finalize for now
-	lock_guard<mutex> gestate_guard(gasink.lock);
-	if (gasink.finalized) {
-		return;
-	}
-
-	WindowAggregator::Finalize(gsink, lstate, stats);
-
-	if (inputs.ColumnCount() > 0) {
-		if (aggr.function.combine && UseCombineAPI()) {
-			gasink.ConstructTree();
-		}
-	}
-
-	++gasink.finalized;
-}
-
-WindowSegmentTreeGlobalState::~WindowSegmentTreeGlobalState() {
-	if (!tree.aggr.function.destructor) {
-		// nothing to destroy
-		return;
-	}
-	AggregateInputData aggr_input_data(tree.aggr.GetFunctionData(), allocator);
-	// call the destructor for all the intermediate states
-	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
-	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
-	idx_t count = 0;
-	for (idx_t i = 0; i < internal_nodes; i++) {
-		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * tree.state_size);
-		if (count == STANDARD_VECTOR_SIZE) {
-			tree.aggr.function.destructor(addresses, aggr_input_data, count);
-			count = 0;
-		}
-	}
-	if (count > 0) {
-		tree.aggr.function.destructor(addresses, aggr_input_data, count);
-	}
 }
 
 class WindowSegmentTreePart {
@@ -958,6 +922,7 @@ public:
 	WindowSegmentTreeState() {
 	}
 
+	void Finalize(WindowSegmentTreeGlobalState &gstate);
 	void Evaluate(const WindowSegmentTreeGlobalState &gsink, const DataChunk &bounds, Vector &result, idx_t count,
 	              idx_t row_idx);
 	//! The left (default) segment tree part
@@ -965,6 +930,22 @@ public:
 	//! The right segment tree part (for EXCLUDE)
 	unique_ptr<WindowSegmentTreePart> right_part;
 };
+
+void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate, const FrameStats &stats) {
+
+	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
+	auto &inputs = gasink.inputs;
+
+	WindowAggregator::Finalize(gsink, lstate, stats);
+
+	if (inputs.ColumnCount() > 0) {
+		if (aggr.function.combine && UseCombineAPI()) {
+			lstate.Cast<WindowSegmentTreeState>().Finalize(gasink);
+		}
+	}
+
+	++gasink.finalized;
+}
 
 WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr,
                                              const DataChunk &inputs, const ValidityArray &filter_mask)
@@ -1063,9 +1044,9 @@ void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalStat
 		ExtractFrame(begin, end, state_ptr);
 	} else {
 		// find out where the states begin
-		auto begin_ptr = tree.levels_flat_native.get() + state_size * (begin + tree.levels_flat_start[l_idx - 1]);
+		auto begin_ptr = tree.levels_flat_native.GetStatePtr(begin + tree.levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
-		auto ldata = FlatVector::GetData<data_ptr_t>(statel);
+		auto ldata = FlatVector::GetData<const_data_ptr_t>(statel);
 		auto pdata = FlatVector::GetData<data_ptr_t>(statep);
 		for (idx_t i = 0; i < count; i++) {
 			pdata[flush_count] = state_ptr;
@@ -1088,20 +1069,12 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	}
 }
 
-void WindowSegmentTreeGlobalState::ConstructTree() {
+WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(const WindowSegmentTree &aggregator, idx_t group_count)
+    : WindowAggregatorGlobalState(aggregator, group_count), tree(aggregator), levels_flat_native(aggregator.aggr) {
+
 	D_ASSERT(inputs.ColumnCount() > 0);
 
-	//	Single part for constructing the tree
-	WindowSegmentTreePart gtstate(allocator, tree.aggr, inputs, filter_mask);
-
 	// compute space required to store internal nodes of segment tree
-	internal_nodes = 0;
-	idx_t level_nodes = inputs.size();
-	do {
-		level_nodes = (level_nodes + (TREE_FANOUT - 1)) / TREE_FANOUT;
-		internal_nodes += level_nodes;
-	} while (level_nodes > 1);
-	levels_flat_native = make_unsafe_uniq_array_uninitialized<data_t>(internal_nodes * tree.state_size);
 	levels_flat_start.push_back(0);
 
 	idx_t levels_flat_offset = 0;
@@ -1112,12 +1085,6 @@ void WindowSegmentTreeGlobalState::ConstructTree() {
 	while ((level_size =
 	            (level_current == 0 ? inputs.size() : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
-			// compute the aggregate for this entry in the segment tree
-			data_ptr_t state_ptr = levels_flat_native.get() + (levels_flat_offset * tree.state_size);
-			gtstate.aggr.function.initialize(state_ptr);
-			gtstate.WindowSegmentValue(*this, level_current, pos, MinValue(level_size, pos + TREE_FANOUT), state_ptr);
-			gtstate.FlushStates(level_current > 0);
-
 			levels_flat_offset++;
 		}
 
@@ -1127,7 +1094,75 @@ void WindowSegmentTreeGlobalState::ConstructTree() {
 
 	// Corner case: single element in the window
 	if (levels_flat_offset == 0) {
-		gtstate.aggr.function.initialize(levels_flat_native.get());
+		++levels_flat_offset;
+	}
+
+	levels_flat_native.Initialize(levels_flat_offset);
+
+	// Start by building from the bottom level
+	build_level = 0;
+
+	build_started = make_uniq<AtomicCounters>(levels_flat_start.size());
+	for (auto &counter : *build_started) {
+		counter = 0;
+	}
+
+	build_completed = make_uniq<AtomicCounters>(levels_flat_start.size());
+	for (auto &counter : *build_completed) {
+		counter = 0;
+	}
+}
+
+void WindowSegmentTreeState::Finalize(WindowSegmentTreeGlobalState &gstate) {
+	//	Single part for constructing the tree
+	auto &inputs = gstate.inputs;
+	auto &tree = gstate.tree;
+	auto &filter_mask = gstate.filter_mask;
+	WindowSegmentTreePart gtstate(allocator, tree.aggr, inputs, filter_mask);
+
+	auto &levels_flat_native = gstate.levels_flat_native;
+	const auto &levels_flat_start = gstate.levels_flat_start;
+	// iterate over the levels of the segment tree
+	for (;;) {
+		const idx_t level_current = gstate.build_level.load();
+		if (level_current >= levels_flat_start.size()) {
+			break;
+		}
+
+		// level 0 is data itself
+		const auto level_size =
+		    (level_current == 0 ? inputs.size()
+		                        : levels_flat_start[level_current] - levels_flat_start[level_current - 1]);
+		if (level_size <= 1) {
+			break;
+		}
+		const idx_t build_count = (level_size + gstate.TREE_FANOUT - 1) / gstate.TREE_FANOUT;
+
+		// Build the next fan-in
+		const idx_t build_idx = (*gstate.build_started).at(level_current)++;
+		if (build_idx >= build_count) {
+			//	Nothing left at this level, so wait until other threads are done.
+			//	Since we are only building TREE_FANOUT values at a time, this will be quick.
+			while (level_current == gstate.build_level.load()) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+			continue;
+		}
+
+		// compute the aggregate for this entry in the segment tree
+		const idx_t pos = build_idx * gstate.TREE_FANOUT;
+		const idx_t levels_flat_offset = levels_flat_start[level_current] + build_idx;
+		auto state_ptr = levels_flat_native.GetStatePtr(levels_flat_offset);
+		gtstate.WindowSegmentValue(gstate, level_current, pos, MinValue(level_size, pos + gstate.TREE_FANOUT),
+		                           state_ptr);
+		gtstate.FlushStates(level_current > 0);
+
+		//	If that was the last one, mark the level as complete.
+		const idx_t build_complete = ++(*gstate.build_completed).at(level_current);
+		if (build_complete == build_count) {
+			gstate.build_level++;
+			continue;
+		}
 	}
 }
 
