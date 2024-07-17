@@ -11,7 +11,6 @@
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/main/relation/materialized_relation.hpp"
 
 namespace duckdb {
 

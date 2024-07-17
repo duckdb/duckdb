@@ -10,7 +10,6 @@
 
 #include "duckdb/main/relation.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
-#include "duckdb/main/external_dependencies.hpp"
 
 namespace duckdb {
 
@@ -28,7 +27,6 @@ public:
 	string GetAlias() override;
 	unique_ptr<TableRef> GetTableRef() override;
 	unique_ptr<QueryNode> GetQueryNode() override;
-	shared_ptr<DependencyItem> GetMaterializedDependency();
 };
 
 } // namespace duckdb

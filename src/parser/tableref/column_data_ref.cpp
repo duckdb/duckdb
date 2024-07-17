@@ -16,13 +16,8 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<ColumnDataRef>();
-
-	auto &collection_a = collection;
-	auto &collection_b = other.collection;
-
-	auto expected_types = collection_a->Types();
-	auto other_expected_types = collection_b->Types();
-
+	auto expected_types = collection->Types();
+	auto other_expected_types = other.collection->Types();
 	if (expected_types.size() != other_expected_types.size()) {
 		return false;
 	}
@@ -45,8 +40,7 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 		}
 	}
 	string unused;
-
-	if (!ColumnDataCollection::ResultEquals(*collection_a, *collection_b, unused, true)) {
+	if (!ColumnDataCollection::ResultEquals(*collection, *other.collection, unused, true)) {
 		return false;
 	}
 	return true;
