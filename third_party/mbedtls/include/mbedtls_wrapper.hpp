@@ -40,6 +40,21 @@ public:
 		void *sha_context;
 	};
 
+	static constexpr size_t SHA1_HASH_LENGTH_BYTES = 20;
+	static constexpr size_t SHA1_HASH_LENGTH_TEXT = 40;
+
+	class SHA1State {
+	public:
+		SHA1State();
+		~SHA1State();
+		void AddString(const std::string &str);
+		std::string Finalize();
+		void FinishHex(char *out);
+
+	private:
+		void *sha_context;
+	};
+
 class AESGCMStateMBEDTLS : public duckdb::EncryptionState {
 	public:
 		DUCKDB_API explicit AESGCMStateMBEDTLS();
