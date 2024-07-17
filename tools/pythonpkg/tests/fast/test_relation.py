@@ -552,7 +552,6 @@ class TestRelation(object):
         rel = duckdb_cursor.sql("select * from test")
         res = rel.fetchall()
         assert res == [([2], ['Alice'])]
-        res = duckdb_cursor.sql("select * from vw").fetchone()
 
     def test_serialized_materialized_relation(self, tmp_database):
         con = duckdb.connect(tmp_database)
