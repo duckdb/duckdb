@@ -249,7 +249,7 @@ string Time::ToString(dtime_t time) {
 
 	char micro_buffer[6];
 	auto length = TimeToStringCast::Length(time_units, micro_buffer);
-	auto buffer = make_unsafe_uniq_array<char>(length);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(length);
 	TimeToStringCast::Format(buffer.get(), length, time_units, micro_buffer);
 	return string(buffer.get(), length);
 }

@@ -88,7 +88,7 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 		for (idx_t i = 0; i < union_member_count; i++) {
 			candidates.push_back(UnionType::GetMemberName(arguments[0]->return_type, i));
 		}
-		auto closest_settings = StringUtil::TopNLevenshtein(candidates, key);
+		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
 		throw BinderException("Could not find key \"%s\" in union\n%s", key, message);
 	}

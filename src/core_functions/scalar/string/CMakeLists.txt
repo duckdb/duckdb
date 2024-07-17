@@ -21,6 +21,7 @@ add_library_unity(
   repeat.cpp
   replace.cpp
   reverse.cpp
+  sha1.cpp
   sha256.cpp
   starts_with.cpp
   string_split.cpp

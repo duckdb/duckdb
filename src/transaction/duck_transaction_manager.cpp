@@ -62,7 +62,7 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	}
 
 	// create the actual transaction
-	auto transaction = make_uniq<DuckTransaction>(*this, context, start_time, transaction_id);
+	auto transaction = make_uniq<DuckTransaction>(*this, context, start_time, transaction_id, last_committed_version);
 	auto &transaction_ref = *transaction;
 
 	// store it in the set of active transactions
@@ -255,6 +255,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		checkpoint_decision = CheckpointDecision(error.Message());
 		transaction.commit_id = 0;
 		transaction.Rollback();
+	} else {
+		// check if catalog changes were made
+		if (transaction.catalog_version >= TRANSACTION_ID_START) {
+			transaction.catalog_version = ++last_committed_version;
+		}
 	}
 	OnCommitCheckpointDecision(checkpoint_decision, transaction);
 
@@ -391,6 +396,18 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, boo
 		// we garbage collected transactions: remove them from the list
 		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + static_cast<int64_t>(i));
 	}
+}
+
+idx_t DuckTransactionManager::GetCatalogVersion(Transaction &transaction_p) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
+	return transaction.catalog_version;
+}
+
+void DuckTransactionManager::PushCatalogEntry(Transaction &transaction_p, duckdb::CatalogEntry &entry,
+                                              duckdb::data_ptr_t extra_data, duckdb::idx_t extra_data_size) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
+	transaction.catalog_version = ++last_uncommitted_catalog_version;
+	transaction.PushCatalogEntry(entry, extra_data, extra_data_size);
 }
 
 } // namespace duckdb
