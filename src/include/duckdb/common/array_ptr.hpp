@@ -6,11 +6,11 @@
 
 namespace duckdb {
 
-template<class DATA_TYPE>
+template <class DATA_TYPE>
 class array_ptr_iterator { // NOLINT: match std naming style
 public:
-	array_ptr_iterator(DATA_TYPE *ptr, idx_t index, idx_t size) :
-		ptr(ptr), index(index), size(size) {}
+	array_ptr_iterator(DATA_TYPE *ptr, idx_t index, idx_t size) : ptr(ptr), index(index), size(size) {
+	}
 
 public:
 	array_ptr_iterator<DATA_TYPE> &operator++() {
@@ -42,6 +42,7 @@ class array_ptr { // NOLINT: match std naming style
 public:
 	using iterator_type = array_ptr_iterator<DATA_TYPE>;
 	using value_type = unordered_map<string, shared_ptr<ClientContextState>>::value_type;
+
 private:
 	static inline void AssertNotNull(const bool null) {
 #if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
@@ -72,14 +73,14 @@ public:
 	explicit array_ptr(DATA_TYPE &ref) : ptr(&ref), count(1) {
 	}
 
-	const DATA_TYPE& operator[](idx_t idx) const {
+	const DATA_TYPE &operator[](idx_t idx) const {
 		if (MemorySafety<SAFE>::ENABLED) {
 			AssertIndexInBounds(idx, count);
 		}
 		return ptr[idx];
 	}
 
-	DATA_TYPE& operator[](idx_t idx) {
+	DATA_TYPE &operator[](idx_t idx) {
 		if (MemorySafety<SAFE>::ENABLED) {
 			AssertIndexInBounds(idx, count);
 		}
