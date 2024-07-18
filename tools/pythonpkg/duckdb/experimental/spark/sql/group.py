@@ -21,7 +21,7 @@ from typing import Callable, TYPE_CHECKING, overload, Dict, Union, List
 from .column import Column
 from .session import SparkSession
 from .dataframe import DataFrame
-from .functions import _to_column
+from .functions import _to_column_expr
 from ._typing import ColumnOrName
 from .types import NumericType
 
@@ -55,7 +55,7 @@ def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
 class Grouping:
     def __init__(self, *cols: "ColumnOrName", **kwargs):
         self._type = ""
-        self._cols = [_to_column(x) for x in cols]
+        self._cols = [_to_column_expr(x) for x in cols]
         if 'special' in kwargs:
             special = kwargs['special']
             accepted_special = ["cube", "rollup"]
