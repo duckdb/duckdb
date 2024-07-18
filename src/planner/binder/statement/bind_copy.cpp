@@ -61,7 +61,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	vector<idx_t> partition_cols;
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
-	bool no_partition_columns = false;
+	bool write_partition_columns = false;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
@@ -127,8 +127,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
-		} else if (loption == "no_partition_columns") {
-			no_partition_columns = true;
+		} else if (loption == "write_partition_columns") {
+			write_partition_columns = true;
 		} else {
 			if (loption == "compression") {
 				if (option.second.empty()) {
@@ -166,10 +166,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	if (file_size_bytes.IsValid() && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine FILE_SIZE_BYTES and PARTITION_BY for COPY");
 	}
-	if (no_partition_columns) {
+	if (!write_partition_columns) {
 		if (partition_cols.size() == select_node.names.size()) {
 			throw NotImplementedException(
-			    "There is no column to write due to PARTITION_BY and NO_PARTITION_COLUMNS options.");
+			    "There is no column to write because all columns are specified with PARTITION_BY option. Consider "
+			    "using WRITE_PARTITION_COLUMNS option to write partition columns.");
 		}
 	}
 	bool is_remote_file = FileSystem::IsRemoteFile(stmt.info->file_path);
@@ -221,15 +222,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	auto unique_column_names = select_node.names;
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
-	unique_ptr<FunctionData> function_data;
-	if (no_partition_columns) {
-		auto names_to_copy = GetNamesWithoutPartitions(unique_column_names, partition_cols);
-		auto types_to_copy = GetTypesWithoutPartitions(select_node.types, partition_cols);
-		function_data = copy_function.function.copy_to_bind(context, bind_input, names_to_copy, types_to_copy);
-	} else {
-		function_data =
-		    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
-	}
+
+	auto names_to_write =
+	    LogicalCopyToFile::GetNamesWithoutPartitions(unique_column_names, partition_cols, write_partition_columns);
+	auto types_to_write =
+	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, partition_cols, write_partition_columns);
+	auto function_data = copy_function.function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 
 	const auto rotate =
 	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);
@@ -260,7 +258,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	}
 	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
-	copy->no_partition_columns = no_partition_columns;
+	copy->write_partition_columns = write_partition_columns;
 	copy->partition_columns = std::move(partition_cols);
 	copy->return_type = return_type;
 

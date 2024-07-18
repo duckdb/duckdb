@@ -1,5 +1,6 @@
 #include "duckdb/function/copy_function.hpp"
 #include <numeric>
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
 
 namespace duckdb {
 
@@ -25,32 +26,10 @@ vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType ret
 	}
 }
 
-vector<LogicalType> GetTypesWithoutPartitions(const vector<LogicalType> &col_types, const vector<idx_t> &part_cols) {
-	vector<LogicalType> types;
-	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
-	for (idx_t col_idx = 0; col_idx < col_types.size(); col_idx++) {
-		if (part_col_set.find(col_idx) == part_col_set.end()) {
-			types.push_back(col_types[col_idx]);
-		}
-	}
-	return types;
-}
-
-vector<string> GetNamesWithoutPartitions(const vector<string> &col_names, const vector<column_t> &part_cols) {
-	vector<string> names;
-	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
-	for (idx_t col_idx = 0; col_idx < col_names.size(); col_idx++) {
-		if (part_col_set.find(col_idx) == part_col_set.end()) {
-			names.push_back(col_names[col_idx]);
-		}
-	}
-	return names;
-}
-
 void SetDataWithoutPartitions(DataChunk &chunk, const DataChunk &source, const vector<LogicalType> &col_types,
                               const vector<idx_t> &part_cols) {
 	D_ASSERT(source.ColumnCount() == col_types.size());
-	auto types = GetTypesWithoutPartitions(col_types, part_cols);
+	auto types = LogicalCopyToFile::GetTypesWithoutPartitions(col_types, part_cols, false);
 	chunk.InitializeEmpty(types);
 	set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
 	idx_t new_col_id = 0;

@@ -245,13 +245,13 @@ public:
 			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 			// push the chunks into the write state
 			for (auto &chunk : partitions[i]->Chunks()) {
-				if (op.no_partition_columns) {
+				if (op.write_partition_columns) {
+					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+				} else {
 					DataChunk filtered_chunk;
 					SetDataWithoutPartitions(filtered_chunk, chunk, op.expected_types, op.partition_columns);
 					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state,
 					                         filtered_chunk);
-				} else {
-					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
 				}
 			}
 			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
