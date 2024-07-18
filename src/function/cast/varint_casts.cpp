@@ -53,9 +53,6 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 	if (is_negative) {
 		int_value.lower = ~int_value.lower + 1;
 		int_value.upper = ~int_value.upper;
-		if (int_value.lower == 0) {
-			int_value.upper += 1;
-		}
 	}
 	// Determine the number of data bytes
 	uint64_t abs_value_upper = static_cast<uint64_t>(int_value.upper);
