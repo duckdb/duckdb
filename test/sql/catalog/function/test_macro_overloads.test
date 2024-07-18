@@ -58,6 +58,22 @@ SELECT COUNT(*) FROM generate_numbers(1, 2, 2, mult := 5);
 ----
 25
 
+
+# view overloads in duckdb_functions
+query II
+SELECT function_name, parameters FROM duckdb_functions() WHERE function_name IN ('arithmetic', 'multi_add', 'generate_numbers') ORDER BY function_name, len(parameters)
+----
+arithmetic	[a, b, mult]
+arithmetic	[a, b, c, division]
+generate_numbers	[a, b]
+generate_numbers	[a, b, c, mult]
+multi_add	[]
+multi_add	[a]
+multi_add	[a, b]
+multi_add	[a, b, c]
+multi_add	[a, b, c, d]
+multi_add	[a, b, c, d, e]
+
 # ambiguity conflict between macros
 statement error
 CREATE MACRO ambiguous_macro
