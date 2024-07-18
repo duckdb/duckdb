@@ -1,0 +1,12 @@
+# name: test/sql/function/numeric/abs.test
+# description: Test abs
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# test abs on negative zero
+query II
+SELECT abs('-0.0'::float), abs('-0.0'::double)
+----
+0.0	0.0

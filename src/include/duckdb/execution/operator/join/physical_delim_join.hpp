@@ -19,11 +19,14 @@ class PhysicalHashAggregate;
 class PhysicalDelimJoin : public PhysicalOperator {
 public:
 	PhysicalDelimJoin(PhysicalOperatorType type, vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-	                  vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality);
+	                  vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality,
+	                  optional_idx delim_idx);
 
 	unique_ptr<PhysicalOperator> join;
 	unique_ptr<PhysicalHashAggregate> distinct;
 	vector<const_reference<PhysicalOperator>> delim_scans;
+
+	optional_idx delim_idx;
 
 public:
 	vector<const_reference<PhysicalOperator>> GetChildren() const override;
