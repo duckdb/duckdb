@@ -180,10 +180,10 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "optionally_owned_ptr<ColumnDataCollection>"
+        "type": "shared_ptr<ColumnDataCollection>"
       }
     ],
-    "constructor": ["expected_names", "collection"]
+    "constructor": ["collection", "expected_names"]
   },
   {
     "class": "PivotRef",
