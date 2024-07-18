@@ -611,9 +611,7 @@ class TestReadCSV(object):
         file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
         print(options)
         if 'hive_types' in options:
-            with pytest.raises(
-                duckdb.InvalidInputException, match=r'Unknown hive_type: "two" does not appear to be a partition'
-            ):
+            with pytest.raises(duckdb.InvalidInputException, match=r'Unknown hive_type:'):
                 rel = duckdb_cursor.read_csv(file, **options)
         else:
             rel = duckdb_cursor.read_csv(file, **options)

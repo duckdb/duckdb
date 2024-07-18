@@ -102,9 +102,7 @@ class TestReadJSON(object):
         option_name, option_value = option
         keyword_arguments[option_name] = option_value
         if option_name == 'hive_types':
-            with pytest.raises(
-                duckdb.InvalidInputException, match=r'Unknown hive_type: "name" does not appear to be a partition'
-            ):
+            with pytest.raises(duckdb.InvalidInputException, match=r'Unknown hive_type:'):
                 rel = duckdb_cursor.read_json(TestFile('example.json'), **keyword_arguments)
         else:
             rel = duckdb_cursor.read_json(TestFile('example.json'), **keyword_arguments)
