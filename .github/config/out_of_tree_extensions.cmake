@@ -75,6 +75,7 @@ if (NOT MINGW)
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
             GIT_TAG 120c0b12258d27758e240d61f5dc22a4238a14a6
+            APPLY_PATCHES
             )
 endif()
 
