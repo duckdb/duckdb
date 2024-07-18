@@ -128,10 +128,6 @@ string PragmaExtensionVersions(ClientContext &context, const FunctionParameters 
 	return "select extension_name, extension_version, install_mode, installed_from from duckdb_extensions() where installed";
 }
 
-string PragmaBugReportInfo(ClientContext &context, const FunctionParameters &parameters) {
-	return "pragma extension_versions; pragma version; pragma platform;";
-}
-
 string PragmaPlatform(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_platform();";
 }
