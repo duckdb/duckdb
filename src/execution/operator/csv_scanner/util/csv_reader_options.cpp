@@ -130,6 +130,21 @@ void CSVReaderOptions::SetQuote(const string &quote_p) {
 	this->dialect_options.state_machine_options.quote.Set(quote_str[0]);
 }
 
+string CSVReaderOptions::GetComment() const {
+	return std::string(1, this->dialect_options.state_machine_options.comment.GetValue());
+}
+
+void CSVReaderOptions::SetComment(const string &comment_p) {
+	auto comment_str = comment_p;
+	if (comment_str.size() > 1) {
+		throw InvalidInputException("The comment option cannot exceed a size of 1 byte.");
+	}
+	if (comment_str.empty()) {
+		comment_str = string("\0", 1);
+	}
+	this->dialect_options.state_machine_options.quote.Set(comment_str[0]);
+}
+
 NewLineIdentifier CSVReaderOptions::GetNewline() const {
 	return dialect_options.state_machine_options.new_line.GetValue();
 }
@@ -290,6 +305,8 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, 
 		SetDelimiter(ParseString(value, loption));
 	} else if (loption == "quote") {
 		SetQuote(ParseString(value, loption));
+	} else if (loption == "comment") {
+		SetComment(ParseString(value, loption));
 	} else if (loption == "new_line") {
 		SetNewline(ParseString(value, loption));
 	} else if (loption == "escape") {

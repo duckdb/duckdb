@@ -24,6 +24,8 @@ struct CSVStateMachineOptions {
 	CSVOption<char> quote = '\"';
 	//! Escape character to escape quote character
 	CSVOption<char> escape = '\0';
+	//! Comment character to skip a line
+	CSVOption<char> comment = '\0';
 	//! New Line separator
 	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
 

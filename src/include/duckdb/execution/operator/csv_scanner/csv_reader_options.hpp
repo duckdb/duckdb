@@ -58,6 +58,7 @@ struct CSVReaderOptions {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Option to convert quoted values to NULL values
 	bool allow_quoted_nulls = true;
+	char comment;
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
@@ -142,8 +143,10 @@ struct CSVReaderOptions {
 
 	void SetSkipRows(int64_t rows);
 
-	string GetQuote() const;
 	void SetQuote(const string &quote);
+	string GetQuote() const;
+	void SetComment(const string &comment);
+	string GetComment() const;
 	void SetDelimiter(const string &delimiter);
 	string GetDelimiter() const;
 
