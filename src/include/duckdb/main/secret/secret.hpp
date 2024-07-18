@@ -12,9 +12,11 @@
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include <duckdb/common/file_opener.hpp>
 
 namespace duckdb {
 class BaseSecret;
+struct SecretEntry;
 
 //! Whether a secret is persistent or temporary
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
@@ -201,10 +203,68 @@ public:
 		return make_uniq<KeyValueSecret>(*this);
 	}
 
+	// Get a value from the secret
+	bool TryGetValue(const string &key, Value &result) const {
+		auto lookup = secret_map.find(key);
+		if (lookup == secret_map.end()) {
+			return false;
+		}
+		result = lookup->second;
+		return true;
+	}
+
 	//! the map of key -> values that make up the secret
 	case_insensitive_tree_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
 	case_insensitive_set_t redact_keys;
+};
+
+// Helper class to easily fetch setting in a cascading way:
+class SecretSettingGetter {
+public:
+	//! Manually pass in a secret reference
+	SecretSettingGetter(const KeyValueSecret& secret_p, FileOpener &opener_p) : secret(secret_p), opener(opener_p){};
+
+	//! Initializes the SecretSettingGetter by fetching the secret automatically
+	SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char** secret_types, idx_t secret_types_len);
+	SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char* secret_type);
+
+	~SecretSettingGetter();
+
+	//! Fetching a secret in a cascading way:
+	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, Value &result);
+	//! Fetching a secret in a cascading way, throws InternalException(!) on not found
+	Value GetSecretKeyOrSetting(const string &secret_key, const string &setting_name);
+
+	//! Templating around TryGetSecretOrSetting
+	template <class TYPE>
+	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, TYPE &value_out) {
+		Value result;
+		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
+		if (lookup_result) {
+			value_out = result.GetValue<TYPE>();
+		}
+		return lookup_result;
+	}
+
+	// Like a templated GetSecretOrSetting but instead of throwing on not found, return the default value
+	template <class TYPE>
+	TYPE GetSecretKeyOrSettingOrDefault(const string &secret_key, const string &setting_name, TYPE default_value) {
+		TYPE result;
+		if (TryGetSecretOrSetting(secret_key, setting_name, result)) {
+			return result;
+		}
+		return default_value;
+	}
+
+protected:
+	//! Fetching the secret
+	optional_ptr<const KeyValueSecret> secret;
+	//! Optionally an owning pointer to the secret entry
+	shared_ptr<SecretEntry> secret_entry;
+
+	//! Fetching the settings
+	optional_ptr<FileOpener> opener;
 };
 
 } // namespace duckdb

@@ -1,8 +1,12 @@
 #include "duckdb/main/secret/secret.hpp"
+
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -100,6 +104,63 @@ Value KeyValueSecret::TryGetValue(const string &key, bool error_on_missing) cons
 	}
 
 	return lookup->second;
+}
+
+SecretSettingGetter::SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char *secret_type)
+    : SecretSettingGetter(opener_p, info, &secret_type, 1) {
+}
+
+SecretSettingGetter::SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char **secret_types,
+                                         idx_t secret_types_len)
+    : opener(opener_p) {
+	auto db = opener->TryGetDatabase();
+	if (!db) {
+		return;
+	}
+	auto &secret_manager = db->GetSecretManager();
+	auto context = opener->TryGetClientContext();
+	auto transaction = context ? CatalogTransaction::GetSystemCatalogTransaction(*context)
+	                           : CatalogTransaction::GetSystemTransaction(*db);
+
+	SecretMatch secret_match;
+	for (idx_t i = 0; i < secret_types_len; i++) {
+		auto &secret_type = secret_types[i];
+		secret_match = secret_manager.LookupSecret(transaction, info.file_path, secret_type);
+		if (secret_match.HasMatch()) {
+			break;
+		}
+	}
+
+	if (secret_match.HasMatch()) {
+		secret = dynamic_cast<const KeyValueSecret &>(secret_match.GetSecret());
+		secret_entry = std::move(secret_match.secret_entry);
+	}
+}
+
+SecretSettingGetter::~SecretSettingGetter() {
+}
+
+SettingLookupResult SecretSettingGetter::TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
+                                                                  Value &result) {
+	if (secret && secret->TryGetValue(secret_key, result)) {
+		return SettingLookupResult(SettingScope::SECRET);
+	}
+	if (opener) {
+		auto res = opener->TryGetCurrentSetting(setting_name, result);
+		if (res) {
+			return res;
+		}
+	}
+	return SettingLookupResult();
+}
+
+Value SecretSettingGetter::GetSecretKeyOrSetting(const string &secret_key, const string &setting_name) {
+	Value result;
+	if (TryGetSecretKeyOrSetting(secret_key, setting_name, result)) {
+		return result;
+	}
+	throw InternalException("Failed to fetch a setting. Neither the Secret key '%s', nor the setting '%s' were found!",
+	                        secret_key, setting_name);
 }
 
 bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
