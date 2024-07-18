@@ -1636,6 +1636,16 @@ const vector<Value> &StructValue::GetChildren(const Value &value) {
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }
 
+const vector<Value> &MapValue::GetChildren(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling MapValue::GetChildren on a NULL value");
+	}
+	D_ASSERT(value.type().id() == LogicalTypeId::MAP);
+	D_ASSERT(value.type().InternalType() == PhysicalType::LIST);
+	D_ASSERT(value.value_info_);
+	return value.value_info_->Get<NestedValueInfo>().GetValues();
+}
+
 const vector<Value> &ListValue::GetChildren(const Value &value) {
 	if (value.is_null) {
 		throw InternalException("Calling ListValue::GetChildren on a NULL value");

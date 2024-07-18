@@ -36,14 +36,14 @@ NULL	NULL
 3	1
 
 query IT
-SELECT i, i NOT IN (1, 2, 3, 4, 5, 6, 7, 8) FROM integers ORDER BY i
+SELECT i, i NOT IN (1, 3, 4, 5, 6, 7, 8) FROM integers ORDER BY i
 ----
 NULL	NULL
 1	0
-2	0
+2	1
 3	0
 
-query IT
+query II
 SELECT i, i IN (1, 2, NULL, 4, 5, 6, 7, 8) FROM integers ORDER BY i
 ----
 NULL	NULL
@@ -138,4 +138,104 @@ NULL	NULL
 1	1
 2	0
 3	0
+
+query I
+SELECT 1 IN [1, 2, 3];
+----
+true
+
+query I
+SELECT 1 IN [2, 2, 3];
+----
+false
+
+statement ok
+PREPARE v1 AS SELECT 1 IN ?
+
+query I
+EXECUTE v1([]);
+----
+false
+
+query I
+SELECT 1 IN [];
+----
+false
+
+query I
+EXECUTE v1([1, 2, 3]);
+----
+true
+
+query I
+EXECUTE v1([2, 2, 3]);
+----
+false
+
+# Test <expr> IN <column_ref>
+
+query I
+with list_provider as (
+	select [1, 2] as lst
+)
+SELECT i FROM (
+	from integers, list_provider
+) t(i, lst) WHERE i IN lst ORDER BY i
+----
+1
+2
+
+query I
+with list_provider as (
+	select [1, 2, 3, 4, 5, 6, 7, 8] as lst
+)
+SELECT i FROM (
+	from integers, list_provider
+) t(i, lst) WHERE i IN lst ORDER BY i
+----
+1
+2
+3
+
+query II
+with list_provider as (
+	select [1, 2, 3, 4, 5, 6, 7, 8] as lst
+)
+SELECT i, i IN lst FROM (
+	from integers, list_provider
+) t(i, lst) order by i
+----
+NULL	NULL
+1	1
+2	1
+3	1
+
+query II
+with list_provider as (
+	select [1, 3, 4, 5, 6, 7, 8] as lst
+)
+SELECT i, i NOT IN lst FROM (
+	from integers, list_provider
+) t(i, lst) order by i
+----
+NULL	NULL
+1	0
+2	1
+3	0
+
+query II
+with list_provider as (
+	select [1, 2, NULL, 4, 5, 6, 7, 8] as lst
+)
+SELECT i, i IN lst FROM (
+	from integers, list_provider
+) t(i, lst) order by i
+----
+NULL	NULL
+1	1
+2	1
+3	0
+
+# ^ Note the '0' on the last row
+# This is different from regular IN behavior
 
