@@ -798,6 +798,10 @@
         "name": "columns_set",
         "type": "bool",
         "default": "false"
+      },
+      {"id": 137,
+        "name": "dialect_options.state_machine_options.delimiter",
+        "type": "CSVOption<char>"
       }
     ],
     "pointer_type": "none"

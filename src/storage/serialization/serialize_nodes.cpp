@@ -203,6 +203,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", sql_type_list);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column", sql_types_per_column);
 	serializer.WritePropertyWithDefault<bool>(136, "columns_set", columns_set, false);
+	serializer.WriteProperty<CSVOption<char>>(137, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -244,6 +245,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", result.sql_type_list);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column", result.sql_types_per_column);
 	deserializer.ReadPropertyWithDefault<bool>(136, "columns_set", result.columns_set, false);
+	deserializer.ReadProperty<CSVOption<char>>(137, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
 	return result;
 }
 
