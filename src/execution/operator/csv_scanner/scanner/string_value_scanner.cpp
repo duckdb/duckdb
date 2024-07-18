@@ -984,26 +984,39 @@ void StringValueScanner::ProcessExtraRow() {
 				lines_read++;
 				return;
 			} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
-				result.AddRow(result, iterator.pos.buffer_pos);
+				if (result.IsCommentSet(result)) {
+					result.UnsetComment(result);
+				} else {
+					result.AddRow(result, iterator.pos.buffer_pos);
+					iterator.pos.buffer_pos++;
+					lines_read++;
+					return;
+				}
 				iterator.pos.buffer_pos++;
 				lines_read++;
-				return;
 			}
 			lines_read++;
 			iterator.pos.buffer_pos++;
 			break;
 		case CSVState::CARRIAGE_RETURN:
 			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
-				result.AddRow(result, iterator.pos.buffer_pos);
+				if (result.IsCommentSet(result)) {
+					result.UnsetComment(result);
+				} else {
+					result.AddRow(result, iterator.pos.buffer_pos);
+					iterator.pos.buffer_pos++;
+					lines_read++;
+					return;
+				}
 				iterator.pos.buffer_pos++;
 				lines_read++;
-				return;
 			} else {
 				result.EmptyLine(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				lines_read++;
 				return;
 			}
+			break;
 		case CSVState::DELIMITER:
 			result.AddValue(result, iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
@@ -1028,6 +1041,15 @@ void StringValueScanner::ProcessExtraRow() {
 			iterator.pos.buffer_pos++;
 			while (state_machine->transition_array
 			           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+			       iterator.pos.buffer_pos < to_pos - 1) {
+				iterator.pos.buffer_pos++;
+			}
+			break;
+		case CSVState::COMMENT:
+			result.SetComment(result);
+			iterator.pos.buffer_pos++;
+			while (state_machine->transition_array
+			           .skip_comment[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
 			       iterator.pos.buffer_pos < to_pos - 1) {
 				iterator.pos.buffer_pos++;
 			}
@@ -1172,7 +1194,11 @@ void StringValueScanner::ProcessOverbufferValue() {
 	}
 
 	if (states.NewRow() && !states.IsNotSet()) {
-		result.AddRowInternal();
+		if (result.IsCommentSet(result)) {
+			result.UnsetComment(result);
+		} else {
+			result.AddRowInternal();
+		}
 		lines_read++;
 	}
 
@@ -1212,7 +1238,11 @@ bool StringValueScanner::MoveToNextBuffer() {
 				// we add the value
 				result.AddValue(result, previous_buffer_handle->actual_size);
 				// And an extra empty value to represent what comes after the delimiter
-				result.AddRow(result, previous_buffer_handle->actual_size);
+				if (result.IsCommentSet(result)) {
+					result.UnsetComment(result);
+				} else {
+					result.AddRow(result, previous_buffer_handle->actual_size);
+				}
 				lines_read++;
 			} else if (states.IsQuotedCurrent()) {
 				// Unterminated quote
@@ -1222,7 +1252,11 @@ bool StringValueScanner::MoveToNextBuffer() {
 				result.current_line_position.end = current_line_start;
 				result.InvalidState(result);
 			} else {
-				result.AddRow(result, previous_buffer_handle->actual_size);
+				if (result.IsCommentSet(result)) {
+					result.UnsetComment(result);
+				} else {
+					result.AddRow(result, previous_buffer_handle->actual_size);
+				}
 				lines_read++;
 			}
 			return false;

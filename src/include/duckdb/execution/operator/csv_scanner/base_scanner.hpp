@@ -28,13 +28,24 @@ public:
 		}
 		result.quoted = true;
 	}
-	//! Adds a Row to the result
 	static inline void SetEscaped(ScannerResult &result) {
 		result.escaped = true;
 	}
+	static inline void SetComment(ScannerResult &result) {
+		result.comment = true;
+	}
+	static inline void UnsetComment(ScannerResult &result) {
+		result.comment = false;
+	}
+	static inline bool IsCommentSet(ScannerResult &result) {
+		return result.comment == true;
+	}
+
 	//! Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	bool escaped = false;
+	//! Variable to keep track if we are in a comment row. Hence won't add it
+	bool comment = false;
 	idx_t quoted_position = 0;
 
 	//! Size of the result
@@ -162,11 +173,15 @@ protected:
 					lines_read++;
 
 				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
-					if (T::AddRow(result, iterator.pos.buffer_pos)) {
-						iterator.pos.buffer_pos++;
-						bytes_read = iterator.pos.buffer_pos - start_pos;
-						lines_read++;
-						return;
+					if (T::IsCommentSet(result)) {
+						T::UnsetComment(result);
+					} else {
+						if (T::AddRow(result, iterator.pos.buffer_pos)) {
+							iterator.pos.buffer_pos++;
+							bytes_read = iterator.pos.buffer_pos - start_pos;
+							lines_read++;
+							return;
+						}
 					}
 					lines_read++;
 				}
@@ -181,11 +196,15 @@ protected:
 						return;
 					}
 				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
-					if (T::AddRow(result, iterator.pos.buffer_pos)) {
-						iterator.pos.buffer_pos++;
-						bytes_read = iterator.pos.buffer_pos - start_pos;
-						lines_read++;
-						return;
+					if (T::IsCommentSet(result)) {
+						T::UnsetComment(result);
+					} else {
+						if (T::AddRow(result, iterator.pos.buffer_pos)) {
+							iterator.pos.buffer_pos++;
+							bytes_read = iterator.pos.buffer_pos - start_pos;
+							lines_read++;
+							return;
+						}
 					}
 				}
 				iterator.pos.buffer_pos++;
@@ -245,6 +264,25 @@ protected:
 				T::QuotedNewLine(result);
 				iterator.pos.buffer_pos++;
 				break;
+			case CSVState::COMMENT: {
+				T::SetComment(result);
+				iterator.pos.buffer_pos++;
+				while (iterator.pos.buffer_pos + 8 < to_pos) {
+					uint64_t value =
+					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
+					if (ContainsZeroByte((value ^ state_machine->transition_array.new_line) &
+					                     (value ^ state_machine->transition_array.carriage_return))) {
+						break;
+					}
+					iterator.pos.buffer_pos += 8;
+				}
+				while (state_machine->transition_array
+				           .skip_comment[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+				       iterator.pos.buffer_pos < to_pos - 1) {
+					iterator.pos.buffer_pos++;
+				}
+				break;
+			}
 			default:
 				iterator.pos.buffer_pos++;
 				break;

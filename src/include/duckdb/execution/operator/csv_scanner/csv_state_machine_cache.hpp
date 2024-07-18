@@ -27,6 +27,8 @@ public:
 	bool skip_standard[256];
 	//! For the Quoted State
 	bool skip_quoted[256];
+	//! For the Comment State
+	bool skip_comment[256];
 
 	uint64_t delimiter = 0;
 	uint64_t new_line = 0;

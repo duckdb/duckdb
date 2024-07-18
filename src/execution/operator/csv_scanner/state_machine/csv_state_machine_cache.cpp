@@ -168,6 +168,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
 		transition_array.skip_standard[i] = true;
 		transition_array.skip_quoted[i] = true;
+		transition_array.skip_comment[i] = true;
 	}
 	// For standard states we only care for delimiters \r and \n
 	transition_array.skip_standard[delimiter] = false;
@@ -179,6 +180,9 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array.skip_quoted[escape] = false;
 	transition_array.skip_quoted[static_cast<uint8_t>('\n')] = false;
 	transition_array.skip_quoted[static_cast<uint8_t>('\r')] = false;
+
+	transition_array.skip_comment[static_cast<uint8_t>('\r')] = false;
+	transition_array.skip_comment[static_cast<uint8_t>('\n')] = false;
 
 	transition_array.delimiter = delimiter;
 	transition_array.new_line = static_cast<uint8_t>('\n');
