@@ -15,8 +15,8 @@ namespace duckdb {
 //! Basically which char, quote and escape were used to generate it.
 struct CSVStateMachineOptions {
 	CSVStateMachineOptions() {};
-	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p, NewLineIdentifier new_line_p)
-	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p), new_line(new_line_p) {};
+	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p, char comment_p, NewLineIdentifier new_line_p)
+	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p) {};
 
 	//! Delimiter to separate columns within each line
 	CSVOption<char> delimiter = ',';
@@ -31,7 +31,7 @@ struct CSVStateMachineOptions {
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape &&
-		       new_line == other.new_line;
+		       new_line == other.new_line && comment == other.comment;
 	}
 };
 } // namespace duckdb

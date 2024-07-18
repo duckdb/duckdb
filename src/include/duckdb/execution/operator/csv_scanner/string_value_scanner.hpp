@@ -244,6 +244,7 @@ public:
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
+	static inline void UnsetComment(StringValueResult &result, idx_t buffer_pos);
 
 	DataChunk &ToChunk();
 	//! Resets the state of the result

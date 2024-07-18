@@ -142,7 +142,7 @@ void CSVReaderOptions::SetComment(const string &comment_p) {
 	if (comment_str.empty()) {
 		comment_str = string("\0", 1);
 	}
-	this->dialect_options.state_machine_options.quote.Set(comment_str[0]);
+	this->dialect_options.state_machine_options.comment.Set(comment_str[0]);
 }
 
 NewLineIdentifier CSVReaderOptions::GetNewline() const {

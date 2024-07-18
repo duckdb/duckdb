@@ -158,6 +158,12 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 	}
 	return false;
 }
+
+void StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos) {
+	result.comment = false;
+	result.last_position.buffer_pos = buffer_pos + 1;
+}
+
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
 	if (HandleTooManyColumnsError(value_ptr, size)) {
 		return;
@@ -985,7 +991,7 @@ void StringValueScanner::ProcessExtraRow() {
 				return;
 			} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 				if (result.IsCommentSet(result)) {
-					result.UnsetComment(result);
+					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
 					result.AddRow(result, iterator.pos.buffer_pos);
 					iterator.pos.buffer_pos++;
@@ -1001,7 +1007,7 @@ void StringValueScanner::ProcessExtraRow() {
 		case CSVState::CARRIAGE_RETURN:
 			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
 				if (result.IsCommentSet(result)) {
-					result.UnsetComment(result);
+					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
 					result.AddRow(result, iterator.pos.buffer_pos);
 					iterator.pos.buffer_pos++;
@@ -1195,7 +1201,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 
 	if (states.NewRow() && !states.IsNotSet()) {
 		if (result.IsCommentSet(result)) {
-			result.UnsetComment(result);
+			result.UnsetComment(result, iterator.pos.buffer_pos);
 		} else {
 			result.AddRowInternal();
 		}
@@ -1239,7 +1245,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 				result.AddValue(result, previous_buffer_handle->actual_size);
 				// And an extra empty value to represent what comes after the delimiter
 				if (result.IsCommentSet(result)) {
-					result.UnsetComment(result);
+					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
 					result.AddRow(result, previous_buffer_handle->actual_size);
 				}
@@ -1253,7 +1259,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 				result.InvalidState(result);
 			} else {
 				if (result.IsCommentSet(result)) {
-					result.UnsetComment(result);
+					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
 					result.AddRow(result, previous_buffer_handle->actual_size);
 				}
