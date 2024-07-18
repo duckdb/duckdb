@@ -11,9 +11,7 @@ void CreateS3SecretFunctions::Register(DatabaseInstance &instance) {
 	RegisterCreateSecretFunction(instance, "gcs");
 }
 
-unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context,
-                                                                             CreateSecretInput &input,
-                                                                             S3AuthParams params) {
+unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input) {
 	// Set scope to user provided scope or the default
 	auto scope = input.scope;
 	if (scope.empty()) {
@@ -37,6 +35,7 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 	// for r2 we can set the endpoint using the account id
 	if (input.type == "r2" && input.options.find("account_id") != input.options.end()) {
 		secret->secret_map["endpoint"] = input.options["account_id"].ToString() + ".r2.cloudflarestorage.com";
+		secret->secret_map["url_style"] = "path";
 	}
 
 	// apply any overridden settings
@@ -77,27 +76,9 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 	return std::move(secret);
 }
 
-unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(ClientContext &context,
-                                                                           CreateSecretInput &input) {
-	auto &opener = context.client_data->file_opener;
-	FileOpenerInfo info;
-	auto params = S3AuthParams::ReadFrom(opener.get(), info);
-	return CreateSecretFunctionInternal(context, input, params);
-}
-
 unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromConfig(ClientContext &context,
                                                                          CreateSecretInput &input) {
-	S3AuthParams empty_params;
-
-	if (input.type == "gcs") {
-		empty_params.endpoint = "storage.googleapis.com";
-	}
-
-	if (input.type == "gcs" || input.type == "r2") {
-		empty_params.url_style = "path";
-	}
-
-	return CreateSecretFunctionInternal(context, input, empty_params);
+	return CreateSecretFunctionInternal(context, input);
 }
 
 void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function, string &type) {
@@ -125,11 +106,8 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
 	ExtensionUtil::RegisterSecretType(instance, secret_type);
 
 	CreateSecretFunction from_empty_config_fun2 = {type, "config", CreateS3SecretFromConfig};
-	CreateSecretFunction from_settings_fun2 = {type, "duckdb_settings", CreateS3SecretFromSettings};
 	SetBaseNamedParams(from_empty_config_fun2, type);
-	SetBaseNamedParams(from_settings_fun2, type);
 	ExtensionUtil::RegisterFunction(instance, from_empty_config_fun2);
-	ExtensionUtil::RegisterFunction(instance, from_settings_fun2);
 }
 
 void CreateBearerTokenFunctions::Register(DatabaseInstance &instance) {

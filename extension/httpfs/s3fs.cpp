@@ -15,6 +15,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+
 #include <iostream>
 #include <thread>
 
@@ -158,31 +159,39 @@ S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerI
 
 	SecretSettingGetter settings(*opener, info, secret_types, secret_types_len);
 
+	// These settings we just set or leave to their S3AuthParams default value
 	settings.TryGetSecretKeyOrSetting("region", "s3_region", result.region);
 	settings.TryGetSecretKeyOrSetting("key_id", "s3_access_key_id", result.access_key_id);
 	settings.TryGetSecretKeyOrSetting("secret", "s3_secret_access_key", result.secret_access_key);
 	settings.TryGetSecretKeyOrSetting("session_token", "s3_session_token", result.session_token);
-	settings.TryGetSecretKeyOrSetting("endpoint", "s3_endpoint", result.endpoint);
-	settings.TryGetSecretKeyOrSetting("url_style", "s3_url_style", result.url_style);
 	settings.TryGetSecretKeyOrSetting("region", "s3_region", result.region);
 	settings.TryGetSecretKeyOrSetting("use_ssl", "s3_use_ssl", result.use_ssl);
 	settings.TryGetSecretKeyOrSetting("s3_url_compatibility_mode", "s3_url_compatibility_mode",
 	                                  result.s3_url_compatibility_mode);
 
-	// Empty string for the endpoint is interpreted as use the default, hence we set the default here conditionally
-	if (result.endpoint.empty()) {
-		if (StringUtil::StartsWith(info.file_path, "gcs://") || StringUtil::StartsWith(info.file_path, "gs://")) {
+	// Endpoint and url style are slightly more complex and require special handling for gcs and r2
+	auto endpoint_result = settings.TryGetSecretKeyOrSetting("endpoint", "s3_endpoint", result.endpoint);
+	auto url_style_result = settings.TryGetSecretKeyOrSetting("url_style", "s3_url_style", result.url_style);
+
+	if (StringUtil::StartsWith(info.file_path, "gcs://") || StringUtil::StartsWith(info.file_path, "gs://")) {
+		// For GCS urls we force the endpoint and vhost path style, allowing only to be overridden by secrets
+		if (result.endpoint.empty() || endpoint_result.GetScope() != SettingScope::SECRET) {
 			result.endpoint = "storage.googleapis.com";
-		} else {
-			result.endpoint = "s3.amazonaws.com";
 		}
+		if (result.url_style.empty() || url_style_result.GetScope() != SettingScope::SECRET) {
+			result.url_style = "path";
+		}
+	}
+
+	if (result.endpoint.empty()) {
+		result.endpoint = "s3.amazonaws.com";
 	}
 
 	return result;
 }
 
-unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
-                                                        string &name, S3AuthParams &params) {
+unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider, string &name,
+                                        S3AuthParams &params) {
 	auto return_value = make_uniq<KeyValueSecret>(prefix_paths_p, type, provider, name);
 
 	//! Set key value map
