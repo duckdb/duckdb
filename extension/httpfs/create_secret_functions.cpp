@@ -14,46 +14,6 @@ void CreateS3SecretFunctions::Register(DatabaseInstance &instance) {
 unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context,
                                                                              CreateSecretInput &input,
                                                                              S3AuthParams params) {
-	// for r2 we can set the endpoint using the account id
-	if (input.type == "r2" && input.options.find("account_id") != input.options.end()) {
-		params.endpoint = input.options["account_id"].ToString() + ".r2.cloudflarestorage.com";
-	}
-
-	// apply any overridden settings
-	for (const auto &named_param : input.options) {
-		auto lower_name = StringUtil::Lower(named_param.first);
-
-		if (lower_name == "key_id") {
-			params.access_key_id = named_param.second.ToString();
-		} else if (lower_name == "secret") {
-			params.secret_access_key = named_param.second.ToString();
-		} else if (lower_name == "region") {
-			params.region = named_param.second.ToString();
-		} else if (lower_name == "session_token") {
-			params.session_token = named_param.second.ToString();
-		} else if (lower_name == "endpoint") {
-			params.endpoint = named_param.second.ToString();
-		} else if (lower_name == "url_style") {
-			params.url_style = named_param.second.ToString();
-		} else if (lower_name == "use_ssl") {
-			if (named_param.second.type() != LogicalType::BOOLEAN) {
-				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'",
-				                            lower_name, named_param.second.type().ToString());
-			}
-			params.use_ssl = named_param.second.GetValue<bool>();
-		} else if (lower_name == "url_compatibility_mode") {
-			if (named_param.second.type() != LogicalType::BOOLEAN) {
-				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'",
-				                            lower_name, named_param.second.type().ToString());
-			}
-			params.s3_url_compatibility_mode = named_param.second.GetValue<bool>();
-		} else if (lower_name == "account_id") {
-			continue; // handled already
-		} else {
-			throw InternalException("Unknown named parameter passed to CreateSecretFunctionInternal: " + lower_name);
-		}
-	}
-
 	// Set scope to user provided scope or the default
 	auto scope = input.scope;
 	if (scope.empty()) {
@@ -71,7 +31,50 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
 		}
 	}
 
-	return S3SecretHelper::CreateSecret(scope, input.type, input.provider, input.name, params);
+	auto secret = make_uniq<KeyValueSecret>(scope, input.type, input.provider, input.name);
+	secret->redact_keys = {"secret", "session_token"};
+
+	// for r2 we can set the endpoint using the account id
+	if (input.type == "r2" && input.options.find("account_id") != input.options.end()) {
+		secret->secret_map["endpoint"] = input.options["account_id"].ToString() + ".r2.cloudflarestorage.com";
+	}
+
+	// apply any overridden settings
+	for (const auto &named_param : input.options) {
+		auto lower_name = StringUtil::Lower(named_param.first);
+
+		if (lower_name == "key_id") {
+			secret->secret_map["key_id"] = named_param.second;
+		} else if (lower_name == "secret") {
+			secret->secret_map["secret"] = named_param.second;
+		} else if (lower_name == "region") {
+			secret->secret_map["region"] = named_param.second.ToString();
+		} else if (lower_name == "session_token") {
+			secret->secret_map["session_token"] = named_param.second.ToString();
+		} else if (lower_name == "endpoint") {
+			secret->secret_map["endpoint"] = named_param.second.ToString();
+		} else if (lower_name == "url_style") {
+			secret->secret_map["url_style"] = named_param.second.ToString();
+		} else if (lower_name == "use_ssl") {
+			if (named_param.second.type() != LogicalType::BOOLEAN) {
+				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'",
+				                            lower_name, named_param.second.type().ToString());
+			}
+			secret->secret_map["use_ssl"] = named_param.second.GetValue<bool>();
+		} else if (lower_name == "url_compatibility_mode") {
+			if (named_param.second.type() != LogicalType::BOOLEAN) {
+				throw InvalidInputException("Invalid type past to secret option: '%s', found '%s', expected: 'BOOLEAN'",
+				                            lower_name, named_param.second.type().ToString());
+			}
+			secret->secret_map["url_compatibility_mode"] = named_param.second.GetValue<bool>();
+		} else if (lower_name == "account_id") {
+			continue; // handled already
+		} else {
+			throw InternalException("Unknown named parameter passed to CreateSecretFunctionInternal: " + lower_name);
+		}
+	}
+
+	return std::move(secret);
 }
 
 unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(ClientContext &context,
@@ -85,10 +88,6 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromSettings(Clien
 unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateS3SecretFromConfig(ClientContext &context,
                                                                          CreateSecretInput &input) {
 	S3AuthParams empty_params;
-	empty_params.use_ssl = true;
-	empty_params.s3_url_compatibility_mode = false;
-	empty_params.region = "us-east-1";
-	empty_params.endpoint = "s3.amazonaws.com";
 
 	if (input.type == "gcs") {
 		empty_params.endpoint = "storage.googleapis.com";

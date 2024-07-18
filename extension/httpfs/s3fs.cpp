@@ -181,7 +181,7 @@ S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerI
 	return result;
 }
 
-unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
+unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
                                                         string &name, S3AuthParams &params) {
 	auto return_value = make_uniq<KeyValueSecret>(prefix_paths_p, type, provider, name);
 

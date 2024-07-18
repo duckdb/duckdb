@@ -77,13 +77,6 @@ struct S3ConfigParams {
 	static S3ConfigParams ReadFrom(optional_ptr<FileOpener> opener);
 };
 
-class S3SecretHelper {
-public:
-	//! Create an S3 type secret
-	static unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
-	                                               string &name, S3AuthParams &params);
-};
-
 class S3FileSystem;
 
 // Holds the buffered data for 1 part of an S3 Multipart upload
