@@ -119,7 +119,7 @@ Unable to connect to URL "http://test-bucket-public.
 statement error
 SELECT i FROM "http://test-bucket-public.duckdb-minio-non-existent-host.com:9000/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
 ----
-Connection error for HTTP HEAD to 'http://test-bucket-public.
+Could not establish connection error for HTTP HEAD to 'http://test-bucket-public.
 
 # S3 errors should throw on
 statement error
