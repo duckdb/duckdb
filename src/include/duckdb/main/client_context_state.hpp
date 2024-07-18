@@ -83,13 +83,13 @@ public:
 class RegisteredStateManager {
 public:
 	template <class T, typename... ARGS>
-	shared_ptr<T> GetOrCreate(const string &key, ARGS... args) {
+	shared_ptr<T> GetOrCreate(const string &key, ARGS&&... args) {
 		lock_guard<mutex> l(lock);
 		auto lookup = registered_state.find(key);
 		if (lookup != registered_state.end()) {
 			return shared_ptr_cast<ClientContextState, T>(lookup->second);
 		}
-		auto cache = make_shared_ptr<T>(args...);
+		auto cache = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 		registered_state[key] = cache;
 		return cache;
 	}
