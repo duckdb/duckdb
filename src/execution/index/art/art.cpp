@@ -551,17 +551,7 @@ void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
 	CheckConstraintsForChunk(chunk, conflict_manager);
 }
 
-bool ART::InsertToLeaf(Node &leaf, const ARTKey &row_id_key) {
-	// We're trying to insert another row ID into an existing leaf.
-	if (IsUnique()) {
-		return false;
-	}
-
-	Leaf::Insert(*this, leaf, row_id_key);
-	return true;
-}
-
-bool ART::InsertToEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key) {
+bool ART::InsertIntoEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key) {
 	D_ASSERT(depth <= key.len);
 	reference<Node> ref_node(node);
 
@@ -575,42 +565,53 @@ bool ART::InsertToEmptyNode(Node &node, const ARTKey &key, idx_t depth, const AR
 	return true;
 }
 
-bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key) {
+bool ART::Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key) {
 	// If the node is empty, we create a new inlined leaf.
 	if (!node.HasMetadata()) {
-		return InsertToEmptyNode(node, key, depth, row_id_key);
+		return InsertIntoEmptyNode(node, key, depth, row_id_key);
 	}
 
-	auto node_type = node.GetType();
-
-	// Insert the row ID into an existing leaf.
-	if (node_type == NType::LEAF || node_type == NType::LEAF_INLINED) {
-		return InsertToLeaf(node, row_id_key);
+	// Insert the row ID into an existing inlined leaf.
+	if (node.GetType() == NType::LEAF_INLINED) {
+		Leaf::InsertIntoInlined(*this, node, row_id_key);
+		return true;
 	}
 
-	if (node_type != NType::PREFIX) {
-		D_ASSERT(depth < key.len);
-		auto child = node.GetChildMutable(*this, key[depth]);
+	// Transform a deprecated leaf.
+	if (node.GetType() == NType::LEAF) {
+		Leaf::TransformToNested(*this, node);
+		return Insert(node, key, depth, row_id_key);
+	}
+
+	// Enter a nested leaf.
+	if (node.IsGate()) {
+		key = row_id_key;
+		depth = 0;
+	}
+
+	if (node.GetType() != NType::PREFIX) {
+		D_ASSERT(depth < key.get().len);
+		auto child = node.GetChildMutable(*this, key.get()[depth]);
 
 		// Recurse, if a child exists at key[depth].
 		if (child) {
 			bool success = Insert(*child, key, depth + 1, row_id_key);
-			node.ReplaceChild(*this, key[depth], *child);
+			node.ReplaceChild(*this, key.get()[depth], *child);
 			return success;
 		}
 
 		// Insert a new inlined leaf at key[depth].
 		Node leaf_node;
 		reference<Node> ref_node(leaf_node);
-		if (depth + 1 < key.len) {
+		if (depth + 1 < key.get().len) {
 			// Create the prefix.
 			auto byte = UnsafeNumericCast<uint32_t>(depth + 1);
-			auto count = UnsafeNumericCast<uint32_t>(key.len - depth - 1);
+			auto count = UnsafeNumericCast<uint32_t>(key.get().len - depth - 1);
 			Prefix::New(*this, ref_node, key, byte, count);
 		}
 		// Create the inlined leaf.
-		Leaf::New(ref_node, row_id_key.GetRowID());
-		Node::InsertChild(*this, node, key[depth], leaf_node);
+		Leaf::New(ref_node, row_id_key.get().GetRowID());
+		Node::InsertChild(*this, node, key.get()[depth], leaf_node);
 		return true;
 	}
 
@@ -618,8 +619,10 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 	reference<Node> next_node(node);
 	auto mismatch_position = Prefix::TraverseMutable(*this, next_node, key, depth);
 
-	// If the prefix matches the key, then we recurse into the next node.
-	if (next_node.get().GetType() != NType::PREFIX) {
+	// We recurse into the next node, if
+	// (1) the prefix matches the key, or
+	// (2) we reach a gate (which can start with a PREFIX node).
+	if (next_node.get().GetType() != NType::PREFIX || next_node.get().IsGate()) {
 		return Insert(next_node, key, depth, row_id_key);
 	}
 
@@ -636,15 +639,15 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 	// Insert the new inlined leaf.
 	Node leaf_node;
 	reference<Node> ref_node(leaf_node);
-	if (depth + 1 < key.len) {
+	if (depth + 1 < key.get().len) {
 		// Create the prefix.
 		auto byte = UnsafeNumericCast<uint32_t>(depth + 1);
-		auto count = UnsafeNumericCast<uint32_t>(key.len - depth - 1);
+		auto count = UnsafeNumericCast<uint32_t>(key.get().len - depth - 1);
 		Prefix::New(*this, ref_node, key, byte, count);
 	}
 	// Create the inlined leaf.
-	Leaf::New(ref_node, row_id_key.GetRowID());
-	Node4::InsertChild(*this, next_node, key[depth], leaf_node);
+	Leaf::New(ref_node, row_id_key.get().GetRowID());
+	Node4::InsertChild(*this, next_node, key.get()[depth], leaf_node);
 	return true;
 }
 
@@ -698,6 +701,9 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id
 	reference<Node> next_node(node);
 	if (next_node.get().GetType() == NType::PREFIX) {
 		Prefix::TraverseMutable(*this, next_node, key, depth);
+		if (next_node.get().IsGate()) {
+			// TODO?
+		}
 		if (next_node.get().GetType() == NType::PREFIX) {
 			return;
 		}
@@ -705,7 +711,7 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id
 
 	// Delete the row ID from the leaf.
 	// This is the root node, which can be a leaf with possible prefix nodes.
-	if (next_node.get().GetType() == NType::LEAF || next_node.get().GetType() == NType::LEAF_INLINED) {
+	if (next_node.get().IsAnyLeaf()) {
 		if (Leaf::Remove(*this, next_node, row_id_key)) {
 			Node::Free(*this, node);
 		}
@@ -729,7 +735,7 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id
 		}
 	}
 
-	if (child_node.get().GetType() == NType::LEAF || child_node.get().GetType() == NType::LEAF_INLINED) {
+	if (child_node.get().IsAnyLeaf()) {
 		// We found a leaf from which to remove the row ID.
 		if (Leaf::Remove(*this, child_node, row_id_key)) {
 			Node::DeleteChild(*this, next_node, node, key[depth]);
@@ -752,7 +758,11 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &row_ids) {
 	if (!leaf) {
 		return true;
 	}
-	return Leaf::GetRowIds(*this, *leaf, row_ids, max_count);
+
+	Iterator it(*this);
+	it.FindMinimum(*leaf);
+	ARTKey empty_key = ARTKey();
+	return it.Scan(empty_key, max_count, row_ids, false);
 }
 
 //===--------------------------------------------------------------------===//
@@ -763,27 +773,29 @@ optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey &key, idx_t 
 	reference<const Node> node_ref(node);
 	while (node_ref.get().HasMetadata()) {
 
-		// Traverse the prefix, if it exists.
-		reference<const Node> next_node(node_ref.get());
-		if (next_node.get().GetType() == NType::PREFIX) {
-			Prefix::Traverse(*this, next_node, key, depth);
-			if (next_node.get().GetType() == NType::PREFIX) {
+		if (node_ref.get().IsAnyLeaf()) {
+			return &node_ref.get();
+		}
+
+		// Traverse the prefix.
+		if (node_ref.get().GetType() == NType::PREFIX) {
+			Prefix::Traverse(*this, node_ref, key, depth);
+			if (node_ref.get().GetType() == NType::PREFIX && !node_ref.get().IsGate()) {
 				return nullptr;
 			}
+			continue;
 		}
 
-		if (next_node.get().GetType() == NType::LEAF || next_node.get().GetType() == NType::LEAF_INLINED) {
-			return &next_node.get();
-		}
-
+		// Get the child node.
 		D_ASSERT(depth < key.len);
-		auto child = next_node.get().GetChild(*this, key[depth]);
+		auto child = node_ref.get().GetChild(*this, key[depth]);
+
+		// The prefix matches the key, but there is no child at the respective byte.
 		if (!child) {
-			// The prefix matches the key, but there is no child at the respective byte.
 			return nullptr;
 		}
 
-		// Recurse (iteratively).
+		// Continue in the child.
 		node_ref = *child;
 		D_ASSERT(node_ref.get().HasMetadata());
 		depth++;
@@ -802,19 +814,16 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, vector<row_t> 
 	}
 
 	// Find the lowest value that satisfies the predicate.
-	Iterator it;
-	if (!it.art) {
-		it.art = this;
-		if (!it.LowerBound(tree, key, equal, 0)) {
-			// Early-out, if the maximum value in the ART is lower than the lower bound.
-			return true;
-		}
+	Iterator it(*this);
+
+	// Early-out, if the maximum value in the ART is lower than the lower bound.
+	if (!it.LowerBound(tree, key, equal, 0)) {
+		return true;
 	}
 
 	// We continue the scan. We do not check the bounds as any value following this value is
 	// greater and satisfies our predicate.
-	ARTKey empty_key = ARTKey();
-	return it.Scan(empty_key, max_count, row_ids, false);
+	return it.Scan(ARTKey(), max_count, row_ids, false);
 }
 
 bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, vector<row_t> &row_ids) {
@@ -822,15 +831,13 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, vector<ro
 		return true;
 	}
 
-	Iterator it;
-	if (!it.art) {
-		it.art = this;
-		// Find the minimum value in the ART: we start scanning from this value.
-		it.FindMinimum(tree);
-		// Early-out, if the minimum value is higher than the upper bound.
-		if (it.current_key > upper_bound) {
-			return true;
-		}
+	// Find the minimum value in the ART: we start scanning from this value.
+	Iterator it(*this);
+	it.FindMinimum(tree);
+
+	// Early-out, if the minimum value is higher than the upper bound.
+	if (it.current_key > upper_bound) {
+		return true;
 	}
 
 	// Continue the scan until we reach the upper bound.
@@ -844,13 +851,11 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, vector<ro
 bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
                            vector<row_t> &row_ids) {
 	// Find the first node that satisfies the left predicate.
-	Iterator it;
-	if (!it.art) {
-		it.art = this;
-		if (!it.LowerBound(tree, lower_bound, left_equal, 0)) {
-			// Early-out, if the maximum value in the ART is lower than the lower bound.
-			return true;
-		}
+	Iterator it(*this);
+
+	// Early-out, if the maximum value in the ART is lower than the lower bound.
+	if (!it.LowerBound(tree, lower_bound, left_equal, 0)) {
+		return true;
 	}
 
 	// Continue the scan until we reach the upper bound.
@@ -1158,9 +1163,6 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 //===--------------------------------------------------------------------===//
 
 string ART::VerifyAndToString(IndexLock &state, const bool only_verify) {
-	// FIXME: this can be improved by counting the allocations of each node type,
-	// FIXME: and by asserting that each fixed-size allocator lists an equal number of
-	// FIXME: allocations of that type
 	return VerifyAndToStringInternal(only_verify);
 }
 

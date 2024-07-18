@@ -56,7 +56,9 @@ public:
 	static constexpr uint8_t LEAF_SIZE = 4;
 	static constexpr uint8_t PREFIX_SIZE = 15;
 	static constexpr idx_t AND_ROW_ID = 0x00FFFFFFFFFFFFFF;
-	//	static constexpr uint8_t AND_GATE = 0x80;
+
+	//! A gate sets the leftmost bit of the metadata, binary: 1000-0000.
+	static constexpr uint8_t AND_GATE = 0x80;
 
 public:
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
@@ -121,6 +123,12 @@ public:
 	//! Transform the node storage to deprecated storage.
 	static void TransformToDeprecated(ART &art, Node &node);
 
+	//! Returns true, if the node is a LEAF, LEAF_INLINED, or gate node.
+	inline bool IsAnyLeaf() const {
+		auto node_type = GetType();
+		return IsGate() || node_type == NType::LEAF_INLINED || node_type == NType::LEAF;
+	}
+
 	//! Get the row ID (8th to 63rd bit)
 	inline row_t GetRowId() const {
 		return Get() & AND_ROW_ID;
@@ -132,17 +140,17 @@ public:
 
 	//! Returns the node type.
 	inline NType GetType() const {
-		//		return NType(GetMetadata() & ~AND_GATE);
-		return NType(GetMetadata());
+		return NType(GetMetadata() & ~AND_GATE);
 	}
 
-	// TODO: gate node.
 	//! Returns true, if the node is a gate node.
-	//	inline bool IsGate() const {
-	//		return GetMetadata() & AND_GATE;
-	//	}
+	inline bool IsGate() const {
+		return GetMetadata() & AND_GATE;
+	}
 	//! Turns the node into a gate node.
-	// TODO.
+	inline void SetGate() {
+		SetMetadata(GetMetadata() | AND_GATE);
+	}
 
 	//! Assign operator
 	inline void operator=(const IndexPointer &ptr) {

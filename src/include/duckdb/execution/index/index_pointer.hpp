@@ -52,7 +52,8 @@ public:
 	}
 	//! Set metadata (zero to 7th bit)
 	inline void SetMetadata(const uint8_t metadata) {
-		data += (idx_t)metadata << SHIFT_METADATA;
+		data &= ~AND_METADATA;
+		data |= (idx_t)metadata << SHIFT_METADATA;
 	}
 
 	//! Get the offset (8th to 23rd bit)

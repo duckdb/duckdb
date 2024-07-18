@@ -128,11 +128,9 @@ void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &
 }
 
 idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKey &key, idx_t &depth) {
-
 	D_ASSERT(prefix_node.get().HasMetadata());
 	D_ASSERT(prefix_node.get().GetType() == NType::PREFIX);
 
-	// compare prefix nodes to key bytes
 	while (prefix_node.get().GetType() == NType::PREFIX) {
 		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
@@ -143,17 +141,18 @@ idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKe
 		}
 		prefix_node = prefix.ptr;
 		D_ASSERT(prefix_node.get().HasMetadata());
+		if (prefix_node.get().IsGate()) {
+			break;
+		}
 	}
 
 	return DConstants::INVALID_INDEX;
 }
 
 idx_t Prefix::TraverseMutable(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth) {
-
 	D_ASSERT(prefix_node.get().HasMetadata());
 	D_ASSERT(prefix_node.get().GetType() == NType::PREFIX);
 
-	// compare prefix nodes to key bytes
 	while (prefix_node.get().GetType() == NType::PREFIX) {
 		auto &prefix = Node::RefMutable<Prefix>(art, prefix_node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
@@ -164,12 +163,17 @@ idx_t Prefix::TraverseMutable(ART &art, reference<Node> &prefix_node, const ARTK
 		}
 		prefix_node = prefix.ptr;
 		D_ASSERT(prefix_node.get().HasMetadata());
+		if (prefix_node.get().IsGate()) {
+			break;
+		}
 	}
 
 	return DConstants::INVALID_INDEX;
 }
 
 bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position) {
+	D_ASSERT(l_node.get().HasMetadata() && l_node.get().GetType() == NType::PREFIX);
+	D_ASSERT(r_node.get().HasMetadata() && l_node.get().GetType() == NType::PREFIX);
 
 	auto &l_prefix = Node::RefMutable<Prefix>(art, l_node.get(), NType::PREFIX);
 	auto &r_prefix = Node::RefMutable<Prefix>(art, r_node.get(), NType::PREFIX);
@@ -306,6 +310,9 @@ string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_ver
 		str += "] ";
 
 		node_ref = prefix.ptr;
+		if (node_ref.get().IsGate()) {
+			break;
+		}
 	}
 
 	auto subtree = node_ref.get().VerifyAndToString(art, only_verify);

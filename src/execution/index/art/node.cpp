@@ -40,19 +40,18 @@ void Node::New(ART &art, Node &node, const NType type) {
 }
 
 void Node::Free(ART &art, Node &node) {
-
+	// Early-out, if the node is empty.
 	if (!node.HasMetadata()) {
 		return node.Clear();
 	}
 
-	// free the children of the nodes
+	// Free the children of the node.
 	auto type = node.GetType();
 	switch (type) {
 	case NType::PREFIX:
-		// iterative
 		return Prefix::Free(art, node);
 	case NType::LEAF:
-		return Leaf::Free(art, node);
+		return Leaf::DeprecatedFree(art, node);
 	case NType::NODE_4:
 		Node4::Free(art, node);
 		break;
@@ -218,15 +217,19 @@ optional_ptr<Node> Node::GetNextChildMutable(ART &art, uint8_t &byte) const {
 //===--------------------------------------------------------------------===//
 
 string Node::VerifyAndToString(ART &art, const bool only_verify) const {
-
 	D_ASSERT(HasMetadata());
 
-	if (GetType() == NType::LEAF || GetType() == NType::LEAF_INLINED) {
-		auto str = Leaf::VerifyAndToString(art, *this, only_verify);
-		return only_verify ? "" : "\n" + str;
+	if (GetType() == NType::LEAF_INLINED) {
+		return only_verify ? "" : "Leaf Inlined [count: 1, row ID: " + to_string(GetRowId()) + "]";
+	}
+	if (GetType() == NType::LEAF) {
+		return Leaf::DeprecatedVerifyAndToString(art, *this, only_verify);
 	}
 	if (GetType() == NType::PREFIX) {
 		auto str = Prefix::VerifyAndToString(art, *this, only_verify);
+		if (IsGate()) {
+			str = "Nested Leaf [" + str + "]";
+		}
 		return only_verify ? "" : "\n" + str;
 	}
 
@@ -239,11 +242,13 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 		if (byte == NumericLimits<uint8_t>::Maximum()) {
 			break;
 		}
-
 		byte++;
 		child = GetNextChild(art, byte);
 	}
 
+	if (IsGate()) {
+		str = "Nested Leaf [" + str + "]";
+	}
 	return only_verify ? "" : "\n" + str + "]";
 }
 
@@ -280,15 +285,13 @@ NType Node::GetARTNodeTypeByCount(const idx_t count) {
 //===--------------------------------------------------------------------===//
 
 void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
-
 	D_ASSERT(HasMetadata());
 
 	switch (GetType()) {
 	case NType::PREFIX:
-		// iterative
 		return Prefix::InitializeMerge(art, *this, flags);
 	case NType::LEAF:
-		return Leaf::InitializeMerge(art, *this, flags);
+		throw InternalException("Failed to initialize merge due to deprecated ART storage.");
 	case NType::NODE_4:
 		RefMutable<Node4>(art, *this, NType::NODE_4).InitializeMerge(art, flags);
 		break;
@@ -309,23 +312,22 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 }
 
 bool Node::Merge(ART &art, Node &other) {
-
-	if (!HasMetadata()) {
-		*this = other;
-		other = Node();
-		return true;
+	if (HasMetadata()) {
+		return ResolvePrefixes(art, other);
 	}
 
-	return ResolvePrefixes(art, other);
+	*this = other;
+	other = Node();
+	return true;
 }
 
 bool MergePrefixContainsOtherPrefix(ART &art, reference<Node> &l_node, reference<Node> &r_node,
                                     idx_t &mismatch_position) {
 
-	// r_node's prefix contains l_node's prefix
-	// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
-	// which is not possible by our construction
-	D_ASSERT(l_node.get().GetType() != NType::LEAF && l_node.get().GetType() != NType::LEAF_INLINED);
+	// r_node's prefix contains l_node's prefix.
+	// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key,
+	// which is not possible by our construction.
+	D_ASSERT(!l_node.get().IsAnyLeaf());
 
 	// test if the next byte (mismatch_position) in r_node (prefix) exists in l_node
 	auto mismatch_byte = Prefix::GetByte(art, r_node, mismatch_position);
@@ -411,7 +413,6 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 }
 
 bool Node::MergeInternal(ART &art, Node &other) {
-
 	D_ASSERT(HasMetadata() && other.HasMetadata());
 	D_ASSERT(GetType() != NType::PREFIX && other.GetType() != NType::PREFIX);
 
@@ -426,8 +427,8 @@ bool Node::MergeInternal(ART &art, Node &other) {
 	auto &l_node = *this;
 	auto &r_node = other;
 
-	if (r_node.GetType() == NType::LEAF || r_node.GetType() == NType::LEAF_INLINED) {
-		D_ASSERT(l_node.GetType() == NType::LEAF || l_node.GetType() == NType::LEAF_INLINED);
+	if (r_node.IsAnyLeaf()) {
+		D_ASSERT(l_node.IsAnyLeaf());
 
 		if (art.IsUnique()) {
 			return false;
@@ -471,21 +472,22 @@ bool Node::MergeInternal(ART &art, Node &other) {
 //===--------------------------------------------------------------------===//
 
 void Node::Vacuum(ART &art, const ARTFlags &flags) {
-
 	D_ASSERT(HasMetadata());
 
 	auto node_type = GetType();
 	auto node_type_idx = static_cast<uint8_t>(node_type);
 
-	// iterative functions
-	if (node_type == NType::PREFIX) {
-		return Prefix::Vacuum(art, *this, flags);
-	}
 	if (node_type == NType::LEAF_INLINED) {
 		return;
 	}
+	if (node_type == NType::PREFIX) {
+		return Prefix::Vacuum(art, *this, flags);
+	}
 	if (node_type == NType::LEAF) {
-		return Leaf::Vacuum(art, *this, flags);
+		if (!flags.vacuum_flags[node_type_idx - 1]) {
+			return;
+		}
+		return Leaf::DeprecatedVacuum(art, *this);
 	}
 
 	auto &allocator = GetAllocator(art, node_type);
@@ -495,7 +497,6 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 		SetMetadata(node_type_idx);
 	}
 
-	// recursive functions
 	switch (node_type) {
 	case NType::NODE_4:
 		return RefMutable<Node4>(art, *this, node_type).Vacuum(art, flags);
@@ -517,12 +518,11 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 void Node::TransformToDeprecated(ART &art, Node &node) {
 	D_ASSERT(node.HasMetadata());
 
-	// TODO: we'll be checking if it is a gate node here.
-	auto node_type = node.GetType();
-	if (node_type == NType::LEAF) {
+	if (node.IsGate()) {
 		return Leaf::TransformToDeprecated(art, node);
 	}
 
+	auto node_type = node.GetType();
 	switch (node_type) {
 	case NType::PREFIX:
 		return Prefix::TransformToDeprecated(art, node);

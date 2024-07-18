@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+// TODO: understand when we go through a gate (use flag).
+
 bool IteratorKey::operator>(const ARTKey &key) const {
 	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), key.len); i++) {
 		if (key_bytes[i] > key.data[i]) {
@@ -57,29 +59,33 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 			}
 		}
 
-		// Copy all row IDs of this leaf into the result row IDs, while staying within max_count.
-		if (!Leaf::GetRowIds(*art, last_leaf, row_ids, max_count)) {
-			return false;
+		if (last_leaf.GetType() == NType::LEAF_INLINED) {
+			if (row_ids.size() + 1 > max_count) {
+				return false;
+			}
+			row_ids.push_back(last_leaf.GetRowId());
+		} else {
+			if (!Leaf::DeprecatedGetRowIds(*art, last_leaf, row_ids, max_count)) {
+				return false;
+			}
 		}
-		// Get the next leaf.
-		has_next = Next();
 
+		has_next = Next();
 	} while (has_next);
 
 	return true;
 }
 
 void Iterator::FindMinimum(const Node &node) {
-
 	D_ASSERT(node.HasMetadata());
 
-	// found the minimum
+	// Found the minimum.
 	if (node.GetType() == NType::LEAF || node.GetType() == NType::LEAF_INLINED) {
 		last_leaf = node;
 		return;
 	}
 
-	// traverse the prefix
+	// Traverse the prefix
 	if (node.GetType() == NType::PREFIX) {
 		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
@@ -104,8 +110,8 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 		return false;
 	}
 
-	// we found the lower bound
-	if (node.GetType() == NType::LEAF || node.GetType() == NType::LEAF_INLINED) {
+	// We found the lower bound.
+	if (node.IsAnyLeaf()) {
 		if (!equal && current_key == key) {
 			return Next();
 		}
@@ -166,7 +172,7 @@ bool Iterator::Next() {
 	while (!nodes.empty()) {
 
 		auto &top = nodes.top();
-		D_ASSERT(top.node.GetType() != NType::LEAF && top.node.GetType() != NType::LEAF_INLINED);
+		D_ASSERT(!top.node.IsAnyLeaf());
 
 		if (top.node.GetType() == NType::PREFIX) {
 			PopNode();

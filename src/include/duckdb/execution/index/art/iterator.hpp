@@ -49,6 +49,8 @@ private:
 
 class Iterator {
 public:
+	explicit Iterator(ART &art) : art(art) {};
+
 	//! Holds the current key leading down to the top node on the stack.
 	IteratorKey current_key;
 	//! Pointer to the ART.

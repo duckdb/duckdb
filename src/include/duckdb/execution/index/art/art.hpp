@@ -122,15 +122,13 @@ public:
 	//! Find the node with a matching key, or return nullptr if not found
 	optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
 	//! Insert a key into the tree.
-	bool Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
+	bool Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key);
 	//! Erase a key from the tree (non-inlined) or erase the leaf itself (inlined).
 	void Erase(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
 
 private:
-	//! Insert a row ID into a leaf.
-	bool InsertToLeaf(Node &leaf, const ARTKey &row_id_key);
 	//! Insert a row ID into an empty node.
-	bool InsertToEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
+	bool InsertIntoEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
 
 	//! Returns all row IDs greater than or equal to the search key.
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, vector<row_t> &row_ids);
