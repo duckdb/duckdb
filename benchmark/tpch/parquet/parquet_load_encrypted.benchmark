@@ -1,0 +1,25 @@
+# name: benchmark/tpch/parquet/parquet_load_encrypted.benchmark
+# description: Import data from Parquet
+# group: [parquet]
+
+name Parquet Data Import (In-Memory)
+group parquet
+subgroup tpch
+
+require parquet
+require tpch
+require httpfs
+
+load
+CALL dbgen(sf=1);
+PRAGMA add_parquet_key('key128', '0123456789112345');
+COPY lineitem TO '${BENCHMARK_DIR}/lineitem_encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'key128'});
+DROP TABLE lineitem;
+CREATE TABLE lineitem(l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL, l_suppkey INTEGER NOT NULL, l_linenumber INTEGER NOT NULL, l_quantity INTEGER NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR NOT NULL, l_linestatus VARCHAR NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR NOT NULL, l_shipmode VARCHAR NOT NULL, l_comment VARCHAR NOT NULL);
+
+run
+COPY lineitem FROM '${BENCHMARK_DIR}/lineitem_encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'key128'});
+
+cleanup
+DROP TABLE lineitem;
+CREATE TABLE lineitem(l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL, l_suppkey INTEGER NOT NULL, l_linenumber INTEGER NOT NULL, l_quantity INTEGER NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR NOT NULL, l_linestatus VARCHAR NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR NOT NULL, l_shipmode VARCHAR NOT NULL, l_comment VARCHAR NOT NULL);

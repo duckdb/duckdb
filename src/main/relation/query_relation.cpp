@@ -14,9 +14,12 @@
 namespace duckdb {
 
 QueryRelation::QueryRelation(const shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt_p,
-                             string alias_p)
-    : Relation(context, RelationType::QUERY_RELATION), select_stmt(std::move(select_stmt_p)),
+                             string alias_p, const string &query_p)
+    : Relation(context, RelationType::QUERY_RELATION), select_stmt(std::move(select_stmt_p)), query(query_p),
       alias(std::move(alias_p)) {
+	if (query.empty()) {
+		query = select_stmt->ToString();
+	}
 	context->TryBindRelation(*this, this->columns);
 }
 

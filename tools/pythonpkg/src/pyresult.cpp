@@ -175,6 +175,9 @@ void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversi
 		res[name] = py::module::import("pandas")
 		                .attr("Categorical")
 		                .attr("from_codes")(conversion.ToArray(col_idx), py::arg("dtype") = categories_type[col_idx]);
+		if (!conversion.ToPandas()) {
+			res[name] = res[name].attr("to_numpy")();
+		}
 	} else {
 		res[name] = conversion.ToArray(col_idx);
 	}

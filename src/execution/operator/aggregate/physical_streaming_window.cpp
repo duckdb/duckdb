@@ -558,6 +558,10 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	}
 
 	auto &delayed = state.delayed;
+	// We can Reset delayed now that no one can be referencing it.
+	if (!delayed.size()) {
+		delayed.Reset();
+	}
 	const idx_t available = delayed.size() + input.size();
 	if (available <= state.lead_count) {
 		//	If we don't have enough to produce a single row,
@@ -569,7 +573,8 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	} else if (delayed.size()) {
 		//	We have enough delayed rows so flush them
 		ExecuteDelayed(context, delayed, input, chunk, gstate_p, state_p);
-		delayed.Reset();
+		// Defer resetting delayed as it may be referenced.
+		delayed.SetCardinality(0);
 		// Come back to process the input
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	} else {

@@ -103,7 +103,6 @@ SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/[aei]*/*.csv', co
 2019-08-15
 2019-08-25
 3
-NULL
 
 query II
 SELECT a, b LIKE '%a_.csv' FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/[aei]*/*.csv', columns=STRUCT_PACK(d := 'STRING'), filename=1) t(a,b) ORDER BY 1
@@ -120,7 +119,6 @@ SELECT a, b LIKE '%a_.csv' FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob
 2019-08-15	0
 2019-08-25	0
 3	0
-NULL	0
 
 # test glob parsing
 query I

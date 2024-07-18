@@ -56,9 +56,10 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 			    "Mismatch between the number of columns (%d) in the CSV file and what is expected in the scanner (%d).",
 			    number_of_columns, csv_file_scan->file_types.size());
 		}
+		bool icu_loaded = csv_file_scan->buffer_manager->context.db->ExtensionIsLoaded("icu");
 		for (idx_t i = 0; i < csv_file_scan->file_types.size(); i++) {
 			auto &type = csv_file_scan->file_types[i];
-			if (StringValueScanner::CanDirectlyCast(type)) {
+			if (StringValueScanner::CanDirectlyCast(type, icu_loaded)) {
 				parse_types[i] = ParseTypeInfo(type, true);
 				logical_types.emplace_back(type);
 			} else {
@@ -98,8 +99,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 
 	// Setup the NullStr information
 	null_str_count = state_machine.options.null_str.size();
-	null_str_ptr = make_unsafe_uniq_array<const char *>(null_str_count);
-	null_str_size = make_unsafe_uniq_array<idx_t>(null_str_count);
+	null_str_ptr = make_unsafe_uniq_array_uninitialized<const char *>(null_str_count);
+	null_str_size = make_unsafe_uniq_array_uninitialized<idx_t>(null_str_count);
 	for (idx_t i = 0; i < null_str_count; i++) {
 		null_str_ptr[i] = state_machine.options.null_str[i].c_str();
 		null_str_size[i] = state_machine.options.null_str[i].size();
@@ -274,7 +275,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		                               static_cast<dtime_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	}
-	case LogicalTypeId::TIMESTAMP: {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ: {
 		if (!timestamp_format.Empty()) {
 			success = timestamp_format.TryParseTimestamp(
 			    value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
@@ -1275,7 +1277,7 @@ void StringValueScanner::SkipUntilNewLine() {
 	}
 }
 
-bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
+bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loaded) {
 
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
@@ -1294,6 +1296,10 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
 	case LogicalTypeId::DECIMAL:
 	case LogicalType::VARCHAR:
 		return true;
+	case LogicalType::TIMESTAMP_TZ:
+		// We only try to do direct cast of timestamp tz if the ICU extension is not loaded, otherwise, it needs to go
+		// through string -> timestamp_tz casting
+		return !icu_loaded;
 	default:
 		return false;
 	}

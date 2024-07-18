@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, vector<column_t> &column_ids) {
+unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, const vector<column_t> &column_ids) {
 	// create the table filter map
 	auto table_filter_set = make_uniq<TableFilterSet>();
 	for (auto &table_filter : table_filters.filters) {
@@ -33,6 +33,7 @@ unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, v
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
+	auto &column_ids = op.GetColumnIds();
 	if (!op.children.empty()) {
 		auto child_node = CreatePlan(std::move(op.children[0]));
 		// this is for table producing functions that consume subquery results
@@ -66,7 +67,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			child_node = std::move(proj);
 		}
 
-		auto node = make_uniq<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), op.column_ids,
+		auto node = make_uniq<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), column_ids,
 		                                                  op.estimated_cardinality, std::move(op.projected_input));
 		node->children.push_back(std::move(child_node));
 		return std::move(node);
@@ -77,7 +78,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 
 	unique_ptr<TableFilterSet> table_filters;
 	if (!op.table_filters.filters.empty()) {
-		table_filters = CreateTableFilterSet(op.table_filters, op.column_ids);
+		table_filters = CreateTableFilterSet(op.table_filters, column_ids);
 	}
 
 	if (op.function.dependency) {
@@ -86,15 +87,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto node =
-		    make_uniq<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data), op.returned_types,
-		                                 op.column_ids, vector<column_t>(), op.names, std::move(table_filters),
-		                                 op.estimated_cardinality, op.extra_info, std::move(op.parameters));
+		auto node = make_uniq<PhysicalTableScan>(
+		    op.returned_types, op.function, std::move(op.bind_data), op.returned_types, column_ids, vector<column_t>(),
+		    op.names, std::move(table_filters), op.estimated_cardinality, op.extra_info, std::move(op.parameters));
 		// first check if an additional projection is necessary
-		if (op.column_ids.size() == op.returned_types.size()) {
+		if (column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
-			for (idx_t i = 0; i < op.column_ids.size(); i++) {
-				if (op.column_ids[i] != i) {
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				if (column_ids[i] != i) {
 					projection_necessary = true;
 					break;
 				}
@@ -109,7 +109,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		// push a projection on top that does the projection
 		vector<LogicalType> types;
 		vector<unique_ptr<Expression>> expressions;
-		for (auto &column_id : op.column_ids) {
+		for (auto &column_id : column_ids) {
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				types.emplace_back(LogicalType::BIGINT);
 				expressions.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
@@ -126,7 +126,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		return std::move(projection);
 	} else {
 		auto node = make_uniq<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types,
-		                                         op.column_ids, op.projection_ids, op.names, std::move(table_filters),
+		                                         column_ids, op.projection_ids, op.names, std::move(table_filters),
 		                                         op.estimated_cardinality, op.extra_info, std::move(op.parameters));
 		node->dynamic_filters = op.dynamic_filters;
 		return std::move(node);

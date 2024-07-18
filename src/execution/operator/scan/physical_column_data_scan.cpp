@@ -112,6 +112,11 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 case_insensitive_map_t<string> PhysicalColumnDataScan::ParamsToString() const {
 	case_insensitive_map_t<string> result;
 	switch (type) {
+	case PhysicalOperatorType::DELIM_SCAN:
+		if (delim_index.IsValid()) {
+			result["Delim Index"] = StringUtil::Format("%llu", delim_index.GetIndex());
+		}
+		break;
 	case PhysicalOperatorType::CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
 		result["CTE Index"] = StringUtil::Format("%llu", cte_index);

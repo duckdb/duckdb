@@ -57,6 +57,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
+#include "duckdb/main/extension_util.hpp"
 
 #include <random>
 
@@ -1533,24 +1534,6 @@ case_insensitive_map_t<Value> TransformPyConfigDict(const py::dict &py_config_di
 	return config_dict;
 }
 
-void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig &config) {
-	// We don't cache unnamed memory instances (i.e., :memory:)
-	bool cache_instance = database != ":memory:" && !database.empty();
-	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
-	res.con.SetDatabase(instance_cache.CreateInstance(database, config, cache_instance));
-	res.con.SetConnection(make_uniq<Connection>(res.con.GetDatabase()));
-	auto &context = *res.con.GetConnection().context;
-	PandasScanFunction scan_fun;
-	CreateTableFunctionInfo scan_info(scan_fun);
-	MapFunction map_fun;
-	CreateTableFunctionInfo map_info(map_fun);
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	context.transaction.BeginTransaction();
-	catalog.CreateTableFunction(context, &scan_info);
-	catalog.CreateTableFunction(context, &map_info);
-	context.transaction.Commit();
-}
-
 static bool HasJupyterProgressBarDependencies() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	if (!import_cache.ipywidgets()) {
@@ -1584,16 +1567,26 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	context.config.display_create_func = JupyterProgressBarDisplay::Create;
 }
 
+void InstantiateNewInstance(DuckDB &db) {
+	auto &db_instance = *db.instance;
+	PandasScanFunction scan_fun;
+	MapFunction map_fun;
+	ExtensionUtil::RegisterFunction(db_instance, scan_fun);
+	ExtensionUtil::RegisterFunction(db_instance, map_fun);
+}
+
 static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database_path, DBConfig &config) {
 	auto res = make_shared_ptr<DuckDBPyConnection>();
-	auto database = instance_cache.GetInstance(database_path, config);
-	if (!database) {
-		//! No cached database, we must create a new instance
-		CreateNewInstance(*res, database_path, config);
-		return res;
+	bool cache_instance = database_path != ":memory:" && !database_path.empty();
+	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
+	{
+		py::gil_scoped_release release;
+		unique_lock<mutex> lock(res->py_connection_lock);
+		auto database =
+		    instance_cache.GetOrCreateInstance(database_path, config, cache_instance, InstantiateNewInstance);
+		res->con.SetDatabase(std::move(database));
+		res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
 	}
-	res->con.SetDatabase(std::move(database));
-	res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
 	return res;
 }
 

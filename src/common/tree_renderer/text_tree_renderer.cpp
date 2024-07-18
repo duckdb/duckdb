@@ -331,7 +331,7 @@ void TextTreeRenderer::SplitUpExtraInfo(const case_insensitive_map_t<string> &ex
 			continue;
 		}
 
-		str = item.first + ": " + str;
+		str = item.first + ":\n" + str;
 		auto splits = StringUtil::Split(str, "\n");
 		for (auto &split : splits) {
 			SplitStringBuffer(split, result);

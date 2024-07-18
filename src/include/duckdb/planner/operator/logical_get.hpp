@@ -35,8 +35,6 @@ public:
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
 	vector<string> names;
-	//! Bound column IDs
-	vector<column_t> column_ids;
 	//! Columns that are used outside of the scan
 	vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
@@ -63,6 +61,11 @@ public:
 	optional_ptr<TableCatalogEntry> GetTable() const;
 
 public:
+	void SetColumnIds(vector<column_t> &&column_ids);
+	void AddColumnId(column_t column_id);
+	void ClearColumnIds();
+	const vector<column_t> &GetColumnIds() const;
+	vector<column_t> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 
@@ -80,5 +83,9 @@ protected:
 
 private:
 	LogicalGet();
+
+private:
+	//! Bound column IDs
+	vector<column_t> column_ids;
 };
 } // namespace duckdb

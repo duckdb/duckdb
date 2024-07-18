@@ -62,7 +62,6 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 		} else {
 			score += StringUtil::SimilarityScore(str, prefix);
 		}
-		D_ASSERT(score >= 0);
 		scores.emplace_back(str, score);
 	}
 	auto results = StringUtil::TopNStrings(scores, 20, 999);

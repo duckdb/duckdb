@@ -172,6 +172,21 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	}
 	bind_data->Finalize();
 
+	switch (bind_data->options.compression) {
+	case FileCompressionType::GZIP:
+		if (!StringUtil::EndsWith(input.file_extension, ".gz")) {
+			input.file_extension += ".gz";
+		}
+		break;
+	case FileCompressionType::ZSTD:
+		if (!StringUtil::EndsWith(input.file_extension, ".zst")) {
+			input.file_extension += ".zst";
+		}
+		break;
+	default:
+		break;
+	}
+
 	auto expressions = CreateCastExpressions(*bind_data, context, names, sql_types);
 	bind_data->cast_expressions = std::move(expressions);
 

@@ -13,7 +13,7 @@ PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, Buff
 }
 
 PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
-    : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout.Copy()) {
+    : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout.Copy()), count(0), data_size(0) {
 }
 
 PartitionedTupleData::~PartitionedTupleData() {
@@ -50,22 +50,13 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 	const idx_t actual_append_count = append_count == DConstants::INVALID_INDEX ? input.size() : append_count;
 
 	// Compute partition indices and store them in state.partition_indices
-	ComputePartitionIndices(state, input);
+	ComputePartitionIndices(state, input, append_sel, actual_append_count);
 
 	// Build the selection vector for the partitions
 	BuildPartitionSel(state, append_sel, actual_append_count);
 
 	// Early out: check if everything belongs to a single partition
-	optional_idx partition_index;
-	if (UseFixedSizeMap()) {
-		if (state.fixed_partition_entries.size() == 1) {
-			partition_index = state.fixed_partition_entries.begin().GetKey();
-		}
-	} else {
-		if (state.partition_entries.size() == 1) {
-			partition_index = state.partition_entries.begin()->first;
-		}
-	}
+	const auto partition_index = state.GetPartitionIndexIfSinglePartition(UseFixedSizeMap());
 	if (partition_index.IsValid()) {
 		auto &partition = *partitions[partition_index.GetIndex()];
 		auto &partition_pin_state = *state.partition_pin_states[partition_index.GetIndex()];
@@ -99,17 +90,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count);
 
 	// Early out: check if everything belongs to a single partition
-	optional_idx partition_index;
-	if (UseFixedSizeMap()) {
-		if (state.fixed_partition_entries.size() == 1) {
-			partition_index = state.fixed_partition_entries.begin().GetKey();
-		}
-	} else {
-		if (state.partition_entries.size() == 1) {
-			partition_index = state.partition_entries.begin()->first;
-		}
-	}
-
+	auto partition_index = state.GetPartitionIndexIfSinglePartition(UseFixedSizeMap());
 	if (partition_index.IsValid()) {
 		auto &partition = *partitions[partition_index.GetIndex()];
 		auto &partition_pin_state = *state.partition_pin_states[partition_index.GetIndex()];
@@ -135,68 +116,26 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	Verify();
 }
 
-// LCOV_EXCL_START
-template <class MAP_TYPE>
-struct UnorderedMapGetter {
-	static inline const typename MAP_TYPE::key_type &GetKey(typename MAP_TYPE::iterator &iterator) {
-		return iterator->first;
-	}
-
-	static inline const typename MAP_TYPE::key_type &GetKey(const typename MAP_TYPE::const_iterator &iterator) {
-		return iterator->first;
-	}
-
-	static inline typename MAP_TYPE::mapped_type &GetValue(typename MAP_TYPE::iterator &iterator) {
-		return iterator->second;
-	}
-
-	static inline const typename MAP_TYPE::mapped_type &GetValue(const typename MAP_TYPE::const_iterator &iterator) {
-		return iterator->second;
-	}
-};
-
-template <class T>
-struct FixedSizeMapGetter {
-	static inline const idx_t &GetKey(fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetKey();
-	}
-
-	static inline const idx_t &GetKey(const const_fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetKey();
-	}
-
-	static inline T &GetValue(fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetValue();
-	}
-
-	static inline const T &GetValue(const const_fixed_size_map_iterator_t<T> &iterator) {
-		return iterator.GetValue();
-	}
-};
-// LCOV_EXCL_STOP
-
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
-                                             const idx_t append_count) {
+                                             const idx_t append_count) const {
 	if (UseFixedSizeMap()) {
-		BuildPartitionSel<fixed_size_map_t<list_entry_t>, FixedSizeMapGetter<list_entry_t>>(
-		    state, state.fixed_partition_entries, append_sel, append_count);
+		BuildPartitionSel<true>(state, append_sel, append_count);
 	} else {
-		BuildPartitionSel<perfect_map_t<list_entry_t>, UnorderedMapGetter<perfect_map_t<list_entry_t>>>(
-		    state, state.partition_entries, append_sel, append_count);
+		BuildPartitionSel<false>(state, append_sel, append_count);
 	}
 }
 
-template <class MAP_TYPE, class GETTER>
-void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries,
-                                             const SelectionVector &append_sel, const idx_t append_count) {
+template <bool fixed>
+void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
+                                             const idx_t append_count) {
+	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
+	auto &partition_entries = state.GetMap<fixed>();
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	partition_entries.clear();
-
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		for (idx_t i = 0; i < append_count; i++) {
-			const auto index = append_sel.get_index(i);
-			const auto &partition_index = partition_indices[index];
+			const auto &partition_index = partition_indices[i];
 			auto partition_entry = partition_entries.find(partition_index);
 			if (partition_entry == partition_entries.end()) {
 				partition_entries[partition_index] = list_entry_t(0, 1);
@@ -215,9 +154,9 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	// Early out: check if everything belongs to a single partition
 	if (partition_entries.size() == 1) {
 		// This needs to be initialized, even if we go the short path here
-		for (idx_t i = 0; i < append_count; i++) {
+		for (sel_t i = 0; i < append_count; i++) {
 			const auto index = append_sel.get_index(i);
-			state.reverse_partition_sel[index] = NumericCast<sel_t>(i);
+			state.reverse_partition_sel[index] = i;
 		}
 		return;
 	}
@@ -235,7 +174,7 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	auto &reverse_partition_sel = state.reverse_partition_sel;
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto index = append_sel.get_index(i);
-		const auto &partition_index = partition_indices[index];
+		const auto &partition_index = partition_indices[i];
 		auto &partition_offset = partition_entries[partition_index].offset;
 		reverse_partition_sel[index] = UnsafeNumericCast<sel_t>(partition_offset);
 		partition_sel[partition_offset++] = UnsafeNumericCast<sel_t>(index);
@@ -244,16 +183,16 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 
 void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state) {
 	if (UseFixedSizeMap()) {
-		BuildBufferSpace<fixed_size_map_t<list_entry_t>, FixedSizeMapGetter<list_entry_t>>(
-		    state, state.fixed_partition_entries);
+		BuildBufferSpace<true>(state);
 	} else {
-		BuildBufferSpace<perfect_map_t<list_entry_t>, UnorderedMapGetter<perfect_map_t<list_entry_t>>>(
-		    state, state.partition_entries);
+		BuildBufferSpace<false>(state);
 	}
 }
 
-template <class MAP_TYPE, class GETTER>
-void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state, const MAP_TYPE &partition_entries) {
+template <bool fixed>
+void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state) {
+	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
+	const auto &partition_entries = state.GetMap<fixed>();
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {
 		const auto &partition_index = GETTER::GetKey(it);
 

@@ -278,10 +278,11 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 		// bound column ref: rewrite to fit in the current set of bound column ids
 		bound_colref.binding.table_index = get.table_index;
 		auto &column_ids = index.GetColumnIds();
+		auto &get_column_ids = get.GetColumnIds();
 		column_t referenced_column = column_ids[bound_colref.binding.column_index];
 		// search for the referenced column in the set of column_ids
-		for (idx_t i = 0; i < get.column_ids.size(); i++) {
-			if (get.column_ids[i] == referenced_column) {
+		for (idx_t i = 0; i < get_column_ids.size(); i++) {
+			if (get_column_ids[i] == referenced_column) {
 				bound_colref.binding.column_index = i;
 				return;
 			}

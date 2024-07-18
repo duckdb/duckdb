@@ -58,7 +58,7 @@ public:
 static inline JSONKeyReadResult ReadString(const char *ptr, const char *const end, const bool escaped) {
 	const char *const before = ptr;
 	if (escaped) {
-		auto key = make_unsafe_uniq_array<char>(end - ptr);
+		auto key = make_unsafe_uniq_array_uninitialized<char>(end - ptr);
 		idx_t key_len = 0;
 
 		bool backslash = false;
