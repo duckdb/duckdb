@@ -1,0 +1,22 @@
+# name: test/sql/function/string/sha1.test
+# description: Test the sha1 function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT sha1('hello'), sha1(NULL)
+----
+aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
+NULL
+
+query I
+SELECT sha1('')
+----
+da39a3ee5e6b4b0d3255bfef95601890afd80709
+
+query I
+SELECT sha1('\xff\xff'::BLOB)
+----
+a19f987b885f5a96069f4bc7f12b9e84ceba7dfa
