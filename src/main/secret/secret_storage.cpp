@@ -130,8 +130,8 @@ unique_ptr<SecretEntry> CatalogSetSecretStorage::GetSecretByName(const string &n
 }
 
 LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseInstance &db_p, const string &name_p,
-                                               const string &secret_path)
-    : CatalogSetSecretStorage(db_p, name_p), secret_path(secret_path) {
+                                               const string &secret_path_p)
+    : CatalogSetSecretStorage(db_p, name_p), secret_path(FileSystem::ExpandPath(secret_path_p, nullptr)) {
 	persistent = true;
 
 	// Check existence of persistent secret dir

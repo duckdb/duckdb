@@ -762,3 +762,4 @@
 #define tcache_enabled_set JEMALLOC_N(tcache_enabled_set)
 #define thread_tcache_max_set JEMALLOC_N(thread_tcache_max_set)
 #define tsd_tls JEMALLOC_N(tsd_tls)
+#define strerror_fixed JEMALLOC_N(strerror_fixed)

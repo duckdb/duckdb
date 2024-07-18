@@ -171,3 +171,35 @@ SELECT * FROM s AS _(x) ORDER BY x;
 5
 6
 7
+
+query I
+WITH RECURSIVE
+  t(b) AS MATERIALIZED (
+    (WITH helper(c) AS (
+      SELECT 5
+    )
+    SELECT * FROM helper h
+    UNION
+    SELECT 7
+    )
+  )
+SELECT * FROM t ORDER BY b;
+----
+5
+7
+
+query I
+WITH RECURSIVE
+  t(b) AS MATERIALIZED (
+    (WITH helper(c) AS (
+      SELECT 5
+    ), h1 AS
+    (SELECT * FROM helper h
+    UNION
+    SELECT 7 FROM helper h)
+    SELECT * FROM h1)
+  )
+SELECT * FROM t ORDER BY b;
+----
+5
+7

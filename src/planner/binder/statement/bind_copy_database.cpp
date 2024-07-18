@@ -132,7 +132,7 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
-	properties.modified_databases.insert(target_catalog.GetName());
+	properties.RegisterDBModify(target_catalog, context);
 	return result;
 }
 

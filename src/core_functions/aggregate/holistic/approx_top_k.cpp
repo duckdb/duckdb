@@ -68,7 +68,7 @@ struct ApproxTopKState {
 		D_ASSERT(lookup_map.empty());
 		k = kval;
 		capacity = kval * MONITORED_VALUES_RATIO;
-		stored_values = make_unsafe_uniq_array<ApproxTopKValue>(capacity);
+		stored_values = make_unsafe_uniq_array_uninitialized<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
 
 		// we scale the filter based on the amount of values we are monitoring

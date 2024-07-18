@@ -19,11 +19,11 @@ namespace duckdb {
 struct ht_entry_t { // NOLINT
 public:
 	//! Upper 16 bits are salt
-	static constexpr const duckdb::hash_t SALT_MASK = 0xFFFF000000000000;
+	static constexpr const hash_t SALT_MASK = 0xFFFF000000000000;
 	//! Lower 48 bits are the pointer
-	static constexpr const duckdb::hash_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
+	static constexpr const hash_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
 
-	explicit inline ht_entry_t(duckdb::hash_t value_p) noexcept : value(value_p) {
+	explicit inline ht_entry_t(hash_t value_p) noexcept : value(value_p) {
 	}
 
 	// Add a default constructor for 32-bit linux test case
@@ -36,17 +36,17 @@ public:
 
 	// Returns a pointer based on the stored value without checking cell occupancy.
 	// This can return a nullptr if the cell is not occupied.
-	inline duckdb::data_ptr_t GetPointerOrNull() const {
-		return reinterpret_cast<duckdb::data_ptr_t>(value & POINTER_MASK);
+	inline data_ptr_t GetPointerOrNull() const {
+		return reinterpret_cast<data_ptr_t>(value & POINTER_MASK);
 	}
 
 	// Returns a pointer based on the stored value if the cell is occupied
-	inline duckdb::data_ptr_t GetPointer() const {
+	inline data_ptr_t GetPointer() const {
 		D_ASSERT(IsOccupied());
-		return reinterpret_cast<duckdb::data_ptr_t>(value & POINTER_MASK);
+		return reinterpret_cast<data_ptr_t>(value & POINTER_MASK);
 	}
 
-	inline void SetPointer(const duckdb::data_ptr_t &pointer) {
+	inline void SetPointer(const data_ptr_t &pointer) {
 		// Pointer shouldn't use upper bits
 		D_ASSERT((reinterpret_cast<uint64_t>(pointer) & SALT_MASK) == 0);
 		// Value should have all 1's in the pointer area
@@ -56,20 +56,20 @@ public:
 	}
 
 	// Returns the salt, leaves upper salt bits intact, sets lower bits to all 1's
-	static inline duckdb::hash_t ExtractSalt(const duckdb::hash_t &hash) {
+	static inline hash_t ExtractSalt(const hash_t &hash) {
 		return hash | POINTER_MASK;
 	}
 
 	// Returns the salt, leaves upper salt bits intact, sets lower bits to all 0's
-	static inline duckdb::hash_t ExtractSaltWithNulls(const duckdb::hash_t &hash) {
+	static inline hash_t ExtractSaltWithNulls(const hash_t &hash) {
 		return hash & SALT_MASK;
 	}
 
-	inline duckdb::hash_t GetSalt() const {
+	inline hash_t GetSalt() const {
 		return ExtractSalt(value);
 	}
 
-	inline void SetSalt(const duckdb::hash_t &salt) {
+	inline void SetSalt(const hash_t &salt) {
 		// Shouldn't be occupied when we set this
 		D_ASSERT(!IsOccupied());
 		// Salt should have all 1's in the pointer field
@@ -78,7 +78,7 @@ public:
 		value = salt;
 	}
 
-	static inline ht_entry_t GetDesiredEntry(const duckdb::data_ptr_t &pointer, const duckdb::hash_t &salt) {
+	static inline ht_entry_t GetDesiredEntry(const data_ptr_t &pointer, const hash_t &salt) {
 		auto desired = reinterpret_cast<uint64_t>(pointer) | (salt & SALT_MASK);
 		return ht_entry_t(desired);
 	}
@@ -88,7 +88,12 @@ public:
 	}
 
 private:
-	duckdb::hash_t value;
+	hash_t value;
 };
+
+// uses an AND operation to apply the modulo operation instead of an if condition that could be branch mispredicted
+inline void IncrementAndWrap(idx_t &offset, const uint64_t &capacity_mask) {
+	++offset &= capacity_mask; // leave the salt bits unchanged
+}
 
 } // namespace duckdb

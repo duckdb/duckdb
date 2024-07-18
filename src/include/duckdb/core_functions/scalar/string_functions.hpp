@@ -387,6 +387,15 @@ struct RtrimFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct SHA1Fun {
+	static constexpr const char *Name = "sha1";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the SHA1 hash of the value";
+	static constexpr const char *Example = "sha1('hello')";
+
+	static ScalarFunction GetFunction();
+};
+
 struct SHA256Fun {
 	static constexpr const char *Name = "sha256";
 	static constexpr const char *Parameters = "value";
@@ -521,6 +530,24 @@ struct RegexpEscapeFun {
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Escapes all potentially meaningful regexp characters in the input string";
 	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct UrlEncodeFun {
+	static constexpr const char *Name = "url_encode";
+	static constexpr const char *Parameters = "input";
+	static constexpr const char *Description = "Escapes the input string by encoding it so that it can be included in a URL query parameter.";
+	static constexpr const char *Example = "url_encode('this string has/ special+ characters>')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct UrlDecodeFun {
+	static constexpr const char *Name = "url_decode";
+	static constexpr const char *Parameters = "input";
+	static constexpr const char *Description = "Unescapes the URL encoded input.";
+	static constexpr const char *Example = "url_decode('this%20string%20is%2BFencoded')";
 
 	static ScalarFunction GetFunction();
 };

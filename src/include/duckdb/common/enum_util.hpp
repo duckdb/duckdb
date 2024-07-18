@@ -194,6 +194,8 @@ enum class MapInvalidReason : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
+enum class MetaPipelineType : uint8_t;
+
 enum class MetricsType : uint8_t;
 
 enum class NType : uint8_t;
@@ -593,6 +595,9 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
+
+template<>
+const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
@@ -1071,6 +1076,9 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
+
+template<>
+MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value);

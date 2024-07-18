@@ -16,33 +16,36 @@
 #
 
 from ..exception import ContributionsAcceptedError
-from typing import Callable, TYPE_CHECKING, overload, Dict, Union
+from typing import Callable, TYPE_CHECKING, overload, Dict, Union, List
 
 from .column import Column
 from .session import SparkSession
 from .dataframe import DataFrame
 from .functions import _to_column
 from ._typing import ColumnOrName
+from .types import NumericType
 
 if TYPE_CHECKING:
     from ._typing import LiteralType
 
 __all__ = ["GroupedData", "Grouping"]
 
+def _api_internal(self: "GroupedData", name: str, *cols: str) -> DataFrame:
+    expressions = ",".join(list(cols))
+    group_by = str(self._grouping) if self._grouping else ""
+    projections = self._grouping.get_columns()
+    jdf = getattr(self._df.relation, "apply")(
+        function_name=name,  # aggregate function
+        function_aggr=expressions,  # inputs to aggregate
+        group_expr=group_by,  # groups
+        projected_columns=projections,  # projections
+    )
+    return DataFrame(jdf, self.session)
 
 def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
     def _api(self: "GroupedData", *cols: str) -> DataFrame:
         name = f.__name__
-        expressions = ",".join(list(cols))
-        group_by = str(self._grouping)
-        projections = self._grouping.get_columns()
-        jdf = getattr(self._df.relation, "apply")(
-            function_name=name,  # aggregate function
-            function_aggr=expressions,  # inputs to aggregate
-            group_expr=group_by,  # groups
-            projected_columns=projections,  # projections
-        )
-        return DataFrame(jdf, self.session)
+        return _api_internal(self, name, *cols)
 
     _api.__name__ = f.__name__
     _api.__doc__ = f.__doc__
@@ -85,7 +88,6 @@ class GroupedData:
     def __repr__(self) -> str:
         return str(self._df)
 
-    @df_varargs_api
     def count(self) -> DataFrame:
         """Counts the number of records for each group.
 
@@ -113,6 +115,7 @@ class GroupedData:
         |  Bob|    2|
         +-----+-----+
         """
+        return _api_internal(self, "count").withColumnRenamed('count_star()', 'count')
 
     @df_varargs_api
     def mean(self, *cols: str) -> DataFrame:
@@ -126,7 +129,6 @@ class GroupedData:
             column names. Non-numeric columns are ignored.
         """
 
-    @df_varargs_api
     def avg(self, *cols: str) -> DataFrame:
         """Computes average values for each numeric columns for each group.
 
@@ -171,6 +173,12 @@ class GroupedData:
         |     5.0|      110.0|
         +--------+-----------+
         """
+        columns = list(cols)
+        if len(columns) == 0:
+            schema = self._df.schema
+            # Take only the numeric types of the relation
+            columns: List[str] = [x.name for x in schema.fields if isinstance(x.dataType, NumericType)]
+        return _api_internal(self, "avg", *columns)
 
     @df_varargs_api
     def max(self, *cols: str) -> DataFrame:
