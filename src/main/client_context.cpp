@@ -136,8 +136,9 @@ struct DebugClientContextState : public ClientContextState {
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
+	registered_state = make_uniq<RegisteredStateManager>();
 #ifdef DEBUG
-	registered_state["debug_client_context_state"] = make_uniq<DebugClientContextState>();
+	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
 #endif
 }
 
@@ -196,8 +197,8 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 	query_progress.Initialize();
 	// Notify any registered state of query begin
-	for (auto const &s : registered_state) {
-		s.second->QueryBegin(*this);
+	for (auto &state : registered_state->States()) {
+		state->QueryBegin(*this);
 	}
 }
 
@@ -208,8 +209,8 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		active_query->executor->CancelTasks();
 	}
 	// Notify any registered state of query end
-	for (auto const &s : registered_state) {
-		s.second->QueryEnd(*this);
+	for (auto &state : registered_state->States()) {
+		state->QueryEnd(*this);
 	}
 	active_query->progress_bar.reset();
 
@@ -371,10 +372,9 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
                                        PreparedStatementMode mode) {
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
-	for (auto const &s : registered_state) {
-		if (s.second->CanRequestRebind()) {
+	for (auto &state : registered_state->States()) {
+		if (state->CanRequestRebind()) {
 			can_request_rebind = true;
-			break;
 		}
 	}
 	if (can_request_rebind) {
@@ -386,8 +386,8 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			// check if any registered client context state wants to try a rebind
-			for (auto const &s : registered_state) {
-				auto info = s.second->OnPlanningError(*this, *statement, error);
+			for (auto &state : registered_state->States()) {
+				auto info = state->OnPlanningError(*this, *statement, error);
 				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 					rebind = true;
 				}
@@ -398,8 +398,8 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		}
 		if (result) {
 			D_ASSERT(!rebind);
-			for (auto const &s : registered_state) {
-				auto info = s.second->OnFinalizePrepare(*this, *result, mode);
+			for (auto &state : registered_state->States()) {
+				auto info = state->OnFinalizePrepare(*this, *result, mode);
 				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 					rebind = true;
 				}
@@ -519,9 +519,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	if (prepared->RequireRebind(*this, parameters.parameters)) {
 		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
-	for (auto const &s : registered_state) {
+
+	for (auto &state : registered_state->States()) {
 		PreparedStatementCallbackInfo info(*prepared, parameters);
-		auto new_rebind = s.second->OnExecutePrepared(*this, info, rebind);
+		auto new_rebind = state->OnExecutePrepared(*this, info, rebind);
 		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 		}
