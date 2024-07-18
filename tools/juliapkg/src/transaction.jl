@@ -6,7 +6,7 @@ function DBInterface.transaction(f, con::Connection)
     catch
         rollback(con)
         rethrow()
-    finally
+    else
         commit(con)
     end
 end
