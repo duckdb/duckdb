@@ -70,3 +70,21 @@ SELECT plus2(4)
 6
 
 endloop
+
+# macro overloads
+# create a macro
+statement ok
+CREATE MACRO addition(a) AS a, (a,b) AS a + b
+
+# use the macro
+query II
+SELECT addition(2), addition(1, 2)
+----
+2	3
+
+restart
+
+query II
+SELECT addition(2), addition(1, 2)
+----
+2	3

@@ -31,6 +31,33 @@ SELECT multi_add(1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
 ----
 does not support 10 parameters
 
+# named parameters
+statement ok
+CREATE MACRO arithmetic
+	(a, b, mult := 1) AS (a + b) * mult,
+	(a, b, c, division := 1) AS  (a + b + c) / division
+
+query IIII
+SELECT arithmetic(42, 84), arithmetic(42, 84, mult := 10), arithmetic(100, 200, 300), arithmetic(100, 200, 300, division := 10)
+----
+126	1260	600	60
+
+# table macro overloads
+statement ok
+CREATE MACRO generate_numbers
+	(a, b) AS TABLE (SELECT * FROM range(a + b) t(i)),
+	(a, b, c, mult := 1) AS TABLE (SELECT * FROM range((a + b + c) * mult) t(i))
+
+query I
+SELECT COUNT(*) FROM generate_numbers(20, 10);
+----
+30
+
+query I
+SELECT COUNT(*) FROM generate_numbers(1, 2, 2, mult := 5);
+----
+25
+
 # ambiguity conflict between macros
 statement error
 CREATE MACRO ambiguous_macro

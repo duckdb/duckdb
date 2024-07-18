@@ -95,7 +95,7 @@ MacroBindResult MacroFunction::BindMacroFunction(const vector<unique_ptr<MacroFu
 	auto &macro_def = *functions[macro_idx];
 	for (auto &default_val : defaults) {
 		auto entry = macro_def.default_parameters.find(default_val.first);
-		if (entry != macro_def.default_parameters.end()) {
+		if (entry == macro_def.default_parameters.end()) {
 			string error =
 			    StringUtil::Format("Macro \"%s\" does not have a named parameter \"%s\"\n", name, default_val.first);
 			error += "\nMacro definition: " + FormatMacroFunction(macro_def, name);
