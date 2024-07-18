@@ -41,7 +41,6 @@ template <class DATA_TYPE, bool SAFE = true>
 class array_ptr { // NOLINT: match std naming style
 public:
 	using iterator_type = array_ptr_iterator<DATA_TYPE>;
-	using value_type = unordered_map<string, shared_ptr<ClientContextState>>::value_type;
 
 private:
 	static inline void AssertNotNull(const bool null) {
