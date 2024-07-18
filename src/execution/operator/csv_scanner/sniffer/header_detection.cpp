@@ -114,10 +114,10 @@ bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<Header
 		if (best_header_row[i].IsNull()) {
 			return false;
 		}
-		if (best_header_row[i].value.GetString() != (*set_columns.names)[i]) {
+		if (best_header_row[i].value != (*set_columns.names)[i]) {
 			error << "Header Mismatch at position:" << i << "\n";
 			error << "Expected Name: \"" << (*set_columns.names)[i] << "\".";
-			error << "Actual Name: \"" << best_header_row[i].value.GetString() << "\"."
+			error << "Actual Name: \"" << best_header_row[i].value << "\"."
 			      << "\n";
 			has_header = false;
 			break;
@@ -240,7 +240,7 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 
 		// get header names from CSV
 		for (idx_t col = 0; col < best_header_row.size(); col++) {
-			string col_name = best_header_row[col].value.GetString();
+			string &col_name = best_header_row[col].value;
 
 			// generate name if field is empty
 			if (EmptyHeader(col_name, best_header_row[col].is_null, options.normalize_names)) {
