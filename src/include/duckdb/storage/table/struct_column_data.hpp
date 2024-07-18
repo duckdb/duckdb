@@ -18,7 +18,10 @@ class StructColumnData : public ColumnData {
 public:
 	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                 LogicalType type, optional_ptr<ColumnData> parent = nullptr);
+	~StructColumnData() override {
+	}
 
+public:
 	//! The sub-columns of the struct
 	vector<unique_ptr<ColumnData>> sub_columns;
 	//! The validity column data of the struct

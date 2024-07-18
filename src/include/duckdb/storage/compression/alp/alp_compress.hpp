@@ -40,6 +40,8 @@ public:
 		//! Combinations found on the analyze step are needed for compression
 		state.best_k_combinations = analyze_state->state.best_k_combinations;
 	}
+	~AlpCompressionState() override {
+	}
 
 	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction &function;

@@ -15,6 +15,8 @@ namespace duckdb {
 class DictionaryCompressionState : public CompressionState {
 public:
 	explicit DictionaryCompressionState(const CompressionInfo &info) : CompressionState(info) {};
+	~DictionaryCompressionState() override {
+	}
 
 public:
 	bool UpdateState(Vector &scan_vector, idx_t count) {

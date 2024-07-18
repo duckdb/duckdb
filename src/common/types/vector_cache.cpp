@@ -43,7 +43,10 @@ public:
 			break;
 		}
 	}
+	~VectorCacheBuffer() override {
+	}
 
+public:
 	void ResetFromCache(Vector &result, const buffer_ptr<VectorBuffer> &buffer) {
 		D_ASSERT(type == result.GetType());
 		auto internal_type = type.InternalType();

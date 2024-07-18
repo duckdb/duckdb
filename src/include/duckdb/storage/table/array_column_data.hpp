@@ -18,7 +18,10 @@ class ArrayColumnData : public ColumnData {
 public:
 	ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                LogicalType type, optional_ptr<ColumnData> parent = nullptr);
+	~ArrayColumnData() override {
+	}
 
+public:
 	//! The child-column of the list
 	unique_ptr<ColumnData> child_column;
 	//! The validity column data of the struct

@@ -18,7 +18,10 @@ class StandardColumnData : public ColumnData {
 public:
 	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                   LogicalType type, optional_ptr<ColumnData> parent = nullptr);
+	~StandardColumnData() override {
+	}
 
+public:
 	//! The validity column data
 	ValidityColumnData validity;
 

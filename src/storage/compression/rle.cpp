@@ -128,7 +128,6 @@ struct RLECompressState : public CompressionState {
 			state->WriteValue(value, count, is_null);
 		}
 	};
-
 	idx_t MaxRLECount() {
 		auto entry_size = sizeof(T) + sizeof(rle_count_t);
 		return (info.GetBlockSize() - RLEConstants::RLE_HEADER_SIZE) / entry_size;
@@ -141,6 +140,8 @@ struct RLECompressState : public CompressionState {
 
 		state.dataptr = (void *)this;
 		max_rle_count = MaxRLECount();
+	}
+	~RLECompressState() override {
 	}
 
 	void CreateEmptySegment(idx_t row_start) {

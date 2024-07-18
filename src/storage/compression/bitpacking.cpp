@@ -383,6 +383,8 @@ public:
 		auto &config = DBConfig::GetConfig(checkpointer.GetDatabase());
 		state.mode = config.options.force_bitpacking_mode;
 	}
+	~BitpackingCompressState() override {
+	}
 
 	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction &function;

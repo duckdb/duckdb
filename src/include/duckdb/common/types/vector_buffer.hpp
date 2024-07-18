@@ -148,6 +148,8 @@ public:
 	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
 	}
+	~DictionaryBuffer() override {
+	}
 
 public:
 	const SelectionVector &GetSelVector() const {
@@ -168,6 +170,8 @@ class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
 	explicit VectorStringBuffer(VectorBufferType type);
+	~VectorStringBuffer() override {
+	}
 
 public:
 	string_t AddString(const char *data, idx_t len) {

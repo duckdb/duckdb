@@ -48,6 +48,8 @@ public:
 		       actual_dictionary_size_bytes);
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
+	~AlpRDCompressionState() override {
+	}
 
 	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction &function;

@@ -42,8 +42,12 @@ idx_t FixedSizeFinalAnalyze(AnalyzeState &state_p) {
 // Compress
 //===--------------------------------------------------------------------===//
 struct UncompressedCompressState : public CompressionState {
+public:
 	UncompressedCompressState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info);
+	~UncompressedCompressState() override {
+	}
 
+public:
 	ColumnDataCheckpointer &checkpointer;
 	unique_ptr<ColumnSegment> current_segment;
 	ColumnAppendState append_state;
