@@ -1,5 +1,7 @@
 #include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
+
 namespace duckdb {
 
 void ReadJSONRelation::InitializeAlias(const vector<string> &input) {
@@ -10,8 +12,8 @@ void ReadJSONRelation::InitializeAlias(const vector<string> &input) {
 
 ReadJSONRelation::ReadJSONRelation(const shared_ptr<ClientContext> &context, vector<string> &input,
                                    named_parameter_map_t options, bool auto_detect, string alias_p)
-    : TableFunctionRelation(context, auto_detect ? "read_json_auto" : "read_json", {CreateValueFromFileList(input)},
-                            std::move(options)),
+    : TableFunctionRelation(context, auto_detect ? "read_json_auto" : "read_json",
+                            {MultiFileReader::CreateValueFromFileList(input)}, std::move(options)),
       alias(std::move(alias_p)) {
 
 	InitializeAlias(input);
