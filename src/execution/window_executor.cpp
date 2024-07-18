@@ -1458,7 +1458,7 @@ public:
 	// Mask to use for exclusion if we are not ignoring NULLs
 	ValidityMask no_nulls;
 	// IGNORE NULLS
-	ValidityMask *ignore_nulls;
+	optional_ptr<ValidityMask> ignore_nulls;
 };
 
 //===--------------------------------------------------------------------===//
@@ -1482,7 +1482,7 @@ public:
 	//! The exclusion filter handler
 	unique_ptr<ExclusionFilter> exclusion_filter;
 	//! The validity mask that combines both the NULLs and exclusion information
-	const ValidityMask *ignore_nulls_exclude;
+	optional_ptr<ValidityMask> ignore_nulls_exclude;
 };
 
 void WindowValueLocalState::Initialize() {
