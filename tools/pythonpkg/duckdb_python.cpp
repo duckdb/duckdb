@@ -563,7 +563,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("parameters") = py::none(), py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "read_json",
-	    [](const string &name, const Optional<py::object> &columns = py::none(),
+	    [](const py::object &name, const Optional<py::object> &columns = py::none(),
 	       const Optional<py::object> &sample_size = py::none(), const Optional<py::object> &maximum_depth = py::none(),
 	       const Optional<py::str> &records = py::none(), const Optional<py::str> &format = py::none(),
 	       const Optional<py::object> &date_format = py::none(),
@@ -589,7 +589,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		                          maximum_sample_files, filename, hive_partitioning, union_by_name, hive_types,
 		                          hive_types_autocast);
 	    },
-	    "Create a relation object from the JSON file in 'name'", py::arg("name"), py::kw_only(),
+	    "Create a relation object from the JSON file in 'name'", py::arg("path_or_buffer"), py::kw_only(),
 	    py::arg("columns") = py::none(), py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none(),
 	    py::arg("records") = py::none(), py::arg("format") = py::none(), py::arg("date_format") = py::none(),
 	    py::arg("timestamp_format") = py::none(), py::arg("compression") = py::none(),

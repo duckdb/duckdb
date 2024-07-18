@@ -4,6 +4,7 @@ import pandas
 import pytest
 import duckdb
 import re
+from io import StringIO
 
 
 def TestFile(name):
@@ -55,6 +56,23 @@ class TestReadJSON(object):
                 {'id': 5, 'name': 'Raising Arizona'},
             ],
         )
+
+    def test_read_filelike(self, duckdb_cursor):
+        pytest.importorskip("fsspec")
+
+        duckdb_cursor.execute("set threads=1")
+        string = StringIO("""{"id":1,"name":"O Brother, Where Art Thou?"}\n{"id":2,"name":"Home for the Holidays"}""")
+        res = duckdb_cursor.read_json(string).fetchall()
+        assert res == [(1, 'O Brother, Where Art Thou?'), (2, 'Home for the Holidays')]
+
+        string1 = StringIO("""{"id":1,"name":"O Brother, Where Art Thou?"}""")
+        string2 = StringIO("""{"id":2,"name":"Home for the Holidays"}""")
+        res = duckdb_cursor.read_json([string1, string2], filename=True).fetchall()
+        assert res[0][1] == 'O Brother, Where Art Thou?'
+        assert res[1][1] == 'Home for the Holidays'
+
+        # filenames are different
+        assert res[0][2] != res[1][2]
 
     def test_read_json_records(self):
         # Wrong option
