@@ -664,7 +664,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	auto &connection = con.GetConnection();
 	auto &client = *connection.context;
 	auto object = PythonReplacementScan::ReplacementObject(python_object, name, client);
-	auto view_rel = make_shared_ptr<ViewRelation>(connection.context, std::move(object));
+	auto view_rel = make_shared_ptr<ViewRelation>(connection.context, std::move(object), name);
 	bool replace = registered_objects.count(name);
 	view_rel->CreateView(name, replace, true);
 	registered_objects.insert(name);
@@ -1242,7 +1242,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 	}
 	auto tableref = PythonReplacementScan::ReplacementObject(value, name, *connection.context);
 	D_ASSERT(tableref);
-	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref))->Alias(name);
+	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref), name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
@@ -1306,7 +1306,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	}
 	auto tableref = PythonReplacementScan::ReplacementObject(arrow_object, name, *connection.context);
 	D_ASSERT(tableref);
-	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref))->Alias(name);
+	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref), name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
