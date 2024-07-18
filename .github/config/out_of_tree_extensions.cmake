@@ -104,6 +104,7 @@ duckdb_extension_load(sqlite_scanner
 duckdb_extension_load(sqlsmith
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
         GIT_TAG 721460ff1f31ce1dc1e4a9c4a55c0faf0b466dcb
+        APPLY_PATCHES
         )
 
 ################# SUBSTRAIT
