@@ -38,7 +38,7 @@ hash_t BoundReferenceExpression::Hash() const {
 	return CombineHash(Expression::Hash(), duckdb::Hash<idx_t>(index));
 }
 
-unique_ptr<Expression> BoundReferenceExpression::Copy() {
+unique_ptr<Expression> BoundReferenceExpression::Copy() const {
 	return make_uniq<BoundReferenceExpression>(alias, return_type, index);
 }
 

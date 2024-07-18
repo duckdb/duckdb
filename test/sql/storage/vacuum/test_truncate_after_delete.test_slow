@@ -7,12 +7,11 @@ load __TEST_DIR__/truncate_after_delete.db
 statement ok
 CREATE TABLE uuids (i VARCHAR);
 
-# for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
-# therefore, we need to compare to a range of total block counts
+# For smaller block sizes (16KB) the total blocks alternate between a few values in the loop.
 statement ok
-CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+CREATE TABLE blocks AS SELECT total_blocks AS b FROM pragma_database_size();
 
-loop i 0 10
+loop i 0 20
 
 statement ok
 DROP TABLE IF EXISTS integers;
@@ -43,23 +42,23 @@ INSERT INTO integers VALUES (1), (2), (3);
 statement ok
 CHECKPOINT;
 
-# ensure that the total blocks don't exceed the total blocks after the first iteration
-# by more than 1.2
+# Ensure that the current block count does not exceed the maximum block count by more than 1.2.
 
 query I
-SELECT CASE WHEN ${i} = 0 THEN True
-	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
+SELECT CASE WHEN ${i} < 10 THEN True
+	WHEN c.total_blocks <= blocks.b * 1.2 THEN True
 	ELSE False END
-FROM pragma_database_size() AS current, total_blocks_tbl;
+FROM pragma_database_size() AS c, blocks;
 ----
 1
 
-# adjust total_blocks_tbl once to the count after the first iteration
+# Adjust blocks to the maximum of the first 10 warm-up iterations.
 
 statement ok
-UPDATE total_blocks_tbl SET total_blocks = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
-		ELSE (total_blocks) END);
+UPDATE blocks SET b = (
+ 	SELECT CASE WHEN ${i} < 10 THEN
+ 		(SELECT list_max(list_value(c.total_blocks, b)) FROM pragma_database_size() AS c)
+ 		ELSE (b) END);
 
 endloop
 

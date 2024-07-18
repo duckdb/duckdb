@@ -28,6 +28,7 @@ logical_opt	<!REGEX>:.*EMPTY_RESULT.*
 statement error
 SELECT 123::TINYINT + (CASE WHEN i=2 THEN (i+1)::TINYINT ELSE (i+2)::TINYINT END) FROM integers;
 ----
+<REGEX>:Out of Range Error:.*Overflow in addition.*
 
 # this does not
 query I

@@ -27,6 +27,10 @@ enum class ExtensionInstallMode : uint8_t {
 	NOT_INSTALLED = 4
 };
 
+struct ExtensionLoadedInfo {
+	string description;
+};
+
 class ExtensionInstallInfo {
 public:
 	//! How the extension was installed
@@ -37,6 +41,8 @@ public:
 	string repository_url;
 	//! (optional) Version of the extension
 	string version;
+	//! (optional) ETag of last fetched resource
+	string etag;
 
 	void Serialize(Serializer &serializer) const;
 

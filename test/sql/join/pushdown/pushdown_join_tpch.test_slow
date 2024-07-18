@@ -1,0 +1,44 @@
+# name: test/sql/join/pushdown/pushdown_join_tpch.test_slow
+# description: Test join filter pushdown on TPC-H
+# group: [pushdown]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+# single join
+query II
+SELECT l_orderkey, l_comment FROM lineitem WHERE l_orderkey=(SELECT MAX(l_orderkey) FROM lineitem) ORDER BY ALL
+----
+6000000	pecial excuses nag evenly f
+6000000	riously pe
+
+# multiple joins
+query III
+select l_orderkey, l_linenumber, l_comment
+from lineitem
+where l_linenumber=(select max(l_linenumber) from lineitem) AND
+      l_orderkey=(SELECT MAX(l_orderkey) FROM lineitem WHERE l_linenumber=7);
+----
+5999968	7	. express requests are
+
+# involving separate tables
+query I
+select count(*) from lineitem where l_linenumber=(select max(l_linenumber) from lineitem) and l_suppkey=(select max(s_suppkey) from supplier);
+----
+16
+
+# bunch of joins
+query IIII
+select l_orderkey, o_orderpriority, l_suppkey, l_linenumber
+from lineitem join orders on (l_orderkey=o_orderkey)
+where l_linenumber=(select max(l_linenumber) from lineitem) and
+      l_suppkey=(select max(s_suppkey) from supplier) and
+      o_orderpriority=(select max(o_orderpriority) from orders)
+order by all
+----
+2076419	5-LOW	10000	7
+2770594	5-LOW	10000	7
+3196290	5-LOW	10000	7
+3892931	5-LOW	10000	7

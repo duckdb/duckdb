@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
-#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -76,6 +76,13 @@ public:
 
 	//! Set the allocator flush threshold
 	void SetAllocatorFlushTreshold(idx_t threshold);
+	//! Sets the allocator background thread
+	void SetAllocatorBackgroundThreads(bool enable);
+
+	//! Get the number of the CPU on which the calling thread is currently executing.
+	//! Fallback to calling thread id if CPU number is not available.
+	//! Result do not need to be exact 'return 0' is a valid fallback strategy
+	static idx_t GetEstimatedCPUId();
 
 private:
 	void RelaunchThreadsInternal(int32_t n);
@@ -92,6 +99,8 @@ private:
 	vector<unique_ptr<atomic<bool>>> markers;
 	//! The threshold after which to flush the allocator after completing a task
 	atomic<idx_t> allocator_flush_threshold;
+	//! Whether allocator background threads are enabled
+	atomic<bool> allocator_background_threads;
 	//! Requested thread count (set by the 'threads' setting)
 	atomic<int32_t> requested_thread_count;
 	//! The amount of threads currently running

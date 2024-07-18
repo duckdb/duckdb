@@ -43,11 +43,35 @@ string LogicalGet::ParamsToString() const {
 	if (!extra_info.file_filters.empty()) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "File Filters: " + extra_info.file_filters;
+		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
+			result += StringUtil::Format("\nScanning: %llu/%llu files", extra_info.filtered_files.GetIndex(),
+			                             extra_info.total_files.GetIndex());
+		}
 	}
 	if (!function.to_string) {
 		return result;
 	}
 	return result + "\n" + function.to_string(bind_data.get());
+}
+
+void LogicalGet::SetColumnIds(vector<column_t> &&column_ids) {
+	this->column_ids = std::move(column_ids);
+}
+
+void LogicalGet::AddColumnId(column_t column_id) {
+	column_ids.push_back(column_id);
+}
+
+void LogicalGet::ClearColumnIds() {
+	column_ids.clear();
+}
+
+const vector<column_t> &LogicalGet::GetColumnIds() const {
+	return column_ids;
+}
+
+vector<column_t> &LogicalGet::GetMutableColumnIds() {
+	return column_ids;
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
@@ -121,6 +145,9 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 		if (node_stats && node_stats->has_estimated_cardinality) {
 			return node_stats->estimated_cardinality;
 		}
+	}
+	if (!children.empty()) {
+		return children[0]->EstimateCardinality(context);
 	}
 	return 1;
 }

@@ -135,7 +135,7 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 	// See if this is the case and we still have a value registered for it
 	auto it = wrapper->values.find(identifier);
 	if (it != wrapper->values.end()) {
-		return ConvertCPPTypeToC(it->second.type());
+		return ConvertCPPTypeToC(it->second.return_type.id());
 	}
 	return DUCKDB_TYPE_INVALID;
 }
@@ -162,7 +162,7 @@ duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx
 		return DuckDBError;
 	}
 	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
-	wrapper->values[identifier] = *value;
+	wrapper->values[identifier] = duckdb::BoundParameterData(*value);
 	return DuckDBSuccess;
 }
 
@@ -280,6 +280,12 @@ duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement,
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
+duckdb_state duckdb_bind_timestamp_tz(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                      duckdb_timestamp val) {
+	auto value = Value::TIMESTAMPTZ(timestamp_t(val.micros));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
+}
+
 duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_interval val) {
 	auto value = Value::INTERVAL(val.months, val.days, val.micros);
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
@@ -332,7 +338,12 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 
-	auto result = wrapper->statement->Execute(wrapper->values, false);
+	duckdb::unique_ptr<duckdb::QueryResult> result;
+	try {
+		result = wrapper->statement->Execute(wrapper->values, false);
+	} catch (...) {
+		return DuckDBError;
+	}
 	return DuckDBTranslateResult(std::move(result), out_result);
 }
 

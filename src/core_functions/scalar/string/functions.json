@@ -269,6 +269,14 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "sha1",
+        "parameters": "value",
+        "description": "Returns the SHA1 hash of the value",
+        "example": "sha1('hello')",
+        "type": "scalar_function",
+        "struct": "SHA1Fun"
+    },
+    {
         "name": "sha256",
         "parameters": "value",
         "description": "Returns the SHA256 hash of the value",
@@ -343,6 +351,20 @@
         "description": "Escapes all potentially meaningful regexp characters in the input string",
         "example": "regexp_escape('https://duckdb.org')",
         "struct": "RegexpEscapeFun",
+        "type": "scalar_function"
+    },
+    {
+        "name": "url_encode",
+        "parameters": "input",
+        "description": "Escapes the input string by encoding it so that it can be included in a URL query parameter.",
+        "example": "url_encode('this string has/ special+ characters>')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "url_decode",
+        "parameters": "input",
+        "description": "Unescapes the URL encoded input.",
+        "example": "url_decode('this%20string%20is%2BFencoded')",
         "type": "scalar_function"
     }
 ]

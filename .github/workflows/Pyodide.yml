@@ -44,21 +44,41 @@ jobs:
           - python: "3.10"
             pyodide-build: "0.22.1"
             node: "16"
+            other_deps: "'pydantic<2'"
           - python: "3.11"
             pyodide-build: "0.25.1"
             node: "18"
+            other_deps: "'pydantic<2'"
+          - python: "3.12"
+            pyodide-build: "0.26.1"
+            node: "20"
     steps:
       - uses: actions/checkout@v4
         with:
           # fetch everything so that the version on the built wheel path is
           # correct
           fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - name: Check/Act on inputs.override_git_describe
+        shell: bash
+        run: |
+          if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+            echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+            exit 1
+          elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+            echo "No override_git_describe provided"
+          else
+            echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git log -1 --format=%h)" >> "$GITHUB_ENV"
+            echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+            git tag ${{ inputs.override_git_describe }}
+          fi
 
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.version.python }}
 
-      - run: pip install 'pyodide-build==${{ matrix.version.pyodide-build }}' 'pydantic<2'
+      - run: pip install 'pyodide-build==${{ matrix.version.pyodide-build }}' ${{ matrix.version.other_deps }}
 
       - name: get emscripten version
         id: emscripten-version
@@ -95,13 +115,6 @@ jobs:
           source .venv-pyodide/bin/activate
           pip install ./tools/pythonpkg/dist/*.whl
 
-      - name: run tests using pyodide
-        run: |
-          source .venv-pyodide/bin/activate
-          python -m pytest ./tools/pythonpkg/tests
-        env:
-          TZ: UTC
-
       - name: Wheel sizes
         run: |
           ls -lah ./tools/pythonpkg/dist/*.whl
@@ -112,6 +125,14 @@ jobs:
           if-no-files-found: error
           path: |
             ./tools/pythonpkg/dist/*.whl
+
+      - name: run tests using pyodide
+        if: ${{ inputs.skip_tests != 'true' }}
+        run: |
+          source .venv-pyodide/bin/activate
+          python -m pytest ./tools/pythonpkg/tests
+        env:
+          TZ: UTC
 
       - name: Deploy
         env:

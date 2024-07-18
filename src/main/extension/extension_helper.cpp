@@ -62,10 +62,6 @@
 #include "icu_extension.hpp"
 #endif
 
-#if DUCKDB_EXTENSION_EXCEL_LINKED
-#include "excel_extension.hpp"
-#endif
-
 #if DUCKDB_EXTENSION_PARQUET_LINKED
 #include "parquet_extension.hpp"
 #endif
@@ -126,6 +122,8 @@ static const DefaultExtension internal_extensions[] = {
     {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
+    {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
+    {"delta", "Adds support for Delta Lake", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -213,7 +211,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(context, extension_name, false, autoinstall_repo);
+			ExtensionHelper::InstallExtension(context, extension_name, false, autoinstall_repo, false);
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 		return true;
@@ -323,26 +321,6 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 	});
 #endif
 
-	for (const auto &extension : db.LoadedExtensions()) {
-		if (seen_extensions.find(extension) != seen_extensions.end()) {
-			const auto &loaded_extension_data = db.LoadedExtensionsData();
-			const auto &loaded_install_info = loaded_extension_data.find(extension);
-
-			ExtensionUpdateResult statically_loaded_ext_result;
-
-			if (loaded_install_info == loaded_extension_data.end()) {
-				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
-			} else if (loaded_install_info->second.mode == ExtensionInstallMode::STATICALLY_LINKED) {
-				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::STATICALLY_LOADED;
-				statically_loaded_ext_result.installed_version = loaded_install_info->second.version;
-			} else {
-				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
-			}
-
-			result.push_back(std::move(statically_loaded_ext_result));
-		}
-	}
-
 	return result;
 }
 
@@ -402,8 +380,8 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// The in-tree extensions that we check. Non-cmake builds are currently limited to these for static linking
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 	//		 these can be removed
-	unordered_set<string> extensions {"parquet", "icu",   "tpch",     "tpcds", "fts",      "httpfs",
-	                                  "json",    "excel", "sqlsmith", "inet",  "jemalloc", "autocomplete"};
+	unordered_set<string> extensions {"parquet", "icu",   "tpch", "tpcds",    "fts",         "httpfs",
+	                                  "json",    "excel", "inet", "jemalloc", "autocomplete"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -514,13 +492,6 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	} else if (extension == "excel") {
 #if DUCKDB_EXTENSION_EXCEL_LINKED
 		db.LoadStaticExtension<ExcelExtension>();
-#else
-		// excel extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "sqlsmith") {
-#if DUCKDB_EXTENSION_SQLSMITH_LINKED
-		db.LoadStaticExtension<SqlsmithExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;

@@ -570,6 +570,11 @@
         "id": 200,
         "name": "type",
         "type": "TransactionType"
+      },
+      {
+        "id": 201,
+        "name": "modifier",
+        "type": "TransactionModifierType"
       }
     ]
   },

@@ -8,6 +8,7 @@
 #include "duckdb/execution/window_executor.hpp"
 
 #include <numeric>
+#include <thread>
 #include <utility>
 
 namespace duckdb {
@@ -18,50 +19,200 @@ namespace duckdb {
 WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAllocator()) {
 }
 
-WindowAggregator::WindowAggregator(AggregateObject aggr_p, const LogicalType &result_type_p,
-                                   const WindowExcludeMode exclude_mode_p, idx_t partition_count_p)
-    : aggr(std::move(aggr_p)), result_type(result_type_p), partition_count(partition_count_p),
-      state_size(aggr.function.state_size()), filter_pos(0), exclude_mode(exclude_mode_p) {
+class WindowAggregatorGlobalState : public WindowAggregatorState {
+public:
+	WindowAggregatorGlobalState(const WindowAggregator &aggregator_p, idx_t group_count)
+	    : aggregator(aggregator_p), winputs(inputs) {
+
+		if (!aggregator.arg_types.empty()) {
+			winputs.Initialize(Allocator::DefaultAllocator(), aggregator.arg_types, group_count);
+		}
+		if (aggregator.aggr.filter) {
+			// 	Start with all invalid and set the ones that pass
+			filter_mask.Initialize(group_count, false);
+		}
+	}
+
+	//! The aggregator data
+	const WindowAggregator &aggregator;
+
+	//! Partition data chunk
+	DataChunk inputs;
+	WindowDataChunk winputs;
+
+	//! The filtered rows in inputs.
+	ValidityArray filter_mask;
+
+	//! Lock for single threading
+	mutable mutex lock;
+
+	//! Number of finalised states
+	idx_t finalized = 0;
+};
+
+WindowAggregator::WindowAggregator(AggregateObject aggr_p, const vector<LogicalType> &arg_types_p,
+                                   const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p)
+    : aggr(std::move(aggr_p)), arg_types(arg_types_p), result_type(result_type_p),
+      state_size(aggr.function.state_size()), exclude_mode(exclude_mode_p) {
 }
 
 WindowAggregator::~WindowAggregator() {
 }
 
-void WindowAggregator::Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) {
-	if (!inputs.ColumnCount() && payload_chunk.ColumnCount()) {
-		inputs.Initialize(Allocator::DefaultAllocator(), payload_chunk.GetTypes());
-	}
-	if (inputs.ColumnCount()) {
-		inputs.Append(payload_chunk, true);
+unique_ptr<WindowAggregatorState> WindowAggregator::GetGlobalState(idx_t group_count, const ValidityMask &) const {
+	return make_uniq<WindowAggregatorGlobalState>(*this, group_count);
+}
+
+void WindowAggregator::Sink(WindowAggregatorState &gsink, WindowAggregatorState &lstate, DataChunk &arg_chunk,
+                            idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+	auto &gasink = gsink.Cast<WindowAggregatorGlobalState>();
+	auto &winputs = gasink.winputs;
+	auto &filter_mask = gasink.filter_mask;
+	if (winputs.chunk.ColumnCount()) {
+		winputs.Copy(arg_chunk, input_idx);
 	}
 	if (filter_sel) {
-		//	Lazy instantiation
-		if (!filter_mask.IsMaskSet()) {
-			// 	Start with all invalid and set the ones that pass
-			filter_bits.resize(ValidityMask::ValidityMaskSize(partition_count), 0);
-			filter_mask.Initialize(filter_bits.data());
-		}
 		for (idx_t f = 0; f < filtered; ++f) {
-			filter_mask.SetValid(filter_pos + filter_sel->get_index(f));
+			filter_mask.SetValid(input_idx + filter_sel->get_index(f));
 		}
-		filter_pos += payload_chunk.size();
 	}
 }
 
-void WindowAggregator::Finalize(const FrameStats &stats) {
+void WindowAggregator::Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, const FrameStats &stats) {
 }
 
 //===--------------------------------------------------------------------===//
-// WindowConstantAggregate
+// WindowConstantAggregator
 //===--------------------------------------------------------------------===//
-WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                                   const ValidityMask &partition_mask,
-                                                   const WindowExcludeMode exclude_mode_p, const idx_t count)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), partition(0), row(0), state(state_size),
-      statep(Value::POINTER(CastPointerToValue(state.data()))),
-      statef(Value::POINTER(CastPointerToValue(state.data()))) {
+struct WindowAggregateStates {
+	explicit WindowAggregateStates(const AggregateObject &aggr);
+	~WindowAggregateStates() {
+		Destroy();
+	}
 
-	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
+	//! The number of states
+	idx_t GetCount() const {
+		return states.size() / state_size;
+	}
+	data_ptr_t *GetData() {
+		return FlatVector::GetData<data_ptr_t>(*statef);
+	}
+	data_ptr_t GetStatePtr(idx_t idx) {
+		return states.data() + idx * state_size;
+	}
+	const_data_ptr_t GetStatePtr(idx_t idx) const {
+		return states.data() + idx * state_size;
+	}
+	//! Initialise all the states
+	void Initialize(idx_t count);
+	//! Combine the states into the target
+	void Combine(WindowAggregateStates &target,
+	             AggregateCombineType combine_type = AggregateCombineType::PRESERVE_INPUT);
+	//! Finalize the states into an output vector
+	void Finalize(Vector &result);
+	//! Destroy the states
+	void Destroy();
+
+	//! A description of the aggregator
+	const AggregateObject aggr;
+	//! The size of each state
+	const idx_t state_size;
+	//! The allocator to use
+	ArenaAllocator allocator;
+	//! Data pointer that contains the state data
+	vector<data_t> states;
+	//! Reused result state container for the window functions
+	unique_ptr<Vector> statef;
+};
+
+WindowAggregateStates::WindowAggregateStates(const AggregateObject &aggr)
+    : aggr(aggr), state_size(aggr.function.state_size()), allocator(Allocator::DefaultAllocator()) {
+}
+
+void WindowAggregateStates::Initialize(idx_t count) {
+	states.resize(count * state_size);
+	auto state_ptr = states.data();
+
+	statef = make_uniq<Vector>(LogicalType::POINTER, count);
+	auto state_f_data = FlatVector::GetData<data_ptr_t>(*statef);
+
+	for (idx_t i = 0; i < count; ++i, state_ptr += state_size) {
+		state_f_data[i] = state_ptr;
+		aggr.function.initialize(state_ptr);
+	}
+
+	// Prevent conversion of results to constants
+	statef->SetVectorType(VectorType::FLAT_VECTOR);
+}
+
+void WindowAggregateStates::Combine(WindowAggregateStates &target, AggregateCombineType combine_type) {
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+	aggr.function.combine(*statef, *target.statef, aggr_input_data, GetCount());
+}
+
+void WindowAggregateStates::Finalize(Vector &result) {
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	aggr.function.finalize(*statef, aggr_input_data, result, GetCount(), 0);
+}
+
+void WindowAggregateStates::Destroy() {
+	if (states.empty()) {
+		return;
+	}
+
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	if (aggr.function.destructor) {
+		aggr.function.destructor(*statef, aggr_input_data, GetCount());
+	}
+
+	states.clear();
+}
+
+class WindowConstantAggregatorGlobalState : public WindowAggregatorGlobalState {
+public:
+	WindowConstantAggregatorGlobalState(const WindowConstantAggregator &aggregator, idx_t count,
+	                                    const ValidityMask &partition_mask);
+
+	void Finalize(const FrameStats &stats);
+
+	//! Partition starts
+	vector<idx_t> partition_offsets;
+	//! Count of local tasks
+	mutable std::atomic<idx_t> locals;
+	//! Reused result state container for the window functions
+	WindowAggregateStates statef;
+	//! Aggregate results
+	unique_ptr<Vector> results;
+};
+
+class WindowConstantAggregatorLocalState : public WindowAggregatorState {
+public:
+	explicit WindowConstantAggregatorLocalState(const WindowConstantAggregatorGlobalState &gstate);
+	~WindowConstantAggregatorLocalState() override {
+	}
+
+	void Sink(DataChunk &payload_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	void Combine(WindowConstantAggregatorGlobalState &gstate);
+
+public:
+	//! The global state we are sharing
+	const WindowConstantAggregatorGlobalState &gstate;
+	//! Reusable chunk for sinking
+	DataChunk inputs;
+	//! A vector of pointers to "state", used for intermediate window segment aggregation
+	Vector statep;
+	//! Reused result state container for the window functions
+	WindowAggregateStates statef;
+	//! The current result partition being read
+	idx_t partition;
+	//! Shared SV for evaluation
+	SelectionVector matches;
+};
+
+WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(const WindowConstantAggregator &aggregator,
+                                                                         idx_t group_count,
+                                                                         const ValidityMask &partition_mask)
+    : WindowAggregatorGlobalState(aggregator, STANDARD_VECTOR_SIZE), locals(0), statef(aggregator.aggr) {
 
 	// Locate the partition boundaries
 	if (partition_mask.AllValid()) {
@@ -69,7 +220,7 @@ WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const L
 	} else {
 		idx_t entry_idx;
 		idx_t shift;
-		for (idx_t start = 0; start < count;) {
+		for (idx_t start = 0; start < group_count;) {
 			partition_mask.GetEntryIndex(start, entry_idx, shift);
 
 			//	If start is aligned with the start of a block,
@@ -81,7 +232,7 @@ WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const L
 			}
 
 			// Loop over the block
-			for (; shift < ValidityMask::BITS_PER_VALUE && start < count; ++shift, ++start) {
+			for (; shift < ValidityMask::BITS_PER_VALUE && start < group_count; ++shift, ++start) {
 				if (partition_mask.RowIsValid(block, shift)) {
 					partition_offsets.emplace_back(start);
 				}
@@ -90,45 +241,70 @@ WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const L
 	}
 
 	//	Initialise the vector for caching the results
-	results = make_uniq<Vector>(result_type, partition_offsets.size());
-	partition_offsets.emplace_back(count);
+	results = make_uniq<Vector>(aggregator.result_type, partition_offsets.size());
 
-	//	Create an aggregate state for intermediate aggregates
-	gstate = make_uniq<WindowAggregatorState>();
+	//	Initialise the final states
+	statef.Initialize(partition_offsets.size());
 
-	//	Start the first aggregate
-	AggregateInit();
+	// Add final guard
+	partition_offsets.emplace_back(group_count);
 }
 
-void WindowConstantAggregator::AggregateInit() {
-	aggr.function.initialize(state.data());
+WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
+    const WindowConstantAggregatorGlobalState &gstate)
+    : gstate(gstate), statep(Value::POINTER(0)), statef(gstate.statef.aggr), partition(0) {
+	matches.Initialize();
+
+	//	Start the aggregates
+	auto &partition_offsets = gstate.partition_offsets;
+	auto &aggregator = gstate.aggregator;
+	statef.Initialize(partition_offsets.size() - 1);
+
+	// Set up shared buffer
+	inputs.Initialize(Allocator::DefaultAllocator(), aggregator.arg_types);
+
+	gstate.locals++;
 }
 
-void WindowConstantAggregator::AggegateFinal(Vector &result, idx_t rid) {
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), gstate->allocator);
-	aggr.function.finalize(statef, aggr_input_data, result, 1, rid);
-
-	if (aggr.function.destructor) {
-		aggr.function.destructor(statef, aggr_input_data, 1);
-	}
+WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                                   const LogicalType &result_type,
+                                                   const WindowExcludeMode exclude_mode_p)
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p) {
 }
 
-void WindowConstantAggregator::Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) {
+unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetGlobalState(idx_t group_count,
+                                                                           const ValidityMask &partition_mask) const {
+	return make_uniq<WindowConstantAggregatorGlobalState>(*this, group_count, partition_mask);
+}
+
+void WindowConstantAggregator::Sink(WindowAggregatorState &gsink, WindowAggregatorState &lstate, DataChunk &arg_chunk,
+                                    idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+	auto &lastate = lstate.Cast<WindowConstantAggregatorLocalState>();
+
+	lastate.Sink(arg_chunk, input_idx, filter_sel, filtered);
+}
+
+void WindowConstantAggregatorLocalState::Sink(DataChunk &payload_chunk, idx_t row,
+                                              optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+	auto &partition_offsets = gstate.partition_offsets;
+	auto &aggregator = gstate.aggregator;
+	const auto &aggr = aggregator.aggr;
 	const auto chunk_begin = row;
 	const auto chunk_end = chunk_begin + payload_chunk.size();
+	idx_t partition =
+	    idx_t(std::upper_bound(partition_offsets.begin(), partition_offsets.end(), row) - partition_offsets.begin()) -
+	    1;
 
-	if (!inputs.ColumnCount() && payload_chunk.ColumnCount()) {
-		inputs.Initialize(Allocator::DefaultAllocator(), payload_chunk.GetTypes());
-	}
+	auto state_f_data = statef.GetData();
+	auto state_p_data = FlatVector::GetData<data_ptr_t>(statep);
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), gstate->allocator);
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	idx_t begin = 0;
 	idx_t filter_idx = 0;
 	auto partition_end = partition_offsets[partition + 1];
 	while (row < chunk_end) {
 		if (row == partition_end) {
-			AggegateFinal(*results, partition++);
-			AggregateInit();
+			++partition;
 			partition_end = partition_offsets[partition + 1];
 		}
 		partition_end = MinValue(partition_end, chunk_end);
@@ -174,9 +350,11 @@ void WindowConstantAggregator::Sink(DataChunk &payload_chunk, SelectionVector *f
 
 		//	Aggregate the filtered rows into a single state
 		const auto count = inputs.size();
+		auto state = state_f_data[partition];
 		if (aggr.function.simple_update) {
-			aggr.function.simple_update(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), state.data(), count);
+			aggr.function.simple_update(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), state, count);
 		} else {
+			state_p_data[0] = state_f_data[partition];
 			aggr.function.update(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), statep, count);
 		}
 
@@ -186,34 +364,36 @@ void WindowConstantAggregator::Sink(DataChunk &payload_chunk, SelectionVector *f
 	}
 }
 
-void WindowConstantAggregator::Finalize(const FrameStats &stats) {
-	AggegateFinal(*results, partition++);
+void WindowConstantAggregator::Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate,
+                                        const FrameStats &stats) {
+	auto &gastate = gstate.Cast<WindowConstantAggregatorGlobalState>();
+	auto &lastate = lstate.Cast<WindowConstantAggregatorLocalState>();
+
+	//	Single-threaded combine
+	lock_guard<mutex> finalize_guard(gastate.lock);
+	lastate.statef.Combine(gastate.statef);
+	lastate.statef.Destroy();
+
+	//	Last one out turns off the lights!
+	if (++gastate.finalized == gastate.locals) {
+		gastate.statef.Finalize(*gastate.results);
+		gastate.statef.Destroy();
+	}
 }
 
-class WindowConstantAggregatorState : public WindowAggregatorState {
-public:
-	WindowConstantAggregatorState() : partition(0) {
-		matches.Initialize();
-	}
-	~WindowConstantAggregatorState() override {
-	}
-
-public:
-	//! The current result partition being read
-	idx_t partition;
-	//! Shared SV for evaluation
-	SelectionVector matches;
-};
-
-unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetLocalState() const {
-	return make_uniq<WindowConstantAggregatorState>();
+unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
+	return make_uniq<WindowConstantAggregatorLocalState>(gstate.Cast<WindowConstantAggregatorGlobalState>());
 }
 
-void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &target,
-                                        idx_t count, idx_t row_idx) const {
+void WindowConstantAggregator::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
+                                        const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const {
+	auto &gasink = gsink.Cast<WindowConstantAggregatorGlobalState>();
+	const auto &partition_offsets = gasink.partition_offsets;
+	const auto &results = *gasink.results;
+
 	auto begins = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
 	//	Chunk up the constants and copy them one at a time
-	auto &lcstate = lstate.Cast<WindowConstantAggregatorState>();
+	auto &lcstate = lstate.Cast<WindowConstantAggregatorLocalState>();
 	idx_t matched = 0;
 	idx_t target_offset = 0;
 	for (idx_t i = 0; i < count; ++i) {
@@ -222,7 +402,7 @@ void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const Dat
 		while (partition_offsets[lcstate.partition + 1] <= begin) {
 			//	Flush the previous partition's data
 			if (matched) {
-				VectorOperations::Copy(*results, target, lcstate.matches, matched, 0, target_offset);
+				VectorOperations::Copy(results, result, lcstate.matches, matched, 0, target_offset);
 				target_offset += matched;
 				matched = 0;
 			}
@@ -234,16 +414,22 @@ void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const Dat
 
 	//	Flush the last partition
 	if (matched) {
-		VectorOperations::Copy(*results, target, lcstate.matches, matched, 0, target_offset);
+		// Optimize constant result
+		if (target_offset == 0 && matched == count) {
+			VectorOperations::Copy(results, result, lcstate.matches, 1, 0, target_offset);
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		} else {
+			VectorOperations::Copy(results, result, lcstate.matches, matched, 0, target_offset);
+		}
 	}
 }
 
 //===--------------------------------------------------------------------===//
 // WindowCustomAggregator
 //===--------------------------------------------------------------------===//
-WindowCustomAggregator::WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                               const WindowExcludeMode exclude_mode_p, idx_t count)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count) {
+WindowCustomAggregator::WindowCustomAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                               const LogicalType &result_type, const WindowExcludeMode exclude_mode)
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode) {
 }
 
 WindowCustomAggregator::~WindowCustomAggregator() {
@@ -282,6 +468,22 @@ static void InitSubFrames(SubFrames &frames, const WindowExcludeMode exclude_mod
 	frames.resize(nframes, {0, 0});
 }
 
+class WindowCustomAggregatorGlobalState : public WindowAggregatorGlobalState {
+public:
+	explicit WindowCustomAggregatorGlobalState(const WindowCustomAggregator &aggregator, idx_t group_count)
+	    : WindowAggregatorGlobalState(aggregator, group_count) {
+
+		gcstate = make_uniq<WindowCustomAggregatorState>(aggregator.aggr, aggregator.exclude_mode);
+	}
+
+	//! Traditional packed filter mask for API
+	ValidityMask filter_packed;
+	//! Data pointer that contains a single local state, used for global custom window execution state
+	unique_ptr<WindowCustomAggregatorState> gcstate;
+	//! Partition description for custom window APIs
+	unique_ptr<WindowPartitionInput> partition_input;
+};
+
 WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr,
                                                          const WindowExcludeMode exclude_mode)
     : aggr(aggr), state(aggr.function.state_size()), statef(Value::POINTER(CastPointerToValue(state.data()))),
@@ -299,21 +501,41 @@ WindowCustomAggregatorState::~WindowCustomAggregatorState() {
 	}
 }
 
-void WindowCustomAggregator::Finalize(const FrameStats &stats) {
-	WindowAggregator::Finalize(stats);
-	partition_input =
-	    make_uniq<WindowPartitionInput>(inputs.data.data(), inputs.ColumnCount(), inputs.size(), filter_mask, stats);
-
-	if (aggr.function.window_init) {
-		gstate = GetLocalState();
-		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
-
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
-		aggr.function.window_init(aggr_input_data, *partition_input, gcstate.state.data());
-	}
+unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetGlobalState(idx_t group_count,
+                                                                         const ValidityMask &) const {
+	return make_uniq<WindowCustomAggregatorGlobalState>(*this, group_count);
 }
 
-unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetLocalState() const {
+void WindowCustomAggregator::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate,
+                                      const FrameStats &stats) {
+	//	Single threaded Finalize for now
+	auto &gcsink = gsink.Cast<WindowCustomAggregatorGlobalState>();
+	lock_guard<mutex> gestate_guard(gcsink.lock);
+	if (gcsink.finalized) {
+		return;
+	}
+
+	WindowAggregator::Finalize(gsink, lstate, stats);
+
+	auto &inputs = gcsink.inputs;
+	auto &filter_mask = gcsink.filter_mask;
+	auto &filter_packed = gcsink.filter_packed;
+	filter_mask.Pack(filter_packed, filter_mask.target_count);
+
+	gcsink.partition_input =
+	    make_uniq<WindowPartitionInput>(inputs.data.data(), inputs.ColumnCount(), inputs.size(), filter_packed, stats);
+
+	if (aggr.function.window_init) {
+		auto &gcstate = *gcsink.gcstate;
+
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
+		aggr.function.window_init(aggr_input_data, *gcsink.partition_input, gcstate.state.data());
+	}
+
+	++gcsink.finalized;
+}
+
+unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
 	return make_uniq<WindowCustomAggregatorState>(aggr, exclude_mode);
 }
 
@@ -374,29 +596,30 @@ static void EvaluateSubFrames(const DataChunk &bounds, const WindowExcludeMode e
 	}
 }
 
-void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
-                                      idx_t count, idx_t row_idx) const {
+void WindowCustomAggregator::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
+                                      const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const {
 	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
 	auto &frames = lcstate.frames;
 	const_data_ptr_t gstate_p = nullptr;
-	if (gstate) {
-		auto &gcstate = gstate->Cast<WindowCustomAggregatorState>();
-		gstate_p = gcstate.state.data();
+	auto &gcsink = gsink.Cast<WindowCustomAggregatorGlobalState>();
+	if (gcsink.gcstate) {
+		gstate_p = gcsink.gcstate->state.data();
 	}
 
 	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lstate.allocator);
-		aggr.function.window(aggr_input_data, *partition_input, gstate_p, lcstate.state.data(), frames, result, i);
+		aggr.function.window(aggr_input_data, *gcsink.partition_input, gstate_p, lcstate.state.data(), frames, result,
+		                     i);
 	});
 }
 
 //===--------------------------------------------------------------------===//
 // WindowNaiveAggregator
 //===--------------------------------------------------------------------===//
-WindowNaiveAggregator::WindowNaiveAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                             const WindowExcludeMode exclude_mode_p, idx_t partition_count)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, partition_count) {
+WindowNaiveAggregator::WindowNaiveAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                             const LogicalType &result_type, const WindowExcludeMode exclude_mode)
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode) {
 }
 
 WindowNaiveAggregator::~WindowNaiveAggregator() {
@@ -405,44 +628,47 @@ WindowNaiveAggregator::~WindowNaiveAggregator() {
 class WindowNaiveState : public WindowAggregatorState {
 public:
 	struct HashRow {
-		explicit HashRow(WindowNaiveState &state) : state(state) {
+		HashRow(WindowNaiveState &state, const DataChunk &inputs) : state(state), inputs(inputs) {
 		}
 
 		size_t operator()(const idx_t &i) const {
-			return state.Hash(i);
+			return state.Hash(inputs, i);
 		}
 
 		WindowNaiveState &state;
+		const DataChunk &inputs;
 	};
 
 	struct EqualRow {
-		explicit EqualRow(WindowNaiveState &state) : state(state) {
+		EqualRow(WindowNaiveState &state, const DataChunk &inputs) : state(state), inputs(inputs) {
 		}
 
 		bool operator()(const idx_t &lhs, const idx_t &rhs) const {
-			return state.KeyEqual(lhs, rhs);
+			return state.KeyEqual(inputs, lhs, rhs);
 		}
 
 		WindowNaiveState &state;
+		const DataChunk &inputs;
 	};
 
 	using RowSet = std::unordered_set<idx_t, HashRow, EqualRow>;
 
-	explicit WindowNaiveState(const WindowNaiveAggregator &gstate);
+	explicit WindowNaiveState(const WindowNaiveAggregator &gsink);
 
-	void Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx);
+	void Evaluate(const WindowAggregatorGlobalState &gsink, const DataChunk &bounds, Vector &result, idx_t count,
+	              idx_t row_idx);
 
 protected:
 	//! Flush the accumulated intermediate states into the result states
-	void FlushStates();
+	void FlushStates(const WindowAggregatorGlobalState &gsink);
 
 	//! Hashes a value for the hash table
-	size_t Hash(idx_t rid);
+	size_t Hash(const DataChunk &inputs, idx_t rid);
 	//! Compares two values for the hash table
-	bool KeyEqual(const idx_t &lhs, const idx_t &rhs);
+	bool KeyEqual(const DataChunk &inputs, const idx_t &lhs, const idx_t &rhs);
 
 	//! The global state
-	const WindowNaiveAggregator &gstate;
+	const WindowNaiveAggregator &aggregator;
 	//! Data pointer that contains a vector of states, used for row aggregation
 	vector<data_t> state;
 	//! Reused result state container for the aggregate
@@ -459,21 +685,12 @@ protected:
 	SubFrames frames;
 	//! The optional hash table used for DISTINCT
 	Vector hashes;
-	HashRow hash_row;
-	EqualRow equal_row;
-	RowSet row_set;
 };
 
-WindowNaiveState::WindowNaiveState(const WindowNaiveAggregator &gstate)
-    : gstate(gstate), state(gstate.state_size * STANDARD_VECTOR_SIZE), statef(LogicalType::POINTER),
-      statep((LogicalType::POINTER)), flush_count(0), hashes(LogicalType::HASH), hash_row(*this), equal_row(*this),
-      row_set(STANDARD_VECTOR_SIZE, hash_row, equal_row) {
-	InitSubFrames(frames, gstate.exclude_mode);
-
-	auto &inputs = gstate.GetInputs();
-	if (inputs.ColumnCount() > 0) {
-		leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
-	}
+WindowNaiveState::WindowNaiveState(const WindowNaiveAggregator &aggregator_p)
+    : aggregator(aggregator_p), state(aggregator.state_size * STANDARD_VECTOR_SIZE), statef(LogicalType::POINTER),
+      statep((LogicalType::POINTER)), flush_count(0), hashes(LogicalType::HASH) {
+	InitSubFrames(frames, aggregator.exclude_mode);
 
 	update_sel.Initialize();
 
@@ -485,28 +702,26 @@ WindowNaiveState::WindowNaiveState(const WindowNaiveAggregator &gstate)
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
 		fdata[i] = state_ptr;
-		state_ptr += gstate.state_size;
+		state_ptr += aggregator.state_size;
 	}
 }
 
-void WindowNaiveState::FlushStates() {
+void WindowNaiveState::FlushStates(const WindowAggregatorGlobalState &gsink) {
 	if (!flush_count) {
 		return;
 	}
 
-	auto &inputs = gstate.GetInputs();
+	auto &inputs = gsink.inputs;
 	leaves.Slice(inputs, update_sel, flush_count);
 
-	auto &aggr = gstate.aggr;
+	auto &aggr = aggregator.aggr;
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), statep, flush_count);
 
 	flush_count = 0;
 }
 
-size_t WindowNaiveState::Hash(idx_t rid) {
-	auto &inputs = gstate.GetInputs();
-
+size_t WindowNaiveState::Hash(const DataChunk &inputs, idx_t rid) {
 	auto s = UnsafeNumericCast<sel_t>(rid);
 	SelectionVector sel(&s);
 	leaves.Slice(inputs, sel, 1);
@@ -515,9 +730,7 @@ size_t WindowNaiveState::Hash(idx_t rid) {
 	return *FlatVector::GetData<hash_t>(hashes);
 }
 
-bool WindowNaiveState::KeyEqual(const idx_t &lhs, const idx_t &rhs) {
-	auto &inputs = gstate.GetInputs();
-
+bool WindowNaiveState::KeyEqual(const DataChunk &inputs, const idx_t &lhs, const idx_t &rhs) {
 	auto l = UnsafeNumericCast<sel_t>(lhs);
 	SelectionVector lsel(&l);
 
@@ -538,14 +751,24 @@ bool WindowNaiveState::KeyEqual(const idx_t &lhs, const idx_t &rhs) {
 	return true;
 }
 
-void WindowNaiveState::Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
-	auto &aggr = gstate.aggr;
-	auto &filter_mask = gstate.GetFilterMask();
+void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const DataChunk &bounds, Vector &result,
+                                idx_t count, idx_t row_idx) {
+	auto &aggr = aggregator.aggr;
+	auto &filter_mask = gsink.filter_mask;
+	auto &inputs = gsink.inputs;
+
+	if (leaves.ColumnCount() == 0 && inputs.ColumnCount() > 0) {
+		leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
+	}
 
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
 
-	EvaluateSubFrames(bounds, gstate.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
+	HashRow hash_row(*this, inputs);
+	EqualRow equal_row(*this, inputs);
+	RowSet row_set(STANDARD_VECTOR_SIZE, hash_row, equal_row);
+
+	EvaluateSubFrames(bounds, aggregator.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
 		auto agg_state = fdata[rid];
 		aggr.function.initialize(agg_state);
 
@@ -565,14 +788,14 @@ void WindowNaiveState::Evaluate(const DataChunk &bounds, Vector &result, idx_t c
 				pdata[flush_count] = agg_state;
 				update_sel[flush_count++] = UnsafeNumericCast<sel_t>(f);
 				if (flush_count >= STANDARD_VECTOR_SIZE) {
-					FlushStates();
+					FlushStates(gsink);
 				}
 			}
 		}
 	});
 
 	//	Flush the final states
-	FlushStates();
+	FlushStates(gsink);
 
 	//	Finalise the result aggregates and write to the result
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
@@ -584,55 +807,47 @@ void WindowNaiveState::Evaluate(const DataChunk &bounds, Vector &result, idx_t c
 	}
 }
 
-unique_ptr<WindowAggregatorState> WindowNaiveAggregator::GetLocalState() const {
+unique_ptr<WindowAggregatorState> WindowNaiveAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
 	return make_uniq<WindowNaiveState>(*this);
 }
 
-void WindowNaiveAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
-                                     idx_t count, idx_t row_idx) const {
-	auto &ldstate = lstate.Cast<WindowNaiveState>();
-	ldstate.Evaluate(bounds, result, count, row_idx);
+void WindowNaiveAggregator::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
+                                     const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const {
+	const auto &gnstate = gsink.Cast<WindowAggregatorGlobalState>();
+	auto &lnstate = lstate.Cast<WindowNaiveState>();
+	lnstate.Evaluate(gnstate, bounds, result, count, row_idx);
 }
 
 //===--------------------------------------------------------------------===//
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
-WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,
-                                     const WindowExcludeMode exclude_mode_p, idx_t count)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), internal_nodes(0), mode(mode_p) {
-}
+class WindowSegmentTreeGlobalState : public WindowAggregatorGlobalState {
+public:
+	using AtomicCounters = vector<std::atomic<idx_t>>;
 
-void WindowSegmentTree::Finalize(const FrameStats &stats) {
-	WindowAggregator::Finalize(stats);
+	WindowSegmentTreeGlobalState(const WindowSegmentTree &aggregator, idx_t group_count);
 
-	gstate = GetLocalState();
-	if (inputs.ColumnCount() > 0) {
-		if (aggr.function.combine && UseCombineAPI()) {
-			ConstructTree();
-		}
-	}
-}
+	//! The owning aggregator
+	const WindowSegmentTree &tree;
+	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
+	WindowAggregateStates levels_flat_native;
+	//! For each level, the starting location in the levels_flat_native array
+	vector<idx_t> levels_flat_start;
+	//! The level being built (read)
+	std::atomic<idx_t> build_level;
+	//! The number of entries started so far at each level
+	unique_ptr<AtomicCounters> build_started;
+	//! The number of entries completed so far at each level
+	unique_ptr<AtomicCounters> build_completed;
 
-WindowSegmentTree::~WindowSegmentTree() {
-	if (!aggr.function.destructor || !gstate) {
-		// nothing to destroy
-		return;
-	}
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), gstate->allocator);
-	// call the destructor for all the intermediate states
-	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
-	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
-	idx_t count = 0;
-	for (idx_t i = 0; i < internal_nodes; i++) {
-		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * state_size);
-		if (count == STANDARD_VECTOR_SIZE) {
-			aggr.function.destructor(addresses, aggr_input_data, count);
-			count = 0;
-		}
-	}
-	if (count > 0) {
-		aggr.function.destructor(addresses, aggr_input_data, count);
-	}
+	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
+	static constexpr idx_t TREE_FANOUT = 16;
+};
+
+WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                     const LogicalType &result_type, WindowAggregationMode mode_p,
+                                     const WindowExcludeMode exclude_mode_p)
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), mode(mode_p) {
 }
 
 class WindowSegmentTreePart {
@@ -643,7 +858,7 @@ public:
 	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
 
 	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, const DataChunk &inputs,
-	                      const ValidityMask &filter_mask);
+	                      const ValidityArray &filter_mask);
 	~WindowSegmentTreePart();
 
 	unique_ptr<WindowSegmentTreePart> Copy() const {
@@ -652,23 +867,23 @@ public:
 
 	void FlushStates(bool combining);
 	void ExtractFrame(idx_t begin, idx_t end, data_ptr_t current_state);
-	void WindowSegmentValue(const WindowSegmentTree &tree, idx_t l_idx, idx_t begin, idx_t end,
+	void WindowSegmentValue(const WindowSegmentTreeGlobalState &tree, idx_t l_idx, idx_t begin, idx_t end,
 	                        data_ptr_t current_state);
 	//! Writes result and calls destructors
 	void Finalize(Vector &result, idx_t count);
 
 	void Combine(WindowSegmentTreePart &other, idx_t count);
 
-	void Evaluate(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends, Vector &result, idx_t count,
-	              idx_t row_idx, FramePart frame_part);
+	void Evaluate(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends, Vector &result,
+	              idx_t count, idx_t row_idx, FramePart frame_part);
 
 protected:
 	//! Initialises the accumulation state vector (statef)
 	void Initialize(idx_t count);
 	//! Accumulate upper tree levels
-	void EvaluateUpperLevels(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends, idx_t count,
-	                         idx_t row_idx, FramePart frame_part);
-	void EvaluateLeaves(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends, idx_t count,
+	void EvaluateUpperLevels(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
+	                         idx_t count, idx_t row_idx, FramePart frame_part);
+	void EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends, idx_t count,
 	                    idx_t row_idx, FramePart frame_part, FramePart leaf_part);
 
 public:
@@ -681,7 +896,7 @@ public:
 	//! The partition arguments
 	const DataChunk &inputs;
 	//! The filtered rows in inputs
-	const ValidityMask &filter_mask;
+	const ValidityArray &filter_mask;
 	//! The size of a single aggregate state
 	const idx_t state_size;
 	//! Data pointer that contains a vector of states, used for intermediate window segment aggregation
@@ -704,24 +919,36 @@ public:
 
 class WindowSegmentTreeState : public WindowAggregatorState {
 public:
-	WindowSegmentTreeState(const AggregateObject &aggr, const DataChunk &inputs, const ValidityMask &filter_mask)
-	    : aggr(aggr), inputs(inputs), filter_mask(filter_mask), part(allocator, aggr, inputs, filter_mask) {
+	WindowSegmentTreeState() {
 	}
 
-	//! The aggregate function
-	const AggregateObject &aggr;
-	//! The aggregate function
-	const DataChunk &inputs;
-	//! The filtered rows in inputs
-	const ValidityMask &filter_mask;
+	void Finalize(WindowSegmentTreeGlobalState &gstate);
+	void Evaluate(const WindowSegmentTreeGlobalState &gsink, const DataChunk &bounds, Vector &result, idx_t count,
+	              idx_t row_idx);
 	//! The left (default) segment tree part
-	WindowSegmentTreePart part;
+	unique_ptr<WindowSegmentTreePart> part;
 	//! The right segment tree part (for EXCLUDE)
 	unique_ptr<WindowSegmentTreePart> right_part;
 };
 
+void WindowSegmentTree::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate, const FrameStats &stats) {
+
+	auto &gasink = gsink.Cast<WindowSegmentTreeGlobalState>();
+	auto &inputs = gasink.inputs;
+
+	WindowAggregator::Finalize(gsink, lstate, stats);
+
+	if (inputs.ColumnCount() > 0) {
+		if (aggr.function.combine && UseCombineAPI()) {
+			lstate.Cast<WindowSegmentTreeState>().Finalize(gasink);
+		}
+	}
+
+	++gasink.finalized;
+}
+
 WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr,
-                                             const DataChunk &inputs, const ValidityMask &filter_mask)
+                                             const DataChunk &inputs, const ValidityArray &filter_mask)
     : allocator(allocator), aggr(aggr),
       order_insensitive(aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT), inputs(inputs),
       filter_mask(filter_mask), state_size(aggr.function.state_size()), state(state_size * STANDARD_VECTOR_SIZE),
@@ -746,8 +973,13 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
 WindowSegmentTreePart::~WindowSegmentTreePart() {
 }
 
-unique_ptr<WindowAggregatorState> WindowSegmentTree::GetLocalState() const {
-	return make_uniq<WindowSegmentTreeState>(aggr, inputs, filter_mask);
+unique_ptr<WindowAggregatorState> WindowSegmentTree::GetGlobalState(idx_t group_count,
+                                                                    const ValidityMask &partition_mask) const {
+	return make_uniq<WindowSegmentTreeGlobalState>(*this, group_count);
+}
+
+unique_ptr<WindowAggregatorState> WindowSegmentTree::GetLocalState(const WindowAggregatorState &gstate) const {
+	return make_uniq<WindowSegmentTreeState>();
 }
 
 void WindowSegmentTreePart::FlushStates(bool combining) {
@@ -800,8 +1032,8 @@ void WindowSegmentTreePart::ExtractFrame(idx_t begin, idx_t end, data_ptr_t stat
 	}
 }
 
-void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTree &tree, idx_t l_idx, idx_t begin, idx_t end,
-                                               data_ptr_t state_ptr) {
+void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalState &tree, idx_t l_idx, idx_t begin,
+                                               idx_t end, data_ptr_t state_ptr) {
 	D_ASSERT(begin <= end);
 	if (begin == end || inputs.ColumnCount() == 0) {
 		return;
@@ -812,9 +1044,9 @@ void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTree &tree, id
 		ExtractFrame(begin, end, state_ptr);
 	} else {
 		// find out where the states begin
-		auto begin_ptr = tree.levels_flat_native.get() + state_size * (begin + tree.levels_flat_start[l_idx - 1]);
+		auto begin_ptr = tree.levels_flat_native.GetStatePtr(begin + tree.levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
-		auto ldata = FlatVector::GetData<data_ptr_t>(statel);
+		auto ldata = FlatVector::GetData<const_data_ptr_t>(statel);
 		auto pdata = FlatVector::GetData<data_ptr_t>(statep);
 		for (idx_t i = 0; i < count; i++) {
 			pdata[flush_count] = state_ptr;
@@ -837,20 +1069,12 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	}
 }
 
-void WindowSegmentTree::ConstructTree() {
+WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(const WindowSegmentTree &aggregator, idx_t group_count)
+    : WindowAggregatorGlobalState(aggregator, group_count), tree(aggregator), levels_flat_native(aggregator.aggr) {
+
 	D_ASSERT(inputs.ColumnCount() > 0);
 
-	//	Use a temporary scan state to build the tree
-	auto &gtstate = gstate->Cast<WindowSegmentTreeState>().part;
-
 	// compute space required to store internal nodes of segment tree
-	internal_nodes = 0;
-	idx_t level_nodes = inputs.size();
-	do {
-		level_nodes = (level_nodes + (TREE_FANOUT - 1)) / TREE_FANOUT;
-		internal_nodes += level_nodes;
-	} while (level_nodes > 1);
-	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * state_size);
 	levels_flat_start.push_back(0);
 
 	idx_t levels_flat_offset = 0;
@@ -861,12 +1085,6 @@ void WindowSegmentTree::ConstructTree() {
 	while ((level_size =
 	            (level_current == 0 ? inputs.size() : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
-			// compute the aggregate for this entry in the segment tree
-			data_ptr_t state_ptr = levels_flat_native.get() + (levels_flat_offset * state_size);
-			aggr.function.initialize(state_ptr);
-			gtstate.WindowSegmentValue(*this, level_current, pos, MinValue(level_size, pos + TREE_FANOUT), state_ptr);
-			gtstate.FlushStates(level_current > 0);
-
 			levels_flat_offset++;
 		}
 
@@ -876,46 +1094,120 @@ void WindowSegmentTree::ConstructTree() {
 
 	// Corner case: single element in the window
 	if (levels_flat_offset == 0) {
-		aggr.function.initialize(levels_flat_native.get());
+		++levels_flat_offset;
+	}
+
+	levels_flat_native.Initialize(levels_flat_offset);
+
+	// Start by building from the bottom level
+	build_level = 0;
+
+	build_started = make_uniq<AtomicCounters>(levels_flat_start.size());
+	for (auto &counter : *build_started) {
+		counter = 0;
+	}
+
+	build_completed = make_uniq<AtomicCounters>(levels_flat_start.size());
+	for (auto &counter : *build_completed) {
+		counter = 0;
 	}
 }
 
-void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
-                                 idx_t row_idx) const {
+void WindowSegmentTreeState::Finalize(WindowSegmentTreeGlobalState &gstate) {
+	//	Single part for constructing the tree
+	auto &inputs = gstate.inputs;
+	auto &tree = gstate.tree;
+	auto &filter_mask = gstate.filter_mask;
+	WindowSegmentTreePart gtstate(allocator, tree.aggr, inputs, filter_mask);
 
+	auto &levels_flat_native = gstate.levels_flat_native;
+	const auto &levels_flat_start = gstate.levels_flat_start;
+	// iterate over the levels of the segment tree
+	for (;;) {
+		const idx_t level_current = gstate.build_level.load();
+		if (level_current >= levels_flat_start.size()) {
+			break;
+		}
+
+		// level 0 is data itself
+		const auto level_size =
+		    (level_current == 0 ? inputs.size()
+		                        : levels_flat_start[level_current] - levels_flat_start[level_current - 1]);
+		if (level_size <= 1) {
+			break;
+		}
+		const idx_t build_count = (level_size + gstate.TREE_FANOUT - 1) / gstate.TREE_FANOUT;
+
+		// Build the next fan-in
+		const idx_t build_idx = (*gstate.build_started).at(level_current)++;
+		if (build_idx >= build_count) {
+			//	Nothing left at this level, so wait until other threads are done.
+			//	Since we are only building TREE_FANOUT values at a time, this will be quick.
+			while (level_current == gstate.build_level.load()) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+			continue;
+		}
+
+		// compute the aggregate for this entry in the segment tree
+		const idx_t pos = build_idx * gstate.TREE_FANOUT;
+		const idx_t levels_flat_offset = levels_flat_start[level_current] + build_idx;
+		auto state_ptr = levels_flat_native.GetStatePtr(levels_flat_offset);
+		gtstate.WindowSegmentValue(gstate, level_current, pos, MinValue(level_size, pos + gstate.TREE_FANOUT),
+		                           state_ptr);
+		gtstate.FlushStates(level_current > 0);
+
+		//	If that was the last one, mark the level as complete.
+		const idx_t build_complete = ++(*gstate.build_completed).at(level_current);
+		if (build_complete == build_count) {
+			gstate.build_level++;
+			continue;
+		}
+	}
+}
+
+void WindowSegmentTree::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
+                                 const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const {
+	const auto &gtstate = gsink.Cast<WindowSegmentTreeGlobalState>();
 	auto &ltstate = lstate.Cast<WindowSegmentTreeState>();
+	ltstate.Evaluate(gtstate, bounds, result, count, row_idx);
+}
+
+void WindowSegmentTreeState::Evaluate(const WindowSegmentTreeGlobalState &gtstate, const DataChunk &bounds,
+                                      Vector &result, idx_t count, idx_t row_idx) {
 	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 
-	auto &part = ltstate.part;
-	if (exclude_mode != WindowExcludeMode::NO_OTHER) {
-		// 1. evaluate the tree left of the excluded part
-		part.Evaluate(*this, window_begin, peer_begin, result, count, row_idx, WindowSegmentTreePart::LEFT);
-
-		// 2. set up a second state for the right of the excluded part
-		if (!ltstate.right_part) {
-			ltstate.right_part = part.Copy();
-		}
-		auto &right_part = *ltstate.right_part;
-
-		// 3. evaluate the tree right of the excluded part
-		right_part.Evaluate(*this, peer_end, window_end, result, count, row_idx, WindowSegmentTreePart::RIGHT);
-
-		// 4. combine the buffer state into the Segment Tree State
-		part.Combine(right_part, count);
-	} else {
-		part.Evaluate(*this, window_begin, window_end, result, count, row_idx, WindowSegmentTreePart::FULL);
+	if (!part) {
+		part =
+		    make_uniq<WindowSegmentTreePart>(allocator, gtstate.aggregator.aggr, gtstate.inputs, gtstate.filter_mask);
 	}
 
-	part.Finalize(result, count);
+	if (gtstate.aggregator.exclude_mode != WindowExcludeMode::NO_OTHER) {
+		// 1. evaluate the tree left of the excluded part
+		part->Evaluate(gtstate, window_begin, peer_begin, result, count, row_idx, WindowSegmentTreePart::LEFT);
+
+		// 2. set up a second state for the right of the excluded part
+		if (!right_part) {
+			right_part = part->Copy();
+		}
+
+		// 3. evaluate the tree right of the excluded part
+		right_part->Evaluate(gtstate, peer_end, window_end, result, count, row_idx, WindowSegmentTreePart::RIGHT);
+
+		// 4. combine the buffer state into the Segment Tree State
+		part->Combine(*right_part, count);
+	} else {
+		part->Evaluate(gtstate, window_begin, window_end, result, count, row_idx, WindowSegmentTreePart::FULL);
+	}
+
+	part->Finalize(result, count);
 }
 
-void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
+void WindowSegmentTreePart::Evaluate(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
                                      Vector &result, idx_t count, idx_t row_idx, FramePart frame_part) {
-	D_ASSERT(aggr.function.combine && tree.UseCombineAPI());
-
 	Initialize(count);
 
 	if (order_insensitive) {
@@ -940,11 +1232,11 @@ void WindowSegmentTreePart::Initialize(idx_t count) {
 	}
 }
 
-void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
-                                                idx_t count, idx_t row_idx, FramePart frame_part) {
+void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTreeGlobalState &tree, const idx_t *begins,
+                                                const idx_t *ends, idx_t count, idx_t row_idx, FramePart frame_part) {
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 
-	const auto exclude_mode = tree.exclude_mode;
+	const auto exclude_mode = tree.tree.exclude_mode;
 	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 
@@ -1034,8 +1326,9 @@ void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTree &tree, c
 	FlushStates(true);
 }
 
-void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
-                                           idx_t count, idx_t row_idx, FramePart frame_part, FramePart leaf_part) {
+void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins,
+                                           const idx_t *ends, idx_t count, idx_t row_idx, FramePart frame_part,
+                                           FramePart leaf_part) {
 
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 
@@ -1044,7 +1337,7 @@ void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTree &tree, const 
 	// The current row is the leftmost value of the right hand side.
 	const bool compute_left = leaf_part != FramePart::RIGHT;
 	const bool compute_right = leaf_part != FramePart::LEFT;
-	const auto exclude_mode = tree.exclude_mode;
+	const auto exclude_mode = tree.tree.exclude_mode;
 	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	// with EXCLUDE TIES, in addition to the frame part right of the peer group's end, we also need to consider the
@@ -1087,17 +1380,54 @@ void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTree &tree, const 
 //===--------------------------------------------------------------------===//
 // WindowDistinctAggregator
 //===--------------------------------------------------------------------===//
-WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                                   const WindowExcludeMode exclude_mode_p, idx_t count,
-                                                   ClientContext &context)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), context(context),
-      allocator(Allocator::DefaultAllocator()) {
+WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                                   const LogicalType &result_type,
+                                                   const WindowExcludeMode exclude_mode_p, ClientContext &context)
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), context(context) {
+}
 
+class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
+public:
+	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+	class DistinctSortTree;
+
+	WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator, idx_t group_count);
+	~WindowDistinctAggregatorGlobalState() override;
+
+	void Sink(DataChunk &arg_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	void Finalize(const FrameStats &stats);
+
+	//	Single threaded sorting for now
+	ClientContext &context;
+	GlobalSortStatePtr global_sort;
+	LocalSortState local_sort;
+	idx_t memory_per_thread;
+
+	vector<LogicalType> payload_types;
+	DataChunk sort_chunk;
+	DataChunk payload_chunk;
+
+	//! The merge sort tree for the aggregate.
+	unique_ptr<DistinctSortTree> merge_sort_tree;
+
+	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
+	unsafe_unique_array<data_t> levels_flat_native;
+	//! For each level, the starting location in the levels_flat_native array
+	vector<idx_t> levels_flat_start;
+
+	//! The total number of internal nodes of the tree, stored in levels_flat_native
+	idx_t internal_nodes;
+};
+
+WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator_p,
+                                                                         idx_t group_count)
+    : WindowAggregatorGlobalState(aggregator_p, group_count), context(aggregator_p.context) {
 	payload_types.emplace_back(LogicalType::UBIGINT);
 	payload_chunk.Initialize(Allocator::DefaultAllocator(), payload_types);
 }
 
-WindowDistinctAggregator::~WindowDistinctAggregator() {
+WindowDistinctAggregatorGlobalState::~WindowDistinctAggregatorGlobalState() {
+	const auto &aggr = aggregator.aggr;
 	if (!aggr.function.destructor) {
 		// nothing to destroy
 		return;
@@ -1108,7 +1438,7 @@ WindowDistinctAggregator::~WindowDistinctAggregator() {
 	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
 	idx_t count = 0;
 	for (idx_t i = 0; i < internal_nodes; i++) {
-		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * state_size);
+		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * aggregator.state_size);
 		if (count == STANDARD_VECTOR_SIZE) {
 			aggr.function.destructor(addresses, aggr_input_data, count);
 			count = 0;
@@ -1119,8 +1449,23 @@ WindowDistinctAggregator::~WindowDistinctAggregator() {
 	}
 }
 
-void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered) {
-	WindowAggregator::Sink(arg_chunk, filter_sel, filtered);
+unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetGlobalState(idx_t group_count,
+                                                                           const ValidityMask &partition_mask) const {
+	return make_uniq<WindowDistinctAggregatorGlobalState>(*this, group_count);
+}
+
+void WindowDistinctAggregator::Sink(WindowAggregatorState &gsink, WindowAggregatorState &lstate, DataChunk &arg_chunk,
+                                    idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+	WindowAggregator::Sink(gsink, lstate, arg_chunk, input_idx, filter_sel, filtered);
+
+	auto &gdstate = gsink.Cast<WindowDistinctAggregatorGlobalState>();
+	gdstate.Sink(arg_chunk, input_idx, filter_sel, filtered);
+}
+
+void WindowDistinctAggregatorGlobalState::Sink(DataChunk &arg_chunk, idx_t input_idx,
+                                               optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+	//	Single threaded for now
+	lock_guard<mutex> sink_guard(lock);
 
 	//	We sort the arguments and use the partition index as a tie-breaker.
 	//	TODO: Use a hash table?
@@ -1150,7 +1495,6 @@ void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filte
 
 		sort_chunk.Initialize(Allocator::DefaultAllocator(), sort_types);
 		sort_chunk.data.back().Reference(payload_chunk.data[0]);
-		payload_pos = 0;
 		memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
 	}
 
@@ -1160,8 +1504,7 @@ void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filte
 	payload_chunk.Reset();
 	auto &sorted_vec = payload_chunk.data[0];
 	auto sorted = FlatVector::GetData<idx_t>(sorted_vec);
-	std::iota(sorted, sorted + count, payload_pos);
-	payload_pos += count;
+	std::iota(sorted, sorted + count, input_idx);
 
 	for (column_t c = 0; c < arg_chunk.ColumnCount(); ++c) {
 		sort_chunk.data[c].Reference(arg_chunk.data[c]);
@@ -1183,16 +1526,31 @@ void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filte
 	}
 }
 
-class WindowDistinctAggregator::DistinctSortTree : public MergeSortTree<idx_t, idx_t> {
+void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate,
+                                        const FrameStats &stats) {
+	auto &gdsink = gsink.Cast<WindowDistinctAggregatorGlobalState>();
+
+	//	Single threaded Finalize for now
+	lock_guard<mutex> gestate_guard(gdsink.lock);
+	if (gdsink.finalized) {
+		return;
+	}
+
+	gdsink.Finalize(stats);
+
+	++gdsink.finalized;
+}
+
+class WindowDistinctAggregatorGlobalState::DistinctSortTree : public MergeSortTree<idx_t, idx_t> {
 public:
 	// prev_idx, input_idx
 	using ZippedTuple = std::tuple<idx_t, idx_t>;
 	using ZippedElements = vector<ZippedTuple>;
 
-	DistinctSortTree(ZippedElements &&prev_idcs, WindowDistinctAggregator &wda);
+	DistinctSortTree(ZippedElements &&prev_idcs, WindowDistinctAggregatorGlobalState &gdsink);
 };
 
-void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
+void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
 	//	5: Sort sorted lexicographically increasing
 	global_sort->AddLocalState(local_sort);
 	global_sort->PrepareMergePhase();
@@ -1270,19 +1628,19 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 	merge_sort_tree = make_uniq<DistinctSortTree>(std::move(prev_idcs), *this);
 }
 
-WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(ZippedElements &&prev_idcs,
-                                                             WindowDistinctAggregator &wda) {
-	auto &inputs = wda.inputs;
-	auto &aggr = wda.aggr;
-	auto &allocator = wda.allocator;
-	const auto state_size = wda.state_size;
-	auto &internal_nodes = wda.internal_nodes;
-	auto &levels_flat_native = wda.levels_flat_native;
-	auto &levels_flat_start = wda.levels_flat_start;
+WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedElements &&prev_idcs,
+                                                                        WindowDistinctAggregatorGlobalState &gdsink) {
+	auto &aggr = gdsink.aggregator.aggr;
+	auto &allocator = gdsink.allocator;
+	auto &inputs = gdsink.inputs;
+	const auto state_size = gdsink.aggregator.state_size;
+	auto &internal_nodes = gdsink.internal_nodes;
+	auto &levels_flat_native = gdsink.levels_flat_native;
+	auto &levels_flat_start = gdsink.levels_flat_start;
 
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
-	leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
+	leaves.Initialize(Allocator::DefaultAllocator(), gdsink.inputs.GetTypes());
 	SelectionVector sel;
 	sel.Initialize();
 
@@ -1306,7 +1664,7 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(ZippedElements &&pr
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		internal_nodes += zipped_tree.tree[level_nr].first.size();
 	}
-	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * state_size);
+	levels_flat_native = make_unsafe_uniq_array_uninitialized<data_t>(internal_nodes * state_size);
 	levels_flat_start.push_back(0);
 	idx_t levels_flat_offset = 0;
 
@@ -1382,20 +1740,17 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(ZippedElements &&pr
 
 class WindowDistinctState : public WindowAggregatorState {
 public:
-	WindowDistinctState(const AggregateObject &aggr, const DataChunk &inputs, const WindowDistinctAggregator &tree);
+	explicit WindowDistinctState(const WindowDistinctAggregator &aggregator);
 
-	void Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx);
+	void Evaluate(const WindowDistinctAggregatorGlobalState &gdstate, const DataChunk &bounds, Vector &result,
+	              idx_t count, idx_t row_idx);
 
 protected:
 	//! Flush the accumulated intermediate states into the result states
 	void FlushStates();
 
-	//! The aggregate function
-	const AggregateObject &aggr;
-	//! The aggregate function
-	const DataChunk &inputs;
-	//! The merge sort tree data
-	const WindowDistinctAggregator &tree;
+	//! The aggregator we are working with
+	const WindowDistinctAggregator &aggregator;
 	//! The size of a single aggregate state
 	const idx_t state_size;
 	//! Data pointer that contains a vector of states, used for row aggregation
@@ -1412,12 +1767,10 @@ protected:
 	SubFrames frames;
 };
 
-WindowDistinctState::WindowDistinctState(const AggregateObject &aggr, const DataChunk &inputs,
-                                         const WindowDistinctAggregator &tree)
-    : aggr(aggr), inputs(inputs), tree(tree), state_size(aggr.function.state_size()),
-      state((state_size * STANDARD_VECTOR_SIZE)), statef(LogicalType::POINTER), statep(LogicalType::POINTER),
-      statel(LogicalType::POINTER), flush_count(0) {
-	InitSubFrames(frames, tree.exclude_mode);
+WindowDistinctState::WindowDistinctState(const WindowDistinctAggregator &aggregator)
+    : aggregator(aggregator), state_size(aggregator.state_size), state((aggregator.state_size * STANDARD_VECTOR_SIZE)),
+      statef(LogicalType::POINTER), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
+	InitSubFrames(frames, aggregator.exclude_mode);
 
 	//	Build the finalise vector that just points to the result states
 	data_ptr_t state_ptr = state.data();
@@ -1436,6 +1789,7 @@ void WindowDistinctState::FlushStates() {
 		return;
 	}
 
+	const auto &aggr = aggregator.aggr;
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	statel.Verify(flush_count);
 	aggr.function.combine(statel, statep, aggr_input_data, flush_count);
@@ -1443,15 +1797,18 @@ void WindowDistinctState::FlushStates() {
 	flush_count = 0;
 }
 
-void WindowDistinctState::Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
+void WindowDistinctState::Evaluate(const WindowDistinctAggregatorGlobalState &gdstate, const DataChunk &bounds,
+                                   Vector &result, idx_t count, idx_t row_idx) {
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 	auto ldata = FlatVector::GetData<data_ptr_t>(statel);
 	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
 
-	const auto &merge_sort_tree = *tree.merge_sort_tree;
-	const auto running_aggs = tree.levels_flat_native.get();
+	const auto &merge_sort_tree = *gdstate.merge_sort_tree;
+	const auto running_aggs = gdstate.levels_flat_native.get();
+	const auto exclude_mode = gdstate.aggregator.exclude_mode;
+	const auto &aggr = gdstate.aggregator.aggr;
 
-	EvaluateSubFrames(bounds, tree.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
+	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t rid) {
 		auto agg_state = fdata[rid];
 		aggr.function.initialize(agg_state);
 
@@ -1463,7 +1820,7 @@ void WindowDistinctState::Evaluate(const DataChunk &bounds, Vector &result, idx_
 			                                    if (run_pos != run_begin) {
 				                                    //	Find the source aggregate
 				                                    // Buffer a merge of the indicated state into the current state
-				                                    const auto agg_idx = tree.levels_flat_start[level] + run_pos - 1;
+				                                    const auto agg_idx = gdstate.levels_flat_start[level] + run_pos - 1;
 				                                    const auto running_agg = running_aggs + agg_idx * state_size;
 				                                    pdata[flush_count] = agg_state;
 				                                    ldata[flush_count++] = running_agg;
@@ -1487,14 +1844,16 @@ void WindowDistinctState::Evaluate(const DataChunk &bounds, Vector &result, idx_
 	}
 }
 
-unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetLocalState() const {
-	return make_uniq<WindowDistinctState>(aggr, inputs, *this);
+unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetLocalState(const WindowAggregatorState &gstate) const {
+	return make_uniq<WindowDistinctState>(*this);
 }
 
-void WindowDistinctAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
-                                        idx_t count, idx_t row_idx) const {
+void WindowDistinctAggregator::Evaluate(const WindowAggregatorState &gsink, WindowAggregatorState &lstate,
+                                        const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) const {
+
+	const auto &gdstate = gsink.Cast<WindowDistinctAggregatorGlobalState>();
 	auto &ldstate = lstate.Cast<WindowDistinctState>();
-	ldstate.Evaluate(bounds, result, count, row_idx);
+	ldstate.Evaluate(gdstate, bounds, result, count, row_idx);
 }
 
 } // namespace duckdb

@@ -64,7 +64,7 @@ Development is managed through [the main DuckDB repository](https://github.com/d
   ```
   3. Generate the Unified Build files for the package:
   ```shell
-  python3 tools/swift/create-package.py tools/swift
+  python3 tools/swift/create_package.py tools/swift
   ```
   4. Open the Xcode workspace at `tools/swift/duckdb-swift/DuckDB.xcworkspace`
 

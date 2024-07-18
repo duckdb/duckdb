@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/types.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -25,6 +25,9 @@ struct MultiFileReaderOptions {
 	bool hive_types_autocast = true;
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
+	// Default/configurable name of the column containing the file names
+	static constexpr const char *DEFAULT_FILENAME_COLUMN = "filename";
+	string filename_column = DEFAULT_FILENAME_COLUMN;
 	// These are used to pass options through custom multifilereaders
 	case_insensitive_map_t<Value> custom_options;
 
@@ -37,6 +40,7 @@ struct MultiFileReaderOptions {
 	DUCKDB_API void VerifyHiveTypesArePartitions(const std::map<string, string> &partitions) const;
 	DUCKDB_API LogicalType GetHiveLogicalType(const string &hive_partition_column) const;
 	DUCKDB_API Value GetHivePartitionValue(const string &base, const string &entry, ClientContext &context) const;
+	DUCKDB_API bool AnySet();
 };
 
 } // namespace duckdb

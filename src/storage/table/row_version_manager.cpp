@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-RowVersionManager::RowVersionManager(idx_t start) : start(start), has_changes(false) {
+RowVersionManager::RowVersionManager(idx_t start) noexcept : start(start), has_changes(false) {
 }
 
 void RowVersionManager::SetStart(idx_t new_start) {

@@ -35,11 +35,11 @@ SELECT MAX(count) FROM pragma_storage_info('test')
 ----
 122880
 
-# the median is different for different block sizes because the upper bound of the segment size is the block size
+# The median differs between block sizes because the upper bound of the segment size is the block size.
 require block_size 262144
 
 query I
-SELECT MEDIAN(count)>100000 FROM pragma_storage_info('test')
+SELECT MEDIAN(count) > 100000 FROM pragma_storage_info('test')
 ----
 true
 

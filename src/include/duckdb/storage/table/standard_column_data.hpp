@@ -24,9 +24,9 @@ public:
 
 public:
 	void SetStart(idx_t new_start) override;
-	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count) override;
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 

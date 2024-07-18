@@ -77,6 +77,14 @@ bool Hugeint::TryNegate(hugeint_t input, hugeint_t &result) {
 	return true;
 }
 
+hugeint_t Hugeint::Abs(hugeint_t n) {
+	if (n < 0) {
+		return Hugeint::Negate(n);
+	} else {
+		return n;
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Divide
 //===--------------------------------------------------------------------===//
@@ -646,7 +654,7 @@ bool CastBigintToFloating(hugeint_t input, REAL_T &result) {
 		result = -REAL_T(NumericLimits<uint64_t>::Maximum() - input.lower) - 1;
 		break;
 	default:
-		result = REAL_T(input.lower) + REAL_T(input.upper) * REAL_T(NumericLimits<uint64_t>::Maximum());
+		result = REAL_T(input.lower) + REAL_T(input.upper) * (REAL_T(NumericLimits<uint64_t>::Maximum()) + 1);
 		break;
 	}
 	return true;

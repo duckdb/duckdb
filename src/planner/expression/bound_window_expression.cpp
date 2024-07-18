@@ -120,7 +120,7 @@ bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other
 	return true;
 }
 
-unique_ptr<Expression> BoundWindowExpression::Copy() {
+unique_ptr<Expression> BoundWindowExpression::Copy() const {
 	auto new_window = make_uniq<BoundWindowExpression>(type, return_type, nullptr, nullptr);
 	new_window->CopyProperties(*this);
 

@@ -89,8 +89,8 @@ void CSVReaderOptions::SetEscape(const string &input) {
 	this->dialect_options.state_machine_options.escape.Set(escape_str[0]);
 }
 
-int64_t CSVReaderOptions::GetSkipRows() const {
-	return NumericCast<int64_t>(this->dialect_options.skip_rows.GetValue());
+idx_t CSVReaderOptions::GetSkipRows() const {
+	return NumericCast<idx_t>(this->dialect_options.skip_rows.GetValue());
 }
 
 void CSVReaderOptions::SetSkipRows(int64_t skip_rows) {
@@ -365,7 +365,7 @@ bool CSVReaderOptions::WasTypeManuallySet(idx_t i) const {
 	return was_type_manually_set[i];
 }
 
-string CSVReaderOptions::ToString() const {
+string CSVReaderOptions::ToString(const string &current_file_path) const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
@@ -373,7 +373,7 @@ string CSVReaderOptions::ToString() const {
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
-	string error = "  file=" + file_path + "\n  ";
+	string error = "  file=" + current_file_path + "\n  ";
 	// Let's first print options that can either be set by the user or by the sniffer
 	// delimiter
 	error += FormatOptionLine("delimiter", delimiter);
@@ -444,8 +444,7 @@ bool StoreUserDefinedParameter(string &option) {
 	}
 	return true;
 }
-void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientContext &context,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
+void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientContext &context) {
 	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
 		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
@@ -457,6 +456,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 			ordered_user_defined_parameters[loption] = kv.second.ToSQLString();
 		}
 		if (loption == "columns") {
+			columns_set = true;
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a struct as input");
@@ -466,13 +466,14 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 			for (idx_t i = 0; i < struct_children.size(); i++) {
 				auto &name = StructType::GetChildName(child_type, i);
 				auto &val = struct_children[i];
-				names.push_back(name);
+				name_list.push_back(name);
 				if (val.type().id() != LogicalTypeId::VARCHAR) {
 					throw BinderException("read_csv requires a type specification as string");
 				}
-				return_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
+				sql_types_per_column[name] = i;
+				sql_type_list.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
 			}
-			if (names.empty()) {
+			if (name_list.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
 		} else if (loption == "auto_type_candidates") {
@@ -557,7 +558,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 		} else if (loption == "normalize_names") {
 			normalize_names = BooleanValue::Get(kv.second);
 		} else {
-			SetReadOption(loption, kv.second, names);
+			SetReadOption(loption, kv.second, name_list);
 		}
 	}
 	for (auto &udf_parameter : ordered_user_defined_parameters) {
@@ -591,7 +592,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	}
 	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size));
 	if (dialect_options.skip_rows.IsSetByUser()) {
-		named_params["skip"] = Value::BIGINT(GetSkipRows());
+		named_params["skip"] = Value::UBIGINT(GetSkipRows());
 	}
 	named_params["null_padding"] = Value::BOOLEAN(null_padding);
 	named_params["parallel"] = Value::BOOLEAN(parallel);

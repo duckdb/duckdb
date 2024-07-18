@@ -81,6 +81,7 @@ bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality
 	}
 	auto &client = executor.context;
 	current_percentage = source->GetProgress(client, *source_state);
+	current_percentage = sink->GetSinkProgress(client, *sink->sink_state, current_percentage);
 	return current_percentage >= 0;
 }
 
@@ -189,6 +190,19 @@ void Pipeline::ResetSink() {
 		if (!sink->sink_state) {
 			sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
 		}
+	}
+}
+
+void Pipeline::PrepareFinalize() {
+	if (sink) {
+		if (!sink->IsSink()) {
+			throw InternalException("Sink of pipeline does not have IsSink set");
+		}
+		lock_guard<mutex> guard(sink->lock);
+		if (!sink->sink_state) {
+			throw InternalException("Sink of pipeline does not have sink state");
+		}
+		sink->PrepareFinalize(GetClientContext(), *sink->sink_state);
 	}
 }
 

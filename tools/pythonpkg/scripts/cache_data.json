@@ -502,7 +502,8 @@
         "name": "types",
         "children": [
             "types.UnionType",
-            "types.GenericAlias"
+            "types.GenericAlias",
+            "types.BuiltinFunctionType"
         ]
     },
     "types.UnionType": {
@@ -515,6 +516,12 @@
         "type": "attribute",
         "full_path": "types.GenericAlias",
         "name": "GenericAlias",
+        "children": []
+    },
+    "types.BuiltinFunctionType": {
+        "type": "attribute",
+        "full_path": "types.BuiltinFunctionType",
+        "name": "BuiltinFunctionType",
         "children": []
     },
     "typing": {
@@ -543,6 +550,35 @@
         "type": "attribute",
         "full_path": "uuid.UUID",
         "name": "UUID",
+        "children": []
+    },
+    "collections": {
+        "type": "module",
+        "full_path": "collections",
+        "name": "collections",
+        "children": [
+            "collections.abc"
+        ]
+    },
+    "collections.abc": {
+        "type": "module",
+        "full_path": "collections.abc",
+        "name": "abc",
+        "children": [
+            "collections.abc.Iterable",
+            "collections.abc.Mapping"
+        ]
+    },
+    "collections.abc.Iterable": {
+        "type": "attribute",
+        "full_path": "collections.abc.Iterable",
+        "name": "Iterable",
+        "children": []
+    },
+    "collections.abc.Mapping": {
+        "type": "attribute",
+        "full_path": "collections.abc.Mapping",
+        "name": "Mapping",
         "children": []
     }
 }

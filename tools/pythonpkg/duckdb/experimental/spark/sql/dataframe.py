@@ -10,6 +10,7 @@ from typing import (
     cast,
     overload,
 )
+import uuid
 
 import duckdb
 from duckdb import ColumnExpression, Expression, StarExpression
@@ -731,8 +732,11 @@ class DataFrame:
         """
         from .group import GroupedData, Grouping
 
-        groups = Grouping(*cols)
-        return GroupedData(groups, self)
+        if len(cols) == 1 and isinstance(cols[0], list):
+            columns = cols[0]
+        else:
+            columns = cols
+        return GroupedData(Grouping(*columns), self)
 
     @property
     def write(self) -> DataFrameWriter:
@@ -903,8 +907,14 @@ class DataFrame:
         +-----+---+------+
         """
         if subset:
-            raise ContributionsAcceptedError
+            rn_col = f"tmp_col_{uuid.uuid1().hex}"
+            subset_str = ', '.join([f'"{c}"' for c in subset])
+            window_spec = f"OVER(PARTITION BY {subset_str}) AS {rn_col}"
+            df = DataFrame(self.relation.row_number(window_spec, "*"), self.session)
+            return df.filter(f"{rn_col} = 1").drop(rn_col)
+
         return self.distinct()
+
 
     def distinct(self) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing the distinct rows in this :class:`DataFrame`.

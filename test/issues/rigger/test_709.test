@@ -20,7 +20,7 @@ insert into t1 values (42, true);
 statement error
 SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::INT1))))AND((false BETWEEN '[' AND t1.c0))) UNION SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (NOT (((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::INT1))))AND((false BETWEEN '[' AND t1.c0)))) UNION SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (((((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::TINYINT))))AND((false BETWEEN '[' AND t1.c0)))) IS NULL);
 ----
-
+<REGEX>:Binder Error.*Cannot mix values.*
 
 query ITR
 SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::INT1))))AND((false::VARCHAR BETWEEN '[' AND t1.c0::VARCHAR))) UNION SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (NOT (((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::INT1))))AND((false::VARCHAR BETWEEN '[' AND t1.c0::VARCHAR)))) UNION SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (((((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::TINYINT))))AND((false::VARCHAR BETWEEN '[' AND t1.c0::VARCHAR)))) IS NULL);

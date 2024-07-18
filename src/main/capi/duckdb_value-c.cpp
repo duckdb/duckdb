@@ -1,6 +1,7 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 static duckdb_value WrapValue(duckdb::Value *list_value) {
 	return reinterpret_cast<duckdb_value>(list_value);
@@ -57,12 +58,16 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	if (!type || !values) {
 		return nullptr;
 	}
-	const auto &ltype = UnwrapType(type);
-	if (ltype.id() != duckdb::LogicalTypeId::STRUCT) {
+	const auto &logical_type = UnwrapType(type);
+	if (logical_type.id() != duckdb::LogicalTypeId::STRUCT) {
 		return nullptr;
 	}
-	auto count = duckdb::StructType::GetChildCount(ltype);
+	if (duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::ANY)) {
+		return nullptr;
+	}
 
+	auto count = duckdb::StructType::GetChildCount(logical_type);
 	duckdb::vector<duckdb::Value> unwrapped_values;
 	for (idx_t i = 0; i < count; i++) {
 		auto value = values[i];
@@ -73,19 +78,24 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	}
 	duckdb::Value *struct_value = new duckdb::Value;
 	try {
-		*struct_value = duckdb::Value::STRUCT(ltype, std::move(unwrapped_values));
+		*struct_value = duckdb::Value::STRUCT(logical_type, std::move(unwrapped_values));
 	} catch (...) {
 		delete struct_value;
 		return nullptr;
 	}
 	return WrapValue(struct_value);
 }
+
 duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count) {
 	if (!type || !values) {
 		return nullptr;
 	}
-	auto &ltype = UnwrapType(type);
+	auto &logical_type = UnwrapType(type);
 	duckdb::vector<duckdb::Value> unwrapped_values;
+	if (duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::ANY)) {
+		return nullptr;
+	}
 
 	for (idx_t i = 0; i < value_count; i++) {
 		auto value = values[i];
@@ -96,7 +106,7 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 	}
 	duckdb::Value *list_value = new duckdb::Value;
 	try {
-		*list_value = duckdb::Value::LIST(ltype, std::move(unwrapped_values));
+		*list_value = duckdb::Value::LIST(logical_type, std::move(unwrapped_values));
 	} catch (...) {
 		delete list_value;
 		return nullptr;
@@ -111,7 +121,11 @@ duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *v
 	if (value_count >= duckdb::ArrayType::MAX_ARRAY_SIZE) {
 		return nullptr;
 	}
-	auto &ltype = UnwrapType(type);
+	auto &logical_type = UnwrapType(type);
+	if (duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::ANY)) {
+		return nullptr;
+	}
 	duckdb::vector<duckdb::Value> unwrapped_values;
 
 	for (idx_t i = 0; i < value_count; i++) {
@@ -123,7 +137,7 @@ duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *v
 	}
 	duckdb::Value *array_value = new duckdb::Value;
 	try {
-		*array_value = duckdb::Value::ARRAY(ltype, std::move(unwrapped_values));
+		*array_value = duckdb::Value::ARRAY(logical_type, std::move(unwrapped_values));
 	} catch (...) {
 		delete array_value;
 		return nullptr;

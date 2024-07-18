@@ -68,15 +68,15 @@ struct ICUStrptime : public ICUDateFunc {
 		}
 
 		// Now get the parts in the given time zone
-		uint64_t micros = 0;
+		uint64_t micros = parsed.GetMicros();
 		calendar->set(UCAL_EXTENDED_YEAR, parsed.data[0]); // strptime doesn't understand eras
 		calendar->set(UCAL_MONTH, parsed.data[1] - 1);
 		calendar->set(UCAL_DATE, parsed.data[2]);
 		calendar->set(UCAL_HOUR_OF_DAY, parsed.data[3]);
 		calendar->set(UCAL_MINUTE, parsed.data[4]);
 		calendar->set(UCAL_SECOND, parsed.data[5]);
-		calendar->set(UCAL_MILLISECOND, parsed.data[6] / Interval::MICROS_PER_MSEC);
-		micros = parsed.data[6] % Interval::MICROS_PER_MSEC;
+		calendar->set(UCAL_MILLISECOND, micros / Interval::MICROS_PER_MSEC);
+		micros %= Interval::MICROS_PER_MSEC;
 
 		// This overrides the TZ setting, so only use it if an offset was parsed.
 		// Note that we don't bother/worry about the DST setting because the two just combine.
@@ -158,7 +158,7 @@ struct ICUStrptime : public ICUDateFunc {
 		}
 	}
 
-	static bind_scalar_function_t bind_strptime;
+	static bind_scalar_function_t bind_strptime; // NOLINT
 
 	static duckdb::unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
 	                                                             vector<duckdb::unique_ptr<Expression>> &arguments) {
@@ -194,7 +194,7 @@ struct ICUStrptime : public ICUDateFunc {
 				throw InvalidInputException("strptime format list must not be empty");
 			}
 			vector<StrpTimeFormat> formats;
-			bool has_tz = true;
+			bool has_tz = false;
 			for (const auto &child : children) {
 				format_string = child.ToString();
 				format.format_specifier = format_string;
@@ -341,7 +341,7 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 };
 
-bind_scalar_function_t ICUStrptime::bind_strptime = nullptr;
+bind_scalar_function_t ICUStrptime::bind_strptime = nullptr; // NOLINT
 
 struct ICUStrftime : public ICUDateFunc {
 	static void ParseFormatSpecifier(string_t &format_str, StrfTimeFormat &format) {

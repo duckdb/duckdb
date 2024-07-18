@@ -10,7 +10,6 @@ namespace duckdb {
 void NumpyBind::Bind(const ClientContext &context, py::handle df, vector<PandasColumnBindData> &bind_columns,
                      vector<LogicalType> &return_types, vector<string> &names) {
 
-	auto &config = DBConfig::GetConfig(context);
 	auto df_columns = py::list(df.attr("keys")());
 	auto df_types = py::list();
 	for (auto item : py::cast<py::dict>(df)) {
@@ -37,8 +36,7 @@ void NumpyBind::Bind(const ClientContext &context, py::handle df, vector<PandasC
 			bind_data.pandas_col = make_uniq<PandasNumpyColumn>(py::array(column.attr("astype")("float32")));
 			bind_data.numpy_type.type = NumpyNullableType::FLOAT_32;
 			duckdb_col_type = NumpyToLogicalType(bind_data.numpy_type);
-		} else if (bind_data.numpy_type.type == NumpyNullableType::OBJECT &&
-		           string(py::str(df_types[col_idx])) == "string") {
+		} else if (bind_data.numpy_type.type == NumpyNullableType::STRING) {
 			bind_data.numpy_type.type = NumpyNullableType::CATEGORY;
 			// here we call numpy.unique
 			// this function call will return the unique values of a given array
@@ -61,7 +59,7 @@ void NumpyBind::Bind(const ClientContext &context, py::handle df, vector<PandasC
 		}
 
 		if (bind_data.numpy_type.type == NumpyNullableType::OBJECT) {
-			PandasAnalyzer analyzer(config);
+			PandasAnalyzer analyzer(context);
 			if (analyzer.Analyze(get_fun(df_columns[col_idx]))) {
 				duckdb_col_type = analyzer.AnalyzedType();
 			}
