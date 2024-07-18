@@ -61,8 +61,8 @@ class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
-	// only compare salts with the ht entries if the capacity is larger than 8192 so
-	// that it does not fit into the CPU cache
+	//! only compare salts with the ht entries if the capacity is larger than 8192 so
+	//! that it does not fit into the CPU cache
 	static constexpr const idx_t USE_SALT_THRESHOLD = 8192;
 
 	//! Scan structure that can be used to resume scans, as a single probe can
@@ -82,6 +82,7 @@ public:
 		unsafe_unique_array<bool> found_match;
 		JoinHashTable &ht;
 		bool finished;
+		bool is_null;
 
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		//! Get the next batch of data from the scan structure
@@ -174,8 +175,8 @@ public:
 	//! ever called.
 	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel);
 	//! Probe the HT with the given input chunk, resulting in the given result
-	unique_ptr<ScanStructure> Probe(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
-	                                optional_ptr<Vector> precomputed_hashes = nullptr);
+	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
+	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result);
 
@@ -271,8 +272,8 @@ public:
 	} correlated_mark_join_info;
 
 private:
-	unique_ptr<ScanStructure> InitializeScanStructure(DataChunk &keys, TupleDataChunkState &key_state,
-	                                                  const SelectionVector *&current_sel);
+	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                             const SelectionVector *&current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 	bool UseSalt() const;
@@ -316,9 +317,11 @@ public:
 	static constexpr const idx_t INITIAL_RADIX_BITS = 4;
 
 	struct ProbeSpillLocalAppendState {
+		ProbeSpillLocalAppendState() {
+		}
 		//! Local partition and append state (if partitioned)
-		PartitionedColumnData *local_partition;
-		PartitionedColumnDataAppendState *local_partition_append_state;
+		optional_ptr<PartitionedColumnData> local_partition;
+		optional_ptr<PartitionedColumnDataAppendState> local_partition_append_state;
 	};
 	//! ProbeSpill represents materialized probe-side data that could not be probed during PhysicalHashJoin::Execute
 	//! because the HashTable did not fit in memory. The ProbeSpill is not partitioned if the remaining data can be
@@ -400,9 +403,9 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize(const idx_t max_ht_size);
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
-	                                        DataChunk &payload, ProbeSpill &probe_spill,
-	                                        ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
+	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                   ProbeState &probe_state, DataChunk &payload, ProbeSpill &probe_spill,
+	                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
 
 private:
 	//! The current number of radix bits used to partition

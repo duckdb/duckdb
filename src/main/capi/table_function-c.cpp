@@ -1,8 +1,10 @@
-#include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
@@ -323,14 +325,25 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 	auto con = reinterpret_cast<duckdb::Connection *>(connection);
 	auto &tf = GetCTableFunction(function);
 	auto &info = tf.function_info->Cast<duckdb::CTableFunctionInfo>();
+
 	if (tf.name.empty() || !info.bind || !info.init || !info.function) {
 		return DuckDBError;
 	}
+	for (auto it = tf.named_parameters.begin(); it != tf.named_parameters.end(); it++) {
+		if (duckdb::TypeVisitor::Contains(it->second, duckdb::LogicalTypeId::INVALID)) {
+			return DuckDBError;
+		}
+	}
+	for (const auto &argument : tf.arguments) {
+		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
+			return DuckDBError;
+		}
+	}
+
 	try {
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateTableFunctionInfo tf_info(tf);
-			// create the function in the catalog
 			catalog.CreateTableFunction(*con->context, tf_info);
 		});
 	} catch (...) { // LCOV_EXCL_START
@@ -356,9 +369,15 @@ void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duck
 	if (!info || !name || !type) {
 		return;
 	}
+	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
+	if (duckdb::TypeVisitor::Contains(*logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(*logical_type, duckdb::LogicalTypeId::ANY)) {
+		return;
+	}
+
 	auto &bind_info = GetCBindInfo(info);
 	bind_info.names.push_back(name);
-	bind_info.return_types.push_back(*(reinterpret_cast<duckdb::LogicalType *>(type)));
+	bind_info.return_types.push_back(*logical_type);
 }
 
 idx_t duckdb_bind_get_parameter_count(duckdb_bind_info info) {

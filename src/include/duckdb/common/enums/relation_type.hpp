@@ -41,7 +41,9 @@ enum class RelationType : uint8_t {
 	SUBQUERY_RELATION,
 	TABLE_FUNCTION_RELATION,
 	VIEW_RELATION,
-	QUERY_RELATION
+	QUERY_RELATION,
+	DELIM_JOIN_RELATION,
+	DELIM_GET_RELATION
 };
 
 string RelationTypeToString(RelationType type);

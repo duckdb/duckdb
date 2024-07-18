@@ -51,7 +51,7 @@ struct TupleDataVectorFormat {
 	unique_ptr<CombinedListData> combined_list_data;
 
 	// Optional: only used for ArrayVector to fake being a list vector
-	unique_array<list_entry_t> array_list_entries;
+	unsafe_unique_array<list_entry_t> array_list_entries;
 };
 
 struct TupleDataChunkState {

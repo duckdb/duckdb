@@ -112,3 +112,43 @@ SELECT s::ROW(i BIGINT, j ROW(a BIGINT, b VARCHAR)) FROM nested_structs
 {'i': 1, 'j': {'a': 2, 'b': NULL}}
 {'i': 1, 'j': NULL}
 NULL
+
+# Issue #12939, NULL used to be case-sensitive
+# Testing all permutations for fun
+query I
+SELECT col::STRUCT(duck INT)
+FROM VALUES
+    ('{"duck": null}'),
+    ('{"duck": nulL}'),
+    ('{"duck": nuLl}'),
+    ('{"duck": nuLL}'),
+    ('{"duck": nUll}'),
+    ('{"duck": nUlL}'),
+    ('{"duck": nULl}'),
+    ('{"duck": nULL}'),
+    ('{"duck": Null}'),
+    ('{"duck": NulL}'),
+    ('{"duck": NuLl}'),
+    ('{"duck": NuLL}'),
+    ('{"duck": NUll}'),
+    ('{"duck": NUlL}'),
+    ('{"duck": NULl}'),
+    ('{"duck": NULL}'),
+AS tab(col)
+----
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}
+{'duck': NULL}

@@ -6,7 +6,6 @@
 #include "utf8proc.hpp"
 
 namespace duckdb {
-
 // Helper function to generate column names
 static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string &prefix = "column") {
 	auto max_digits = NumericHelper::UnsignedLength(total_cols - 1);
@@ -149,6 +148,24 @@ bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<Header
 	return has_header;
 }
 
+bool EmptyHeader(const string &col_name, bool is_null, bool normalize) {
+	if (col_name.empty() || is_null) {
+		return true;
+	}
+	if (normalize) {
+		// normalize has special logic to trim white spaces and generate names
+		return false;
+	}
+	// check if it's all white spaces
+	for (auto &c : col_name) {
+		if (!StringUtil::CharacterIsSpace(c)) {
+			return false;
+		}
+	}
+	// if we are not normalizing the name and is all white spaces, then we generate a name
+	return true;
+}
+
 vector<string>
 CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row,
                                  CSVStateMachine &state_machine, SetColumns &set_columns,
@@ -226,7 +243,7 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 			string col_name = best_header_row[col].value.GetString();
 
 			// generate name if field is empty
-			if (col_name.empty() || best_header_row[col].IsNull()) {
+			if (EmptyHeader(col_name, best_header_row[col].is_null, options.normalize_names)) {
 				col_name = GenerateColumnName(dialect_options.num_cols, col);
 			}
 

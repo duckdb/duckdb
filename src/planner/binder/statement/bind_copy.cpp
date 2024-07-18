@@ -315,7 +315,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function.function.copy_from_function,
 	                                 std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
-		get->column_ids.push_back(i);
+		get->AddColumnId(i);
 	}
 	insert_statement.plan->children.push_back(std::move(get));
 	result.plan = std::move(insert_statement.plan);

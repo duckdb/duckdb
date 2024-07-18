@@ -192,7 +192,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	// We reset the buffer for compressed files
 	// This is done because we can't easily seek on compressed files, if a buffer goes out of scope we must read from
 	// the start
-	if (!buffer_manager->file_handle->uncompressed) {
+	if (buffer_manager->file_handle->compression_type != FileCompressionType::UNCOMPRESSED) {
 		buffer_manager->ResetBufferManager();
 	}
 	buffer_manager->sniffing = false;

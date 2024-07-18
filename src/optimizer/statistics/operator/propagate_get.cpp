@@ -39,8 +39,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		// no column statistics to get
 		return std::move(node_stats);
 	}
-	for (idx_t i = 0; i < get.column_ids.size(); i++) {
-		auto stats = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
+	auto &column_ids = get.GetColumnIds();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto stats = get.function.statistics(context, get.bind_data.get(), column_ids[i]);
 		if (stats) {
 			ColumnBinding binding(get.table_index, i);
 			statistics_map.insert(make_pair(binding, std::move(stats)));
@@ -55,13 +56,13 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 
 	for (auto &table_filter_column : column_indexes) {
 		idx_t column_index;
-		for (column_index = 0; column_index < get.column_ids.size(); column_index++) {
-			if (get.column_ids[column_index] == table_filter_column) {
+		for (column_index = 0; column_index < column_ids.size(); column_index++) {
+			if (column_ids[column_index] == table_filter_column) {
 				break;
 			}
 		}
-		D_ASSERT(column_index < get.column_ids.size());
-		D_ASSERT(get.column_ids[column_index] == table_filter_column);
+		D_ASSERT(column_index < column_ids.size());
+		D_ASSERT(column_ids[column_index] == table_filter_column);
 
 		// find the stats
 		ColumnBinding stats_binding(get.table_index, column_index);

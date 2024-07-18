@@ -13,7 +13,7 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
 		auto &get = op.Cast<LogicalGet>();
 		auto get_bindings = get.GetColumnBindings();
-		auto column_ids = get.column_ids;
+		auto &column_ids = get.GetColumnIds();
 		if (std::find(column_ids.begin(), column_ids.end(), DConstants::INVALID_INDEX) != column_ids.end()) {
 			for (auto &binding : get_bindings) {
 				bindings.push_back(binding);
