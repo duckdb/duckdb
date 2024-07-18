@@ -9,8 +9,6 @@
 
 namespace duckdb {
 
-//! TODO: Serialize a nested leaf into a deprecated leaf.
-
 Node &UnnestMutable(ART &art, Node &node) {
 	D_ASSERT(node.GetType() == NType::LEAF);
 	auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
@@ -245,7 +243,7 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 		leaf_ref = leaf.ptr;
 	}
 
-	auto &leaf = Node::RefMutable<Leaf>(art, leaf_ref, NType::LEAF);
+	auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
 	Leaf::DeprecatedFree(art, leaf.ptr);
 
 	leaf.ptr = root;
@@ -253,6 +251,12 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 }
 
 void Leaf::TransformToDeprecated(ART &art, Node &node) {
+
+	// Early-out, if the leaf uses deprecated storage.
+	auto &first_leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
+	if (first_leaf.count != 0) {
+		return;
+	}
 
 	// Collect all row IDs and free the nested leaf.
 	vector<row_t> row_ids;

@@ -47,8 +47,10 @@ struct IndexStorageInfo {
 	string name;
 	//! The storage root.
 	idx_t root;
-	//! True, if the index uses deprecated storage. Defaults to true during deserialization.
-	bool deprecated_storage;
+	//! True, if the index uses the storage format of v1.0.0. Defaults to true during deserialization.
+	//! We write this to throw a meaningful error message w.r.t. forwards compatibility when reading
+	//! a newer file format with a deprecated duckdb version. It is not necessary for the program's logic.
+	bool v1_0_0_storage;
 	//! Serialization information for fixed-size allocator memory.
 	vector<FixedSizeAllocatorInfo> allocator_infos;
 

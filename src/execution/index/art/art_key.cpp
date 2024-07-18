@@ -146,12 +146,12 @@ row_t ARTKey::GetRowID() const {
 // ARTKeySection
 //===--------------------------------------------------------------------===//
 
-ARTKeySection::ARTKeySection(idx_t start_p, idx_t end_p, idx_t depth_p, data_t key_byte_p)
-    : start(start_p), end(end_p), depth(depth_p), key_byte(key_byte_p) {
+ARTKeySection::ARTKeySection(idx_t start, idx_t end, idx_t depth, data_t key_byte)
+    : start(start), end(end), depth(depth), key_byte(key_byte) {
 }
 
-ARTKeySection::ARTKeySection(idx_t start_p, idx_t end_p, const vector<ARTKey> &keys, ARTKeySection &section)
-    : start(start_p), end(end_p), depth(section.depth + 1), key_byte(keys[end_p].data[section.depth]) {
+ARTKeySection::ARTKeySection(idx_t start, idx_t end, const vector<ARTKey> &keys, ARTKeySection &section)
+    : start(start), end(end), depth(section.depth + 1), key_byte(keys[end].data[section.depth]) {
 }
 
 void ARTKeySection::GetChildSections(vector<ARTKeySection> &child_sections, const vector<ARTKey> &keys) {

@@ -83,8 +83,8 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
 	auto db_options = checkpoint_manager.db.GetDatabase().config.options;
-	auto use_deprecated_storage = db_options.serialization_compatibility.serialization_version < 3;
-	auto index_storage_infos = info->GetIndexes().GetStorageInfos(use_deprecated_storage);
+	auto use_v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	auto index_storage_infos = info->GetIndexes().GetStorageInfos(use_v1_0_0_storage);
 
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;

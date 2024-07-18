@@ -432,7 +432,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 		// Read older duckdb files.
 		index_storage_info.name = index.name;
 		index_storage_info.root_block_ptr = root_block_pointer;
-		index_storage_info.deprecated_storage = true;
+		index_storage_info.v1_0_0_storage = true;
 
 	} else {
 		// Read the matching index storage info.
@@ -540,7 +540,7 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 			// Deprecated storage is always true for old duckdb files.
 			IndexStorageInfo index_storage_info;
 			index_storage_info.root_block_ptr = index_pointers[i];
-			index_storage_info.deprecated_storage = true;
+			index_storage_info.v1_0_0_storage = true;
 			bound_info.indexes.push_back(index_storage_info);
 		}
 	}

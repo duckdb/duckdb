@@ -78,7 +78,7 @@
       },
       {
         "id": 103,
-        "name": "deprecated_storage",
+        "name": "v1_0_0_storage",
         "type": "bool",
         "default": "true"
       }

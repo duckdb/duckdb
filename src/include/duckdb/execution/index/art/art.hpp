@@ -53,8 +53,6 @@ public:
 	shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data
 	bool owns_data;
-	//! True, if the ART contains nested leaves.
-	bool has_nested_leaves;
 
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
@@ -93,7 +91,7 @@ public:
 	bool SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &row_ids);
 
 	//! Returns ART storage serialization information.
-	IndexStorageInfo GetStorageInfo(const bool use_deprecated_storage, const bool to_wal) override;
+	IndexStorageInfo GetStorageInfo(const bool use_v1_0_0_storage, const bool to_wal) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge

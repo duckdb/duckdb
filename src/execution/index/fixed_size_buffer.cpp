@@ -81,12 +81,8 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		return;
 	}
 
-	// Early-out, if the buffer does not contain any segments.
-	if (segment_count == 0) {
-		return;
-	}
-
-	// the allocation possibly changed
+	// Adjust the allocation size.
+	D_ASSERT(segment_count != 0);
 	SetAllocationSize(available_segments, segment_size, bitmask_offset);
 
 	// the buffer is in memory, so we copied it onto a new buffer when pinning

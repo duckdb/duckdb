@@ -63,14 +63,14 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<Log
 	AddDataTableIndex(storage, columns, new_keys, constraint_type, info);
 }
 
-IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, const bool deprecated_storage,
+IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, const bool v1_0_0_storage,
                               unique_ptr<CreateInfo> &create_info, const idx_t identifier) {
 
 	auto &create_table_info = create_info->Cast<CreateTableInfo>();
 	auto constraint_name = EnumUtil::ToString(constraint_type) + "_";
 	auto name = constraint_name + create_table_info.table + "_" + to_string(identifier);
 	IndexStorageInfo info(name);
-	info.deprecated_storage = deprecated_storage;
+	info.v1_0_0_storage = v1_0_0_storage;
 	return info;
 }
 

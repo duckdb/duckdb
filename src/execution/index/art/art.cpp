@@ -84,20 +84,17 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 
 	if (!info.IsValid()) {
 		// We are creating a new ART.
-		has_nested_leaves = true;
 		return;
 	}
 
 	if (info.root_block_ptr.IsValid()) {
 		// Backwards compatibility.
-		has_nested_leaves = false;
 		Deserialize(info.root_block_ptr);
 		return;
 	}
 
 	// Set the root node and initialize the allocators.
 	tree.Set(info.root);
-	has_nested_leaves = !info.deprecated_storage;
 	InitAllocators(info);
 }
 
@@ -993,16 +990,16 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-IndexStorageInfo ART::GetStorageInfo(const bool use_deprecated_storage, const bool to_wal) {
+IndexStorageInfo ART::GetStorageInfo(const bool use_v1_0_0_storage, const bool to_wal) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
-	if (use_deprecated_storage && has_nested_leaves && tree.HasMetadata()) {
+	if (use_v1_0_0_storage && tree.HasMetadata()) {
 		Node::TransformToDeprecated(*this, tree);
 	}
 
 	IndexStorageInfo info(name);
 	info.root = tree.Get();
-	info.deprecated_storage = use_deprecated_storage;
+	info.v1_0_0_storage = use_v1_0_0_storage;
 
 	if (!to_wal) {
 		// Store the data on disk as partial blocks and set the block ids.

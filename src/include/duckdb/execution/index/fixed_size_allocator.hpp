@@ -138,6 +138,8 @@ private:
 private:
 	//! Returns an available buffer id
 	idx_t GetAvailableBufferId() const;
+	//! Removes empty buffers.
+	void RemoveEmptyBuffers();
 };
 
 } // namespace duckdb
