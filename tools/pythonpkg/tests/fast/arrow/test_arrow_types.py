@@ -29,7 +29,7 @@ class TestArrowTypes(object):
             duckdb.InvalidInputException,
             match='Attempted to convert a STRUCT with no fields to DuckDB which is not supported',
         ):
-            duckdb_cursor.register('invalid_struct', arrow_table)
+            duckdb_cursor.sql("select * from arrow_table").fetchall()
 
     def test_invalid_union(self, duckdb_cursor):
         # Create a sparse union array from dense arrays

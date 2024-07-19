@@ -194,6 +194,8 @@ enum class MapInvalidReason : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
+enum class MetaPipelineType : uint8_t;
+
 enum class MetricsType : uint8_t;
 
 enum class NType : uint8_t;
@@ -243,6 +245,8 @@ enum class PreparedParamType : uint8_t;
 enum class PreparedStatementMode : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
+
+enum class ProfilingNodeType : uint8_t;
 
 enum class QuantileSerializationType : uint8_t;
 
@@ -301,6 +305,8 @@ enum class StatisticsType : uint8_t;
 enum class StatsInfo : uint8_t;
 
 enum class StrTimeSpecifier : uint8_t;
+
+enum class StreamExecutionResult : uint8_t;
 
 enum class SubqueryType : uint8_t;
 
@@ -591,6 +597,9 @@ template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
 
 template<>
+const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
+
+template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
 
 template<>
@@ -664,6 +673,9 @@ const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value
 
 template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
+
+template<>
+const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
@@ -751,6 +763,9 @@ const char* EnumUtil::ToChars<StatsInfo>(StatsInfo value);
 
 template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
+
+template<>
+const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value);
 
 template<>
 const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
@@ -1063,6 +1078,9 @@ template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
 
 template<>
+MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
+
+template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value);
 
 template<>
@@ -1136,6 +1154,9 @@ PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *va
 
 template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
+
+template<>
+ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value);
 
 template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);
@@ -1223,6 +1244,9 @@ StatsInfo EnumUtil::FromString<StatsInfo>(const char *value);
 
 template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);
+
+template<>
+StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *value);
 
 template<>
 SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);

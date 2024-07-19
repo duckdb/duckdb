@@ -72,7 +72,7 @@ public:
 	}
 	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER) {
 		if (data_size > 0) {
-			data = make_unsafe_uniq_array<data_t>(data_size);
+			data = make_unsafe_uniq_array_uninitialized<data_t>(data_size);
 		}
 	}
 	explicit VectorBuffer(unsafe_unique_array<data_t> data_p)

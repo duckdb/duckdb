@@ -122,11 +122,11 @@ struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
 public:
 	ConnectionGuard con;
 	vector<weak_ptr<DuckDBPyConnection>> cursors;
-	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::mutex py_connection_lock;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
 	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;
+	case_insensitive_set_t registered_objects;
 
 public:
 	explicit DuckDBPyConnection() {
@@ -163,7 +163,7 @@ public:
 	py::list ExtractStatements(const string &query);
 
 	unique_ptr<DuckDBPyRelation> ReadJSON(
-	    const string &name, const Optional<py::object> &columns = py::none(),
+	    const py::object &name, const Optional<py::object> &columns = py::none(),
 	    const Optional<py::object> &sample_size = py::none(), const Optional<py::object> &maximum_depth = py::none(),
 	    const Optional<py::str> &records = py::none(), const Optional<py::str> &format = py::none(),
 	    const Optional<py::object> &date_format = py::none(), const Optional<py::object> &timestamp_format = py::none(),

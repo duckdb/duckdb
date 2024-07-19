@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
@@ -88,6 +89,7 @@ struct ParquetOptions {
 	bool binary_as_string = false;
 	bool file_row_number = false;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
+	bool debug_use_openssl = true;
 
 	MultiFileReaderOptions file_options;
 	vector<ParquetColumnDefinition> schema;
@@ -130,11 +132,14 @@ public:
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
 	unique_ptr<ColumnReader> root_reader;
+	shared_ptr<EncryptionUtil> encryption_util;
 
 	//! Index of the file_row_number column
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! Parquet schema for the generated columns
 	vector<duckdb_parquet::format::SchemaElement> generated_column_schema;
+	//! Table column names - set when using COPY tbl FROM file.parquet
+	vector<string> table_columns;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);

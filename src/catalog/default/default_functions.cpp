@@ -166,8 +166,12 @@ static const DefaultMacro internal_macros[] = {
 	// regexp functions
 	{DEFAULT_SCHEMA, "regexp_split_to_table", {"text", "pattern", nullptr}, "unnest(string_split_regex(text, pattern))"},
 
-    // storage helper functions
-    {DEFAULT_SCHEMA, "get_block_size", {"db_name"}, "(SELECT block_size FROM pragma_database_size() WHERE database_name = db_name)"},
+	// storage helper functions
+	{DEFAULT_SCHEMA, "get_block_size", {"db_name"}, "(SELECT block_size FROM pragma_database_size() WHERE database_name = db_name)"},
+
+	// string functions
+	{DEFAULT_SCHEMA, "md5_number_upper", {"param"}, "((md5_number(param)::bit::varchar)[65:])::bit::uint64"},
+	{DEFAULT_SCHEMA, "md5_number_lower", {"param"}, "((md5_number(param)::bit::varchar)[:64])::bit::uint64"},
 
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};

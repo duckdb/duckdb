@@ -92,7 +92,7 @@ struct FSSTAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), type);
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<FSSTAnalyzeState>(info);
 }
 
@@ -605,10 +605,10 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 
 	auto offsets = CalculateBpDeltaOffsets(scan_state.last_known_row, start, scan_count);
 
-	auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
+	auto bitunpack_buffer = unsafe_unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
 	BitUnpackRange(base_data, data_ptr_cast(bitunpack_buffer.get()), offsets.total_bitunpack_count,
 	               offsets.bitunpack_start_row, scan_state.current_width);
-	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
+	auto delta_decode_buffer = unsafe_unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
 	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
 	                   offsets.total_delta_decode_count, scan_state.last_known_index);
 
@@ -706,8 +706,8 @@ CompressionFunction FSSTFun::GetFunction(PhysicalType data_type) {
 	    FSSTStorage::StringScanPartial<false>, FSSTStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
-bool FSSTFun::TypeIsSupported(const CompressionInfo &info) {
-	return info.GetPhysicalType() == PhysicalType::VARCHAR;
+bool FSSTFun::TypeIsSupported(const PhysicalType physical_type) {
+	return physical_type == PhysicalType::VARCHAR;
 }
 
 //===--------------------------------------------------------------------===//

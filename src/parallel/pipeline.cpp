@@ -193,6 +193,19 @@ void Pipeline::ResetSink() {
 	}
 }
 
+void Pipeline::PrepareFinalize() {
+	if (sink) {
+		if (!sink->IsSink()) {
+			throw InternalException("Sink of pipeline does not have IsSink set");
+		}
+		lock_guard<mutex> guard(sink->lock);
+		if (!sink->sink_state) {
+			throw InternalException("Sink of pipeline does not have sink state");
+		}
+		sink->PrepareFinalize(GetClientContext(), *sink->sink_state);
+	}
+}
+
 void Pipeline::Reset() {
 	ResetSink();
 	for (auto &op_ref : operators) {

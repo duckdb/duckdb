@@ -130,21 +130,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 		} else if (loption == "write_partition_columns") {
 			write_partition_columns = true;
 		} else {
-			if (loption == "compression") {
-				if (option.second.empty()) {
-					// This can't be empty
-					throw BinderException("COMPRESSION option, in the file scanner, can't be empty. It should be set "
-					                      "to AUTO, UNCOMPRESSED, GZIP, SNAPPY or ZSTD. Depending on the file format.");
-				}
-				auto parameter = StringUtil::Lower(option.second[0].ToString());
-				if (parameter == "gzip" && !StringUtil::EndsWith(bind_input.file_extension, ".gz")) {
-					// We just add .gz
-					bind_input.file_extension += ".gz";
-				} else if (parameter == "zstd" && !StringUtil::EndsWith(bind_input.file_extension, ".zst")) {
-					// We just add .zst
-					bind_input.file_extension += ".zst";
-				}
-			}
 			stmt.info->options[option.first] = option.second;
 		}
 	}
@@ -344,7 +329,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function.function.copy_from_function,
 	                                 std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
-		get->column_ids.push_back(i);
+		get->AddColumnId(i);
 	}
 	insert_statement.plan->children.push_back(std::move(get));
 	result.plan = std::move(insert_statement.plan);

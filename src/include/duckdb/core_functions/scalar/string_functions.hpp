@@ -249,7 +249,7 @@ struct MD5Fun {
 	static constexpr const char *Description = "Returns the MD5 hash of the value as a string";
 	static constexpr const char *Example = "md5('123')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct MD5NumberFun {
@@ -258,25 +258,7 @@ struct MD5NumberFun {
 	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
 	static constexpr const char *Example = "md5_number('123')";
 
-	static ScalarFunction GetFunction();
-};
-
-struct MD5NumberLowerFun {
-	static constexpr const char *Name = "md5_number_lower";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
-	static constexpr const char *Example = "md5_number_lower('123')";
-
-	static ScalarFunction GetFunction();
-};
-
-struct MD5NumberUpperFun {
-	static constexpr const char *Name = "md5_number_upper";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
-	static constexpr const char *Example = "md5_number_upper('123')";
-
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ParseDirnameFun {
@@ -387,13 +369,22 @@ struct RtrimFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct SHA1Fun {
+	static constexpr const char *Name = "sha1";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the SHA1 hash of the value";
+	static constexpr const char *Example = "sha1('hello')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct SHA256Fun {
 	static constexpr const char *Name = "sha256";
 	static constexpr const char *Parameters = "value";
 	static constexpr const char *Description = "Returns the SHA256 hash of the value";
 	static constexpr const char *Example = "sha256('hello')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct StringSplitFun {
@@ -521,6 +512,24 @@ struct RegexpEscapeFun {
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Escapes all potentially meaningful regexp characters in the input string";
 	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct UrlEncodeFun {
+	static constexpr const char *Name = "url_encode";
+	static constexpr const char *Parameters = "input";
+	static constexpr const char *Description = "Escapes the input string by encoding it so that it can be included in a URL query parameter.";
+	static constexpr const char *Example = "url_encode('this string has/ special+ characters>')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct UrlDecodeFun {
+	static constexpr const char *Name = "url_decode";
+	static constexpr const char *Parameters = "input";
+	static constexpr const char *Description = "Unescapes the URL encoded input.";
+	static constexpr const char *Example = "url_decode('this%20string%20is%2BFencoded')";
 
 	static ScalarFunction GetFunction();
 };

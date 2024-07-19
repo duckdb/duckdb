@@ -4,6 +4,7 @@ add_library_unity(
   capi_scalar_functions.cpp
   capi_table_functions.cpp
   test_capi.cpp
+  test_capi_any_invalid_type.cpp
   test_starting_database.cpp
   test_capi_appender.cpp
   test_capi_arrow.cpp
@@ -11,6 +12,7 @@ add_library_unity(
   test_capi_extract.cpp
   test_capi_pending.cpp
   test_capi_prepared.cpp
+  test_capi_profiling.cpp
   test_capi_website.cpp
   test_capi_complex_types.cpp
   test_capi_to_decimal.cpp

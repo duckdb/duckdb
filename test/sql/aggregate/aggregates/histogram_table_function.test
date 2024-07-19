@@ -18,14 +18,21 @@ insert into integers values (84);
 query II
 SELECT * FROM histogram_values(integers, i, bin_count := 2)
 ----
-64	1
-84	1
+60	1
+80	0
+100	1
+
+# missing column
+statement error
+SELECT * FROM histogram_values(integers, k)
+----
+not found in FROM clause
 
 statement ok
 INSERT INTO integers FROM range(127)
 
 query II
-SELECT * FROM histogram_values(integers, i, bin_count := 10, technique := 'equi-width')
+SELECT * FROM histogram_values(integers, i, bin_count => 10, technique => 'equi-width')
 ----
 12	13
 25	13

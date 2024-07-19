@@ -167,7 +167,8 @@ SnifferResult CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
 		string error;
 		auto full_sniffer = SniffCSV();
 		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
-			if (!file_schema.SchemasMatch(error, full_sniffer.names, full_sniffer.return_types, options.file_path)) {
+			if (!file_schema.SchemasMatch(error, full_sniffer.names, full_sniffer.return_types, options.file_path) &&
+			    !options.ignore_errors.GetValue()) {
 				throw InvalidInputException(error);
 			}
 		}
@@ -191,7 +192,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	// We reset the buffer for compressed files
 	// This is done because we can't easily seek on compressed files, if a buffer goes out of scope we must read from
 	// the start
-	if (!buffer_manager->file_handle->uncompressed) {
+	if (buffer_manager->file_handle->compression_type != FileCompressionType::UNCOMPRESSED) {
 		buffer_manager->ResetBufferManager();
 	}
 	buffer_manager->sniffing = false;

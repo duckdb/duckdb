@@ -11,6 +11,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
+#include <cmath>
 
 namespace duckdb {
 
@@ -20,6 +21,16 @@ struct AbsOperator {
 		return input < 0 ? -input : input;
 	}
 };
+
+template <>
+inline float AbsOperator::Operation(float input) {
+	return std::fabs(input);
+}
+
+template <>
+inline double AbsOperator::Operation(double input) {
+	return std::fabs(input);
+}
 
 template <>
 inline hugeint_t AbsOperator::Operation(hugeint_t input) {

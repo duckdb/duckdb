@@ -57,6 +57,17 @@ string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	}
 }
 
+optional_ptr<ProfilingNode> Connection::GetProfilingTree() {
+	auto &client_config = ClientConfig::GetConfig(*context);
+	auto enable_profiler = client_config.enable_profiler;
+
+	if (!enable_profiler) {
+		throw Exception(ExceptionType::SETTINGS, "Profiling is not enabled for this connection");
+	}
+	auto &profiler = QueryProfiler::Get(*context);
+	return profiler.GetRoot();
+}
+
 void Connection::Interrupt() {
 	context->Interrupt();
 }
@@ -277,8 +288,9 @@ shared_ptr<Relation> Connection::RelationFromQuery(const string &query, const st
 	return RelationFromQuery(QueryRelation::ParseStatement(*context, query, error), alias);
 }
 
-shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, const string &alias) {
-	return make_shared_ptr<QueryRelation>(context, std::move(select_stmt), alias);
+shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> select_stmt, const string &alias,
+                                                   const string &query_p) {
+	return make_shared_ptr<QueryRelation>(context, std::move(select_stmt), alias, query_p);
 }
 
 void Connection::BeginTransaction() {
