@@ -326,7 +326,10 @@ NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_ma
 	if (carriage_return && n) {
 		return NewLineIdentifier::CARRY_ON;
 	}
-	return NewLineIdentifier::SINGLE;
+	if (carriage_return) {
+		return NewLineIdentifier::SINGLE_R;
+	}
+	return NewLineIdentifier::SINGLE_N;
 }
 
 // Dialect Detection consists of five steps:
