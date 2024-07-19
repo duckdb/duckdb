@@ -36,6 +36,7 @@ struct CommonTableExpressionInfo;
 struct GroupingExpressionMap;
 class OnConflictInfo;
 class UpdateSetInfo;
+class MacroFunction;
 struct ParserOptions;
 struct PivotColumn;
 struct PivotColumnEntry;
@@ -356,6 +357,8 @@ private:
 
 	Vector PGListToVector(optional_ptr<duckdb_libpgquery::PGList> column_list, idx_t &size);
 	vector<string> TransformConflictTarget(duckdb_libpgquery::PGList &list);
+
+	unique_ptr<MacroFunction> TransformMacroFunction(duckdb_libpgquery::PGFunctionDefinition &function);
 
 	void ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
 	                                 duckdb_libpgquery::PGNode *arg);

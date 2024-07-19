@@ -246,10 +246,17 @@
       {
         "id": 201,
         "name": "function",
+        "serialize_property": "macros[0]",
         "type": "MacroFunction*"
+      },
+      {
+        "id": 202,
+        "name": "extra_functions",
+        "type": "vector<MacroFunction*>",
+        "serialize_property": "GetAllButFirstFunction()"
       }
     ],
-    "constructor": ["$CatalogType"]
+    "constructor": ["$CatalogType", "function", "extra_functions"]
   },
   {
     "class": "CreateSequenceInfo",

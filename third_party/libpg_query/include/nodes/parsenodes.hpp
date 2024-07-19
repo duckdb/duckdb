@@ -1753,13 +1753,16 @@ typedef struct PGAlterSeqStmt {
  *		CREATE FUNCTION Statement
  * ----------------------
  */
+typedef struct PGFunctionDefinition {
+	PGList *params;
+	PGNode *function;
+	PGNode *query;
+} PGFunctionDefinition;
 
 typedef struct PGCreateFunctionStmt {
 	PGNodeTag type;
 	PGRangeVar *name;
-	PGList *params;
-	PGNode *function;
-  	PGNode *query;
+	PGList *functions;
 	PGOnCreateConflict onconflict;
 } PGCreateFunctionStmt;
 
