@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "config.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/value.hpp"
 
@@ -606,12 +605,6 @@ struct IndexScanPercentage {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
-
-	using SETTING_TYPE = double;
-
-	SETTING_TYPE GetSetting(const DBConfig &config) {
-		return config.options.index_scan_percentage;
-	}
 };
 
 struct IndexScanMaxCount {
