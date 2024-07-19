@@ -395,8 +395,8 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		return;
 	}
 
-	for (auto &it : context.registered_state) {
-		it.second->WriteProfilingInformation(ss);
+	for (auto &state : context.registered_state->States()) {
+		state->WriteProfilingInformation(ss);
 	}
 
 	constexpr idx_t TOTAL_BOX_WIDTH = 39;

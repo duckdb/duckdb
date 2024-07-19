@@ -33,6 +33,7 @@ class Value {
 	friend struct ListValue;
 	friend struct UnionValue;
 	friend struct ArrayValue;
+	friend struct MapValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -414,6 +415,10 @@ struct IntervalValue {
 };
 
 struct StructValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
+struct MapValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
 };
 

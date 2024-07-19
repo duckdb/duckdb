@@ -214,9 +214,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Create a relation object from the named table function with given parameters", py::arg("name"),
 	      py::arg("parameters") = py::none());
 	m.def("read_json", &DuckDBPyConnection::ReadJSON, "Create a relation object from the JSON file in 'name'",
-	      py::arg("name"), py::kw_only(), py::arg("columns") = py::none(), py::arg("sample_size") = py::none(),
-	      py::arg("maximum_depth") = py::none(), py::arg("records") = py::none(), py::arg("format") = py::none(),
-	      py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
+	      py::arg("path_or_buffer"), py::kw_only(), py::arg("columns") = py::none(),
+	      py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none(), py::arg("records") = py::none(),
+	      py::arg("format") = py::none(), py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
 	      py::arg("compression") = py::none(), py::arg("maximum_object_size") = py::none(),
 	      py::arg("ignore_errors") = py::none(), py::arg("convert_strings_to_integers") = py::none(),
 	      py::arg("field_appearance_threshold") = py::none(), py::arg("map_inference_threshold") = py::none(),
@@ -664,7 +664,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	auto &connection = con.GetConnection();
 	auto &client = *connection.context;
 	auto object = PythonReplacementScan::ReplacementObject(python_object, name, client);
-	auto view_rel = make_shared_ptr<ViewRelation>(connection.context, std::move(object));
+	auto view_rel = make_shared_ptr<ViewRelation>(connection.context, std::move(object), name);
 	bool replace = registered_objects.count(name);
 	view_rel->CreateView(name, replace, true);
 	registered_objects.insert(name);
@@ -715,7 +715,7 @@ static void ParseMultiFileReaderOptions(named_parameter_map_t &options, const Op
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
-    const string &name, const Optional<py::object> &columns, const Optional<py::object> &sample_size,
+    const py::object &name_p, const Optional<py::object> &columns, const Optional<py::object> &sample_size,
     const Optional<py::object> &maximum_depth, const Optional<py::str> &records, const Optional<py::str> &format,
     const Optional<py::object> &date_format, const Optional<py::object> &timestamp_format,
     const Optional<py::object> &compression, const Optional<py::object> &maximum_object_size,
@@ -728,6 +728,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
 	named_parameter_map_t options;
 
 	auto &connection = con.GetConnection();
+	auto path_like = GetPathLike(name_p);
+	auto &name = path_like.files;
+	auto file_like_object_wrapper = std::move(path_like.dependency);
+
 	ParseMultiFileReaderOptions(options, filename, hive_partitioning, union_by_name, hive_types, hive_types_autocast);
 
 	if (!py::none().is(columns)) {
@@ -888,6 +892,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
 	    make_shared_ptr<ReadJSONRelation>(connection.context, name, std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
 		throw BinderException("read_json can only be used when the JSON extension is (statically) loaded");
+	}
+	if (file_like_object_wrapper) {
+		read_json_relation->AddExternalDependency(std::move(file_like_object_wrapper));
 	}
 	return make_uniq<DuckDBPyRelation>(std::move(read_json_relation));
 }
@@ -1242,7 +1249,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 	}
 	auto tableref = PythonReplacementScan::ReplacementObject(value, name, *connection.context);
 	D_ASSERT(tableref);
-	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref))->Alias(name);
+	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref), name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
@@ -1306,7 +1313,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	}
 	auto tableref = PythonReplacementScan::ReplacementObject(arrow_object, name, *connection.context);
 	D_ASSERT(tableref);
-	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref))->Alias(name);
+	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref), name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 

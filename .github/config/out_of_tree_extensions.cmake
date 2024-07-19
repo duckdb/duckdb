@@ -75,6 +75,7 @@ if (NOT MINGW)
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
             GIT_TAG 120c0b12258d27758e240d61f5dc22a4238a14a6
+            APPLY_PATCHES
             )
 endif()
 
@@ -85,6 +86,7 @@ duckdb_extension_load(spatial
     GIT_TAG dbb9971c900c5888e3e3598af91de3b9b884aca6
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
