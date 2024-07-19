@@ -16,7 +16,11 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = std::move(table_function);
 	select_statement.node = std::move(select_node);
-	return Bind(select_statement);
+
+	auto result = Bind(select_statement);
+	auto &properties = GetStatementProperties();
+	properties.allow_stream_result = false;
+	return result;
 }
 
 } // namespace duckdb
