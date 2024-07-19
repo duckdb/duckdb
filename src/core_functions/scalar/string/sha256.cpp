@@ -25,8 +25,11 @@ static void SHA256Function(DataChunk &args, ExpressionState &state, Vector &resu
 	UnaryExecutor::ExecuteString<string_t, string_t, SHA256Operator>(input, result, args.size());
 }
 
-ScalarFunction SHA256Fun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, SHA256Function);
+ScalarFunctionSet SHA256Fun::GetFunctions() {
+	ScalarFunctionSet set("sha256");
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, SHA256Function));
+	set.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, SHA256Function));
+	return set;
 }
 
 } // namespace duckdb

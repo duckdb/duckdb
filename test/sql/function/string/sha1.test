@@ -16,6 +16,11 @@ SELECT sha1('')
 ----
 da39a3ee5e6b4b0d3255bfef95601890afd80709
 
+query I
+SELECT sha1('\xff\xff'::BLOB)
+----
+a19f987b885f5a96069f4bc7f12b9e84ceba7dfa
+
 statement ok
 CREATE TABLE strings AS SELECT s::VARCHAR s FROM generate_series(0,10,1) t(s)
 
@@ -45,9 +50,10 @@ statement error
 SELECT sha1()
 ----
 
-statement error
-SELECT sha1('' :: blob)
+query I
+SELECT sha1(''::blob)
 ----
+da39a3ee5e6b4b0d3255bfef95601890afd80709
 
 statement error
 SELECT sha1(42)
