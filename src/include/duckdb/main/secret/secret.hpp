@@ -12,11 +12,11 @@
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include <duckdb/common/file_opener.hpp>
 
 namespace duckdb {
 class BaseSecret;
 struct SecretEntry;
+struct FileOpenerInfo;
 
 //! Whether a secret is persistent or temporary
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
