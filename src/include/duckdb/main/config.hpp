@@ -270,7 +270,7 @@ public:
 	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
-	mutex config_lock;
+	mutable mutex config_lock;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
 
@@ -305,6 +305,12 @@ public:
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
+
+	template<class OP>
+	typename OP::SETTING_TYPE GetSetting() const {
+		lock_guard<mutex> lock(config_lock);
+		OP::GetSetting(*this);
+	}
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

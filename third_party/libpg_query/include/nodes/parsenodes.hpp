@@ -1542,18 +1542,20 @@ typedef struct PGCopyStmt {
  * ----------------------
  */
 typedef enum {
+
 	VAR_SET_VALUE,   /* SET var = value */
 	VAR_SET_DEFAULT, /* SET var TO DEFAULT */
 	VAR_SET_CURRENT, /* SET var FROM CURRENT */
 	VAR_SET_MULTI,   /* special case for SET TRANSACTION ... */
 	VAR_RESET,       /* RESET var */
-	VAR_RESET_ALL    /* RESET ALL */
+	VAR_RESET_ALL,   /* RESET ALL */
 } VariableSetKind;
 
 typedef enum {
 	VAR_SET_SCOPE_LOCAL,   /* SET LOCAL var */
 	VAR_SET_SCOPE_SESSION, /* SET SESSION var */
 	VAR_SET_SCOPE_GLOBAL,  /* SET GLOBAL var */
+	VAR_SET_SCOPE_VARIABLE,/* SET VARIABLE var */
 	VAR_SET_SCOPE_DEFAULT  /* SET var (same as SET_SESSION) */
 } VariableSetScope;
 

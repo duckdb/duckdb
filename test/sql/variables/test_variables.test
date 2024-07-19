@@ -1,0 +1,39 @@
+# name: test/sql/variables/test_variables.test
+# description: Test SQL variables
+# group: [variables]
+
+#statement ok
+#PRAGMA enable_verification
+
+statement ok
+SET VARIABLE animal = 'duck'
+
+query I
+SELECT GETVARIABLE('animal')
+----
+duck
+
+# overwriting
+statement ok
+SET VARIABLE animal='bird'
+
+query I
+SELECT GETVARIABLE('animal')
+----
+bird
+
+
+
+#query I
+#SHOW VARIABLES
+#----
+#duck
+
+statement ok
+RESET VARIABLE animal
+
+query I
+SELECT GETVARIABLE('animal')
+----
+NULL
+
