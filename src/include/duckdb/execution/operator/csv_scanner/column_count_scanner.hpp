@@ -28,6 +28,7 @@ public:
 	idx_t current_column_count = 0;
 	bool error = false;
 	bool last_value_always_empty = true;
+	bool last_value_always_empty_including_first = true;
 	idx_t result_position = 0;
 
 	//! Adds a Value to the result
@@ -41,6 +42,8 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(ColumnCountResult &result, const idx_t buffer_pos);
 	inline void InternalAddRow();
+
+	void Finalize();
 };
 
 //! Scanner that goes over the CSV and figures out how many columns each row has. Used for dialect sniffing

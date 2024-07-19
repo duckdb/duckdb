@@ -129,6 +129,12 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		}
 		if (sniffed_column_counts[row] == num_cols || (options.ignore_errors.GetValue() && !options.null_padding)) {
 			consistent_rows++;
+		} else if (sniffed_column_counts.last_value_always_empty &&
+		           sniffed_column_counts[row] == sniffed_column_counts[0] + 1) {
+			// we allow for the first row to miss one column IF last_value_always_empty is true
+			// This is so we can sniff files that have an extra delimiter on the data part.
+			// e.g., C1|C2\n1|2|\n3|4|
+			consistent_rows++;
 		} else if (num_cols < sniffed_column_counts[row] && !options.dialect_options.skip_rows.IsSetByUser() &&
 		           (!set_columns.IsSet() || options.null_padding)) {
 			// all rows up to this point will need padding
@@ -137,7 +143,6 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			num_cols = sniffed_column_counts[row];
 			dirty_notes = row;
 			consistent_rows = 1;
-
 		} else if (num_cols >= sniffed_column_counts[row]) {
 			// we are missing some columns, we can parse this as long as we add padding
 			padding_count++;

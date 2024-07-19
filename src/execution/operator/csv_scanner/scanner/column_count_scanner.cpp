@@ -15,10 +15,19 @@ inline void ColumnCountResult::InternalAddRow() {
 	current_column_count = 0;
 }
 
+void ColumnCountResult::Finalize() {
+	if (result_position == 1) {
+		last_value_always_empty = last_value_always_empty_including_first;
+	}
+}
+
 bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
 	result.InternalAddRow();
 	if (!result.states.EmptyLastValue()) {
-		result.last_value_always_empty = false;
+		result.last_value_always_empty_including_first = false;
+		if (result.result_position != 1) {
+			result.last_value_always_empty = false;
+		}
 	}
 	if (result.result_position >= result.result_size) {
 		// We sniffed enough rows
@@ -76,7 +85,8 @@ void ColumnCountScanner::Initialize() {
 
 void ColumnCountScanner::FinalizeChunkProcess() {
 	if (result.result_position == result.result_size || result.error) {
-		// We are done
+		// We are don
+		result.Finalize();
 		return;
 	}
 	// We run until we have a full chunk, or we are done scanning
@@ -87,10 +97,12 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
 				if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow() || states.IsNotSet()) {
+					result.Finalize();
 					return;
 				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added
-				result.InternalAddRow();
+				result.AddRow(result, NumericLimits<idx_t>::Maximum());
+				result.Finalize();
 				return;
 			}
 			iterator.pos.buffer_pos = 0;
