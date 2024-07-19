@@ -58,7 +58,7 @@ void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
 
 	D_ASSERT(l_node.GetType() != NType::LEAF_INLINED && l_node.IsGate());
 	D_ASSERT(r_node.GetType() != NType::LEAF_INLINED && r_node.IsGate());
-	l_node.Merge(art, r_node);
+	l_node.Merge(art, r_node, true);
 }
 
 void Leaf::InsertIntoInlined(ART &art, Node &node, reference<const ARTKey> row_id) {
@@ -78,19 +78,10 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, reference<const ARTKey> row_i
 	node.SetGate();
 }
 
-bool Leaf::Remove(ART &art, reference<Node> &node, const ARTKey &row_id) {
-	D_ASSERT(node.get().HasMetadata());
+void Leaf::EraseFromNested(ART &art, Node &node, const ARTKey &row_id) {
+	D_ASSERT(node.HasMetadata());
 
-	if (node.get().GetType() == NType::LEAF_INLINED) {
-		return node.get().GetRowId() == row_id.GetRowID();
-	}
-	if (!node.get().IsGate()) {
-		// This is a deprecated leaf. We transform it.
-		TransformToNested(art, node);
-	}
-
-	// Erase the row ID.
-	art.Erase(node, row_id, 0, row_id);
+	art.Erase(node, row_id, 0, row_id, true);
 
 	// Traverse the prefix.
 	reference<const Node> prefix_node(node);
@@ -100,14 +91,13 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const ARTKey &row_id) {
 		D_ASSERT(prefix.ptr.HasMetadata());
 	}
 
-	// The first non-prefix node is an inlined leaf.
-	// Thus, we can inline it into the node directly.
+	// If the first non-prefix node is an inlined leaf,
+	// then we can inline it into child_node.
 	if (prefix_node.get().GetType() == NType::LEAF_INLINED) {
 		auto remaining_row_id = prefix_node.get().GetRowId();
 		Node::Free(art, node);
-		New(node, remaining_row_id);
+		Leaf::New(node, remaining_row_id);
 	}
-	return false;
 }
 
 void Leaf::TransformToNested(ART &art, Node &node) {

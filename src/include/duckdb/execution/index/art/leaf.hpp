@@ -53,9 +53,8 @@ public:
 
 	//! Inserts a row ID into an inlined leaf.
 	static void InsertIntoInlined(ART &art, Node &node, reference<const ARTKey> row_id);
-	//! Removes a row ID from the leaf.
-	//! Returns true, if the leaf is empty after the removal, else false.
-	static bool Remove(ART &art, reference<Node> &node, const ARTKey &row_id);
+	//! Erase from a nested leaf.
+	static void EraseFromNested(ART &art, Node &child_node, const ARTKey &row_id);
 
 	//! Transforms a deprecated leaf to a nested leaf.
 	static void TransformToNested(ART &art, Node &node);

@@ -93,13 +93,13 @@ public:
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
 	//! Get the child (immutable) for the respective byte in the node
-	optional_ptr<const Node> GetChild(ART &art, const uint8_t byte) const;
+	const Node *GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child for the respective byte in the node
-	optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte) const;
+	Node *GetChildMutable(ART &art, const uint8_t byte) const;
 	//! Get the first child (immutable) that is greater or equal to the specific byte
-	optional_ptr<const Node> GetNextChild(ART &art, uint8_t &byte) const;
+	const Node *GetNextChild(ART &art, uint8_t &byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChildMutable(ART &art, uint8_t &byte) const;
+	Node *GetNextChildMutable(ART &art, uint8_t &byte) const;
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	string VerifyAndToString(ART &art, const bool only_verify) const;
@@ -111,11 +111,11 @@ public:
 	//! Initializes a merge by incrementing the buffer IDs of a node and its subtree
 	void InitializeMerge(ART &art, const ARTFlags &flags);
 	//! Merge another node into this node
-	bool Merge(ART &art, Node &other);
+	bool Merge(ART &art, Node &other, const bool inside_gate);
 	//! Merge two nodes by first resolving their prefixes
-	bool ResolvePrefixes(ART &art, Node &other);
+	bool ResolvePrefixes(ART &art, Node &other, const bool inside_gate);
 	//! Merge two nodes that have no prefix or the same prefix
-	bool MergeInternal(ART &art, Node &other);
+	bool MergeInternal(ART &art, Node &other, const bool inside_gate);
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
 	void Vacuum(ART &art, const ARTFlags &flags);

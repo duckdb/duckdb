@@ -7,35 +7,15 @@
 
 namespace duckdb {
 
-// TODO: understand when we go through a gate (use flag).
+//===--------------------------------------------------------------------===//
+// IteratorKey
+//===--------------------------------------------------------------------===//
 
-bool IteratorKey::operator>(const ARTKey &key) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), key.len); i++) {
-		if (key_bytes[i] > key.data[i]) {
-			return true;
-		} else if (key_bytes[i] < key.data[i]) {
-			return false;
-		}
+bool IteratorKey::Contains(const ARTKey &key) const {
+	if (Size() < key.len) {
+		return false;
 	}
-	return key_bytes.size() > key.len;
-}
-
-bool IteratorKey::operator>=(const ARTKey &key) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), key.len); i++) {
-		if (key_bytes[i] > key.data[i]) {
-			return true;
-		} else if (key_bytes[i] < key.data[i]) {
-			return false;
-		}
-	}
-	return key_bytes.size() >= key.len;
-}
-
-bool IteratorKey::operator==(const ARTKey &key) const {
-	// NOTE: we only use this for finding the LowerBound, in which case the length
-	// has to be equal
-	D_ASSERT(key_bytes.size() == key.len);
-	for (idx_t i = 0; i < key_bytes.size(); i++) {
+	for (idx_t i = 0; i < key.len; i++) {
 		if (key_bytes[i] != key.data[i]) {
 			return false;
 		}
@@ -43,19 +23,34 @@ bool IteratorKey::operator==(const ARTKey &key) const {
 	return true;
 }
 
+bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(Size(), key.len); i++) {
+		if (key_bytes[i] > key.data[i]) {
+			return true;
+		} else if (key_bytes[i] < key.data[i]) {
+			return false;
+		}
+	}
+	if (equal) {
+		// Returns true, if current_key is greater than key.
+		return Size() > key.len;
+	}
+	// Returns true, if current_key and key match or current_key is greater than key.
+	return Size() >= key.len;
+}
+
+//===--------------------------------------------------------------------===//
+// Iterator
+//===--------------------------------------------------------------------===//
+
 bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row_t> &row_ids, const bool equal) {
 	bool has_next;
 	do {
-		if (!upper_bound.Empty()) {
-			// No more row IDs within the key bounds.
-			if (equal) {
-				if (current_key > upper_bound) {
-					return true;
-				}
-			} else {
-				if (current_key >= upper_bound) {
-					return true;
-				}
+		// An empty upper bound indicates that no upper bound exists.
+		// Any dedicated nested leaf scans always have an empty upper bound.
+		if (!upper_bound.Empty() && !inside_gate) {
+			if (current_key.GreaterThan(upper_bound, equal)) {
+				return true;
 			}
 		}
 
@@ -65,6 +60,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 			}
 			row_ids.push_back(last_leaf.GetRowId());
 		} else {
+			D_ASSERT(last_leaf.GetType() == NType::LEAF);
 			if (!Leaf::DeprecatedGetRowIds(*art, last_leaf, row_ids, max_count)) {
 				return false;
 			}
@@ -72,7 +68,6 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 
 		has_next = Next();
 	} while (has_next);
-
 	return true;
 }
 
@@ -85,7 +80,13 @@ void Iterator::FindMinimum(const Node &node) {
 		return;
 	}
 
-	// Traverse the prefix
+	// We are passing a gate node.
+	if (node.IsGate()) {
+		D_ASSERT(!inside_gate);
+		inside_gate = true;
+	}
+
+	// Traverse the prefix.
 	if (node.GetType() == NType::PREFIX) {
 		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
@@ -95,84 +96,96 @@ void Iterator::FindMinimum(const Node &node) {
 		return FindMinimum(prefix.ptr);
 	}
 
-	// go to the leftmost entry in the current node and recurse
+	// Go to the leftmost entry in the current node.
 	uint8_t byte = 0;
 	auto next = node.GetNextChild(*art, byte);
 	D_ASSERT(next);
+
+	// Recurse on the leftmost node.
 	current_key.Push(byte);
 	nodes.emplace(node, byte);
 	FindMinimum(*next);
 }
 
 bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth) {
-
 	if (!node.HasMetadata()) {
 		return false;
 	}
 
-	// We found the lower bound.
+	// We found any leaf node.
 	if (node.IsAnyLeaf()) {
-		if (!equal && current_key == key) {
+		D_ASSERT(!inside_gate);
+		D_ASSERT(current_key.Size() == key.len);
+		if (!equal && current_key.Contains(key)) {
 			return Next();
 		}
-		last_leaf = node;
+
+		if (node.IsGate()) {
+			FindMinimum(node);
+		} else {
+			last_leaf = node;
+		}
 		return true;
 	}
 
+	D_ASSERT(!node.IsGate());
 	if (node.GetType() != NType::PREFIX) {
 		auto next_byte = key[depth];
 		auto child = node.GetNextChild(*art, next_byte);
+
+		// The key is greater than any key in this subtree.
 		if (!child) {
-			// the key is greater than any key in this subtree
 			return Next();
 		}
 
 		current_key.Push(next_byte);
 		nodes.emplace(node, next_byte);
 
+		// We return the minimum because all keys are greater than the lower bound.
 		if (next_byte > key[depth]) {
-			// we only need to find the minimum from here
-			// because all keys will be greater than the lower bound
 			FindMinimum(*child);
 			return true;
 		}
 
-		// recurse into the child
+		// We recurse into the child.
 		return LowerBound(*child, key, equal, depth + 1);
 	}
 
-	// resolve the prefix
+	// Push back all prefix bytes.
 	auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 		current_key.Push(prefix.data[i]);
 	}
 	nodes.emplace(node, 0);
 
+	// We compare the prefix bytes with the key bytes.
 	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-		// the key down to this node is less than the lower bound, the next key will be
-		// greater than the lower bound
+		// We found a prefix byte that is less than its corresponding key byte.
+		// I.e., the subsequent node is lesser than the key. Thus, the next node
+		// is the lower bound.
 		if (prefix.data[i] < key[depth + i]) {
 			return Next();
 		}
-		// we only need to find the minimum from here
-		// because all keys will be greater than the lower bound
+
+		// We found a prefix byte that is greater than its corresponding key byte.
+		// I.e., the subsequent node is greater than the key. Thus, the minimum is
+		// the lower bound.
 		if (prefix.data[i] > key[depth + i]) {
 			FindMinimum(prefix.ptr);
 			return true;
 		}
 	}
 
-	// recurse into the child
+	// The prefix matches the key. We recurse into the child.
 	depth += prefix.data[Node::PREFIX_SIZE];
 	return LowerBound(prefix.ptr, key, equal, depth);
 }
 
 bool Iterator::Next() {
-
 	while (!nodes.empty()) {
-
 		auto &top = nodes.top();
-		D_ASSERT(!top.node.IsAnyLeaf());
+		D_ASSERT(top.node.GetType() != NType::LEAF_INLINED);
+		D_ASSERT(top.node.GetType() != NType::LEAF);
 
 		if (top.node.GetType() == NType::PREFIX) {
 			PopNode();
@@ -180,7 +193,8 @@ bool Iterator::Next() {
 		}
 
 		if (top.byte == NumericLimits<uint8_t>::Maximum()) {
-			// no node found: move up the tree, pop key byte of current node
+			// No more children of this node.
+			// Move up the tree by popping the key byte of the current node.
 			PopNode();
 			continue;
 		}
@@ -188,6 +202,8 @@ bool Iterator::Next() {
 		top.byte++;
 		auto next_node = top.node.GetNextChild(*art, top.byte);
 		if (!next_node) {
+			// No more children of this node.
+			// Move up the tree by popping the key byte of the current node.
 			PopNode();
 			continue;
 		}
@@ -202,13 +218,23 @@ bool Iterator::Next() {
 }
 
 void Iterator::PopNode() {
-	if (nodes.top().node.GetType() == NType::PREFIX) {
-		auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, NType::PREFIX);
-		auto prefix_byte_count = prefix.data[Node::PREFIX_SIZE];
-		current_key.Pop(prefix_byte_count);
-	} else {
-		current_key.Pop(1);
+	// We are popping a gate node.
+	if (nodes.top().node.IsGate()) {
+		D_ASSERT(inside_gate);
+		inside_gate = false;
 	}
+
+	// Pop the byte and the node.
+	if (nodes.top().node.GetType() != NType::PREFIX) {
+		current_key.Pop(1);
+		nodes.pop();
+		return;
+	}
+
+	// Pop all prefix bytes and the node.
+	auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, NType::PREFIX);
+	auto prefix_byte_count = prefix.data[Node::PREFIX_SIZE];
+	current_key.Pop(prefix_byte_count);
 	nodes.pop();
 }
 

@@ -511,7 +511,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			if (keys[i].Empty()) {
 				continue;
 			}
-			Erase(tree, keys[i], 0, row_id_keys[i]);
+			Erase(tree, keys[i], 0, row_id_keys[i], tree.IsGate());
 		}
 	}
 
@@ -573,6 +573,9 @@ bool ART::Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference
 
 	// Insert the row ID into an existing inlined leaf.
 	if (node.GetType() == NType::LEAF_INLINED) {
+		if (IsUnique()) {
+			return false;
+		}
 		Leaf::InsertIntoInlined(*this, node, row_id_key);
 		return true;
 	}
@@ -580,7 +583,6 @@ bool ART::Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference
 	// Transform a deprecated leaf.
 	if (node.GetType() == NType::LEAF) {
 		Leaf::TransformToNested(*this, node);
-		return Insert(node, key, depth, row_id_key);
 	}
 
 	// Enter a nested leaf.
@@ -622,16 +624,21 @@ bool ART::Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference
 	// We recurse into the next node, if
 	// (1) the prefix matches the key, or
 	// (2) we reach a gate (which can start with a PREFIX node).
-	if (next_node.get().GetType() != NType::PREFIX || next_node.get().IsGate()) {
-		return Insert(next_node, key, depth, row_id_key);
+	if (mismatch_position == DConstants::INVALID_INDEX) {
+		if (next_node.get().GetType() != NType::PREFIX || next_node.get().IsGate()) {
+			return Insert(next_node, key, depth, row_id_key);
+		}
 	}
 
 	// If the prefix does not match the key, we create a new Node4. It has two children, which are
 	// the remaining part of the prefix, and the new inlined leaf.
 	Node remaining_prefix;
 	auto prefix_byte = Prefix::GetByte(*this, next_node, mismatch_position);
-	Prefix::Split(*this, next_node, remaining_prefix, mismatch_position);
+	auto freed_gate = Prefix::Split(*this, next_node, remaining_prefix, mismatch_position);
 	Node4::New(*this, next_node);
+	if (freed_gate) {
+		next_node.get().SetGate();
+	}
 
 	// Insert the remaining prefix into the new Node4.
 	Node4::InsertChild(*this, next_node, prefix_byte, remaining_prefix);
@@ -678,7 +685,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		Erase(tree, keys[i], 0, row_id_keys[i]);
+		Erase(tree, keys[i], 0, row_id_keys[i], tree.IsGate());
 	}
 
 #ifdef DEBUG
@@ -692,60 +699,80 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #endif
 }
 
-void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key) {
+void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key,
+                bool inside_gate) {
+	// TODO: add description with "ahead looking for inlined leaf, otherwise recurse
+
 	if (!node.HasMetadata()) {
 		return;
 	}
 
-	// Prefix handling.
+	// Traverse the prefix.
 	reference<Node> next_node(node);
 	if (next_node.get().GetType() == NType::PREFIX) {
 		Prefix::TraverseMutable(*this, next_node, key, depth);
-		if (next_node.get().IsGate()) {
-			// TODO?
-		}
-		if (next_node.get().GetType() == NType::PREFIX) {
+		if (next_node.get().GetType() == NType::PREFIX && !next_node.get().IsGate()) {
 			return;
 		}
 	}
 
-	// Delete the row ID from the leaf.
-	// This is the root node, which can be a leaf with possible prefix nodes.
-	if (next_node.get().IsAnyLeaf()) {
-		if (Leaf::Remove(*this, next_node, row_id_key)) {
+	//	Delete the row ID from the leaf.
+	//	This is the root node, which can be a leaf with possible prefix nodes.
+	if (next_node.get().GetType() == NType::LEAF_INLINED) {
+		if (next_node.get().GetRowId() == row_id_key.get().GetRowID()) {
 			Node::Free(*this, node);
 		}
 		return;
 	}
 
-	D_ASSERT(depth < key.len);
-	auto child = next_node.get().GetChildMutable(*this, key[depth]);
+	// Transform a deprecated leaf.
+	if (next_node.get().GetType() == NType::LEAF) {
+		D_ASSERT(!inside_gate);
+		Leaf::TransformToNested(*this, next_node);
+	}
+
+	// Enter a nested leaf.
+	if (!inside_gate && next_node.get().IsGate()) {
+		return Leaf::EraseFromNested(*this, next_node, row_id_key);
+	}
+
+	D_ASSERT(depth < key.get().len);
+	auto child = next_node.get().GetChildMutable(*this, key.get()[depth]);
 	if (!child) {
 		return;
 	}
 
-	D_ASSERT(child->HasMetadata());
+	// Transform a deprecated leaf.
+	if (child->GetType() == NType::LEAF) {
+		D_ASSERT(!inside_gate);
+		Leaf::TransformToNested(*this, *child);
+	}
+
+	// Enter a nested leaf.
+	if (!inside_gate && child->IsGate()) {
+		return Leaf::EraseFromNested(*this, *child, row_id_key);
+	}
 
 	auto temp_depth = depth + 1;
 	reference<Node> child_node(*child);
+
 	if (child_node.get().GetType() == NType::PREFIX) {
 		Prefix::TraverseMutable(*this, child_node, key, temp_depth);
-		if (child_node.get().GetType() == NType::PREFIX) {
+		if (child_node.get().GetType() == NType::PREFIX && !child_node.get().IsGate()) {
 			return;
 		}
 	}
 
-	if (child_node.get().IsAnyLeaf()) {
-		// We found a leaf from which to remove the row ID.
-		if (Leaf::Remove(*this, child_node, row_id_key)) {
-			Node::DeleteChild(*this, next_node, node, key[depth]);
+	if (child_node.get().GetType() == NType::LEAF_INLINED) {
+		if (child_node.get().GetRowId() == row_id_key.get().GetRowID()) {
+			Node::DeleteChild(*this, next_node, node, key.get()[depth]);
 		}
 		return;
 	}
 
 	// Recurse.
-	Erase(*child, key, depth + 1, row_id_key);
-	next_node.get().ReplaceChild(*this, key[depth], *child);
+	Erase(*child, key, depth + 1, row_id_key, inside_gate);
+	next_node.get().ReplaceChild(*this, key.get()[depth], *child);
 }
 
 //===--------------------------------------------------------------------===//
@@ -836,7 +863,7 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, vector<ro
 	it.FindMinimum(tree);
 
 	// Early-out, if the minimum value is higher than the upper bound.
-	if (it.current_key > upper_bound) {
+	if (it.current_key.GreaterThan(upper_bound, equal)) {
 		return true;
 	}
 
@@ -989,6 +1016,12 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 	auto key_name = GenerateErrorKeyName(input, found_conflict);
 	auto exception_msg = GenerateConstraintErrorMessage(conflict_manager.LookupType(), key_name);
 	throw ConstraintException(exception_msg);
+}
+
+string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
+	auto key_name = GenerateErrorKeyName(input, failed_index);
+	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
+	return exception_msg;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1152,7 +1185,8 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 	}
 
 	// Merge the ARTs.
-	if (!tree.Merge(*this, other_art.tree)) {
+	D_ASSERT(tree.IsGate() == other_art.tree.IsGate());
+	if (!tree.Merge(*this, other_art.tree, tree.IsGate())) {
 		return false;
 	}
 	return true;
@@ -1171,12 +1205,6 @@ string ART::VerifyAndToStringInternal(const bool only_verify) {
 		return "ART: " + tree.VerifyAndToString(*this, only_verify);
 	}
 	return "[empty]";
-}
-
-string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
-	auto key_name = GenerateErrorKeyName(input, failed_index);
-	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
-	return exception_msg;
 }
 
 constexpr const char *ART::TYPE_NAME;

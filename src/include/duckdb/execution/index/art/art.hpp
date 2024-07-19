@@ -124,7 +124,8 @@ public:
 	//! Insert a key into the tree.
 	bool Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key);
 	//! Erase a key from the tree (non-inlined) or erase the leaf itself (inlined).
-	void Erase(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
+	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key,
+	           bool inside_gate);
 
 private:
 	//! Insert a row ID into an empty node.

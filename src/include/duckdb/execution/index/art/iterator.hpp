@@ -34,14 +34,20 @@ public:
 	inline void Pop(const idx_t n) {
 		key_bytes.resize(key_bytes.size() - n);
 	}
-
+	//! Returns the byte at idx.
 	inline uint8_t &operator[](idx_t idx) {
 		D_ASSERT(idx < key_bytes.size());
 		return key_bytes[idx];
 	}
-	bool operator>(const ARTKey &key) const;
-	bool operator>=(const ARTKey &key) const;
-	bool operator==(const ARTKey &key) const;
+	// Returns the number of key bytes.
+	inline idx_t Size() const {
+		return key_bytes.size();
+	}
+
+	//! Returns true, if key_bytes contains all bytes of key.
+	bool Contains(const ARTKey &key) const;
+	//! Returns true, if key_bytes is greater than [or equal to] the key.
+	bool GreaterThan(const ARTKey &key, bool equal) const;
 
 private:
 	vector<uint8_t> key_bytes;
@@ -49,7 +55,7 @@ private:
 
 class Iterator {
 public:
-	explicit Iterator(ART &art) : art(art) {};
+	explicit Iterator(ART &art) : art(art), inside_gate(false) {};
 
 	//! Holds the current key leading down to the top node on the stack.
 	IteratorKey current_key;
@@ -70,6 +76,8 @@ private:
 	stack<IteratorEntry> nodes;
 	//! Last visited leaf node.
 	Node last_leaf = Node();
+	//! True, if we passed a gate.
+	bool inside_gate = false;
 
 	//! Goes to the next leaf in the ART and sets it as last_leaf,
 	//! returns false if there is no next leaf.

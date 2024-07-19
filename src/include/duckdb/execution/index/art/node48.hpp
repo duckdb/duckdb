@@ -51,17 +51,21 @@ public:
 	//! Replace the child node at byte
 	inline void ReplaceChild(const uint8_t byte, const Node child) {
 		D_ASSERT(child_index[byte] != Node::EMPTY_MARKER);
+		auto was_gate = children[child_index[byte]].IsGate();
 		children[child_index[byte]] = child;
+		if (was_gate && child.HasMetadata()) {
+			children[child_index[byte]].SetGate();
+		}
 	}
 
 	//! Get the (immutable) child for the respective byte in the node
-	optional_ptr<const Node> GetChild(const uint8_t byte) const;
+	const Node *GetChild(const uint8_t byte) const;
 	//! Get the child for the respective byte in the node
-	optional_ptr<Node> GetChildMutable(const uint8_t byte);
+	Node *GetChildMutable(const uint8_t byte);
 	//! Get the first (immutable) child that is greater or equal to the specific byte
-	optional_ptr<const Node> GetNextChild(uint8_t &byte) const;
+	const Node *GetNextChild(uint8_t &byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChildMutable(uint8_t &byte);
+	Node *GetNextChildMutable(uint8_t &byte);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
