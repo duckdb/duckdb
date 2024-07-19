@@ -15,7 +15,7 @@ SourceResultType PhysicalSetVariable::GetData(ExecutionContext &context, DataChu
 
 SinkResultType PhysicalSetVariable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	if (chunk.size() != 1) {
-		throw InternalException("PhysicalSetVariable can only handle a single value");
+		throw InvalidInputException("PhysicalSetVariable can only handle a single value");
 	}
 	auto &config = ClientConfig::GetConfig(context.client);
 	config.SetUserVariable(name, chunk.GetValue(0, 0));

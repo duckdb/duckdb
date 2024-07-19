@@ -54,3 +54,14 @@ query I
 SELECT GETVARIABLE('animals')
 ----
 [duck, goose]
+
+statement error
+SET VARIABLE animals=UNNEST([1,2,3])
+----
+can only handle a single value
+
+# variable does not exist
+query I
+SELECT GETVARIABLE('xxx')
+----
+NULL
