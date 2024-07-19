@@ -929,9 +929,6 @@ public:
 	WindowAggregateExecutorGlobalState(const WindowAggregateExecutor &executor, const idx_t payload_count,
 	                                   const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
-	ExpressionExecutor filter_executor;
-	SelectionVector filter_sel;
-
 	// aggregate computation algorithm
 	unique_ptr<WindowAggregator> aggregator;
 	// aggregate global state
@@ -1043,7 +1040,7 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
                                                                        const idx_t group_count,
                                                                        const ValidityMask &partition_mask,
                                                                        const ValidityMask &order_mask)
-    : WindowExecutorGlobalState(executor, group_count, partition_mask, order_mask), filter_executor(executor.context) {
+    : WindowExecutorGlobalState(executor, group_count, partition_mask, order_mask) {
 	auto &wexpr = executor.wexpr;
 	auto &context = executor.context;
 	auto return_type = wexpr.return_type;
@@ -1070,12 +1067,6 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
 	}
 
 	gsink = aggregator->GetGlobalState(group_count, partition_mask);
-
-	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
-	if (wexpr.filter_expr) {
-		filter_executor.AddExpression(*wexpr.filter_expr);
-		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
-	}
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(const idx_t payload_count,
@@ -1087,15 +1078,26 @@ unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(co
 class WindowAggregateExecutorLocalState : public WindowExecutorBoundsState {
 public:
 	WindowAggregateExecutorLocalState(const WindowExecutorGlobalState &gstate, const WindowAggregator &aggregator)
-	    : WindowExecutorBoundsState(gstate) {
+	    : WindowExecutorBoundsState(gstate), filter_executor(gstate.executor.context) {
 
 		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 		aggregator_state = aggregator.GetLocalState(*gastate.gsink);
+
+		// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
+		auto &wexpr = gstate.executor.wexpr;
+		if (wexpr.filter_expr) {
+			filter_executor.AddExpression(*wexpr.filter_expr);
+			filter_sel.Initialize(STANDARD_VECTOR_SIZE);
+		}
 	}
 
 public:
 	// state of aggregator
 	unique_ptr<WindowAggregatorState> aggregator_state;
+	//! Executor for any filter clause
+	ExpressionExecutor filter_executor;
+	//! Result of filtering
+	SelectionVector filter_sel;
 };
 
 unique_ptr<WindowExecutorLocalState>
@@ -1109,8 +1111,8 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
                                    WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
-	auto &filter_sel = gastate.filter_sel;
-	auto &filter_executor = gastate.filter_executor;
+	auto &filter_sel = lastate.filter_sel;
+	auto &filter_executor = lastate.filter_executor;
 	auto &payload_executor = lastate.payload_executor;
 	auto &payload_chunk = lastate.payload_chunk;
 	auto &aggregator = gastate.aggregator;
