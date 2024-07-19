@@ -306,7 +306,7 @@ public:
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
 
-	template<class OP>
+	template <class OP>
 	typename OP::SETTING_TYPE GetSetting() const {
 		lock_guard<mutex> lock(config_lock);
 		OP::GetSetting(*this);

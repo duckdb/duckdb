@@ -2,8 +2,8 @@
 # description: Test SQL variables
 # group: [variables]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 SET VARIABLE animal = 'duck'

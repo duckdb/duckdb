@@ -23,7 +23,7 @@ struct GetVariableBindData : FunctionData {
 };
 
 static unique_ptr<FunctionData> GetVariableBind(ClientContext &context, ScalarFunction &function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+                                                vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[0]->IsFoldable()) {
 		throw NotImplementedException("getvariable requires a constant input");
 	}
@@ -50,8 +50,7 @@ unique_ptr<Expression> BindGetVariableExpression(FunctionBindExpressionInput &in
 }
 
 void GetVariableFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction getvar("getvariable", {LogicalType::VARCHAR}, LogicalType::ANY,
-	                        nullptr, GetVariableBind, nullptr);
+	ScalarFunction getvar("getvariable", {LogicalType::VARCHAR}, LogicalType::ANY, nullptr, GetVariableBind, nullptr);
 	getvar.bind_expression = BindGetVariableExpression;
 	set.AddFunction(getvar);
 }

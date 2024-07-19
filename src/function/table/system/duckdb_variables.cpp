@@ -25,7 +25,7 @@ struct DuckDBVariablesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBVariablesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -42,7 +42,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBVariablesInit(ClientContext &context,
 	auto result = make_uniq<DuckDBVariablesData>();
 	auto &config = ClientConfig::GetConfig(context);
 
-	for(auto &entry : config.user_variables) {
+	for (auto &entry : config.user_variables) {
 		VariableData data;
 		data.name = entry.first;
 		data.value = entry.second;
@@ -77,7 +77,8 @@ void DuckDBVariablesFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 void DuckDBVariablesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_variables", {}, DuckDBVariablesFunction, DuckDBVariablesBind, DuckDBVariablesInit));
+	set.AddFunction(
+	    TableFunction("duckdb_variables", {}, DuckDBVariablesFunction, DuckDBVariablesBind, DuckDBVariablesInit));
 }
 
 } // namespace duckdb

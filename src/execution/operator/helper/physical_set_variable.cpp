@@ -4,10 +4,12 @@
 namespace duckdb {
 
 PhysicalSetVariable::PhysicalSetVariable(string name_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::SET_VARIABLE, {LogicalType::BOOLEAN}, estimated_cardinality), name(std::move(name_p)) {
+    : PhysicalOperator(PhysicalOperatorType::SET_VARIABLE, {LogicalType::BOOLEAN}, estimated_cardinality),
+      name(std::move(name_p)) {
 }
 
-SourceResultType PhysicalSetVariable::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalSetVariable::GetData(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
 	return SourceResultType::FINISHED;
 }
 
@@ -20,4 +22,4 @@ SinkResultType PhysicalSetVariable::Sink(ExecutionContext &context, DataChunk &c
 	return SinkResultType::FINISHED;
 }
 
-}
+} // namespace duckdb
