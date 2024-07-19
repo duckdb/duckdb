@@ -223,11 +223,11 @@ public:
 class SecretSettingGetter {
 public:
 	//! Manually pass in a secret reference
-	SecretSettingGetter(const KeyValueSecret& secret_p, FileOpener &opener_p) : secret(secret_p), opener(opener_p){};
+	SecretSettingGetter(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p), opener(opener_p) {};
 
 	//! Initializes the SecretSettingGetter by fetching the secret automatically
-	SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char** secret_types, idx_t secret_types_len);
-	SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char* secret_type);
+	SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char **secret_types, idx_t secret_types_len);
+	SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char *secret_type);
 
 	~SecretSettingGetter();
 
@@ -238,7 +238,8 @@ public:
 
 	//! Templating around TryGetSecretOrSetting
 	template <class TYPE>
-	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, TYPE &value_out) {
+	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
+	                                             TYPE &value_out) {
 		Value result;
 		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
 		if (lookup_result) {

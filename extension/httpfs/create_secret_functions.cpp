@@ -11,7 +11,8 @@ void CreateS3SecretFunctions::Register(DatabaseInstance &instance) {
 	RegisterCreateSecretFunction(instance, "gcs");
 }
 
-unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input) {
+unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(ClientContext &context,
+                                                                             CreateSecretInput &input) {
 	// Set scope to user provided scope or the default
 	auto scope = input.scope;
 	if (scope.empty()) {
