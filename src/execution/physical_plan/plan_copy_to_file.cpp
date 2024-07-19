@@ -2,7 +2,6 @@
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
-#include "duckdb/function/copy_function.hpp"
 
 namespace duckdb {
 

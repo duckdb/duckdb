@@ -1,6 +1,4 @@
 #include "duckdb/function/copy_function.hpp"
-#include <numeric>
-#include "duckdb/planner/operator/logical_copy_to_file.hpp"
 
 namespace duckdb {
 
