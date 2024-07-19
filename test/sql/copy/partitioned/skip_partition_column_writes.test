@@ -85,15 +85,9 @@ SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, valu
 ----
 1	2	3	4	5	6	7	8	9	10
 
-# Throw error if there's no column to write by skipping partition column writes
-statement error
-COPY test TO '__TEST_DIR__/no-part-cols8' (FORMAT PARQUET, PARTITION_BY (part_col, value_col, value2_col));
-----
-Not implemented Error: There is no column to write because all columns are specified with PARTITION_BY option. Consider using WRITE_PARTITION_COLUMNS option to write partition columns.
-
-# However if WRITE_PARTITION_COLUMNS option is used, all columns would still be written and still readable.
+# Implicitly write partition columns when all columns are specified as partitions
 statement ok
-COPY test TO '__TEST_DIR__/no-part-cols8' (FORMAT PARQUET, PARTITION_BY (part_col, value_col, value2_col), WRITE_PARTITION_COLUMNS);
+COPY test TO '__TEST_DIR__/no-part-cols8' (FORMAT PARQUET, PARTITION_BY (part_col, value_col, value2_col));
 
 query III
 SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols8/part_col=0/value_col=*/value2_col=*/*.parquet' ORDER BY value2_col;
@@ -104,14 +98,36 @@ SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols8/part_col
 0	2	6
 0	4	8
 
-statement error
-COPY test TO '__TEST_DIR__/no-part-cols9' (FORMAT PARQUET, PARTITION_BY '*');
-----
-Not implemented Error: There is no column to write because all columns are specified with PARTITION_BY option. Consider using WRITE_PARTITION_COLUMNS option to write partition columns.
-
-# However if WRITE_PARTITION_COLUMNS option is used, all columns would still be written and still readable.
+# With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
 statement ok
-COPY test TO '__TEST_DIR__/no-part-cols9' (FORMAT PARQUET, PARTITION_BY '*', WRITE_PARTITION_COLUMNS);
+COPY test TO '__TEST_DIR__/no-part-cols8' (FORMAT PARQUET, OVERWRITE, PARTITION_BY (part_col, value_col, value2_col), WRITE_PARTITION_COLUMNS);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols8/part_col=0/value_col=*/value2_col=*/*.parquet' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# '*' also ends up with implicit write of partition columns
+statement ok
+COPY test TO '__TEST_DIR__/no-part-cols9' (FORMAT PARQUET, PARTITION_BY '*');
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols9/part_col=0/value_col=*/value2_col=*/*.parquet' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+
+# With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
+statement ok
+COPY test TO '__TEST_DIR__/no-part-cols9' (FORMAT PARQUET, PARTITION_BY '*', OVERWRITE, WRITE_PARTITION_COLUMNS);
 
 query III
 SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols9/part_col=0/value_col=*/value2_col=*/*.parquet' ORDER BY value2_col;
@@ -200,15 +216,9 @@ SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, valu
 ----
 1	2	3	4	5	6	7	8	9	10
 
-# Throw error if there's no column to write 
-statement error
-COPY test TO '__TEST_DIR__/csv-no-part-cols8' (FORMAT CSV, PARTITION_BY (part_col, value_col, value2_col));
-----
-Not implemented Error: There is no column to write because all columns are specified with PARTITION_BY option. Consider using WRITE_PARTITION_COLUMNS option to write partition columns.
-
-# However if WRITE_PARTITION_COLUMNS option is used, all columns would still be written and still readable.
+# Implicitly write partition columns when all columns are specified as partitions
 statement ok
-COPY test TO '__TEST_DIR__/csv-no-part-cols8' (FORMAT CSV, PARTITION_BY (part_col, value_col, value2_col), WRITE_PARTITION_COLUMNS);
+COPY test TO '__TEST_DIR__/csv-no-part-cols8' (FORMAT CSV, PARTITION_BY (part_col, value_col, value2_col));
 
 query III
 SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols8/part_col=0/value_col=*/value2_col=*/*.csv' ORDER BY value2_col;
@@ -219,15 +229,35 @@ SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols8/part
 0	2	6
 0	4	8
 
-# Throw error if there's no column to write with *
-statement error
-COPY test TO '__TEST_DIR__/csv-no-part-cols9' (FORMAT CSV, PARTITION_BY '*');
-----
-Not implemented Error: There is no column to write because all columns are specified with PARTITION_BY option. Consider using WRITE_PARTITION_COLUMNS option to write partition columns.
-
-# However if WRITE_PARTITION_COLUMNS option is used, all columns would still be written and still readable.
+# With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
 statement ok
-COPY test TO '__TEST_DIR__/csv-no-part-cols9' (FORMAT CSV, PARTITION_BY '*', WRITE_PARTITION_COLUMNS);
+COPY test TO '__TEST_DIR__/csv-no-part-cols8' (FORMAT CSV, PARTITION_BY (part_col, value_col, value2_col), OVERWRITE, WRITE_PARTITION_COLUMNS);
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols8/part_col=0/value_col=*/value2_col=*/*.csv' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# '*' also ends up with implicit write of partition columns
+statement ok
+COPY test TO '__TEST_DIR__/csv-no-part-cols9' (FORMAT CSV, PARTITION_BY '*');
+
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols9/part_col=0/value_col=*/value2_col=*/*.csv' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
+statement ok
+COPY test TO '__TEST_DIR__/csv-no-part-cols9' (FORMAT CSV, PARTITION_BY '*', OVERWRITE, WRITE_PARTITION_COLUMNS);
 
 query III
 SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols9/part_col=0/value_col=*/value2_col=*/*.csv' ORDER BY value2_col;

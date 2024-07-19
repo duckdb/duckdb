@@ -16,13 +16,13 @@ select count(*) from glob('__TEST_DIR__/csv_partition_1/**');
 ----
 2
 
-# without HIVE_PARTITIONING=1, directory names won't be read unless they are written in data
+#	with HIVE_PARTITIONING=0, directory names won't be read unless they are written in data
 query III
 select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_1/**', names=['a','b','c','d'], HIVE_PARTITIONING=0) LIMIT 1;
 ----
 a	b	c
 
-# with HIVE_PARTITIONING, column name from directory name supercedes "names" parameter
+#	with HIVE_PARTITIONING, column name from directory name supercedes "names" parameter
 query IIII
 select alias(columns(*)) from read_csv_auto('__TEST_DIR__/csv_partition_1/**', names=['a','b','c','d'], HIVE_PARTITIONING=1) LIMIT 1;
 ----

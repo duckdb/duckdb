@@ -7,7 +7,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/copy_function.hpp"
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
 
 #include <algorithm>
 
@@ -227,6 +227,22 @@ public:
 		part_buffer_append_state.reset();
 		part_buffer.reset();
 		append_count = 0;
+	}
+
+	void SetDataWithoutPartitions(DataChunk &chunk, const DataChunk &source, const vector<LogicalType> &col_types,
+	                              const vector<idx_t> &part_cols) {
+		D_ASSERT(source.ColumnCount() == col_types.size());
+		auto types = LogicalCopyToFile::GetTypesWithoutPartitions(col_types, part_cols, false);
+		chunk.InitializeEmpty(types);
+		set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
+		idx_t new_col_id = 0;
+		for (idx_t col_idx = 0; col_idx < source.ColumnCount(); col_idx++) {
+			if (part_col_set.find(col_idx) == part_col_set.end()) {
+				chunk.data[new_col_id].Reference(source.data[col_idx]);
+				new_col_id++;
+			}
+		}
+		chunk.SetCardinality(source.size());
 	}
 
 	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {

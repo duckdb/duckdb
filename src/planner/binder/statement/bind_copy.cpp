@@ -153,9 +153,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	}
 	if (!write_partition_columns) {
 		if (partition_cols.size() == select_node.names.size()) {
-			throw NotImplementedException(
-			    "There is no column to write because all columns are specified with PARTITION_BY option. Consider "
-			    "using WRITE_PARTITION_COLUMNS option to write partition columns.");
+			// Implicitly write partition columns when all columns are specified as partitions
+			write_partition_columns = true;
 		}
 	}
 	bool is_remote_file = FileSystem::IsRemoteFile(stmt.info->file_path);
