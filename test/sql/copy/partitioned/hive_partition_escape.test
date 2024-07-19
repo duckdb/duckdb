@@ -44,7 +44,7 @@ statement ok
 ALTER TABLE weird_tbl RENAME COLUMN key TO "=/ \\/"
 
 statement ok
-COPY weird_tbl TO '__TEST_DIR__/escaped_partitions_names' (FORMAT PARQUET, PARTITION_BY("=/ \\/"))
+COPY weird_tbl TO '__TEST_DIR__/escaped_partitions_names' (FORMAT PARQUET, PARTITION_BY("=/ \\/"), WRITE_PARTITION_COLUMNS)
 
 
 query II
