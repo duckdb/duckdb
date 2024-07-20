@@ -11,15 +11,22 @@ void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_p
 }
 
 inline void ColumnCountResult::InternalAddRow() {
-	column_counts[result_position++] = current_column_count + 1;
+	column_counts[result_position].number_of_columns = current_column_count + 1;
 	current_column_count = 0;
 }
 
 bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
 	result.InternalAddRow();
 	if (!result.states.EmptyLastValue()) {
-		result.last_value_always_empty = false;
+		idx_t col_count_idx = result.result_position;
+		for (idx_t i = 0; i < result.result_position + 1; i++) {
+			if (!result.column_counts[col_count_idx].last_value_always_empty) {
+				break;
+			}
+			result.column_counts[col_count_idx--].last_value_always_empty = false;
+		}
 	}
+	result.result_position++;
 	if (result.result_position >= result.result_size) {
 		// We sniffed enough rows
 		return true;
@@ -90,7 +97,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 					return;
 				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added
-				result.InternalAddRow();
+				result.AddRow(result, NumericLimits<idx_t>::Maximum());
 				return;
 			}
 			iterator.pos.buffer_pos = 0;
