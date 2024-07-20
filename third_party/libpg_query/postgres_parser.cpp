@@ -41,7 +41,7 @@ bool PostgresParser::IsKeyword(const std::string &text) {
 vector<duckdb_libpgquery::PGKeyword> PostgresParser::KeywordList() {
 	// FIXME: because of this, we might need to change the libpg_query library to use duckdb::vector
 	vector<duckdb_libpgquery::PGKeyword> tmp(duckdb_libpgquery::keyword_list());
-	return std::move(tmp);
+	return tmp;
 }
 
 void PostgresParser::SetPreserveIdentifierCase(bool preserve) {

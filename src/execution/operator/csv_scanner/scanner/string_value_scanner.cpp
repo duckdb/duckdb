@@ -1140,7 +1140,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 	}
 	bool skip_value = false;
 	if (result.projecting_columns) {
-		if (!result.projected_columns[result.cur_col_id]) {
+		if (!result.projected_columns[result.cur_col_id] && result.cur_col_id != result.number_of_columns) {
 			result.cur_col_id++;
 			skip_value = true;
 		}
@@ -1388,7 +1388,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		bool moved = MoveToNextBuffer();
 		if (cur_buffer_handle) {
-			if (moved && result.cur_col_id < result.number_of_columns && result.cur_col_id > 0) {
+			if (moved && result.cur_col_id > 0) {
 				ProcessExtraRow();
 			} else if (!moved) {
 				ProcessExtraRow();
