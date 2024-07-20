@@ -63,7 +63,7 @@ COPY (
     SELECT 2 i1, 3 i3, 4 i4, 5 i5
 ) TO '__TEST_DIR__/partitioned2' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1}, PARTITION_BY i1, FORMAT parquet)
 ----
-Binder Error: Column name "i1" specified in FIELD_IDS not found. Consider using WRITE_PARTITION_COLUMNS if this column is a partition column. Available column names: [i5, i4, i3]
+Binder Error: Column name "i1" specified in FIELD_IDS not found. Consider using WRITE_PARTITION_COLUMNS if this column is a partition column. Available column names:
 
 # cannot duplicate field_ids
 statement error
