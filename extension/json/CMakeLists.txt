@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(JSONExtension)
 
-include_directories(include)
+include_directories(include ../common/include ../../third_party/zstd/include)
+
 add_subdirectory(json_functions)
 
 set(JSON_EXTENSION_FILES
@@ -30,7 +31,29 @@ set(JSON_EXTENSION_FILES
     json_functions/json_serialize_sql.cpp
     json_functions/json_serialize_plan.cpp
     json_functions/read_json.cpp
-    json_functions/read_json_objects.cpp)
+    json_functions/read_json_objects.cpp
+    ../common/zstd_file_system.cpp
+    ../../third_party/zstd/decompress/zstd_ddict.cpp
+    ../../third_party/zstd/decompress/huf_decompress.cpp
+    ../../third_party/zstd/decompress/zstd_decompress.cpp
+    ../../third_party/zstd/decompress/zstd_decompress_block.cpp
+    ../../third_party/zstd/common/entropy_common.cpp
+    ../../third_party/zstd/common/fse_decompress.cpp
+    ../../third_party/zstd/common/zstd_common.cpp
+    ../../third_party/zstd/common/error_private.cpp
+    ../../third_party/zstd/common/xxhash.cpp
+    ../../third_party/zstd/compress/fse_compress.cpp
+    ../../third_party/zstd/compress/hist.cpp
+    ../../third_party/zstd/compress/huf_compress.cpp
+    ../../third_party/zstd/compress/zstd_compress.cpp
+    ../../third_party/zstd/compress/zstd_compress_literals.cpp
+    ../../third_party/zstd/compress/zstd_compress_sequences.cpp
+    ../../third_party/zstd/compress/zstd_compress_superblock.cpp
+    ../../third_party/zstd/compress/zstd_double_fast.cpp
+    ../../third_party/zstd/compress/zstd_fast.cpp
+    ../../third_party/zstd/compress/zstd_lazy.cpp
+    ../../third_party/zstd/compress/zstd_ldm.cpp
+    ../../third_party/zstd/compress/zstd_opt.cpp)
 
 build_static_extension(json ${JSON_EXTENSION_FILES})
 set(PARAMETERS "-warnings")

@@ -1,9 +1,11 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "json_extension.hpp"
+#include "zstd_file_system.hpp"
 
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -13,6 +15,8 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
+
+#include "zstd.h"
 
 namespace duckdb {
 
@@ -25,6 +29,10 @@ static DefaultMacro json_macros[] = {
 
 void JsonExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
+
+	auto &fs = db.GetFileSystem();
+	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
+
 	// JSON type
 	auto json_type = LogicalType::JSON();
 	ExtensionUtil::RegisterType(db_instance, LogicalType::JSON_TYPE_NAME, std::move(json_type));

@@ -4,6 +4,7 @@ project(ParquetExtension)
 
 include_directories(
   include
+  ../common/include
   ../../third_party/lz4
   ../../third_party/parquet
   ../../third_party/thrift
@@ -24,8 +25,8 @@ set(PARQUET_EXTENSION_FILES
     parquet_timestamp.cpp
     parquet_writer.cpp
     serialize_parquet.cpp
-    zstd_file_system.cpp
-    geo_parquet.cpp)
+    geo_parquet.cpp
+    ../common/zstd_file_system.cpp)
 
 if(NOT CLANG_TIDY)
   # parquet/thrift/snappy

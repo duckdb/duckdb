@@ -1,0 +1,13 @@
+# name: test/sql/json/table/read_json_zstd.test
+# description: Read ZSTD compressed json files straight to columnar data
+# group: [table]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT * FROM read_json('data/json/zstd_compressed.json.zst', auto_detect=True)
+----
+value
