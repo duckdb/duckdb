@@ -1,3 +1,4 @@
+#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include <cmath>
 #include <algorithm>
@@ -16,6 +17,9 @@ static void ListCosineSimilarity(DataChunk &args, ExpressionState &, Vector &res
 
 	auto &left_child = ListVector::GetEntry(left);
 	auto &right_child = ListVector::GetEntry(right);
+
+	left_child.Flatten(left_count);
+	right_child.Flatten(right_count);
 
 	D_ASSERT(left_child.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(right_child.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -40,6 +44,10 @@ static void ListCosineSimilarity(DataChunk &args, ExpressionState &, Vector &res
 		    }
 
 		    auto dimensions = left.length;
+
+		    if (dimensions == 0) {
+			    return NullValue<NUMERIC_TYPE>();
+		    }
 
 		    NUMERIC_TYPE distance = 0;
 		    NUMERIC_TYPE norm_l = 0;
