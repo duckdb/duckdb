@@ -4316,12 +4316,14 @@ NType EnumUtil::FromString<NType>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<NewLineIdentifier>(NewLineIdentifier value) {
 	switch(value) {
-	case NewLineIdentifier::SINGLE:
-		return "SINGLE";
+	case NewLineIdentifier::SINGLE_N:
+		return "SINGLE_N";
 	case NewLineIdentifier::CARRY_ON:
 		return "CARRY_ON";
 	case NewLineIdentifier::NOT_SET:
 		return "NOT_SET";
+	case NewLineIdentifier::SINGLE_R:
+		return "SINGLE_R";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4329,14 +4331,17 @@ const char* EnumUtil::ToChars<NewLineIdentifier>(NewLineIdentifier value) {
 
 template<>
 NewLineIdentifier EnumUtil::FromString<NewLineIdentifier>(const char *value) {
-	if (StringUtil::Equals(value, "SINGLE")) {
-		return NewLineIdentifier::SINGLE;
+	if (StringUtil::Equals(value, "SINGLE_N")) {
+		return NewLineIdentifier::SINGLE_N;
 	}
 	if (StringUtil::Equals(value, "CARRY_ON")) {
 		return NewLineIdentifier::CARRY_ON;
 	}
 	if (StringUtil::Equals(value, "NOT_SET")) {
 		return NewLineIdentifier::NOT_SET;
+	}
+	if (StringUtil::Equals(value, "SINGLE_R")) {
+		return NewLineIdentifier::SINGLE_R;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
