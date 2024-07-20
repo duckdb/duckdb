@@ -171,7 +171,7 @@ struct EquiWidthBinsDouble {
 		double step;
 		if (!Value::IsFinite(span)) {
 			// max - min does not fit
-			step = max / bin_count - min / bin_count;
+			step = max / static_cast<double>(bin_count) - min / static_cast<double>(bin_count);
 		} else {
 			step = span / static_cast<double>(bin_count);
 		}
