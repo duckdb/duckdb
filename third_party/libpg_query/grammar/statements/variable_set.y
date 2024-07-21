@@ -31,6 +31,12 @@ VariableSetStmt:
 					n->scope = VAR_SET_SCOPE_GLOBAL;
 					$$ = (PGNode *) n;
 				}
+			| SET VARIABLE_P set_rest
+				{
+					PGVariableSetStmt *n = $3;
+					n->scope = VAR_SET_SCOPE_VARIABLE;
+					$$ = (PGNode *) n;
+				}
 		;
 
 

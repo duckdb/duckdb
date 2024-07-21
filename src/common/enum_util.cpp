@@ -5140,6 +5140,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "EXPORT";
 	case PhysicalOperatorType::SET:
 		return "SET";
+	case PhysicalOperatorType::SET_VARIABLE:
+		return "SET_VARIABLE";
 	case PhysicalOperatorType::LOAD:
 		return "LOAD";
 	case PhysicalOperatorType::INOUT_FUNCTION:
@@ -5369,6 +5371,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "SET")) {
 		return PhysicalOperatorType::SET;
+	}
+	if (StringUtil::Equals(value, "SET_VARIABLE")) {
+		return PhysicalOperatorType::SET_VARIABLE;
 	}
 	if (StringUtil::Equals(value, "LOAD")) {
 		return PhysicalOperatorType::LOAD;
@@ -6218,6 +6223,8 @@ const char* EnumUtil::ToChars<SetScope>(SetScope value) {
 		return "SESSION";
 	case SetScope::GLOBAL:
 		return "GLOBAL";
+	case SetScope::VARIABLE:
+		return "VARIABLE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6236,6 +6243,9 @@ SetScope EnumUtil::FromString<SetScope>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "GLOBAL")) {
 		return SetScope::GLOBAL;
+	}
+	if (StringUtil::Equals(value, "VARIABLE")) {
+		return SetScope::VARIABLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

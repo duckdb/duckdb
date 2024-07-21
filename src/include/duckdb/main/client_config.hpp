@@ -126,6 +126,9 @@ struct ClientConfig {
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
 
+	//! Variables set by the user
+	case_insensitive_map_t<Value> user_variables;
+
 	//! Function that is used to create the result collector for a materialized result
 	//! Defaults to PhysicalMaterializedCollector
 	get_result_collector_t result_collector = nullptr;
@@ -142,6 +145,23 @@ public:
 
 	bool AnyVerification() {
 		return query_verification_enabled || verify_external || verify_serializer || verify_fetch_row;
+	}
+
+	void SetUserVariable(const string &name, Value value) {
+		user_variables[name] = std::move(value);
+	}
+
+	bool GetUserVariable(const string &name, Value &result) {
+		auto entry = user_variables.find(name);
+		if (entry == user_variables.end()) {
+			return false;
+		}
+		result = entry->second;
+		return true;
+	}
+
+	void ResetUserVariable(const string &name) {
+		user_variables.erase(name);
 	}
 
 public:
