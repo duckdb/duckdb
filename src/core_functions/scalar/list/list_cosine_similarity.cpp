@@ -1,4 +1,3 @@
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include <cmath>
 #include <algorithm>
@@ -46,7 +45,7 @@ static void ListCosineSimilarity(DataChunk &args, ExpressionState &, Vector &res
 		    auto dimensions = left.length;
 
 		    if (dimensions == 0) {
-			    return NullValue<NUMERIC_TYPE>();
+			    throw InvalidInputException("The cosine similarity for empty vectors is not defined");
 		    }
 
 		    NUMERIC_TYPE distance = 0;
