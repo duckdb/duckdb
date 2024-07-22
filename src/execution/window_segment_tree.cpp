@@ -827,6 +827,12 @@ public:
 
 	WindowSegmentTreeGlobalState(const WindowSegmentTree &aggregator, idx_t group_count);
 
+	ArenaAllocator &CreateTreeAllocator() {
+		lock_guard<mutex> tree_lock(lock);
+		tree_allocators.emplace_back(make_uniq<ArenaAllocator>(Allocator::DefaultAllocator()));
+		return *tree_allocators.back();
+	}
+
 	//! The owning aggregator
 	const WindowSegmentTree &tree;
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
@@ -839,6 +845,10 @@ public:
 	unique_ptr<AtomicCounters> build_started;
 	//! The number of entries completed so far at each level
 	unique_ptr<AtomicCounters> build_completed;
+	//! The tree allocators.
+	//! We need to hold onto them for the tree lifetime,
+	//! not the lifetime of the local state that constructed part of the tree
+	vector<unique_ptr<ArenaAllocator>> tree_allocators;
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 16;
@@ -1118,7 +1128,7 @@ void WindowSegmentTreeState::Finalize(WindowSegmentTreeGlobalState &gstate) {
 	auto &inputs = gstate.inputs;
 	auto &tree = gstate.tree;
 	auto &filter_mask = gstate.filter_mask;
-	WindowSegmentTreePart gtstate(allocator, tree.aggr, inputs, filter_mask);
+	WindowSegmentTreePart gtstate(gstate.CreateTreeAllocator(), tree.aggr, inputs, filter_mask);
 
 	auto &levels_flat_native = gstate.levels_flat_native;
 	const auto &levels_flat_start = gstate.levels_flat_start;
