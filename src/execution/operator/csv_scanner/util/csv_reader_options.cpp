@@ -611,7 +611,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 		named_params["escape"] = Value(GetEscape());
 	}
 	if (comment.IsSetByUser()) {
-		named_params["comment"] == Value(GetComment());
+		named_params["comment"] = Value(GetComment());
 	}
 	if (header.IsSetByUser()) {
 		named_params["header"] = Value(GetHeader());

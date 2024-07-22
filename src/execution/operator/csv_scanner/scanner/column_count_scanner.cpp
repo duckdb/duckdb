@@ -6,7 +6,7 @@ ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine, result_size) {
 }
 
-void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos) {
+void ColumnCountResult::AddValue(ColumnCountResult &result, idx_t buffer_pos) {
 	result.current_column_count++;
 }
 
@@ -15,7 +15,7 @@ inline void ColumnCountResult::InternalAddRow() {
 	current_column_count = 0;
 }
 
-bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
+bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 	result.InternalAddRow();
 	if (!result.states.EmptyLastValue()) {
 		idx_t col_count_idx = result.result_position;
@@ -34,12 +34,21 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos
 	return false;
 }
 
+bool ColumnCountResult::UnsetComment(ColumnCountResult &result, idx_t buffer_pos) {
+	// If we are unsetting a comment, it means this row started with a comment char.
+	// We add the row but tag it as a comment
+	bool done = result.AddRow(result, buffer_pos);
+	result.column_counts[result.result_position - 1].is_comment = true;
+	result.comment = false;
+	return done;
+}
+
 void ColumnCountResult::InvalidState(ColumnCountResult &result) {
 	result.result_position = 0;
 	result.error = true;
 }
 
-bool ColumnCountResult::EmptyLine(ColumnCountResult &result, const idx_t buffer_pos) {
+bool ColumnCountResult::EmptyLine(ColumnCountResult &result, idx_t buffer_pos) {
 	// nop
 	return false;
 }
@@ -97,7 +106,13 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 					return;
 				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added
-				result.AddRow(result, NumericLimits<idx_t>::Maximum());
+				if (result.comment) {
+					// If it's a comment we add the last line via unsetcomment
+					result.UnsetComment(result, NumericLimits<idx_t>::Maximum());
+				} else {
+					// OW, we do a regular AddRow
+					result.AddRow(result, NumericLimits<idx_t>::Maximum());
+				}
 				return;
 			}
 			iterator.pos.buffer_pos = 0;

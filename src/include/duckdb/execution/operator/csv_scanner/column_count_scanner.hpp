@@ -17,10 +17,16 @@
 
 namespace duckdb {
 
+//! Result of a sniffed tuples using the column count scanner
 struct ColumnCount {
+	//! Number of columns found in a row
 	idx_t number_of_columns = 0;
+	//! If all values from this row onwards are null
 	bool last_value_always_empty = true;
+	//! If this row is potentially a comment
+	bool is_comment = false;
 };
+
 class ColumnCountResult : public ScannerResult {
 public:
 	ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
@@ -34,15 +40,18 @@ public:
 	idx_t result_position = 0;
 
 	//! Adds a Value to the result
-	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos);
+	static inline void AddValue(ColumnCountResult &result, idx_t buffer_pos);
 	//! Adds a Row to the result
-	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos);
+	static inline bool AddRow(ColumnCountResult &result, idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void InvalidState(ColumnCountResult &result);
 	//! Handles QuotedNewline State
 	static inline void QuotedNewLine(ColumnCountResult &result);
 	//! Handles EmptyLine states
-	static inline bool EmptyLine(ColumnCountResult &result, const idx_t buffer_pos);
+	static inline bool EmptyLine(ColumnCountResult &result, idx_t buffer_pos);
+	//! Handles unset comment
+	static inline bool UnsetComment(ColumnCountResult &result, idx_t buffer_pos);
+
 	inline void InternalAddRow();
 };
 

@@ -34,8 +34,9 @@ public:
 	static inline void SetComment(ScannerResult &result) {
 		result.comment = true;
 	}
-	static inline void UnsetComment(ScannerResult &result, idx_t buffer_pos) {
+	static inline bool UnsetComment(ScannerResult &result, idx_t buffer_pos) {
 		result.comment = false;
+		return false;
 	}
 	static inline bool IsCommentSet(ScannerResult &result) {
 		return result.comment == true;
@@ -174,7 +175,10 @@ protected:
 
 				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 					if (T::IsCommentSet(result)) {
-						T::UnsetComment(result, iterator.pos.buffer_pos);
+						if (T::UnsetComment(result, iterator.pos.buffer_pos)) {
+							iterator.pos.buffer_pos++;
+							return;
+						}
 					} else {
 						if (T::AddRow(result, iterator.pos.buffer_pos)) {
 							iterator.pos.buffer_pos++;
@@ -197,7 +201,10 @@ protected:
 					}
 				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 					if (T::IsCommentSet(result)) {
-						T::UnsetComment(result, iterator.pos.buffer_pos);
+						if (T::UnsetComment(result, iterator.pos.buffer_pos)) {
+							iterator.pos.buffer_pos++;
+							return;
+						}
 					} else {
 						if (T::AddRow(result, iterator.pos.buffer_pos)) {
 							iterator.pos.buffer_pos++;

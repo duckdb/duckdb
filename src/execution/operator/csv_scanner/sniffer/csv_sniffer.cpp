@@ -61,6 +61,7 @@ void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sn
 	                error);
 	MatchAndReplace(original.state_machine_options.quote, sniffed.state_machine_options.quote, "Quote", error);
 	MatchAndReplace(original.state_machine_options.escape, sniffed.state_machine_options.escape, "Escape", error);
+	MatchAndReplace(original.state_machine_options.comment, sniffed.state_machine_options.comment, "Comment", error);
 	if (found_date) {
 		MatchAndReplace(original.date_format[LogicalTypeId::DATE], sniffed.date_format[LogicalTypeId::DATE],
 		                "Date Format", error);

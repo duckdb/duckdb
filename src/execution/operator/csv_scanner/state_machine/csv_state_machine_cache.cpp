@@ -219,7 +219,7 @@ CSVStateMachineCache::CSVStateMachineCache() {
 			for (const auto &delimiter : DialectCandidates::DEFAULT_DELIMITER) {
 				const auto &escape_candidates = DialectCandidates::DEFAULT_ESCAPE[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					for (const auto& comment: DialectCandidates::DEFAULT_COMMENT) {
+					for (const auto &comment : DialectCandidates::DEFAULT_COMMENT) {
 						Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_N});
 						Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_R});
 						Insert({delimiter, quote, escape, comment, NewLineIdentifier::CARRY_ON});

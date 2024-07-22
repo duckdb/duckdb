@@ -159,9 +159,10 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 	return false;
 }
 
-void StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos) {
+bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos) {
 	result.comment = false;
 	result.last_position.buffer_pos = buffer_pos + 1;
+	return false;
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
