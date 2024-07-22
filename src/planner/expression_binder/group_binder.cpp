@@ -89,7 +89,10 @@ bool GroupBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression
 		return false;
 	}
 	if (!root_expression) {
-		result = BindResult(BinderException(colref, "Alias with name \"%s\" exists, but aliases cannot be used as part of an expression in the GROUP BY", alias_name));
+		result = BindResult(BinderException(
+		    colref,
+		    "Alias with name \"%s\" exists, but aliases cannot be used as part of an expression in the GROUP BY",
+		    alias_name));
 		return true;
 	}
 	result = BindResult(BindSelectRef(entry->second));
