@@ -285,7 +285,7 @@ struct TimeToStringCast {
 		D_ASSERT(value >= 0 && value <= 99);
 		if (value < 10) {
 			ptr[0] = '0';
-			ptr[1] = '0' + UnsafeNumericCast<char>(value);
+			ptr[1] = UnsafeNumericCast<char>('0' + value);
 		} else {
 			auto index = UnsafeNumericCast<unsigned>(value * 2);
 			ptr[0] = duckdb_fmt::internal::data::digits[index];
