@@ -46,7 +46,7 @@ public:
 	UndoBufferProperties GetProperties();
 
 	//! Cleanup the undo buffer
-	void Cleanup();
+	void Cleanup(transaction_t lowest_active_transaction);
 	//! Commit the changes made in the UndoBuffer: should be called on commit
 	void WriteToWAL(WriteAheadLog &wal);
 	//! Commit the changes made in the UndoBuffer: should be called on commit

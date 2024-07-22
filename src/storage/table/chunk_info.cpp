@@ -32,6 +32,10 @@ static bool UseVersion(TransactionData transaction, transaction_t id) {
 	return TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
+bool ChunkInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+	return false;
+}
+
 void ChunkInfo::Write(WriteStream &writer) const {
 	writer.Write<ChunkInfoType>(type);
 }
@@ -93,6 +97,20 @@ bool ChunkConstantInfo::HasDeletes() const {
 
 idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) {
 	return delete_id < TRANSACTION_ID_START ? max_count : 0;
+}
+
+bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+	if (insert_id > lowest_transaction) {
+		// there are still transactions active that need this ChunkInfo
+		return false;
+	}
+	if (delete_id == NOT_DELETED_ID) {
+		// if there are no deletes either we can erase the entire chunk info
+		return true;
+	} else {
+		// otherwise we need to keep the constant info around to label the rows as deleted
+		return false;
+	}
 }
 
 void ChunkConstantInfo::Write(WriteStream &writer) const {
@@ -231,6 +249,58 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 	for (idx_t i = start; i < end; i++) {
 		inserted[i] = commit_id;
 	}
+}
+
+bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+	// there are two potential paths to cleaning up a ChunkVectorInfo
+	// either we can remove it entirely
+	// or we can compress it into a `ChunkConstantInfo`
+
+	// first check the inserts
+	if (!same_inserted_id){
+		for(idx_t idx = 1; idx < STANDARD_VECTOR_SIZE; idx++) {
+			if (inserted[idx] > lowest_transaction) {
+				// transaction was inserted after the lowest transaction start
+				// we still need to use an older version - cannot compress
+				return false;
+			}
+		}
+	} else if (insert_id > lowest_transaction) {
+		// transaction was inserted after the lowest transaction start
+		// we still need to use an older version - cannot compress
+		return false;
+	}
+	// all inserts HAVE to be used - now check the deletes
+	if (!any_deleted) {
+		// no deletes - we can just delete the chunk info entirely
+		return true;
+	}
+
+	// if there are deletes we can potentially replace this with a constant info if:
+	// 1) all deletes are the same
+	// 2) all deletes MUST be used (i.e. deleted[idx] < lowest_transaction
+	bool delete_is_constant = true;
+	bool delete_must_be_used = true;
+	for(idx_t idx = 1; idx < STANDARD_VECTOR_SIZE; idx++) {
+		if (deleted[idx] != deleted[0]) {
+			// deleted is not constant
+			delete_is_constant = false;
+		}
+		if (deleted[idx] > lowest_transaction) {
+			delete_must_be_used = false;
+		}
+	}
+	if (!delete_is_constant && !delete_must_be_used) {
+		// deletes are not constant AND delete must not be used
+		// cannot clean this up just yet
+		return false;
+	}
+	// we can clean this up by turning it into a ChunkConstantInfo
+	auto constant_info = make_uniq<ChunkConstantInfo>(start);
+	constant_info->insert_id = inserted[0];
+	constant_info->delete_id = deleted[0];
+	result = std::move(constant_info);
+	return true;
 }
 
 bool ChunkVectorInfo::HasDeletes() const {

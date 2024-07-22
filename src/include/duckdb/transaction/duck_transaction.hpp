@@ -56,7 +56,7 @@ public:
 	//! Rollback
 	void Rollback() noexcept;
 	//! Cleanup the undo buffer
-	void Cleanup();
+	void Cleanup(transaction_t lowest_active_transaction);
 
 	bool ChangesMade();
 	UndoBufferProperties GetUndoProperties();
