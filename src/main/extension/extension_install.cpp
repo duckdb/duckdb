@@ -351,7 +351,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 	static constexpr const idx_t MAX_RETRY_COUNT = 3;
 	idx_t retry_idx = 0;
 	duckdb_httplib::Result res;
-	while(true) {
+	while (true) {
 		duckdb_httplib::Client cli(url_base.c_str());
 		if (http_logger) {
 			cli.set_logger(http_logger->GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
@@ -364,7 +364,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 		{
 			auto fs = FileSystem::CreateLocal();
 			if (fs->FileExists(local_extension_path + ".info")) {
-				install_info = ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
+				install_info =
+				    ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
 			}
 			if (install_info && !install_info->etag.empty()) {
 				headers.insert({"If-None-Match", StringUtil::Format("%s", install_info->etag)});
