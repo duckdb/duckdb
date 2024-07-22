@@ -422,7 +422,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 		}
 		// retry
 		// sleep first
-		uint64_t sleep_amount = static_cast<uint64_t>(static_cast<double>(RETRY_WAIT_MS) * pow(RETRY_BACKOFF, retry_count - 1));
+		uint64_t sleep_amount =
+		    static_cast<uint64_t>(static_cast<double>(RETRY_WAIT_MS) * pow(RETRY_BACKOFF, retry_count - 1));
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
