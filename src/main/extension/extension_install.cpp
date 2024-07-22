@@ -12,6 +12,8 @@
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
+#include <chrono>
+#include <thread>
 #endif
 #endif
 #include "duckdb/common/windows_undefs.hpp"
@@ -349,7 +351,9 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 
 	auto url_base = "http://" + hostname_without_http;
 	static constexpr const idx_t MAX_RETRY_COUNT = 3;
-	idx_t retry_idx = 0;
+	static constexpr uint64_t RETRY_WAIT_MS = 100;
+	static constexpr double RETRY_BACKOFF = 4;
+	idx_t retry_count = 0;
 	duckdb_httplib::Result res;
 	while (true) {
 		duckdb_httplib::Client cli(url_base.c_str());
@@ -400,8 +404,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 			// always retry on duckdb_httplib::Error::Error
 			should_retry = true;
 		}
-		retry_idx++;
-		if (!should_retry || retry_idx >= MAX_RETRY_COUNT) {
+		retry_count++;
+		if (!should_retry || retry_count >= MAX_RETRY_COUNT) {
 			// if we should not retry or exceeded the number of retries - bubble up the error
 			string message;
 			auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
@@ -416,6 +420,10 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 				                  url_base, url_local_part, message, to_string(res.error()));
 			}
 		}
+		// retry
+		// sleep first
+		uint64_t sleep_amount = static_cast<uint64_t>(static_cast<double>(RETRY_WAIT_MS) * pow(RETRY_BACKOFF, retry_count - 1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 
