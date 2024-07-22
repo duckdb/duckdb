@@ -20,6 +20,7 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
+#include <duckdb/common/http_util.hpp>
 #include <map>
 
 namespace duckdb {
@@ -32,56 +33,42 @@ static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_heade
 	return headers;
 }
 
-HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
-	uint64_t timeout = DEFAULT_TIMEOUT;
-	uint64_t retries = DEFAULT_RETRIES;
-	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
-	float retry_backoff = DEFAULT_RETRY_BACKOFF;
-	bool force_download = DEFAULT_FORCE_DOWNLOAD;
-	bool keep_alive = DEFAULT_KEEP_ALIVE;
-	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
-	std::string ca_cert_file;
-	uint64_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
+HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info) {
+	auto result = HTTPParams();
+
+	// No point in continueing without an opener
+	if (!opener) {
+		return result;
+	}
 
 	Value value;
-	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
-		timeout = value.GetValue<uint64_t>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "force_download", value)) {
-		force_download = value.GetValue<bool>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retries", value)) {
-		retries = value.GetValue<uint64_t>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", value)) {
-		retry_wait_ms = value.GetValue<uint64_t>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value)) {
-		retry_backoff = value.GetValue<float>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", value)) {
-		keep_alive = value.GetValue<bool>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", value)) {
-		enable_server_cert_verification = value.GetValue<bool>();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", value)) {
-		ca_cert_file = value.ToString();
-	}
-	if (FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", value)) {
-		hf_max_per_page = value.GetValue<uint64_t>();
-	}
 
-	return {timeout,
-	        retries,
-	        retry_wait_ms,
-	        retry_backoff,
-	        force_download,
-	        keep_alive,
-	        enable_server_cert_verification,
-	        ca_cert_file,
-	        "",
-	        hf_max_per_page};
+	// Setting lookups
+	FileOpener::TryGetCurrentSetting(opener, "http_timeout", result.timeout, info);
+	FileOpener::TryGetCurrentSetting(opener, "force_download", result.force_download, info);
+	FileOpener::TryGetCurrentSetting(opener, "http_retries", result.retries, info);
+	FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", result.retry_wait_ms, info);
+	FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", result.retry_backoff, info);
+	FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", result.keep_alive, info);
+	FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", result.enable_server_cert_verification, info);
+	FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result.ca_cert_file, info);
+	FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", result.hf_max_per_page, info);
+
+	// HTTP Secret lookups
+	KeyValueSecretReader settings_reader(*opener, info, "http");
+
+	string proxy_setting;
+	if (settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy", "http_proxy", proxy_setting)) {
+		idx_t port;
+		string host;
+		HTTPUtil::ParseHTTPProxyHost(proxy_setting, host, port);
+		result.http_proxy_host = host;
+		result.http_proxy_port = port;
+	}
+	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_username", "http_proxy_username", result.http_proxy_username);
+	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_password", "http_proxy_password", result.http_proxy_password);
+
+	return result;
 }
 
 unique_ptr<duckdb_httplib_openssl::Client> HTTPClientCache::GetClient() {
@@ -246,6 +233,15 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	if (!http_params.bearer_token.empty()) {
 		client->set_bearer_token_auth(http_params.bearer_token.c_str());
 	}
+
+	if (!http_params.http_proxy_host.empty()) {
+		client->set_proxy(http_params.http_proxy_host, http_params.http_proxy_port);
+
+		if (!http_params.http_proxy_username.empty()) {
+			client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
+		}
+	}
+
 	return client;
 }
 
@@ -431,7 +427,9 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, File
                                                         optional_ptr<FileOpener> opener) {
 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
 
-	auto params = HTTPParams::ReadFrom(opener);
+	FileOpenerInfo info;
+	info.file_path = path;
+	auto params = HTTPParams::ReadFrom(opener, info);
 
 	auto secret_manager = FileOpener::TryGetSecretManager(opener);
 	auto transaction = FileOpener::TryGetCatalogTransaction(opener);

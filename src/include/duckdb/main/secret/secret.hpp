@@ -228,11 +228,19 @@ public:
 class KeyValueSecretReader {
 public:
 	//! Manually pass in a secret reference
-	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p), opener(opener_p) {};
+	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {};
 
 	//! Initializes the KeyValueSecretReader by fetching the secret automatically
-	KeyValueSecretReader(FileOpener &opener_p, FileOpenerInfo &info, const char **secret_types, idx_t secret_types_len);
-	KeyValueSecretReader(FileOpener &opener_p, FileOpenerInfo &info, const char *secret_type);
+	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types, idx_t secret_types_len);
+	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char *secret_type);
+
+	//! Initialize KeyValueSecretReader from a db instance
+	KeyValueSecretReader(DatabaseInstance &db, const char **secret_types, idx_t secret_types_len, string path);
+	KeyValueSecretReader(DatabaseInstance &db, const char *secret_type, string path);
+
+	// Initialize KeyValueSecretReader from a client context
+	KeyValueSecretReader(ClientContext &context, const char **secret_types, idx_t secret_types_len, string path);
+	KeyValueSecretReader(ClientContext &context, const char *secret_type, string path);
 
 	~KeyValueSecretReader();
 
@@ -279,6 +287,8 @@ public:
 	}
 
 protected:
+	void Initialize(const char **secret_types, idx_t secret_types_len);
+
 	[[noreturn]] void ThrowNotFoundError(const string &secret_key);
 	[[noreturn]] void ThrowNotFoundError(const string &secret_key, const string &setting_name);
 
@@ -287,9 +297,11 @@ protected:
 	//! Optionally an owning pointer to the secret entry
 	shared_ptr<SecretEntry> secret_entry;
 
-	//! Fetching the settings
-	optional_ptr<FileOpener> opener;
-	optional_ptr<FileOpenerInfo> opener_info;
+	//! Secrets/settings will be fetched either through a context (local + global settings) or a databaseinstance (global only)
+	optional_ptr<DatabaseInstance> db;
+	optional_ptr<ClientContext> context;
+
+	string path;
 };
 
 } // namespace duckdb

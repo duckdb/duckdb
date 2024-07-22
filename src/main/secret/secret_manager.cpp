@@ -522,7 +522,7 @@ void SecretManager::ThrowTypeNotFoundError(const string &type) {
 	if (!entry.empty() && db) {
 		auto error_message = "Secret type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
 		error_message =
-		    ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(*db), error_message, entry);
+		    ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db, error_message, entry);
 
 		throw InvalidInputException(error_message);
 	}
@@ -542,7 +542,7 @@ void SecretManager::ThrowProviderNotFoundError(const string &type, const string 
 		error_message +=
 		    " '" + provider + "' for type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
 		error_message =
-		    ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(*db), error_message, entry);
+		    ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db, error_message, entry);
 
 		throw InvalidInputException(error_message);
 	}
