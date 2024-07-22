@@ -887,8 +887,8 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-case_insensitive_map_t<string> PhysicalWindow::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalWindow::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	string projections;
 	for (idx_t i = 0; i < select_list.size(); i++) {
 		if (i > 0) {

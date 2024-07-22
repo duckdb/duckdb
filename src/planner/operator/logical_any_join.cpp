@@ -5,8 +5,8 @@ namespace duckdb {
 LogicalAnyJoin::LogicalAnyJoin(JoinType type) : LogicalJoin(type, LogicalOperatorType::LOGICAL_ANY_JOIN) {
 }
 
-case_insensitive_map_t<string> LogicalAnyJoin::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> LogicalAnyJoin::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["Condition"] = condition->ToString();
 	return result;
 }

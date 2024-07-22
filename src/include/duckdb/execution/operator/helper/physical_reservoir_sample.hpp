@@ -48,7 +48,7 @@ public:
 		return true;
 	}
 
-	case_insensitive_map_t<string> ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };
 
 } // namespace duckdb

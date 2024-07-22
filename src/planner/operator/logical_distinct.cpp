@@ -11,7 +11,7 @@ LogicalDistinct::LogicalDistinct(vector<unique_ptr<Expression>> targets, Distinc
       distinct_targets(std::move(targets)) {
 }
 
-case_insensitive_map_t<string> LogicalDistinct::ParamsToString() const {
+InsertionOrderPreservingMap<string> LogicalDistinct::ParamsToString() const {
 	auto result = LogicalOperator::ParamsToString();
 	if (!distinct_targets.empty()) {
 		result["Distinct Targets"] =

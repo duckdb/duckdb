@@ -28,7 +28,7 @@ public:
 	unique_ptr<JoinFilterPushdownInfo> filter_pushdown;
 
 public:
-	case_insensitive_map_t<string> ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	//! Re-order join conditions so that equality predicates are first, followed by other predicates
 	static void ReorderConditions(vector<JoinCondition> &conditions);

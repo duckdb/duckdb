@@ -51,7 +51,7 @@ public:
 
 public:
 	string GetName() const override;
-	case_insensitive_map_t<string> ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	bool Equals(const PhysicalOperator &other) const override;
 

@@ -31,7 +31,8 @@ public:
 		idx_t x;
 		idx_t y;
 	};
-	RenderTreeNode(const string &name, case_insensitive_map_t<string> extra_text) : name(name), extra_text(extra_text) {
+	RenderTreeNode(const string &name, InsertionOrderPreservingMap<string> extra_text)
+	    : name(name), extra_text(extra_text) {
 	}
 
 public:
@@ -41,7 +42,7 @@ public:
 
 public:
 	string name;
-	case_insensitive_map_t<string> extra_text;
+	InsertionOrderPreservingMap<string> extra_text;
 	vector<Coordinate> child_positions;
 };
 

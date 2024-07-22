@@ -134,8 +134,8 @@ string PhysicalTableScan::GetName() const {
 	return StringUtil::Upper(function.name + " " + function.extra_info);
 }
 
-case_insensitive_map_t<string> PhysicalTableScan::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
 		result["Stringified"] = function.to_string(bind_data.get());
 	}

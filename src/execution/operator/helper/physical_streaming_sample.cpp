@@ -68,8 +68,8 @@ OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, D
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-case_insensitive_map_t<string> PhysicalStreamingSample::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalStreamingSample::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["Sample Method"] = EnumUtil::ToString(method) + ": " + to_string(100 * percentage) + "%";
 	return result;
 }

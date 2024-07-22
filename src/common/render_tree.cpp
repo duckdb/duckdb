@@ -116,7 +116,7 @@ static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
-	case_insensitive_map_t<string> extra_info;
+	InsertionOrderPreservingMap<string> extra_info;
 	if (op.GetProfilingInfo().Enabled(MetricsType::EXTRA_INFO)) {
 		extra_info = op.GetProfilingInfo().metrics.extra_info;
 	}

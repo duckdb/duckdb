@@ -91,8 +91,8 @@ SourceResultType PhysicalReservoirSample::GetData(ExecutionContext &context, Dat
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-case_insensitive_map_t<string> PhysicalReservoirSample::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalReservoirSample::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["Sample Size"] = options->sample_size.ToString() + (options->is_percentage ? "%" : " rows");
 	return result;
 }

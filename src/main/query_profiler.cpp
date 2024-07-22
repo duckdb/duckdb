@@ -458,8 +458,8 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	}
 }
 
-case_insensitive_map_t<string> QueryProfiler::JSONSanitize(const case_insensitive_map_t<string> &input) {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> QueryProfiler::JSONSanitize(const InsertionOrderPreservingMap<string> &input) {
+	InsertionOrderPreservingMap<string> result;
 	for (auto &it : input) {
 		result[it.first] = JSONSanitize(it.second);
 	}

@@ -23,7 +23,7 @@ vector<const_reference<PhysicalOperator>> PhysicalDelimJoin::GetChildren() const
 	return result;
 }
 
-case_insensitive_map_t<string> PhysicalDelimJoin::ParamsToString() const {
+InsertionOrderPreservingMap<string> PhysicalDelimJoin::ParamsToString() const {
 	auto result = join->ParamsToString();
 	result["Delim Index"] = StringUtil::Format("%llu", delim_idx.GetIndex());
 	return result;

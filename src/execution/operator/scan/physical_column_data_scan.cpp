@@ -109,8 +109,8 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 	state.SetPipelineSource(current, *this);
 }
 
-case_insensitive_map_t<string> PhysicalColumnDataScan::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalColumnDataScan::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	switch (type) {
 	case PhysicalOperatorType::DELIM_SCAN:
 		if (delim_index.IsValid()) {

@@ -61,8 +61,8 @@ public:
 
 public:
 	virtual string GetName() const;
-	virtual case_insensitive_map_t<string> ParamsToString() const {
-		return case_insensitive_map_t<string>();
+	virtual InsertionOrderPreservingMap<string> ParamsToString() const {
+		return InsertionOrderPreservingMap<string>();
 	}
 	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	void Print() const;

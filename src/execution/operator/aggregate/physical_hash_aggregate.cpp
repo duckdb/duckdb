@@ -895,8 +895,8 @@ double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceSt
 	return total_progress / double(groupings.size());
 }
 
-case_insensitive_map_t<string> PhysicalHashAggregate::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalHashAggregate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	auto &groups = grouped_aggregate_data.groups;
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	string groups_info;

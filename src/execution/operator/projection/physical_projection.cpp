@@ -69,8 +69,8 @@ PhysicalProjection::CreateJoinProjection(vector<LogicalType> proj_types, const v
 	return make_uniq<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), estimated_cardinality);
 }
 
-case_insensitive_map_t<string> PhysicalProjection::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalProjection::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	string projections;
 	for (idx_t i = 0; i < select_list.size(); i++) {
 		if (i > 0) {

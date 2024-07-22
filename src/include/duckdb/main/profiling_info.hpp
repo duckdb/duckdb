@@ -47,7 +47,7 @@ struct SettingSetFunctions {
 
 struct Metrics {
 	double cpu_time;
-	case_insensitive_map_t<string> extra_info;
+	InsertionOrderPreservingMap<string> extra_info;
 	idx_t operator_cardinality;
 	double operator_timing;
 

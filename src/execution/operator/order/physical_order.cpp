@@ -267,8 +267,8 @@ idx_t PhysicalOrder::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, 
 	return lstate.batch_index;
 }
 
-case_insensitive_map_t<string> PhysicalOrder::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalOrder::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	string orders_info;
 	for (idx_t i = 0; i < orders.size(); i++) {
 		if (i > 0) {

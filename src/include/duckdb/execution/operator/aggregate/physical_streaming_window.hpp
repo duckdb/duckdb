@@ -46,7 +46,7 @@ public:
 		return OrderPreservationType::FIXED_ORDER;
 	}
 
-	case_insensitive_map_t<string> ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 private:
 	void ExecuteFunctions(ExecutionContext &context, DataChunk &chunk, DataChunk &delayed,

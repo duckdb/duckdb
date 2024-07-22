@@ -108,8 +108,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-case_insensitive_map_t<string> PhysicalTableInOutFunction::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalTableInOutFunction::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
 		result["Stringified"] = function.to_string(bind_data.get());
 	} else {

@@ -600,8 +600,8 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 	return OperatorFinalizeResultType::FINISHED;
 }
 
-case_insensitive_map_t<string> PhysicalStreamingWindow::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalStreamingWindow::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	string projections;
 	for (idx_t i = 0; i < select_list.size(); i++) {
 		if (i > 0) {

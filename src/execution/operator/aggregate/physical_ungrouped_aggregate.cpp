@@ -647,8 +647,8 @@ SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, 
 	return SourceResultType::FINISHED;
 }
 
-case_insensitive_map_t<string> PhysicalUngroupedAggregate::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalUngroupedAggregate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	string aggregate_info;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();

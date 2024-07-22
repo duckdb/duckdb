@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-case_insensitive_map_t<string> LogicalCTERef::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> LogicalCTERef::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["CTE Index"] = StringUtil::Format("%llu", cte_index);
 	return result;
 }

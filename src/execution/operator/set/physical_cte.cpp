@@ -102,8 +102,8 @@ vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
 	return children[1]->GetSources();
 }
 
-case_insensitive_map_t<string> PhysicalCTE::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
 	result["Table Index"] = StringUtil::Format("%llu", table_index);
 	return result;

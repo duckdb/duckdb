@@ -203,8 +203,8 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-case_insensitive_map_t<string> PhysicalBlockwiseNLJoin::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalBlockwiseNLJoin::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["Join Type"] = EnumUtil::ToString(join_type);
 	result["Condition"] = condition->GetName();
 	return result;

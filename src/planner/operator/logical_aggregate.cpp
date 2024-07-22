@@ -40,8 +40,8 @@ vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	return result;
 }
 
-case_insensitive_map_t<string> LogicalAggregate::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> LogicalAggregate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	string groups_info;
 	for (idx_t i = 0; i < groups.size(); i++) {
 		if (i > 0) {

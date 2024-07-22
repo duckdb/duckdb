@@ -11,8 +11,8 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 	ReorderConditions(conditions);
 }
 
-case_insensitive_map_t<string> PhysicalComparisonJoin::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalComparisonJoin::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["Join Type"] = EnumUtil::ToString(join_type);
 	string condition_info;
 	for (idx_t i = 0; i < conditions.size(); i++) {

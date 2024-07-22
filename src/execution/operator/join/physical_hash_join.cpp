@@ -1241,8 +1241,8 @@ double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &
 	return progress * 100.0;
 }
 
-case_insensitive_map_t<string> PhysicalHashJoin::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["Join Type"] = EnumUtil::ToString(join_type);
 
 	string condition_info;

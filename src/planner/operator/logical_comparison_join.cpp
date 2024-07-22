@@ -8,8 +8,8 @@ LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperator
     : LogicalJoin(join_type, logical_type) {
 }
 
-case_insensitive_map_t<string> LogicalComparisonJoin::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> LogicalComparisonJoin::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["Join Type"] = EnumUtil::ToChars(join_type);
 
 	string conditions_info;

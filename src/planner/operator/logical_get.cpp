@@ -30,8 +30,8 @@ optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
 	return function.get_bind_info(bind_data.get()).table;
 }
 
-case_insensitive_map_t<string> LogicalGet::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 
 	string filters_info;
 	bool first_item = true;

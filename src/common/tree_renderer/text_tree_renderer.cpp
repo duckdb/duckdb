@@ -314,7 +314,7 @@ void TextTreeRenderer::SplitStringBuffer(const string &source, vector<string> &r
 	}
 }
 
-void TextTreeRenderer::SplitUpExtraInfo(const case_insensitive_map_t<string> &extra_info, vector<string> &result) {
+void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string> &extra_info, vector<string> &result) {
 	if (extra_info.empty()) {
 		return;
 	}

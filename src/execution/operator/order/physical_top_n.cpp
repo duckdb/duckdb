@@ -492,8 +492,8 @@ SourceResultType PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chu
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-case_insensitive_map_t<string> PhysicalTopN::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> PhysicalTopN::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	result["Top"] = to_string(limit);
 	if (offset > 0) {
 		result["Offset"] = to_string(offset);

@@ -47,8 +47,8 @@ string LogicalOperator::GetName() const {
 	return LogicalOperatorToString(type);
 }
 
-case_insensitive_map_t<string> LogicalOperator::ParamsToString() const {
-	case_insensitive_map_t<string> result;
+InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	string expressions_info;
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (i > 0) {
