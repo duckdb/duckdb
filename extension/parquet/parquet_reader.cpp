@@ -338,6 +338,21 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 
 			c_idx++;
 		}
+		// rename child type entries if there are case-insensitive duplicates by appending _1, _2 etc.
+		// behavior consistent with CSV reader fwiw
+		case_insensitive_map_t<idx_t> name_collision_count;
+		// get header names from CSV
+		for (auto &child_type : child_types) {
+			auto col_name = child_type.first;
+			// avoid duplicate header names
+			while (name_collision_count.find(col_name) != name_collision_count.end()) {
+				name_collision_count[col_name] += 1;
+				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
+			}
+			child_type.first = col_name;
+			name_collision_count[col_name] = 0;
+		}
+
 		D_ASSERT(!child_types.empty());
 		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
