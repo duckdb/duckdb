@@ -54,6 +54,10 @@ public:
 
 	CSVStateMachine &state_machine;
 
+	void Print() {
+		state_machine.Print();
+	}
+
 protected:
 	CSVStates &states;
 };

@@ -153,6 +153,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::EMPTY_SPACE)] =
 		    CSVState::RECORD_SEPARATOR;
 	}
+	transition_array[quote][static_cast<uint8_t>(CSVState::EMPTY_SPACE)] = CSVState::QUOTED;
 
 	// 11) Comment State
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::COMMENT)] = CSVState::RECORD_SEPARATOR;

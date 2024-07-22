@@ -16,7 +16,7 @@ const vector<char> DialectCandidates::DEFAULT_DELIMITER = {',', '|', ';', '\t'};
 const vector<vector<char>> DialectCandidates::DEFAULT_QUOTE = {{'\"'}, {'\"', '\''}, {'\0'}};
 const vector<QuoteRule> DialectCandidates::DEFAULT_QUOTE_RULE = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER,
                                                                  QuoteRule::NO_QUOTES};
-const vector<vector<char>> DialectCandidates::DEFAULT_ESCAPE = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
+const vector<vector<char>> DialectCandidates::DEFAULT_ESCAPE = {{'\"', '\0', '\''}, {'\\'}, {'\0'}};
 const vector<char> DialectCandidates::DEFAULT_COMMENT = {'#', '/', '\0'};
 
 DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
