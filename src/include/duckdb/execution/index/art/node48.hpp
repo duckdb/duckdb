@@ -14,11 +14,11 @@
 
 namespace duckdb {
 
-//! Node48 holds up to 48 Node children. It contains a child_index array which can be directly indexed by the key
-//! byte, and which contains the position of the child node in the children array
+//! Node48 holds up to 48 Node children. It contains a child_index array, which is indexed by the key
+//! byte, and which contains the position of the child node in the children array.
 class Node48 {
 public:
-	//! Delete copy constructors, as any Node48 can never own its memory
+	Node48() = delete;
 	Node48(const Node48 &) = delete;
 	Node48 &operator=(const Node48 &) = delete;
 

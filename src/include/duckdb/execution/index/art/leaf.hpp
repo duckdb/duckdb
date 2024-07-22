@@ -14,37 +14,34 @@
 
 namespace duckdb {
 
-// classes
 class MetadataWriter;
 class MetadataReader;
-
-// structs
 struct BlockPointer;
 
-//! TODO: change description. Also, anything useful to do with the memory here?
-
-//! The LEAF is a special node type that contains a count, up to LEAF_SIZE row IDs,
-//! and a Node pointer. If this pointer is set, then it must point to another LEAF,
-//! creating a chain of leaf nodes storing row IDs.
-//! This class also contains functionality for nodes of type LEAF_INLINED, in which case we store the
-//! row ID directly in the node pointer.
+//! There are three types of leaves.
+//! 1. LEAF_INLINED: Inlines a row ID in a Node pointer.
+//! 2. LEAF: Deprecated. A list of Leaf nodes containing row IDs.
+//! 3. Nested leaves indicated by gate nodes. If an ART key contains multiple row IDs, then we use the row IDs as keys
+//!  and create a nested ART behind the gate node. As row IDs are always unique, these nested ARTs never contain
+//! duplicates themselves. I.e., their row IDs are always inlined. This allows for fast insertions and deletions
+//! in the presence of duplicates. Constraint checking is not affected, as we never enter nested leaves.
 class Leaf {
 public:
 	Leaf() = delete;
 	Leaf(const Leaf &) = delete;
 	Leaf &operator=(const Leaf &) = delete;
 
-	//! The number of row IDs in this leaf
+	//! The number of row IDs in this leaf.
 	uint8_t count;
-	//! Up to LEAF_SIZE row IDs
+	//! Up to LEAF_SIZE row IDs.
 	row_t row_ids[Node::LEAF_SIZE];
-	//! A pointer to the next LEAF node
+	//! A pointer to the next LEAF node.
 	Node ptr;
 
 public:
 	//! Inline a row ID into a node pointer.
 	static void New(Node &node, const row_t row_id);
-	//! Get a new non-inlined nested leaf node, might cause new buffer allocations.
+	//! Get a new non-inlined nested leaf node. Might cause new buffer allocations.
 	static void New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
 	                const idx_t count);
 
@@ -53,8 +50,8 @@ public:
 
 	//! Inserts a row ID into an inlined leaf.
 	static void InsertIntoInlined(ART &art, Node &node, reference<const ARTKey> row_id);
-	//! Erase from a nested leaf.
-	static void EraseFromNested(ART &art, Node &child_node, const ARTKey &row_id);
+	//! Erase a row ID from a nested leaf.
+	static void EraseFromNested(ART &art, Node &node, const ARTKey &row_id);
 
 	//! Transforms a deprecated leaf to a nested leaf.
 	static void TransformToNested(ART &art, Node &node);
@@ -67,14 +64,11 @@ public:
 public:
 	//! Frees the linked list of leaves.
 	static void DeprecatedFree(ART &art, Node &node);
-
 	//! Fills the row_ids vector with the row IDs of this linked list of leaves.
 	//! Never pushes more than max_count row IDs.
 	static bool DeprecatedGetRowIds(ART &art, const Node &node, unsafe_vector<row_t> &row_ids, const idx_t max_count);
-
 	//! Vacuums the linked list of leaves.
 	static void DeprecatedVacuum(ART &art, Node &node);
-
 	//! Returns the string representation of the linked list of leaves, if only_verify is true.
 	//! Else, it traverses and verifies the linked list of leaves.
 	static string DeprecatedVerifyAndToString(ART &art, const Node &node, const bool only_verify);

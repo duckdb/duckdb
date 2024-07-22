@@ -14,10 +14,10 @@
 
 namespace duckdb {
 
-//! Node16 holds up to 16 Node children sorted by their key byte
+//! Node16 holds up to 16 Node children sorted by their key byte.
 class Node16 {
 public:
-	//! Delete copy constructors, as any Node16 can never own its memory
+	Node16() = delete;
 	Node16(const Node16 &) = delete;
 	Node16 &operator=(const Node16 &) = delete;
 

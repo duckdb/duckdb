@@ -1033,9 +1033,9 @@ string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t
 IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
-	auto v1_0_0_storage = options.find("v1_0_0_storage");
-	bool use_v1_0_0_storage = v1_0_0_storage == options.end() || v1_0_0_storage->second != Value(false);
-	if (use_v1_0_0_storage && tree.HasMetadata()) {
+	auto v1_0_0_option = options.find("v1_0_0_storage");
+	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
+	if (v1_0_0_storage && tree.HasMetadata()) {
 		Node::TransformToDeprecated(*this, tree);
 	}
 

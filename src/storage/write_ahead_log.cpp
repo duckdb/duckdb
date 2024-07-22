@@ -279,10 +279,10 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	serializer.WriteProperty(101, "index_catalog_entry", &entry);
 
 	auto db_options = database.GetDatabase().config.options;
-	auto use_v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
 	case_insensitive_map_t<Value> options;
-	if (!use_v1_0_0_storage) {
-		options.emplace("v1_0_0_storage", use_v1_0_0_storage);
+	if (!v1_0_0_storage) {
+		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
 
 	// now serialize the index data to the persistent storage and write the index metadata

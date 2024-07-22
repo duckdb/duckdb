@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"

@@ -14,10 +14,10 @@
 
 namespace duckdb {
 
-//! Node4 holds up to four Node children sorted by their key byte
+//! Node4 holds up to four Node children sorted by their key byte.
 class Node4 {
 public:
-	//! Delete copy constructors, as any Node4 can never own its memory
+	Node4() = delete;
 	Node4(const Node4 &) = delete;
 	Node4 &operator=(const Node4 &) = delete;
 

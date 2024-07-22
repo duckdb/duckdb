@@ -13,14 +13,13 @@
 
 namespace duckdb {
 
-// classes
 class ARTKey;
 
 //! The Prefix is a special node type that contains up to PREFIX_SIZE bytes, one byte for the count,
 //! and a Node pointer. This pointer either points to a prefix node or another Node.
 class Prefix {
 public:
-	//! Delete copy constructors, as any Prefix can never own its memory
+	Prefix() = delete;
 	Prefix(const Prefix &) = delete;
 	Prefix &operator=(const Prefix &) = delete;
 
