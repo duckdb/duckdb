@@ -324,6 +324,7 @@ SELECT ROUND(12::DECIMAL(3,0))
 statement error
 SELECT ROUND(12::DECIMAL(3,0), i) FROM range(1) tbl(i)
 ----
+<REGEX>:Binder Error.*No function matches.*
 
 # null precision becomes null (postgres behavior)
 query T
