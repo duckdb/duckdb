@@ -5,7 +5,17 @@
 using namespace duckdb;
 using namespace std;
 
-void rand_str(char *dest, size_t length);
+void rand_str(char *dest, idx_t length) {
+	char charset[] = "0123456789"
+	                 "abcdefghijklmnopqrstuvwxyz"
+	                 "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+	while (length-- > 0) {
+		idx_t index = (double)rand() / RAND_MAX * (sizeof charset - 1);
+		*dest++ = charset[index];
+	}
+	*dest = '\0';
+}
 
 TEST_CASE("Test repeated appending small chunks to a table", "[memoryleak]") {
 	if (!TestMemoryLeaks()) {
@@ -15,9 +25,10 @@ TEST_CASE("Test repeated appending small chunks to a table", "[memoryleak]") {
 	duckdb_connection con;
 	duckdb_state state;
 	int ret;
-	TestDeleteFile("/tmp/appender_test.dat");
+	auto db_path = TestCreatePath("appender_leak_test.db");
+	TestDeleteFile(db_path);
 
-	if (duckdb_open("/tmp/appender_test.dat", &db) == DuckDBError) {
+	if (duckdb_open(db_path.c_str(), &db) == DuckDBError) {
 		// handle error
 		FAIL("Failed to open");
 	}
@@ -44,8 +55,8 @@ TEST_CASE("Test repeated appending small chunks to a table", "[memoryleak]") {
 			FAIL("Failed to create appender");
 		}
 		for (int j = 0; j < 1000; j++) {
-			char str[] = {[41] = '\1'};
-			rand_str(str, sizeof str - 1);
+			char str[41];
+			rand_str(str, sizeof(str) - 1);
 			duckdb_append_varchar(appender, str);
 			duckdb_append_varchar(appender, "hello");
 			duckdb_append_int64(appender, n1++);
@@ -73,16 +84,4 @@ TEST_CASE("Test repeated appending small chunks to a table", "[memoryleak]") {
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
 	REQUIRE(1 == 1);
-}
-
-void rand_str(char *dest, size_t length) {
-	char charset[] = "0123456789"
-	                 "abcdefghijklmnopqrstuvwxyz"
-	                 "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-	while (length-- > 0) {
-		size_t index = (double)rand() / RAND_MAX * (sizeof charset - 1);
-		*dest++ = charset[index];
-	}
-	*dest = '\0';
 }
