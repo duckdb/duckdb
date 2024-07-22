@@ -1,4 +1,5 @@
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
 #include <memory>
 
@@ -81,8 +82,8 @@ duckdb::vector<Match> RegexFindAll(const char *input_data, size_t input_size, co
 		} else { // match.length(0) == 0
 			auto next_char_length = GetMultibyteCharLength(input_data[match.position(0)]);
 			if (!next_char_length) {
-				// invalid UTF-8 leading byte
-				return duckdb::vector<Match>();
+				throw duckdb::InvalidInputException("Invalid UTF-8 leading byte at position " +
+				                                    std::to_string(match.position(0) + 1));
 			}
 			if (match.position(0) + next_char_length < input_size) {
 				position = match.position(0) + next_char_length;
