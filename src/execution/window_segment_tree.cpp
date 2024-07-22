@@ -22,7 +22,7 @@ WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAll
 class WindowAggregatorGlobalState : public WindowAggregatorState {
 public:
 	WindowAggregatorGlobalState(const WindowAggregator &aggregator_p, idx_t group_count)
-	    : aggregator(aggregator_p), winputs(inputs) {
+	    : aggregator(aggregator_p), winputs(inputs), finalized(0) {
 
 		if (!aggregator.arg_types.empty()) {
 			winputs.Initialize(Allocator::DefaultAllocator(), aggregator.arg_types, group_count);
@@ -47,7 +47,7 @@ public:
 	mutable mutex lock;
 
 	//! Number of finalised states
-	idx_t finalized = 0;
+	std::atomic<idx_t> finalized;
 };
 
 WindowAggregator::WindowAggregator(AggregateObject aggr_p, const vector<LogicalType> &arg_types_p,
