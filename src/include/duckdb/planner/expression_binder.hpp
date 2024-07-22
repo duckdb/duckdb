@@ -129,6 +129,7 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
+	virtual bool TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result);
 	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
 
 	//! Bind the given expression. Unlike Bind(), this does *not* mute the given ParsedExpression.
@@ -166,7 +167,7 @@ protected:
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
-	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth);
+	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth, bool root_expression);
 	BindResult BindExpression(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
