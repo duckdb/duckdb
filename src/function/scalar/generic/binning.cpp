@@ -171,7 +171,7 @@ struct EquiWidthBinsDouble {
 		double step;
 		if (!Value::IsFinite(span)) {
 			// max - min does not fit
-			step = max / bin_count - min / bin_count;
+			step = max / static_cast<double>(bin_count) - min / static_cast<double>(bin_count);
 		} else {
 			step = span / static_cast<double>(bin_count);
 		}
@@ -296,7 +296,8 @@ int64_t RoundNumberToDivisor(int64_t number, int64_t divisor) {
 interval_t MakeIntervalNice(interval_t interval) {
 	if (interval.months >= 6) {
 		// if we have more than 6 months, we don't care about days
-		interval.days = interval.micros = 0;
+		interval.days = 0;
+		interval.micros = 0;
 	} else if (interval.months > 0 || interval.days >= 5) {
 		// if we have any months or more than 5 days, we don't care about micros
 		interval.micros = 0;

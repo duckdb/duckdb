@@ -118,11 +118,6 @@ public:
 	void ErrorIfNeeded();
 	//! Inserts a finished error info
 	void Insert(idx_t boundary_idx, idx_t rows);
-	//! Method that actually throws the error
-	void ThrowError(CSVError csv_error);
-	//! If we processed all boundaries before the one that error-ed
-	bool CanGetLine(idx_t boundary_index);
-	//! Return the 1-indexed line number
 	idx_t GetLine(const LinesPerBoundary &error_info);
 	void NewMaxLineSize(idx_t scan_line_size);
 	//! Returns true if there are any errors
@@ -138,8 +133,15 @@ public:
 	}
 
 private:
+	//! Private methods should always be locked by parent method.
 	//! If we should print the line of an error
 	bool PrintLineNumber(CSVError &error);
+	//! Method that actually throws the error
+	void ThrowError(CSVError csv_error);
+	//! If we processed all boundaries before the one that error-ed
+	bool CanGetLine(idx_t boundary_index);
+	//! Return the 1-indexed line number
+	idx_t GetLineInternal(const LinesPerBoundary &error_info);
 	//! CSV Error Handler Mutex
 	mutex main_mutex;
 	//! Map of <boundary indexes> -> lines read

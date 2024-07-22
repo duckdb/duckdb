@@ -18,7 +18,7 @@ CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_er
 void CSVErrorHandler::ThrowError(CSVError csv_error) {
 	std::ostringstream error;
 	if (PrintLineNumber(csv_error)) {
-		error << "CSV Error on Line: " << GetLine(csv_error.error_info) << '\n';
+		error << "CSV Error on Line: " << GetLineInternal(csv_error.error_info) << '\n';
 		if (!csv_error.csv_row.empty()) {
 			error << "Original Line: " << csv_error.csv_row << '\n';
 		}
@@ -42,8 +42,8 @@ void CSVErrorHandler::ThrowError(CSVError csv_error) {
 }
 
 void CSVErrorHandler::Error(CSVError csv_error, bool force_error) {
+	lock_guard<mutex> parallel_lock(main_mutex);
 	if ((ignore_errors && !force_error) || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex()))) {
-		lock_guard<mutex> parallel_lock(main_mutex);
 		// We store this error, we can't throw it now, or we are ignoring it
 		errors[csv_error.error_info].push_back(std::move(csv_error));
 		return;
@@ -54,14 +54,12 @@ void CSVErrorHandler::Error(CSVError csv_error, bool force_error) {
 
 void CSVErrorHandler::ErrorIfNeeded() {
 	CSVError first_error;
-	{
-		lock_guard<mutex> parallel_lock(main_mutex);
-		if (ignore_errors || errors.empty()) {
-			// Nothing to error
-			return;
-		}
-		first_error = errors.begin()->second[0];
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (ignore_errors || errors.empty()) {
+		// Nothing to error
+		return;
 	}
+	first_error = errors.begin()->second[0];
 
 	if (CanGetLine(first_error.error_info.boundary_idx)) {
 		ThrowError(first_error);
@@ -272,6 +270,9 @@ bool CSVErrorHandler::CanGetLine(idx_t boundary_index) {
 
 idx_t CSVErrorHandler::GetLine(const LinesPerBoundary &error_info) {
 	lock_guard<mutex> parallel_lock(main_mutex);
+	return GetLineInternal(error_info);
+}
+idx_t CSVErrorHandler::GetLineInternal(const LinesPerBoundary &error_info) {
 	// We start from one, since the lines are 1-indexed
 	idx_t current_line = 1 + error_info.lines_in_batch;
 	for (idx_t boundary_idx = 0; boundary_idx < error_info.boundary_idx; boundary_idx++) {

@@ -121,6 +121,9 @@ struct MultiFileReader {
 	//! Create a default MultiFileReader, function_name is used for errors
 	DUCKDB_API static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
 
+	//! Create a LIST Value from a vector of strings (list of file paths)
+	static Value CreateValueFromFileList(const vector<string> &files);
+
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API static void AddParameters(TableFunction &table_function);
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)

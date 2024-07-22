@@ -542,8 +542,8 @@
 		"docs": "Create a relation object from the JSON file in 'name'",
 		"args": [
 			{
-				"name": "name",
-				"type": "str"
+				"name": "path_or_buffer",
+				"type": "Union[str, StringIO, TextIOBase]"
 			}
 		],
 		"kwargs": [
