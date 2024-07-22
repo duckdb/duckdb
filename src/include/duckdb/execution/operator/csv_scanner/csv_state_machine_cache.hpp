@@ -83,10 +83,7 @@ private:
 	//! Cache on delimiter|quote|escape|newline
 	unordered_map<CSVStateMachineOptions, StateMachine, HashCSVStateMachineConfig> state_machine_cache;
 	//! Default value for options used to intialize CSV State Machine Cache
-	const vector<char> default_delimiter = {',', '|', ';', '\t'};
-	const vector<vector<char>> default_quote = {{'\"'}, {'\"', '\''}, {'\0'}};
-	const vector<QuoteRule> default_quote_rule = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
-	const vector<vector<char>> default_escape = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
+
 	//! Because the state machine cache can be accessed in Parallel we need a mutex.
 	mutex main_mutex;
 };

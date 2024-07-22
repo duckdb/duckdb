@@ -34,7 +34,15 @@ struct SnifferResult {
 //! All the options that will be used to sniff the dialect of the CSV file
 struct DialectCandidates {
 	//! The constructor populates all of our the options that will be used in our sniffer search space
-	explicit DialectCandidates(CSVStateMachineOptions &state_machine_options);
+	explicit DialectCandidates(const CSVStateMachineOptions &options);
+
+	//! Static variables holding defaults of the search space
+	static const vector<char> DEFAULT_DELIMITER;
+	static const vector<vector<char>> DEFAULT_QUOTE;
+	static const vector<QuoteRule> DEFAULT_QUOTE_RULE;
+	static const vector<vector<char>> DEFAULT_ESCAPE;
+	static const vector<char> DEFAULT_COMMENT;
+
 	//! Candidates for the delimiter
 	vector<char> delim_candidates;
 	//! Candidates for the comment

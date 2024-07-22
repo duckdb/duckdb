@@ -11,31 +11,50 @@ bool IsQuoteDefault(char quote) {
 	return false;
 }
 
-DialectCandidates::DialectCandidates(CSVStateMachineOptions &options) {
-	escape_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)] = {'\"', '\'', '\0'};
-	escape_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_OTHER)] = {'\\'};
-	escape_candidates_map[static_cast<uint8_t>(QuoteRule::NO_QUOTES)] = {'\0'};
+// Initialize dialect candidates defaults
+const vector<char> DialectCandidates::DEFAULT_DELIMITER = {',', '|', ';', '\t'};
+const vector<vector<char>> DialectCandidates::DEFAULT_QUOTE = {{'\"'}, {'\"', '\''}, {'\0'}};
+const vector<QuoteRule> DialectCandidates::DEFAULT_QUOTE_RULE = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
+const vector<vector<char>> DialectCandidates::DEFAULT_ESCAPE = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
+const vector<char> DialectCandidates::DEFAULT_COMMENT = {'#','/', '\0'};
+
+
+DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
+	// assert that quotes escapes and rules have equal size
+	D_ASSERT(DEFAULT_QUOTE.size() == DEFAULT_QUOTE_RULE.size() &&  DEFAULT_QUOTE_RULE.size()== DEFAULT_ESCAPE.size());
+	// fill the escapes
+	for (idx_t i = 0; i < DEFAULT_QUOTE_RULE.size(); i++) {
+		escape_candidates_map[static_cast<uint8_t>(DEFAULT_QUOTE_RULE[i])] = DEFAULT_ESCAPE[i];
+	}
+
 	if (options.delimiter.IsSetByUser()) {
 		// user provided a delimiter: use that delimiter
 		delim_candidates = {options.delimiter.GetValue()};
 	} else {
 		// no delimiter provided: try standard/common delimiters
-		delim_candidates = {',', '|', ';', '\t'};
+		delim_candidates = DEFAULT_DELIMITER;
+	}
+	if (options.comment.IsSetByUser()) {
+		// user provided comment character: use that as a comment
+		comment_candidates = {options.comment.GetValue()};
+	} else {
+		// no comment provided: try standard/common comments
+		comment_candidates = DEFAULT_COMMENT;
 	}
 	if (options.quote.IsSetByUser()) {
 		// user provided quote: use that quote rule
-		quote_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)] = {options.quote.GetValue()};
-		quote_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_OTHER)] = {options.quote.GetValue()};
-		quote_candidates_map[static_cast<uint8_t>(QuoteRule::NO_QUOTES)] = {options.quote.GetValue()};
+		for (auto& quote_rule: DEFAULT_QUOTE_RULE) {
+			quote_candidates_map[static_cast<uint8_t>(quote_rule)] = {options.quote.GetValue()};
+		}
 		// also add it as a escape rule
 		if (!IsQuoteDefault(options.quote.GetValue())) {
 			escape_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)].emplace_back(options.quote.GetValue());
 		}
 	} else {
 		// no quote rule provided: use standard/common quotes
-		quote_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)] = {'\"'};
-		quote_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_OTHER)] = {'\"', '\''};
-		quote_candidates_map[static_cast<uint8_t>(QuoteRule::NO_QUOTES)] = {'\0'};
+		for (idx_t i = 0; i < DEFAULT_QUOTE_RULE.size(); i++) {
+			quote_candidates_map[static_cast<uint8_t>(DEFAULT_QUOTE_RULE[i])] = {DEFAULT_QUOTE[i]};
+		}
 	}
 	if (options.escape.IsSetByUser()) {
 		// user provided escape: use that escape rule
@@ -47,7 +66,7 @@ DialectCandidates::DialectCandidates(CSVStateMachineOptions &options) {
 		escape_candidates_map[static_cast<uint8_t>(quoterule_candidates[0])] = {options.escape.GetValue()};
 	} else {
 		// no escape provided: try standard/common escapes
-		quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
+		quoterule_candidates = DEFAULT_QUOTE_RULE;
 	}
 }
 
