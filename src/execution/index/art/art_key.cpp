@@ -150,11 +150,11 @@ ARTKeySection::ARTKeySection(idx_t start, idx_t end, idx_t depth, data_t key_byt
     : start(start), end(end), depth(depth), key_byte(key_byte) {
 }
 
-ARTKeySection::ARTKeySection(idx_t start, idx_t end, const vector<ARTKey> &keys, ARTKeySection &section)
+ARTKeySection::ARTKeySection(idx_t start, idx_t end, const unsafe_vector<ARTKey> &keys, ARTKeySection &section)
     : start(start), end(end), depth(section.depth + 1), key_byte(keys[end].data[section.depth]) {
 }
 
-void ARTKeySection::GetChildSections(vector<ARTKeySection> &child_sections, const vector<ARTKey> &keys) {
+void ARTKeySection::GetChildSections(unsafe_vector<ARTKeySection> &child_sections, const unsafe_vector<ARTKey> &keys) {
 	auto child_start_idx = start;
 	for (idx_t i = start + 1; i <= end; i++) {
 		if (keys[i - 1].data[depth] != keys[i].data[depth]) {

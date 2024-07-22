@@ -26,8 +26,8 @@ class FixedSizeAllocator;
 
 struct ARTIndexScanState;
 struct ARTFlags {
-	vector<bool> vacuum_flags;
-	vector<idx_t> merge_buffer_counts;
+	unsafe_vector<bool> vacuum_flags;
+	unsafe_vector<idx_t> merge_buffer_counts;
 };
 
 class ART : public BoundIndex {
@@ -59,7 +59,7 @@ public:
 
 	//! Performs a lookup on the index, fetching up to max_count row IDs.
 	//! Returns true, if all row IDs were fetched, and false otherwise.
-	bool Scan(IndexScanState &state, idx_t max_count, vector<row_t> &row_ids);
+	bool Scan(IndexScanState &state, idx_t max_count, unsafe_vector<row_t> &row_ids);
 
 public:
 	//! Create a index instance of this type.
@@ -83,12 +83,14 @@ public:
 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Construct an ART from a vector of sorted keys and verify the result.
-	bool ConstructFromSorted(const vector<ARTKey> &keys, const vector<ARTKey> &row_id_keys, const idx_t row_count);
+	bool ConstructFromSorted(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_id_keys,
+	                         const idx_t row_count);
 	//! Recursively construct an ART by appending key sections.
-	bool Construct(const vector<ARTKey> &keys, const vector<ARTKey> &row_ids, Node &node, ARTKeySection &section);
+	bool Construct(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
+	               ARTKeySection &section);
 
 	//! Search equal values and fetches the row IDs
-	bool SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &row_ids);
+	bool SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids);
 
 	//! Returns ART storage serialization information.
 	IndexStorageInfo GetStorageInfo(const bool use_v1_0_0_storage, const bool to_wal) override;
@@ -105,9 +107,9 @@ public:
 
 	//! Generate ART keys for an input chunk
 	template <bool IS_NOT_NULL = false>
-	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
-	static void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, vector<ARTKey> &keys,
-	                               vector<ARTKey> &row_id_keys);
+	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+	static void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids,
+	                               unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
 
 	//! Generate a string containing all the expressions and their respective values that violate a constraint
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
@@ -132,12 +134,12 @@ private:
 	bool InsertIntoEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
 
 	//! Returns all row IDs greater than or equal to the search key.
-	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, vector<row_t> &row_ids);
+	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
 	//! Returns all row IDs less than or equal to the upper_bound.
-	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, vector<row_t> &row_ids);
+	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
 	//! Returns all row IDs within the range of lower_bound and upper_bound.
 	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-	                      vector<row_t> &row_ids);
+	                      unsafe_vector<row_t> &row_ids);
 
 	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
 	void InitializeMerge(ARTFlags &flags);
@@ -166,9 +168,9 @@ private:
 };
 
 template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 
 template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 
 } // namespace duckdb

@@ -93,9 +93,9 @@ void ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, AR
 class ARTKeySection {
 public:
 	ARTKeySection(idx_t start, idx_t end, idx_t depth, data_t key_byte);
-	ARTKeySection(idx_t start, idx_t end, const vector<ARTKey> &keys, ARTKeySection &section);
+	ARTKeySection(idx_t start, idx_t end, const unsafe_vector<ARTKey> &keys, ARTKeySection &section);
 
-	void GetChildSections(vector<ARTKeySection> &child_sections, const vector<ARTKey> &keys);
+	void GetChildSections(unsafe_vector<ARTKeySection> &child_sections, const unsafe_vector<ARTKey> &keys);
 
 	idx_t start;
 	idx_t end;

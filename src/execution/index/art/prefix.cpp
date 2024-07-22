@@ -283,7 +283,7 @@ bool Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 		}
 
 		D_ASSERT(prefix.ptr.HasMetadata());
-		if (prefix.ptr.GetType() == NType::PREFIX) {
+		if (prefix.ptr.GetType() == NType::PREFIX && !prefix.ptr.IsGate()) {
 			child_prefix.get().Append(art, prefix.ptr);
 		} else {
 			child_prefix.get().ptr = prefix.ptr;

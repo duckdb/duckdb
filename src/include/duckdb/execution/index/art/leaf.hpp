@@ -45,7 +45,7 @@ public:
 	//! Inline a row ID into a node pointer.
 	static void New(Node &node, const row_t row_id);
 	//! Get a new non-inlined nested leaf node, might cause new buffer allocations.
-	static void New(ART &art, reference<Node> &node, const vector<ARTKey> &row_ids, const idx_t start,
+	static void New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
 	                const idx_t count);
 
 	//! Merges two leaves.
@@ -70,7 +70,7 @@ public:
 
 	//! Fills the row_ids vector with the row IDs of this linked list of leaves.
 	//! Never pushes more than max_count row IDs.
-	static bool DeprecatedGetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, const idx_t max_count);
+	static bool DeprecatedGetRowIds(ART &art, const Node &node, unsafe_vector<row_t> &row_ids, const idx_t max_count);
 
 	//! Vacuums the linked list of leaves.
 	static void DeprecatedVacuum(ART &art, Node &node);

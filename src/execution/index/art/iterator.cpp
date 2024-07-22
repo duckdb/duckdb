@@ -43,7 +43,7 @@ bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal) const {
 // Iterator
 //===--------------------------------------------------------------------===//
 
-bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row_t> &row_ids, const bool equal) {
+bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vector<row_t> &row_ids, const bool equal) {
 	bool has_next;
 	do {
 		// An empty upper bound indicates that no upper bound exists.

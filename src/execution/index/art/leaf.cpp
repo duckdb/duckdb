@@ -17,7 +17,8 @@ void Leaf::New(Node &node, const row_t row_id) {
 	node.SetRowId(row_id);
 }
 
-void Leaf::New(ART &art, reference<Node> &node, const vector<ARTKey> &row_ids, const idx_t start, const idx_t count) {
+void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
+               const idx_t count) {
 	D_ASSERT(count > 1);
 	D_ASSERT(!node.get().HasMetadata());
 
@@ -132,7 +133,7 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 	}
 
 	// Collect all row IDs and free the nested leaf.
-	vector<row_t> row_ids;
+	unsafe_vector<row_t> row_ids;
 	Iterator it(art);
 	it.FindMinimum(node);
 	ARTKey empty_key = ARTKey();
@@ -196,7 +197,7 @@ void Leaf::DeprecatedFree(ART &art, Node &node) {
 	node.Clear();
 }
 
-bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, vector<row_t> &row_ids, idx_t max_count) {
+bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, unsafe_vector<row_t> &row_ids, idx_t max_count) {
 	D_ASSERT(node.GetType() == NType::LEAF);
 
 	// Push back all row IDs of this leaf.

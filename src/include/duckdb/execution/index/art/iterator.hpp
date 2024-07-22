@@ -50,7 +50,7 @@ public:
 	bool GreaterThan(const ARTKey &key, bool equal) const;
 
 private:
-	vector<uint8_t> key_bytes;
+	unsafe_vector<uint8_t> key_bytes;
 };
 
 class Iterator {
@@ -64,7 +64,7 @@ public:
 
 	//! Scans the tree, starting at the current top node on the stack, and ending at upper_bound.
 	//! If upper_bound is the empty ARTKey, than there is no upper bound.
-	bool Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row_t> &row_ids, const bool equal);
+	bool Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vector<row_t> &row_ids, const bool equal);
 	//! Finds the minimum (leaf) of the current subtree.
 	void FindMinimum(const Node &node);
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower

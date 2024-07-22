@@ -28,8 +28,8 @@ struct ARTIndexScanState : public IndexScanState {
 	//! The expressions over the scan predicates.
 	ExpressionType expressions[2];
 	bool checked = false;
-	//! All scanned row IDs
-	vector<row_t> result_ids;
+	//! All scanned row IDs.
+	unsafe_vector<row_t> row_ids;
 };
 
 //===--------------------------------------------------------------------===//
@@ -214,7 +214,7 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 //===--------------------------------------------------------------------===//
 
 template <class T, bool IS_NOT_NULL>
-static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<ARTKey> &keys) {
+static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
 
 	D_ASSERT(keys.size() >= count);
 	UnifiedVectorFormat idata;
@@ -235,7 +235,7 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 }
 
 template <class T, bool IS_NOT_NULL>
-static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, vector<ARTKey> &keys) {
+static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
 
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
@@ -268,7 +268,7 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 }
 
 template <bool IS_NOT_NULL>
-void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys) {
+void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
 	switch (input.data[0].GetType().InternalType()) {
 	case PhysicalType::BOOL:
 		TemplatedGenerateKeys<bool, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
@@ -368,17 +368,17 @@ void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, vector<AR
 }
 
 template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys) {
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
 	GenerateKeysInternal<false>(allocator, input, keys);
 }
 
 template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys) {
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
-void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, vector<ARTKey> &keys,
-                             vector<ARTKey> &row_id_keys) {
+void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
+                             unsafe_vector<ARTKey> &row_id_keys) {
 	GenerateKeys<>(allocator, input, keys);
 
 	DataChunk row_id_chunk;
@@ -392,7 +392,8 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector
 // Construct from sorted data (only during CREATE (UNIQUE) INDEX statements)
 //===--------------------------------------------------------------------===//
 
-bool ART::Construct(const vector<ARTKey> &keys, const vector<ARTKey> &row_ids, Node &node, ARTKeySection &section) {
+bool ART::Construct(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
+                    ARTKeySection &section) {
 
 	D_ASSERT(section.start < keys.size());
 	D_ASSERT(section.end < keys.size());
@@ -435,7 +436,7 @@ bool ART::Construct(const vector<ARTKey> &keys, const vector<ARTKey> &row_ids, N
 	// Create a new node and recurse.
 
 	// There are at least two child entries for this node. Otherwise, we would have reached a leaf.
-	vector<ARTKeySection> child_sections;
+	unsafe_vector<ARTKeySection> child_sections;
 	section.GetChildSections(child_sections, keys);
 
 	// Create the prefix.
@@ -460,7 +461,8 @@ bool ART::Construct(const vector<ARTKey> &keys, const vector<ARTKey> &row_ids, N
 	return true;
 }
 
-bool ART::ConstructFromSorted(const vector<ARTKey> &keys, const vector<ARTKey> &row_id_keys, const idx_t row_count) {
+bool ART::ConstructFromSorted(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_id_keys,
+                              const idx_t row_count) {
 	ARTKeySection section(0, row_count - 1, 0, 0);
 	if (!Construct(keys, row_id_keys, tree, section)) {
 		return false;
@@ -488,8 +490,8 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	auto row_count = input.size();
 
 	ArenaAllocator allocator(BufferAllocator::Get(db));
-	vector<ARTKey> keys(row_count);
-	vector<ARTKey> row_id_keys(row_count);
+	unsafe_vector<ARTKey> keys(row_count);
+	unsafe_vector<ARTKey> row_id_keys(row_count);
 	GenerateKeyVectors(allocator, input, row_ids, keys, row_id_keys);
 
 	// Insert the entries into the index.
@@ -677,8 +679,8 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	ExecuteExpressions(input, expr_chunk);
 
 	ArenaAllocator allocator(BufferAllocator::Get(db));
-	vector<ARTKey> keys(row_count);
-	vector<ARTKey> row_id_keys(row_count);
+	unsafe_vector<ARTKey> keys(row_count);
+	unsafe_vector<ARTKey> row_id_keys(row_count);
 	GenerateKeyVectors(allocator, expr_chunk, row_ids, keys, row_id_keys);
 
 	for (idx_t i = 0; i < row_count; i++) {
@@ -779,7 +781,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 // Point Query (Equal)
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &row_ids) {
+bool ART::SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids) {
 
 	auto leaf = Lookup(tree, key, 0);
 	if (!leaf) {
@@ -835,7 +837,7 @@ optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey &key, idx_t 
 // Greater Than and Less Than
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, vector<row_t> &row_ids) {
+bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids) {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -853,7 +855,7 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, vector<row_t> 
 	return it.Scan(ARTKey(), max_count, row_ids, false);
 }
 
-bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, vector<row_t> &row_ids) {
+bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids) {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -876,7 +878,7 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, vector<ro
 //===--------------------------------------------------------------------===//
 
 bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-                           vector<row_t> &row_ids) {
+                           unsafe_vector<row_t> &row_ids) {
 	// Find the first node that satisfies the left predicate.
 	Iterator it(*this);
 
@@ -889,7 +891,7 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 	return it.Scan(upper_bound, max_count, row_ids, right_equal);
 }
 
-bool ART::Scan(IndexScanState &state, const idx_t max_count, vector<row_t> &row_ids) {
+bool ART::Scan(IndexScanState &state, const idx_t max_count, unsafe_vector<row_t> &row_ids) {
 
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
@@ -979,7 +981,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 	ExecuteExpressions(input, expr_chunk);
 
 	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
-	vector<ARTKey> keys(expr_chunk.size());
+	unsafe_vector<ARTKey> keys(expr_chunk.size());
 	GenerateKeys<>(arena_allocator, expr_chunk, keys);
 
 	idx_t found_conflict = DConstants::INVALID_INDEX;
