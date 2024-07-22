@@ -537,20 +537,14 @@ string QueryProfiler::ToJSON() const {
 
 	if (!IsEnabled()) {
 		yyjson_mut_obj_add_str(doc, result_obj, "result", "disabled");
-		auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
-		                                      nullptr, nullptr);
 		return StringifyAndFree(doc, result_obj);
 	}
 	if (query.empty() && !root) {
 		yyjson_mut_obj_add_str(doc, result_obj, "result", "empty");
-		auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
-		                                      nullptr, nullptr);
 		return StringifyAndFree(doc, result_obj);
 	}
 	if (!root) {
 		yyjson_mut_obj_add_str(doc, result_obj, "result", "error");
-		auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
-		                                      nullptr, nullptr);
 		return StringifyAndFree(doc, result_obj);
 	}
 
