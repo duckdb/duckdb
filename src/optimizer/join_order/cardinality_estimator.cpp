@@ -8,9 +8,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-#include <duckdb/common/sort/duckdb_pdqsort.hpp>
-#include <duckdb/parser/expression/comparison_expression.hpp>
-
 namespace duckdb {
 
 // The filter was made on top of a logical sample or other projection,
