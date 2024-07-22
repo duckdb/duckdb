@@ -517,6 +517,19 @@ static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node)
 	return result_obj;
 }
 
+static string StringifyAndFree(yyjson_mut_doc *doc, yyjson_mut_val *object) {
+	auto data = yyjson_mut_val_write_opts(object, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
+	                                      nullptr, nullptr);
+	if (!data) {
+		yyjson_mut_doc_free(doc);
+		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
+	}
+	auto result = string(data);
+	free(data);
+	yyjson_mut_doc_free(doc);
+	return result;
+}
+
 string QueryProfiler::ToJSON() const {
 	auto doc = yyjson_mut_doc_new(nullptr);
 	auto result_obj = yyjson_mut_obj(doc);
@@ -526,19 +539,19 @@ string QueryProfiler::ToJSON() const {
 		yyjson_mut_obj_add_str(doc, result_obj, "result", "disabled");
 		auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
 		                                      nullptr, nullptr);
-		return string(data);
+		return StringifyAndFree(doc, result_obj);
 	}
 	if (query.empty() && !root) {
 		yyjson_mut_obj_add_str(doc, result_obj, "result", "empty");
 		auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
 		                                      nullptr, nullptr);
-		return string(data);
+		return StringifyAndFree(doc, result_obj);
 	}
 	if (!root) {
 		yyjson_mut_obj_add_str(doc, result_obj, "result", "error");
 		auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
 		                                      nullptr, nullptr);
-		return string(data);
+		return StringifyAndFree(doc, result_obj);
 	}
 
 	auto &query_info = root->Cast<QueryProfilingNode>();
@@ -565,15 +578,7 @@ string QueryProfiler::ToJSON() const {
 	yyjson_mut_obj_add_val(doc, result_obj, "children", children_list);
 	auto child = ToJSONRecursive(doc, *root->GetChild(0));
 	yyjson_mut_arr_add_val(children_list, child);
-	auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
-	                                      nullptr, nullptr);
-	if (!data) {
-		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
-	}
-	auto result = string(data);
-	free(data);
-	yyjson_mut_doc_free(doc);
-	return result;
+	return StringifyAndFree(doc, result_obj);
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {
