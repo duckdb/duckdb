@@ -25,8 +25,11 @@ static void SHA1Function(DataChunk &args, ExpressionState &state, Vector &result
 	UnaryExecutor::ExecuteString<string_t, string_t, SHA1Operator>(input, result, args.size());
 }
 
-ScalarFunction SHA1Fun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, SHA1Function);
+ScalarFunctionSet SHA1Fun::GetFunctions() {
+	ScalarFunctionSet set("sha1");
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, SHA1Function));
+	set.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, SHA1Function));
+	return set;
 }
 
 } // namespace duckdb

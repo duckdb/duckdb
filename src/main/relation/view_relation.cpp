@@ -13,9 +13,10 @@ ViewRelation::ViewRelation(const shared_ptr<ClientContext> &context, string sche
 	context->TryBindRelation(*this, this->columns);
 }
 
-ViewRelation::ViewRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableRef> ref)
-    : Relation(context, RelationType::VIEW_RELATION), premade_tableref(std::move(ref)) {
+ViewRelation::ViewRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableRef> ref, const string &view_name)
+    : Relation(context, RelationType::VIEW_RELATION), view_name(view_name), premade_tableref(std::move(ref)) {
 	context->TryBindRelation(*this, this->columns);
+	premade_tableref->alias = view_name;
 }
 
 unique_ptr<QueryNode> ViewRelation::GetQueryNode() {
@@ -36,6 +37,7 @@ unique_ptr<TableRef> ViewRelation::GetTableRef() {
 }
 
 string ViewRelation::GetAlias() {
+	D_ASSERT(!view_name.empty());
 	return view_name;
 }
 

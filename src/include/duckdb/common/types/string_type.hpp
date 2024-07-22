@@ -21,7 +21,6 @@ namespace duckdb {
 
 struct string_t {
 	friend struct StringComparisonOperators;
-	friend class StringSegment;
 
 public:
 	static constexpr idx_t PREFIX_BYTES = 4 * sizeof(char);

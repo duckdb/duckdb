@@ -27,8 +27,8 @@ unique_ptr<MacroFunction> TableMacroFunction::Copy() const {
 	return std::move(result);
 }
 
-string TableMacroFunction::ToSQL(const string &schema, const string &name) const {
-	return MacroFunction::ToSQL(schema, name) + StringUtil::Format("TABLE (%s);", query_node->ToString());
+string TableMacroFunction::ToSQL() const {
+	return MacroFunction::ToSQL() + StringUtil::Format("TABLE (%s)", query_node->ToString());
 }
 
 } // namespace duckdb

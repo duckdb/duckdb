@@ -20,6 +20,11 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 }
 
 SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	if (scope == SetScope::VARIABLE) {
+		auto &client_config = ClientConfig::GetConfig(context.client);
+		client_config.ResetUserVariable(name);
+		return SourceResultType::FINISHED;
+	}
 	auto &config = DBConfig::GetConfig(context.client);
 	config.CheckLock(name);
 	auto option = DBConfig::GetOptionByName(name);

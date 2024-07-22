@@ -8,8 +8,8 @@ namespace duckdb {
 void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
 	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
 	if (!extension.empty()) {
-		// path is prefixed with an extension - remove it
-		path = StringUtil::Replace(path, extension + ":", "");
+		// path is prefixed with an extension - remove the first occurence of it
+		path = path.substr(extension.length() + 1);
 		db_type = ExtensionHelper::ApplyExtensionAlias(extension);
 	}
 }

@@ -114,8 +114,8 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
 		if (LAST || !state.is_set) {
-			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue(state, unary_input.input, input,
-			                                                             !unary_input.RowIsValid());
+			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE>(state, unary_input.input, input,
+			                                                                    !unary_input.RowIsValid());
 		}
 	}
 

@@ -135,8 +135,10 @@ NewLineIdentifier CSVReaderOptions::GetNewline() const {
 }
 
 void CSVReaderOptions::SetNewline(const string &input) {
-	if (input == "\\n" || input == "\\r") {
-		dialect_options.state_machine_options.new_line.Set(NewLineIdentifier::SINGLE);
+	if (input == "\\n") {
+		dialect_options.state_machine_options.new_line.Set(NewLineIdentifier::SINGLE_N);
+	} else if (input == "\\r") {
+		dialect_options.state_machine_options.new_line.Set(NewLineIdentifier::SINGLE_R);
 	} else if (input == "\\r\\n") {
 		dialect_options.state_machine_options.new_line.Set(NewLineIdentifier::CARRY_ON);
 	} else {

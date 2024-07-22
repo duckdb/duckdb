@@ -249,7 +249,7 @@ struct MD5Fun {
 	static constexpr const char *Description = "Returns the MD5 hash of the value as a string";
 	static constexpr const char *Example = "md5('123')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct MD5NumberFun {
@@ -258,25 +258,7 @@ struct MD5NumberFun {
 	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
 	static constexpr const char *Example = "md5_number('123')";
 
-	static ScalarFunction GetFunction();
-};
-
-struct MD5NumberLowerFun {
-	static constexpr const char *Name = "md5_number_lower";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
-	static constexpr const char *Example = "md5_number_lower('123')";
-
-	static ScalarFunction GetFunction();
-};
-
-struct MD5NumberUpperFun {
-	static constexpr const char *Name = "md5_number_upper";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the MD5 hash of the value as an INT128";
-	static constexpr const char *Example = "md5_number_upper('123')";
-
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ParseDirnameFun {
@@ -393,7 +375,7 @@ struct SHA1Fun {
 	static constexpr const char *Description = "Returns the SHA1 hash of the value";
 	static constexpr const char *Example = "sha1('hello')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct SHA256Fun {
@@ -402,7 +384,7 @@ struct SHA256Fun {
 	static constexpr const char *Description = "Returns the SHA256 hash of the value";
 	static constexpr const char *Example = "sha256('hello')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct StringSplitFun {

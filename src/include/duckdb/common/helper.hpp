@@ -126,14 +126,14 @@ unique_ptr<S> make_unique_base(Args &&... args) {
 }
 #endif // DUCKDB_ENABLE_DEPRECATED_API
 
-template <typename T, typename S>
-unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) { // NOLINT: mimic std style
-	return unique_ptr<S>(static_cast<S *>(src.release()));
+template <typename SRC, typename TGT>
+unique_ptr<TGT> unique_ptr_cast(unique_ptr<SRC> src) { // NOLINT: mimic std style
+	return unique_ptr<TGT>(static_cast<TGT *>(src.release()));
 }
 
-template <typename T, typename S>
-shared_ptr<S> shared_ptr_cast(shared_ptr<T> src) { // NOLINT: mimic std style
-	return shared_ptr<S>(std::static_pointer_cast<S, T>(src.internal));
+template <typename SRC, typename TGT>
+shared_ptr<TGT> shared_ptr_cast(shared_ptr<SRC> src) { // NOLINT: mimic std style
+	return shared_ptr<TGT>(std::static_pointer_cast<TGT, SRC>(src.internal));
 }
 
 struct SharedConstructor {

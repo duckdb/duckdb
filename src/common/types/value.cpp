@@ -848,6 +848,13 @@ Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	return result;
 }
 
+Value Value::VARINT(const_data_ptr_t data, idx_t len) {
+	Value result(LogicalType::VARINT);
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
 Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
@@ -1632,6 +1639,16 @@ const vector<Value> &StructValue::GetChildren(const Value &value) {
 		throw InternalException("Calling StructValue::GetChildren on a NULL value");
 	}
 	D_ASSERT(value.type().InternalType() == PhysicalType::STRUCT);
+	D_ASSERT(value.value_info_);
+	return value.value_info_->Get<NestedValueInfo>().GetValues();
+}
+
+const vector<Value> &MapValue::GetChildren(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling MapValue::GetChildren on a NULL value");
+	}
+	D_ASSERT(value.type().id() == LogicalTypeId::MAP);
+	D_ASSERT(value.type().InternalType() == PhysicalType::LIST);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }
