@@ -79,29 +79,28 @@ SELECT i, ordinality FROM UNNEST([]::INT[]) with ordinality AS tbl(i);
 ----
 
 # unnest from a subquery
+# disregards second row (postgres shows an error here)
 query II
 SELECT * FROM UNNEST((SELECT [1,2,3] UNION ALL SELECT [4,5])) with ordinality;
 ----
 1	1
 2	2
 3	3
-4	1
-5	2
 
 statement ok
 CREATE TABLE lists AS SELECT [1,2,3] l UNION ALL SELECT [4,5] UNION ALL SELECT [] UNION ALL SELECT [NULL] UNION ALL SELECT [7, 8];
 
 query II
-SELECT * FROM UNNEST((SELECT l FROM lists)) with ordinality;
+SELECT u,o FROM lists, UNNEST(l) with ordinality AS unnest(u,o) ORDER BY l, u;
 ----
 1	1
 2	2
 3	3
-4	4
-5	5
-NULL	6
-7	7
-8	8
+4	1
+5	2
+7	1
+8	2
+NULL	1
 
 # unnest with a prepared statement parameter
 statement ok

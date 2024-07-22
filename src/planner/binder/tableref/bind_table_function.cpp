@@ -372,8 +372,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		}
 	}
 
-
-
 	if (!parameters.empty()) {
 		// cast the parameters to the type of the function
 		for (idx_t i = 0; i < arguments.size(); i++) {
@@ -397,16 +395,17 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		}
 	}
 	auto get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
-										 std::move(input_table_types), std::move(input_table_names));
+	                                     std::move(input_table_types), std::move(input_table_names));
+
+	auto table_function_ref = make_uniq<BoundTableFunction>(std::move(get));
 	if (subquery) {
 		if (table_function.with_ordinality) {
-			get->children[0]->children[0]->children.push_back(Binder::CreatePlan(*subquery));
+			table_function_ref->get->children[0]->children[0]->children.push_back(Binder::CreatePlan(*subquery));
 		} else {
-			get->children.push_back(Binder::CreatePlan(*subquery));
+			table_function_ref->subquery = std::move(subquery);
 		}
 	}
-	auto table_function_ref = make_uniq<BoundTableFunction>(std::move(get));
-	table_function_ref->subquery = std::move(subquery);
+
 	return std::move(table_function_ref);
 }
 
