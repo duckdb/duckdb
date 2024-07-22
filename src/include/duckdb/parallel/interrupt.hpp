@@ -56,7 +56,7 @@ protected:
 	//! Current interrupt mode
 	InterruptMode mode;
 	//! Task ptr for InterruptMode::TASK
-	weak_ptr<Task> current_task;
+	weak_ptr<Task> associated_task;
 	//! Signal state for InterruptMode::BLOCKING
 	weak_ptr<InterruptDoneSignalState> signal_state;
 };

@@ -7,6 +7,7 @@
 #include "duckdb/main/database.hpp"
 
 #ifndef DUCKDB_NO_THREADS
+#include "duckdb/parallel/semaphore.hpp"
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
 #include "lightweightsemaphore.h"
@@ -36,11 +37,10 @@ struct SchedulerThread {
 
 #ifndef DUCKDB_NO_THREADS
 typedef duckdb_moodycamel::ConcurrentQueue<shared_ptr<Task>> concurrent_queue_t;
-typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
 	concurrent_queue_t q;
-	lightweight_semaphore_t semaphore;
+	semaphore semaphore;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
 	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);

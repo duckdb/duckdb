@@ -17,6 +17,9 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
+#include "concurrentqueue.h"
+#include "lightweightsemaphore.h"
+
 #include <algorithm>
 #include <chrono>
 
@@ -462,12 +465,13 @@ void Executor::WorkOnTasks() {
 }
 
 void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
-	task_reschedule.notify_one();
+	task_reschedule.signal();
 }
 
 void Executor::WaitForTask() {
-	static constexpr std::chrono::milliseconds WAIT_TIME = std::chrono::milliseconds(20);
-	std::unique_lock<mutex> l(executor_lock);
+	int64_t WAIT_TIME_IN_MICROS = 20000;
+	lock_guard<mutex> l(executor_lock);
+
 	if (to_be_rescheduled_tasks.empty()) {
 		return;
 	}
@@ -476,7 +480,7 @@ void Executor::WaitForTask() {
 		return;
 	}
 
-	task_reschedule.wait_for(l, WAIT_TIME);
+	task_reschedule.wait(WAIT_TIME_IN_MICROS);
 }
 
 void Executor::RescheduleTask(shared_ptr<Task> &task_p) {

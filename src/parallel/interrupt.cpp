@@ -3,13 +3,12 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
-#include <condition_variable>
 
 namespace duckdb {
 
 InterruptState::InterruptState() : mode(InterruptMode::NO_INTERRUPTS) {
 }
-InterruptState::InterruptState(weak_ptr<Task> task) : mode(InterruptMode::TASK), current_task(std::move(task)) {
+InterruptState::InterruptState(weak_ptr<Task> task) : mode(InterruptMode::TASK), associated_task(std::move(task)) {
 }
 InterruptState::InterruptState(weak_ptr<InterruptDoneSignalState> signal_state_p)
     : mode(InterruptMode::BLOCKING), signal_state(std::move(signal_state_p)) {
@@ -17,7 +16,7 @@ InterruptState::InterruptState(weak_ptr<InterruptDoneSignalState> signal_state_p
 
 void InterruptState::Callback() const {
 	if (mode == InterruptMode::TASK) {
-		auto task = current_task.lock();
+		auto task = associated_task.lock();
 
 		if (!task) {
 			return;
