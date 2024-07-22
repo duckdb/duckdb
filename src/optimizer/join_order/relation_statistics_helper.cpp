@@ -123,7 +123,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		bool has_equality_filter = (cardinality_after_filters != base_table_cardinality);
 		if (!has_equality_filter && !get.table_filters.filters.empty()) {
 			cardinality_after_filters = MaxValue<idx_t>(
-			    NumericCast<idx_t>(base_table_cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY), 1U);
+			    NumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY), 1U);
 		}
 		if (base_table_cardinality == 0) {
 			cardinality_after_filters = 0;
@@ -336,12 +336,13 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 				// be grouped by. Hopefully this can be fixed with duckdb-internal#606
 				continue;
 			}
-			if (new_card < child_stats.column_distinct_count[col_index].distinct_count) {
-				new_card = child_stats.column_distinct_count[col_index].distinct_count;
+			double distinct_count = double(child_stats.column_distinct_count[col_index].distinct_count);
+			if (new_card < distinct_count) {
+				new_card = distinct_count;
 			}
 		}
 	}
-	if (new_card < 0 || new_card >= child_stats.cardinality) {
+	if (new_card < 0 || new_card >= double(child_stats.cardinality)) {
 		// We have no good statistics on distinct count.
 		// most likely we are running on parquet files. Therefore we divide by 2.
 		new_card = (double)child_stats.cardinality / 2;
