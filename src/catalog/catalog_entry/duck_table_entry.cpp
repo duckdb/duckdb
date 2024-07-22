@@ -70,7 +70,9 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, const 
 	auto constraint_name = EnumUtil::ToString(constraint_type) + "_";
 	auto name = constraint_name + create_table_info.table + "_" + to_string(identifier);
 	IndexStorageInfo info(name);
-	info.v1_0_0_storage = v1_0_0_storage;
+	if (!v1_0_0_storage) {
+		info.options.emplace("v1_0_0_storage", v1_0_0_storage);
+	}
 	return info;
 }
 

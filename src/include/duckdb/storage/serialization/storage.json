@@ -78,9 +78,9 @@
       },
       {
         "id": 103,
-        "name": "v1_0_0_storage",
-        "type": "bool",
-        "default": "true"
+        "name": "options",
+        "type": "case_insensitive_map_t<Value>",
+        "default": "case_insensitive_map_t<Value>()"
       }
     ],
     "pointer_type": "none"

@@ -1030,16 +1030,18 @@ string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t
 // Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-IndexStorageInfo ART::GetStorageInfo(const bool use_v1_0_0_storage, const bool to_wal) {
+IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
+	auto v1_0_0_storage = options.find("v1_0_0_storage");
+	bool use_v1_0_0_storage = v1_0_0_storage == options.end() || v1_0_0_storage->second != Value(false);
 	if (use_v1_0_0_storage && tree.HasMetadata()) {
 		Node::TransformToDeprecated(*this, tree);
 	}
 
 	IndexStorageInfo info(name);
 	info.root = tree.Get();
-	info.v1_0_0_storage = use_v1_0_0_storage;
+	info.options = options;
 
 	if (!to_wal) {
 		// Store the data on disk as partial blocks and set the block ids.

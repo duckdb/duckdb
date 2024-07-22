@@ -76,7 +76,7 @@ public:
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
 
 	//! Serialize all indexes of this table.
-	vector<IndexStorageInfo> GetStorageInfos(const bool use_v1_0_0_storage);
+	vector<IndexStorageInfo> GetStorageInfos(const case_insensitive_map_t<Value> &options);
 
 	vector<column_t> GetRequiredColumns();
 

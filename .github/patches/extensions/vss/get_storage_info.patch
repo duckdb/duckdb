@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 012a8ea..46d5a90 100644
+index 012a8ea..f2c445f 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
 @@ -490,7 +490,7 @@ void HNSWIndex::PersistToDisk() {
@@ -7,7 +7,7 @@ index 012a8ea..46d5a90 100644
  }
  
 -IndexStorageInfo HNSWIndex::GetStorageInfo(const bool get_buffers) {
-+IndexStorageInfo HNSWIndex::GetStorageInfo(const bool, const bool to_wal) {
++IndexStorageInfo HNSWIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
  
  	PersistToDisk();
  
@@ -21,7 +21,7 @@ index 012a8ea..46d5a90 100644
  		auto &block_manager = table_io_manager.GetIndexBlockManager();
  		PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
 diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
-index bd0a60d..7479a86 100644
+index bd0a60d..2344ffb 100644
 --- a/src/include/hnsw/hnsw_index.hpp
 +++ b/src/include/hnsw/hnsw_index.hpp
 @@ -72,7 +72,7 @@ public:
@@ -29,7 +29,7 @@ index bd0a60d..7479a86 100644
  	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
  
 -	IndexStorageInfo GetStorageInfo(const bool get_buffers) override;
-+	IndexStorageInfo GetStorageInfo(const bool use_v1_0_0_storage, const bool to_wal) override;
++	IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) override;
  	idx_t GetInMemorySize(IndexLock &state) override;
  
  	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other

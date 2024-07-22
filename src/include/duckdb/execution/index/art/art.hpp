@@ -93,7 +93,7 @@ public:
 	bool SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids);
 
 	//! Returns ART storage serialization information.
-	IndexStorageInfo GetStorageInfo(const bool use_v1_0_0_storage, const bool to_wal) override;
+	IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
