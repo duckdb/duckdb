@@ -800,7 +800,7 @@
         "default": "false"
       },
       {"id": 137,
-        "name": "dialect_options.state_machine_options.delimiter",
+        "name": "dialect_options.state_machine_options.comment",
         "type": "CSVOption<char>"
       }
     ],
