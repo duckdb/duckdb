@@ -151,7 +151,6 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 			vector_info[vector_idx] = std::move(new_info);
 		}
 	}
-
 }
 
 void RowVersionManager::RevertAppend(idx_t start_row) {
