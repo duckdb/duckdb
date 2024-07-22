@@ -7,6 +7,20 @@
 
 namespace duckdb_re2 {
 
+static size_t GetMultibyteCharLength(const char c) {
+	if ((c & 0x80) == 0) {
+		return 1; // 1-byte character (ASCII)
+	} else if ((c & 0xE0) == 0xC0) {
+		return 2; // 2-byte character
+	} else if ((c & 0xF0) == 0xE0) {
+		return 3; // 3-byte character
+	} else if ((c & 0xF8) == 0xF0) {
+		return 4; // 4-byte character
+	} else {
+		return 0; // invalid UTF-8leading byte
+	}
+}
+
 Regex::Regex(const std::string &pattern, RegexOptions options) {
 	RE2::Options o;
 	o.set_case_sensitive(options == RegexOptions::CASE_INSENSITIVE);
@@ -62,8 +76,21 @@ duckdb::vector<Match> RegexFindAll(const char *input_data, size_t input_size, co
 	size_t position = 0;
 	Match match;
 	while (RegexSearchInternal(input_data, input_size, match, regex, RE2::UNANCHORED, position, input_size)) {
-		auto match_length = (match.length(0)) : match.length(0) ? 1;
-		position = match.position(0) + match_length;
+		if (match.length(0)) {
+			position = match.position(0) + match.length(0);
+		} else { // match.length(0) == 0
+			auto next_char_length = GetMultibyteCharLength(input_data[match.position(0)]);
+			if (!next_char_length) {
+				// invalid UTF-8 leading byte
+				return duckdb::vector<Match>();
+			}
+			if (match.position(0) + next_char_length < input_size) {
+				position = match.position(0) + next_char_length;
+			} else {
+				matches.emplace_back(match);
+				break;
+			}
+		}
 		matches.emplace_back(match);
 	}
 	return matches;
