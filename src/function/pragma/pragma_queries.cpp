@@ -43,6 +43,7 @@ string PragmaShowTables() {
 	ORDER BY "name";)EOF";
 	// clang-format on
 }
+
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
 	return PragmaShowTables();
 }
@@ -91,6 +92,9 @@ string PragmaShowDatabases(ClientContext &context, const FunctionParameters &par
 	return PragmaShowDatabases();
 }
 
+string PragmaShowVariables() {
+	return "SELECT * FROM duckdb_variables() ORDER BY name";
+}
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_last_profiling_output() JOIN pragma_detailed_profiling_output() ON "
 	       "(pragma_last_profiling_output.operator_id);";

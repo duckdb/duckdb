@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
@@ -2038,6 +2039,34 @@ ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SEQUENCE")) {
 		return ExceptionType::SEQUENCE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
+	switch(value) {
+	case ExplainFormat::DEFAULT:
+		return "DEFAULT";
+	case ExplainFormat::TEXT:
+		return "TEXT";
+	case ExplainFormat::JSON:
+		return "JSON";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
+	if (StringUtil::Equals(value, "DEFAULT")) {
+		return ExplainFormat::DEFAULT;
+	}
+	if (StringUtil::Equals(value, "TEXT")) {
+		return ExplainFormat::TEXT;
+	}
+	if (StringUtil::Equals(value, "JSON")) {
+		return ExplainFormat::JSON;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5140,6 +5169,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "EXPORT";
 	case PhysicalOperatorType::SET:
 		return "SET";
+	case PhysicalOperatorType::SET_VARIABLE:
+		return "SET_VARIABLE";
 	case PhysicalOperatorType::LOAD:
 		return "LOAD";
 	case PhysicalOperatorType::INOUT_FUNCTION:
@@ -5369,6 +5400,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "SET")) {
 		return PhysicalOperatorType::SET;
+	}
+	if (StringUtil::Equals(value, "SET_VARIABLE")) {
+		return PhysicalOperatorType::SET_VARIABLE;
 	}
 	if (StringUtil::Equals(value, "LOAD")) {
 		return PhysicalOperatorType::LOAD;
@@ -6218,6 +6252,8 @@ const char* EnumUtil::ToChars<SetScope>(SetScope value) {
 		return "SESSION";
 	case SetScope::GLOBAL:
 		return "GLOBAL";
+	case SetScope::VARIABLE:
+		return "VARIABLE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6236,6 +6272,9 @@ SetScope EnumUtil::FromString<SetScope>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "GLOBAL")) {
 		return SetScope::GLOBAL;
+	}
+	if (StringUtil::Equals(value, "VARIABLE")) {
+		return SetScope::VARIABLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -89,8 +89,10 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 
 		// Don't multiply by cardinalities, the only important metric is the size of the row
 		// in the hash table
-		ret.left_side = left_tuple_layout.GetRowWidth() * (1 + COLUMN_COUNT_PENALTY * left_child->types.size());
-		ret.right_side = right_tuple_layout.GetRowWidth() * (1 + COLUMN_COUNT_PENALTY * right_child->types.size());
+		ret.left_side =
+		    double(left_tuple_layout.GetRowWidth()) * (1 + COLUMN_COUNT_PENALTY * double(left_child->types.size()));
+		ret.right_side =
+		    double(right_tuple_layout.GetRowWidth()) * (1 + COLUMN_COUNT_PENALTY * double(right_child->types.size()));
 		return ret;
 	}
 	default:
@@ -109,8 +111,8 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 
 	auto build_sizes = GetBuildSizes(op);
 	// special math.
-	auto left_side_build_cost = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
-	auto right_side_build_cost = rhs_cardinality * build_sizes.right_side;
+	auto left_side_build_cost = double(lhs_cardinality) * double(cardinality_ratio) * build_sizes.left_side;
+	auto right_side_build_cost = double(rhs_cardinality) * build_sizes.right_side;
 
 	bool swap = false;
 	// RHS is build side.

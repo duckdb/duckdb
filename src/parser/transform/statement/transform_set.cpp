@@ -16,6 +16,8 @@ SetScope ToSetScope(duckdb_libpgquery::VariableSetScope pg_scope) {
 		return SetScope::SESSION;
 	case duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_GLOBAL:
 		return SetScope::GLOBAL;
+	case duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_VARIABLE:
+		return SetScope::VARIABLE;
 	case duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_DEFAULT:
 		return SetScope::AUTOMATIC;
 	default:
@@ -37,17 +39,16 @@ SetType ToSetType(duckdb_libpgquery::VariableSetKind pg_kind) {
 } // namespace
 
 unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PGVariableSetStmt &stmt) {
-	D_ASSERT(stmt.kind == duckdb_libpgquery::VariableSetKind::VAR_SET_VALUE);
-
 	if (stmt.scope == duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_LOCAL) {
 		throw NotImplementedException("SET LOCAL is not implemented.");
 	}
 
-	auto name = std::string(stmt.name);
+	string name(stmt.name);
 	D_ASSERT(!name.empty()); // parser protect us!
 	if (stmt.args->length != 1) {
 		throw ParserException("SET needs a single scalar value parameter");
 	}
+	auto scope = ToSetScope(stmt.scope);
 	D_ASSERT(stmt.args->head && stmt.args->head->data.ptr_value);
 	auto const_val = PGPointerCast<duckdb_libpgquery::PGNode>(stmt.args->head->data.ptr_value);
 	auto expr = TransformExpression(const_val);
@@ -63,9 +64,9 @@ unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PG
 	}
 	if (expr->type == ExpressionType::VALUE_DEFAULT) {
 		// set to default = reset
-		return make_uniq<ResetVariableStatement>(name, ToSetScope(stmt.scope));
+		return make_uniq<ResetVariableStatement>(std::move(name), scope);
 	}
-	return make_uniq<SetVariableStatement>(name, std::move(expr), ToSetScope(stmt.scope));
+	return make_uniq<SetVariableStatement>(std::move(name), std::move(expr), scope);
 }
 
 unique_ptr<SetStatement> Transformer::TransformResetVariable(duckdb_libpgquery::PGVariableSetStmt &stmt) {
@@ -75,7 +76,7 @@ unique_ptr<SetStatement> Transformer::TransformResetVariable(duckdb_libpgquery::
 		throw NotImplementedException("RESET LOCAL is not implemented.");
 	}
 
-	auto name = std::string(stmt.name);
+	string name(stmt.name);
 	D_ASSERT(!name.empty()); // parser protect us!
 
 	return make_uniq<ResetVariableStatement>(name, ToSetScope(stmt.scope));
@@ -85,14 +86,13 @@ unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGVariable
 	D_ASSERT(stmt.type == duckdb_libpgquery::T_PGVariableSetStmt);
 
 	SetType set_type = ToSetType(stmt.kind);
-
 	switch (set_type) {
 	case SetType::SET:
 		return TransformSetVariable(stmt);
 	case SetType::RESET:
 		return TransformResetVariable(stmt);
 	default:
-		throw NotImplementedException("Type not implemented for SetType");
+		throw InternalException("Type not implemented for SetType");
 	}
 }
 

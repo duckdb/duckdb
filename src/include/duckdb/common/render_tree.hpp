@@ -22,12 +22,29 @@ struct PipelineRenderNode;
 
 struct RenderTreeNode {
 public:
+	struct Coordinate {
+	public:
+		Coordinate(idx_t x, idx_t y) : x(x), y(y) {
+		}
+
+	public:
+		idx_t x;
+		idx_t y;
+	};
+
+public:
 	RenderTreeNode(const string &name, const string &extra_text) : name(name), extra_text(extra_text) {
+	}
+
+public:
+	void AddChildPosition(idx_t x, idx_t y) {
+		child_positions.emplace_back(x, y);
 	}
 
 public:
 	string name;
 	string extra_text;
+	vector<Coordinate> child_positions;
 };
 
 struct RenderTree {
