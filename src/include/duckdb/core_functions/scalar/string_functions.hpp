@@ -387,6 +387,15 @@ struct RtrimFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct SHA1Fun {
+	static constexpr const char *Name = "sha1";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the SHA1 hash of the value";
+	static constexpr const char *Example = "sha1('hello')";
+
+	static ScalarFunction GetFunction();
+};
+
 struct SHA256Fun {
 	static constexpr const char *Name = "sha256";
 	static constexpr const char *Parameters = "value";

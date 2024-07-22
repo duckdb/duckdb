@@ -48,6 +48,10 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 			// nested columns are not supported for pushdown
 			continue;
 		}
+		if (cond.left->return_type.id() == LogicalTypeId::INTERVAL) {
+			// interval is not supported for pushdown
+			continue;
+		}
 		JoinFilterPushdownColumn pushdown_col;
 		pushdown_col.join_condition = cond_idx;
 

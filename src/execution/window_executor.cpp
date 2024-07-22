@@ -1543,29 +1543,16 @@ void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, co
 		if (check_nulls) {
 			const auto count = input_chunk.size();
 
-			payload_chunk.Flatten();
+			lock_guard<mutex> validity_guard(gvstate.lock);
+			D_ASSERT(payload_chunk.data[0].GetVectorType() == VectorType::FLAT_VECTOR);
 			UnifiedVectorFormat vdata;
 			payload_chunk.data[0].ToUnifiedFormat(count, vdata);
-			lock_guard<mutex> validity_guard(gvstate.lock);
 			if (!vdata.validity.AllValid()) {
 				//	Lazily materialise the contents when we find the first NULL
 				if (ignore_nulls.AllValid()) {
 					ignore_nulls.Initialize(total_count);
 				}
-				// Write to the current position
-				if (input_idx % ValidityMask::BITS_PER_VALUE == 0) {
-					// If we are at the edge of an output entry, just copy the entries
-					auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(input_idx);
-					auto src = vdata.validity.GetData();
-					for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
-						*dst++ = *src++;
-					}
-				} else {
-					// If not, we have ragged data and need to copy one bit at a time.
-					for (idx_t i = 0; i < count; ++i) {
-						ignore_nulls.Set(input_idx + i, vdata.validity.RowIsValid(i));
-					}
-				}
+				ignore_nulls.SliceInPlace(vdata.validity, input_idx, 0, count);
 			}
 		}
 	}

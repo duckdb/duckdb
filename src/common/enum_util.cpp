@@ -5832,6 +5832,10 @@ const char* EnumUtil::ToChars<RelationType>(RelationType value) {
 		return "VIEW_RELATION";
 	case RelationType::QUERY_RELATION:
 		return "QUERY_RELATION";
+	case RelationType::DELIM_JOIN_RELATION:
+		return "DELIM_JOIN_RELATION";
+	case RelationType::DELIM_GET_RELATION:
+		return "DELIM_GET_RELATION";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5916,6 +5920,12 @@ RelationType EnumUtil::FromString<RelationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "QUERY_RELATION")) {
 		return RelationType::QUERY_RELATION;
+	}
+	if (StringUtil::Equals(value, "DELIM_JOIN_RELATION")) {
+		return RelationType::DELIM_JOIN_RELATION;
+	}
+	if (StringUtil::Equals(value, "DELIM_GET_RELATION")) {
+		return RelationType::DELIM_GET_RELATION;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -7109,6 +7119,8 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 		return "SHOW_REF";
 	case TableReferenceType::COLUMN_DATA:
 		return "COLUMN_DATA";
+	case TableReferenceType::DELIM_GET:
+		return "DELIM_GET";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -7148,6 +7160,9 @@ TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COLUMN_DATA")) {
 		return TableReferenceType::COLUMN_DATA;
+	}
+	if (StringUtil::Equals(value, "DELIM_GET")) {
+		return TableReferenceType::DELIM_GET;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -160,6 +160,10 @@ public:
 		Initialize(write);
 	}
 
+	FileCompressionType GetFileCompressionType() override {
+		return FileCompressionType::ZSTD;
+	}
+
 	ZStdFileSystem zstd_fs;
 };
 

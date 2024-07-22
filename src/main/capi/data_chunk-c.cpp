@@ -1,6 +1,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 #include <string.h>
 
@@ -11,6 +12,10 @@ duckdb_data_chunk duckdb_create_data_chunk(duckdb_logical_type *column_types, id
 	duckdb::vector<duckdb::LogicalType> types;
 	for (idx_t i = 0; i < column_count; i++) {
 		auto logical_type = reinterpret_cast<duckdb::LogicalType *>(column_types[i]);
+		if (duckdb::TypeVisitor::Contains(*logical_type, duckdb::LogicalTypeId::INVALID) ||
+		    duckdb::TypeVisitor::Contains(*logical_type, duckdb::LogicalTypeId::ANY)) {
+			return nullptr;
+		}
 		types.push_back(*logical_type);
 	}
 
