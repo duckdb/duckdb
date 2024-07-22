@@ -13,27 +13,30 @@
 
 // fwd declare LightweightSemaphore;
 namespace duckdb_moodycamel {
-	class LightweightSemaphore;
-};
+class LightweightSemaphore;
+} // namespace duckdb_moodycamel
 
 namespace duckdb {
 
 class semaphore { // NOLINT: match std naming style
-// NOTE:
-// To instantiate this class, these headers have to be included:
-// #include "concurrentqueue.h"
-// #include "lightweightsemaphore.h"
+	// NOTE:
+	// To instantiate this class, these headers have to be included:
+	// #include "concurrentqueue.h"
+	// #include "lightweightsemaphore.h"
 
-// This header explicitly does not include these files because they are third_party headers
-// which should only be referenced by internal duckdb source files.
+	// This header explicitly does not include these files because they are third_party headers
+	// which should only be referenced by internal duckdb source files.
 
 public:
 	semaphore();
+
 public:
 	bool wait();
 	bool wait(int64_t timeout_usecs);
+
 public:
 	void signal(ssize_t count = 1);
+
 private:
 	unsafe_unique_ptr<duckdb_moodycamel::LightweightSemaphore> _sem;
 };
