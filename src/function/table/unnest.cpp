@@ -11,8 +11,6 @@ struct UnnestBindData : public FunctionData {
 	}
 
 	LogicalType input_type;
-	idx_t original_ordinality_id;
-	bool with_ordinality = false;
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
