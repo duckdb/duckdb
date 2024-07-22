@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -101,7 +102,7 @@ private:
 public:
 	DUCKDB_API bool IsEnabled() const;
 	DUCKDB_API bool IsDetailedEnabled() const;
-	DUCKDB_API ProfilerPrintFormat GetPrintFormat() const;
+	DUCKDB_API ProfilerPrintFormat GetPrintFormat(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	DUCKDB_API bool PrintOptimizerOutput() const;
 	DUCKDB_API string GetSaveLocation() const;
 
@@ -126,7 +127,7 @@ public:
 
 	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
 	//! the return value is formatted based on the current print format (see GetPrintFormat()).
-	DUCKDB_API string ToString() const;
+	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 
 	static string JSONSanitize(const string &text);
 	static string DrawPadded(const string &str, idx_t width);
