@@ -11,45 +11,40 @@ bool IsQuoteDefault(char quote) {
 	return false;
 }
 
-void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candidates,
-                                                       vector<QuoteRule> &quoterule_candidates,
-                                                       unordered_map<uint8_t, vector<char>> &quote_candidates_map,
-                                                       unordered_map<uint8_t, vector<char>> &escape_candidates_map) {
-	if (options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
+DialectCandidates::DialectCandidates(CSVStateMachineOptions &options) {
+	escape_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)] = {'\"', '\'', '\0'};
+	escape_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_OTHER)] = {'\\'};
+	escape_candidates_map[static_cast<uint8_t>(QuoteRule::NO_QUOTES)] = {'\0'};
+	if (options.delimiter.IsSetByUser()) {
 		// user provided a delimiter: use that delimiter
-		delim_candidates = {options.dialect_options.state_machine_options.delimiter.GetValue()};
+		delim_candidates = {options.delimiter.GetValue()};
 	} else {
 		// no delimiter provided: try standard/common delimiters
 		delim_candidates = {',', '|', ';', '\t'};
 	}
-	if (options.dialect_options.state_machine_options.quote.IsSetByUser()) {
+	if (options.quote.IsSetByUser()) {
 		// user provided quote: use that quote rule
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {
-		    options.dialect_options.state_machine_options.quote.GetValue()};
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {
-		    options.dialect_options.state_machine_options.quote.GetValue()};
-		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {
-		    options.dialect_options.state_machine_options.quote.GetValue()};
+		quote_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)] = {options.quote.GetValue()};
+		quote_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_OTHER)] = {options.quote.GetValue()};
+		quote_candidates_map[static_cast<uint8_t>(QuoteRule::NO_QUOTES)] = {options.quote.GetValue()};
 		// also add it as a escape rule
-		if (!IsQuoteDefault(options.dialect_options.state_machine_options.quote.GetValue())) {
-			escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC].emplace_back(
-			    options.dialect_options.state_machine_options.quote.GetValue());
+		if (!IsQuoteDefault(options.quote.GetValue())) {
+			escape_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)].emplace_back(options.quote.GetValue());
 		}
 	} else {
 		// no quote rule provided: use standard/common quotes
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"'};
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {'\"', '\''};
-		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {'\0'};
+		quote_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)] = {'\"'};
+		quote_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_OTHER)] = {'\"', '\''};
+		quote_candidates_map[static_cast<uint8_t>(QuoteRule::NO_QUOTES)] = {'\0'};
 	}
-	if (options.dialect_options.state_machine_options.escape.IsSetByUser()) {
+	if (options.escape.IsSetByUser()) {
 		// user provided escape: use that escape rule
-		if (options.dialect_options.state_machine_options.escape == '\0') {
+		if (options.escape == '\0') {
 			quoterule_candidates = {QuoteRule::QUOTES_RFC};
 		} else {
 			quoterule_candidates = {QuoteRule::QUOTES_OTHER};
 		}
-		escape_candidates_map[(uint8_t)quoterule_candidates[0]] = {
-		    options.dialect_options.state_machine_options.escape.GetValue()};
+		escape_candidates_map[static_cast<uint8_t>(quoterule_candidates[0])] = {options.escape.GetValue()};
 	} else {
 		// no escape provided: try standard/common escapes
 		quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
@@ -57,10 +52,7 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 }
 
 void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountScanner>> &column_count_scanners,
-                                                 const vector<char> &delimiter_candidates,
-                                                 const vector<QuoteRule> &quoterule_candidates,
-                                                 const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
-                                                 const unordered_map<uint8_t, vector<char>> &escape_candidates_map) {
+                                                 const DialectCandidates &dialect_candidates) {
 	// Generate state machines for all option combinations
 	NewLineIdentifier new_line_id;
 	if (options.dialect_options.state_machine_options.new_line.IsSetByUser()) {
@@ -70,11 +62,11 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	}
 	CSVIterator first_iterator;
 	bool iterator_set = false;
-	for (const auto quoterule : quoterule_candidates) {
-		const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
+	for (const auto quoterule : dialect_candidates.quoterule_candidates) {
+		const auto &quote_candidates = dialect_candidates.quote_candidates_map.at((uint8_t)quoterule);
 		for (const auto &quote : quote_candidates) {
-			for (const auto &delimiter : delimiter_candidates) {
-				const auto &escape_candidates = escape_candidates_map.at((uint8_t)quoterule);
+			for (const auto &delimiter : dialect_candidates.delim_candidates) {
+				const auto &escape_candidates = dialect_candidates.escape_candidates_map.at((uint8_t)quoterule);
 				for (const auto &escape : escape_candidates) {
 					D_ASSERT(buffer_manager);
 					CSVStateMachineOptions state_machine_options(delimiter, quote, escape, '\0', new_line_id);
@@ -348,17 +340,7 @@ NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_ma
 // 4. Analyze the remaining chunks of the file and find the best dialect candidate
 void CSVSniffer::DetectDialect() {
 	// Variables for Dialect Detection
-	// Candidates for the delimiter
-	vector<char> delim_candidates;
-	// Quote-Rule Candidates
-	vector<QuoteRule> quoterule_candidates;
-	// Candidates for the quote option
-	unordered_map<uint8_t, vector<char>> quote_candidates_map;
-	// Candidates for the escape option
-	unordered_map<uint8_t, vector<char>> escape_candidates_map;
-	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"', '\'', '\0'};
-	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {'\\'};
-	escape_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {'\0'};
+	DialectCandidates dialect_candidates(options.dialect_options.state_machine_options);
 	// Number of rows read
 	idx_t rows_read = 0;
 	// Best Number of consistent rows (i.e., presenting all columns)
@@ -367,18 +349,13 @@ void CSVSniffer::DetectDialect() {
 	idx_t prev_padding_count = 0;
 	// Vector of CSV State Machines
 	vector<unique_ptr<ColumnCountScanner>> csv_state_machines;
-
-	// Step 1: Generate search space
-	GenerateCandidateDetectionSearchSpace(delim_candidates, quoterule_candidates, quote_candidates_map,
-	                                      escape_candidates_map);
-	// Step 2: Generate state machines
-	GenerateStateMachineSearchSpace(csv_state_machines, delim_candidates, quoterule_candidates, quote_candidates_map,
-	                                escape_candidates_map);
-	// Step 3: Analyze all candidates on the first chunk
+	// Step 1: Generate state machines
+	GenerateStateMachineSearchSpace(csv_state_machines, dialect_candidates);
+	// Step 2: Analyze all candidates on the first chunk
 	for (auto &state_machine : csv_state_machines) {
 		AnalyzeDialectCandidate(std::move(state_machine), rows_read, best_consistent_rows, prev_padding_count);
 	}
-	// Step 4: Loop over candidates and find if they can still produce good results for the remaining chunks
+	// Step 3: Loop over candidates and find if they can still produce good results for the remaining chunks
 	RefineCandidates();
 
 	// if no dialect candidate was found, we throw an exception
