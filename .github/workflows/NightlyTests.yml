@@ -675,7 +675,6 @@ jobs:
   threadsan:
     name: Thread Sanitizer
     runs-on: ubuntu-20.04
-    needs: linux-memory-leaks
     env:
       CC: gcc-10
       CXX: g++-10
@@ -688,6 +687,7 @@ jobs:
       BUILD_JEMALLOC: 1
       BUILD_EXTENSIONS: "inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+      FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
     - uses: actions/checkout@v3

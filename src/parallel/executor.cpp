@@ -466,7 +466,6 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 }
 
 void Executor::WaitForTask() {
-	static constexpr std::chrono::milliseconds WAIT_TIME = std::chrono::milliseconds(20);
 	std::unique_lock<mutex> l(executor_lock);
 	if (to_be_rescheduled_tasks.empty()) {
 		return;
@@ -476,7 +475,7 @@ void Executor::WaitForTask() {
 		return;
 	}
 
-	task_reschedule.wait_for(l, WAIT_TIME);
+	task_reschedule.wait_for(l);
 }
 
 void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
