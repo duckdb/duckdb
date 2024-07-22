@@ -1,12 +1,15 @@
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/storage/data_table.hpp"
+
+#include <duckdb/common/sort/duckdb_pdqsort.hpp>
+#include <duckdb/parser/expression/comparison_expression.hpp>
 
 namespace duckdb {
 
@@ -212,7 +215,42 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	double new_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
 	case JoinType::INNER: {
+		bool set = false;
+		ExpressionType comparison_type = ExpressionType::COMPARE_EQUAL;
+		ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
+			if (expr.expression_class == ExpressionClass::BOUND_COMPARISON) {
+				comparison_type = expr.type;
+				set = true;
+				return;
+			}
+		});
+		if (!set) {
+			new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+			// no comparison is taking place, so the denominator is just the product of the left and right
+			return new_denom;
+		}
+		double extra_ratio = 1;
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			// extra ration stays 1
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+			extra_ratio = 0.4;
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			// cardinality should be much higher.
+			extra_ratio = 0.1;
+			break;
+		default:
+			break;
+		}
 		new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+		new_denom *= extra_ratio;
 		return new_denom;
 	}
 	case JoinType::SEMI:
