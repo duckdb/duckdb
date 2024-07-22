@@ -43,6 +43,7 @@ CREATE VIEW v1(i) AS SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM in
 statement error
 SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i::DATE) FROM integers UNION ALL SELECT MAX(i::DATE) FROM integers;
 ----
+<REGEX>:Conversion Error.*Unimplemented type for cast.*
 
 # errors are properly cleared
 query R sort
