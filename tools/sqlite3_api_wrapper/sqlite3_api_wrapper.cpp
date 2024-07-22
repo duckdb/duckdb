@@ -14,10 +14,6 @@
 #include "sqlite3_udf_wrapper.hpp"
 #include "udf_struct_sqlite3.h"
 #include "utf8proc_wrapper.hpp"
-#ifdef SHELL_INLINE_AUTOCOMPLETE
-#include "autocomplete_extension.hpp"
-#endif
-#include "shell_extension.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -121,10 +117,6 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_uniq<DuckDB>(filename, &config);
-#ifdef SHELL_INLINE_AUTOCOMPLETE
-		pDb->db->LoadStaticExtension<AutocompleteExtension>();
-#endif
-		pDb->db->LoadStaticExtension<ShellExtension>();
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
