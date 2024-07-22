@@ -570,7 +570,10 @@ string QueryProfiler::ToJSON() const {
 	if (!data) {
 		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
 	}
-	return string(data);
+	auto result = string(data);
+	free(data);
+	yyjson_mut_doc_free(doc);
+	return result;
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {
