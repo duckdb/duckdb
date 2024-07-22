@@ -24,7 +24,6 @@ TEST_CASE("Test repeated appending small chunks to a table", "[memoryleak]") {
 	duckdb_database db;
 	duckdb_connection con;
 	duckdb_state state;
-	int ret;
 	auto db_path = TestCreatePath("appender_leak_test.db");
 	TestDeleteFile(db_path);
 
