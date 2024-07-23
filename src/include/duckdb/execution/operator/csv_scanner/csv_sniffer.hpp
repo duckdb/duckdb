@@ -36,12 +36,16 @@ struct DialectCandidates {
 	//! The constructor populates all of our the options that will be used in our sniffer search space
 	explicit DialectCandidates(const CSVStateMachineOptions &options);
 
-	//! Static variables holding defaults of the search space
-	static const vector<char> DEFAULT_DELIMITER;
-	static const vector<vector<char>> DEFAULT_QUOTE;
-	static const vector<QuoteRule> DEFAULT_QUOTE_RULE;
-	static const vector<vector<char>> DEFAULT_ESCAPE;
-	static const vector<char> DEFAULT_COMMENT;
+	//! Static functions to get defaults of the search space
+	static vector<char> GetDefaultDelimiter();
+
+	static vector<vector<char>> GetDefaultQuote();
+
+	static vector<QuoteRule> GetDefaultQuoteRule();
+
+	static vector<vector<char>> GetDefaultEscape();
+
+	static vector<char> GetDefaultComment();
 
 	//! Candidates for the delimiter
 	vector<char> delim_candidates;

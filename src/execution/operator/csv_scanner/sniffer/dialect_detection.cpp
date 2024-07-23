@@ -11,20 +11,38 @@ bool IsQuoteDefault(char quote) {
 	return false;
 }
 
-// Initialize dialect candidates defaults
-const vector<char> DialectCandidates::DEFAULT_DELIMITER = {',', '|', ';', '\t'};
-const vector<vector<char>> DialectCandidates::DEFAULT_QUOTE = {{'\"'}, {'\"', '\''}, {'\0'}};
-const vector<QuoteRule> DialectCandidates::DEFAULT_QUOTE_RULE = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER,
-                                                                 QuoteRule::NO_QUOTES};
-const vector<vector<char>> DialectCandidates::DEFAULT_ESCAPE = {{'\"', '\0', '\''}, {'\\'}, {'\0'}};
-const vector<char> DialectCandidates::DEFAULT_COMMENT = {'#', '/', '\0'};
+vector<char> DialectCandidates::GetDefaultDelimiter() {
+	return {',', '|', ';', '\t'};
+}
+
+vector<vector<char>> DialectCandidates::GetDefaultQuote() {
+	return {{'\"'}, {'\"', '\''}, {'\0'}};
+}
+
+vector<QuoteRule> DialectCandidates::GetDefaultQuoteRule() {
+	return {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
+}
+
+vector<vector<char>> DialectCandidates::GetDefaultEscape() {
+	return {{'\"', '\0', '\''}, {'\\'}, {'\0'}};
+}
+
+vector<char> DialectCandidates::GetDefaultComment() {
+	return {'#', '/', '\0'};
+}
 
 DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 	// assert that quotes escapes and rules have equal size
-	D_ASSERT(DEFAULT_QUOTE.size() == DEFAULT_QUOTE_RULE.size() && DEFAULT_QUOTE_RULE.size() == DEFAULT_ESCAPE.size());
+	auto default_quote = GetDefaultQuote();
+	auto default_escape = GetDefaultEscape();
+	auto default_quote_rule = GetDefaultQuoteRule();
+	auto default_delimiter = GetDefaultDelimiter();
+	auto default_comment = GetDefaultComment();
+
+	D_ASSERT(default_quote.size() == default_quote_rule.size() && default_quote_rule.size() == default_escape.size());
 	// fill the escapes
-	for (idx_t i = 0; i < DEFAULT_QUOTE_RULE.size(); i++) {
-		escape_candidates_map[static_cast<uint8_t>(DEFAULT_QUOTE_RULE[i])] = DEFAULT_ESCAPE[i];
+	for (idx_t i = 0; i < default_quote_rule.size(); i++) {
+		escape_candidates_map[static_cast<uint8_t>(default_quote_rule[i])] = default_escape[i];
 	}
 
 	if (options.delimiter.IsSetByUser()) {
@@ -32,18 +50,18 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 		delim_candidates = {options.delimiter.GetValue()};
 	} else {
 		// no delimiter provided: try standard/common delimiters
-		delim_candidates = DEFAULT_DELIMITER;
+		delim_candidates = default_delimiter;
 	}
 	if (options.comment.IsSetByUser()) {
 		// user provided comment character: use that as a comment
 		comment_candidates = {options.comment.GetValue()};
 	} else {
 		// no comment provided: try standard/common comments
-		comment_candidates = DEFAULT_COMMENT;
+		comment_candidates = default_comment;
 	}
 	if (options.quote.IsSetByUser()) {
 		// user provided quote: use that quote rule
-		for (auto &quote_rule : DEFAULT_QUOTE_RULE) {
+		for (auto &quote_rule : default_quote_rule) {
 			quote_candidates_map[static_cast<uint8_t>(quote_rule)] = {options.quote.GetValue()};
 		}
 		// also add it as a escape rule
@@ -52,8 +70,8 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 		}
 	} else {
 		// no quote rule provided: use standard/common quotes
-		for (idx_t i = 0; i < DEFAULT_QUOTE_RULE.size(); i++) {
-			quote_candidates_map[static_cast<uint8_t>(DEFAULT_QUOTE_RULE[i])] = {DEFAULT_QUOTE[i]};
+		for (idx_t i = 0; i < default_quote_rule.size(); i++) {
+			quote_candidates_map[static_cast<uint8_t>(default_quote_rule[i])] = {default_quote[i]};
 		}
 	}
 	if (options.escape.IsSetByUser()) {
@@ -66,7 +84,7 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 		escape_candidates_map[static_cast<uint8_t>(quoterule_candidates[0])] = {options.escape.GetValue()};
 	} else {
 		// no escape provided: try standard/common escapes
-		quoterule_candidates = DEFAULT_QUOTE_RULE;
+		quoterule_candidates = default_quote_rule;
 	}
 }
 

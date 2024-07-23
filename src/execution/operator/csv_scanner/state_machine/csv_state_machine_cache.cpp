@@ -228,13 +228,19 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {
-	for (auto quoterule : DialectCandidates::DEFAULT_QUOTE_RULE) {
-		const auto &quote_candidates = DialectCandidates::DEFAULT_QUOTE[static_cast<uint8_t>(quoterule)];
+	auto default_quote = DialectCandidates::GetDefaultQuote();
+	auto default_escape = DialectCandidates::GetDefaultEscape();
+	auto default_quote_rule = DialectCandidates::GetDefaultQuoteRule();
+	auto default_delimiter = DialectCandidates::GetDefaultDelimiter();
+	auto default_comment = DialectCandidates::GetDefaultComment();
+
+	for (auto quoterule : default_quote_rule) {
+		const auto &quote_candidates = default_quote[static_cast<uint8_t>(quoterule)];
 		for (const auto &quote : quote_candidates) {
-			for (const auto &delimiter : DialectCandidates::DEFAULT_DELIMITER) {
-				const auto &escape_candidates = DialectCandidates::DEFAULT_ESCAPE[static_cast<uint8_t>(quoterule)];
+			for (const auto &delimiter : default_delimiter) {
+				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					for (const auto &comment : DialectCandidates::DEFAULT_COMMENT) {
+					for (const auto &comment : default_comment) {
 						Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_N});
 						Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_R});
 						Insert({delimiter, quote, escape, comment, NewLineIdentifier::CARRY_ON});

@@ -72,11 +72,9 @@ void BaseCSVData::Finalize() {
 	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
 	                options.dialect_options.state_machine_options.quote.GetValue(), "COMMENT", "QUOTE");
 
-
 	// delimiter and quote must not be substrings of each other
 	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
 	                options.dialect_options.state_machine_options.delimiter.GetValue(), "COMMENT", "DELIMITER");
-
 
 	// null string and delimiter must not be substrings of each other
 	for (auto &null_str : options.null_str) {
