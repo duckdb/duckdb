@@ -194,6 +194,51 @@ typedef enum duckdb_statement_type {
 	DUCKDB_STATEMENT_TYPE_DETACH = 26,
 	DUCKDB_STATEMENT_TYPE_MULTI = 27,
 } duckdb_statement_type;
+//! An enum over DuckDB's different result types.
+typedef enum duckdb_error_type {
+	DUCKDB_ERROR_INVALID = 0,
+	DUCKDB_ERROR_OUT_OF_RANGE = 1,
+	DUCKDB_ERROR_CONVERSION = 2,
+	DUCKDB_ERROR_UNKNOWN_TYPE = 3,
+	DUCKDB_ERROR_DECIMAL = 4,
+	DUCKDB_ERROR_MISMATCH_TYPE = 5,
+	DUCKDB_ERROR_DIVIDE_BY_ZERO = 6,
+	DUCKDB_ERROR_OBJECT_SIZE = 7,
+	DUCKDB_ERROR_INVALID_TYPE = 8,
+	DUCKDB_ERROR_SERIALIZATION = 9,
+	DUCKDB_ERROR_TRANSACTION = 10,
+	DUCKDB_ERROR_NOT_IMPLEMENTED = 11,
+	DUCKDB_ERROR_EXPRESSION = 12,
+	DUCKDB_ERROR_CATALOG = 13,
+	DUCKDB_ERROR_PARSER = 14,
+	DUCKDB_ERROR_PLANNER = 15,
+	DUCKDB_ERROR_SCHEDULER = 16,
+	DUCKDB_ERROR_EXECUTOR = 17,
+	DUCKDB_ERROR_CONSTRAINT = 18,
+	DUCKDB_ERROR_INDEX = 19,
+	DUCKDB_ERROR_STAT = 20,
+	DUCKDB_ERROR_CONNECTION = 21,
+	DUCKDB_ERROR_SYNTAX = 22,
+	DUCKDB_ERROR_SETTINGS = 23,
+	DUCKDB_ERROR_BINDER = 24,
+	DUCKDB_ERROR_NETWORK = 25,
+	DUCKDB_ERROR_OPTIMIZER = 26,
+	DUCKDB_ERROR_NULL_POINTER = 27,
+	DUCKDB_ERROR_IO = 28,
+	DUCKDB_ERROR_INTERRUPT = 29,
+	DUCKDB_ERROR_FATAL = 30,
+	DUCKDB_ERROR_INTERNAL = 31,
+	DUCKDB_ERROR_INVALID_INPUT = 32,
+	DUCKDB_ERROR_OUT_OF_MEMORY = 33,
+	DUCKDB_ERROR_PERMISSION = 34,
+	DUCKDB_ERROR_PARAMETER_NOT_RESOLVED = 35,
+	DUCKDB_ERROR_PARAMETER_NOT_ALLOWED = 36,
+	DUCKDB_ERROR_DEPENDENCY = 37,
+	DUCKDB_ERROR_HTTP = 38,
+	DUCKDB_ERROR_MISSING_EXTENSION = 39,
+	DUCKDB_ERROR_AUTOLOAD = 40,
+	DUCKDB_ERROR_SEQUENCE = 41
+} duckdb_error_type;
 
 //===--------------------------------------------------------------------===//
 // General type definitions
@@ -836,6 +881,15 @@ The result of this function must not be freed. It will be cleaned up when `duckd
 * returns: The error of the result.
 */
 DUCKDB_API const char *duckdb_result_error(duckdb_result *result);
+
+/*!
+Returns the result error type contained within the result. The error is only set if `duckdb_query` returns
+`DuckDBError`.
+
+* result: The result object to fetch the error from.
+* returns: The error type of the result.
+*/
+DUCKDB_API duckdb_error_type duckdb_result_error_type(duckdb_result *result);
 
 //===--------------------------------------------------------------------===//
 // Result Functions
