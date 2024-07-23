@@ -39,16 +39,22 @@ public:
 	virtual ~ClientContextState() = default;
 	virtual void QueryBegin(ClientContext &context) {
 	}
-	virtual void QueryEnd(optional_ptr<ErrorData> error) {
+	virtual void QueryEnd() {
+	}
+	virtual void QueryEnd(ClientContext &context) {
+		QueryEnd();
 	}
 	virtual void QueryEnd(ClientContext &context, optional_ptr<ErrorData> error) {
-		QueryEnd(error);
+		QueryEnd(context);
 	}
 	virtual void TransactionBegin(MetaTransaction &transaction, ClientContext &context) {
 	}
 	virtual void TransactionCommit(MetaTransaction &transaction, ClientContext &context) {
 	}
+	virtual void TransactionRollback(MetaTransaction &transaction, ClientContext &context) {
+	}
 	virtual void TransactionRollback(MetaTransaction &transaction, ClientContext &context, optional_ptr<ErrorData> error) {
+		TransactionRollback(transaction, context);
 	}
 	virtual bool CanRequestRebind() {
 		return false;
