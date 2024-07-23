@@ -464,6 +464,7 @@ duckdb_error_type CAPIErrorType(ExceptionType type) {
 	case ExceptionType::SEQUENCE:
 		return DUCKDB_ERROR_SEQUENCE;
 	}
+	return DUCKDB_ERROR_INVALID;
 }
 
 } // namespace duckdb
