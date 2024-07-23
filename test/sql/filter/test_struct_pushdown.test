@@ -138,7 +138,7 @@ SELECT * FROM nested_structs WHERE s.a.b < 2;
 query II
 EXPLAIN SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.a.*\.c IS NOT.*NULL AND s\.d\.e=5.*AND s\.d\.e.*IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.a.*\.c IS.*NOT NULL AND s\.d\.e=5 AND.*s\.d\.e IS NOT NULL.*
 
 query I
 SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
@@ -217,7 +217,7 @@ SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.b < 
 query II
 EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.a\.c IS NOT.*NULL AND s\.d\.e=5 AND s\.d\.e.*IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.a\.c IS.*NOT NULL AND s\.d\.e=5 AND.*s\.d\.e IS NOT NULL.*
 
 query I
 SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
@@ -232,7 +232,7 @@ COPY (SELECT {'i': n} as s FROM generate_series(100000) as t(n)) TO '__TEST_DIR_
 query II
 EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.i>=500 AND s\.i<5000 AND s.*\.i IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.i>=500 AND s\.i<5000 AND.*s\.i IS NOT NULL.*
 
 query II
 SELECT min(s.i), max(s.i) FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;

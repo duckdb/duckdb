@@ -79,18 +79,24 @@ void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx
 }
 
 string AdjustTextForRendering(string source, idx_t max_render_width) {
-	idx_t cpos = 0;
+	const idx_t SIZE = source.size();
+	const char *INPUT = source.c_str();
+
 	idx_t render_width = 0;
+
+	// For every character in the input, create a StringSegment
 	vector<StringSegment> render_widths;
-	while (cpos < source.size()) {
-		idx_t char_render_width = Utf8Proc::RenderWidth(source.c_str(), source.size(), cpos);
-		cpos = Utf8Proc::NextGraphemeCluster(source.c_str(), source.size(), cpos);
+	idx_t current_position = 0;
+	while (current_position < SIZE) {
+		idx_t char_render_width = Utf8Proc::RenderWidth(INPUT, SIZE, current_position);
+		current_position = Utf8Proc::NextGraphemeCluster(INPUT, SIZE, current_position);
 		render_width += char_render_width;
-		render_widths.push_back(StringSegment(cpos, render_width));
+		render_widths.push_back(StringSegment(current_position, render_width));
 		if (render_width > max_render_width) {
 			break;
 		}
 	}
+
 	if (render_width > max_render_width) {
 		// need to find a position to truncate
 		for (idx_t pos = render_widths.size(); pos > 0; pos--) {
@@ -284,33 +290,42 @@ string TextTreeRenderer::RemovePadding(string l) {
 
 void TextTreeRenderer::SplitStringBuffer(const string &source, vector<string> &result) {
 	D_ASSERT(Utf8Proc::IsValid(source.c_str(), source.size()));
-	idx_t max_line_render_size = config.node_render_width - 2;
+	const idx_t MAX_LINE_RENDER_SIZE = config.node_render_width - 2;
 	// utf8 in prompt, get render width
-	idx_t cpos = 0;
+	idx_t character_pos = 0;
 	idx_t start_pos = 0;
 	idx_t render_width = 0;
 	idx_t last_possible_split = 0;
-	while (cpos < source.size()) {
-		// check if we can split on this character
-		if (CanSplitOnThisChar(source[cpos])) {
-			last_possible_split = cpos;
-		}
-		size_t char_render_width = Utf8Proc::RenderWidth(source.c_str(), source.size(), cpos);
-		idx_t next_cpos = Utf8Proc::NextGraphemeCluster(source.c_str(), source.size(), cpos);
-		if (render_width + char_render_width > max_line_render_size) {
-			if (last_possible_split <= start_pos + 8) {
-				last_possible_split = cpos;
+
+	const idx_t SIZE = source.size();
+	const char *INPUT = source.c_str();
+
+	while (character_pos < SIZE) {
+		size_t char_render_width = Utf8Proc::RenderWidth(INPUT, SIZE, character_pos);
+		idx_t next_character_pos = Utf8Proc::NextGraphemeCluster(INPUT, SIZE, character_pos);
+
+		// Does the next character make us exceed the line length?
+		if (render_width + char_render_width > MAX_LINE_RENDER_SIZE) {
+			if (start_pos + 8 > last_possible_split) {
+				// The last character we can split on is one of the first 8 characters of the line
+				// to not create very small lines we instead split on the current character
+				last_possible_split = character_pos;
 			}
 			result.push_back(source.substr(start_pos, last_possible_split - start_pos));
+			render_width = character_pos - last_possible_split;
 			start_pos = last_possible_split;
-			cpos = last_possible_split;
-			render_width = 0;
+			character_pos = last_possible_split;
 		}
-		cpos = next_cpos;
+		// check if we can split on this character
+		if (CanSplitOnThisChar(source[character_pos])) {
+			last_possible_split = character_pos;
+		}
+		character_pos = next_character_pos;
 		render_width += char_render_width;
 	}
-	if (source.size() > start_pos) {
-		result.push_back(source.substr(start_pos, source.size() - start_pos));
+	if (SIZE > start_pos) {
+		// append the remainder of the input
+		result.push_back(source.substr(start_pos, SIZE - start_pos));
 	}
 }
 
