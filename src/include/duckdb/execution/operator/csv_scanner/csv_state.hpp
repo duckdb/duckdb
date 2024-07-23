@@ -24,8 +24,9 @@ enum class CSVState : uint8_t {
 	INVALID = 7,          //! Got to an Invalid State, this should error.
 	NOT_SET = 8,          //! If the state is not set, usually the first state before getting the first character
 	QUOTED_NEW_LINE = 9,  //! If we have a quoted newline
-	EMPTY_SPACE = 10,     //! If we have empty spaces in the beginning and end of value
-	COMMENT = 11          //! If we are in a comment state, and hence have to skip the whole line
+	EMPTY_SPACE = 10,     //! If we have empty spaces in the beginning and end of value, but not the first value.
+	EMPTY_SPACE_FIRST_COLUMN = 11, //! If we have empty spaces in the beginning and end of the 1st value
+	COMMENT = 12                   //! If we are in a comment state, and hence have to skip the whole line
 };
 
 } // namespace duckdb

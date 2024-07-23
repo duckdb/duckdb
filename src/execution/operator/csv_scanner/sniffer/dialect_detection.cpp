@@ -310,7 +310,7 @@ bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
 			                                            sniffed_column_counts[i].last_value_always_empty);
 		}
 		if (max_columns_found != sniffed_column_counts[i].number_of_columns &&
-		    (!options.null_padding && !options.ignore_errors.GetValue())) {
+		    (!options.null_padding && !options.ignore_errors.GetValue() && !sniffed_column_counts[i].is_comment)) {
 			return false;
 		}
 	}

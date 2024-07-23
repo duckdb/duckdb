@@ -830,6 +830,8 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "QUOTED_NEW_LINE";
 	case CSVState::EMPTY_SPACE:
 		return "EMPTY_SPACE";
+	case CSVState::EMPTY_SPACE_FIRST_COLUMN:
+		return "EMPTY_SPACE_FIRST_COLUMN";
 	case CSVState::COMMENT:
 		return "COMMENT";
 	default:
@@ -871,6 +873,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EMPTY_SPACE")) {
 		return CSVState::EMPTY_SPACE;
+	}
+	if (StringUtil::Equals(value, "EMPTY_SPACE_FIRST_COLUMN")) {
+		return CSVState::EMPTY_SPACE_FIRST_COLUMN;
 	}
 	if (StringUtil::Equals(value, "COMMENT")) {
 		return CSVState::COMMENT;
