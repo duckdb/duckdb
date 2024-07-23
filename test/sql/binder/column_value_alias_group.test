@@ -1,0 +1,42 @@
+# name: test/sql/binder/column_value_alias_group.test
+# description: Test using column value aliases as groups
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table test(a int);
+
+statement ok
+insert into test values (2), (1), (3);
+
+# group by user
+query I rowsort
+select a as "user" from test group by "user";
+----
+1
+2
+3
+
+# having
+query I
+select a as "user" from test group by "user" having "user"=1;
+----
+1
+
+# order by user
+query I
+select a as "user" from test order by "user";
+----
+1
+2
+3
+
+# group by AND order by user
+query I
+select a as "user" from test group by "user" order by "user";
+----
+1
+2
+3

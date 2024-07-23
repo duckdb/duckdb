@@ -18,6 +18,7 @@ from .duckdb import (
     ExplainType,
     StatementType,
     ExpectedResultType,
+	CSVLineTerminator,
     PythonExceptionHandling,
     RenderMode,
     Expression,

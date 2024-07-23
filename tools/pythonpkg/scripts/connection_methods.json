@@ -691,6 +691,7 @@
 				"type": "Union[str, StringIO, TextIOBase]"
 			}
 		],
+		"kwargs_as_dict": true,
 		"kwargs": [
 			{
 				"name": "header",
@@ -773,11 +774,6 @@
 				"type": "Optional[bool]"
 			},
 			{
-				"name": "filename",
-				"default": "None",
-				"type": "Optional[bool]"
-			},
-			{
 				"name": "null_padding",
 				"default": "None",
 				"type": "Optional[bool]"
@@ -786,6 +782,96 @@
 				"name": "names",
 				"default": "None",
 				"type": "Optional[List[str]]"
+			},
+			{
+				"name": "lineterminator",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "columns",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "auto_type_candidates",
+				"default": "None",
+				"type": "Optional[List[str]]"
+			},
+			{
+				"name": "max_line_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "ignore_errors",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "store_rejects",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "rejects_table",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "rejects_scan",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "rejects_limit",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "force_not_null",
+				"default": "None",
+				"type": "Optional[List[str]]"
+			},
+			{
+				"name": "buffer_size",
+				"default": "None",
+				"type": "Optional[int]"
+			},
+			{
+				"name": "decimal",
+				"default": "None",
+				"type": "Optional[str]"
+			},
+			{
+				"name": "allow_quoted_nulls",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "filename",
+				"default": "None",
+				"type": "Optional[bool | str]"
+			},
+			{
+				"name": "hive_partitioning",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "union_by_name",
+				"default": "None",
+				"type": "Optional[bool]"
+			},
+			{
+				"name": "hive_types",
+				"default": "None",
+				"type": "Optional[Dict[str, str]]"
+			},
+			{
+				"name": "hive_types_autocast",
+				"default": "None",
+				"type": "Optional[bool]"
 			}
 		],
 		"return": "DuckDBPyRelation"
