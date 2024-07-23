@@ -198,7 +198,6 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 	if (is_user_config) {
 		// for user config we just set the option in the `user_options`
 		options.user_options[name] = value;
-		return;
 	}
 	auto option = DBConfig::GetOptionByName(name);
 	if (option) {
