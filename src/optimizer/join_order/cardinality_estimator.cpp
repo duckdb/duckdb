@@ -2,6 +2,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
@@ -226,27 +227,32 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 			// no comparison is taking place, so the denominator is just the product of the left and right
 			return new_denom;
 		}
+		// extra_ratio helps represents how many tuples will be filtered out if the comparison evaluates to
+		// false. set to 1 to assume cross product.
 		double extra_ratio = 1;
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			// extra ration stays 1
+			extra_ratio = filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		case ExpressionType::COMPARE_GREATERTHAN:
-			extra_ratio = 0.4;
+			// start with the selectivity of equality
+			extra_ratio = filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+			// now assume every tuple will match 2.5 times (on average)
+			extra_ratio *= static_cast<double>(1) / CardinalityEstimator::DEFAULT_LT_GT_MULTIPLIER;
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
-			// cardinality should be much higher.
-			extra_ratio = 0.1;
+			// basically assume cross product.
+			extra_ratio = 1;
 			break;
 		default:
 			break;
 		}
-		new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
 		new_denom *= extra_ratio;
 		return new_denom;
 	}
