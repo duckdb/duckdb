@@ -349,6 +349,14 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 	auto hostname_without_http = no_http.substr(0, next);
 	auto url_local_part = no_http.substr(next);
 
+	unique_ptr<ExtensionInstallInfo> install_info;
+	{
+		auto fs = FileSystem::CreateLocal();
+		if (fs->FileExists(local_extension_path + ".info")) {
+			install_info = ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
+		}
+	}
+
 	auto url_base = "http://" + hostname_without_http;
 	static constexpr const idx_t MAX_RETRY_COUNT = 3;
 	static constexpr uint64_t RETRY_WAIT_MS = 100;
@@ -364,16 +372,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 		duckdb_httplib::Headers headers = {
 		    {"User-Agent", StringUtil::Format("%s %s", config.UserAgent(), DuckDB::SourceID())}};
 
-		unique_ptr<ExtensionInstallInfo> install_info;
-		{
-			auto fs = FileSystem::CreateLocal();
-			if (fs->FileExists(local_extension_path + ".info")) {
-				install_info =
-				    ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
-			}
-			if (install_info && !install_info->etag.empty()) {
-				headers.insert({"If-None-Match", StringUtil::Format("%s", install_info->etag)});
-			}
+		if (install_info && !install_info->etag.empty()) {
+			headers.insert({"If-None-Match", StringUtil::Format("%s", install_info->etag)});
 		}
 
 		res = cli.Get(url_local_part.c_str(), headers);
