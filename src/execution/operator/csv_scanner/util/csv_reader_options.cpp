@@ -134,7 +134,9 @@ string CSVReaderOptions::GetNewline() const {
 	switch (dialect_options.state_machine_options.new_line.GetValue()) {
 	case NewLineIdentifier::CARRY_ON:
 		return "\\r\\n";
-	case NewLineIdentifier::SINGLE:
+	case NewLineIdentifier::SINGLE_R:
+		return "\\r";
+	case NewLineIdentifier::SINGLE_N:
 		return "\\n";
 	case NewLineIdentifier::NOT_SET:
 		return "";
