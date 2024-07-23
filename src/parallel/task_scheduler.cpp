@@ -40,7 +40,7 @@ typedef duckdb_moodycamel::ConcurrentQueue<shared_ptr<Task>> concurrent_queue_t;
 
 struct ConcurrentQueue {
 	concurrent_queue_t q;
-	semaphore semaphore;
+	semaphore sem;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
 	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
@@ -56,7 +56,7 @@ struct QueueProducerToken {
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	if (q.enqueue(token.token->queue_token, std::move(task))) {
-		semaphore.signal();
+		sem.signal();
 	} else {
 		throw InternalException("Could not schedule task!");
 	}
@@ -153,15 +153,15 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	while (*marker) {
 		if (!Allocator::SupportsFlush() || allocator_background_threads) {
 			// allocator can't flush, or background threads clean up allocations, just start an untimed wait
-			queue->semaphore.wait();
-		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
+			queue->sem.wait();
+		} else if (!queue->sem.wait(INITIAL_FLUSH_WAIT)) {
 			// no background threads, flush this threads outstanding allocations after it was idle for 0.5s
 			Allocator::ThreadFlush(allocator_flush_threshold);
-			if (!queue->semaphore.wait(Allocator::DecayDelay() * 1000000 - INITIAL_FLUSH_WAIT)) {
+			if (!queue->sem.wait(Allocator::DecayDelay() * 1000000 - INITIAL_FLUSH_WAIT)) {
 				// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
 				// mark it as idle and start an untimed wait
 				Allocator::ThreadIdle();
-				queue->semaphore.wait();
+				queue->sem.wait();
 			}
 		}
 		if (queue->q.try_dequeue(task)) {
@@ -226,7 +226,7 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 #ifndef DUCKDB_NO_THREADS
 	shared_ptr<Task> task;
 	for (idx_t i = 0; i < max_tasks; i++) {
-		queue->semaphore.wait(TASK_TIMEOUT_USECS);
+		queue->sem.wait(TASK_TIMEOUT_USECS);
 		if (!queue->q.try_dequeue(task)) {
 			return;
 		}
@@ -295,7 +295,7 @@ void TaskScheduler::SetAllocatorBackgroundThreads(bool enable) {
 void TaskScheduler::Signal(idx_t n) {
 #ifndef DUCKDB_NO_THREADS
 	typedef std::make_signed<std::size_t>::type ssize_t;
-	queue->semaphore.signal(NumericCast<ssize_t>(n));
+	queue->sem.signal(NumericCast<ssize_t>(n));
 #endif
 }
 

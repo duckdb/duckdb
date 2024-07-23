@@ -28,6 +28,7 @@ class semaphore { // NOLINT: match std naming style
 	// which should only be referenced by internal duckdb source files.
 
 public:
+	typedef std::make_signed<std::size_t>::type ssize_t;
 	semaphore();
 
 public:
