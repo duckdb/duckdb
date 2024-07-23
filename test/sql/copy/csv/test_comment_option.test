@@ -5,6 +5,17 @@
 statement ok
 PRAGMA enable_verification
 
+# Comment must be different than quote and delimiter options
+statement error
+FROM  read_csv('data/csv/comments/mixed_options.csv', delim = ',', comment = ',', auto_detect = false, columns= {'a':'integer'})
+----
+COMMENT must not appear in the DELIMITER specification and vice versa
+
+statement error
+FROM  read_csv('data/csv/comments/mixed_options.csv', quote = ',', comment = ',', escape = '', delim = ';', auto_detect = false, columns= {'a':'integer'})
+----
+COMMENT must not appear in the QUOTE specification and vice versa
+
 query II
 FROM 'data/csv/comments/simple.csv';
 ----
@@ -108,3 +119,4 @@ FROM read_csv('data/csv/comments/simple.csv',skip=${i});
 6	7
 
 endloop
+
