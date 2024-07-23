@@ -109,7 +109,7 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		active_transaction = false;
 	}
-	void TransactionRollback(MetaTransaction &transaction, ClientContext &context, optional_ptr<ErrorData>) override {
+	void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override {
 		if (!active_transaction) {
 			throw InternalException(
 			    "DebugClientContextState::TransactionRollback called when no transaction is active");

@@ -53,7 +53,8 @@ public:
 	}
 	virtual void TransactionRollback(MetaTransaction &transaction, ClientContext &context) {
 	}
-	virtual void TransactionRollback(MetaTransaction &transaction, ClientContext &context, optional_ptr<ErrorData> error) {
+	virtual void TransactionRollback(MetaTransaction &transaction, ClientContext &context,
+	                                 optional_ptr<ErrorData> error) {
 		TransactionRollback(transaction, context);
 	}
 	virtual bool CanRequestRebind() {
