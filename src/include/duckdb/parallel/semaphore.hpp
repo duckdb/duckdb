@@ -19,10 +19,10 @@ class LightweightSemaphore;
 namespace duckdb {
 
 class semaphore { // NOLINT: match std naming style
-	// NOTE:
-	// To instantiate this class, these headers have to be included:
-	// #include "concurrentqueue.h"
-	// #include "lightweightsemaphore.h"
+	              // NOTE:
+	              // To instantiate this class, these headers have to be included:
+	              // #include "concurrentqueue.h"
+	              // #include "lightweightsemaphore.h"
 
 	// This header explicitly does not include these files because they are third_party headers
 	// which should only be referenced by internal duckdb source files.
