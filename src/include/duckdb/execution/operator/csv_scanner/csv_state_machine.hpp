@@ -47,6 +47,10 @@ struct CSVStates {
 		return states[1] == CSVState::NOT_SET;
 	}
 
+	inline bool IsComment() {
+		return states[1] == CSVState::COMMENT;
+	}
+
 	inline bool IsCurrentNewRow() {
 		return states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN;
 	}

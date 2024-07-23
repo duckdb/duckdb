@@ -162,6 +162,8 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos) {
 	result.comment = false;
 	result.last_position.buffer_pos = buffer_pos + 1;
+	result.cur_col_id = 0;
+	result.chunk_col_id = 0;
 	return false;
 }
 
@@ -1130,6 +1132,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 		if (states.IsEscaped()) {
 			result.escaped = true;
 		}
+		if (states.IsComment()) {
+			result.comment = true;
+		}
 		if (states.IsInvalid()) {
 			result.InvalidState(result);
 		}
@@ -1158,6 +1163,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
+		}
+		if (states.IsComment()) {
+			result.comment = true;
 		}
 		if (states.IsEscaped()) {
 			result.escaped = true;
