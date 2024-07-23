@@ -44,10 +44,43 @@ void TextTreeRenderer::RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t 
 			ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2 - 1);
 			ss << config.RTCORNER;
 		} else {
+			bool has_adjacent_nodes = false;
+			for (idx_t i = 0; x + i < root.width; i++) {
+				has_adjacent_nodes = has_adjacent_nodes || root.HasNode(x + i, y);
+			}
+			if (!has_adjacent_nodes) {
+				// There are no nodes to the right side of this position
+				// no need to fill the empty space
+				continue;
+			}
+			// there are nodes next to this, fill the space
 			ss << StringUtil::Repeat(" ", config.node_render_width);
 		}
 	}
 	ss << '\n';
+}
+
+static bool NodeHasMultipleChildren(RenderTreeNode &node) {
+	return node.child_positions.size() > 1;
+}
+
+static bool ShouldRenderWhitespace(RenderTree &root, idx_t x, idx_t y) {
+	for (; x >= 0; x--) {
+		auto node = root.GetNode(x, y);
+		if (node) {
+			if (NodeHasMultipleChildren(*node)) {
+				return true;
+			}
+			return false;
+		}
+		if (root.HasNode(x, y + 1)) {
+			break;
+		}
+		if (x == 0) {
+			break;
+		}
+	}
+	return false;
 }
 
 void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y) {
@@ -55,7 +88,12 @@ void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx
 		if (x * config.node_render_width >= config.maximum_render_width) {
 			break;
 		}
-		if (root.HasNode(x, y)) {
+		bool has_adjacent_nodes = false;
+		for (idx_t i = 0; x + i < root.width; i++) {
+			has_adjacent_nodes = has_adjacent_nodes || root.HasNode(x + i, y);
+		}
+		auto node = root.GetNode(x, y);
+		if (node) {
 			ss << config.LDCORNER;
 			ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2 - 1);
 			if (root.HasNode(x, y + 1)) {
@@ -70,9 +108,13 @@ void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx
 		} else if (root.HasNode(x, y + 1)) {
 			ss << StringUtil::Repeat(" ", config.node_render_width / 2);
 			ss << config.VERTICAL;
-			ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+			if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
+				ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+			}
 		} else {
-			ss << StringUtil::Repeat(" ", config.node_render_width);
+			if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
+				ss << StringUtil::Repeat(" ", config.node_render_width);
+			}
 		}
 	}
 	ss << '\n';
@@ -115,15 +157,6 @@ string AdjustTextForRendering(string source, idx_t max_render_width) {
 	return string(half_spaces + extra_left_space, ' ') + source + string(half_spaces, ' ');
 }
 
-static bool NodeHasMultipleChildren(RenderTree &root, idx_t x, idx_t y) {
-	for (; x < root.width && !root.HasNode(x + 1, y); x++) {
-		if (root.HasNode(x + 1, y + 1)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y) {
 	// we first need to figure out how high our boxes are going to be
 	vector<vector<string>> extra_info;
@@ -146,10 +179,14 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 			if (x * config.node_render_width >= config.maximum_render_width) {
 				break;
 			}
+			bool has_adjacent_nodes = false;
+			for (idx_t i = 0; x + i < root.width; i++) {
+				has_adjacent_nodes = has_adjacent_nodes || root.HasNode(x + i, y);
+			}
 			auto node = root.GetNode(x, y);
 			if (!node) {
 				if (render_y == halfway_point) {
-					bool has_child_to_the_right = NodeHasMultipleChildren(root, x, y);
+					bool has_child_to_the_right = ShouldRenderWhitespace(root, x, y);
 					if (root.HasNode(x, y + 1)) {
 						// node right below this one
 						ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2);
@@ -158,29 +195,39 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 							// but we have another child to the right! keep rendering the line
 							ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2);
 						} else {
-							// only a child below this one: fill the rest with spaces
-							ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+							if (has_adjacent_nodes) {
+								// only a child below this one: fill the rest with spaces
+								ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+							}
 						}
 					} else if (has_child_to_the_right) {
 						// child to the right, but no child right below this one: render a full line
 						ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width);
 					} else {
-						// empty spot: render spaces
-						ss << StringUtil::Repeat(" ", config.node_render_width);
+						if (has_adjacent_nodes) {
+							// empty spot: render spaces
+							ss << StringUtil::Repeat(" ", config.node_render_width);
+						}
 					}
 				} else if (render_y >= halfway_point) {
 					if (root.HasNode(x, y + 1)) {
 						// we have a node below this empty spot: render a vertical line
 						ss << StringUtil::Repeat(" ", config.node_render_width / 2);
 						ss << config.VERTICAL;
-						ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+						if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
+							ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+						}
 					} else {
+						if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
+							// empty spot: render spaces
+							ss << StringUtil::Repeat(" ", config.node_render_width);
+						}
+					}
+				} else {
+					if (has_adjacent_nodes) {
 						// empty spot: render spaces
 						ss << StringUtil::Repeat(" ", config.node_render_width);
 					}
-				} else {
-					// empty spot: render spaces
-					ss << StringUtil::Repeat(" ", config.node_render_width);
 				}
 			} else {
 				ss << config.VERTICAL;
@@ -196,7 +243,7 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
 				ss << render_text;
 
-				if (render_y == halfway_point && NodeHasMultipleChildren(root, x, y)) {
+				if (render_y == halfway_point && NodeHasMultipleChildren(*node)) {
 					ss << config.LMIDDLE;
 				} else {
 					ss << config.VERTICAL;
