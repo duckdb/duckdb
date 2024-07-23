@@ -5,8 +5,6 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
