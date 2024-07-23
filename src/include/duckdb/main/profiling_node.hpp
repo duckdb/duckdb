@@ -31,7 +31,7 @@ class QueryProfilingNode;
 // Recursive tree that mirrors the operator tree
 class ProfilingNode {
 public:
-	ProfilingNode(ProfilingNodeType node_type) : node_type(node_type) {
+	explicit ProfilingNode(ProfilingNodeType node_type) : node_type(node_type) {
 	}
 	virtual ~ProfilingNode() {};
 
@@ -90,7 +90,7 @@ public:
 	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::QUERY_ROOT;
 
 public:
-	QueryProfilingNode(const string &query) : ProfilingNode(TYPE), query(query) {
+	explicit QueryProfilingNode(const string &query) : ProfilingNode(TYPE), query(query) {
 	}
 	~QueryProfilingNode() override {};
 
