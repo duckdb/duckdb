@@ -144,6 +144,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
 	auto &sniffed_column_counts = scanner->ParseChunk();
 	idx_t dirty_notes = 0;
+	idx_t dirty_notes_minus_comments = 0;
 	if (sniffed_column_counts.error) {
 		// This candidate has an error (i.e., over maximum line size or never unquoting quoted values)
 		return;
@@ -187,7 +188,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			padding_count = 0;
 			// we use the maximum amount of num_cols that we find
 			num_cols = sniffed_column_counts[row].number_of_columns;
-			dirty_notes = row - comment_rows;
+			dirty_notes = row;
+			dirty_notes_minus_comments = dirty_notes - comment_rows;
 			header_idx = row;
 			consistent_rows = 1;
 		} else if (num_cols >= sniffed_column_counts[row].number_of_columns) {
@@ -214,7 +216,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
 	bool rows_consistent =
-	    consistent_rows + (dirty_notes - options.dialect_options.skip_rows.GetValue()) + comment_rows ==
+	    consistent_rows + (dirty_notes_minus_comments - options.dialect_options.skip_rows.GetValue()) + comment_rows ==
 	    sniffed_column_counts.result_position - options.dialect_options.skip_rows.GetValue();
 	// If there are more than one consistent row.
 	bool more_than_one_row = consistent_rows > 1;

@@ -53,8 +53,25 @@ FROM read_csv('data/csv/comments/simple.csv', buffer_size = ${buffer_size}) limi
 
 endloop
 
-## Character indicating that the remainder of line should not be parsed. If found at the beginning of a line, the line will be ignored altogether.
-## This parameter must be a single character.
-#
-## Fully commented lines are ignored by the parameter header but not by skiprows.
-#
+# Test that fully commented lines are ignored by the parameter header but not by skiprows.
+query II
+FROM read_csv('data/csv/comments/simple.csv', skip = 2);
+----
+1	3
+6	7
+
+# Test we can detect comments and skip rows at the same time
+query II
+FROM read_csv('data/csv/comments/invalid_rows.csv');
+----
+1	3
+6	7
+
+query II
+select SkipRows, Comment FROM sniff_csv('data/csv/comments/invalid_rows.csv');
+----
+5	#
+
+# Test ignore errors
+
+# Test rejects table
