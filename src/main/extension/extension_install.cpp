@@ -12,8 +12,10 @@
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
+#ifndef DUCKDB_NO_THREADS
 #include <chrono>
 #include <thread>
+#endif
 #endif
 #endif
 #include "duckdb/common/windows_undefs.hpp"
@@ -358,7 +360,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 	}
 
 	auto url_base = "http://" + hostname_without_http;
-	static constexpr const idx_t MAX_RETRY_COUNT = 3;
+	// FIXME: the retry logic should be unified with the retry logic in the httpfs client
+	static constexpr idx_t MAX_RETRY_COUNT = 3;
 	static constexpr uint64_t RETRY_WAIT_MS = 100;
 	static constexpr double RETRY_BACKOFF = 4;
 	idx_t retry_count = 0;
@@ -420,11 +423,13 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 				                  url_base, url_local_part, message, to_string(res.error()));
 			}
 		}
+#ifndef DUCKDB_NO_THREADS
 		// retry
 		// sleep first
 		uint64_t sleep_amount =
 		    static_cast<uint64_t>(static_cast<double>(RETRY_WAIT_MS) * pow(RETRY_BACKOFF, retry_count - 1));
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
+#endif
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 
