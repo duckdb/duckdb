@@ -342,7 +342,6 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 
-	config.options.unrecognized_options.clear();
 	// configure the user-provided options
 	for (auto &entry : config.options.user_options) {
 		config.SetOptionByName(entry.first, entry.second);
