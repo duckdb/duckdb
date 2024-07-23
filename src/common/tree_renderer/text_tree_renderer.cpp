@@ -65,7 +65,7 @@ static bool NodeHasMultipleChildren(RenderTreeNode &node) {
 }
 
 static bool ShouldRenderWhitespace(RenderTree &root, idx_t x, idx_t y) {
-	for (; x >= 0; x--) {
+	for (;; x--) {
 		auto node = root.GetNode(x, y);
 		if (node) {
 			if (NodeHasMultipleChildren(*node)) {
