@@ -195,6 +195,11 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 }
 
 void DBConfig::SetOptionByName(const string &name, const Value &value) {
+	if (is_user_config) {
+		// for user config we just set the option in the `user_options`
+		options.user_options[name] = value;
+		return;
+	}
 	auto option = DBConfig::GetOptionByName(name);
 	if (option) {
 		SetOption(*option, value);
@@ -451,7 +456,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 
 // Right now we only really care about access mode when comparing DBConfigs
 bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
-	return other.access_mode == access_mode;
+	return other.access_mode == access_mode && other.user_options == user_options;
 }
 
 bool DBConfig::operator==(const DBConfig &other) {
@@ -487,7 +492,7 @@ OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType
 	}
 }
 
-const std::string DBConfig::UserAgent() const {
+const string DBConfig::UserAgent() const {
 	auto user_agent = GetDefaultUserAgent();
 
 	if (!options.duckdb_api.empty()) {
