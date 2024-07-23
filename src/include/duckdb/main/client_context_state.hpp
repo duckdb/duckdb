@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 class ClientContext;
