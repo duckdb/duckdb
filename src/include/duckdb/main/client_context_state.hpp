@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include  <mutex>
 
 namespace duckdb {
 class ClientContext;
