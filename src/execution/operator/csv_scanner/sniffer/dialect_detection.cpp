@@ -163,6 +163,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		return;
 	}
 	idx_t header_idx = 0;
+	bool first_row_seen = false;
 	for (idx_t row = 0; row < sniffed_column_counts.result_position; row++) {
 		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row].number_of_columns, options.null_padding,
 		                                        options.ignore_errors.GetValue(),
@@ -172,9 +173,6 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		}
 		if (sniffed_column_counts[row].is_comment) {
 			comment_rows++;
-		} else if (sniffed_column_counts[row].number_of_columns == num_cols ||
-		           (options.ignore_errors.GetValue() && !options.null_padding)) {
-			consistent_rows++;
 		} else if (sniffed_column_counts[row].last_value_always_empty &&
 		           sniffed_column_counts[row].number_of_columns ==
 		               sniffed_column_counts[header_idx].number_of_columns + 1) {
@@ -192,6 +190,9 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			dirty_notes_minus_comments = dirty_notes - comment_rows;
 			header_idx = row;
 			consistent_rows = 1;
+		} else if (sniffed_column_counts[row].number_of_columns == num_cols ||
+		           (options.ignore_errors.GetValue() && !options.null_padding)) {
+			consistent_rows++;
 		} else if (num_cols >= sniffed_column_counts[row].number_of_columns) {
 			// we are missing some columns, we can parse this as long as we add padding
 			padding_count++;
@@ -263,7 +264,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				return;
 			}
 			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
-		} else if (!options.null_padding && !options.ignore_errors.GetValue()) {
+		} else if (!options.null_padding) {
 			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
 		}
 
@@ -293,7 +294,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 					return;
 				}
 				sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
-			} else if (!options.null_padding && !options.ignore_errors.GetValue()) {
+			} else if (!options.null_padding) {
 				sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
 			}
 

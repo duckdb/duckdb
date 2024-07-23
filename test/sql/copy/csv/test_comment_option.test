@@ -6,14 +6,14 @@ statement ok
 PRAGMA enable_verification
 
 query II
-FROM read_csv('data/csv/comments/simple.csv');
+FROM 'data/csv/comments/simple.csv';
 ----
 1	3
 6	7
 
 # Lets try over a vector size
 query II
-FROM read_csv('data/csv/comments/big.csv') limit 5;
+FROM 'data/csv/comments/big.csv' limit 5;
 ----
 1	3
 6	7
@@ -23,17 +23,17 @@ FROM read_csv('data/csv/comments/big.csv') limit 5;
 
 # Check commented data-points are not in the data
 query II
-FROM read_csv('data/csv/comments/big.csv') where  a = 20
+FROM 'data/csv/comments/big.csv' where  a = 20
 ----
 
 query I
-SELECT count(*) FROM read_csv('data/csv/comments/big.csv')
+SELECT count(*) FROM 'data/csv/comments/big.csv'
 ----
 1448
 
 # Test empty spaces
 query II
-FROM read_csv('data/csv/comments/empty_space.csv', comment = '#', delim = ';');
+FROM read_csv('data/csv/comments/empty_space.csv');
 ----
 1	3
 1	3
@@ -62,7 +62,7 @@ FROM read_csv('data/csv/comments/simple.csv', skip = 2);
 
 # Test we can detect comments and skip rows at the same time
 query II
-FROM read_csv('data/csv/comments/invalid_rows.csv');
+FROM 'data/csv/comments/invalid_rows.csv';
 ----
 1	3
 6	7
@@ -73,5 +73,31 @@ select SkipRows, Comment FROM sniff_csv('data/csv/comments/invalid_rows.csv');
 5	#
 
 # Test ignore errors
+statement error
+select count(*) FROM 'data/csv/comments/error.csv';
+----
+CSV options could not be auto-detected.
 
-# Test rejects table
+query I
+select count(*) FROM read_csv('data/csv/comments/error.csv', ignore_errors = true);
+----
+2726
+
+query I
+select count(*) FROM read_csv('data/csv/comments/error.csv', ignore_errors = true, comment = '#');
+----
+2726
+
+query II
+select comment, columns from sniff_csv('data/csv/comments/error.csv', ignore_errors = true);
+----
+\0	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]
+
+query II
+select comment, columns from sniff_csv('data/csv/comments/error.csv', ignore_errors = true, comment = '#');
+----
+#	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]
+
+#query I
+#FROM
+# Test set skip row
