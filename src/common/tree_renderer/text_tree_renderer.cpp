@@ -326,11 +326,11 @@ void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string
 	}
 
 	for (auto &item : extra_info) {
-		result.push_back(ExtraInfoSeparator());
 		string str = RemovePadding(item.second);
 		if (str.empty()) {
 			continue;
 		}
+		result.push_back(ExtraInfoSeparator());
 
 		str = item.first + ":\n" + str;
 		auto splits = StringUtil::Split(str, "\n");

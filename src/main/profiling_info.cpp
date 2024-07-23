@@ -77,7 +77,18 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::EXTRA_INFO: {
 			auto extra_info = yyjson_mut_obj(doc);
 			for (auto &it : metrics.extra_info) {
-				yyjson_mut_obj_add_strcpy(doc, extra_info, it.first.c_str(), it.second.c_str());
+				auto &key = it.first;
+				auto &value = it.second;
+				auto splits = StringUtil::Split(value, "\n");
+				if (splits.size() > 1) {
+					auto list_items = yyjson_mut_arr(doc);
+					for (auto &split : splits) {
+						yyjson_mut_arr_add_strcpy(doc, list_items, split.c_str());
+					}
+					yyjson_mut_obj_add_val(doc, extra_info, key.c_str(), list_items);
+				} else {
+					yyjson_mut_obj_add_strcpy(doc, extra_info, key.c_str(), value.c_str());
+				}
 			}
 			yyjson_mut_obj_add_val(doc, dest, "extra_info", extra_info);
 			break;
