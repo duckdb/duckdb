@@ -86,7 +86,7 @@ public:
 	static bool RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream);
 
 private:
-	static bool CompareResults(unique_ptr<QueryResult> arrow, unique_ptr<MaterializedQueryResult> duck,
+	static bool CompareResults(Connection &con, unique_ptr<QueryResult> arrow, unique_ptr<MaterializedQueryResult> duck,
 	                           const string &query);
 
 public:

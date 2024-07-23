@@ -33,6 +33,7 @@ class Value {
 	friend struct ListValue;
 	friend struct UnionValue;
 	friend struct ArrayValue;
+	friend struct MapValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -193,6 +194,8 @@ public:
 	//! Creates a bitstring by casting a specified string to a bitstring
 	DUCKDB_API static Value BIT(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIT(const string &data);
+
+	DUCKDB_API static Value VARINT(const_data_ptr_t data, idx_t len);
 
 	//! Creates an aggregate state
 	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
@@ -414,6 +417,10 @@ struct IntervalValue {
 };
 
 struct StructValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
+struct MapValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
 };
 

@@ -11,6 +11,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -47,6 +48,7 @@ class StorageExtension;
 class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
+class EncryptionUtil;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -239,8 +241,7 @@ struct DBConfigOptions {
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
-	//! NOTE: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
-	idx_t default_block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
+	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
 	//! The index_scan_percentage sets a threshold for index scans.
@@ -251,6 +252,10 @@ struct DBConfigOptions {
 	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
 	// rows match, we perform an index scan instead of a table scan.
 	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
+	//! Whether or not we initialize table functions in the main thread
+	//! This is a work-around that exists for certain clients (specifically R)
+	//! Because those clients do not like it when threads other than the main thread call into R, for e.g., arrow scans
+	bool initialize_in_main_thread = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -298,6 +303,8 @@ public:
 	shared_ptr<BufferManager> buffer_manager;
 	//! Set of callbacks that can be installed by extensions
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
+	//! Encryption Util for OpenSSL
+	shared_ptr<EncryptionUtil> encryption_util;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -328,11 +335,11 @@ public:
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
-	//! Return the list of possible compression functions for the provided compression information.
-	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const CompressionInfo &info);
-	//! Return the compression function matching the compression type and its compression information.
+	//! Returns the list of possible compression functions for the physical type.
+	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const PhysicalType physical_type);
+	//! Returns the compression function matching the compression and physical type.
 	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
-	                                                                    const CompressionInfo &info);
+	                                                                    const PhysicalType physical_type);
 
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);

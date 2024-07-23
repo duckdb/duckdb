@@ -24,6 +24,7 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/planner/collation_binding.hpp"
+#include "duckdb/main/db_instance_cache.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -65,11 +66,13 @@ DatabaseInstance::~DatabaseInstance() {
 	scheduler.reset();
 	db_manager.reset();
 	buffer_manager.reset();
-	// finally, flush allocations and disable the background thread
+	// flush allocations and disable the background thread
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
 	}
 	Allocator::SetBackgroundThreads(false);
+	// after all destruction is complete clear the cache entry
+	db_cache_entry.reset();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
@@ -90,6 +93,10 @@ DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 
 const DatabaseInstance &DatabaseInstance::GetDatabase(const ClientContext &context) {
 	return *context.db;
+}
+
+void DatabaseInstance::SetDatabaseCacheEntry(shared_ptr<DatabaseCacheEntry> entry) {
+	db_cache_entry = std::move(entry);
 }
 
 DatabaseManager &DatabaseInstance::GetDatabaseManager() {
@@ -191,7 +198,7 @@ void DatabaseInstance::CreateMainDatabase() {
 	}
 
 	initial_database->SetInitialDatabase();
-	initial_database->Initialize(config.options.default_block_alloc_size);
+	initial_database->Initialize();
 }
 
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
@@ -399,12 +406,12 @@ idx_t DatabaseInstance::NumberOfThreads() {
 	return NumericCast<idx_t>(scheduler->NumberOfThreads());
 }
 
-const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
-	return loaded_extensions;
+const unordered_map<string, ExtensionInfo> &DatabaseInstance::GetExtensions() {
+	return loaded_extensions_info;
 }
 
-const unordered_map<std::string, ExtensionInstallInfo> &DatabaseInstance::LoadedExtensionsData() {
-	return loaded_extensions_data;
+void DatabaseInstance::AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info) {
+	loaded_extensions_info[name].load_info = make_uniq<ExtensionLoadedInfo>(info);
 }
 
 idx_t DuckDB::NumberOfThreads() {
@@ -413,7 +420,8 @@ idx_t DuckDB::NumberOfThreads() {
 
 bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	return loaded_extensions.find(extension_name) != loaded_extensions.end();
+	auto it = loaded_extensions_info.find(extension_name);
+	return it != loaded_extensions_info.end() && it->second.is_loaded;
 }
 
 bool DuckDB::ExtensionIsLoaded(const std::string &name) {
@@ -422,8 +430,8 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 
 void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallInfo &install_info) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
-	loaded_extensions.insert(extension_name);
-	loaded_extensions_data.insert({extension_name, install_info});
+	loaded_extensions_info[extension_name].is_loaded = true;
+	loaded_extensions_info[extension_name].install_info = make_uniq<ExtensionInstallInfo>(install_info);
 
 	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
 	for (auto &callback : callbacks) {

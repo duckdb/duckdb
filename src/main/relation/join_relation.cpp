@@ -43,6 +43,11 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	}
 	join_ref->using_columns = using_columns;
 	join_ref->type = join_type;
+	join_ref->delim_flipped = delim_flipped;
+	for (auto &col : duplicate_eliminated_columns) {
+		join_ref->duplicate_eliminated_columns.emplace_back(col->Copy());
+	}
+
 	return std::move(join_ref);
 }
 

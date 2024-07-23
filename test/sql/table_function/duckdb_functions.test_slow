@@ -38,4 +38,4 @@ create macro my_range(x) as table from range(x);
 query I
 select macro_definition from duckdb_functions() where function_name = 'my_range';
 ----
-SELECT * FROM range(x)
+SELECT * FROM "range"(x)

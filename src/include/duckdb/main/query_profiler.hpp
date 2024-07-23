@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -21,6 +22,7 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/profiling_node.hpp"
 
 #include <stack>
 
@@ -88,34 +90,19 @@ public:
 	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
-	// Recursive tree that mirrors the operator tree
-	struct TreeNode {
-		PhysicalOperatorType type;
-		string name;
-		ProfilingInfo profiling_info;
-		vector<unique_ptr<TreeNode>> children;
-		idx_t depth = 0;
-	};
-
-	// Holds the top level query info
-	struct QueryInfo {
-		string query;
-		ProfilingInfo settings;
-	};
-
 	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
 	void Propagate(QueryProfiler &qp);
 
-	using TreeMap = reference_map_t<const PhysicalOperator, reference<TreeNode>>;
+	using TreeMap = reference_map_t<const PhysicalOperator, reference<ProfilingNode>>;
 
 private:
-	unique_ptr<TreeNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
-	void Render(const TreeNode &node, std::ostream &str) const;
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
+	void Render(const ProfilingNode &node, std::ostream &str) const;
 
 public:
 	DUCKDB_API bool IsEnabled() const;
 	DUCKDB_API bool IsDetailedEnabled() const;
-	DUCKDB_API ProfilerPrintFormat GetPrintFormat() const;
+	DUCKDB_API ProfilerPrintFormat GetPrintFormat(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	DUCKDB_API bool PrintOptimizerOutput() const;
 	DUCKDB_API string GetSaveLocation() const;
 
@@ -140,9 +127,10 @@ public:
 
 	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
 	//! the return value is formatted based on the current print format (see GetPrintFormat()).
-	DUCKDB_API string ToString() const;
+	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 
 	static string JSONSanitize(const string &text);
+	static string DrawPadded(const string &str, idx_t width);
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 
@@ -150,7 +138,12 @@ public:
 		return tree_map.size();
 	}
 
-	void Finalize(TreeNode &node);
+	void Finalize(ProfilingNode &node);
+
+	//! Return the root of the query tree
+	optional_ptr<ProfilingNode> GetRoot() {
+		return root.get();
+	}
 
 private:
 	ClientContext &context;
@@ -164,10 +157,7 @@ private:
 	bool query_requires_profiling;
 
 	//! The root of the query tree
-	unique_ptr<TreeNode> root;
-
-	//! The query info
-	unique_ptr<QueryInfo> query_info;
+	unique_ptr<ProfilingNode> root;
 
 	//! The query string
 	string query;

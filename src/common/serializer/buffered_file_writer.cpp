@@ -1,7 +1,9 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/common/exception.hpp"
+
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
+
 #include <cstring>
 
 namespace duckdb {
@@ -10,7 +12,8 @@ namespace duckdb {
 constexpr FileOpenFlags BufferedFileWriter::DEFAULT_OPEN_FLAGS;
 
 BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, FileOpenFlags open_flags)
-    : fs(fs), path(path_p), data(make_unsafe_uniq_array<data_t>(FILE_BUFFER_SIZE)), offset(0), total_written(0) {
+    : fs(fs), path(path_p), data(make_unsafe_uniq_array_uninitialized<data_t>(FILE_BUFFER_SIZE)), offset(0),
+      total_written(0) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 }
 

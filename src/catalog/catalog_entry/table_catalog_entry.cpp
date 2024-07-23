@@ -32,7 +32,7 @@ bool TableCatalogEntry::HasGeneratedColumns() const {
 	return columns.LogicalColumnCount() != columns.PhysicalColumnCount();
 }
 
-LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
+LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) const {
 	auto entry = columns.GetColumnIndex(column_name);
 	if (!entry.IsValid()) {
 		if (if_exists) {
@@ -43,15 +43,15 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exis
 	return entry;
 }
 
-bool TableCatalogEntry::ColumnExists(const string &name) {
+bool TableCatalogEntry::ColumnExists(const string &name) const {
 	return columns.ColumnExists(name);
 }
 
-const ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
+const ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) const {
 	return columns.GetColumn(name);
 }
 
-vector<LogicalType> TableCatalogEntry::GetTypes() {
+vector<LogicalType> TableCatalogEntry::GetTypes() const {
 	vector<LogicalType> types;
 	for (auto &col : columns.Physical()) {
 		types.push_back(col.Type());
@@ -185,7 +185,7 @@ const ColumnList &TableCatalogEntry::GetColumns() const {
 	return columns;
 }
 
-const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) {
+const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) const {
 	return columns.GetColumn(idx);
 }
 
@@ -226,8 +226,8 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
-			get.column_ids.push_back(check_column_id.index);
+			    column.Type(), ColumnBinding(get.table_index, get.GetColumnIds().size())));
+			get.AddColumnId(check_column_id.index);
 			update.columns.push_back(check_column_id);
 		}
 	}

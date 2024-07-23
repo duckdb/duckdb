@@ -60,6 +60,7 @@ CMAKE_VARS_BUILD ?=
 CMAKE_LLVM_VARS ?=
 SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
+CORE_EXTENSIONS ?=
 ifdef OVERRIDE_GIT_DESCRIBE
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE="${OVERRIDE_GIT_DESCRIBE}"
 else
@@ -70,6 +71,9 @@ ifneq (${CXX_STANDARD}, )
 endif
 ifneq (${DUCKDB_EXTENSIONS}, )
 	BUILD_EXTENSIONS:=${DUCKDB_EXTENSIONS}
+endif
+ifneq (${CORE_EXTENSIONS}, )
+	CORE_EXTENSIONS:=${CORE_EXTENSIONS}
 endif
 ifeq (${DISABLE_PARQUET}, 1)
 	SKIP_EXTENSIONS:=${SKIP_EXTENSIONS};parquet
@@ -102,6 +106,9 @@ ifeq (${BUILD_AUTOCOMPLETE}, 1)
 endif
 ifeq (${BUILD_ICU}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};icu
+endif
+ifeq (${BUILD_INET}, 1)
+	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};inet
 endif
 ifeq (${BUILD_TPCH}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};tpch
@@ -157,6 +164,9 @@ ifneq ("${FORCE_QUERY_LOG}a", "a")
 endif
 ifneq ($(BUILD_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS="$(BUILD_EXTENSIONS)"
+endif
+ifneq ($(CORE_EXTENSIONS),)
+	CMAKE_VARS:=${CMAKE_VARS} -DCORE_EXTENSIONS="$(CORE_EXTENSIONS)"
 endif
 ifneq ($(SKIP_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_EXTENSIONS="$(SKIP_EXTENSIONS)"
@@ -441,7 +451,6 @@ generate-files:
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
-	./scripts/generate_micro_extended.sh
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 

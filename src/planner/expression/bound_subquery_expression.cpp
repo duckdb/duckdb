@@ -17,7 +17,7 @@ bool BoundSubqueryExpression::Equals(const BaseExpression &other_p) const {
 	return false;
 }
 
-unique_ptr<Expression> BoundSubqueryExpression::Copy() {
+unique_ptr<Expression> BoundSubqueryExpression::Copy() const {
 	throw SerializationException("Cannot copy BoundSubqueryExpression");
 }
 

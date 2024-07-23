@@ -92,7 +92,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 		for (auto &struct_child : struct_children) {
 			candidates.push_back(struct_child.first);
 		}
-		auto closest_settings = StringUtil::TopNLevenshtein(candidates, key);
+		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
 		throw BinderException("Could not find key \"%s\" in struct\n%s", key, message);
 	}

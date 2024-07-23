@@ -29,12 +29,11 @@ void TransactionContext::BeginTransaction() {
 		throw TransactionException("cannot start a transaction within a transaction");
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
-	auto catalog_version = Catalog::GetSystemCatalog(context).GetCatalogVersion();
-	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, catalog_version);
+	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp);
 
 	// Notify any registered state of transaction begin
-	for (auto const &s : context.registered_state) {
-		s.second->TransactionBegin(*current_transaction, context);
+	for (auto &state : context.registered_state->States()) {
+		state->TransactionBegin(*current_transaction, context);
 	}
 }
 
@@ -47,13 +46,13 @@ void TransactionContext::Commit() {
 	auto error = transaction->Commit();
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
-		for (auto const &s : context.registered_state) {
-			s.second->TransactionRollback(*transaction, context, error);
+		for (auto const &s : context.registered_state->States()) {
+			s->TransactionRollback(*transaction, context, error);
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	} else {
-		for (auto const &s : context.registered_state) {
-			s.second->TransactionCommit(*transaction, context);
+		for (auto &state : context.registered_state->States()) {
+			state->TransactionCommit(*transaction, context);
 		}
 	}
 }
@@ -77,8 +76,8 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	ClearTransaction();
 	transaction->Rollback();
 	// Notify any registered state of transaction rollback
-	for (auto const &s : context.registered_state) {
-		s.second->TransactionRollback(*transaction, context, error);
+	for (auto const &s : context.registered_state->States()) {
+		s->TransactionRollback(*transaction, context, error);
 	}
 }
 

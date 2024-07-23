@@ -35,6 +35,10 @@ uint32_t RandomEngine::NextRandomInteger() {
 	return random_state->pcg();
 }
 
+uint32_t RandomEngine::NextRandomInteger(uint32_t min, uint32_t max) {
+	return min + static_cast<uint32_t>(NextRandom() * double(max - min));
+}
+
 void RandomEngine::SetSeed(uint32_t seed) {
 	random_state->pcg.seed(seed);
 }

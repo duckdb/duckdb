@@ -61,20 +61,26 @@ jobs:
       ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja
       BUILD_BENCHMARK: 1
-      DEBUG_STACKTRACE: 1
       FORCE_WARN_UNUSED: 1
       DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+    - name: Handrolled checkout
+      shell: bash
+      env:
+        REPO_NAME: ${{ github.repository }}
+        REPO_REF: ${{ inputs.git_ref }}
+      run: |
+        git config --global --add safe.directory $(pwd)
+        git clone https://github.com/$REPO_NAME .
+        git fetch
+        git checkout $REPO_REF
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
         ninja-build: 1
-        ccache: 1
+        ccache: 0
         python_alias: 1
         aws-cli: 1
 
@@ -147,6 +153,7 @@ jobs:
      TREAT_WARNINGS_AS_ERRORS: 1
      FORCE_WARN_UNUSED: 1
      DUCKDB_PLATFORM: linux_arm64
+     ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
    steps:
      - uses: actions/checkout@v3
@@ -190,6 +197,8 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:18.04
     needs: linux-release-64
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
@@ -230,6 +239,8 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:18.04
     needs: linux-release-64
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - uses: actions/checkout@v3

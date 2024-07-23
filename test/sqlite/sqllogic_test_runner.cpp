@@ -172,6 +172,9 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 }
 
 bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<string> &result) {
+	if (parameter.empty()) {
+		return true;
+	}
 	auto token_name = StringUtil::Lower(parameter);
 	StringUtil::Trim(token_name);
 	bool collection = false;
@@ -181,6 +184,18 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 	bool is_integral = is_numeric || token_name == "<integral>";
 	bool is_signed = is_integral || token_name == "<signed>";
 	bool is_unsigned = is_integral || token_name == "<unsigned>";
+	bool is_all_types_column = token_name == "<all_types_columns>";
+	if (token_name[0] == '!') {
+		// !token tries to remove the token from the list of tokens
+		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
+		if (entry == result.end()) {
+			// not found - insert as-is
+			return false;
+		}
+		// found - erase the entry
+		result.erase(entry);
+		collection = true;
+	}
 	if (is_signed) {
 		result.push_back("tinyint");
 		result.push_back("smallint");
@@ -217,6 +232,62 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("fsst");
 		result.push_back("alp");
 		result.push_back("alprd");
+		collection = true;
+	}
+	if (is_all_types_column) {
+		result.push_back("bool");
+		result.push_back("tinyint");
+		result.push_back("smallint");
+		result.push_back("int");
+		result.push_back("bigint");
+		result.push_back("hugeint");
+		result.push_back("uhugeint");
+		result.push_back("utinyint");
+		result.push_back("usmallint");
+		result.push_back("uint");
+		result.push_back("ubigint");
+		result.push_back("date");
+		result.push_back("time");
+		result.push_back("timestamp");
+		result.push_back("timestamp_s");
+		result.push_back("timestamp_ms");
+		result.push_back("timestamp_ns");
+		result.push_back("time_tz");
+		result.push_back("timestamp_tz");
+		result.push_back("float");
+		result.push_back("double");
+		result.push_back("dec_4_1");
+		result.push_back("dec_9_4");
+		result.push_back("dec_18_6");
+		result.push_back("dec38_10");
+		result.push_back("uuid");
+		result.push_back("interval");
+		result.push_back("varchar");
+		result.push_back("blob");
+		result.push_back("bit");
+		result.push_back("small_enum");
+		result.push_back("medium_enum");
+		result.push_back("large_enum");
+		result.push_back("int_array");
+		result.push_back("double_array");
+		result.push_back("date_array");
+		result.push_back("timestamp_array");
+		result.push_back("timestamptz_array");
+		result.push_back("varchar_array");
+		result.push_back("nested_int_array");
+		result.push_back("struct");
+		result.push_back("struct_of_arrays");
+		result.push_back("array_of_structs");
+		result.push_back("map");
+		result.push_back("union");
+		result.push_back("fixed_int_array");
+		result.push_back("fixed_varchar_array");
+		result.push_back("fixed_nested_int_array");
+		result.push_back("fixed_nested_varchar_array");
+		result.push_back("fixed_struct_array");
+		result.push_back("struct_of_fixed_array");
+		result.push_back("fixed_array_of_int_list");
+		result.push_back("list_of_fixed_int_array");
 		collection = true;
 	}
 	return collection;
@@ -331,7 +402,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		// require a specific block size
 		auto required_block_size = NumericCast<idx_t>(std::stoi(params[1]));
-		if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
+		if (config->options.default_block_alloc_size != required_block_size) {
 			// block size does not match the required block size: skip it
 			return RequireResult::MISSING;
 		}

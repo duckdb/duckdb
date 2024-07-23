@@ -19,7 +19,7 @@ namespace duckdb {
 class CSVFileScan;
 class ScannerResult {
 public:
-	ScannerResult(CSVStates &states, CSVStateMachine &state_machine);
+	ScannerResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
 
 	//! Adds a Value to the result
 	static inline void SetQuoted(ScannerResult &result, idx_t quoted_position) {
@@ -32,10 +32,13 @@ public:
 	static inline void SetEscaped(ScannerResult &result) {
 		result.escaped = true;
 	}
-	// Variable to keep information regarding quoted and escaped values
+	//! Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	bool escaped = false;
 	idx_t quoted_position = 0;
+
+	//! Size of the result
+	const idx_t result_size;
 
 	CSVStateMachine &state_machine;
 

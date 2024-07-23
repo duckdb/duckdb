@@ -40,9 +40,9 @@ BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr,
 	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
-		return BindResult("LATERAL join cannot contain DEFAULT clause");
+		return BindUnsupportedExpression(expr, depth, "LATERAL join cannot contain DEFAULT clause!");
 	case ExpressionClass::WINDOW:
-		return BindResult("LATERAL join cannot contain window functions!");
+		return BindUnsupportedExpression(expr, depth, "LATERAL join cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:

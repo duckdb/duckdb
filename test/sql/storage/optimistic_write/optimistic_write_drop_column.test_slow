@@ -54,7 +54,7 @@ SELECT SUM(a), SUM(b) FROM test
 
 require skip_reload
 
-# ensure the drop column does not lead to leaking blocks
+# ensure the drop column does not result in leaking blocks
 
 # for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
 # therefore, we need to compare to a range of total block counts

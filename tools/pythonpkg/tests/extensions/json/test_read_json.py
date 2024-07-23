@@ -4,6 +4,7 @@ import pandas
 import pytest
 import duckdb
 import re
+from io import StringIO
 
 
 def TestFile(name):
@@ -56,6 +57,23 @@ class TestReadJSON(object):
             ],
         )
 
+    def test_read_filelike(self, duckdb_cursor):
+        pytest.importorskip("fsspec")
+
+        duckdb_cursor.execute("set threads=1")
+        string = StringIO("""{"id":1,"name":"O Brother, Where Art Thou?"}\n{"id":2,"name":"Home for the Holidays"}""")
+        res = duckdb_cursor.read_json(string).fetchall()
+        assert res == [(1, 'O Brother, Where Art Thou?'), (2, 'Home for the Holidays')]
+
+        string1 = StringIO("""{"id":1,"name":"O Brother, Where Art Thou?"}""")
+        string2 = StringIO("""{"id":2,"name":"Home for the Holidays"}""")
+        res = duckdb_cursor.read_json([string1, string2], filename=True).fetchall()
+        assert res[0][1] == 'O Brother, Where Art Thou?'
+        assert res[1][1] == 'Home for the Holidays'
+
+        # filenames are different
+        assert res[0][2] != res[1][2]
+
     def test_read_json_records(self):
         # Wrong option
         with pytest.raises(duckdb.BinderException, match="""read_json requires "records" to be one of"""):
@@ -102,9 +120,7 @@ class TestReadJSON(object):
         option_name, option_value = option
         keyword_arguments[option_name] = option_value
         if option_name == 'hive_types':
-            with pytest.raises(
-                duckdb.InvalidInputException, match=r'Unknown hive_type: "name" does not appear to be a partition'
-            ):
+            with pytest.raises(duckdb.InvalidInputException, match=r'Unknown hive_type:'):
                 rel = duckdb_cursor.read_json(TestFile('example.json'), **keyword_arguments)
         else:
             rel = duckdb_cursor.read_json(TestFile('example.json'), **keyword_arguments)

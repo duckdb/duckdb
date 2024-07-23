@@ -6,7 +6,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/http_state.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -137,8 +137,9 @@ struct DebugClientContextState : public ClientContextState {
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
+	registered_state = make_uniq<RegisteredStateManager>();
 #ifdef DEBUG
-	registered_state["debug_client_context_state"] = make_uniq<DebugClientContextState>();
+	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
 #endif
 }
 
@@ -197,8 +198,8 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 	query_progress.Initialize();
 	// Notify any registered state of query begin
-	for (auto const &s : registered_state) {
-		s.second->QueryBegin(*this);
+	for (auto &state : registered_state->States()) {
+		state->QueryBegin(*this);
 	}
 }
 
@@ -240,11 +241,11 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	} // LCOV_EXCL_STOP
 
 	// Notify any registered state of query end
-	for (auto const &s : registered_state) {
+	for (auto const &s : registered_state->States()) {
 		if (error.HasError()) {
-			s.second->QueryEnd(*this, &error);
+			s->QueryEnd(*this, &error);
 		} else {
-			s.second->QueryEnd(*this, previous_error);
+			s->QueryEnd(*this, previous_error);
 		}
 	}
 
@@ -346,7 +347,6 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = std::move(planner.value_map);
-	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
 	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}
@@ -384,10 +384,9 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
                                        PreparedStatementMode mode) {
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
-	for (auto const &s : registered_state) {
-		if (s.second->CanRequestRebind()) {
+	for (auto &state : registered_state->States()) {
+		if (state->CanRequestRebind()) {
 			can_request_rebind = true;
-			break;
 		}
 	}
 	if (can_request_rebind) {
@@ -399,8 +398,8 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			// check if any registered client context state wants to try a rebind
-			for (auto const &s : registered_state) {
-				auto info = s.second->OnPlanningError(*this, *statement, error);
+			for (auto &state : registered_state->States()) {
+				auto info = state->OnPlanningError(*this, *statement, error);
 				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 					rebind = true;
 				}
@@ -411,8 +410,8 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		}
 		if (result) {
 			D_ASSERT(!rebind);
-			for (auto const &s : registered_state) {
-				auto info = s.second->OnFinalizePrepare(*this, *result, mode);
+			for (auto &state : registered_state->States()) {
+				auto info = state->OnFinalizePrepare(*this, *result, mode);
 				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 					rebind = true;
 				}
@@ -463,7 +462,8 @@ void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &
 	}
 	auto &meta_transaction = MetaTransaction::Get(*this);
 	auto &manager = DatabaseManager::Get(*this);
-	for (auto &modified_database : statement.properties.modified_databases) {
+	for (auto &it : statement.properties.modified_databases) {
+		auto &modified_database = it.first;
 		auto entry = manager.GetDatabase(*this, modified_database);
 		if (!entry) {
 			throw InternalException("Database \"%s\" not found", modified_database);
@@ -531,9 +531,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	if (prepared->RequireRebind(*this, parameters.parameters)) {
 		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
-	for (auto const &s : registered_state) {
+
+	for (auto &state : registered_state->States()) {
 		PreparedStatementCallbackInfo info(*prepared, parameters);
-		auto new_rebind = s.second->OnExecutePrepared(*this, info, rebind);
+		auto new_rebind = state->OnExecutePrepared(*this, info, rebind);
 		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 		}
@@ -742,10 +743,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
 		                                          prepared->properties.parameter_count);
-		return ErrorResult<PendingQueryResult>(ErrorData(error_message), query);
+		return ErrorResult<PendingQueryResult>(InvalidInputException(error_message), query);
 	}
 	if (!prepared->properties.bound_all_parameters) {
-		return ErrorResult<PendingQueryResult>(ErrorData("Not all parameters were bound"), query);
+		return ErrorResult<PendingQueryResult>(InvalidInputException("Not all parameters were bound"), query);
 	}
 	// execute the prepared statement
 	CheckIfPreparedStatementIsExecutable(*prepared);

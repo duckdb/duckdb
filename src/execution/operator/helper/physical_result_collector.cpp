@@ -8,6 +8,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {

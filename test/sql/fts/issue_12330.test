@@ -6,6 +6,8 @@
 
 require fts
 
+require noalternativeverify
+
 statement ok
 CREATE OR REPLACE TABLE documents (
     id VARCHAR,
