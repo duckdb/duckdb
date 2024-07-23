@@ -91,7 +91,7 @@ public:
 	atomic<idx_t> total_bytes_sent {0};
 
 	//! Called by the ClientContext when the current query ends
-	void QueryEnd(ClientContext &context, optional_ptr<ErrorData>) override {
+	void QueryEnd(ClientContext &context) override {
 		Reset();
 	}
 	void WriteProfilingInformation(std::ostream &ss) override;

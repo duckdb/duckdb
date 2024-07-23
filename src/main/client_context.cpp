@@ -90,7 +90,7 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		active_query = true;
 	}
-	void QueryEnd(ClientContext &context, optional_ptr<ErrorData>) override {
+	void QueryEnd(ClientContext &context) override {
 		if (!active_query) {
 			throw InternalException("DebugClientContextState::QueryEnd called when no query is active");
 		}

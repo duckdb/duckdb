@@ -14,7 +14,7 @@ struct TestClientContextState : ClientContextState {
 	TestClientContextState() = default;
 	TestClientContextState(const TestClientContextState &) = delete;
 
-	void QueryEnd(optional_ptr<ErrorData> error) override {
+	void QueryEnd(ClientContext &, optional_ptr<ErrorData> error) override {
 		if (error && error->HasError()) {
 			query_errors.push_back(error->Message());
 		}
@@ -31,7 +31,7 @@ struct TestClientContextState : ClientContextState {
 shared_ptr<TestClientContextState> WithLifecycleState(const Connection &conn) {
 	auto &register_state = conn.context->registered_state;
 	auto state = make_shared_ptr<TestClientContextState>();
-	register_state["test_state"] = state;
+	register_state->Insert("test_state", state);
 	return state;
 }
 
