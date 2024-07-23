@@ -154,6 +154,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t padding_count = 0;
 	idx_t comment_rows = 0;
 	bool allow_padding = options.null_padding;
+	bool first_valid = false;
 	if (sniffed_column_counts.result_position > rows_read) {
 		rows_read = sniffed_column_counts.result_position;
 	}
@@ -163,7 +164,6 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		return;
 	}
 	idx_t header_idx = 0;
-	bool first_row_seen = false;
 	for (idx_t row = 0; row < sniffed_column_counts.result_position; row++) {
 		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row].number_of_columns, options.null_padding,
 		                                        options.ignore_errors.GetValue(),
@@ -181,17 +181,27 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			// e.g., C1|C2\n1|2|\n3|4|
 			consistent_rows++;
 		} else if (num_cols < sniffed_column_counts[row].number_of_columns &&
-		           !options.dialect_options.skip_rows.IsSetByUser() && (!set_columns.IsSet() || options.null_padding)) {
+		           (!options.dialect_options.skip_rows.IsSetByUser() || comment_rows > 0) &&
+		           (!set_columns.IsSet() || options.null_padding)) {
 			// all rows up to this point will need padding
+			if (!first_valid) {
+				first_valid = true;
+				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
+			}
 			padding_count = 0;
 			// we use the maximum amount of num_cols that we find
 			num_cols = sniffed_column_counts[row].number_of_columns;
 			dirty_notes = row;
+			// sniffed_column_counts.state_machine.dialect_options.rows_until_header = dirty_notes;
 			dirty_notes_minus_comments = dirty_notes - comment_rows;
 			header_idx = row;
 			consistent_rows = 1;
 		} else if (sniffed_column_counts[row].number_of_columns == num_cols ||
 		           (options.ignore_errors.GetValue() && !options.null_padding)) {
+			if (!first_valid) {
+				first_valid = true;
+				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
+			}
 			consistent_rows++;
 		} else if (num_cols >= sniffed_column_counts[row].number_of_columns) {
 			// we are missing some columns, we can parse this as long as we add padding
@@ -199,6 +209,10 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		}
 	}
 
+	if (sniffed_column_counts.state_machine.options.dialect_options.skip_rows.IsSetByUser()) {
+		sniffed_column_counts.state_machine.dialect_options.rows_until_header +=
+		    sniffed_column_counts.state_machine.options.dialect_options.skip_rows.GetValue();
+	}
 	// Calculate the total number of consistent rows after adding padding.
 	consistent_rows += padding_count;
 
@@ -259,8 +273,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		prev_padding_count = padding_count;
 		if (options.dialect_options.skip_rows.IsSetByUser()) {
 			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
-			// ignore_errors is set
-			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
+			// ignore_errors is set we have comments
+			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue() && comment_rows == 0) {
 				return;
 			}
 			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();

@@ -31,6 +31,7 @@ struct DialectOptions {
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! How many leading rows to skip
 	CSVOption<idx_t> skip_rows = 0;
+	idx_t rows_until_header = 0;
 };
 
 struct CSVReaderOptions {
