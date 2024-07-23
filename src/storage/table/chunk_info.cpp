@@ -281,7 +281,7 @@ bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<Chunk
 	// 2) all deletes MUST be used (i.e. deleted[idx] < lowest_transaction
 	bool delete_is_constant = true;
 	bool delete_must_be_used = true;
-	for (idx_t idx = 1; idx < STANDARD_VECTOR_SIZE; idx++) {
+	for (idx_t idx = 0; idx < STANDARD_VECTOR_SIZE; idx++) {
 		if (deleted[idx] != deleted[0]) {
 			// deleted is not constant
 			delete_is_constant = false;
