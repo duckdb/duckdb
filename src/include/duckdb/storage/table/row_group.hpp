@@ -74,7 +74,9 @@ private:
 	//! The RowGroupCollection this row-group is a part of
 	reference<RowGroupCollection> collection;
 	//! The version info of the row_group (inserted and deleted tuple info)
-	shared_ptr<RowVersionManager> version_info;
+	atomic<optional_ptr<RowVersionManager>> version_info;
+	//! The owned version info of the row_group (inserted and deleted tuple info)
+	shared_ptr<RowVersionManager> owned_version_info;
 	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
 
@@ -126,6 +128,8 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t count);
 	//! Revert a previous append made by RowGroup::AppendVersionInfo
 	void RevertAppend(idx_t start);
+	//! Clean up append states that can either be compressed or deleted
+	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count);
@@ -168,8 +172,10 @@ public:
 	static RowGroupPointer Deserialize(Deserializer &deserializer);
 
 private:
-	shared_ptr<RowVersionManager> &GetVersionInfo();
-	shared_ptr<RowVersionManager> &GetOrCreateVersionInfoPtr();
+	optional_ptr<RowVersionManager> GetVersionInfo();
+	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
+	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
+	void SetVersionInfo(shared_ptr<RowVersionManager> version);
 
 	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;

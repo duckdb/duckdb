@@ -9,8 +9,8 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -18,9 +18,12 @@ string PhysicalOperator::GetName() const {
 	return PhysicalOperatorToString(type);
 }
 
-string PhysicalOperator::ToString() const {
-	TreeRenderer renderer;
-	return renderer.ToString(*this);
+string PhysicalOperator::ToString(ExplainFormat format) const {
+	auto renderer = TreeRenderer::CreateRenderer(format);
+	stringstream ss;
+	auto tree = RenderTree::CreateRenderTree(*this);
+	renderer->ToStream(*tree, ss);
+	return ss.str();
 }
 
 // LCOV_EXCL_START
@@ -100,6 +103,9 @@ SinkResultType PhysicalOperator::Sink(ExecutionContext &context, DataChunk &chun
 
 SinkCombineResultType PhysicalOperator::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	return SinkCombineResultType::FINISHED;
+}
+
+void PhysicalOperator::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
 }
 
 SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

@@ -150,7 +150,7 @@ struct CSVReaderOptions {
 	//! If we can safely ignore errors (i.e., they are being ignored and not being stored in a rejects table)
 	bool IgnoreErrors() const;
 
-	NewLineIdentifier GetNewline() const;
+	string GetNewline() const;
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
@@ -171,8 +171,10 @@ struct CSVReaderOptions {
 
 	string NewLineIdentifierToString() {
 		switch (dialect_options.state_machine_options.new_line.GetValue()) {
-		case NewLineIdentifier::SINGLE:
+		case NewLineIdentifier::SINGLE_N:
 			return "\\n";
+		case NewLineIdentifier::SINGLE_R:
+			return "\\r";
 		case NewLineIdentifier::CARRY_ON:
 			return "\\r\\n";
 		default:

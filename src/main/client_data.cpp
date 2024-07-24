@@ -38,7 +38,7 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 	profiler = make_shared_ptr<QueryProfiler>(context);
 	http_logger = make_shared_ptr<HTTPLogger>(context);
 	temporary_objects = make_shared_ptr<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
-	temporary_objects->oid = DatabaseManager::Get(db).ModifyCatalog();
+	temporary_objects->oid = DatabaseManager::Get(db).NextOid();
 	random_engine = make_uniq<RandomEngine>();
 	file_opener = make_uniq<ClientContextFileOpener>(context);
 	client_file_system = make_uniq<ClientFileSystem>(context);

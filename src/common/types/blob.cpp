@@ -1,10 +1,11 @@
-#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/blob.hpp"
+
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -65,7 +66,7 @@ void Blob::ToString(string_t blob, char *output) {
 
 string Blob::ToString(string_t blob) {
 	auto str_len = GetStringSize(blob);
-	auto buffer = make_unsafe_uniq_array<char>(str_len);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(str_len);
 	Blob::ToString(blob, buffer.get());
 	return string(buffer.get(), str_len);
 }
@@ -150,7 +151,7 @@ string Blob::ToBlob(string_t str) {
 
 string Blob::ToBlob(string_t str, CastParameters &parameters) {
 	auto blob_len = GetBlobSize(str, parameters);
-	auto buffer = make_unsafe_uniq_array<char>(blob_len);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(blob_len);
 	Blob::ToBlob(str, data_ptr_cast(buffer.get()));
 	return string(buffer.get(), blob_len);
 }

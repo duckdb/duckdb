@@ -113,7 +113,7 @@ string BinaryDeserializer::ReadString() {
 	if (len == 0) {
 		return string();
 	}
-	auto buffer = make_unsafe_uniq_array<data_t>(len);
+	auto buffer = make_unsafe_uniq_array_uninitialized<data_t>(len);
 	ReadData(buffer.get(), len);
 	return string(const_char_ptr_cast(buffer.get()), len);
 }

@@ -929,17 +929,10 @@ public:
 	WindowAggregateExecutorGlobalState(const WindowAggregateExecutor &executor, const idx_t payload_count,
 	                                   const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
-	ExpressionExecutor filter_executor;
-	SelectionVector filter_sel;
-
 	// aggregate computation algorithm
 	unique_ptr<WindowAggregator> aggregator;
 	// aggregate global state
 	unique_ptr<WindowAggregatorState> gsink;
-
-	// Single threaded Finalize
-	mutex lock;
-	bool finalized = false;
 };
 
 bool WindowAggregateExecutorGlobalState::IsConstantAggregate() {
@@ -1047,7 +1040,7 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
                                                                        const idx_t group_count,
                                                                        const ValidityMask &partition_mask,
                                                                        const ValidityMask &order_mask)
-    : WindowExecutorGlobalState(executor, group_count, partition_mask, order_mask), filter_executor(executor.context) {
+    : WindowExecutorGlobalState(executor, group_count, partition_mask, order_mask) {
 	auto &wexpr = executor.wexpr;
 	auto &context = executor.context;
 	auto return_type = wexpr.return_type;
@@ -1074,12 +1067,6 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
 	}
 
 	gsink = aggregator->GetGlobalState(group_count, partition_mask);
-
-	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
-	if (wexpr.filter_expr) {
-		filter_executor.AddExpression(*wexpr.filter_expr);
-		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
-	}
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(const idx_t payload_count,
@@ -1088,16 +1075,47 @@ unique_ptr<WindowExecutorGlobalState> WindowAggregateExecutor::GetGlobalState(co
 	return make_uniq<WindowAggregateExecutorGlobalState>(*this, payload_count, partition_mask, order_mask);
 }
 
+class WindowAggregateExecutorLocalState : public WindowExecutorBoundsState {
+public:
+	WindowAggregateExecutorLocalState(const WindowExecutorGlobalState &gstate, const WindowAggregator &aggregator)
+	    : WindowExecutorBoundsState(gstate), filter_executor(gstate.executor.context) {
+
+		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
+		aggregator_state = aggregator.GetLocalState(*gastate.gsink);
+
+		// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
+		auto &wexpr = gstate.executor.wexpr;
+		if (wexpr.filter_expr) {
+			filter_executor.AddExpression(*wexpr.filter_expr);
+			filter_sel.Initialize(STANDARD_VECTOR_SIZE);
+		}
+	}
+
+public:
+	// state of aggregator
+	unique_ptr<WindowAggregatorState> aggregator_state;
+	//! Executor for any filter clause
+	ExpressionExecutor filter_executor;
+	//! Result of filtering
+	SelectionVector filter_sel;
+};
+
+unique_ptr<WindowExecutorLocalState>
+WindowAggregateExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
+	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
+	auto res = make_uniq<WindowAggregateExecutorLocalState>(gstate, *gastate.aggregator);
+	return std::move(res);
+}
+
 void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count,
                                    WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
-	auto &lastate = lstate.Cast<WindowExecutorLocalState>();
-	auto &filter_sel = gastate.filter_sel;
-	auto &filter_executor = gastate.filter_executor;
+	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
+	auto &filter_sel = lastate.filter_sel;
+	auto &filter_executor = lastate.filter_executor;
 	auto &payload_executor = lastate.payload_executor;
 	auto &payload_chunk = lastate.payload_chunk;
 	auto &aggregator = gastate.aggregator;
-	auto &gsink = gastate.gsink;
 
 	idx_t filtered = 0;
 	SelectionVector *filtering = nullptr;
@@ -1116,7 +1134,9 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 	}
 
 	D_ASSERT(aggregator);
-	aggregator->Sink(*gsink, payload_chunk, input_idx, filtering, filtered);
+	auto &gestate = *gastate.gsink;
+	auto &lestate = *lastate.aggregator_state;
+	aggregator->Sink(gestate, lestate, payload_chunk, input_idx, filtering, filtered);
 
 	WindowExecutor::Sink(input_chunk, input_idx, total_count, gstate, lstate);
 }
@@ -1185,12 +1205,6 @@ void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate, Window
 	auto &gsink = gastate.gsink;
 	D_ASSERT(aggregator);
 
-	//	Single threaded Finalize for now
-	lock_guard<mutex> gestate_guard(gastate.lock);
-	if (gastate.finalized) {
-		return;
-	}
-
 	//	Estimate the frame statistics
 	//	Default to the entire partition if we don't know anything
 	FrameStats stats;
@@ -1206,27 +1220,8 @@ void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate, Window
 	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
 	ApplyWindowStats(wexpr.end, stats[1], base, false);
 
-	aggregator->Finalize(*gsink, stats);
-
-	gastate.finalized = true;
-}
-
-class WindowAggregateExecutorLocalState : public WindowExecutorBoundsState {
-public:
-	WindowAggregateExecutorLocalState(const WindowExecutorGlobalState &gstate, const WindowAggregator &aggregator)
-	    : WindowExecutorBoundsState(gstate), aggregator_state(aggregator.GetLocalState()) {
-	}
-
-public:
-	// state of aggregator
-	unique_ptr<WindowAggregatorState> aggregator_state;
-};
-
-unique_ptr<WindowExecutorLocalState>
-WindowAggregateExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
-	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
-	auto res = make_uniq<WindowAggregateExecutorLocalState>(gstate, *gastate.aggregator);
-	return std::move(res);
+	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
+	aggregator->Finalize(*gsink, *lastate.aggregator_state, stats);
 }
 
 void WindowAggregateExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
@@ -1399,7 +1394,7 @@ void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gsta
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		auto denom = NumericCast<int64_t>(partition_end[i] - partition_begin[i] - 1);
+		auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i] - 1));
 		double percent_rank = denom > 0 ? ((double)lpeer.rank - 1) / denom : 0;
 		rdata[i] = percent_rank;
 	}
@@ -1420,7 +1415,7 @@ void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 	auto peer_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PEER_END]);
 	auto rdata = FlatVector::GetData<double>(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		auto denom = NumericCast<int64_t>(partition_end[i] - partition_begin[i]);
+		auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i]));
 		double cume_dist = denom > 0 ? ((double)(peer_end[i] - partition_begin[i])) / denom : 0;
 		rdata[i] = cume_dist;
 	}
@@ -1435,11 +1430,26 @@ public:
 	WindowValueGlobalState(const WindowExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask),
-	      payload_collection(payload_data)
+	      payload_collection(payload_data), ignore_nulls(&no_nulls)
 
 	{
 		if (!arg_types.empty()) {
 			payload_collection.Initialize(Allocator::Get(executor.context), arg_types, payload_count);
+		}
+
+		auto &wexpr = executor.wexpr;
+		if (wexpr.ignore_nulls) {
+			switch (wexpr.type) {
+			case ExpressionType::WINDOW_LEAD:
+			case ExpressionType::WINDOW_LAG:
+			case ExpressionType::WINDOW_FIRST_VALUE:
+			case ExpressionType::WINDOW_LAST_VALUE:
+			case ExpressionType::WINDOW_NTH_VALUE:
+				ignore_nulls = &FlatVector::Validity(payload_collection.chunk.data[0]);
+				break;
+			default:
+				break;
+			}
 		}
 	}
 
@@ -1447,10 +1457,10 @@ public:
 	DataChunk payload_data;
 	// The partition values
 	WindowDataChunk payload_collection;
+	// Mask to use for exclusion if we are not ignoring NULLs
+	ValidityMask no_nulls;
 	// IGNORE NULLS
-	ValidityMask ignore_nulls;
-	// Serialisation lock
-	mutex lock;
+	optional_ptr<ValidityMask> ignore_nulls;
 };
 
 //===--------------------------------------------------------------------===//
@@ -1474,21 +1484,21 @@ public:
 	//! The exclusion filter handler
 	unique_ptr<ExclusionFilter> exclusion_filter;
 	//! The validity mask that combines both the NULLs and exclusion information
-	const ValidityMask *ignore_nulls_exclude;
+	optional_ptr<ValidityMask> ignore_nulls_exclude;
 };
 
 void WindowValueLocalState::Initialize() {
 	if (initialized) {
 		return;
 	}
-	auto &ignore_nulls = gvstate.ignore_nulls;
+	auto ignore_nulls = gvstate.ignore_nulls;
 	if (gvstate.executor.wexpr.exclude_clause == WindowExcludeMode::NO_OTHER) {
 		exclusion_filter = nullptr;
-		ignore_nulls_exclude = &ignore_nulls;
+		ignore_nulls_exclude = ignore_nulls;
 	} else {
 		// create the exclusion filter based on ignore_nulls
 		exclusion_filter =
-		    make_uniq<ExclusionFilter>(gvstate.executor.wexpr.exclude_clause, gvstate.payload_count, ignore_nulls);
+		    make_uniq<ExclusionFilter>(gvstate.executor.wexpr.exclude_clause, gvstate.payload_count, *ignore_nulls);
 		ignore_nulls_exclude = &exclusion_filter->mask;
 	}
 
@@ -1519,62 +1529,12 @@ void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, co
 	auto &payload_chunk = lvstate.payload_chunk;
 	auto &payload_executor = lvstate.payload_executor;
 	auto &payload_collection = gvstate.payload_collection;
-	auto &ignore_nulls = gvstate.ignore_nulls;
-
-	// Single pass over the input to produce the global data.
-	// Vectorisation for the win...
-
-	// Set up a validity mask for IGNORE NULLS
-	bool check_nulls = false;
-	if (wexpr.ignore_nulls) {
-		switch (wexpr.type) {
-		case ExpressionType::WINDOW_LEAD:
-		case ExpressionType::WINDOW_LAG:
-		case ExpressionType::WINDOW_FIRST_VALUE:
-		case ExpressionType::WINDOW_LAST_VALUE:
-		case ExpressionType::WINDOW_NTH_VALUE:
-			check_nulls = true;
-			break;
-		default:
-			break;
-		}
-	}
 
 	if (!wexpr.children.empty()) {
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
 		payload_collection.Copy(payload_chunk, input_idx);
-
-		// process payload chunks while they are still piping hot
-		if (check_nulls) {
-			const auto count = input_chunk.size();
-
-			payload_chunk.Flatten();
-			UnifiedVectorFormat vdata;
-			payload_chunk.data[0].ToUnifiedFormat(count, vdata);
-			lock_guard<mutex> validity_guard(gvstate.lock);
-			if (!vdata.validity.AllValid()) {
-				//	Lazily materialise the contents when we find the first NULL
-				if (ignore_nulls.AllValid()) {
-					ignore_nulls.Initialize(total_count);
-				}
-				// Write to the current position
-				if (input_idx % ValidityMask::BITS_PER_VALUE == 0) {
-					// If we are at the edge of an output entry, just copy the entries
-					auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(input_idx);
-					auto src = vdata.validity.GetData();
-					for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
-						*dst++ = *src++;
-					}
-				} else {
-					// If not, we have ragged data and need to copy one bit at a time.
-					for (idx_t i = 0; i < count; ++i) {
-						ignore_nulls.Set(input_idx + i, vdata.validity.RowIsValid(i));
-					}
-				}
-			}
-		}
 	}
 
 	WindowExecutor::Sink(input_chunk, input_idx, total_count, gstate, lstate);
@@ -1676,7 +1636,7 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 	auto &ignore_nulls = gvstate.ignore_nulls;
 	auto &llstate = lstate.Cast<WindowLeadLagLocalState>();
 
-	bool can_shift = ignore_nulls.AllValid();
+	bool can_shift = ignore_nulls->AllValid();
 	if (wexpr.offset_expr) {
 		can_shift = can_shift && wexpr.offset_expr->IsFoldable();
 	}
@@ -1703,10 +1663,10 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 		if (val_idx < (int64_t)row_idx) {
 			// Count backwards
 			delta = idx_t(row_idx - idx_t(val_idx));
-			val_idx = int64_t(FindPrevStart(ignore_nulls, partition_begin[i], row_idx, delta));
+			val_idx = int64_t(FindPrevStart(*ignore_nulls, partition_begin[i], row_idx, delta));
 		} else if (val_idx > (int64_t)row_idx) {
 			delta = idx_t(idx_t(val_idx) - row_idx);
-			val_idx = int64_t(FindNextStart(ignore_nulls, row_idx + 1, partition_end[i], delta));
+			val_idx = int64_t(FindNextStart(*ignore_nulls, row_idx + 1, partition_end[i], delta));
 		}
 		// else offset is zero, so don't move.
 

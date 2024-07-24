@@ -365,8 +365,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 	}
 	if (bound_function.get_modified_databases && binder) {
 		auto &properties = binder->GetStatementProperties();
-		FunctionModifiedDatabasesInput input(bind_info, properties.modified_databases);
-		bound_function.get_modified_databases(input);
+		FunctionModifiedDatabasesInput input(bind_info, properties);
+		bound_function.get_modified_databases(context, input);
 	}
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);

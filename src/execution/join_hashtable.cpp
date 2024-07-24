@@ -102,7 +102,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 	sink_collection =
 	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 
-	dead_end = make_unsafe_uniq_array<data_t>(layout.GetRowWidth());
+	dead_end = make_unsafe_uniq_array_uninitialized<data_t>(layout.GetRowWidth());
 	memset(dead_end.get(), 0, layout.GetRowWidth());
 }
 
@@ -152,13 +152,6 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, const idx_t &count, co
 	}
 }
 
-// uses an AND operation to apply the modulo operation instead of an if condition that could be branch mispredicted
-inline void IncrementAndWrap(idx_t &value, const uint64_t &capacity_mask) {
-	value += 1;
-	// leave the salt bits unchanged
-	value &= capacity_mask;
-}
-
 //! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the key_match_sel
 //! vector and the count argument to the number and position of the matches
 template <bool USE_SALTS>
@@ -166,7 +159,6 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
                                           JoinHashTable::ProbeState &state, Vector &hashes_v,
                                           const SelectionVector &sel, idx_t &count, JoinHashTable *ht,
                                           ht_entry_t *entries, Vector &pointers_result_v, SelectionVector &match_sel) {
-
 	UnifiedVectorFormat hashes_v_unified;
 	hashes_v.ToUnifiedFormat(count, hashes_v_unified);
 
@@ -305,7 +297,6 @@ inline bool JoinHashTable::UseSalt() const {
 void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
                                    const SelectionVector &sel, idx_t &count, Vector &pointers_result_v,
                                    SelectionVector &match_sel) {
-
 	if (UseSalt()) {
 		GetRowPointersInternal<true>(keys, key_state, state, hashes_v, sel, count, this, entries, pointers_result_v,
 		                             match_sel);
@@ -718,51 +709,50 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	} while (iterator.Next());
 }
 
-unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys, TupleDataChunkState &key_state,
-                                                                 const SelectionVector *&current_sel) {
+void JoinHashTable::InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys,
+                                            TupleDataChunkState &key_state, const SelectionVector *&current_sel) {
 	D_ASSERT(Count() > 0); // should be handled before
 	D_ASSERT(finalized);
 
 	// set up the scan structure
-	auto ss = make_uniq<ScanStructure>(*this, key_state);
+	scan_structure.is_null = false;
+	scan_structure.finished = false;
 	if (join_type != JoinType::INNER) {
-		ss->found_match = make_unsafe_uniq_array<bool>(STANDARD_VECTOR_SIZE);
-		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+		memset(scan_structure.found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 	}
 
 	// first prepare the keys for probing
 	TupleDataCollection::ToUnifiedFormat(key_state, keys);
-	ss->count = PrepareKeys(keys, key_state.vector_data, current_sel, ss->sel_vector, false);
-	return ss;
+	scan_structure.count = PrepareKeys(keys, key_state.vector_data, current_sel, scan_structure.sel_vector, false);
 }
 
-unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
-                                               optional_ptr<Vector> precomputed_hashes) {
+void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+                          ProbeState &probe_state, optional_ptr<Vector> precomputed_hashes) {
 	const SelectionVector *current_sel;
-	auto ss = InitializeScanStructure(keys, key_state, current_sel);
-	if (ss->count == 0) {
-		return ss;
+	InitializeScanStructure(scan_structure, keys, key_state, current_sel);
+	if (scan_structure.count == 0) {
+		return;
 	}
 
 	if (precomputed_hashes) {
-		GetRowPointers(keys, key_state, probe_state, *precomputed_hashes, *current_sel, ss->count, ss->pointers,
-		               ss->sel_vector);
+		GetRowPointers(keys, key_state, probe_state, *precomputed_hashes, *current_sel, scan_structure.count,
+		               scan_structure.pointers, scan_structure.sel_vector);
 	} else {
 		Vector hashes(LogicalType::HASH);
 		// hash all the keys
-		Hash(keys, *current_sel, ss->count, hashes);
+		Hash(keys, *current_sel, scan_structure.count, hashes);
 
 		// now initialize the pointers of the scan structure based on the hashes
-		GetRowPointers(keys, key_state, probe_state, hashes, *current_sel, ss->count, ss->pointers, ss->sel_vector);
+		GetRowPointers(keys, key_state, probe_state, hashes, *current_sel, scan_structure.count,
+		               scan_structure.pointers, scan_structure.sel_vector);
 	}
-
-	return ss;
 }
 
 ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p)
     : key_state(key_state_p), pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE),
-      chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE), ht(ht_p),
-      finished(false) {
+      chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE),
+      found_match(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
+      is_null(true) {
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -815,16 +805,12 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 
 	// If there is a matcher for the probing side because of non-equality predicates, use it
 	if (ht.needs_chain_matcher) {
-
 		idx_t no_match_count = 0;
-
 		auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
-
 		D_ASSERT(matcher);
 
 		// we need to only use the vectors with the indices of the columns that are used in the probe phase, namely
 		// the non-equality columns
-
 		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, ht.layout, pointers, no_match_sel,
 		                      no_match_count, ht.non_equality_predicate_columns);
 	} else {
@@ -835,7 +821,6 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 
 idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {
 	while (true) {
-
 		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, result_vector, nullptr);
 
@@ -942,7 +927,6 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	// Start with the scan selection
 
 	while (this->count > 0) {
-
 		// resolve the equality_predicates for the current set of pointers
 		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, &chain_no_match_sel_vector);
 		idx_t no_match_count = this->count - match_count;
@@ -1401,6 +1385,7 @@ void JoinHashTable::Repartition(JoinHashTable &global_ht) {
 
 void JoinHashTable::Reset() {
 	data_collection->Reset();
+	hash_map.Reset();
 	finalized = false;
 }
 
@@ -1457,10 +1442,9 @@ static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &keys, DataChunk 
 	spill_chunk.data[spill_col_idx].Reference(hashes);
 }
 
-unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, TupleDataChunkState &key_state,
-                                                       ProbeState &probe_state, DataChunk &payload,
-                                                       ProbeSpill &probe_spill, ProbeSpillLocalAppendState &spill_state,
-                                                       DataChunk &spill_chunk) {
+void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+                                  ProbeState &probe_state, DataChunk &payload, ProbeSpill &probe_spill,
+                                  ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
 	Hash(keys, *FlatVector::IncrementalSelectionVector(), keys.size(), hashes);
@@ -1487,15 +1471,14 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, TupleDat
 	payload.Slice(true_sel, true_count);
 
 	const SelectionVector *current_sel;
-	auto ss = InitializeScanStructure(keys, key_state, current_sel);
-	if (ss->count == 0) {
-		return ss;
+	InitializeScanStructure(scan_structure, keys, key_state, current_sel);
+	if (scan_structure.count == 0) {
+		return;
 	}
 
 	// now initialize the pointers of the scan structure based on the hashes
-	GetRowPointers(keys, key_state, probe_state, hashes, *current_sel, ss->count, ss->pointers, ss->sel_vector);
-
-	return ss;
+	GetRowPointers(keys, key_state, probe_state, hashes, *current_sel, scan_structure.count, scan_structure.pointers,
+	               scan_structure.sel_vector);
 }
 
 ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types)

@@ -1,0 +1,94 @@
+# name: test/sql/copy/parquet/parquet_encrypted_tpch_httpfs.test_slow
+# description: Test Parquet encryption with OpenSSL for TPC-H
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1)
+
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/tpch_encrypted' (FORMAT 'parquet', ENCRYPTION_CONFIG {footer_key: 'key128'})
+
+load :memory:
+
+# re-add key upon loading the DB again
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/tpch_encrypted'
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+
+# now again without importing the DB, just with views, so we can test projection/filter pushdown
+load :memory:
+
+# re-add key upon loading the DB again
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+CREATE VIEW lineitem AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/lineitem.parquet', encryption_config={footer_key: 'key128'});
+
+statement ok
+CREATE VIEW orders AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/orders.parquet', encryption_config={footer_key: 'key128'});
+
+statement ok
+CREATE VIEW partsupp AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/partsupp.parquet', encryption_config={footer_key: 'key128'});
+
+statement ok
+CREATE VIEW part AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/part.parquet', encryption_config={footer_key: 'key128'});
+
+statement ok
+CREATE VIEW customer AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/customer.parquet', encryption_config={footer_key: 'key128'});
+
+statement ok
+CREATE VIEW supplier AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/supplier.parquet', encryption_config={footer_key: 'key128'});
+
+statement ok
+CREATE VIEW nation AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/nation.parquet', encryption_config={footer_key: 'key128'});
+
+statement ok
+CREATE VIEW region AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/region.parquet', encryption_config={footer_key: 'key128'});
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

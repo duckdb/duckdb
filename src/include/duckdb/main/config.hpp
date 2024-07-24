@@ -11,6 +11,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -47,6 +48,7 @@ class StorageExtension;
 class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
+class EncryptionUtil;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -222,6 +224,8 @@ struct DBConfigOptions {
 	bool immediate_transaction_mode = false;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
+	//! The set of user-provided options
+	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	unordered_map<string, Value> unrecognized_options;
 	//! Whether or not the configuration settings can be altered
@@ -250,6 +254,10 @@ struct DBConfigOptions {
 	//! If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
 	// rows match, we perform an index scan instead of a table scan.
 	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
+	//! Whether or not we initialize table functions in the main thread
+	//! This is a work-around that exists for certain clients (specifically R)
+	//! Because those clients do not like it when threads other than the main thread call into R, for e.g., arrow scans
+	bool initialize_in_main_thread = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -297,6 +305,8 @@ public:
 	shared_ptr<BufferManager> buffer_manager;
 	//! Set of callbacks that can be installed by extensions
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
+	//! Encryption Util for OpenSSL
+	shared_ptr<EncryptionUtil> encryption_util;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -345,13 +355,14 @@ public:
 
 	OrderType ResolveOrder(OrderType order_type) const;
 	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
-	const std::string UserAgent() const;
+	const string UserAgent() const;
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<CastFunctionSet> cast_functions;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
+	bool is_user_config = true;
 };
 
 } // namespace duckdb

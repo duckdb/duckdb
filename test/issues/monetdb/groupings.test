@@ -160,6 +160,7 @@ fresh food
 statement error
 SELECT * FROM categories GROUP BY ()
 ----
+<REGEX>:Binder Error:.*must appear in the GROUP BY.*
 
 statement ok
 ROLLBACK

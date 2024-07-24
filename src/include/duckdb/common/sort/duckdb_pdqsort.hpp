@@ -11,7 +11,7 @@ applications, and to alter it and redistribute it freely, subject to the followi
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the
     original software. If you use this software in a product, an acknowledgment in the product
-	documentation would be appreciated but is not required.
+    documentation would be appreciated but is not required.
 
 2. Altered source versions must be plainly marked as such, and must not be misrepresented as
     being the original software.
@@ -35,16 +35,14 @@ applications, and to alter it and redistribute it freely, subject to the followi
 
 namespace duckdb_pdqsort {
 
-using duckdb::idx_t;
-using duckdb::data_t;
 using duckdb::data_ptr_t;
-using duckdb::unique_ptr;
-using duckdb::unique_array;
-using duckdb::unsafe_unique_array;
-using duckdb::make_uniq_array;
-using duckdb::make_unsafe_uniq_array;
-using duckdb::FastMemcpy;
+using duckdb::data_t;
 using duckdb::FastMemcmp;
+using duckdb::FastMemcpy;
+using duckdb::idx_t;
+using duckdb::make_unsafe_uniq_array_uninitialized;
+using duckdb::unique_ptr;
+using duckdb::unsafe_unique_array;
 
 // NOLINTBEGIN
 
@@ -80,9 +78,10 @@ inline int log2(T n) {
 struct PDQConstants {
 	PDQConstants(idx_t entry_size, idx_t comp_offset, idx_t comp_size, data_ptr_t end)
 	    : entry_size(entry_size), comp_offset(comp_offset), comp_size(comp_size),
-	      tmp_buf_ptr(make_unsafe_uniq_array<data_t>(entry_size)), tmp_buf(tmp_buf_ptr.get()),
-	      iter_swap_buf_ptr(make_unsafe_uniq_array<data_t>(entry_size)), iter_swap_buf(iter_swap_buf_ptr.get()),
-	      swap_offsets_buf_ptr(make_unsafe_uniq_array<data_t>(entry_size)),
+	      tmp_buf_ptr(make_unsafe_uniq_array_uninitialized<data_t>(entry_size)), tmp_buf(tmp_buf_ptr.get()),
+	      iter_swap_buf_ptr(make_unsafe_uniq_array_uninitialized<data_t>(entry_size)),
+	      iter_swap_buf(iter_swap_buf_ptr.get()),
+	      swap_offsets_buf_ptr(make_unsafe_uniq_array_uninitialized<data_t>(entry_size)),
 	      swap_offsets_buf(swap_offsets_buf_ptr.get()), end(end) {
 	}
 

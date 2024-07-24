@@ -51,6 +51,7 @@ class SimpleBufferedData;
 class BufferedData;
 struct ClientData;
 class ClientContextState;
+class RegisteredStateManager;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
@@ -78,7 +79,7 @@ public:
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
-	unordered_map<string, shared_ptr<ClientContextState>> registered_state;
+	unique_ptr<RegisteredStateManager> registered_state;
 	//! The client configuration
 	ClientConfig config;
 	//! The set of client-specific data
