@@ -52,6 +52,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
 		}
+		transition_array[comment][state] = CSVState::COMMENT;
 	}
 	// 2) Field Separator State
 	transition_array[delimiter][static_cast<uint8_t>(CSVState::DELIMITER)] = CSVState::DELIMITER;
@@ -68,6 +69,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (delimiter != ' ') {
 		transition_array[' '][static_cast<uint8_t>(CSVState::DELIMITER)] = CSVState::EMPTY_SPACE;
 	}
+	transition_array[comment][static_cast<uint8_t>(CSVState::DELIMITER)] = CSVState::COMMENT;
 
 	// 3) Record Separator State
 	transition_array[delimiter][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::DELIMITER;
@@ -82,7 +84,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 	transition_array[quote][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::QUOTED;
 	if (delimiter != ' ') {
-		transition_array[' '][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::EMPTY_SPACE_FIRST_COLUMN;
+		transition_array[' '][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::EMPTY_SPACE;
 	}
 	transition_array[comment][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::COMMENT;
 
@@ -93,11 +95,12 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	    CSVState::CARRIAGE_RETURN;
 	transition_array[quote][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] = CSVState::QUOTED;
 	if (delimiter != ' ') {
-		transition_array[' '][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] = CSVState::EMPTY_SPACE_FIRST_COLUMN;
+		transition_array[' '][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] = CSVState::EMPTY_SPACE;
 	}
+	transition_array[comment][static_cast<uint8_t>(CSVState::COMMENT)] =
 
-	// 5) Quoted State
-	transition_array[quote][static_cast<uint8_t>(CSVState::QUOTED)] = CSVState::UNQUOTED;
+	    // 5) Quoted State
+	    transition_array[quote][static_cast<uint8_t>(CSVState::QUOTED)] = CSVState::UNQUOTED;
 	transition_array['\n'][static_cast<uint8_t>(CSVState::QUOTED)] = CSVState::QUOTED_NEW_LINE;
 	transition_array['\r'][static_cast<uint8_t>(CSVState::QUOTED)] = CSVState::QUOTED_NEW_LINE;
 
@@ -117,6 +120,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[escape][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
+	transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::COMMENT;
 	// 7) Escaped State
 	transition_array[quote][static_cast<uint8_t>(CSVState::ESCAPE)] = CSVState::QUOTED;
 	transition_array[escape][static_cast<uint8_t>(CSVState::ESCAPE)] = CSVState::QUOTED;
@@ -133,7 +137,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 	transition_array[quote][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::QUOTED;
 	if (delimiter != ' ') {
-		transition_array[' '][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::EMPTY_SPACE_FIRST_COLUMN;
+		transition_array[' '][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::EMPTY_SPACE;
 	}
 	transition_array[comment][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::COMMENT;
 
@@ -155,20 +159,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		    CSVState::RECORD_SEPARATOR;
 	}
 	transition_array[quote][static_cast<uint8_t>(CSVState::EMPTY_SPACE)] = CSVState::QUOTED;
-
-	// 11) Empty Value State (First value)
-	transition_array[delimiter][static_cast<uint8_t>(CSVState::EMPTY_SPACE_FIRST_COLUMN)] = CSVState::DELIMITER;
-	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::EMPTY_SPACE_FIRST_COLUMN)] =
-	    CSVState::RECORD_SEPARATOR;
-	if (new_line_id == NewLineIdentifier::CARRY_ON) {
-		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::EMPTY_SPACE_FIRST_COLUMN)] =
-		    CSVState::CARRIAGE_RETURN;
-	} else {
-		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::EMPTY_SPACE_FIRST_COLUMN)] =
-		    CSVState::RECORD_SEPARATOR;
-	}
-	transition_array[quote][static_cast<uint8_t>(CSVState::EMPTY_SPACE_FIRST_COLUMN)] = CSVState::QUOTED;
-	transition_array[comment][static_cast<uint8_t>(CSVState::EMPTY_SPACE_FIRST_COLUMN)] = CSVState::COMMENT;
+	transition_array[comment][static_cast<uint8_t>(CSVState::EMPTY_SPACE)] = CSVState::COMMENT;
 
 	// 11) Comment State
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::COMMENT)] = CSVState::RECORD_SEPARATOR;

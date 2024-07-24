@@ -34,12 +34,22 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 	return false;
 }
 
+void ColumnCountResult::SetComment(ColumnCountResult &result) {
+	if (result.current_column_count == 0) {
+		result.cur_line_starts_as_comment = true;
+	}
+	result.comment = true;
+}
+
 bool ColumnCountResult::UnsetComment(ColumnCountResult &result, idx_t buffer_pos) {
 	// If we are unsetting a comment, it means this row started with a comment char.
 	// We add the row but tag it as a comment
 	bool done = result.AddRow(result, buffer_pos);
-	result.column_counts[result.result_position - 1].is_comment = true;
+	if (result.cur_line_starts_as_comment) {
+		result.column_counts[result.result_position - 1].is_comment = true;
+	}
 	result.comment = false;
+	result.cur_line_starts_as_comment = false;
 	return done;
 }
 

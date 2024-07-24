@@ -38,6 +38,7 @@ public:
 	idx_t current_column_count = 0;
 	bool error = false;
 	idx_t result_position = 0;
+	bool cur_line_starts_as_comment = false;
 
 	//! Adds a Value to the result
 	static inline void AddValue(ColumnCountResult &result, idx_t buffer_pos);
@@ -51,6 +52,8 @@ public:
 	static inline bool EmptyLine(ColumnCountResult &result, idx_t buffer_pos);
 	//! Handles unset comment
 	static inline bool UnsetComment(ColumnCountResult &result, idx_t buffer_pos);
+
+	static inline void SetComment(ColumnCountResult &result);
 
 	inline void InternalAddRow();
 };
