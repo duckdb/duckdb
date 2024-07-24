@@ -12,6 +12,10 @@
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
+#ifndef DUCKDB_NO_THREADS
+#include <chrono>
+#include <thread>
+#endif
 #endif
 #endif
 #include "duckdb/common/windows_undefs.hpp"
@@ -347,46 +351,85 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 	auto hostname_without_http = no_http.substr(0, next);
 	auto url_local_part = no_http.substr(next);
 
-	auto url_base = "http://" + hostname_without_http;
-	duckdb_httplib::Client cli(url_base.c_str());
-	if (http_logger) {
-		cli.set_logger(http_logger->GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
-	}
-
-	duckdb_httplib::Headers headers = {
-	    {"User-Agent", StringUtil::Format("%s %s", config.UserAgent(), DuckDB::SourceID())}};
-
 	unique_ptr<ExtensionInstallInfo> install_info;
 	{
 		auto fs = FileSystem::CreateLocal();
 		if (fs->FileExists(local_extension_path + ".info")) {
 			install_info = ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
 		}
+	}
+
+	auto url_base = "http://" + hostname_without_http;
+	// FIXME: the retry logic should be unified with the retry logic in the httpfs client
+	static constexpr idx_t MAX_RETRY_COUNT = 3;
+	static constexpr uint64_t RETRY_WAIT_MS = 100;
+	static constexpr double RETRY_BACKOFF = 4;
+	idx_t retry_count = 0;
+	duckdb_httplib::Result res;
+	while (true) {
+		duckdb_httplib::Client cli(url_base.c_str());
+		if (http_logger) {
+			cli.set_logger(http_logger->GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
+		}
+
+		duckdb_httplib::Headers headers = {
+		    {"User-Agent", StringUtil::Format("%s %s", config.UserAgent(), DuckDB::SourceID())}};
+
 		if (install_info && !install_info->etag.empty()) {
 			headers.insert({"If-None-Match", StringUtil::Format("%s", install_info->etag)});
 		}
-	}
 
-	auto res = cli.Get(url_local_part.c_str(), headers);
-
-	if (install_info && res && res->status == 304) {
-		return install_info;
-	}
-
-	if (!res || res->status != 200) {
-		// create suggestions
-		string message;
-		auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
-		if (exact_match && !ExtensionHelper::IsRelease(DuckDB::LibraryVersion())) {
-			message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
+		res = cli.Get(url_local_part.c_str(), headers);
+		if (install_info && res && res->status == 304) {
+			return install_info;
 		}
+
+		if (res && res->status == 200) {
+			// success!
+			break;
+		}
+		// failure - check if we should retry
+		bool should_retry = false;
 		if (res.error() == duckdb_httplib::Error::Success) {
-			throw HTTPException(res.value(), "Failed to download extension \"%s\" at URL \"%s%s\" (HTTP %n)\n%s",
-			                    extension_name, url_base, url_local_part, res->status, message);
+			switch (res->status) {
+			case 408: // Request Timeout
+			case 418: // Server is pretending to be a teapot
+			case 429: // Rate limiter hit
+			case 500: // Server has error
+			case 503: // Server has error
+			case 504: // Server has error
+				should_retry = true;
+				break;
+			default:
+				break;
+			}
 		} else {
-			throw IOException("Failed to download extension \"%s\" at URL \"%s%s\"\n%s (ERROR %s)", extension_name,
-			                  url_base, url_local_part, message, to_string(res.error()));
+			// always retry on duckdb_httplib::Error::Error
+			should_retry = true;
 		}
+		retry_count++;
+		if (!should_retry || retry_count >= MAX_RETRY_COUNT) {
+			// if we should not retry or exceeded the number of retries - bubble up the error
+			string message;
+			auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
+			if (exact_match && !ExtensionHelper::IsRelease(DuckDB::LibraryVersion())) {
+				message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
+			}
+			if (res.error() == duckdb_httplib::Error::Success) {
+				throw HTTPException(res.value(), "Failed to download extension \"%s\" at URL \"%s%s\" (HTTP %n)\n%s",
+				                    extension_name, url_base, url_local_part, res->status, message);
+			} else {
+				throw IOException("Failed to download extension \"%s\" at URL \"%s%s\"\n%s (ERROR %s)", extension_name,
+				                  url_base, url_local_part, message, to_string(res.error()));
+			}
+		}
+#ifndef DUCKDB_NO_THREADS
+		// retry
+		// sleep first
+		uint64_t sleep_amount =
+		    static_cast<uint64_t>(static_cast<double>(RETRY_WAIT_MS) * pow(RETRY_BACKOFF, retry_count - 1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
+#endif
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 
