@@ -94,7 +94,7 @@ def is_measured_join(op) -> bool:
         return False
     if 'Join Type' not in op['extra_info']:
         return False
-    if 'MARK' in op['extra_info']['Join Type']:
+    if op['extra_info']['Join Type'].startswith('MARK'):
         return False
     return True
 
