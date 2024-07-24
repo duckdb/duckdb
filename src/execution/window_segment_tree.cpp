@@ -1548,8 +1548,7 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 	auto &gdsink = gsink.Cast<WindowDistinctAggregatorGlobalState>();
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
 
-	//	Single threaded Combine for now
-	lock_guard<mutex> gestate_guard(gdsink.lock);
+	//	AddLocalState is thread-safe
 	gdsink.global_sort->AddLocalState(ldstate.local_sort);
 
 	//	Last one out turns off the lights!
