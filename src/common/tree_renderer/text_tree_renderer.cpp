@@ -345,11 +345,11 @@ void TextTreeRenderer::SplitStringBuffer(const string &source, vector<string> &r
 	idx_t last_possible_split = 0;
 
 	const idx_t size = source.size();
-	const char *INPUT = source.c_str();
+	const char *input = source.c_str();
 
 	while (character_pos < size) {
-		size_t char_render_width = Utf8Proc::RenderWidth(INPUT, size, character_pos);
-		idx_t next_character_pos = Utf8Proc::NextGraphemeCluster(INPUT, size, character_pos);
+		size_t char_render_width = Utf8Proc::RenderWidth(input, size, character_pos);
+		idx_t next_character_pos = Utf8Proc::NextGraphemeCluster(input, size, character_pos);
 
 		// Does the next character make us exceed the line length?
 		if (render_width + char_render_width > max_line_render_size) {
