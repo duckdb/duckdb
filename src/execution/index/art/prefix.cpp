@@ -118,7 +118,7 @@ void Prefix::Concatenate(ART &art, Node &parent_node, const uint8_t byte, Node &
 	}
 
 	// Create a new prefix containing the byte.
-	if (parent_node.GetType() != NType::PREFIX && child_node.GetType() != NType::PREFIX) {
+	if (parent_node.GetType() != NType::PREFIX && (child_node.GetType() != NType::PREFIX || child_node.IsGate())) {
 		New(art, parent_node, byte, child_node);
 		return;
 	}
@@ -138,7 +138,7 @@ void Prefix::Concatenate(ART &art, Node &parent_node, const uint8_t byte, Node &
 	// Append the byte.
 	prefix = prefix.get().Append(art, byte);
 
-	// Append the child.
+	// Append the child. Also handles any gate nodes in the child.
 	if (child_node.GetType() == NType::PREFIX) {
 		prefix.get().Append(art, child_node);
 		return;
@@ -374,7 +374,7 @@ Prefix &Prefix::Append(ART &art, const uint8_t byte) {
 
 	reference<Prefix> prefix(*this);
 
-	// we need a new prefix node
+	// The current prefix is full. Thus, we append a new prefix node.
 	if (prefix.get().data[Node::PREFIX_SIZE] == Node::PREFIX_SIZE) {
 		prefix = New(art, prefix.get().ptr);
 	}
@@ -388,14 +388,18 @@ void Prefix::Append(ART &art, Node other_prefix) {
 	D_ASSERT(other_prefix.HasMetadata());
 
 	reference<Prefix> prefix(*this);
-	while (other_prefix.GetType() == NType::PREFIX && !other_prefix.IsGate()) {
+	while (other_prefix.GetType() == NType::PREFIX) {
 
-		// copy prefix bytes
+		if (other_prefix.IsGate()) {
+			prefix.get().ptr = other_prefix;
+			return;
+		}
+
+		// Copy all prefix bytes of other_prefix into this prefix.
 		auto &other = Node::RefMutable<Prefix>(art, other_prefix, NType::PREFIX);
 		for (idx_t i = 0; i < other.data[Node::PREFIX_SIZE]; i++) {
 			prefix = prefix.get().Append(art, other.data[i]);
 		}
-
 		D_ASSERT(other.ptr.HasMetadata());
 
 		prefix.get().ptr = other.ptr;
