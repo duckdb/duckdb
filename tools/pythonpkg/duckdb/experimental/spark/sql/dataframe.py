@@ -669,7 +669,7 @@ class DataFrame:
         [Row(age=5, name='Bob')]
         """
         if isinstance(item, str):
-            return col(item)
+            return Column(duckdb.ColumnExpression(self.relation.alias, item))
         elif isinstance(item, Column):
             return self.filter(item)
         elif isinstance(item, (list, tuple)):
