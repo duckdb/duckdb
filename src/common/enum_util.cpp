@@ -4569,6 +4569,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "JOIN_FILTER_PUSHDOWN";
 	case OptimizerType::EXTENSION:
 		return "EXTENSION";
+	case OptimizerType::MATERIALIZED_CTE:
+		return "MATERIALIZED_CTE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4644,6 +4646,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return OptimizerType::EXTENSION;
+	}
+	if (StringUtil::Equals(value, "MATERIALIZED_CTE")) {
+		return OptimizerType::MATERIALIZED_CTE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
