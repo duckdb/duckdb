@@ -328,3 +328,39 @@ class TestDataFrameJoin(object):
             Row(emp_id=5, name='Brown', superior_emp_id=2, superior_emp_name='Rose'),
             Row(emp_id=6, name='Brown', superior_emp_id=2, superior_emp_name='Rose'),
         ]
+
+    def test_join_with_using_clause(self, spark, dataframe_a):
+        dataframe_a = dataframe_a.select('name', 'year_joined')
+
+        df = dataframe_a.alias('df1')
+        df2 = dataframe_a.alias('df2')
+        res = df.join(df2, ['name', 'year_joined']).sort('name', 'year_joined')
+        res = res.collect()
+        assert res == [
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Jones', year_joined='2005'),
+            Row(name='Rose', year_joined='2010'),
+            Row(name='Smith', year_joined='2018'),
+            Row(name='Williams', year_joined='2010'),
+        ]
+
+    def test_join_with_common_column(self, spark, dataframe_a):
+        dataframe_a = dataframe_a.select('name', 'year_joined')
+
+        df = dataframe_a.alias('df1')
+        df2 = dataframe_a.alias('df2')
+        res = df.join(df2, df.name == df2.name).sort('name', 'year_joined')
+        res = res.collect()
+        assert res == [
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Jones', year_joined='2005'),
+            Row(name='Rose', year_joined='2010'),
+            Row(name='Smith', year_joined='2018'),
+            Row(name='Williams', year_joined='2010'),
+        ]
