@@ -62,7 +62,7 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
 		auto order_value = constant.value.GetValue<int64_t>();
-		return order_value <= 0 ? NumericLimits<idx_t>::Maximum() : static_cast<idx_t>(order_value - 1);
+		return static_cast<idx_t>(order_value <= 0 ? NumericLimits<int64_t>::Maximum() : order_value - 1);
 	}
 	case ExpressionClass::COLUMN_REF: {
 		auto &colref = expr.Cast<ColumnRefExpression>();
