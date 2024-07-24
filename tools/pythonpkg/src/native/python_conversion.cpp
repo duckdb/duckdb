@@ -22,14 +22,6 @@ static Value EmptyMapValue() {
 
 vector<string> TransformStructKeys(py::handle keys, idx_t size, const LogicalType &type = LogicalType::UNKNOWN) {
 	vector<string> res;
-	if (type.id() == LogicalTypeId::STRUCT) {
-		auto &struct_keys = StructType::GetChildTypes(type);
-		res.reserve(struct_keys.size());
-		for (idx_t i = 0; i < struct_keys.size(); i++) {
-			res.push_back(struct_keys[i].first);
-		}
-		return res;
-	}
 	res.reserve(size);
 	for (idx_t i = 0; i < size; i++) {
 		res.emplace_back(py::str(keys.attr("__getitem__")(i)));
@@ -94,9 +86,44 @@ Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &t
 		                            dict.ToString(), target_type.ToString());
 	}
 
+	case_insensitive_map_t<idx_t> key_mapping;
+	if (struct_target) {
+		if (StructType::IsUnnamed(target_type)) {
+			for (idx_t i = 0; i < struct_keys.size(); i++) {
+				key_mapping[struct_keys[i]] = i;
+			}
+		} else {
+			// Register which key belongs to which index
+			case_insensitive_map_t<idx_t> expected_keys;
+			auto &child_types = StructType::GetChildTypes(target_type);
+
+			D_ASSERT(child_types.size() == struct_keys.size());
+
+			for (idx_t i = 0; i < child_types.size(); i++) {
+				auto &child_type = child_types[i];
+				auto &key = child_type.first;
+				expected_keys[key] = i;
+			}
+
+			for (idx_t i = 0; i < struct_keys.size(); i++) {
+				auto it = expected_keys.find(struct_keys[i]);
+				if (it == expected_keys.end()) {
+					throw InvalidInputException(
+					    "Key \"%s\" present in the STRUCT result was not found in the target type: %s", struct_keys[i],
+					    target_type.ToString());
+				}
+				key_mapping[struct_keys[i]] = it->second;
+			}
+		}
+	}
+
+	// FIXME: above we figure out which type should be used for which key
+	// but we still create the STRUCT Value with a different field order than expected
+	// resulting in a reordering later - we can probably reorder here directly.
 	child_list_t<Value> struct_values;
 	for (idx_t i = 0; i < dict.len; i++) {
-		auto &child_type = struct_target ? StructType::GetChildType(target_type, i) : LogicalType::UNKNOWN;
+		auto &child_type =
+		    struct_target ? StructType::GetChildType(target_type, key_mapping[struct_keys[i]]) : LogicalType::UNKNOWN;
 		auto val = TransformPythonValue(dict.values.attr("__getitem__")(i), child_type);
 		struct_values.emplace_back(make_pair(std::move(struct_keys[i]), std::move(val)));
 	}
@@ -606,7 +633,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 		switch (target_type.id()) {
 		case LogicalTypeId::STRUCT:
-			return TransformDictionaryToStruct(dict, target_type);
+			return TransformDictionaryToStruct(dict, target_type).DefaultCastAs(target_type);
 		case LogicalTypeId::MAP:
 			return TransformDictionaryToMap(dict, target_type);
 		default:
