@@ -92,7 +92,8 @@ def is_measured_join(op) -> bool:
         return False
     if op['name'] != 'HASH_JOIN':
         return False
-    assert 'Join Type' in op['extra_info']
+    if 'Join Type' not in op['extra_info']:
+        return False
     if 'MARK' in op['extra_info']['Join Type']:
         return False
     return True

@@ -121,17 +121,17 @@ void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx
 }
 
 string AdjustTextForRendering(string source, idx_t max_render_width) {
-	const idx_t SIZE = source.size();
-	const char *INPUT = source.c_str();
+	const idx_t size = source.size();
+	const char *input = source.c_str();
 
 	idx_t render_width = 0;
 
 	// For every character in the input, create a StringSegment
 	vector<StringSegment> render_widths;
 	idx_t current_position = 0;
-	while (current_position < SIZE) {
-		idx_t char_render_width = Utf8Proc::RenderWidth(INPUT, SIZE, current_position);
-		current_position = Utf8Proc::NextGraphemeCluster(INPUT, SIZE, current_position);
+	while (current_position < size) {
+		idx_t char_render_width = Utf8Proc::RenderWidth(input, size, current_position);
+		current_position = Utf8Proc::NextGraphemeCluster(input, size, current_position);
 		render_width += char_render_width;
 		render_widths.push_back(StringSegment(current_position, render_width));
 		if (render_width > max_render_width) {
@@ -337,22 +337,22 @@ string TextTreeRenderer::RemovePadding(string l) {
 
 void TextTreeRenderer::SplitStringBuffer(const string &source, vector<string> &result) {
 	D_ASSERT(Utf8Proc::IsValid(source.c_str(), source.size()));
-	const idx_t MAX_LINE_RENDER_SIZE = config.node_render_width - 2;
+	const idx_t max_line_render_size = config.node_render_width - 2;
 	// utf8 in prompt, get render width
 	idx_t character_pos = 0;
 	idx_t start_pos = 0;
 	idx_t render_width = 0;
 	idx_t last_possible_split = 0;
 
-	const idx_t SIZE = source.size();
+	const idx_t size = source.size();
 	const char *INPUT = source.c_str();
 
-	while (character_pos < SIZE) {
-		size_t char_render_width = Utf8Proc::RenderWidth(INPUT, SIZE, character_pos);
-		idx_t next_character_pos = Utf8Proc::NextGraphemeCluster(INPUT, SIZE, character_pos);
+	while (character_pos < size) {
+		size_t char_render_width = Utf8Proc::RenderWidth(INPUT, size, character_pos);
+		idx_t next_character_pos = Utf8Proc::NextGraphemeCluster(INPUT, size, character_pos);
 
 		// Does the next character make us exceed the line length?
-		if (render_width + char_render_width > MAX_LINE_RENDER_SIZE) {
+		if (render_width + char_render_width > max_line_render_size) {
 			if (start_pos + 8 > last_possible_split) {
 				// The last character we can split on is one of the first 8 characters of the line
 				// to not create very small lines we instead split on the current character
@@ -370,9 +370,9 @@ void TextTreeRenderer::SplitStringBuffer(const string &source, vector<string> &r
 		character_pos = next_character_pos;
 		render_width += char_render_width;
 	}
-	if (SIZE > start_pos) {
+	if (size > start_pos) {
 		// append the remainder of the input
-		result.push_back(source.substr(start_pos, SIZE - start_pos));
+		result.push_back(source.substr(start_pos, size - start_pos));
 	}
 }
 

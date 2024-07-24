@@ -32,7 +32,7 @@ public:
 		idx_t y;
 	};
 	RenderTreeNode(const string &name, InsertionOrderPreservingMap<string> extra_text)
-	    : name(name), extra_text(extra_text) {
+	    : name(name), extra_text(std::move(extra_text)) {
 	}
 
 public:
