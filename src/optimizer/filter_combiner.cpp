@@ -1180,7 +1180,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //
 //	for (auto child_conjunction : conjunctions_to_visit) {
 //		cur_conjunction = child_conjunction;
-//		// traverse child conjuction
+//		// traverse child conjunction
 //		if (!BFSLookUpConjunctions(child_conjunction)) {
 //			return false;
 //		}
