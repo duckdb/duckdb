@@ -32,14 +32,14 @@ public:
 	semaphore();
 
 public:
-	bool wait();
-	bool wait(int64_t timeout_usecs);
+	bool wait();                      // NOLINT: match std naming style
+	bool wait(int64_t timeout_usecs); // NOLINT: match std naming style
 
 public:
-	void signal(ssize_t count = 1);
+	void signal(ssize_t count = 1); // NOLINT: match std naming style
 
 private:
-	unsafe_unique_ptr<duckdb_moodycamel::LightweightSemaphore> _sem;
+	unsafe_unique_ptr<duckdb_moodycamel::LightweightSemaphore> sem;
 };
 
 } // namespace duckdb
