@@ -25,7 +25,9 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 			}
 			double result = 0;
 			try {
-				result = std::stod(duckdb_get_varchar(value));
+				auto str_value = duckdb_get_varchar(value);
+				result = std::stod(str_value);
+				duckdb_free(str_value);
 			} catch (std::invalid_argument &e) {
 				REQUIRE(false);
 			}
