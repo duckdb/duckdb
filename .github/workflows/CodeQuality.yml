@@ -131,4 +131,10 @@ jobs:
 
       - name: Tidy Check
         shell: bash
+        if: ${{ github.ref == 'refs/heads/main' }}
         run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
+
+      - name: Tidy Check Diff
+        shell: bash
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: make tidy-check-diff TIDY_BINARY=/tmp/clang-tidy-cache
