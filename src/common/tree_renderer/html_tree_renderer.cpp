@@ -63,18 +63,16 @@ static string CreateStyleSection(RenderTree &root) {
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            position: relative;
         }
 
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(%d, minmax(150px, 1fr));
+            grid-template-columns: repeat(%d, auto);
             grid-template-rows: repeat(%d, auto);
             gap: 20px;
             padding: 40px;
             position: relative;
+            box-sizing: border-box;
         }
 
         .grid-item {
@@ -122,6 +120,7 @@ static string CreateStyleSection(RenderTree &root) {
             left: 0;
             width: 100%%;
             height: 100%%;
+            overflow: visible
         }
 
         .line {
