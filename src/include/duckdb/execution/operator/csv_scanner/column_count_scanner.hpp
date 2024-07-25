@@ -25,6 +25,8 @@ struct ColumnCount {
 	bool last_value_always_empty = true;
 	//! If this row is potentially a comment
 	bool is_comment = false;
+	//! If this row is potentially a mid-line comment
+	bool is_mid_comment = false;
 };
 
 class ColumnCountResult : public ScannerResult {
@@ -53,7 +55,7 @@ public:
 	//! Handles unset comment
 	static inline bool UnsetComment(ColumnCountResult &result, idx_t buffer_pos);
 
-	static inline void SetComment(ColumnCountResult &result);
+	static inline void SetComment(ColumnCountResult &result, idx_t buffer_pos);
 
 	inline void InternalAddRow();
 };

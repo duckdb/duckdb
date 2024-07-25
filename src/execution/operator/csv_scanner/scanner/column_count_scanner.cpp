@@ -34,7 +34,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 	return false;
 }
 
-void ColumnCountResult::SetComment(ColumnCountResult &result) {
+void ColumnCountResult::SetComment(ColumnCountResult &result, idx_t buffer_pos) {
 	if (result.current_column_count == 0) {
 		result.cur_line_starts_as_comment = true;
 	}
@@ -47,6 +47,8 @@ bool ColumnCountResult::UnsetComment(ColumnCountResult &result, idx_t buffer_pos
 	bool done = result.AddRow(result, buffer_pos);
 	if (result.cur_line_starts_as_comment) {
 		result.column_counts[result.result_position - 1].is_comment = true;
+	} else {
+		result.column_counts[result.result_position - 1].is_mid_comment = true;
 	}
 	result.comment = false;
 	result.cur_line_starts_as_comment = false;
