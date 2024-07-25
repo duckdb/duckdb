@@ -28,7 +28,7 @@ vector<vector<char>> DialectCandidates::GetDefaultEscape() {
 }
 
 vector<char> DialectCandidates::GetDefaultComment() {
-	return {'#', '/', '\0'};
+	return {'#', '\0'};
 }
 
 DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
@@ -140,9 +140,12 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols) {
 	// valid comments are all lines where the number of columns does not fit our expected number of columns.
 	double valid_comments = 0;
 	for (idx_t i = 0; i < result.result_position; i++) {
-		if (result.column_counts[i].is_comment) {
+		if (result.column_counts[i].is_comment || result.column_counts[i].is_mid_comment) {
 			detected_comments++;
-			if (result.column_counts[i].number_of_columns != num_cols) {
+			if (result.column_counts[i].number_of_columns != num_cols && result.column_counts[i].is_comment) {
+				valid_comments++;
+			}
+			if (result.column_counts[i].number_of_columns == num_cols && result.column_counts[i].is_mid_comment) {
 				valid_comments++;
 			}
 		}
