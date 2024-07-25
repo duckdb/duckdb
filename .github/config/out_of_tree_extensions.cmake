@@ -44,11 +44,13 @@ if (NOT MINGW)
 endif()
 
 ################# DELTA
-if (NOT MINGW)
+# MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
+# for Delta
+if (NOT MINGW AND NOT DUCKDB_EXPLICIT_PLATFORM STREQUAL linux_amd64_gcc4)
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG 0b981978e8450a43f3b0bfdb84d382d61afbb1d0
+            GIT_TAG v0.1.0
     )
 endif()
 

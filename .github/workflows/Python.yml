@@ -140,18 +140,6 @@ jobs:
         python_alias: 1
         openssl: 1
 
-    - name: Setup Rust for manylinux (dtolnay/rust-toolchain doesn't work due to curl being old here)
-      run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y 
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-    - name: Configure OpenSSL for Rust
-      run: |
-        echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
-        echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
-        echo "OPENSSL_INCLUDE_DIR=`pwd`/build/release/vcpkg_installed/x64-linux/include" >> $GITHUB_ENV
-        echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
-
     - uses: ./.github/actions/build_extensions
       with:
         vcpkg_target_triplet: x64-linux
