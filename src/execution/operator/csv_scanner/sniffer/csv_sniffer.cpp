@@ -201,7 +201,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors.GetValue()) {
 		for (auto &error_vector : best_candidate->error_handler->errors) {
 			for (auto &error : error_vector.second) {
-				if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
+				if (error.type == MAXIMUM_LINE_SIZE) {
 					// If it's a maximum line size error, we can do it now.
 					error_handler->Error(error);
 				}

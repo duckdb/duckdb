@@ -1148,7 +1148,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 		if (states.NewRow() || states.NewValue()) {
 			break;
 		} else {
-			overbuffer_string += previous_buffer[i];
+			if (!result.comment) {
+				overbuffer_string += previous_buffer[i];
+			}
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
@@ -1183,7 +1185,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 		if (states.NewRow() || states.NewValue()) {
 			break;
 		} else {
-			overbuffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
+			if (!result.comment && !states.IsComment()) {
+				overbuffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
+			}
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
@@ -1222,7 +1226,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 		}
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
-		} else if (!states.IsNotSet() && !result.comment) {
+		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
 			result.AddValueToVector(value.GetData(), value.GetSize(), true);
 		}
 	} else {
