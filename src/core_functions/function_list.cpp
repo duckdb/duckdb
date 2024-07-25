@@ -50,6 +50,7 @@ namespace duckdb {
 static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(FactorialOperatorFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitwiseAndFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(ListHasAnyFunAlias),
 	DUCKDB_SCALAR_FUNCTION(PowOperatorFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ListInnerProductFunAlias),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ListDistanceFunAlias),
@@ -85,6 +86,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayDotProductFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayFilterFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayGradeUpFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayHasAnyFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ArrayInnerProductFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayReduceFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayReverseSortFun),
@@ -227,6 +229,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ListDotProductFun),
 	DUCKDB_SCALAR_FUNCTION(ListFilterFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListGradeUpFun),
+	DUCKDB_SCALAR_FUNCTION(ListHasAnyFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListInnerProductFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListPackFun),
 	DUCKDB_SCALAR_FUNCTION(ListReduceFun),
