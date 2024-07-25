@@ -2,7 +2,7 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
@@ -245,7 +245,7 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 }
 
 string Pipeline::ToString() const {
-	TreeRenderer renderer;
+	TextTreeRenderer renderer;
 	return renderer.ToString(*this);
 }
 

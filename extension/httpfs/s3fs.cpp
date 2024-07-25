@@ -334,11 +334,11 @@ void S3FileHandle::Close() {
 	}
 }
 
-void S3FileHandle::InitializeClient(optional_ptr<ClientContext> client_context) {
+unique_ptr<duckdb_httplib_openssl::Client> S3FileHandle::CreateClient(optional_ptr<ClientContext> client_context) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, this->auth_params);
 
 	string proto_host_port = parsed_url.http_proto + parsed_url.host;
-	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
+	return HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
 }
 
 // Opens the multipart upload and returns the ID

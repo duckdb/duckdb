@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
@@ -2043,6 +2044,34 @@ ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
+	switch(value) {
+	case ExplainFormat::DEFAULT:
+		return "DEFAULT";
+	case ExplainFormat::TEXT:
+		return "TEXT";
+	case ExplainFormat::JSON:
+		return "JSON";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
+	if (StringUtil::Equals(value, "DEFAULT")) {
+		return ExplainFormat::DEFAULT;
+	}
+	if (StringUtil::Equals(value, "TEXT")) {
+		return ExplainFormat::TEXT;
+	}
+	if (StringUtil::Equals(value, "JSON")) {
+		return ExplainFormat::JSON;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value) {
 	switch(value) {
 	case ExplainOutputType::ALL:
@@ -3861,6 +3890,8 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "STRING_LITERAL";
 	case LogicalTypeId::INTEGER_LITERAL:
 		return "INTEGER_LITERAL";
+	case LogicalTypeId::VARINT:
+		return "VARINT";
 	case LogicalTypeId::UHUGEINT:
 		return "UHUGEINT";
 	case LogicalTypeId::HUGEINT:
@@ -3991,6 +4022,9 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "INTEGER_LITERAL")) {
 		return LogicalTypeId::INTEGER_LITERAL;
+	}
+	if (StringUtil::Equals(value, "VARINT")) {
+		return LogicalTypeId::VARINT;
 	}
 	if (StringUtil::Equals(value, "UHUGEINT")) {
 		return LogicalTypeId::UHUGEINT;
@@ -4311,12 +4345,14 @@ NType EnumUtil::FromString<NType>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<NewLineIdentifier>(NewLineIdentifier value) {
 	switch(value) {
-	case NewLineIdentifier::SINGLE:
-		return "SINGLE";
+	case NewLineIdentifier::SINGLE_N:
+		return "SINGLE_N";
 	case NewLineIdentifier::CARRY_ON:
 		return "CARRY_ON";
 	case NewLineIdentifier::NOT_SET:
 		return "NOT_SET";
+	case NewLineIdentifier::SINGLE_R:
+		return "SINGLE_R";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4324,14 +4360,17 @@ const char* EnumUtil::ToChars<NewLineIdentifier>(NewLineIdentifier value) {
 
 template<>
 NewLineIdentifier EnumUtil::FromString<NewLineIdentifier>(const char *value) {
-	if (StringUtil::Equals(value, "SINGLE")) {
-		return NewLineIdentifier::SINGLE;
+	if (StringUtil::Equals(value, "SINGLE_N")) {
+		return NewLineIdentifier::SINGLE_N;
 	}
 	if (StringUtil::Equals(value, "CARRY_ON")) {
 		return NewLineIdentifier::CARRY_ON;
 	}
 	if (StringUtil::Equals(value, "NOT_SET")) {
 		return NewLineIdentifier::NOT_SET;
+	}
+	if (StringUtil::Equals(value, "SINGLE_R")) {
+		return NewLineIdentifier::SINGLE_R;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4530,6 +4569,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "JOIN_FILTER_PUSHDOWN";
 	case OptimizerType::EXTENSION:
 		return "EXTENSION";
+	case OptimizerType::MATERIALIZED_CTE:
+		return "MATERIALIZED_CTE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4605,6 +4646,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return OptimizerType::EXTENSION;
+	}
+	if (StringUtil::Equals(value, "MATERIALIZED_CTE")) {
+		return OptimizerType::MATERIALIZED_CTE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5130,6 +5174,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "EXPORT";
 	case PhysicalOperatorType::SET:
 		return "SET";
+	case PhysicalOperatorType::SET_VARIABLE:
+		return "SET_VARIABLE";
 	case PhysicalOperatorType::LOAD:
 		return "LOAD";
 	case PhysicalOperatorType::INOUT_FUNCTION:
@@ -5359,6 +5405,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "SET")) {
 		return PhysicalOperatorType::SET;
+	}
+	if (StringUtil::Equals(value, "SET_VARIABLE")) {
+		return PhysicalOperatorType::SET_VARIABLE;
 	}
 	if (StringUtil::Equals(value, "LOAD")) {
 		return PhysicalOperatorType::LOAD;
@@ -6208,6 +6257,8 @@ const char* EnumUtil::ToChars<SetScope>(SetScope value) {
 		return "SESSION";
 	case SetScope::GLOBAL:
 		return "GLOBAL";
+	case SetScope::VARIABLE:
+		return "VARIABLE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6226,6 +6277,9 @@ SetScope EnumUtil::FromString<SetScope>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "GLOBAL")) {
 		return SetScope::GLOBAL;
+	}
+	if (StringUtil::Equals(value, "VARIABLE")) {
+		return SetScope::VARIABLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

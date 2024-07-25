@@ -342,7 +342,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, boo
 			old_transactions.push_back(std::move(current_transaction));
 		}
 	} else if (transaction.ChangesMade()) {
-		transaction.Cleanup();
+		transaction.Cleanup(lowest_start_time);
 	}
 	// remove the transaction from the set of currently active transactions
 	active_transactions.unsafe_erase_at(t_index);
@@ -364,7 +364,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, boo
 			// we can only safely do the actual memory cleanup when all the
 			// currently active queries have finished running! (actually,
 			// when all the currently active scans have finished running...)
-			recently_committed_transactions[i]->Cleanup();
+			recently_committed_transactions[i]->Cleanup(lowest_start_time);
 			// store the current highest active query
 			recently_committed_transactions[i]->highest_active_query = current_query;
 			// move it to the list of transactions awaiting GC

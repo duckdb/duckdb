@@ -274,6 +274,15 @@ static int64_t ImplicitCastTimestamp(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastVarint(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::DOUBLE:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
 bool LogicalTypeIsValid(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
@@ -566,6 +575,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastTimestampNS(to);
 	case LogicalTypeId::TIMESTAMP:
 		return ImplicitCastTimestamp(to);
+	case LogicalTypeId::VARINT:
+		return ImplicitCastVarint(to);
 	default:
 		return -1;
 	}

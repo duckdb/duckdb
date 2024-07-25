@@ -109,36 +109,45 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		return;
 	}
 	idx_t consistent_rows = 0;
-	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[0];
+	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[0].number_of_columns;
 	idx_t padding_count = 0;
 	bool allow_padding = options.null_padding;
 	if (sniffed_column_counts.result_position > rows_read) {
 		rows_read = sniffed_column_counts.result_position;
 	}
 	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors.GetValue(),
-	                                        sniffed_column_counts.last_value_always_empty)) {
+	                                        sniffed_column_counts[0].last_value_always_empty)) {
 		// Not acceptable
 		return;
 	}
+	idx_t header_idx = 0;
 	for (idx_t row = 0; row < sniffed_column_counts.result_position; row++) {
-		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row], options.null_padding,
+		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row].number_of_columns, options.null_padding,
 		                                        options.ignore_errors.GetValue(),
-		                                        sniffed_column_counts.last_value_always_empty)) {
+		                                        sniffed_column_counts[row].last_value_always_empty)) {
 			// Not acceptable
 			return;
 		}
-		if (sniffed_column_counts[row] == num_cols || (options.ignore_errors.GetValue() && !options.null_padding)) {
+		if (sniffed_column_counts[row].number_of_columns == num_cols ||
+		    (options.ignore_errors.GetValue() && !options.null_padding)) {
 			consistent_rows++;
-		} else if (num_cols < sniffed_column_counts[row] && !options.dialect_options.skip_rows.IsSetByUser() &&
-		           (!set_columns.IsSet() || options.null_padding)) {
+		} else if (sniffed_column_counts[row].last_value_always_empty &&
+		           sniffed_column_counts[row].number_of_columns ==
+		               sniffed_column_counts[header_idx].number_of_columns + 1) {
+			// we allow for the first row to miss one column IF last_value_always_empty is true
+			// This is so we can sniff files that have an extra delimiter on the data part.
+			// e.g., C1|C2\n1|2|\n3|4|
+			consistent_rows++;
+		} else if (num_cols < sniffed_column_counts[row].number_of_columns &&
+		           !options.dialect_options.skip_rows.IsSetByUser() && (!set_columns.IsSet() || options.null_padding)) {
 			// all rows up to this point will need padding
 			padding_count = 0;
 			// we use the maximum amount of num_cols that we find
-			num_cols = sniffed_column_counts[row];
+			num_cols = sniffed_column_counts[row].number_of_columns;
 			dirty_notes = row;
+			header_idx = row;
 			consistent_rows = 1;
-
-		} else if (num_cols >= sniffed_column_counts[row]) {
+		} else if (num_cols >= sniffed_column_counts[row].number_of_columns) {
 			// we are missing some columns, we can parse this as long as we add padding
 			padding_count++;
 		}
@@ -251,11 +260,11 @@ bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
 	auto &sniffed_column_counts = candidate.ParseChunk();
 	for (idx_t i = 0; i < sniffed_column_counts.result_position; i++) {
 		if (set_columns.IsSet()) {
-			return !set_columns.IsCandidateUnacceptable(sniffed_column_counts[i], options.null_padding,
-			                                            options.ignore_errors.GetValue(),
-			                                            sniffed_column_counts.last_value_always_empty);
+			return !set_columns.IsCandidateUnacceptable(sniffed_column_counts[i].number_of_columns,
+			                                            options.null_padding, options.ignore_errors.GetValue(),
+			                                            sniffed_column_counts[i].last_value_always_empty);
 		}
-		if (max_columns_found != sniffed_column_counts[i] &&
+		if (max_columns_found != sniffed_column_counts[i].number_of_columns &&
 		    (!options.null_padding && !options.ignore_errors.GetValue())) {
 			return false;
 		}
@@ -326,7 +335,10 @@ NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_ma
 	if (carriage_return && n) {
 		return NewLineIdentifier::CARRY_ON;
 	}
-	return NewLineIdentifier::SINGLE;
+	if (carriage_return) {
+		return NewLineIdentifier::SINGLE_R;
+	}
+	return NewLineIdentifier::SINGLE_N;
 }
 
 // Dialect Detection consists of five steps:

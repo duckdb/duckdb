@@ -1,5 +1,7 @@
 #include "duckdb/main/config.hpp"
 
+#include "duckdb/common/cgroups.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -195,6 +197,10 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 }
 
 void DBConfig::SetOptionByName(const string &name, const Value &value) {
+	if (is_user_config) {
+		// for user config we just set the option in the `user_options`
+		options.user_options[name] = value;
+	}
 	auto option = DBConfig::GetOptionByName(name);
 	if (option) {
 		SetOption(*option, value);
@@ -294,12 +300,14 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 }
 
 void DBConfig::SetDefaultMaxMemory() {
-	auto memory = FileSystem::GetAvailableMemory();
-	if (!memory.IsValid()) {
-		options.maximum_memory = DBConfigOptions().maximum_memory;
-		return;
+	auto memory = GetSystemAvailableMemory(*file_system);
+	if (memory == DBConfigOptions().maximum_memory) {
+		// If GetSystemAvailableMemory returned the default, use it as is
+		options.maximum_memory = memory;
+	} else {
+		// Otherwise, use 80% of the available memory
+		options.maximum_memory = memory * 8 / 10;
 	}
-	options.maximum_memory = memory.GetIndex() * 8 / 10;
 }
 
 void DBConfig::SetDefaultTempDirectory() {
@@ -324,67 +332,50 @@ void DBConfig::CheckLock(const string &name) {
 	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
 
-idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
-	static constexpr const char *CPU_MAX = "/sys/fs/cgroup/cpu.max";
-	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
-	static constexpr const char *CFS_PERIOD = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
-
-	int64_t quota, period;
-	char byte_buffer[1000];
-	unique_ptr<FileHandle> handle;
-	int64_t read_bytes;
-
-	if (fs.FileExists(CPU_MAX)) {
-		// cgroup v2
-		// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
-		handle = fs.OpenFile(CPU_MAX, FileFlags::FILE_FLAGS_READ);
-		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-		byte_buffer[read_bytes] = '\0';
-		if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
-			return physical_cores;
-		}
-	} else if (fs.FileExists(CFS_QUOTA) && fs.FileExists(CFS_PERIOD)) {
-		// cgroup v1
-		// https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
-
-		// Read the quota, this indicates how many microseconds the CPU can be utilized by this cgroup per period
-		handle = fs.OpenFile(CFS_QUOTA, FileFlags::FILE_FLAGS_READ);
-		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-		byte_buffer[read_bytes] = '\0';
-		if (std::sscanf(byte_buffer, "%" SCNd64 "", &quota) != 1) {
-			return physical_cores;
-		}
-
-		// Read the time period, a cgroup can utilize the CPU up to quota microseconds every period
-		handle = fs.OpenFile(CFS_PERIOD, FileFlags::FILE_FLAGS_READ);
-		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-		byte_buffer[read_bytes] = '\0';
-		if (std::sscanf(byte_buffer, "%" SCNd64 "", &period) != 1) {
-			return physical_cores;
-		}
-	} else {
-		// No cgroup quota
-		return physical_cores;
-	}
-	if (quota > 0 && period > 0) {
-		return idx_t(std::ceil((double)quota / (double)period));
-	} else {
-		return physical_cores;
-	}
-}
-
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
-#ifndef DUCKDB_NO_THREADS
+#ifdef DUCKDB_NO_THREADS
+	return 1;
+#else
 	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
-	auto cores_available_per_period = CGroupBandwidthQuota(physical_cores, fs);
-	return MaxValue<idx_t>(cores_available_per_period, 1);
+	if (const char *slurm_cpus = getenv("SLURM_CPUS_ON_NODE")) {
+		idx_t slurm_threads;
+		if (TryCast::Operation<string_t, idx_t>(string_t(slurm_cpus), slurm_threads)) {
+			return MaxValue<idx_t>(slurm_threads, 1);
+		}
+	}
+	return MaxValue<idx_t>(CGroups::GetCPULimit(fs, physical_cores), 1);
 #else
 	return physical_cores;
 #endif
-#else
-	return 1;
 #endif
+}
+
+idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+	// Check SLURM environment variables first
+	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
+	const char *slurm_mem_per_cpu = getenv("SLURM_MEM_PER_CPU");
+
+	if (slurm_mem_per_node) {
+		return ParseMemoryLimitSlurm(slurm_mem_per_node);
+	} else if (slurm_mem_per_cpu) {
+		idx_t mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
+		idx_t num_threads = GetSystemMaxThreads(fs);
+		return mem_per_cpu * num_threads;
+	}
+
+	// Check cgroup memory limit
+	auto cgroup_memory_limit = CGroups::GetMemoryLimit(fs);
+	if (cgroup_memory_limit.IsValid()) {
+		return cgroup_memory_limit.GetIndex();
+	}
+
+	// Fall back to system memory detection
+	auto memory = FileSystem::GetAvailableMemory();
+	if (!memory.IsValid()) {
+		return DBConfigOptions().maximum_memory;
+	}
+	return memory.GetIndex();
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
@@ -449,9 +440,42 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	return NumericCast<idx_t>(multiplier * limit);
 }
 
+idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
+	if (arg.empty()) {
+		return 0;
+	}
+
+	string number_str = arg;
+	idx_t multiplier = 1000LL * 1000LL; // Default to MB if no unit specified
+
+	// Check for SLURM-style suffixes
+	if (arg.back() == 'K' || arg.back() == 'k') {
+		number_str = arg.substr(0, arg.size() - 1);
+		multiplier = 1000LL;
+	} else if (arg.back() == 'M' || arg.back() == 'm') {
+		number_str = arg.substr(0, arg.size() - 1);
+		multiplier = 1000LL * 1000LL;
+	} else if (arg.back() == 'G' || arg.back() == 'g') {
+		number_str = arg.substr(0, arg.size() - 1);
+		multiplier = 1000LL * 1000LL * 1000LL;
+	} else if (arg.back() == 'T' || arg.back() == 't') {
+		number_str = arg.substr(0, arg.size() - 1);
+		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+	}
+
+	// Parse the number
+	double limit = Cast::Operation<string_t, double>(string_t(number_str));
+
+	if (limit < 0) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+
+	return NumericCast<idx_t>(multiplier * limit);
+}
+
 // Right now we only really care about access mode when comparing DBConfigs
 bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
-	return other.access_mode == access_mode;
+	return other.access_mode == access_mode && other.user_options == user_options;
 }
 
 bool DBConfig::operator==(const DBConfig &other) {
@@ -487,7 +511,7 @@ OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType
 	}
 }
 
-const std::string DBConfig::UserAgent() const {
+const string DBConfig::UserAgent() const {
 	auto user_agent = GetDefaultUserAgent();
 
 	if (!options.duckdb_api.empty()) {

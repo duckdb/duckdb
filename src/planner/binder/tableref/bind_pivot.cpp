@@ -538,6 +538,9 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	for (auto &entry : unpivot.entries) {
 		ExtractUnpivotEntries(child_binder, entry, unpivot_entries);
 	}
+	if (unpivot_entries.empty()) {
+		throw BinderException(ref, "UNPIVOT clause must unpivot on at least one column - zero were provided");
+	}
 
 	case_insensitive_set_t handled_columns;
 	case_insensitive_map_t<string> name_map;

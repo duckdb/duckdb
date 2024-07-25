@@ -57,6 +57,11 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		return BindResult(BinderException(function, UnsupportedUnnestMessage()));
 	}
 
+	if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
+		throw InvalidInputException("\"DISTINCT\", \"FILTER\", and \"ORDER BY\" are not "
+		                            "applicable to \"UNNEST\"");
+	}
+
 	idx_t max_depth = 1;
 	if (function.children.size() != 1) {
 		bool has_parameter = false;

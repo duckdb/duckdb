@@ -1,11 +1,12 @@
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/valid_checker.hpp"
+
 #include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/valid_checker.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -56,8 +57,15 @@ SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChu
 		if (client.transaction.IsAutoCommit()) {
 			throw TransactionException("cannot rollback - no transaction is active");
 		} else {
-			// explicitly rollback the current transaction
-			client.transaction.Rollback();
+			// Explicitly rollback the current transaction
+			// If it is because of an invalidated transaction, we need to rollback with an error
+			auto &valid_checker = ValidChecker::Get(client.transaction.ActiveTransaction());
+			if (valid_checker.IsInvalidated()) {
+				ErrorData error(ExceptionType::TRANSACTION, valid_checker.InvalidatedMessage());
+				client.transaction.Rollback(error);
+			} else {
+				client.transaction.Rollback(nullptr);
+			}
 		}
 		break;
 	}

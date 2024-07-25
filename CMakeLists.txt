@@ -1048,6 +1048,14 @@ function(duckdb_extension_load NAME)
     return()
   endif()
 
+  # Running this function in whitelist mode will only build the extensions in the whitelist
+  if (${DUCKDB_EXTENSION_LOAD_WHITELIST_SET})
+    list (FIND DUCKDB_EXTENSION_LOAD_WHITELIST ${EXTENSION_NAME_LOWERCASE} _index)
+    if (${_index} EQUAL -1)
+      return()
+    endif()
+  endif()
+
   list (FIND SKIP_EXTENSIONS ${EXTENSION_NAME_LOWERCASE} _index)
   if (${_index} GREATER -1)
     return()
@@ -1137,6 +1145,15 @@ foreach(EXT IN LISTS BUILD_EXTENSIONS)
     duckdb_extension_load(${EXT})
   endif()
 endforeach()
+
+if (NOT "${CORE_EXTENSIONS}" STREQUAL "")
+    SET(DUCKDB_EXTENSION_LOAD_WHITELIST ${CORE_EXTENSIONS})
+    SET(DUCKDB_EXTENSION_LOAD_WHITELIST_SET 1)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/.github/config/out_of_tree_extensions.cmake)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/.github/config/in_tree_extensions.cmake)
+    SET(DUCKDB_EXTENSION_LOAD_WHITELIST "")
+    SET(DUCKDB_EXTENSION_LOAD_WHITELIST_SET 0)
+endif()
 
 # Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
 foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
