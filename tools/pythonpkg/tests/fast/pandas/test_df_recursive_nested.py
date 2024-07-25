@@ -64,31 +64,31 @@ class TestDFRecursiveNested(object):
             Value(
                 data,
                 """
-        	STRUCT(
-				A STRUCT(
-					a STRUCT(
-						"1" INTEGER[]
-					),
-					b STRUCT(
-						"1" INTEGER[]
-					),
-					c STRUCT(
-						"1" INTEGER[]
-					)
-				),
-				B STRUCT(
-					a STRUCT(
-						"1" INTEGER[]
-					),
-					b STRUCT(
-						"1" INTEGER[]
-					),
-					c STRUCT(
-						"1" INTEGER[]
-					)
-				)
-			)
-		""",
+            STRUCT(
+                A STRUCT(
+                    a STRUCT(
+                        "1" INTEGER[]
+                    ),
+                    b STRUCT(
+                        "1" INTEGER[]
+                    ),
+                    c STRUCT(
+                        "1" INTEGER[]
+                    )
+                ),
+                B STRUCT(
+                    a STRUCT(
+                        "1" INTEGER[]
+                    ),
+                    b STRUCT(
+                        "1" INTEGER[]
+                    ),
+                    c STRUCT(
+                        "1" INTEGER[]
+                    )
+                )
+            )
+        """,
             ),
         )
 
@@ -116,30 +116,21 @@ class TestDFRecursiveNested(object):
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_recursive_stresstest(self, duckdb_cursor, pandas):
-        # LIST(
-        # 	STRUCT(
-        # 		MAP(
-        # 			STRUCT(
-        # 				LIST(
-        # 					INTEGER
-        # 				)
-        # 			)
-        # 			LIST(
-        # 				STRUCT(
-        # 					VARCHAR
-        # 				)
-        # 			)
-        # 		)
-        # 	)
-        # )
         data = [
             {
                 'a': {
                     'key': [
+                        # key 1
                         {'1': [5, 4, 3], '2': [8, 7, 6], '3': [1, 2, 3]},
+                        # key 2
                         {'1': [], '2': NULL, '3': [NULL, 0, NULL]},
                     ],
-                    'value': [[{'A': 'abc', 'B': 'def', 'C': NULL}], [NULL]],
+                    'value': [
+                        # value 1
+                        [{'A': 'abc', 'B': 'def', 'C': NULL}],
+                        # value 2
+                        [NULL],
+                    ],
                 },
                 'b': NULL,
                 'c': {'key': [], 'value': []},
@@ -147,12 +138,30 @@ class TestDFRecursiveNested(object):
         ]
         reference_query = create_reference_query()
         df = pandas.DataFrame([{'a': data}])
+        duckdb_type = """
+            STRUCT(
+                a MAP(
+                    STRUCT(
+                        "1" INTEGER[],
+                        "2" INTEGER[],
+                        "3" INTEGER[]
+                    ),
+                    STRUCT(
+                        A VARCHAR,
+                        B VARCHAR,
+                        C VARCHAR
+                    )[]
+                ),
+                b INTEGER,
+                c MAP(VARCHAR, VARCHAR)
+            )[]
+        """
         check_equal(
             duckdb_cursor,
             df,
             reference_query,
             Value(
                 data,
-                type='STRUCT(a MAP(STRUCT("1" INTEGER[], "2" INTEGER, "3" INTEGER), STRUCT(A VARCHAR, B VARCHAR, C VARCHAR)[]), b INTEGER, c MAP(VARCHAR, VARCHAR))[]',
+                type=duckdb_type,
             ),
         )
