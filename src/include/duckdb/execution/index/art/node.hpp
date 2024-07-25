@@ -25,6 +25,9 @@ enum class NType : uint8_t {
 	NODE_48 = 5,
 	NODE_256 = 6,
 	LEAF_INLINED = 7,
+	NODE_7_LEAF = 8,
+	NODE_15_LEAF = 9,
+	NODE_256_LEAF = 10,
 };
 
 class ART;
@@ -46,6 +49,8 @@ public:
 	static constexpr uint8_t NODE_256_SHRINK_THRESHOLD = 36;
 	//! Node sizes
 	static constexpr uint8_t NODE_4_CAPACITY = 4;
+	static constexpr uint8_t NODE_7_LEAF_CAPACITY = 7;
+	static constexpr uint8_t NODE_15_LEAF_CAPACITY = 15;
 	static constexpr uint8_t NODE_16_CAPACITY = 16;
 	static constexpr uint8_t NODE_48_CAPACITY = 48;
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
@@ -98,11 +103,11 @@ public:
 	const Node *GetNextChild(ART &art, uint8_t &byte) const;
 	//! Get the first child that is greater or equal to the specific byte
 	Node *GetNextChildMutable(ART &art, uint8_t &byte) const;
+	//! Get the next byte that is greater or equal to the specific byte.
+	bool GetNextByte(ART &art, uint8_t &byte) const;
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	string VerifyAndToString(ART &art, const bool only_verify) const;
-	//! Returns the capacity of the node
-	idx_t GetCapacity() const;
 	//! Returns the matching node type for a given count
 	static NType GetARTNodeTypeByCount(const idx_t count);
 
