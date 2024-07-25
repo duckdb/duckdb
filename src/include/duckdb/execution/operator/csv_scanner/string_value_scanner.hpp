@@ -227,6 +227,10 @@ public:
 
 	const string path;
 
+	//! Variable used when trying to figure out where a new segment starts, we must always start from a Valid
+	//! (i.e., non-comment) line.
+	bool first_line_is_comment = false;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result

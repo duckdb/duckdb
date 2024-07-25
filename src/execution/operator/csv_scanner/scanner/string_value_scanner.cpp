@@ -177,12 +177,15 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 			}
 		}
 		if (!all_empty) {
-			done =  AddRow(result, result.position_before_comment);
+			done = AddRow(result, result.position_before_comment);
 		}
 	} else {
 		if (result.cur_col_id != 0) {
-			done =  AddRow(result, result.position_before_comment);
+			done = AddRow(result, result.position_before_comment);
 		}
+	}
+	if (result.number_of_rows == 0) {
+		result.first_line_is_comment = true;
 	}
 	result.comment = false;
 	result.last_position.buffer_pos = buffer_pos + 1;
@@ -778,8 +781,7 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	if (force_error) {
 		result.HandleUnicodeError(result.cur_col_id, result.last_position);
 	}
-	result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
-	                             result.last_position);
+	result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 }
 
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
@@ -1023,12 +1025,10 @@ void StringValueScanner::ProcessExtraRow() {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
 					result.AddRow(result, iterator.pos.buffer_pos);
-					iterator.pos.buffer_pos++;
-					lines_read++;
-					return;
 				}
 				iterator.pos.buffer_pos++;
 				lines_read++;
+				return;
 			}
 			lines_read++;
 			iterator.pos.buffer_pos++;
@@ -1039,12 +1039,10 @@ void StringValueScanner::ProcessExtraRow() {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
 					result.AddRow(result, iterator.pos.buffer_pos);
-					iterator.pos.buffer_pos++;
-					lines_read++;
-					return;
 				}
 				iterator.pos.buffer_pos++;
 				lines_read++;
+				return;
 			} else {
 				result.EmptyLine(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
@@ -1215,10 +1213,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 			                 UnsafeNumericCast<uint32_t>(overbuffer_string.size() - 1 - result.quoted_position));
 			if (result.escaped) {
 				const auto str_ptr = overbuffer_string.c_str() + result.quoted_position;
-				value = RemoveEscape(
-				    str_ptr, overbuffer_string.size() - 2,
-				    state_machine->dialect_options.state_machine_options.escape.GetValue(),
-				    result.parse_chunk.data[result.chunk_col_id]);
+				value = RemoveEscape(str_ptr, overbuffer_string.size() - 2,
+				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+				                     result.parse_chunk.data[result.chunk_col_id]);
 			}
 		} else {
 			value = string_t(overbuffer_string.c_str(), UnsafeNumericCast<uint32_t>(overbuffer_string.size()));
@@ -1409,7 +1406,8 @@ void StringValueScanner::SetStart() {
 		auto &tuples = scan_finder->ParseChunk();
 		line_found = true;
 		if (tuples.number_of_rows != 1 ||
-		    (!tuples.borked_rows.empty() && !state_machine->options.ignore_errors.GetValue())) {
+		    (!tuples.borked_rows.empty() && !state_machine->options.ignore_errors.GetValue()) ||
+		    tuples.first_line_is_comment) {
 			line_found = false;
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
 			// Or if columns don't match, this is not the correct start, we need to skip until the next new line
