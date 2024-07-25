@@ -181,6 +181,8 @@ protected:
 					if (T::IsCommentSet(result)) {
 						if (T::UnsetComment(result, iterator.pos.buffer_pos)) {
 							iterator.pos.buffer_pos++;
+							bytes_read = iterator.pos.buffer_pos - start_pos;
+							lines_read++;
 							return;
 						}
 					} else {
@@ -207,6 +209,8 @@ protected:
 					if (T::IsCommentSet(result)) {
 						if (T::UnsetComment(result, iterator.pos.buffer_pos)) {
 							iterator.pos.buffer_pos++;
+							bytes_read = iterator.pos.buffer_pos - start_pos;
+							lines_read++;
 							return;
 						}
 					} else {
