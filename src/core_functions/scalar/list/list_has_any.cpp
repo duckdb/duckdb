@@ -41,9 +41,9 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 	Vector l_sortkey_vec(LogicalType::BLOB, l_size);
 	Vector r_sortkey_vec(LogicalType::BLOB, r_size);
 
-	const OrderModifiers order_modifies(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-	CreateSortKeyHelpers::CreateSortKey(ListVector::GetEntry(l_vec), l_size, order_modifies, l_sortkey_vec);
-	CreateSortKeyHelpers::CreateSortKey(ListVector::GetEntry(r_vec), r_size, order_modifies, r_sortkey_vec);
+	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	CreateSortKeyHelpers::CreateSortKey(ListVector::GetEntry(l_vec), l_size, order_modifiers, l_sortkey_vec);
+	CreateSortKeyHelpers::CreateSortKey(ListVector::GetEntry(r_vec), r_size, order_modifiers, r_sortkey_vec);
 
 	const auto l_validity_ptr = &FlatVector::Validity(ListVector::GetEntry(l_vec));
 	const auto r_validity_ptr = &FlatVector::Validity(ListVector::GetEntry(r_vec));
