@@ -531,11 +531,8 @@ public:
 	using TaskPtr = optional_ptr<Task>;
 
 	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
-	void BeginHashGroup();
-	void Sink();
-	void Finalize();
-	bool GetData(DataChunk &chunk);
-	void FinishHashGroup(TaskPtr prev_task);
+
+	bool ExecuteTask(DataChunk &chunk);
 
 	//! The shared source state
 	WindowGlobalSourceState &gsource;
@@ -551,6 +548,11 @@ public:
 	DataChunk input_chunk;
 	//! Buffer for window results
 	DataChunk output_chunk;
+
+protected:
+	void Sink();
+	void Finalize();
+	bool GetData(DataChunk &chunk);
 };
 
 WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(WindowGlobalSinkState &gsink) {
@@ -571,26 +573,16 @@ WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(WindowGlobalS
 	return gestates;
 }
 
-void WindowLocalSourceState::BeginHashGroup() {
-	if (!task) {
-		return;
-	}
-
-	auto &gsink = gsource.gsink;
-	auto &gpart = *gsink.global_partition;
-	window_hash_group = gpart.window_hash_groups[task->group_idx].get();
-
-	// Create the executor state for each function
-	// These can be large so we defer building them until we are ready.
-	window_hash_group->Initialize(gsink);
-}
-
 void WindowLocalSourceState::Sink() {
+	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::SINK);
 
 	auto &gsink = gsource.gsink;
 	const auto &executors = gsink.executors;
-	auto &gestates = window_hash_group->gestates;
+
+	// Create the global state for each function
+	// These can be large so we defer building them until we are ready.
+	auto &gestates = window_hash_group->Initialize(gsink);
 
 	//	Set up the local states
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
@@ -615,7 +607,6 @@ void WindowLocalSourceState::Sink() {
 				break;
 			}
 
-			//	TODO: Stagger functions to reduce contention?
 			for (idx_t w = 0; w < executors.size(); ++w) {
 				executors[w]->Sink(input_chunk, input_idx, window_hash_group->count, *gestates[w], *local_states[w]);
 			}
@@ -630,6 +621,7 @@ void WindowLocalSourceState::Sink() {
 }
 
 void WindowLocalSourceState::Finalize() {
+	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::FINALIZE);
 
 	// Finalize all the executors.
@@ -700,42 +692,26 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 	}
 }
 
-void WindowLocalSourceState::FinishHashGroup(TaskPtr prev_task) {
-	scanner.reset();
-	if (window_hash_group && prev_task && prev_task->stage == WindowGroupStage::GETDATA) {
-		auto &local_states = window_hash_group->thread_states.at(prev_task->thread_idx);
-		local_states.clear();
+bool WindowLocalSourceState::ExecuteTask(DataChunk &result) {
+	auto &gsink = gsource.gsink;
+
+	//	We aren't done with a task until its memory has been consumed.
+	if (task && task->begin_idx >= task->end_idx) {
+		gsource.FinishTask(task);
 	}
 
-	gsource.FinishTask(prev_task);
-}
-
-bool WindowLocalSourceState::GetData(DataChunk &result) {
-	// Are we done with this scanner?
-	if (scanner && !scanner->Remaining()) {
-		scanner.reset();
-		++task->begin_idx;
-	}
-
-	//	Are we done with this task?
 	while (!task || task->begin_idx >= task->end_idx || task->stage != WindowGroupStage::GETDATA) {
-		auto prev_task = task;
-		while (!gsource.TryNextTask(task)) {
-			FinishHashGroup(prev_task);
+		if (!gsource.TryNextTask(task)) {
 			return false;
-		}
-
-		const auto new_group = (!task || !prev_task || task->group_idx != prev_task->group_idx);
-		// Release all the old group's data if we started a new group
-		if (new_group) {
-			FinishHashGroup(prev_task);
-			BeginHashGroup();
 		}
 
 		// Are we done?
 		if (!task) {
 			return true;
 		}
+
+		// Update the hash group
+		window_hash_group = gsink.global_partition->window_hash_groups[task->group_idx].get();
 
 		// Process the new state
 		switch (task->stage) {
@@ -755,6 +731,10 @@ bool WindowLocalSourceState::GetData(DataChunk &result) {
 		}
 	}
 
+	return GetData(result);
+}
+
+bool WindowLocalSourceState::GetData(DataChunk &result) {
 	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
 
 	if (!scanner) {
@@ -787,6 +767,17 @@ bool WindowLocalSourceState::GetData(DataChunk &result) {
 	}
 	for (idx_t col_idx = 0; col_idx < output_chunk.ColumnCount(); col_idx++) {
 		result.data[out_idx++].Reference(output_chunk.data[col_idx]);
+	}
+
+	// Are we done with this scanner?
+	if (!scanner->Remaining()) {
+		scanner.reset();
+		++task->begin_idx;
+	}
+
+	// Are we done with this task?
+	if (task->begin_idx == task->end_idx) {
+		local_states.clear();
 	}
 	result.Verify();
 
@@ -863,7 +854,7 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 #if 1
 	//	Debugging variant
 	try {
-		while (!lsource.GetData(chunk)) {
+		while (!lsource.ExecuteTask(chunk)) {
 			TaskScheduler::GetScheduler(context.client).YieldThread();
 		}
 	} catch (...) {
