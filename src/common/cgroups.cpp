@@ -70,7 +70,7 @@ optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
 string CGroups::ReadCGroupPath(FileSystem &fs, const char *cgroup_file) {
 	auto handle = fs.OpenFile(cgroup_file, FileFlags::FILE_FLAGS_READ);
 	char buffer[1024];
-	idx_t bytes_read = fs.Read(*handle, buffer, sizeof(buffer) - 1);
+	auto bytes_read = fs.Read(*handle, buffer, sizeof(buffer) - 1);
 	buffer[bytes_read] = '\0';
 
 	// For cgroup v2, we're looking for a single line with "0::/path"
@@ -86,7 +86,7 @@ string CGroups::ReadCGroupPath(FileSystem &fs, const char *cgroup_file) {
 string CGroups::ReadMemoryCGroupPath(FileSystem &fs, const char *cgroup_file) {
 	auto handle = fs.OpenFile(cgroup_file, FileFlags::FILE_FLAGS_READ);
 	char buffer[1024];
-	idx_t bytes_read = fs.Read(*handle, buffer, sizeof(buffer) - 1);
+	auto bytes_read = fs.Read(*handle, buffer, sizeof(buffer) - 1);
 	buffer[bytes_read] = '\0';
 
 	// For cgroup v1, we're looking for a line with "memory:/path"
@@ -107,7 +107,7 @@ string CGroups::ReadMemoryCGroupPath(FileSystem &fs, const char *cgroup_file) {
 optional_idx CGroups::ReadCGroupValue(FileSystem &fs, const char *file_path) {
 	auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
 	char buffer[100];
-	idx_t bytes_read = fs.Read(*handle, buffer, 99);
+	auto bytes_read = fs.Read(*handle, buffer, 99);
 	buffer[bytes_read] = '\0';
 
 	idx_t value;
