@@ -2814,7 +2814,7 @@ DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info i
 //===--------------------------------------------------------------------===//
 
 /*!
-Returns the root node from the profiling information. Returns NULL if profiling is not enabled
+Returns the root node of the profiling information. Returns NULL if profiling is not enabled.
 
 * @param connection A connection object
 * @return A profiling information object
@@ -2827,9 +2827,9 @@ enabled, nullptr is returned.
 
 * @param info A profiling information object
 * @param key The name of the metric setting to return the value for
-* @return The value of the metric setting. Must be freed with `duckdb_free`.
+* @return The value of the metric setting. Must be freed with `duckdb_destroy_value`.
 */
-DUCKDB_API const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
+DUCKDB_API duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
 
 /*!
 Returns the number of children in the current profiling info node.

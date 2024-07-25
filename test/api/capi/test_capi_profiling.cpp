@@ -20,19 +20,17 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 		auto value = duckdb_profiling_info_get_value(profiling_info, settings[i].c_str());
 		if (value != nullptr) {
 			if (settings[i] == "EXTRA_INFO") {
-				REQUIRE(value[0] == '\"');
-				REQUIRE(value[strlen(value) - 1] == '\"');
-				duckdb_free((void *)value);
+				duckdb_destroy_value(&value);
 				continue;
 			}
 			double result = 0;
 			try {
-				result = std::stod(value);
+				result = std::stod(duckdb_get_varchar(value));
 			} catch (std::invalid_argument &e) {
 				REQUIRE(false);
 			}
 
-			duckdb_free((void *)value);
+			duckdb_destroy_value(&value);
 			REQUIRE(result >= 0);
 		}
 	}
