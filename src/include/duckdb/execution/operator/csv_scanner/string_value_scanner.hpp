@@ -172,6 +172,7 @@ public:
 	LinePosition last_position;
 	char *buffer_ptr;
 	idx_t buffer_size;
+	idx_t position_before_comment;
 
 	//! CSV Options that impact the parsing
 	const uint32_t number_of_columns;
@@ -244,6 +245,7 @@ public:
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
+	static inline void SetComment(StringValueResult &result, idx_t buffer_pos);
 	static inline bool UnsetComment(StringValueResult &result, idx_t buffer_pos);
 
 	DataChunk &ToChunk();

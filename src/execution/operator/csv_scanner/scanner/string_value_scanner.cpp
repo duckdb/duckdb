@@ -150,7 +150,7 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 		}
 		if (error) {
 			// We error pointing to the current value error.
-			current_errors.Insert(CSVErrorType::TOO_MANY_COLUMNS, cur_col_id, chunk_col_id, last_position);
+			current_errors.Insert(TOO_MANY_COLUMNS, cur_col_id, chunk_col_id, last_position);
 			cur_col_id++;
 		}
 		// We had an error
@@ -159,7 +159,30 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 	return false;
 }
 
+void StringValueResult::SetComment(StringValueResult &result, idx_t buffer_pos) {
+	if (!result.comment) {
+		result.position_before_comment = buffer_pos;
+		result.comment = true;
+	}
+}
+
 bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos) {
+	if (result.last_position.buffer_pos < result.position_before_comment) {
+		bool all_empty = true;
+		for (idx_t i = result.last_position.buffer_pos; i < result.position_before_comment; i++) {
+			if (result.buffer_ptr[i] != ' ') {
+				all_empty = false;
+				break;
+			}
+		}
+		if (!all_empty) {
+			AddRow(result, result.position_before_comment);
+		}
+	} else {
+		if (result.cur_col_id != 0) {
+			AddRow(result, result.position_before_comment);
+		}
+	}
 	result.comment = false;
 	result.last_position.buffer_pos = buffer_pos + 1;
 	result.cur_col_id = 0;
@@ -645,11 +668,11 @@ bool StringValueResult::AddRowInternal() {
 	current_line_position.begin = current_line_position.end;
 	current_line_position.end = current_line_start;
 	if (current_line_size > state_machine.options.maximum_line_size) {
-		current_errors.Insert(CSVErrorType::MAXIMUM_LINE_SIZE, 1, chunk_col_id, last_position, current_line_size);
+		current_errors.Insert(MAXIMUM_LINE_SIZE, 1, chunk_col_id, last_position, current_line_size);
 	}
 	if (!state_machine.options.null_padding) {
 		for (idx_t col_idx = cur_col_id; col_idx < number_of_columns; col_idx++) {
-			current_errors.Insert(CSVErrorType::TOO_FEW_COLUMNS, col_idx - 1, chunk_col_id, last_position);
+			current_errors.Insert(TOO_FEW_COLUMNS, col_idx - 1, chunk_col_id, last_position);
 		}
 	}
 
@@ -727,7 +750,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 	if (result.last_position.buffer_pos <= buffer_pos) {
 		// We add the value
 		if (result.quoted) {
-			StringValueResult::AddQuotedValue(result, buffer_pos);
+			AddQuotedValue(result, buffer_pos);
 		} else {
 			result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
 			                        buffer_pos - result.last_position.buffer_pos);
@@ -1057,7 +1080,7 @@ void StringValueScanner::ProcessExtraRow() {
 			}
 			break;
 		case CSVState::COMMENT:
-			result.SetComment(result);
+			result.SetComment(result, iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
 			while (state_machine->transition_array
 			           .skip_comment[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&

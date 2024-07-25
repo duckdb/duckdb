@@ -31,14 +31,14 @@ public:
 	static inline void SetEscaped(ScannerResult &result) {
 		result.escaped = true;
 	}
-	static inline void SetComment(ScannerResult &result) {
+	static inline void SetComment(ScannerResult &result, idx_t buffer_pos) {
 		result.comment = true;
 	}
 	static inline bool UnsetComment(ScannerResult &result, idx_t buffer_pos) {
 		result.comment = false;
 		return false;
 	}
-	static inline bool IsCommentSet(ScannerResult &result) {
+	static inline bool IsCommentSet(const ScannerResult &result) {
 		return result.comment == true;
 	}
 
@@ -54,7 +54,7 @@ public:
 
 	CSVStateMachine &state_machine;
 
-	void Print() {
+	void Print() const {
 		state_machine.Print();
 	}
 
@@ -85,15 +85,15 @@ public:
 
 	void SetIterator(const CSVIterator &it);
 
-	idx_t GetBoundaryIndex() {
+	idx_t GetBoundaryIndex() const {
 		return iterator.GetBoundaryIdx();
 	}
 
-	idx_t GetLinesRead() {
+	idx_t GetLinesRead() const {
 		return lines_read;
 	}
 
-	CSVPosition GetIteratorPosition() {
+	CSVPosition GetIteratorPosition() const {
 		return iterator.pos;
 	}
 
@@ -142,7 +142,7 @@ protected:
 	//! Initializes the scanner
 	virtual void Initialize();
 
-	inline bool ContainsZeroByte(uint64_t v) {
+	inline static bool ContainsZeroByte(uint64_t v) {
 		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
 	}
 
@@ -259,7 +259,8 @@ protected:
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
 					if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
 					                     (value ^ state_machine->transition_array.new_line) &
-					                     (value ^ state_machine->transition_array.carriage_return))) {
+					                     (value ^ state_machine->transition_array.carriage_return) &
+					                     (value ^ state_machine->transition_array.comment))) {
 						break;
 					}
 					iterator.pos.buffer_pos += 8;
@@ -276,7 +277,7 @@ protected:
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::COMMENT: {
-				T::SetComment(result);
+				T::SetComment(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
 					uint64_t value =
