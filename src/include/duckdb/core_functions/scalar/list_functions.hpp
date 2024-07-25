@@ -324,7 +324,7 @@ struct UnpivotListFun {
 struct ListHasAnyFun {
 	static constexpr const char *Name = "list_has_any";
 	static constexpr const char *Parameters = "l1, l2";
-	static constexpr const char *Description = "Returns true if any elements exist is both lists";
+	static constexpr const char *Description = "Returns true if the lists have any element in common. NULLs are ignored.";
 	static constexpr const char *Example = "list_has_any([1, 2, 3], [2, 3, 4])";
 
 	static ScalarFunction GetFunction();

@@ -144,7 +144,7 @@
     {
         "name": "list_has_any",
         "parameters": "l1, l2",
-        "description": "Returns true if any elements exist is both lists",
+        "description": "Returns true if the lists have any element in common. NULLs are ignored.",
         "example": "list_has_any([1, 2, 3], [2, 3, 4])",
         "type": "scalar_function",
         "aliases": ["array_has_any", "&&"]
