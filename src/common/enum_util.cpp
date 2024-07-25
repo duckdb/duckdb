@@ -2052,6 +2052,8 @@ const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
 		return "TEXT";
 	case ExplainFormat::JSON:
 		return "JSON";
+	case ExplainFormat::HTML:
+		return "HTML";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2067,6 +2069,9 @@ ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "JSON")) {
 		return ExplainFormat::JSON;
+	}
+	if (StringUtil::Equals(value, "HTML")) {
+		return ExplainFormat::HTML;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
