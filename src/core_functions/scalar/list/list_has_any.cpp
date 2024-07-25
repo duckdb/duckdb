@@ -16,8 +16,15 @@ static unique_ptr<FunctionData> ListHasAnyBind(ClientContext &context, ScalarFun
 	const auto right_type = ListType::GetChildType(arguments[1]->return_type);
 
 	if (left_type != LogicalType::SQLNULL && right_type != LogicalType::SQLNULL && left_type != right_type) {
-		throw BinderException("ListHasAny: left and right list types must be the same, got '%s' and '%s'",
-		                      left_type.ToString(), right_type.ToString());
+		LogicalType common_type;
+		if (LogicalType::TryGetMaxLogicalType(context, arguments[0]->return_type, arguments[1]->return_type,
+		                                      common_type)) {
+			arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), common_type);
+			arguments[1] = BoundCastExpression::AddCastToType(context, std::move(arguments[1]), common_type);
+		} else {
+			throw BinderException("ListHasAny: cannot compare lists of different types: '%s' and '%s'",
+			                      left_type.ToString(), right_type.ToString());
+		}
 	}
 
 	return nullptr;
