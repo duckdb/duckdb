@@ -1,0 +1,30 @@
+# name: test/sql/copy/csv/test_date_sniffer.test
+# description: Test sniffer bug from date detection is issue https://github.com/duckdb/duckdb/issues/13121
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+FROM 'data/csv/bad_date.csv'
+----
+2016-10-03	vst_OSBS_2016	41101
+
+query I
+SELECT columns[1].type FROM sniff_csv('data/csv/bad_date.csv')
+----
+DATE
+
+query II
+FROM 'data/csv/bad_date_2.csv'
+----
+2023-12-03	2.2.2
+2023-04-06	2.2.0
+2023-04-06	2.2.0
+2023-04-06	2.2.0
+2022-11-09	2.2.0
+
+query I
+SELECT columns[1].type FROM sniff_csv('data/csv/bad_date_2.csv')
+----
+DATE

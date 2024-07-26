@@ -19,6 +19,7 @@ struct DateTimestampSniffing {
 	bool initialized = false;
 	bool had_match = false;
 	vector<string> format;
+	idx_t initial_size;
 };
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
@@ -87,6 +88,12 @@ struct HeaderValue {
 	}
 	bool is_null = false;
 	string value;
+};
+
+//! Struct used to know if we have a date or timestamp type already identified in this CSV File
+struct HasType {
+	bool date = false;
+	bool timestamp = false;
 };
 
 //! Sniffer that detects Header, Dialect and Types of CSV Files
