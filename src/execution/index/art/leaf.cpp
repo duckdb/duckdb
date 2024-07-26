@@ -36,7 +36,7 @@ void MergeInlined(ART &art, Node &l_node, Node &r_node) {
 	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, logical_type, r_node.GetRowId());
 
 	// Insert the key.
-	art.Insert(l_node, key, 0, key);
+	art.Insert(l_node, key, 0, key, l_node.IsGate());
 	r_node.Clear();
 }
 
@@ -74,8 +74,8 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, reference<const ARTKey> row_i
 
 	// Insert both row IDs into the nested ART.
 	// Row IDs are always unique.
-	art.Insert(node, inlined_row_id_key, 0, inlined_row_id_key);
-	art.Insert(node, row_id, 0, row_id);
+	art.Insert(node, inlined_row_id_key, 0, inlined_row_id_key, true);
+	art.Insert(node, row_id, 0, row_id, true);
 	node.SetGate();
 }
 
@@ -114,7 +114,7 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, NType::LEAF);
 		for (idx_t i = 0; i < leaf.count; i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, logical_type, leaf.row_ids[i]);
-			art.Insert(root, row_id, 0, row_id);
+			art.Insert(root, row_id, 0, row_id, true);
 		}
 		leaf_ref = leaf.ptr;
 	}

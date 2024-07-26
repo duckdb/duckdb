@@ -35,9 +35,7 @@ public:
 	// Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
 	//! FixedSizeAllocator count of the ART. One allocator per node type.
-	static constexpr uint8_t ALLOCATOR_COUNT = 6;
-	//! The index of the LEAF allocator.
-	static constexpr idx_t LEAF_ALLOCATOR_IDX = 1;
+	static constexpr uint8_t ALLOCATOR_COUNT = 9;
 
 public:
 	//! Constructs an ART.
@@ -124,14 +122,16 @@ public:
 	//! Find the node with a matching key, or return nullptr if not found
 	optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
 	//! Insert a key into the tree.
-	bool Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key);
+	bool Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key,
+	            const bool inside_gate);
 	//! Erase a key from the tree (non-inlined) or erase the leaf itself (inlined).
 	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key,
 	           bool inside_gate);
 
 private:
 	//! Insert a row ID into an empty node.
-	bool InsertIntoEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key);
+	void InsertIntoEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key,
+	                         const bool inside_gate);
 
 	//! Returns all row IDs greater than or equal to the search key.
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
@@ -161,7 +161,7 @@ private:
 	//! STABLE STORAGE NOTE: This is for old storage files, to deserialize the allocators of the ART
 	void Deserialize(const BlockPointer &pointer);
 	//! Initializes the serialization of the index by combining the allocator data onto partial blocks
-	void WritePartialBlocks();
+	void WritePartialBlocks(const bool v1_0_0_storage);
 
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;

@@ -273,7 +273,6 @@ FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
 }
 
 void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_manager) {
-	RemoveEmptyBuffers();
 	for (auto &buffer : buffers) {
 		buffer.second.Serialize(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
 	}

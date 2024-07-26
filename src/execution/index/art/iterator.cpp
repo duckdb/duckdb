@@ -47,23 +47,40 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 	bool has_next;
 	do {
 		// An empty upper bound indicates that no upper bound exists.
-		// Any dedicated nested leaf scans always have an empty upper bound.
 		if (!upper_bound.Empty() && !inside_gate) {
 			if (current_key.GreaterThan(upper_bound, equal)) {
 				return true;
 			}
 		}
 
-		if (last_leaf.GetType() == NType::LEAF_INLINED) {
+		switch (last_leaf.GetType()) {
+		case NType::LEAF_INLINED:
 			if (row_ids.size() + 1 > max_count) {
 				return false;
 			}
 			row_ids.push_back(last_leaf.GetRowId());
-		} else {
-			D_ASSERT(last_leaf.GetType() == NType::LEAF);
+			break;
+		case NType::LEAF:
 			if (!Leaf::DeprecatedGetRowIds(*art, last_leaf, row_ids, max_count)) {
 				return false;
 			}
+			break;
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF: {
+			uint8_t last_byte = 0;
+			while (last_leaf.GetNextByte(*art, last_byte)) {
+				if (row_ids.size() + 1 > max_count) {
+					return false;
+				}
+				row_id[sizeof(row_t) - 1] = last_byte;
+				ARTKey key(&row_id[0], sizeof(row_t));
+				row_ids.push_back(key.GetRowID());
+			}
+			break;
+		}
+		default:
+			throw InternalException("Invalid leaf type for index scan.");
 		}
 
 		has_next = Next();
@@ -75,7 +92,7 @@ void Iterator::FindMinimum(const Node &node) {
 	D_ASSERT(node.HasMetadata());
 
 	// Found the minimum.
-	if (node.GetType() == NType::LEAF || node.GetType() == NType::LEAF_INLINED) {
+	if (node.IsLeaf()) {
 		last_leaf = node;
 		return;
 	}
@@ -84,6 +101,7 @@ void Iterator::FindMinimum(const Node &node) {
 	if (node.IsGate()) {
 		D_ASSERT(!inside_gate);
 		inside_gate = true;
+		nested_depth = 0;
 	}
 
 	// Traverse the prefix.
@@ -91,6 +109,8 @@ void Iterator::FindMinimum(const Node &node) {
 		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			current_key.Push(prefix.data[i]);
+			row_id[nested_depth] = prefix.data[i];
+			nested_depth++;
 		}
 		nodes.emplace(node, 0);
 		return FindMinimum(prefix.ptr);
@@ -103,6 +123,10 @@ void Iterator::FindMinimum(const Node &node) {
 
 	// Recurse on the leftmost node.
 	current_key.Push(byte);
+	if (inside_gate) {
+		row_id[nested_depth] = byte;
+		nested_depth++;
+	}
 	nodes.emplace(node, byte);
 	FindMinimum(*next);
 }
@@ -112,8 +136,8 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 		return false;
 	}
 
-	// We found any leaf node.
-	if (node.IsAnyLeaf()) {
+	// We found any leaf node, or a gate.
+	if (node.IsLeaf() || node.IsGate()) {
 		D_ASSERT(!inside_gate);
 		D_ASSERT(current_key.Size() == key.len);
 		if (!equal && current_key.Contains(key)) {
@@ -184,8 +208,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 bool Iterator::Next() {
 	while (!nodes.empty()) {
 		auto &top = nodes.top();
-		D_ASSERT(top.node.GetType() != NType::LEAF_INLINED);
-		D_ASSERT(top.node.GetType() != NType::LEAF);
+		D_ASSERT(!top.node.IsLeaf());
 
 		if (top.node.GetType() == NType::PREFIX) {
 			PopNode();
@@ -227,6 +250,9 @@ void Iterator::PopNode() {
 	// Pop the byte and the node.
 	if (nodes.top().node.GetType() != NType::PREFIX) {
 		current_key.Pop(1);
+		if (inside_gate) {
+			nested_depth--;
+		}
 		nodes.pop();
 		return;
 	}
@@ -235,6 +261,9 @@ void Iterator::PopNode() {
 	auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, NType::PREFIX);
 	auto prefix_byte_count = prefix.data[Node::PREFIX_SIZE];
 	current_key.Pop(prefix_byte_count);
+	if (inside_gate) {
+		nested_depth -= prefix_byte_count;
+	}
 	nodes.pop();
 }
 

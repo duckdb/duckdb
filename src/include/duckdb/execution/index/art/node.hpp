@@ -16,7 +16,6 @@
 
 namespace duckdb {
 
-// classes
 enum class NType : uint8_t {
 	PREFIX = 1,
 	LEAF = 2,
@@ -25,9 +24,10 @@ enum class NType : uint8_t {
 	NODE_48 = 5,
 	NODE_256 = 6,
 	LEAF_INLINED = 7,
-	NODE_7_LEAF = 8,
-	NODE_15_LEAF = 9,
-	NODE_256_LEAF = 10,
+	PREFIX_INLINED = 8,
+	NODE_7_LEAF = 9,
+	NODE_15_LEAF = 10,
+	NODE_256_LEAF = 11,
 };
 
 class ART;
@@ -35,28 +35,26 @@ class Prefix;
 class MetadataReader;
 class MetadataWriter;
 
-// structs
 struct BlockPointer;
 struct ARTFlags;
 struct MetaBlockPointer;
 
 //! The Node is the pointer class of the ART index.
-//! It inherits from the IndexPointer, and adds ART-specific functionality
+//! It inherits from the IndexPointer, and adds ART-specific functionality.
 class Node : public IndexPointer {
 public:
-	//! Node thresholds
 	static constexpr uint8_t NODE_48_SHRINK_THRESHOLD = 12;
 	static constexpr uint8_t NODE_256_SHRINK_THRESHOLD = 36;
-	//! Node sizes
+
 	static constexpr uint8_t NODE_4_CAPACITY = 4;
 	static constexpr uint8_t NODE_7_LEAF_CAPACITY = 7;
 	static constexpr uint8_t NODE_15_LEAF_CAPACITY = 15;
 	static constexpr uint8_t NODE_16_CAPACITY = 16;
 	static constexpr uint8_t NODE_48_CAPACITY = 48;
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
-	//! Other constants
+
 	static constexpr uint8_t EMPTY_MARKER = 48;
-	static constexpr uint8_t LEAF_SIZE = 4;
+	static constexpr uint8_t LEAF_SIZE = 4; // Deprecated.
 	static constexpr uint8_t PREFIX_SIZE = 15;
 	static constexpr idx_t AND_ROW_ID = 0x00FFFFFFFFFFFFFF;
 
@@ -64,12 +62,12 @@ public:
 	static constexpr uint8_t AND_GATE = 0x80;
 
 public:
-	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
+	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it.
 	static void New(ART &art, Node &node, const NType type);
-	//! Free the node (and its subtree)
+	//! Free the node (and its subtree).
 	static void Free(ART &art, Node &node);
 
-	//! Get references to the allocator
+	//! Get a reference to the allocator.
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
 
 	//! Get an immutable reference to the node.
@@ -88,36 +86,35 @@ public:
 		return GetAllocator(art, type).GetInMemoryPtr<NODE>(ptr);
 	}
 
-	//! Replace the child node at byte
+	//! Replace the child node at byte.
 	void ReplaceChild(const ART &art, const uint8_t byte, const Node child) const;
-	//! Insert the child node at byte
+	//! Insert the child node at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
-	//! Delete the child node at byte
+	//! Delete the child node at byte.
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
-	//! Get the child (immutable) for the respective byte in the node
+	//! Get the immutable child at byte.
 	const Node *GetChild(ART &art, const uint8_t byte) const;
-	//! Get the child for the respective byte in the node
+	//! Get the child at byte.
 	Node *GetChildMutable(ART &art, const uint8_t byte) const;
-	//! Get the first child (immutable) that is greater or equal to the specific byte
+	//! Get the first immutable child greater or equal to the byte.
 	const Node *GetNextChild(ART &art, uint8_t &byte) const;
-	//! Get the first child that is greater or equal to the specific byte
+	//! Get the first child greater or equal to the byte.
 	Node *GetNextChildMutable(ART &art, uint8_t &byte) const;
-	//! Get the next byte that is greater or equal to the specific byte.
+	//! Get the next byte greater or equal to the byte.
 	bool GetNextByte(ART &art, uint8_t &byte) const;
 
-	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
+	//! Returns the string representation of the node, if only_verify is false.
+	//! Else, it traverses and verifies the node and its subtree.
 	string VerifyAndToString(ART &art, const bool only_verify) const;
-	//! Returns the matching node type for a given count
+	//! Returns the matching node type for a given count.
 	static NType GetARTNodeTypeByCount(const idx_t count);
 
-	//! Initializes a merge by incrementing the buffer IDs of a node and its subtree
+	//! Initializes a merge by incrementing the buffer IDs of a node and its subtree.
 	void InitializeMerge(ART &art, const ARTFlags &flags);
-	//! Merge another node into this node
+	//! Merge another node into this node.
 	bool Merge(ART &art, Node &other, const bool inside_gate);
-	//! Merge two nodes by first resolving their prefixes
-	bool ResolvePrefixes(ART &art, Node &other, const bool inside_gate);
-	//! Merge two nodes that have no prefix or the same prefix
+	//! Merge another node into this node.
 	bool MergeInternal(ART &art, Node &other, const bool inside_gate);
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
@@ -126,10 +123,18 @@ public:
 	//! Transform the node storage to deprecated storage.
 	static void TransformToDeprecated(ART &art, Node &node);
 
-	//! Returns true, if the node is a LEAF, LEAF_INLINED, or gate node.
-	inline bool IsAnyLeaf() const {
-		auto node_type = GetType();
-		return IsGate() || node_type == NType::LEAF_INLINED || node_type == NType::LEAF;
+	//! Returns true, if the node is any leaf node.
+	inline bool IsLeaf() const {
+		switch (GetType()) {
+		case NType::LEAF_INLINED:
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+		case NType::LEAF:
+			return true;
+		default:
+			return false;
+		}
 	}
 
 	//! Get the row ID (8th to 63rd bit)
@@ -159,5 +164,13 @@ public:
 	inline void operator=(const IndexPointer &ptr) {
 		Set(ptr.Get());
 	}
+
+private:
+	//! Merge two nodes that have no prefix or the same prefix
+	bool MergeNodes(ART &art, Node &other, const bool inside_gate);
+	//! Reduce r_node's prefix and insert it into l_node, or recurse.
+	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos, bool inside_gate);
+	//! Split l_node and reduce r_node, and insert them into a new Node4.
+	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos);
 };
 } // namespace duckdb

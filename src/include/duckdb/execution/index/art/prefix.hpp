@@ -15,28 +15,39 @@ namespace duckdb {
 
 class ARTKey;
 
-//! The Prefix is a special node type that contains up to PREFIX_SIZE bytes, one byte for the count,
-//! and a Node pointer. This pointer either points to a prefix node or another Node.
+//! PrefixInlined is a special node containing up to PREFIX_SIZE bytes and a byte for the count.
+class PrefixInlined {
+public:
+	PrefixInlined() = delete;
+	PrefixInlined(const PrefixInlined &) = delete;
+	PrefixInlined &operator=(const PrefixInlined &) = delete;
+
+	uint8_t data[Node::PREFIX_SIZE + 1];
+
+public:
+	static void New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, uint32_t count);
+};
+
+//! Prefix is a special node type containing up to PREFIX_SIZE bytes and one byte for the count.
+//! It also contains a Node pointer.
 class Prefix {
 public:
 	Prefix() = delete;
 	Prefix(const Prefix &) = delete;
 	Prefix &operator=(const Prefix &) = delete;
 
-	//! Up to PREFIX_SIZE bytes of prefix data and the count
 	uint8_t data[Node::PREFIX_SIZE + 1];
-	//! A pointer to the next Node
 	Node ptr;
 
 public:
-	//! Get a new empty prefix node, might cause a new buffer allocation
+	//! Get a new empty prefix node.
 	static Prefix &New(ART &art, Node &node);
-	//! Create a new prefix node containing a single byte and a pointer to a next node
+	//! Get a new prefix node containing a single byte and a pointer the next node.
 	static Prefix &New(ART &art, Node &node, uint8_t byte, const Node &next = Node());
-	//! Get a new chain of prefix nodes, might cause new buffer allocations,
-	//! with the node parameter holding the tail of the chain
+	//! Get a new chain of prefix nodes. The node parameter holds the tail of the chain.
 	static void New(ART &art, reference<Node> &node, const ARTKey &key, const uint32_t depth, uint32_t count);
-	//! Free the node (and its subtree)
+
+	//! Free the node and its subtree.
 	static void Free(ART &art, Node &node);
 
 	//! Initializes a merge by incrementing the buffer ID of the prefix and its child node(s)
@@ -61,22 +72,16 @@ public:
 	                     const bool inside_gate);
 
 	//! Returns the byte at position.
-	static inline uint8_t GetByte(const ART &art, const Node &prefix_node, const idx_t position) {
-		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, NType::PREFIX);
-		D_ASSERT(position < Node::PREFIX_SIZE);
-		D_ASSERT(position < prefix.data[Node::PREFIX_SIZE]);
-		return prefix.data[position];
-	}
+	static uint8_t GetByte(const ART &art, const Node &node, const idx_t pos);
 
-	//! Removes the first n bytes from the prefix and shifts all subsequent bytes in the
-	//! prefix node(s) by n. Frees empty prefix nodes.
-	static void Reduce(ART &art, Node &prefix_node, const idx_t n);
-
-	//! Splits the prefix at position.
+	//! Removes the first n bytes from the prefix.
+	//! Shifts all subsequent bytes by n. Frees empty prefix nodes.
+	static void Reduce(ART &art, Node &node, const idx_t n);
+	//! Splits the prefix at pos.
 	//! prefix_node points to the node that replaces the split byte.
 	//! child_node points to the remaining node after the split.
 	//! Returns true, if a gate was freed.
-	static bool Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
+	static bool Split(ART &art, Node &node, Node &child, idx_t pos);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);

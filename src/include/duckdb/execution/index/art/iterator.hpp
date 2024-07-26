@@ -56,12 +56,10 @@ private:
 class Iterator {
 public:
 	explicit Iterator(ART &art) : art(art), inside_gate(false) {};
-
 	//! Holds the current key leading down to the top node on the stack.
 	IteratorKey current_key;
-	//! Pointer to the ART.
-	optional_ptr<ART> art = nullptr;
 
+public:
 	//! Scans the tree, starting at the current top node on the stack, and ending at upper_bound.
 	//! If upper_bound is the empty ARTKey, than there is no upper bound.
 	bool Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vector<row_t> &row_ids, const bool equal);
@@ -72,13 +70,20 @@ public:
 	bool LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth);
 
 private:
+	//! Pointer to the ART.
+	optional_ptr<ART> art = nullptr;
 	//! Stack of nodes from the root to the currently active node.
 	stack<IteratorEntry> nodes;
 	//! Last visited leaf node.
 	Node last_leaf = Node();
+	//! Holds the row ID of nested leaves.
+	uint8_t row_id[sizeof(row_t)];
 	//! True, if we passed a gate.
 	bool inside_gate = false;
+	//! Depth in a nested leaf.
+	uint8_t nested_depth = 0;
 
+private:
 	//! Goes to the next leaf in the ART and sets it as last_leaf,
 	//! returns false if there is no next leaf.
 	bool Next();

@@ -7,8 +7,25 @@
 
 namespace duckdb {
 
-Prefix &Prefix::New(ART &art, Node &node) {
+//===--------------------------------------------------------------------===//
+// PrefixInlined
+//===--------------------------------------------------------------------===//
 
+void PrefixInlined::New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, uint32_t count) {
+	node = Node::GetAllocator(art, NType::PREFIX_INLINED).New();
+	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX_INLINED));
+
+	auto &prefix = Node::RefMutable<PrefixInlined>(art, node, NType::PREFIX_INLINED);
+	auto this_count = MinValue((uint32_t)Node::PREFIX_SIZE, count);
+	prefix.data[Node::PREFIX_SIZE] = (uint8_t)this_count;
+	memcpy(prefix.data, key.data + depth, this_count);
+}
+
+//===--------------------------------------------------------------------===//
+// Prefix
+//===--------------------------------------------------------------------===//
+
+Prefix &Prefix::New(ART &art, Node &node) {
 	node = Node::GetAllocator(art, NType::PREFIX).New();
 	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX));
 
@@ -18,7 +35,6 @@ Prefix &Prefix::New(ART &art, Node &node) {
 }
 
 Prefix &Prefix::New(ART &art, Node &node, uint8_t byte, const Node &next) {
-
 	node = Node::GetAllocator(art, NType::PREFIX).New();
 	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX));
 
@@ -30,12 +46,11 @@ Prefix &Prefix::New(ART &art, Node &node, uint8_t byte, const Node &next) {
 }
 
 void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, const uint32_t depth, uint32_t count) {
-
 	if (count == 0) {
 		return;
 	}
-	idx_t copy_count = 0;
 
+	idx_t copy_count = 0;
 	while (count) {
 		node.get() = Node::GetAllocator(art, NType::PREFIX).New();
 		node.get().SetMetadata(static_cast<uint8_t>(NType::PREFIX));
@@ -52,7 +67,6 @@ void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, const uint3
 }
 
 void Prefix::Free(ART &art, Node &node) {
-
 	Node current_node = node;
 	Node next_node;
 	while (current_node.HasMetadata() && current_node.GetType() == NType::PREFIX) {
@@ -213,7 +227,7 @@ bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node
 
 		// prefixes match (so far)
 		if (l_prefix.data[Node::PREFIX_SIZE] == r_prefix.data[Node::PREFIX_SIZE]) {
-			return l_prefix.ptr.ResolvePrefixes(art, r_prefix.ptr, inside_gate);
+			return l_prefix.ptr.MergeInternal(art, r_prefix.ptr, inside_gate);
 		}
 
 		mismatch_position = max_count;
@@ -232,44 +246,77 @@ bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node
 	return true;
 }
 
-void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
+uint8_t Prefix::GetByte(const ART &art, const Node &node, const idx_t pos) {
+	auto type = node.GetType();
+	switch (type) {
+	case NType::PREFIX_INLINED: {
+		auto &prefix = Node::Ref<const PrefixInlined>(art, node, type);
+		return prefix.data[pos];
+	}
+	case NType::PREFIX: {
+		auto &prefix = Node::Ref<const Prefix>(art, node, type);
+		return prefix.data[pos];
+	}
+	default:
+		throw InternalException("Invalid prefix type for GetByte.");
+	}
+}
 
-	D_ASSERT(prefix_node.HasMetadata());
-	D_ASSERT(n < Node::PREFIX_SIZE);
-
-	reference<Prefix> prefix = Node::RefMutable<Prefix>(art, prefix_node, NType::PREFIX);
-
-	// free this prefix node
-	if (n == (idx_t)(prefix.get().data[Node::PREFIX_SIZE] - 1)) {
-		auto next_ptr = prefix.get().ptr;
-		D_ASSERT(next_ptr.HasMetadata());
-		prefix.get().ptr.Clear();
-		Node::Free(art, prefix_node);
-		prefix_node = next_ptr;
+void ReduceInlinedPrefix(ART &art, Node &node, const idx_t n, const NType type) {
+	auto &prefix = Node::RefMutable<PrefixInlined>(art, node, type);
+	if (n == idx_t(prefix.data[Node::PREFIX_SIZE] - 1)) {
+		Node::Free(art, node);
 		return;
 	}
+	for (idx_t i = 0; i < Node::PREFIX_SIZE - n - 1; i++) {
+		prefix.data[i] = prefix.data[n + i + 1];
+	}
+}
 
-	// shift by n bytes in the current prefix
+void ReducePrefix(ART &art, Node &node, const idx_t n, const NType type) {
+	reference<Prefix> prefix = Node::RefMutable<Prefix>(art, node, type);
+	if (n == idx_t(prefix.get().data[Node::PREFIX_SIZE] - 1)) {
+		auto next_ptr = prefix.get().ptr;
+		prefix.get().ptr.Clear();
+		Node::Free(art, node);
+		node = next_ptr;
+		return;
+	}
 	for (idx_t i = 0; i < Node::PREFIX_SIZE - n - 1; i++) {
 		prefix.get().data[i] = prefix.get().data[n + i + 1];
 	}
-	D_ASSERT(n < (idx_t)(prefix.get().data[Node::PREFIX_SIZE] - 1));
 	prefix.get().data[Node::PREFIX_SIZE] -= n + 1;
-
-	// append the remaining prefix bytes
 	prefix.get().Append(art, prefix.get().ptr);
 }
 
-bool Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position) {
-	D_ASSERT(prefix_node.get().HasMetadata());
+void Prefix::Reduce(ART &art, Node &node, const idx_t n) {
+	D_ASSERT(node.HasMetadata());
+	D_ASSERT(n < Node::PREFIX_SIZE);
 
-	auto &prefix = Node::RefMutable<Prefix>(art, prefix_node, NType::PREFIX);
+	auto type = node.GetType();
+	switch (type) {
+	case NType::PREFIX_INLINED: {
+		return ReduceInlinedPrefix(art, node, n, type);
+	}
+	case NType::PREFIX: {
+		return ReducePrefix(art, node, n, type);
+	}
+	default:
+		throw InternalException("Invalid prefix type for Reduce.");
+	}
+}
+
+bool Prefix::Split(ART &art, Node &node, Node &child, idx_t position) {
+	D_ASSERT(node.HasMetadata());
+	D_ASSERT(node.GetType() == NType::PREFIX);
+
+	auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
 
 	// The split is at the last prefix byte. Decrease the count and return.
 	if (position + 1 == Node::PREFIX_SIZE) {
 		prefix.data[Node::PREFIX_SIZE]--;
-		prefix_node = prefix.ptr;
-		child_node = prefix.ptr;
+		node = prefix.ptr;
+		child = prefix.ptr;
 		return false;
 	}
 
@@ -277,7 +324,7 @@ bool Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 	// 1. The remaining bytes of this prefix.
 	// 2. The remaining prefix nodes.
 	if (position + 1 < prefix.data[Node::PREFIX_SIZE]) {
-		reference<Prefix> child_prefix = New(art, child_node);
+		reference<Prefix> child_prefix = New(art, child);
 		for (idx_t i = position + 1; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			child_prefix = child_prefix.get().Append(art, prefix.data[i]);
 		}
@@ -291,7 +338,7 @@ bool Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 
 	} else if (position + 1 == prefix.data[Node::PREFIX_SIZE]) {
 		// No prefix bytes after the split.
-		child_node = prefix.ptr;
+		child = prefix.ptr;
 	}
 
 	// Set the new count of this node.
@@ -299,14 +346,14 @@ bool Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 
 	// No bytes left before the split, free this node.
 	if (position == 0) {
-		auto freed_gate = prefix_node.get().IsGate();
+		auto freed_gate = node.IsGate();
 		prefix.ptr.Clear();
-		Node::Free(art, prefix_node.get());
+		Node::Free(art, node);
 		return freed_gate;
 	}
 
 	// There are bytes left before the split. The subsequent node replaces the split byte.
-	prefix_node = prefix.ptr;
+	node = prefix.ptr;
 	return false;
 }
 
