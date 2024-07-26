@@ -72,38 +72,62 @@ static string CreateStyleSection(RenderTree &root) {
             gap: 20px;
             padding: 40px;
             position: relative;
-            width: fixed;
-            height: fixed;
+            width: auto;
+            height: auto;
             box-sizing: border-box;
+            justify-content: start;
+            align-items: start;
         }
 
         .grid-item {
-            border: 1px solid #000;
-            padding: 10px;
-            width: 150px;
-            background-color: #f9f9f9;
+            border: 1px solid #E5E5E5;
+            border-radius: 0.5rem;
+            padding: 0px;
+            width: auto;
+            background-color: #FAFAFA;
             text-align: center;
             position: relative;
         }
 
         .title {
             font-weight: bold;
-            border-bottom: 1px solid #000;
-            margin-bottom: 5px;
             padding-bottom: 5px;
+            color: #fff100;
+            box-sizing: border-box;
+            background-color: black;
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            padding: 10px;
+        }
+
+        .grid-item > .title:only-child {
+            border-bottom-left-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
         }
 
         .content {
+            border-top: 1px solid #000;
             text-align: center;
+            border-bottom-left-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
+            padding: 10px;
         }
 
         .sub-title {
+            color: black;
             font-weight: bold;
-            margin-top: 5px;
+            padding-top: 5px;
+        }
+
+        .sub-title:not(:first-child) {
+            border-top: 1px solid #ADADAD;
         }
 
         .value {
             margin-left: 10px;
+            margin-top: 5px;
+            color: #3B3B3B;
+            margin-bottom: 5px;
         }
 
         .svg-container {
@@ -166,6 +190,10 @@ static string CreateGridItemContent(RenderTreeNode &node) {
 	for (auto &item : node.extra_text) {
 		auto &key = item.first;
 		auto &value = item.second;
+
+		if (value.empty()) {
+			continue;
+		}
 
 		items.push_back(StringUtil::Format(R"(                <div class="sub-title">%s</div>)", key));
 		auto splits = StringUtil::Split(value, "\n");
