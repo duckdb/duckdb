@@ -76,7 +76,7 @@ BASE_HEADER_CONTENT_MARK = '// DUCKDB_FUNCTIONS_ARE_GENERATED_HERE\n'
 
 
 # Loads the template for the header files to be generated
-def fetch_header_template():
+def fetch_header_template_main():
     # Read the base header
     with open(BASE_HEADER_TEMPLATE, 'r') as f:
         result = f.read()
@@ -88,6 +88,18 @@ def fetch_header_template():
         exit(1)
 
     return result[result.find(header_mark) + len(header_mark) :]
+
+def fetch_header_template_ext():
+        return """#pragma once
+        
+#include "duckdb.h"
+
+//===--------------------------------------------------------------------===//
+// Functions
+//===--------------------------------------------------------------------===//
+
+// DUCKDB_FUNCTIONS_ARE_GENERATED_HERE
+"""
 
 
 # Parse the CAPI_FUNCTION_DEFINITION_FILES to get the full list of functions
@@ -282,7 +294,8 @@ def create_duckdb_h(ext_api_version):
     duckdb_capi_header_body = (
         function_declarations_finished + "\n\n" + create_extension_api_struct(ext_api_version, with_create_method=True)
     )
-    duckdb_h = DUCKDB_H_HEADER + HEADER_TEMPLATE.replace(BASE_HEADER_CONTENT_MARK, duckdb_capi_header_body)
+    header_template = fetch_header_template_main()
+    duckdb_h = DUCKDB_H_HEADER + header_template.replace(BASE_HEADER_CONTENT_MARK, duckdb_capi_header_body)
     with open('src/include/duckdb.h', 'w+') as f:
         f.write(duckdb_h)
 
@@ -355,8 +368,8 @@ def create_duckdb_ext_h(ext_api_version):
     extension_header_body += (
         f'# define DUCKDB_EXTENSION_EXTERN extern const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME};\n'
     )
-
-    duckdb_ext_h = DUCKDB_EXT_H_HEADER + HEADER_TEMPLATE.replace(BASE_HEADER_CONTENT_MARK, extension_header_body)
+    header_template = fetch_header_template_ext()
+    duckdb_ext_h = DUCKDB_EXT_H_HEADER + header_template.replace(BASE_HEADER_CONTENT_MARK, extension_header_body)
     with open('src/include/duckdb_extension.h', 'w+') as f:
         f.write(duckdb_ext_h)
 
@@ -382,7 +395,6 @@ def get_extension_api_version():
 if __name__ == "__main__":
     EXT_API_DEFINITION = parse_ext_api_definition()
     EXT_API_VERSION = get_extension_api_version()
-    HEADER_TEMPLATE = fetch_header_template()
     FUNCTION_GROUPS, FUNCTION_MAP = parse_capi_function_definitions()
 
     print("Generating C APIs")
