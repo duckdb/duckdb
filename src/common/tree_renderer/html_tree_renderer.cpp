@@ -72,6 +72,8 @@ static string CreateStyleSection(RenderTree &root) {
             gap: 20px;
             padding: 40px;
             position: relative;
+            width: fixed;
+            height: fixed;
             box-sizing: border-box;
         }
 
@@ -216,6 +218,10 @@ static string CreateSVGLines(RenderTree &root) {
 	vector<string> svg_lines;
 
 	function_body.push_back("            const svg = document.getElementById('svgLines');");
+	function_body.push_back("            const gridContainer = document.querySelector('.grid-container');");
+	function_body.push_back("            const gridRect = gridContainer.getBoundingClientRect();");
+	function_body.push_back("            svg.setAttribute('width', gridRect.width);");
+	function_body.push_back("            svg.setAttribute('height', gridRect.height);");
 	for (idx_t y = 0; y < root.height; y++) {
 		for (idx_t x = 0; x < root.width; x++) {
 			auto node = root.GetNode(x, y);
@@ -312,12 +318,12 @@ static string CreateBodySection(RenderTree &root) {
         }
 
 %s
-
         // Update SVG lines initially
         window.addEventListener('load', updateSVGLines);
 
         // Update SVG lines on window resize
         window.addEventListener('resize', updateSVGLines);
+        updateSVGLines();
     </script>
 </body>
 </html>

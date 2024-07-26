@@ -7,8 +7,8 @@ require tpch
 statement ok
 call dbgen(sf=0.01);
 
-statement ok
-SELECT NULL
+query II
+EXPLAIN (FORMAT HTML) SELECT NULL
 FROM main.supplier AS ref_0
 LEFT JOIN main.nation AS ref_1 
 LEFT JOIN main.nation AS ref_2 
@@ -40,3 +40,4 @@ INNER JOIN (
     LIMIT 101
 ) AS subq_0 ON (ref_6.o_orderstatus ~~* ref_6.o_comment) 
 WHERE (ref_8.s_address ~~* ref_8.s_address);
+----

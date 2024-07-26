@@ -1462,10 +1462,19 @@ void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional
 	py::print(py::str(ToStringInternal(config, invalidate_cache)));
 }
 
+static ExplainFormat GetExplainFormat() {
+	if (DuckDBPyConnection::IsJupyter()) {
+		return ExplainFormat::HTML;
+	} else {
+		return ExplainFormat::DEFAULT;
+	}
+}
+
 string DuckDBPyRelation::Explain(ExplainType type) {
 	AssertRelation();
 	py::gil_scoped_release release;
-	auto res = rel->Explain(type);
+
+	auto res = rel->Explain(type, GetExplainFormat());
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = res->Cast<MaterializedQueryResult>();
 	auto &coll = materialized.Collection();
@@ -1481,6 +1490,17 @@ string DuckDBPyRelation::Explain(ExplainType type) {
 		}
 		result += "\n";
 	}
+
+	if (DuckDBPyConnection::IsJupyter()) {
+		py::gil_scoped_acquire gil;
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		auto html_attr = import_cache.IPython.display.HTML();
+		auto html_object = html_attr(py::str(result));
+		auto display_attr = import_cache.IPython.display.display();
+		display_attr(html_object);
+		return "";
+	}
+
 	return result;
 }
 
