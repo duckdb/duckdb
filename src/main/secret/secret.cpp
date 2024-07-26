@@ -200,8 +200,9 @@ void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key, const st
 		                                    secret_scope_hint_message);
 	}
 
-	throw InvalidConfigurationException(base_message + ": secret '%s' did not contain the key, also the setting was not found.", secret_key,
-	                                    setting_name, secret->GetName());
+	throw InvalidConfigurationException(base_message +
+	                                        ": secret '%s' did not contain the key, also the setting was not found.",
+	                                    secret_key, setting_name, secret->GetName());
 }
 
 bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {
