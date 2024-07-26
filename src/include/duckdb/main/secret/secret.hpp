@@ -219,22 +219,42 @@ public:
 	case_insensitive_set_t redact_keys;
 };
 
-// Helper class to easily fetch setting in a cascading way:
-class SecretSettingGetter {
+// Helper class to fetch secret parameters in a cascading way. The idea being that in many cases there is a direct
+// connection between a KeyValueSecret key and a setting and we want to:
+// - check if the secret has a specific key, if so return the corresponding value
+// - check if a setting exists, if so return its value
+// - return a default value
+
+class KeyValueSecretReader {
 public:
 	//! Manually pass in a secret reference
-	SecretSettingGetter(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p), opener(opener_p) {};
+	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p), opener(opener_p) {};
 
-	//! Initializes the SecretSettingGetter by fetching the secret automatically
-	SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char **secret_types, idx_t secret_types_len);
-	SecretSettingGetter(FileOpener &opener_p, FileOpenerInfo &info, const char *secret_type);
+	//! Initializes the KeyValueSecretReader by fetching the secret automatically
+	KeyValueSecretReader(FileOpener &opener_p, FileOpenerInfo &info, const char **secret_types, idx_t secret_types_len);
+	KeyValueSecretReader(FileOpener &opener_p, FileOpenerInfo &info, const char *secret_type);
 
-	~SecretSettingGetter();
+	~KeyValueSecretReader();
 
-	//! Fetching a secret in a cascading way:
+	//! Lookup a KeyValueSecret value
+	SettingLookupResult TryGetSecretKey(const string &secret_key, Value &result);
+	//! Lookup a KeyValueSecret value or a setting
 	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, Value &result);
-	//! Fetching a secret in a cascading way, throws InternalException(!) on not found
+	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
+	Value GetSecretKey(const string &secret_key);
+	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
 	Value GetSecretKeyOrSetting(const string &secret_key, const string &setting_name);
+
+	//! Templating around TryGetSecretKey
+	template <class TYPE>
+	SettingLookupResult TryGetSecretKey(const string &secret_key, TYPE &value_out) {
+		Value result;
+		auto lookup_result = TryGetSecretKey(secret_key, result);
+		if (lookup_result) {
+			value_out = result.GetValue<TYPE>();
+		}
+		return lookup_result;
+	}
 
 	//! Templating around TryGetSecretOrSetting
 	template <class TYPE>
@@ -252,13 +272,16 @@ public:
 	template <class TYPE>
 	TYPE GetSecretKeyOrSettingOrDefault(const string &secret_key, const string &setting_name, TYPE default_value) {
 		TYPE result;
-		if (TryGetSecretOrSetting(secret_key, setting_name, result)) {
+		if (TryGetSecretKeyOrSetting(secret_key, setting_name, result)) {
 			return result;
 		}
 		return default_value;
 	}
 
 protected:
+	[[noreturn]] void ThrowNotFoundError(const string &secret_key);
+	[[noreturn]] void ThrowNotFoundError(const string &secret_key, const string &setting_name);
+
 	//! Fetching the secret
 	optional_ptr<const KeyValueSecret> secret;
 	//! Optionally an owning pointer to the secret entry
@@ -266,6 +289,7 @@ protected:
 
 	//! Fetching the settings
 	optional_ptr<FileOpener> opener;
+	optional_ptr<FileOpenerInfo> opener_info;
 };
 
 } // namespace duckdb

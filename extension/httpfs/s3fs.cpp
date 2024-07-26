@@ -157,21 +157,21 @@ S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerI
 	const char *secret_types[] = {"s3", "r2", "gcs"};
 	idx_t secret_types_len = sizeof(secret_types) / sizeof(const char *);
 
-	SecretSettingGetter settings(*opener, info, secret_types, secret_types_len);
+	KeyValueSecretReader secret_reader(*opener, info, secret_types, secret_types_len);
 
 	// These settings we just set or leave to their S3AuthParams default value
-	settings.TryGetSecretKeyOrSetting("region", "s3_region", result.region);
-	settings.TryGetSecretKeyOrSetting("key_id", "s3_access_key_id", result.access_key_id);
-	settings.TryGetSecretKeyOrSetting("secret", "s3_secret_access_key", result.secret_access_key);
-	settings.TryGetSecretKeyOrSetting("session_token", "s3_session_token", result.session_token);
-	settings.TryGetSecretKeyOrSetting("region", "s3_region", result.region);
-	settings.TryGetSecretKeyOrSetting("use_ssl", "s3_use_ssl", result.use_ssl);
-	settings.TryGetSecretKeyOrSetting("s3_url_compatibility_mode", "s3_url_compatibility_mode",
-	                                  result.s3_url_compatibility_mode);
+	secret_reader.TryGetSecretKeyOrSetting("region", "s3_region", result.region);
+	secret_reader.TryGetSecretKeyOrSetting("key_id", "s3_access_key_id", result.access_key_id);
+	secret_reader.TryGetSecretKeyOrSetting("secret", "s3_secret_access_key", result.secret_access_key);
+	secret_reader.TryGetSecretKeyOrSetting("session_token", "s3_session_token", result.session_token);
+	secret_reader.TryGetSecretKeyOrSetting("region", "s3_region", result.region);
+	secret_reader.TryGetSecretKeyOrSetting("use_ssl", "s3_use_ssl", result.use_ssl);
+	secret_reader.TryGetSecretKeyOrSetting("s3_url_compatibility_mode", "s3_url_compatibility_mode",
+	                                       result.s3_url_compatibility_mode);
 
 	// Endpoint and url style are slightly more complex and require special handling for gcs and r2
-	auto endpoint_result = settings.TryGetSecretKeyOrSetting("endpoint", "s3_endpoint", result.endpoint);
-	auto url_style_result = settings.TryGetSecretKeyOrSetting("url_style", "s3_url_style", result.url_style);
+	auto endpoint_result = secret_reader.TryGetSecretKeyOrSetting("endpoint", "s3_endpoint", result.endpoint);
+	auto url_style_result = secret_reader.TryGetSecretKeyOrSetting("url_style", "s3_url_style", result.url_style);
 
 	if (StringUtil::StartsWith(info.file_path, "gcs://") || StringUtil::StartsWith(info.file_path, "gs://")) {
 		// For GCS urls we force the endpoint and vhost path style, allowing only to be overridden by secrets
