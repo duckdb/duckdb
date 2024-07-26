@@ -188,7 +188,11 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 		result.first_line_is_comment = true;
 	}
 	result.comment = false;
-	result.last_position.buffer_pos = buffer_pos + 1;
+	if (result.state_machine.dialect_options.state_machine_options.new_line.GetValue() != NewLineIdentifier::CARRY_ON) {
+		result.last_position.buffer_pos = buffer_pos + 1;
+	} else {
+		result.last_position.buffer_pos = buffer_pos + 2;
+	}
 	result.cur_col_id = 0;
 	result.chunk_col_id = 0;
 	return done;
