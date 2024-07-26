@@ -59,30 +59,21 @@ void HTMLTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 }
 
 static string CreateStyleSection(RenderTree &root) {
-	string style_section = R"(
+	return R"(
     <style>
         body {
             font-family: Arial, sans-serif;
         }
 
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(%d, auto);
-            grid-template-rows: repeat(%d, auto);
-            gap: 20px;
-            padding: 40px;
-            position: relative;
-            width: auto;
-            height: auto;
-            box-sizing: border-box;
-            justify-content: start;
-            align-items: start;
-        }
-
-        .grid-item {
+		.tf-tree .tf-nc {
+			padding: 0px;
             border: 1px solid #E5E5E5;
+		}
+
+        .tf-nc {
             border-radius: 0.5rem;
             padding: 0px;
+			min-width: 150px;
             width: auto;
             background-color: #FAFAFA;
             text-align: center;
@@ -100,7 +91,7 @@ static string CreateStyleSection(RenderTree &root) {
             padding: 10px;
         }
 
-        .grid-item > .title:only-child {
+        .tf-nc > .title:only-child {
             border-bottom-left-radius: 0.5rem;
             border-bottom-right-radius: 0.5rem;
         }
@@ -130,35 +121,17 @@ static string CreateStyleSection(RenderTree &root) {
             margin-bottom: 5px;
         }
 
-        .svg-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%%;
-            height: 100%%;
-            pointer-events: none;
-            z-index: -1;
-        }
-
-        svg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%%;
-            height: 100%%;
-            overflow: visible
-        }
-
-        .line {
-            stroke: #000;
-            stroke-width: 2;
-            fill: none;
+        .tf-tree {
+            display: grid;
+            box-sizing: border-box;
+            justify-content: start;
+            align-items: start;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
         }
     </style>
 	)";
-	auto columns = root.width;
-	auto rows = root.height;
-	return StringUtil::Format(style_section, columns, rows);
 }
 
 static string CreateHeadSection(RenderTree &root) {
@@ -168,7 +141,8 @@ static string CreateHeadSection(RenderTree &root) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grid Layout</title>
+	<link rel="stylesheet" href="https://unpkg.com/treeflex/dist/css/treeflex.css">
+    <title>DuckDB Query Plan</title>
 	%s
 </head>
 	)";
@@ -206,7 +180,7 @@ static string CreateGridItemContent(RenderTreeNode &node) {
 
 static string CreateGridItem(RenderTree &root, idx_t x, idx_t y) {
 	const string grid_item_format = R"(
-        <div class="grid-item" id="item%d_%d" style="grid-column: %d / span 1; grid-row: %d / span 1;">
+        <div class="tf-nc">
             <div class="title">%s</div>%s
         </div>
 	)";
@@ -218,145 +192,36 @@ static string CreateGridItem(RenderTree &root, idx_t x, idx_t y) {
 
 	auto title = node->name;
 	auto content = CreateGridItemContent(*node);
-	return StringUtil::Format(grid_item_format, x, y, x + 1, y + 1, title, content);
+	return StringUtil::Format(grid_item_format, title, content);
 }
 
-static string CreateGridContainer(RenderTree &root) {
-	vector<string> grid_items;
-	for (idx_t y = 0; y < root.height; y++) {
-		for (idx_t x = 0; x < root.width; x++) {
-			auto node_item = CreateGridItem(root, x, y);
-			if (!node_item.empty()) {
-				grid_items.push_back(std::move(node_item));
-			}
+static string CreateTreeRecursive(RenderTree &root, idx_t x, idx_t y) {
+	string result;
+
+	result += "<li>";
+	result += CreateGridItem(root, x, y);
+	auto node = root.GetNode(x, y);
+	if (!node->child_positions.empty()) {
+		result += "<ul>";
+		for (auto &coord : node->child_positions) {
+			result += CreateTreeRecursive(root, coord.x, coord.y);
 		}
+		result += "</ul>";
 	}
-
-	const string grid_container_format = R"(
-    <div class="grid-container">
-	%s
-    </div>
-	)";
-
-	return StringUtil::Format(grid_container_format, StringUtil::Join(grid_items, "\n"));
-}
-
-static string CreateSVGLines(RenderTree &root) {
-	vector<string> function_body;
-	vector<string> svg_lines;
-
-	function_body.push_back("            const svg = document.getElementById('svgLines');");
-	function_body.push_back("            const gridContainer = document.querySelector('.grid-container');");
-	function_body.push_back("            const gridRect = gridContainer.getBoundingClientRect();");
-	function_body.push_back("            svg.setAttribute('width', gridRect.width);");
-	function_body.push_back("            svg.setAttribute('height', gridRect.height);");
-	for (idx_t y = 0; y < root.height; y++) {
-		for (idx_t x = 0; x < root.width; x++) {
-			auto node = root.GetNode(x, y);
-			if (!node) {
-				continue;
-			}
-			function_body.push_back(StringUtil::Format(
-			    "            const rect%d_%d = document.getElementById('item%d_%d').getBoundingClientRect();", x, y, x,
-			    y));
-
-			for (auto &coord : node->child_positions) {
-				if (coord.x == x) {
-					svg_lines.push_back(StringUtil::Format(
-					    "            createVerticalConnection(svg, rect%d_%d, rect%d_%d);", x, y, coord.x, coord.y));
-				} else {
-					svg_lines.push_back(StringUtil::Format(
-					    "            createAngledConnection(svg, rect%d_%d, rect%d_%d);", x, y, coord.x, coord.y));
-				}
-			}
-		}
-	}
-
-	function_body.push_back("            svg.innerHTML = '';");
-	function_body.push_back("            const svgRect = svg.getBoundingClientRect();");
-
-	function_body.insert(function_body.end(), svg_lines.begin(), svg_lines.end());
-
-	const string function_definition = R"(
-        function updateSVGLines() {
-%s
-        }
-	)";
-	return StringUtil::Format(function_definition, StringUtil::Join(function_body, "\n"));
+	result += "</li>";
+	return result;
 }
 
 static string CreateBodySection(RenderTree &root) {
 	const string body_section = R"(
 <body>
-%s
-
-    <!-- SVG container for lines -->
-    <div class="svg-container">
-        <svg id="svgLines">
-            <!-- Lines will be drawn here by JavaScript -->
-        </svg>
-    </div>
-
-    <script>
-        function createVerticalConnection(svg, item1, item2) {
-            // Calculate positions for SVG
-            const svgRect = svg.getBoundingClientRect();
-
-            // Create the vertical line between item1 and item2
-            const line3 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            const x = (item1.left + (item1.width / 2)) - svgRect.left;
-
-            const y_start = item1.bottom - svgRect.top;
-            const y_end = item2.top - svgRect.top;
-            line3.setAttribute('x1', x);
-            line3.setAttribute('y1', y_start);
-
-            line3.setAttribute('x2', x);
-            line3.setAttribute('y2', y_end);
-            line3.setAttribute('class', 'line');
-            svg.appendChild(line3);
-        }
-
-        function createAngledConnection(svg, item1, item2) {
-            // Calculate positions for SVG
-            const svgRect = svg.getBoundingClientRect();
-
-            const x1 = item1.right - svgRect.left;
-            const y1 = item1.top + (item1.height / 2) - svgRect.top;
-
-            const x2 = (item2.left + (item2.width / 2)) - svgRect.left;
-            const y2 = item2.top - svgRect.top;
-
-            // Create the horizontal and vertical lines
-            const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line1.setAttribute('x1', x1);
-            line1.setAttribute('y1', y1);
-            line1.setAttribute('x2', x2);
-            line1.setAttribute('y2', y1);
-            line1.setAttribute('class', 'line');
-            svg.appendChild(line1);
-
-            const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line2.setAttribute('x1', x2);
-            line2.setAttribute('y1', y1);
-            line2.setAttribute('x2', x2);
-            line2.setAttribute('y2', y2);
-            line2.setAttribute('class', 'line');
-            svg.appendChild(line2);
-        }
-
-%s
-        // Update SVG lines initially
-        window.addEventListener('load', updateSVGLines);
-
-        // Update SVG lines on window resize
-        window.addEventListener('resize', updateSVGLines);
-        updateSVGLines();
-    </script>
+	<div class="tf-tree">
+		<ul>%s</ul>
+	</div>
 </body>
 </html>
 	)";
-	return StringUtil::Format(body_section, CreateGridContainer(root), CreateSVGLines(root));
+	return StringUtil::Format(body_section, CreateTreeRecursive(root, 0, 0));
 }
 
 void HTMLTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
