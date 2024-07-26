@@ -28,3 +28,13 @@ query I
 SELECT columns[1].type FROM sniff_csv('data/csv/bad_date_2.csv')
 ----
 DATE
+
+query II
+FROM 'data/csv/conflict_timestamp.csv'
+----
+2020-01-01 01:02:03	01-01-2020 01:02:03
+
+query II
+SELECT columns[1].type, columns[2].type FROM sniff_csv('data/csv/conflict_timestamp.csv')
+----
+TIMESTAMP	VARCHAR
