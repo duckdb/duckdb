@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb.h"
+#include "duckdb/main/capi/extension_api.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include <thread>

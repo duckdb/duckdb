@@ -1,6 +1,7 @@
 {
     "group": "arrow_interface",
     "deprecated": true,
+    "excluded_from_struct": true,
     "entries": [
         {
             "name": "duckdb_query_arrow",

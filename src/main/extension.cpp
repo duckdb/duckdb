@@ -1,7 +1,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb.h"
+#include "duckdb/main/capi/extension_api.hpp"
 
 namespace duckdb {
 

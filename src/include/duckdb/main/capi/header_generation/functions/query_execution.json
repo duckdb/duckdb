@@ -155,6 +155,7 @@
                 }
             ],
             "deprecated": true,
+            "excluded_from_struct": true,
             "comment": {
                 "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nReturns the number of rows present in the result object.\n\n",
                 "param_comments": {
@@ -194,6 +195,7 @@
                 }
             ],
             "deprecated": true,
+            "excluded_from_struct": true,
             "comment": {
                 "description": "**DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.\n\nReturns the data of a specific column of a result in columnar format.\n\nThe function returns a dense array which contains the result data. The exact type stored in the array depends on the\ncorresponding duckdb_type (as provided by `duckdb_column_type`). For the exact type by which the data should be\naccessed, see the comments in [the types section](types) or the `DUCKDB_TYPE` enum.\n\nFor example, for a column of type `DUCKDB_TYPE_INTEGER`, rows can be accessed in the following manner:\n```c\nint32_t *data = (int32_t *) duckdb_column_data(&result, 0);\nprintf(\"Data for row %d: %d\\n\", row, data[row]);\n```\n\n",
                 "param_comments": {
@@ -217,6 +219,7 @@
                 }
             ],
             "deprecated": true,
+            "excluded_from_struct": true,
             "comment": {
                 "description": "**DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.\n\nReturns the nullmask of a specific column of a result in columnar format. The nullmask indicates for every row\nwhether or not the corresponding row is `NULL`. If a row is `NULL`, the values present in the array provided\nby `duckdb_column_data` are undefined.\n\n```c\nint32_t *data = (int32_t *) duckdb_column_data(&result, 0);\nbool *nullmask = duckdb_nullmask_data(&result, 0);\nif (nullmask[row]) {\n    printf(\"Data for row %d: NULL\\n\", row);\n} else {\n    printf(\"Data for row %d: %d\\n\", row, data[row]);\n}\n```\n\n",
                 "param_comments": {

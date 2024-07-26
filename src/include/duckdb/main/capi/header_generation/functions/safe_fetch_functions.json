@@ -1,6 +1,7 @@
 {
     "group": "safe_fetch_functions",
     "deprecated": true,
+    "excluded_from_struct": true,
     "description": "// These functions will perform conversions if necessary.\n// On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.\n// Note that these functions are slow since they perform bounds checking and conversion\n// For fast access of values prefer using `duckdb_result_get_chunk`",
     "entries": [
         {

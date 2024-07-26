@@ -5,6 +5,7 @@
         {
             "name": "duckdb_stream_fetch_chunk",
             "deprecated": true,
+            "excluded_from_struct": true,
             "return_type": "duckdb_data_chunk",
             "params": [
                 {
