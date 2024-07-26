@@ -45,51 +45,73 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 	const auto l_size = ListVector::GetListSize(l_vec);
 	const auto r_size = ListVector::GetListSize(r_vec);
 
+	auto &l_child = ListVector::GetEntry(l_vec);
+	auto &r_child = ListVector::GetEntry(r_vec);
+
+	// Setup unified formats for the list elements
+	UnifiedVectorFormat l_child_format;
+	UnifiedVectorFormat r_child_format;
+
+	l_child.ToUnifiedFormat(l_size, l_child_format);
+	r_child.ToUnifiedFormat(r_size, r_child_format);
+
+	// Create the sort keys for the list elements
 	Vector l_sortkey_vec(LogicalType::BLOB, l_size);
 	Vector r_sortkey_vec(LogicalType::BLOB, r_size);
 
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-	CreateSortKeyHelpers::CreateSortKey(ListVector::GetEntry(l_vec), l_size, order_modifiers, l_sortkey_vec);
-	CreateSortKeyHelpers::CreateSortKey(ListVector::GetEntry(r_vec), r_size, order_modifiers, r_sortkey_vec);
 
-	const auto l_validity_ptr = &FlatVector::Validity(ListVector::GetEntry(l_vec));
-	const auto r_validity_ptr = &FlatVector::Validity(ListVector::GetEntry(r_vec));
+	CreateSortKeyHelpers::CreateSortKey(l_child, l_size, order_modifiers, l_sortkey_vec);
+	CreateSortKeyHelpers::CreateSortKey(r_child, r_size, order_modifiers, r_sortkey_vec);
 
-	const auto l_ptr = FlatVector::GetData<string_t>(l_sortkey_vec);
-	const auto r_ptr = FlatVector::GetData<string_t>(r_sortkey_vec);
+	const auto l_sortkey_ptr = FlatVector::GetData<string_t>(l_sortkey_vec);
+	const auto r_sortkey_ptr = FlatVector::GetData<string_t>(r_sortkey_vec);
 
 	string_set_t set;
 
 	BinaryExecutor::Execute<list_entry_t, list_entry_t, bool>(
-	    l_vec, r_vec, result, args.size(), [&](const list_entry_t &l_val, const list_entry_t &r_val) {
+	    l_vec, r_vec, result, args.size(), [&](const list_entry_t &l_list, const list_entry_t &r_list) {
 		    // Short circuit if either list is empty
-		    if (l_val.length == 0 || r_val.length == 0) {
+		    if (l_list.length == 0 || r_list.length == 0) {
 			    return false;
 		    }
 
-		    auto build_ptr = l_ptr;
-		    auto probe_ptr = r_ptr;
-		    auto build_val = l_val;
-		    auto probe_val = r_val;
+		    auto build_list = l_list;
+		    auto probe_list = r_list;
 
-		    auto build_validity = l_validity_ptr;
-		    auto probe_validity = r_validity_ptr;
+		    auto build_data = l_sortkey_ptr;
+		    auto probe_data = r_sortkey_ptr;
+
+		    auto build_format = &l_child_format;
+		    auto probe_format = &r_child_format;
 
 		    // Use the smaller list to build the set
-		    if (probe_val.length < build_val.length) {
-			    std::swap(build_ptr, probe_ptr);
-			    std::swap(build_val, probe_val);
-			    std::swap(build_validity, probe_validity);
+		    if (r_list.length < l_list.length) {
+
+			    build_list = r_list;
+			    probe_list = l_list;
+
+			    build_data = r_sortkey_ptr;
+			    probe_data = l_sortkey_ptr;
+
+			    build_format = &r_child_format;
+			    probe_format = &l_child_format;
 		    }
 
+		    // Reset the set
 		    set.clear();
-		    for (auto i = build_val.offset; i < build_val.offset + build_val.length; i++) {
-			    if (build_validity->RowIsValid(i)) {
-				    set.insert(build_ptr[i]);
+
+		    // Build the set
+		    for (auto idx = build_list.offset; idx < build_list.offset + build_list.length; idx++) {
+			    const auto entry_idx = build_format->sel->get_index(idx);
+			    if (build_format->validity.RowIsValid(entry_idx)) {
+				    set.insert(build_data[entry_idx]);
 			    }
 		    }
-		    for (auto i = probe_val.offset; i < probe_val.offset + probe_val.length; i++) {
-			    if (probe_validity->RowIsValid(i) && set.find(probe_ptr[i]) != set.end()) {
+		    // Probe the set
+		    for (auto idx = probe_list.offset; idx < probe_list.offset + probe_list.length; idx++) {
+			    const auto entry_idx = probe_format->sel->get_index(idx);
+			    if (probe_format->validity.RowIsValid(entry_idx) && set.find(probe_data[entry_idx]) != set.end()) {
 				    return true;
 			    }
 		    }
