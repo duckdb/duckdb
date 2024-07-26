@@ -65,15 +65,15 @@ static string CreateStyleSection(RenderTree &root) {
             font-family: Arial, sans-serif;
         }
 
-		.tf-tree .tf-nc {
-			padding: 0px;
+        .tf-tree .tf-nc {
+            padding: 0px;
             border: 1px solid #E5E5E5;
-		}
+        }
 
         .tf-nc {
             border-radius: 0.5rem;
             padding: 0px;
-			min-width: 150px;
+            min-width: 150px;
             width: auto;
             background-color: #FAFAFA;
             text-align: center;
@@ -122,16 +122,12 @@ static string CreateStyleSection(RenderTree &root) {
         }
 
         .tf-tree {
-            display: grid;
-            box-sizing: border-box;
-            justify-content: start;
-            align-items: start;
             width: 100%;
             height: 100%;
             overflow: auto;
         }
     </style>
-	)";
+    )";
 }
 
 static string CreateHeadSection(RenderTree &root) {
@@ -141,11 +137,11 @@ static string CreateHeadSection(RenderTree &root) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<link rel="stylesheet" href="https://unpkg.com/treeflex/dist/css/treeflex.css">
+    <link rel="stylesheet" href="https://unpkg.com/treeflex/dist/css/treeflex.css">
     <title>DuckDB Query Plan</title>
-	%s
+    %s
 </head>
-	)";
+    )";
 	return StringUtil::Format(head_section, CreateStyleSection(root));
 }
 
@@ -154,7 +150,7 @@ static string CreateGridItemContent(RenderTreeNode &node) {
             <div class="content">
 %s
             </div>
-	)";
+    )";
 
 	if (node.extra_text.empty()) {
 		return "";
@@ -183,7 +179,7 @@ static string CreateGridItem(RenderTree &root, idx_t x, idx_t y) {
         <div class="tf-nc">
             <div class="title">%s</div>%s
         </div>
-	)";
+    )";
 
 	auto node = root.GetNode(x, y);
 	if (!node) {
@@ -202,7 +198,7 @@ static string CreateTreeRecursive(RenderTree &root, idx_t x, idx_t y) {
 	result += CreateGridItem(root, x, y);
 	auto node = root.GetNode(x, y);
 	if (!node->child_positions.empty()) {
-		result += "<ul>";
+		result += "<ul class=\"list-inline\">";
 		for (auto &coord : node->child_positions) {
 			result += CreateTreeRecursive(root, coord.x, coord.y);
 		}
@@ -215,12 +211,12 @@ static string CreateTreeRecursive(RenderTree &root, idx_t x, idx_t y) {
 static string CreateBodySection(RenderTree &root) {
 	const string body_section = R"(
 <body>
-	<div class="tf-tree">
-		<ul>%s</ul>
-	</div>
+    <div class="tf-tree">
+        <ul>%s</ul>
+    </div>
 </body>
 </html>
-	)";
+    )";
 	return StringUtil::Format(body_section, CreateTreeRecursive(root, 0, 0));
 }
 
