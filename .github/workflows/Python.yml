@@ -142,6 +142,7 @@ jobs:
 
     - uses: ./.github/actions/build_extensions
       with:
+        duckdb_arch: linux_amd64_gcc4
         vcpkg_target_triplet: x64-linux
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64_gcc4
