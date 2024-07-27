@@ -212,18 +212,21 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 		}
 	}
 
-	const string file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
-	const string temp_path = file_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
+	string file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
+	// If persistent file already exists remove
+
+	if (fs.FileExists(file_path)) {
+		fs.RemoveFile(file_path);
+	}
+
+	string temp_path = file_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 
 	// If temporary file already exists remove
 	if (fs.FileExists(temp_path)) {
 		fs.RemoveFile(temp_path);
 	}
 
-	// If persistent file already exists remove
-	if (fs.FileExists(file_path)) {
-		fs.RemoveFile(file_path);
-	}
+	printf("WRITING TO DISK MAYBE?????");
 
 	WriteSecretFileToDisk(fs, temp_path, secret);
 
