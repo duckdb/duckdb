@@ -4,8 +4,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
@@ -166,14 +166,29 @@ CatalogTransaction CatalogSetSecretStorage::GetTransactionOrDefault(optional_ptr
 	return CatalogTransaction::GetSystemTransaction(db);
 }
 
+static void WriteSecretFileToDisk(FileSystem &fs, const string &path, const BaseSecret &secret) {
+	auto open_flags = FileFlags::FILE_FLAGS_WRITE;
+	// Ensure we are writing to a private file with 600 permission
+	open_flags |= FileFlags::FILE_FLAGS_PRIVATE;
+	// Ensure we overwrite anything that may have been placed there since our delete above
+	open_flags |= FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+
+	auto file_writer = BufferedFileWriter(fs, path, open_flags);
+
+	auto serializer = BinarySerializer(file_writer);
+	serializer.Begin();
+	secret.Serialize(serializer);
+	serializer.End();
+}
+
 void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) {
-	LocalFileSystem fs;
+	auto fs = FileSystem::CreateLocal();
 
 	// We may need to create the secret dir here if the directory was not present during LocalFileSecretStorage
 	// construction
-	if (!fs.DirectoryExists(secret_path)) {
+	if (!fs->DirectoryExists(secret_path)) {
 		// TODO: recursive directory creation should probably live in filesystem
-		auto sep = fs.PathSeparator(secret_path);
+		auto sep = fs->PathSeparator(secret_path);
 		auto splits = StringUtil::Split(secret_path, sep);
 		D_ASSERT(!splits.empty());
 		string extension_directory_prefix;
@@ -183,8 +198,8 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 		try {
 			for (auto &split : splits) {
 				extension_directory_prefix = extension_directory_prefix + split + sep;
-				if (!fs.DirectoryExists(extension_directory_prefix)) {
-					fs.CreateDirectory(extension_directory_prefix);
+				if (!fs->DirectoryExists(extension_directory_prefix)) {
+					fs->CreateDirectory(extension_directory_prefix);
 				}
 			}
 		} catch (std::exception &ex) {
@@ -197,26 +212,22 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 		}
 	}
 
-	auto file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
+	const string file_path = fs->JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
+	const string temp_path = file_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 
-	if (fs.FileExists(file_path)) {
-		fs.RemoveFile(file_path);
+	// If temporary file already exists remove
+	if (fs->FileExists(temp_path)) {
+		fs->RemoveFile(temp_path);
 	}
 
-	auto open_flags = FileFlags::FILE_FLAGS_WRITE;
-	// Ensure we are writing to a private file with 600 permission
-	open_flags |= FileFlags::FILE_FLAGS_PRIVATE;
-	// Ensure we overwrite anything that may have been placed there since our delete above
-	open_flags |= FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+	// If persistent file already exists remove
+	if (fs->FileExists(file_path)) {
+		fs->RemoveFile(file_path);
+	}
 
-	auto file_writer = BufferedFileWriter(fs, file_path, open_flags);
+	WriteSecretFileToDisk(*fs, temp_path, secret);
 
-	auto serializer = BinarySerializer(file_writer);
-	serializer.Begin();
-	secret.Serialize(serializer);
-	serializer.End();
-
-	file_writer.Flush();
+	fs->MoveFile(temp_path, file_path);
 }
 
 void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) {
