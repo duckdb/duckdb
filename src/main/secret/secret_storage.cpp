@@ -182,13 +182,13 @@ static void WriteSecretFileToDisk(FileSystem &fs, const string &path, const Base
 }
 
 void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) {
-	auto fs = FileSystem::CreateLocal();
+	LocalFileSystem fs;
 
 	// We may need to create the secret dir here if the directory was not present during LocalFileSecretStorage
 	// construction
-	if (!fs->DirectoryExists(secret_path)) {
+	if (!fs.DirectoryExists(secret_path)) {
 		// TODO: recursive directory creation should probably live in filesystem
-		auto sep = fs->PathSeparator(secret_path);
+		auto sep = fs.PathSeparator(secret_path);
 		auto splits = StringUtil::Split(secret_path, sep);
 		D_ASSERT(!splits.empty());
 		string extension_directory_prefix;
@@ -198,8 +198,8 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 		try {
 			for (auto &split : splits) {
 				extension_directory_prefix = extension_directory_prefix + split + sep;
-				if (!fs->DirectoryExists(extension_directory_prefix)) {
-					fs->CreateDirectory(extension_directory_prefix);
+				if (!fs.DirectoryExists(extension_directory_prefix)) {
+					fs.CreateDirectory(extension_directory_prefix);
 				}
 			}
 		} catch (std::exception &ex) {
@@ -212,22 +212,22 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 		}
 	}
 
-	const string file_path = fs->JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
+	const string file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
 	const string temp_path = file_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 
 	// If temporary file already exists remove
-	if (fs->FileExists(temp_path)) {
-		fs->RemoveFile(temp_path);
+	if (fs.FileExists(temp_path)) {
+		fs.RemoveFile(temp_path);
 	}
 
 	// If persistent file already exists remove
-	if (fs->FileExists(file_path)) {
-		fs->RemoveFile(file_path);
+	if (fs.FileExists(file_path)) {
+		fs.RemoveFile(file_path);
 	}
 
-	WriteSecretFileToDisk(*fs, temp_path, secret);
+	WriteSecretFileToDisk(fs, temp_path, secret);
 
-	fs->MoveFile(temp_path, file_path);
+	fs.MoveFile(temp_path, file_path);
 }
 
 void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) {
