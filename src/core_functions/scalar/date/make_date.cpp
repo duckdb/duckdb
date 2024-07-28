@@ -66,7 +66,7 @@ struct MakeTimeOperator {
 		if (ss < 0 || ss > Interval::SECS_PER_MINUTE) {
 			ss_32 = Cast::Operation<SS, int32_t>(ss);
 		} else {
-			ss_32 = UnsafeNumericCast<int32_t>(ss);
+			ss_32 = LossyNumericCast<int32_t>(ss);
 		}
 		auto micros = LossyNumericCast<int32_t>(std::round((ss - ss_32) * Interval::MICROS_PER_SEC));
 
