@@ -152,12 +152,12 @@ double CastInterpolation::Interpolate(const double &lo, const double d, const do
 
 template <>
 dtime_t CastInterpolation::Interpolate(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(lo.micros * (1.0 - d) + hi.micros * d));
+	return dtime_t(std::llround(static_cast<double>(lo.micros) * (1.0 - d) + static_cast<double>(hi.micros) * d));
 }
 
 template <>
 timestamp_t CastInterpolation::Interpolate(const timestamp_t &lo, const double d, const timestamp_t &hi) {
-	return timestamp_t(std::llround(lo.value * (1.0 - d) + hi.value * d));
+	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
 }
 
 template <>
@@ -167,7 +167,7 @@ hugeint_t CastInterpolation::Interpolate(const hugeint_t &lo, const double d, co
 
 static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
 	D_ASSERT(d >= 0 && d <= 1);
-	return Interval::FromMicro(std::llround(Interval::GetMicro(i) * d));
+	return Interval::FromMicro(std::llround(static_cast<double>(Interval::GetMicro(i)) * d));
 }
 
 inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {
