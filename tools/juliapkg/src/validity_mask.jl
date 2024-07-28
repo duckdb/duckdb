@@ -34,3 +34,4 @@ function isvalid(mask::ValidityMask, index)::Bool
 end
 
 all_valid(mask::ValidityMask) = all(==(typemax(eltype(mask.data))), mask.data)
+

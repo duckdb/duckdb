@@ -1978,6 +1978,183 @@ function duckdb_vector_assign_string_element_len(vector, index, str, str_len)
     )
 end
 
+
+#=
+//===--------------------------------------------------------------------===//
+// Scalar Functions
+//===--------------------------------------------------------------------===//
+=#
+
+"""
+Creates a new empty scalar function.
+
+The return value should be destroyed with `duckdb_destroy_scalar_function`.
+
+* returns: The scalar function object.
+"""
+function duckdb_create_scalar_function()
+    return ccall((:duckdb_create_scalar_function, libduckdb), duckdb_scalar_function, ())
+end
+
+"""
+Destroys the given scalar function object.
+
+* scalar_function: The scalar function to destroy
+"""
+function duckdb_destroy_scalar_function(func)
+    return ccall((:duckdb_destroy_scalar_function, libduckdb), Cvoid, (Ref{duckdb_scalar_function},), func)
+end
+
+"""
+Sets the name of the given scalar function.
+
+* scalar_function: The scalar function
+* name: The name of the scalar function
+"""
+function duckdb_scalar_function_set_name(func, name)
+    return ccall((:duckdb_scalar_function_set_name, libduckdb), Cvoid, (duckdb_scalar_function, Cstring), func, name)
+end
+
+"""
+Sets the parameters of the given scalar function to varargs. Does not require adding parameters with
+duckdb_scalar_function_add_parameter.
+
+* @param scalar_function: The scalar function;
+* @param type The type of the arguments.
+"""
+function duckdb_scalar_function_set_varargs(func, vararg_type)
+    return ccall(
+        (:duckdb_scalar_function_set_varargs, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, duckdb_logical_type),
+        func,
+        vararg_type
+    )
+end
+
+"""
+Sets the NULL handling of the scalar function to SPECIAL_HANDLING.
+
+* scalar_function: The scalar function
+"""
+function duckdb_scalar_function_set_special_handling(func)
+    return ccall((:duckdb_scalar_function_set_special_handling, libduckdb), Cvoid, (duckdb_scalar_function,), func)
+end
+
+"""
+Adds a parameter to the scalar function.
+
+* scalar_function: The scalar function.
+* dtype: The parameter type. Cannot contain INVALID.
+"""
+function duckdb_scalar_function_add_parameter(func, dtype)
+    return ccall(
+        (:duckdb_scalar_function_add_parameter, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, duckdb_logical_type),
+        func,
+        dtype
+    )
+end
+
+"""
+Sets the return type of the scalar function.
+
+* @param scalar_function The scalar function.
+* @param type The return type. Cannot contain INVALID or ANY.
+"""
+function duckdb_scalar_function_set_return_type(func, type)
+    return ccall(
+        (:duckdb_scalar_function_set_return_type, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, duckdb_logical_type),
+        func,
+        type
+    )
+end
+
+"""
+Assigns extra information to the scalar function that can be fetched during binding, etc.
+
+* scalar_function: The scalar function
+* extra_info: The extra information
+"""
+function duckdb_scalar_function_set_extra_info(func, extra_data)
+    return ccall(
+        (:duckdb_scalar_function_set_extra_info, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, Ptr{Cvoid}, Ptr{Cvoid}),
+        func,
+        extra_data,
+        C_NULL # destroy callback -> not used
+    )
+end
+
+
+"""
+Sets the main function of the scalar function.
+
+* scalar_function: The scalar function
+* function: The function
+"""
+function duckdb_scalar_function_set_function(func, scalar_func)
+    return ccall(
+        (:duckdb_scalar_function_set_function, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, Ptr{Cvoid}),
+        func,
+        scalar_func
+    )
+end
+
+
+"""
+Register the scalar function object within the given connection.
+
+The function requires at least a name, a function and a return type.
+
+If the function is incomplete or a function with this name already exists DuckDBError is returned.
+
+* con: The connection to register it in.
+* function: The function pointer
+* returns: Whether or not the registration was successful.
+"""
+function duckdb_register_scalar_function(con, func)
+    return ccall(
+        (:duckdb_register_scalar_function, libduckdb),
+        Int32,
+        (duckdb_connection, duckdb_scalar_function),
+        con,
+        func
+    )
+end
+
+"""
+Retrieves the extra info of the function as set in `duckdb_scalar_function_set_extra_info`.
+
+* info: The info object
+* returns: The extra info
+"""
+function duckdb_scalar_function_get_extra_info(func_info)
+    return ccall((:duckdb_scalar_function_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_scalar_function,), func_info)
+end
+
+"""
+Report that an error has occurred while executing the scalar function.
+
+* info: The info object
+* error: The error message
+"""
+function duckdb_scalar_function_set_error(func, error)
+    return ccall(
+        (:duckdb_scalar_function_set_error, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, Ptr{UInt8}),
+        func,
+        error
+    )
+end
+
 #=
 //===--------------------------------------------------------------------===//
 // Table Functions
@@ -2979,98 +3156,3 @@ function duckdb_execution_is_finished(con)
     return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
 end
 
-# ctypes.jl
-const duckdb_scalar_function = Ptr{Cvoid}
-
-"""
-Creates a new scalar function.
-
-* returns: The created scalar function
-"""
-function duckdb_create_scalar_function()
-    return ccall((:duckdb_create_scalar_function, libduckdb), duckdb_scalar_function, ())
-end
-
-"""
-Destroys the scalar function.
-
-* func: The scalar function to destroy
-"""
-function duckdb_destroy_scalar_function(func)
-    return ccall((:duckdb_destroy_scalar_function, libduckdb), Cvoid, (Ref{duckdb_scalar_function},), func)
-end
-
-"""
-Sets the name of the scalar function.
-
-* func: The scalar function to set the name for
-* name: The name to set for the scalar function
-"""
-function duckdb_scalar_function_set_name(func, name)
-    return ccall((:duckdb_scalar_function_set_name, libduckdb), Cvoid, (duckdb_scalar_function, Ptr{UInt8}), func, name)
-end
-
-"""
-Adds a parameter to the scalar function.
-
-* func: The scalar function to add the parameter to
-* type: The type of the parameter to add
-"""
-function duckdb_scalar_function_add_parameter(func, type)
-    return ccall(
-        (:duckdb_scalar_function_add_parameter, libduckdb),
-        Cvoid,
-        (duckdb_scalar_function, duckdb_logical_type),
-        func,
-        type
-    )
-end
-
-"""
-Sets the return type of the scalar function.
-
-* func: The scalar function to set the return type for
-* type: The return type to set for the scalar function
-"""
-function duckdb_scalar_function_set_return_type(func, type)
-    return ccall(
-        (:duckdb_scalar_function_set_return_type, libduckdb),
-        Cvoid,
-        (duckdb_scalar_function, duckdb_logical_type),
-        func,
-        type
-    )
-end
-
-"""
-Sets the function implementation for the scalar function.
-
-* scalar_func: The scalar function to set the implementation for
-* func: The function implementation to set
-"""
-function duckdb_scalar_function_set_function(scalar_func, func)
-    return ccall(
-        (:duckdb_scalar_function_set_function, libduckdb),
-        Cvoid,
-        (duckdb_scalar_function, Ptr{Cvoid}),
-        scalar_func,
-        func
-    )
-end
-
-"""
-Registers the scalar function with the connection.
-
-* con: The connection to register the scalar function with
-* func: The scalar function to register
-* returns: The result of the registration
-"""
-function duckdb_register_scalar_function(con, func)
-    return ccall(
-        (:duckdb_register_scalar_function, libduckdb),
-        Int32,
-        (duckdb_connection, duckdb_scalar_function),
-        con,
-        func
-    )
-end
