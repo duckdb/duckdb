@@ -1446,8 +1446,8 @@ struct IntervalValueConversion {
 
 	static interval_t ReadParquetInterval(const_data_ptr_t input) {
 		interval_t result;
-		result.months = Load<uint32_t>(input);
-		result.days = Load<uint32_t>(input + sizeof(uint32_t));
+		result.months = Load<int32_t>(input);
+		result.days = Load<int32_t>(input + sizeof(uint32_t));
 		result.micros = int64_t(Load<uint32_t>(input + sizeof(uint32_t) * 2)) * 1000;
 		return result;
 	}
