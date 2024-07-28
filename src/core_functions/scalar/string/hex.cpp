@@ -42,7 +42,7 @@ static void WriteHugeIntHexBytes(T x, char *&output, idx_t buffer_size) {
 static void WriteBinBytes(uint64_t x, char *&output, idx_t buffer_size) {
 	idx_t offset = buffer_size;
 	for (; offset >= 1; offset -= 1) {
-		*output = ((x >> (offset - 1)) & 0x01) + '0';
+		*output = NumericCast<char>(((x >> (offset - 1)) & 0x01) + '0');
 		output++;
 	}
 }
