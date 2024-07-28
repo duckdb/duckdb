@@ -110,7 +110,7 @@ struct AlpCompression {
 			return NumericCast<int64_t>(AlpConstants::ENCODING_UPPER_LIMIT);
 		}
 		n = n + AlpTypedConstants<T>::MAGIC_NUMBER - AlpTypedConstants<T>::MAGIC_NUMBER;
-		return NumericCast<int64_t>(n);
+		return LossyNumericCast<int64_t>(n);
 	}
 
 	/*
@@ -185,7 +185,7 @@ struct AlpCompression {
 
 		// Evaluate factor/exponent compression size (we optimize for FOR)
 		uint64_t delta = (static_cast<uint64_t>(max_encoded_value) - static_cast<uint64_t>(min_encoded_value));
-		estimated_bits_per_value = NumericCast<uint32_t>(std::ceil(std::log2(delta + 1)));
+		estimated_bits_per_value = LossyNumericCast<uint32_t>(std::ceil(std::log2(delta + 1)));
 		estimated_compression_size += n_values * estimated_bits_per_value;
 		estimated_compression_size +=
 		    exceptions_count * (EXACT_TYPE_BITSIZE + (AlpConstants::EXCEPTION_POSITION_SIZE * 8));
