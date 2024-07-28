@@ -56,9 +56,9 @@ idx_t DistinctStatistics::GetCount() const {
 		return 0;
 	}
 
-	double u = NumericCast<double>(MinValue<idx_t>(log->Count(), sample_count));
-	double s = NumericCast<double>(sample_count);
-	double n = NumericCast<double>(total_count);
+	double u = static_cast<double>(MinValue<idx_t>(log->Count(), sample_count));
+	double s = static_cast<double>(sample_count);
+	double n = static_cast<double>(total_count);
 
 	// Assume this proportion of the the sampled values occurred only once
 	double u1 = pow(u / s, 2) * u;
