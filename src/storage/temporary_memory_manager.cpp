@@ -69,7 +69,8 @@ void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto &task_scheduler = TaskScheduler::GetScheduler(context);
 
-	memory_limit = NumericCast<idx_t>(MAXIMUM_MEMORY_LIMIT_RATIO * static_cast<double>(buffer_manager.GetMaxMemory()));
+	memory_limit =
+	    LossyNumericCast<idx_t>(MAXIMUM_MEMORY_LIMIT_RATIO * static_cast<double>(buffer_manager.GetMaxMemory()));
 	has_temporary_directory = buffer_manager.HasTemporaryDirectory();
 	num_threads = NumericCast<idx_t>(task_scheduler.NumberOfThreads());
 	query_max_memory = buffer_manager.GetQueryMaxMemory();
@@ -120,8 +121,8 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 		// 3. MAXIMUM_FREE_MEMORY_RATIO * free memory
 		auto upper_bound = MinValue<idx_t>(temporary_memory_state.GetRemainingSize(), query_max_memory);
 		const auto free_memory = memory_limit - (reservation - temporary_memory_state.GetReservation());
-		upper_bound = MinValue<idx_t>(upper_bound,
-		                              NumericCast<idx_t>(MAXIMUM_FREE_MEMORY_RATIO * static_cast<double>(free_memory)));
+		upper_bound = MinValue<idx_t>(
+		    upper_bound, LossyNumericCast<idx_t>(MAXIMUM_FREE_MEMORY_RATIO * static_cast<double>(free_memory)));
 		upper_bound = MinValue<idx_t>(upper_bound, free_memory);
 
 		idx_t new_reservation;
@@ -225,13 +226,13 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 		const auto avg_of_nonmaxed = sum_of_nonmaxed / static_cast<double>(nonmax_count);
 
 		// This is how much memory we will distribute in this round
-		const auto iter_memory = NumericCast<idx_t>(static_cast<double>(remaining_memory) /
-		                                            static_cast<double>(optimization_iterations - opt_idx));
+		const auto iter_memory = LossyNumericCast<idx_t>(static_cast<double>(remaining_memory) /
+		                                                 static_cast<double>(optimization_iterations - opt_idx));
 		for (i = 0; i < n; i++) {
 			if (res[i] == siz[i] || der[i] > avg_of_nonmaxed) {
 				continue;
 			}
-			const auto delta = NumericCast<idx_t>(
+			const auto delta = LossyNumericCast<idx_t>(
 			    MinValue<double>(siz[i] - res[i], (der[i] / sum_of_nonmaxed) * static_cast<double>(iter_memory)));
 			D_ASSERT(delta > 0 && delta <= remaining_memory);
 			res[i] += static_cast<double>(delta);
