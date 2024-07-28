@@ -779,11 +779,11 @@ struct ContinuousQuantileListFunction {
 };
 
 template <class OP>
-AggregateFunction EmptyQuantileFunction(LogicalType input, LogicalType result, LogicalType extra_arg) {
+AggregateFunction EmptyQuantileFunction(LogicalType input, LogicalType result, const LogicalType &extra_arg) {
 	AggregateFunction fun({std::move(input)}, std::move(result), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      OP::Bind);
 	if (extra_arg.id() != LogicalTypeId::INVALID) {
-		fun.arguments.push_back(std::move(extra_arg));
+		fun.arguments.push_back(extra_arg);
 	}
 	fun.serialize = QuantileBindData::Serialize;
 	fun.deserialize = OP::Deserialize;
