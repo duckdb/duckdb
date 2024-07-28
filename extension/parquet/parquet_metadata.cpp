@@ -545,7 +545,7 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 	//	num_rows
 	current_chunk.SetValue(2, 0, Value::BIGINT(meta_data->num_rows));
 	//	num_row_groups
-	current_chunk.SetValue(3, 0, Value::BIGINT(meta_data->row_groups.size()));
+	current_chunk.SetValue(3, 0, Value::BIGINT(UnsafeNumericCast<int64_t>(meta_data->row_groups.size())));
 	//	format_version
 	current_chunk.SetValue(4, 0, Value::BIGINT(meta_data->version));
 	//	encryption_algorithm

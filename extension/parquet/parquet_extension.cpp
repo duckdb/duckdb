@@ -635,7 +635,7 @@ public:
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (gstate.file_index + 1)) / total_count;
+			return (100.0 * (static_cast<double>(gstate.file_index) + 1.0)) / static_cast<double>(total_count);
 		}
 		auto percentage = MinValue<double>(
 		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));

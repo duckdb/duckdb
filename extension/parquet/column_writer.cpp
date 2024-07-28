@@ -726,7 +726,7 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		writer.WriteData(write_info.compressed_data, write_info.compressed_size);
 	}
 	column_chunk.meta_data.total_compressed_size = column_writer.GetTotalWritten() - start_offset;
-	column_chunk.meta_data.total_uncompressed_size = total_uncompressed_size;
+	column_chunk.meta_data.total_uncompressed_size = UnsafeNumericCast<int64_t>(total_uncompressed_size);
 }
 
 void BasicColumnWriter::FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats) {
@@ -752,7 +752,7 @@ void BasicColumnWriter::WriteDictionary(BasicColumnWriterState &state, unique_pt
 
 	hdr.dictionary_page_header.encoding = Encoding::PLAIN;
 	hdr.dictionary_page_header.is_sorted = false;
-	hdr.dictionary_page_header.num_values = row_count;
+	hdr.dictionary_page_header.num_values = UnsafeNumericCast<int32_t>(row_count);
 
 	write_info.temp_writer = std::move(temp_writer);
 	write_info.write_count = 0;
@@ -761,7 +761,7 @@ void BasicColumnWriter::WriteDictionary(BasicColumnWriterState &state, unique_pt
 	// compress the contents of the dictionary page
 	CompressPage(*write_info.temp_writer, write_info.compressed_size, write_info.compressed_data,
 	             write_info.compressed_buf);
-	hdr.compressed_page_size = write_info.compressed_size;
+	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
 
 	// insert the dictionary page as the first page to write for this column
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
@@ -2097,7 +2097,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		// set up the schema element for this struct
 		duckdb_parquet::format::SchemaElement schema_element;
 		schema_element.repetition_type = null_type;
-		schema_element.num_children = child_types.size();
+		schema_element.num_children = UnsafeNumericCast<int32_t>(child_types.size());
 		schema_element.__isset.num_children = true;
 		schema_element.__isset.type = false;
 		schema_element.__isset.repetition_type = true;
