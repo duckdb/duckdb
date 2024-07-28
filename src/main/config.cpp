@@ -470,7 +470,7 @@ idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 
-	return NumericCast<idx_t>(multiplier * limit);
+	return NumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 
 // Right now we only really care about access mode when comparing DBConfigs
