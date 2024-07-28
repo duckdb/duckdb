@@ -39,7 +39,7 @@ static void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &res
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0 || Value::IsNan(input_seeds[i])) {
 			throw InvalidInputException("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
 		}
-		auto norm_seed = NumericCast<uint32_t>((input_seeds[i] + 1.0) * half_max);
+		auto norm_seed = LossyNumericCast<uint32_t>((input_seeds[i] + 1.0) * half_max);
 		random_engine.SetSeed(norm_seed);
 	}
 
