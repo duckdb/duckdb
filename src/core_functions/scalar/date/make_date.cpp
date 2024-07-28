@@ -68,7 +68,7 @@ struct MakeTimeOperator {
 		} else {
 			ss_32 = UnsafeNumericCast<int32_t>(ss);
 		}
-		auto micros = UnsafeNumericCast<int32_t>(std::round((ss - ss_32) * Interval::MICROS_PER_SEC));
+		auto micros = LossyNumericCast<int32_t>(std::round((ss - ss_32) * Interval::MICROS_PER_SEC));
 
 		if (!Time::IsValidTime(hh_32, mm_32, ss_32, micros)) {
 			throw ConversionException("Time out of range: %d:%d:%d.%d", hh_32, mm_32, ss_32, micros);
