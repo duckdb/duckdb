@@ -352,7 +352,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				auto index_scan_max_count = db_config.options.index_scan_max_count;
 
 				auto total_rows = storage.GetTotalRows();
-				auto total_rows_from_percentage = NumericCast<idx_t>(double(total_rows) * index_scan_percentage);
+				auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * index_scan_percentage);
 				auto max_count = MaxValue(index_scan_max_count, total_rows_from_percentage);
 
 				// Check if we can use an index scan, and already retrieve the matching row ids.
