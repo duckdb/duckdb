@@ -255,7 +255,7 @@ struct AlpCompression {
 		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
 		vector<T> vector_sample;
 		auto idx_increments = MaxValue<uint32_t>(
-		    1, UnsafeNumericCast<uint32_t>(std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR)));
+		    1, LossyNumericCast<uint32_t>(std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR)));
 		for (idx_t i = 0; i < n_values; i += idx_increments) {
 			vector_sample.push_back(input_vector[i]);
 		}
