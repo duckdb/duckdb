@@ -3084,7 +3084,9 @@ Append a NULL value to the appender (of any type).
 DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
 
 /*!
-Appends a pre-filled data chunk to the specified appender.
+Appends a pre-filled data chunk to the specified appended.
+
+After calling this method, you must call `duckdb_data_chunk_reset`.
 
 The types of the data chunk must exactly match the types of the table, no casting is performed.
 If the types do not match or the appender is in an invalid state, DuckDBError is returned.
