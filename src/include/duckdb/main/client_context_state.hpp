@@ -8,9 +8,16 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/valid_checker.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/client_context.hpp"
+#include <mutex>
 
 namespace duckdb {
 class ClientContext;
@@ -44,11 +51,18 @@ public:
 	virtual void QueryEnd(ClientContext &context) {
 		QueryEnd();
 	}
+	virtual void QueryEnd(ClientContext &context, optional_ptr<ErrorData> error) {
+		QueryEnd(context);
+	}
 	virtual void TransactionBegin(MetaTransaction &transaction, ClientContext &context) {
 	}
 	virtual void TransactionCommit(MetaTransaction &transaction, ClientContext &context) {
 	}
 	virtual void TransactionRollback(MetaTransaction &transaction, ClientContext &context) {
+	}
+	virtual void TransactionRollback(MetaTransaction &transaction, ClientContext &context,
+	                                 optional_ptr<ErrorData> error) {
+		TransactionRollback(transaction, context);
 	}
 	virtual bool CanRequestRebind() {
 		return false;

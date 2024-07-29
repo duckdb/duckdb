@@ -18,6 +18,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 #include "duckdb.hpp"
@@ -650,58 +651,28 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "read_csv",
-	    [](const py::object &name, const py::object &header = py::none(), const py::object &compression = py::none(),
-	       const py::object &sep = py::none(), const py::object &delimiter = py::none(),
-	       const py::object &dtype = py::none(), const py::object &na_values = py::none(),
-	       const py::object &skiprows = py::none(), const py::object &quotechar = py::none(),
-	       const py::object &escapechar = py::none(), const py::object &encoding = py::none(),
-	       const py::object &parallel = py::none(), const py::object &date_format = py::none(),
-	       const py::object &timestamp_format = py::none(), const py::object &sample_size = py::none(),
-	       const py::object &all_varchar = py::none(), const py::object &normalize_names = py::none(),
-	       const py::object &filename = py::none(), const py::object &null_padding = py::none(),
-	       const py::object &names = py::none(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &name, py::kwargs &kwargs) {
+		    auto connection_arg = kwargs.contains("conn") ? kwargs["conn"] : py::none();
+		    auto conn = py::cast<shared_ptr<DuckDBPyConnection>>(connection_arg);
+
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->ReadCSV(name, header, compression, sep, delimiter, dtype, na_values, skiprows, quotechar,
-		                         escapechar, encoding, parallel, date_format, timestamp_format, sample_size,
-		                         all_varchar, normalize_names, filename, null_padding, names);
+		    return conn->ReadCSV(name, kwargs);
 	    },
-	    "Create a relation object from the CSV file in 'name'", py::arg("path_or_buffer"), py::kw_only(),
-	    py::arg("header") = py::none(), py::arg("compression") = py::none(), py::arg("sep") = py::none(),
-	    py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(), py::arg("na_values") = py::none(),
-	    py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
-	    py::arg("encoding") = py::none(), py::arg("parallel") = py::none(), py::arg("date_format") = py::none(),
-	    py::arg("timestamp_format") = py::none(), py::arg("sample_size") = py::none(),
-	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
-	    py::arg("null_padding") = py::none(), py::arg("names") = py::none(), py::arg("connection") = py::none());
+	    "Create a relation object from the CSV file in 'name'", py::arg("path_or_buffer"), py::kw_only());
 	m.def(
 	    "from_csv_auto",
-	    [](const py::object &name, const py::object &header = py::none(), const py::object &compression = py::none(),
-	       const py::object &sep = py::none(), const py::object &delimiter = py::none(),
-	       const py::object &dtype = py::none(), const py::object &na_values = py::none(),
-	       const py::object &skiprows = py::none(), const py::object &quotechar = py::none(),
-	       const py::object &escapechar = py::none(), const py::object &encoding = py::none(),
-	       const py::object &parallel = py::none(), const py::object &date_format = py::none(),
-	       const py::object &timestamp_format = py::none(), const py::object &sample_size = py::none(),
-	       const py::object &all_varchar = py::none(), const py::object &normalize_names = py::none(),
-	       const py::object &filename = py::none(), const py::object &null_padding = py::none(),
-	       const py::object &names = py::none(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &name, py::kwargs &kwargs) {
+		    auto connection_arg = kwargs.contains("conn") ? kwargs["conn"] : py::none();
+		    auto conn = py::cast<shared_ptr<DuckDBPyConnection>>(connection_arg);
+
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->ReadCSV(name, header, compression, sep, delimiter, dtype, na_values, skiprows, quotechar,
-		                         escapechar, encoding, parallel, date_format, timestamp_format, sample_size,
-		                         all_varchar, normalize_names, filename, null_padding, names);
+		    return conn->ReadCSV(name, kwargs);
 	    },
-	    "Create a relation object from the CSV file in 'name'", py::arg("path_or_buffer"), py::kw_only(),
-	    py::arg("header") = py::none(), py::arg("compression") = py::none(), py::arg("sep") = py::none(),
-	    py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(), py::arg("na_values") = py::none(),
-	    py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
-	    py::arg("encoding") = py::none(), py::arg("parallel") = py::none(), py::arg("date_format") = py::none(),
-	    py::arg("timestamp_format") = py::none(), py::arg("sample_size") = py::none(),
-	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
-	    py::arg("null_padding") = py::none(), py::arg("names") = py::none(), py::arg("connection") = py::none());
+	    "Create a relation object from the CSV file in 'name'", py::arg("path_or_buffer"), py::kw_only());
 	m.def(
 	    "from_df",
 	    [](const PandasDataFrame &value, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -1070,8 +1041,12 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	    .export_values();
 
 	RegisterStatementType(m);
-
 	RegisterExpectedResultType(m);
+
+	py::enum_<duckdb::PythonCSVLineTerminator::Type>(m, "CSVLineTerminator")
+	    .value("LINE_FEED", duckdb::PythonCSVLineTerminator::Type::LINE_FEED)
+	    .value("CARRIAGE_RETURN_LINE_FEED", duckdb::PythonCSVLineTerminator::Type::CARRIAGE_RETURN_LINE_FEED)
+	    .export_values();
 
 	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
 	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)

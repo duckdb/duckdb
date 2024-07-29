@@ -179,8 +179,8 @@ struct Interpolator<true> {
 			break;
 		}
 		default:
-			const auto scaled_q = (double)(n * q.dbl);
-			floored = UnsafeNumericCast<idx_t>(floor(n - scaled_q));
+			const auto scaled_q = double(n) * q.dbl;
+			floored = UnsafeNumericCast<idx_t>(floor(double(n) - scaled_q));
 			break;
 		}
 

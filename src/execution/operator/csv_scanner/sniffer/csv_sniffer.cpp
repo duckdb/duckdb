@@ -107,8 +107,8 @@ SnifferResult CSVSniffer::MinimalSniff() {
 		return {{}, {}};
 	}
 
-	state_machine->dialect_options.num_cols = sniffed_column_counts[0];
-	options.dialect_options.num_cols = sniffed_column_counts[0];
+	state_machine->dialect_options.num_cols = sniffed_column_counts[0].number_of_columns;
+	options.dialect_options.num_cols = sniffed_column_counts[0].number_of_columns;
 
 	// First figure out the number of columns on this configuration
 	auto scanner = count_scanner.UpgradeToStringValueScanner();

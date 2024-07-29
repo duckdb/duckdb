@@ -18,22 +18,18 @@ namespace duckdb {
 
 unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func,
                                              idx_t depth) {
-
-	auto &macro_def = macro_func.function->Cast<TableMacroFunction>();
-	auto node = macro_def.query_node->Copy();
-
-	// auto &macro_def = *macro_func->function;
-
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
-	string error =
-	    MacroFunction::ValidateArguments(*macro_func.function, macro_func.name, function, positionals, defaults);
-	if (!error.empty()) {
+	auto bind_result =
+	    MacroFunction::BindMacroFunction(macro_func.macros, macro_func.name, function, positionals, defaults);
+	if (!bind_result.error.empty()) {
 		// cannot use error below as binder rnot in scope
 		// return BindResult(binder. FormatError(*expr->get(), error));
-		throw BinderException(function, error);
+		throw BinderException(function, bind_result.error);
 	}
+	auto &macro_def = macro_func.macros[bind_result.function_idx.GetIndex()]->Cast<TableMacroFunction>();
+	auto node = macro_def.query_node->Copy();
 
 	// create a MacroBinding to bind this macro's parameters to its arguments
 	vector<LogicalType> types;

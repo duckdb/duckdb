@@ -412,7 +412,7 @@ BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx
 	return (*lambda_bindings)[lambda_ref.lambda_idx].Bind(lambda_ref, depth);
 }
 
-BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_t depth) {
+BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_t depth, bool root_expression) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
@@ -421,6 +421,14 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	auto expr = QualifyColumnName(col_ref_p, error);
 	if (!expr) {
 		if (!col_ref_p.IsQualified()) {
+			// column was not found
+			// first try to bind it as an alias
+			BindResult alias_result;
+			auto found_alias = TryBindAlias(col_ref_p, root_expression, alias_result);
+			if (found_alias) {
+				return alias_result;
+			}
+
 			// column was not found - check if it is a SQL value function
 			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
 			if (value_function) {

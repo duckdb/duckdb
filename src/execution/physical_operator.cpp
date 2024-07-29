@@ -18,9 +18,12 @@ string PhysicalOperator::GetName() const {
 	return PhysicalOperatorToString(type);
 }
 
-string PhysicalOperator::ToString() const {
-	TreeRenderer renderer;
-	return renderer.ToString(*this);
+string PhysicalOperator::ToString(ExplainFormat format) const {
+	auto renderer = TreeRenderer::CreateRenderer(format);
+	stringstream ss;
+	auto tree = RenderTree::CreateRenderTree(*this);
+	renderer->ToStream(*tree, ss);
+	return ss.str();
 }
 
 // LCOV_EXCL_START

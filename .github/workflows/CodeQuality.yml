@@ -1,6 +1,9 @@
 name: CodeQuality
 on:
   workflow_dispatch:
+    inputs:
+      explicit_checks:
+        type: string
   repository_dispatch:
   push:
     branches:
@@ -94,14 +97,15 @@ jobs:
 
   tidy-check:
     name: Tidy Check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: format-check
 
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
       GEN: ninja
       TIDY_THREADS: 4
+      TIDY_CHECKS: ${{ inputs.explicit_checks && inputs.explicit_checks || '' }}
 
     steps:
       - uses: actions/checkout@v3
@@ -110,7 +114,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global] --break-system-packages
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
