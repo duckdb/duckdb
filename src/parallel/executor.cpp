@@ -544,7 +544,7 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 	}
 	// check if there are any incomplete pipelines
 	auto &scheduler = TaskScheduler::GetScheduler(context);
-	while (completed_pipelines < total_pipelines) {
+	if (completed_pipelines < total_pipelines) {
 		// there are! if we don't already have a task, fetch one
 		auto current_task = task.get();
 		if (dry_run) {
