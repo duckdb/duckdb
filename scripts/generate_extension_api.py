@@ -177,13 +177,13 @@ def create_function_comment(function_obj):
                     continue
                 if param['name'] in comment['param_comments']:
                     param_comment = comment['param_comments'][param['name']]
-                    result += f'* {param_name}: {param_comment}\n'
+                    result += f'* @param {param_name} {param_comment}\n'
                 elif not ALLOW_UNCOMMENTED_PARAMS:
                     print(f'Uncommented parameter found: {param_name} of function {function_name}')
                     exit(1)
         if 'return_value' in comment:
             comment_return_value = comment['return_value']
-            result += f'* returns: {comment_return_value}\n'
+            result += f'* @return {comment_return_value}\n'
         result += '*/\n'
     return result
 
