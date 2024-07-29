@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 
@@ -15,24 +16,26 @@ IndexDataTableInfo::~IndexDataTableInfo() {
 	info->GetIndexes().RemoveIndex(index_name);
 }
 
-DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
-    : IndexCatalogEntry(catalog, schema, info) {
+DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
+                               TableCatalogEntry &table_p)
+    : IndexCatalogEntry(catalog, schema, info), initial_index_size(0) {
+	auto &table = table_p.Cast<DuckTableEntry>();
+	auto &storage = table.GetStorage();
+
+	this->info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), name);
+}
+
+DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
+                               shared_ptr<IndexDataTableInfo> info_p)
+    : IndexCatalogEntry(catalog, schema, info), info(std::move(info_p)), initial_index_size(0) {
 }
 
 unique_ptr<CatalogEntry> DuckIndexEntry::Copy(ClientContext &context) const {
 	auto info_copy = GetInfo();
 	auto &cast_info = info_copy->Cast<CreateIndexInfo>();
 
-	auto result = make_uniq<DuckIndexEntry>(catalog, schema, cast_info);
-	result->info = info;
+	auto result = make_uniq<DuckIndexEntry>(catalog, schema, cast_info, info);
 	result->initial_index_size = initial_index_size;
-
-	for (auto &expr : expressions) {
-		result->expressions.push_back(expr->Copy());
-	}
-	for (auto &expr : parsed_expressions) {
-		result->parsed_expressions.push_back(expr->Copy());
-	}
 
 	return std::move(result);
 }

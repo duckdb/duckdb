@@ -9,6 +9,7 @@ PRAGMA enable_verification
 statement error
 CREATE TYPE alias as BLOBL;
 ----
+<REGEX>:Catalog Error.*Type.*does not exist.*
 
 statement ok
 CREATE TYPE a as BLOB;

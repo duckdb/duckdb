@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine)
-    : ScannerResult(states, state_machine) {
+ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size)
+    : ScannerResult(states, state_machine, result_size) {
 }
 
 void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos) {
@@ -11,16 +11,23 @@ void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_p
 }
 
 inline void ColumnCountResult::InternalAddRow() {
-	column_counts[result_position++] = current_column_count + 1;
+	column_counts[result_position].number_of_columns = current_column_count + 1;
 	current_column_count = 0;
 }
 
 bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
 	result.InternalAddRow();
 	if (!result.states.EmptyLastValue()) {
-		result.last_value_always_empty = false;
+		idx_t col_count_idx = result.result_position;
+		for (idx_t i = 0; i < result.result_position + 1; i++) {
+			if (!result.column_counts[col_count_idx].last_value_always_empty) {
+				break;
+			}
+			result.column_counts[col_count_idx--].last_value_always_empty = false;
+		}
 	}
-	if (result.result_position >= STANDARD_VECTOR_SIZE) {
+	result.result_position++;
+	if (result.result_position >= result.result_size) {
 		// We sniffed enough rows
 		return true;
 	}
@@ -41,11 +48,13 @@ void ColumnCountResult::QuotedNewLine(ColumnCountResult &result) {
 	// nop
 }
 
-ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager_p,
+ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       shared_ptr<CSVErrorHandler> error_handler, CSVIterator iterator)
-    : BaseScanner(std::move(buffer_manager_p), state_machine, std::move(error_handler), true, nullptr, iterator),
-      result(states, *state_machine), column_count(1) {
+                                       shared_ptr<CSVErrorHandler> error_handler, idx_t result_size_p,
+                                       CSVIterator iterator)
+    : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler), true, nullptr, iterator),
+      result(states, *state_machine, result_size_p), column_count(1), result_size(result_size_p) {
+	sniffing = true;
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
@@ -53,7 +62,8 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 	if (iterator.done) {
 		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
 	}
-	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator);
+	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator,
+	                                     result_size);
 }
 
 ColumnCountResult &ColumnCountScanner::ParseChunk() {
@@ -72,12 +82,12 @@ void ColumnCountScanner::Initialize() {
 }
 
 void ColumnCountScanner::FinalizeChunkProcess() {
-	if (result.result_position == STANDARD_VECTOR_SIZE || result.error) {
+	if (result.result_position == result.result_size || result.error) {
 		// We are done
 		return;
 	}
 	// We run until we have a full chunk, or we are done scanning
-	while (!FinishedFile() && result.result_position < STANDARD_VECTOR_SIZE && !result.error) {
+	while (!FinishedFile() && result.result_position < result.result_size && !result.error) {
 		if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
 			// Move to next buffer
 			cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
@@ -87,7 +97,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 					return;
 				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added
-				result.InternalAddRow();
+				result.AddRow(result, NumericLimits<idx_t>::Maximum());
 				return;
 			}
 			iterator.pos.buffer_pos = 0;

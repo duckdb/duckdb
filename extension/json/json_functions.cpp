@@ -167,6 +167,8 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetSerializeSqlFunction());
 	functions.push_back(GetDeserializeSqlFunction());
 
+	functions.push_back(GetPrettyPrintFunction());
+
 	return functions;
 }
 
@@ -196,7 +198,7 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 
 unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
                                                         optional_ptr<ReplacementScanData> data) {
-	auto &table_name = input.table_name;
+	auto table_name = ReplacementScan::GetFullPath(input);
 	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson"})) {
 		return nullptr;
 	}

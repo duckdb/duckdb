@@ -36,7 +36,8 @@ void DistinctStatistics::Update(UnifiedVectorFormat &vdata, const LogicalType &t
 
 	total_count += count;
 	if (sample) {
-		count = MinValue<idx_t>(idx_t(SAMPLE_RATE * MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count)), count);
+		count = MinValue<idx_t>(idx_t(SAMPLE_RATE * static_cast<double>(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count))),
+		                        count);
 	}
 	sample_count += count;
 
@@ -56,15 +57,15 @@ idx_t DistinctStatistics::GetCount() const {
 		return 0;
 	}
 
-	double u = MinValue<idx_t>(log->Count(), sample_count);
-	double s = sample_count;
-	double n = total_count;
+	double u = static_cast<double>(MinValue<idx_t>(log->Count(), sample_count));
+	double s = static_cast<double>(sample_count);
+	double n = static_cast<double>(total_count);
 
 	// Assume this proportion of the the sampled values occurred only once
 	double u1 = pow(u / s, 2) * u;
 
 	// Estimate total uniques using Good Turing Estimation
-	idx_t estimate = NumericCast<idx_t>(u + u1 / s * (n - s));
+	idx_t estimate = LossyNumericCast<idx_t>(u + u1 / s * (n - s));
 	return MinValue<idx_t>(estimate, total_count);
 }
 

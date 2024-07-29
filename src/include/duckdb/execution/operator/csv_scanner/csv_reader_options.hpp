@@ -68,6 +68,8 @@ struct CSVReaderOptions {
 	vector<LogicalType> sql_type_list;
 	//! User-defined name list
 	vector<string> name_list;
+	//! If the names and types were set by the columns parameter
+	bool columns_set = false;
 	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
 	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR,   LogicalType::DOUBLE, LogicalType::BIGINT,
 	                                            LogicalType::TIMESTAMP, LogicalType::DATE,   LogicalType::TIME,
@@ -148,7 +150,7 @@ struct CSVReaderOptions {
 	//! If we can safely ignore errors (i.e., they are being ignored and not being stored in a rejects table)
 	bool IgnoreErrors() const;
 
-	NewLineIdentifier GetNewline() const;
+	string GetNewline() const;
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
@@ -161,17 +163,18 @@ struct CSVReaderOptions {
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 	void ToNamedParameters(named_parameter_map_t &out);
-	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context, vector<LogicalType> &return_types,
-	                         vector<string> &names);
+	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context);
 
-	string ToString() const;
+	string ToString(const string &current_file_path) const;
 	//! If the type for column with idx i was manually set
 	bool WasTypeManuallySet(idx_t i) const;
 
 	string NewLineIdentifierToString() {
 		switch (dialect_options.state_machine_options.new_line.GetValue()) {
-		case NewLineIdentifier::SINGLE:
+		case NewLineIdentifier::SINGLE_N:
 			return "\\n";
+		case NewLineIdentifier::SINGLE_R:
+			return "\\r";
 		case NewLineIdentifier::CARRY_ON:
 			return "\\r\\n";
 		default:

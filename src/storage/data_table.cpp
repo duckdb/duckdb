@@ -326,6 +326,10 @@ void DataTable::VacuumIndexes() {
 	});
 }
 
+void DataTable::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+	row_groups->CleanupAppend(lowest_transaction, start, count);
+}
+
 bool DataTable::IndexNameIsUnique(const string &name) {
 	return info->indexes.NameIsUnique(name);
 }
@@ -941,9 +945,6 @@ void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &indexes) 
 }
 
 void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
-	if (log.skip_writing) {
-		return;
-	}
 	log.WriteSetTable(info->schema, info->table);
 	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }

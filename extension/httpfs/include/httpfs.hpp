@@ -2,7 +2,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/http_state.hpp"
+#include "http_state.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -58,6 +58,20 @@ struct HTTPParams {
 	static HTTPParams ReadFrom(optional_ptr<FileOpener> opener);
 };
 
+class HTTPClientCache {
+public:
+	//! Get a client from the client cache
+	unique_ptr<duckdb_httplib_openssl::Client> GetClient();
+	//! Store a client in the cache for reuse
+	void StoreClient(unique_ptr<duckdb_httplib_openssl::Client> client);
+
+protected:
+	//! The cached clients
+	vector<unique_ptr<duckdb_httplib_openssl::Client>> clients;
+	//! Lock to fetch a client
+	mutex lock;
+};
+
 class HTTPFileHandle : public FileHandle {
 public:
 	HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags flags, const HTTPParams &params);
@@ -66,7 +80,8 @@ public:
 	virtual void Initialize(optional_ptr<FileOpener> opener);
 
 	// We keep an http client stored for connection reuse with keep-alive headers
-	duckdb::unique_ptr<duckdb_httplib_openssl::Client> http_client;
+	HTTPClientCache client_cache;
+
 	optional_ptr<HTTPLogger> http_logger;
 
 	const HTTPParams http_params;
@@ -94,12 +109,18 @@ public:
 
 	void AddHeaders(HeaderMap &map);
 
+	// Get a Client to run requests over
+	unique_ptr<duckdb_httplib_openssl::Client> GetClient(optional_ptr<ClientContext> client_context);
+	// Return the client for re-use
+	void StoreClient(unique_ptr<duckdb_httplib_openssl::Client> client);
+
 public:
 	void Close() override {
 	}
 
 protected:
-	virtual void InitializeClient(optional_ptr<ClientContext> client_context);
+	//! Create a new Client
+	virtual unique_ptr<duckdb_httplib_openssl::Client> CreateClient(optional_ptr<ClientContext> client_context);
 };
 
 class HTTPFileSystem : public FileSystem {

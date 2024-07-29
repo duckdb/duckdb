@@ -158,9 +158,9 @@ class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
-	                  bool figure_out_new_line, idx_t buffer_position, CSVErrorHandler &error_handler,
-	                  CSVIterator &iterator, bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan,
-	                  idx_t &lines_read, bool sniffing);
+	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
+	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing,
+	                  string path);
 
 	~StringValueResult();
 
@@ -186,8 +186,7 @@ public:
 	DataChunk parse_chunk;
 	idx_t number_of_rows = 0;
 	idx_t cur_col_id = 0;
-	bool figure_out_new_line;
-	idx_t result_size;
+	bool figure_out_new_line = false;
 	//! Information to properly handle errors
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
@@ -225,6 +224,8 @@ public:
 	//! We store borked rows so we can generate multiple errors during flushing
 	unordered_set<idx_t> borked_rows;
 
+	const string path;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -258,11 +259,12 @@ public:
 	StringValueScanner(idx_t scanner_idx, const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
 	                   const shared_ptr<CSVErrorHandler> &error_handler, const shared_ptr<CSVFileScan> &csv_file_scan,
-	                   bool sniffing = false, CSVIterator boundary = {}, bool figure_out_nl = false);
+	                   bool sniffing = false, CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
-	                   const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary);
+	                   const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size = STANDARD_VECTOR_SIZE,
+	                   CSVIterator boundary = {});
 
 	StringValueResult &ParseChunk() override;
 
@@ -278,7 +280,7 @@ public:
 	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
-	static bool CanDirectlyCast(const LogicalType &type);
+	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
 
 	const idx_t scanner_idx;
 

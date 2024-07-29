@@ -15,12 +15,13 @@ namespace duckdb {
 class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
+class StorageCommitState;
 struct UndoBufferProperties;
 
 class DuckTransaction : public Transaction {
 public:
 	DuckTransaction(DuckTransactionManager &manager, ClientContext &context, transaction_t start_time,
-	                transaction_t transaction_id);
+	                transaction_t transaction_id, idx_t catalog_version);
 	~DuckTransaction() override;
 
 	//! The start timestamp of this transaction
@@ -32,25 +33,30 @@ public:
 	//! Highest active query when the transaction finished, used for cleaning up
 	transaction_t highest_active_query;
 
+	atomic<idx_t> catalog_version;
+
 public:
 	static DuckTransaction &Get(ClientContext &context, AttachedDatabase &db);
 	static DuckTransaction &Get(ClientContext &context, Catalog &catalog);
 	LocalStorage &GetLocalStorage();
 
-	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data = nullptr, idx_t extra_data_size = 0);
+	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data, idx_t extra_data_size);
 
 	void SetReadWrite() override;
 
+	bool ShouldWriteToWAL(AttachedDatabase &db);
+	ErrorData WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
-	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept;
+	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id,
+	                 unique_ptr<StorageCommitState> commit_state) noexcept;
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
 	bool AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties);
 
 	//! Rollback
 	void Rollback() noexcept;
 	//! Cleanup the undo buffer
-	void Cleanup();
+	void Cleanup(transaction_t lowest_active_transaction);
 
 	bool ChangesMade();
 	UndoBufferProperties GetUndoProperties();
@@ -66,6 +72,9 @@ public:
 	}
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
+	bool HasWriteLock() const {
+		return write_lock.get();
+	}
 
 private:
 	DuckTransactionManager &transaction_manager;

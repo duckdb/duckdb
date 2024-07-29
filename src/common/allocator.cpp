@@ -129,7 +129,9 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 	auto result = allocate_function(private_data.get(), size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
-	private_data->debug_info->AllocateData(result, size);
+	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		private_data->debug_info->AllocateData(result, size);
+	}
 #endif
 	if (!result) {
 		throw OutOfMemoryException("Failed to allocate block of %llu bytes (bad allocation)", size);
@@ -144,7 +146,9 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 	D_ASSERT(size > 0);
 #ifdef DEBUG
 	D_ASSERT(private_data);
-	private_data->debug_info->FreeData(pointer, size);
+	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		private_data->debug_info->FreeData(pointer, size);
+	}
 #endif
 	free_function(private_data.get(), pointer, size);
 }
@@ -162,7 +166,9 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	auto new_pointer = reallocate_function(private_data.get(), pointer, old_size, size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
-	private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
+	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
+	}
 #endif
 	if (!new_pointer) {
 		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes (bad allocation)", size);

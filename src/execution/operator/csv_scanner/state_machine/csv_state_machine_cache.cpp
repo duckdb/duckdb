@@ -199,7 +199,8 @@ CSVStateMachineCache::CSVStateMachineCache() {
 			for (const auto &delimiter : default_delimiter) {
 				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					Insert({delimiter, quote, escape, NewLineIdentifier::SINGLE});
+					Insert({delimiter, quote, escape, NewLineIdentifier::SINGLE_N});
+					Insert({delimiter, quote, escape, NewLineIdentifier::SINGLE_R});
 					Insert({delimiter, quote, escape, NewLineIdentifier::CARRY_ON});
 				}
 			}

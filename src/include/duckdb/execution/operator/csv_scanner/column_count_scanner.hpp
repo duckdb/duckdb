@@ -17,17 +17,20 @@
 
 namespace duckdb {
 
+struct ColumnCount {
+	idx_t number_of_columns = 0;
+	bool last_value_always_empty = true;
+};
 class ColumnCountResult : public ScannerResult {
 public:
-	ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine);
-	inline idx_t &operator[](size_t index) {
+	ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
+	inline ColumnCount &operator[](size_t index) {
 		return column_counts[index];
 	}
 
-	idx_t column_counts[STANDARD_VECTOR_SIZE];
+	ColumnCount column_counts[STANDARD_VECTOR_SIZE];
 	idx_t current_column_count = 0;
 	bool error = false;
-	bool last_value_always_empty = true;
 	idx_t result_position = 0;
 
 	//! Adds a Value to the result
@@ -47,7 +50,8 @@ public:
 class ColumnCountScanner : public BaseScanner {
 public:
 	ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager, const shared_ptr<CSVStateMachine> &state_machine,
-	                   shared_ptr<CSVErrorHandler> error_handler, CSVIterator iterator = {});
+	                   shared_ptr<CSVErrorHandler> error_handler, idx_t result_size = STANDARD_VECTOR_SIZE,
+	                   CSVIterator iterator = {});
 
 	ColumnCountResult &ParseChunk() override;
 
@@ -63,6 +67,7 @@ private:
 	ColumnCountResult result;
 
 	idx_t column_count;
+	idx_t result_size;
 };
 
 } // namespace duckdb

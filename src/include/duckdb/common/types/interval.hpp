@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -39,6 +40,9 @@ struct interval_t { // NOLINT
 		right.Normalize(rmonths, rdays, rmicros);
 
 		return lmonths == rmonths && ldays == rdays && lmicros == rmicros;
+	}
+	inline bool operator!=(const interval_t &right) const {
+		return !(*this == right);
 	}
 
 	inline bool operator>(const interval_t &right) const {
@@ -165,7 +169,7 @@ void interval_t::Normalize(int64_t &months, int64_t &days, int64_t &micros) cons
 	auto input = *this;
 	int64_t extra_months_d = input.days / Interval::DAYS_PER_MONTH;
 	int64_t extra_months_micros = input.micros / Interval::MICROS_PER_MONTH;
-	input.days -= extra_months_d * Interval::DAYS_PER_MONTH;
+	input.days -= UnsafeNumericCast<int32_t>(extra_months_d * Interval::DAYS_PER_MONTH);
 	input.micros -= extra_months_micros * Interval::MICROS_PER_MONTH;
 
 	int64_t extra_days_micros = input.micros / Interval::MICROS_PER_DAY;

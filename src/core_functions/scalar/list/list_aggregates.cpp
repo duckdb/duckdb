@@ -11,7 +11,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/core_functions/create_sort_key.hpp"
-#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {
 
@@ -225,7 +225,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	// state_buffer holds the state for each list of this chunk
 	idx_t size = aggr.function.state_size();
-	auto state_buffer = make_unsafe_uniq_array<data_t>(size * count);
+	auto state_buffer = make_unsafe_uniq_array_uninitialized<data_t>(size * count);
 
 	// state vector for initialize and finalize
 	StateVector state_vector(count, info.aggr_expr->Copy());
@@ -339,12 +339,14 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::VARCHAR:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string_t, string_map_t<idx_t>>(
-			    result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string_t,
+			                                               OwningStringMap<idx_t>>(result, state_vector.state_vector,
+			                                                                       count);
 			break;
 		default:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeGenericValueFunctor, string_t, string_map_t<idx_t>>(
-			    result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeGenericValueFunctor, string_t,
+			                                               OwningStringMap<idx_t>>(result, state_vector.state_vector,
+			                                                                       count);
 			break;
 		}
 	}

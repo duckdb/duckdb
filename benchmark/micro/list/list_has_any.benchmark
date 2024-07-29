@@ -1,0 +1,16 @@
+# name: benchmark/micro/list/list_has_any.benchmark
+# description: Benchmark for the list_has_any function
+# group: [list]
+
+name list_has_any micro
+group micro
+subgroup list
+
+load
+CREATE TABLE t1 as SELECT range(s, s + 3000) as l1, range(s + 1499, s + 3000) as l2 FROM range(0, 3000) r(s);
+
+run
+SELECT bool_and(list_has_any(l1, l2)) FROM t1;
+
+result I
+true

@@ -1,0 +1,17 @@
+# name: benchmark/csv/sniffer_quotes.benchmark
+# description: Run sniffer on quoted lineitem
+# group: [csv]
+
+name CSV Read Benchmark
+group csv
+
+require tpch
+
+cache tpch_sf1_lineitem_quoted.duckdb
+
+load
+call dbgen(sf=1);
+COPY lineitem TO '${BENCHMARK_DIR}/lineitem_quoted.csv' (FORMAT CSV, DELIMITER '|', HEADER, FORCE_QUOTE *);
+
+run
+FROM read_csv('${BENCHMARK_DIR}/lineitem_quoted.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'l_orderkey': 'BIGINT', 'l_partkey': 'BIGINT', 'l_suppkey': 'BIGINT', 'l_linenumber': 'BIGINT', 'l_quantity': 'DOUBLE', 'l_extendedprice': 'DOUBLE', 'l_discount': 'DOUBLE', 'l_tax': 'DOUBLE', 'l_returnflag': 'VARCHAR', 'l_linestatus': 'VARCHAR', 'l_shipdate': 'DATE', 'l_commitdate': 'DATE', 'l_receiptdate': 'DATE', 'l_shipinstruct': 'VARCHAR', 'l_shipmode': 'VARCHAR', 'l_comment': 'VARCHAR'}, dateformat='%Y-%m-%d');

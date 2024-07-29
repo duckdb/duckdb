@@ -1,0 +1,23 @@
+# name: benchmark/tpch/parquet/parquet_q1_encrypted.benchmark
+# description: Execute Q1 over lineitem stored in a parquet file
+# group: [parquet]
+
+name Q1 (Parquet)
+group parquet
+subgroup tpch
+
+# if httpfs is required, en/decryption is 2x as fast
+require httpfs
+require parquet
+require tpch
+
+load
+CALL dbgen(sf=1, suffix='_normal');
+PRAGMA add_parquet_key('key256', '01234567891123450123456789112345');
+COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem_encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'key256'});
+CREATE VIEW lineitem AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/lineitem_encrypted.parquet', encryption_config={footer_key: 'key256'});
+
+run
+PRAGMA tpch(1)
+
+result extension/tpch/dbgen/answers/sf1/q01.csv

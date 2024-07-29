@@ -333,11 +333,18 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		filesec = 0666;
 	}
 
+	if (flags.ExclusiveCreate()) {
+		open_flags |= O_EXCL;
+	}
+
 	// Open the file
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
 		if (flags.ReturnNullIfNotExists() && errno == ENOENT) {
+			return nullptr;
+		}
+		if (flags.ReturnNullIfExists() && errno == EEXIST) {
 			return nullptr;
 		}
 		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
@@ -491,7 +498,8 @@ bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_
 	return false;
 #else
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset_bytes, length_bytes);
+	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, UnsafeNumericCast<int64_t>(offset_bytes),
+	                    UnsafeNumericCast<int64_t>(length_bytes));
 	return res == 0;
 #endif
 #else
@@ -612,10 +620,6 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                 FileOpener *opener) {
-	if (!DirectoryExists(directory, opener)) {
-		return false;
-	}
-
 	auto dir = opendir(directory.c_str());
 	if (!dir) {
 		return false;
@@ -634,11 +638,11 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		}
 		// now stat the file to figure out if it is a regular file or directory
 		string full_path = JoinPath(directory, name);
-		if (access(full_path.c_str(), 0) != 0) {
+		struct stat status;
+		auto res = stat(full_path.c_str(), &status);
+		if (res != 0) {
 			continue;
 		}
-		struct stat status;
-		stat(full_path.c_str(), &status);
 		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
 			// not a file or directory: skip
 			continue;

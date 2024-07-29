@@ -31,3 +31,9 @@ COPY date_test TO '__TEST_DIR__/date.csv'
 statement error
 SET enable_external_access=true;
 ----
+
+# sniffer also respects external access flag
+statement error
+FROM sniff_csv('test/sql/copy/csv/data/test/date.csv');
+----
+Permission Error: sniff_csv is disabled through configuration

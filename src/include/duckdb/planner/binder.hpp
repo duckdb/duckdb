@@ -11,19 +11,21 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/joinside.hpp"
-#include "duckdb/common/reference_map.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/tableref/bound_delimgetref.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -257,14 +259,13 @@ private:
 	void MoveCorrelatedExpressions(Binder &other);
 
 	//! Tries to bind the table name with replacement scans
-	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, const string &table_name,
-	                                                  BaseTableRef &ref);
+	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, BaseTableRef &ref);
 
 	template <class T>
 	BoundStatement BindWithCTE(T &statement);
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
-	BoundStatement Bind(CopyStatement &stmt);
+	BoundStatement Bind(CopyStatement &stmt, CopyToType copy_to_type);
 	BoundStatement Bind(DeleteStatement &stmt);
 	BoundStatement Bind(UpdateStatement &stmt);
 	BoundStatement Bind(CreateStatement &stmt);
@@ -298,6 +299,9 @@ private:
 
 	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map);
 	unique_ptr<BoundCTENode> BindCTE(CTENode &statement);
+	//! Materializes CTEs if this is expected to improve performance
+	bool OptimizeCTEs(QueryNode &node);
+
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
 	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);
@@ -318,6 +322,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte = nullptr);
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
+	unique_ptr<BoundTableRef> Bind(DelimGetRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 	unique_ptr<BoundTableRef> Bind(ColumnDataRef &ref);
 	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
@@ -353,8 +358,9 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundColumnDataRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundDelimGetRef &ref);
 
-	BoundStatement BindCopyTo(CopyStatement &stmt);
+	BoundStatement BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
