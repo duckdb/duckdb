@@ -311,6 +311,23 @@ def create_duckdb_h(ext_api_version):
     with open(DUCKDB_HEADER_OUT_FILE, 'w+') as f:
         f.write(duckdb_h)
 
+def write_struct_member_definitions(version_entries, initialize=False):
+    result = ""
+    for function in version_entries:
+        function_lookup = FUNCTION_MAP[function['name']]
+        # Special case for C API functions that were already deprecated when the extension API started
+        if 'deprecated' in function_lookup and function_lookup['deprecated'] and 'excluded_from_struct' in function_lookup and function_lookup['excluded_from_struct']:
+            continue
+        if 'group_deprecated' in function_lookup and function_lookup['group_deprecated'] and 'group_excluded_from_struct' in function_lookup and function_lookup['group_excluded_from_struct']:
+            continue
+        function_lookup_name = function_lookup['name']
+
+        if initialize:
+            result += f'        result.{function_lookup_name} = {function_lookup_name};\n'
+        else:
+            result += f'        result.{function_lookup_name} = nullptr;\n'
+
+    return result
 
 def create_extension_api_struct(ext_api_version, with_create_method=False):
     # Generate the struct
@@ -333,20 +350,21 @@ def create_extension_api_struct(ext_api_version, with_create_method=False):
     extension_struct_finished += '} ' + f'{DUCKDB_EXT_API_STRUCT_NAME};\n\n'
 
     if with_create_method:
-        extension_struct_finished += "inline duckdb_ext_api_v0 CreateApi() {\n"
-        extension_struct_finished += "    return {\n"
+        extension_struct_finished += "inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {\n"
+        extension_struct_finished += "    duckdb_ext_api_v0 result;\n"
         for api_version_entry in EXT_API_DEFINITION['version_entries']:
-            for function in api_version_entry['entries']:
-                function_lookup = FUNCTION_MAP[function['name']]
-                # Special case for C API functions that were already deprecated when the extension API started
-                if 'deprecated' in function_lookup and function_lookup['deprecated'] and 'excluded_from_struct' in function_lookup and function_lookup['excluded_from_struct']:
-                    continue
-                if 'group_deprecated' in function_lookup and function_lookup['group_deprecated'] and 'group_excluded_from_struct' in function_lookup and function_lookup['group_excluded_from_struct']:
-                    continue
-                function_lookup_name = function_lookup['name']
-                extension_struct_finished += f'        {function_lookup_name}, \n'
-        extension_struct_finished = extension_struct_finished[:-1]
-        extension_struct_finished += "    };\n"
+
+            if len(api_version_entry['entries']) == 0:
+                continue
+
+            major, minor, patch = parse_semver(api_version_entry['version'])
+            extension_struct_finished += f'if (minor_version >= {minor} && patch_version >= {patch})' + '{'
+            extension_struct_finished += write_struct_member_definitions(api_version_entry['entries'], initialize=True)
+            extension_struct_finished += '} else {'
+            extension_struct_finished += write_struct_member_definitions(api_version_entry['entries'], initialize=False)
+            extension_struct_finished += '}'
+
+        extension_struct_finished += "    return result;\n"
         extension_struct_finished += "}\n\n"
 
     extension_struct_finished += create_version_defines(ext_api_version)
@@ -397,9 +415,9 @@ def create_duckdb_ext_h(ext_api_version):
         f'# define DUCKDB_EXTENSION_EXTERN extern const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME};\n'
     )
     extension_header_body += f'// Initializes the C Extension API: First thing to call in the extension entrypoint\n'
-    extension_header_body += f' #define DUCKDB_EXTENSION_API_INIT(info, access) {DUCKDB_EXT_API_PTR_NAME} = ({DUCKDB_EXT_API_STRUCT_NAME} *) access->get_api(info, DUCKDB_EXTENSION_API_VERSION); if (!{DUCKDB_EXT_API_PTR_NAME}) {{ return; }};\n'
+    extension_header_body += f' #define DUCKDB_EXTENSION_API_INIT(info, access, version) {DUCKDB_EXT_API_PTR_NAME} = ({DUCKDB_EXT_API_STRUCT_NAME} *) access->get_api(info, version); if (!{DUCKDB_EXT_API_PTR_NAME}) {{ return; }};\n'
     extension_header_body += f'// Register the extension entrypoint\n'
-    extension_header_body += ' #define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint) DUCKDB_EXTENSION_API void extension_name##_init_c_api(duckdb_extension_info info, duckdb_extension_access *access) { DUCKDB_EXTENSION_API_INIT(info, access); duckdb_database *db = access->get_database(info); duckdb_connection conn; if (duckdb_connect(*db, &conn) == DuckDBError) { access->set_error(info, "Failed to open connection to database"); return; } entrypoint(conn, info, access); duckdb_disconnect(&conn);}\n'
+    extension_header_body += ' #define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint, version) DUCKDB_EXTENSION_API void extension_name##_init_c_api(duckdb_extension_info info, duckdb_extension_access *access) { DUCKDB_EXTENSION_API_INIT(info, access, version); duckdb_database *db = access->get_database(info); duckdb_connection conn; if (duckdb_connect(*db, &conn) == DuckDBError) { access->set_error(info, "Failed to open connection to database"); return; } entrypoint(conn, info, access); duckdb_disconnect(&conn);}\n'
 
 
     header_template = fetch_header_template_ext()

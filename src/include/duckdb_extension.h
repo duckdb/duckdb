@@ -577,16 +577,16 @@ typedef struct {
 // Place in global scope of any C/C++ file that needs to access the extension API
 #define DUCKDB_EXTENSION_EXTERN extern const duckdb_ext_api_v0 *duckdb_ext_api;
 // Initializes the C Extension API: First thing to call in the extension entrypoint
-#define DUCKDB_EXTENSION_API_INIT(info, access)                                                                        \
-	duckdb_ext_api = (duckdb_ext_api_v0 *)access->get_api(info, DUCKDB_EXTENSION_API_VERSION);                         \
+#define DUCKDB_EXTENSION_API_INIT(info, access, version)                                                               \
+	duckdb_ext_api = (duckdb_ext_api_v0 *)access->get_api(info, version);                                              \
 	if (!duckdb_ext_api) {                                                                                             \
 		return;                                                                                                        \
 	};
 // Register the extension entrypoint
-#define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint)                                               \
+#define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint, version)                                      \
 	DUCKDB_EXTENSION_API void extension_name##_init_c_api(duckdb_extension_info info,                                  \
 	                                                      duckdb_extension_access *access) {                           \
-		DUCKDB_EXTENSION_API_INIT(info, access);                                                                       \
+		DUCKDB_EXTENSION_API_INIT(info, access, version);                                                              \
 		duckdb_database *db = access->get_database(info);                                                              \
 		duckdb_connection conn;                                                                                        \
 		if (duckdb_connect(*db, &conn) == DuckDBError) {                                                               \

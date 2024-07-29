@@ -8,6 +8,8 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 #include <duckdb/function/table/system_functions.hpp>
 
@@ -49,15 +51,6 @@ struct DuckDBExtensionLoadState {
 };
 
 
-struct duckdb_extension_access {
-	//! Indicate that an error has occured
-	void (*set_error)(duckdb_extension_info info, const char* version);
-	//! Fetch the database from duckdb to register extensions to. Note that this pointer is valid only during the extension initialization
-	duckdb_database* (*get_database)(duckdb_extension_info info);
-	//! Fetch the API
-	void* (*get_api)(duckdb_extension_info info, const char* version);
-};
-
 struct DuckDBExtensionAccess {
 	static duckdb_extension_access CreateAccessStruct() {
 		return {
@@ -91,18 +84,53 @@ struct DuckDBExtensionAccess {
 		}
 	}
 
+	static bool ParseSemver(string semver, idx_t &major_out, idx_t &minor_out, idx_t &patch_out) {
+		if (!StringUtil::StartsWith(semver, "v")) {
+			return false;
+		}
+
+		auto without_v = semver.substr(1);
+
+		auto split = StringUtil::Split(without_v, '.');
+
+		if (split.size() != 3) {
+			return false;
+		}
+
+		idx_t major, minor, patch;
+		bool succeeded = true;
+
+		succeeded &= TryCast::Operation<string_t, idx_t>(split[0], major);
+		succeeded &= TryCast::Operation<string_t, idx_t>(split[1], minor);
+		succeeded &= TryCast::Operation<string_t, idx_t>(split[2], patch);
+
+		if (!succeeded) {
+			return false;
+		}
+
+		major_out = major;
+		minor_out = minor;
+		patch_out = patch;
+
+		return true;
+	}
+
 	static void* GetAPI(duckdb_extension_info info, const char* version) {
 		// TODO allow fine-grained match
-		if (strcmp(version, DUCKDB_EXTENSION_API_VERSION) != 0) {
+
+		idx_t major, minor, patch;
+		auto res = ParseSemver(version, major, minor, patch);
+
+		if (!res) {
 			auto &load_state = DuckDBExtensionLoadState::Get(info);
 			load_state.has_error = true;
-			load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, "Invalid version"); // TODO make nice
+			load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, "Failed to parse extension C API version: " + string(version));
 			return nullptr;
 		}
 
 		// TODO prevent tripping up memleak detection
 		auto api = new duckdb_ext_api_v0();
-		*api = CreateApi();
+		*api = CreateApi(minor, patch);
 		return api;
 	}
 };

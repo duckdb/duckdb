@@ -277,242 +277,484 @@ typedef struct {
 	duckdb_data_chunk (*duckdb_fetch_chunk)(duckdb_result result);
 } duckdb_ext_api_v0;
 
-inline duckdb_ext_api_v0 CreateApi() {
-	return {
-	    duckdb_open,
-	    duckdb_close,
-	    duckdb_connect,
-	    duckdb_interrupt,
-	    duckdb_query_progress,
-	    duckdb_disconnect,
-	    duckdb_library_version,
-	    duckdb_create_config,
-	    duckdb_config_count,
-	    duckdb_get_config_flag,
-	    duckdb_set_config,
-	    duckdb_destroy_config,
-	    duckdb_query,
-	    duckdb_destroy_result,
-	    duckdb_column_name,
-	    duckdb_column_type,
-	    duckdb_result_statement_type,
-	    duckdb_column_logical_type,
-	    duckdb_column_count,
-	    duckdb_rows_changed,
-	    duckdb_result_error,
-	    duckdb_result_return_type,
-	    duckdb_malloc,
-	    duckdb_free,
-	    duckdb_vector_size,
-	    duckdb_string_is_inlined,
-	    duckdb_from_date,
-	    duckdb_to_date,
-	    duckdb_is_finite_date,
-	    duckdb_from_time,
-	    duckdb_create_time_tz,
-	    duckdb_from_time_tz,
-	    duckdb_to_time,
-	    duckdb_from_timestamp,
-	    duckdb_to_timestamp,
-	    duckdb_is_finite_timestamp,
-	    duckdb_hugeint_to_double,
-	    duckdb_double_to_hugeint,
-	    duckdb_uhugeint_to_double,
-	    duckdb_double_to_uhugeint,
-	    duckdb_double_to_decimal,
-	    duckdb_decimal_to_double,
-	    duckdb_prepare,
-	    duckdb_destroy_prepare,
-	    duckdb_prepare_error,
-	    duckdb_nparams,
-	    duckdb_parameter_name,
-	    duckdb_param_type,
-	    duckdb_clear_bindings,
-	    duckdb_prepared_statement_type,
-	    duckdb_bind_value,
-	    duckdb_bind_parameter_index,
-	    duckdb_bind_boolean,
-	    duckdb_bind_int8,
-	    duckdb_bind_int16,
-	    duckdb_bind_int32,
-	    duckdb_bind_int64,
-	    duckdb_bind_hugeint,
-	    duckdb_bind_uhugeint,
-	    duckdb_bind_decimal,
-	    duckdb_bind_uint8,
-	    duckdb_bind_uint16,
-	    duckdb_bind_uint32,
-	    duckdb_bind_uint64,
-	    duckdb_bind_float,
-	    duckdb_bind_double,
-	    duckdb_bind_date,
-	    duckdb_bind_time,
-	    duckdb_bind_timestamp,
-	    duckdb_bind_timestamp_tz,
-	    duckdb_bind_interval,
-	    duckdb_bind_varchar,
-	    duckdb_bind_varchar_length,
-	    duckdb_bind_blob,
-	    duckdb_bind_null,
-	    duckdb_execute_prepared,
-	    duckdb_extract_statements,
-	    duckdb_prepare_extracted_statement,
-	    duckdb_extract_statements_error,
-	    duckdb_destroy_extracted,
-	    duckdb_pending_prepared,
-	    duckdb_destroy_pending,
-	    duckdb_pending_error,
-	    duckdb_pending_execute_task,
-	    duckdb_pending_execute_check_state,
-	    duckdb_execute_pending,
-	    duckdb_pending_execution_is_finished,
-	    duckdb_destroy_value,
-	    duckdb_create_varchar,
-	    duckdb_create_varchar_length,
-	    duckdb_create_int64,
-	    duckdb_create_struct_value,
-	    duckdb_create_list_value,
-	    duckdb_create_array_value,
-	    duckdb_get_varchar,
-	    duckdb_get_int64,
-	    duckdb_create_logical_type,
-	    duckdb_logical_type_get_alias,
-	    duckdb_create_list_type,
-	    duckdb_create_array_type,
-	    duckdb_create_map_type,
-	    duckdb_create_union_type,
-	    duckdb_create_struct_type,
-	    duckdb_create_enum_type,
-	    duckdb_create_decimal_type,
-	    duckdb_get_type_id,
-	    duckdb_decimal_width,
-	    duckdb_decimal_scale,
-	    duckdb_decimal_internal_type,
-	    duckdb_enum_internal_type,
-	    duckdb_enum_dictionary_size,
-	    duckdb_enum_dictionary_value,
-	    duckdb_list_type_child_type,
-	    duckdb_array_type_child_type,
-	    duckdb_array_type_array_size,
-	    duckdb_map_type_key_type,
-	    duckdb_map_type_value_type,
-	    duckdb_struct_type_child_count,
-	    duckdb_struct_type_child_name,
-	    duckdb_struct_type_child_type,
-	    duckdb_union_type_member_count,
-	    duckdb_union_type_member_name,
-	    duckdb_union_type_member_type,
-	    duckdb_destroy_logical_type,
-	    duckdb_create_data_chunk,
-	    duckdb_destroy_data_chunk,
-	    duckdb_data_chunk_reset,
-	    duckdb_data_chunk_get_column_count,
-	    duckdb_data_chunk_get_vector,
-	    duckdb_data_chunk_get_size,
-	    duckdb_data_chunk_set_size,
-	    duckdb_vector_get_column_type,
-	    duckdb_vector_get_data,
-	    duckdb_vector_get_validity,
-	    duckdb_vector_ensure_validity_writable,
-	    duckdb_vector_assign_string_element,
-	    duckdb_vector_assign_string_element_len,
-	    duckdb_list_vector_get_child,
-	    duckdb_list_vector_get_size,
-	    duckdb_list_vector_set_size,
-	    duckdb_list_vector_reserve,
-	    duckdb_struct_vector_get_child,
-	    duckdb_array_vector_get_child,
-	    duckdb_validity_row_is_valid,
-	    duckdb_validity_set_row_validity,
-	    duckdb_validity_set_row_invalid,
-	    duckdb_validity_set_row_valid,
-	    duckdb_create_scalar_function,
-	    duckdb_destroy_scalar_function,
-	    duckdb_scalar_function_set_name,
-	    duckdb_scalar_function_add_parameter,
-	    duckdb_scalar_function_set_return_type,
-	    duckdb_scalar_function_set_extra_info,
-	    duckdb_scalar_function_set_function,
-	    duckdb_register_scalar_function,
-	    duckdb_create_table_function,
-	    duckdb_destroy_table_function,
-	    duckdb_table_function_set_name,
-	    duckdb_table_function_add_parameter,
-	    duckdb_table_function_add_named_parameter,
-	    duckdb_table_function_set_extra_info,
-	    duckdb_table_function_set_bind,
-	    duckdb_table_function_set_init,
-	    duckdb_table_function_set_local_init,
-	    duckdb_table_function_set_function,
-	    duckdb_table_function_supports_projection_pushdown,
-	    duckdb_register_table_function,
-	    duckdb_bind_get_extra_info,
-	    duckdb_bind_add_result_column,
-	    duckdb_bind_get_parameter_count,
-	    duckdb_bind_get_parameter,
-	    duckdb_bind_get_named_parameter,
-	    duckdb_bind_set_bind_data,
-	    duckdb_bind_set_cardinality,
-	    duckdb_bind_set_error,
-	    duckdb_init_get_extra_info,
-	    duckdb_init_get_bind_data,
-	    duckdb_init_set_init_data,
-	    duckdb_init_get_column_count,
-	    duckdb_init_get_column_index,
-	    duckdb_init_set_max_threads,
-	    duckdb_init_set_error,
-	    duckdb_function_get_extra_info,
-	    duckdb_function_get_bind_data,
-	    duckdb_function_get_init_data,
-	    duckdb_function_get_local_init_data,
-	    duckdb_function_set_error,
-	    duckdb_add_replacement_scan,
-	    duckdb_replacement_scan_set_function_name,
-	    duckdb_replacement_scan_add_parameter,
-	    duckdb_replacement_scan_set_error,
-	    duckdb_appender_create,
-	    duckdb_appender_column_count,
-	    duckdb_appender_column_type,
-	    duckdb_appender_error,
-	    duckdb_appender_flush,
-	    duckdb_appender_close,
-	    duckdb_appender_destroy,
-	    duckdb_appender_begin_row,
-	    duckdb_appender_end_row,
-	    duckdb_append_default,
-	    duckdb_append_bool,
-	    duckdb_append_int8,
-	    duckdb_append_int16,
-	    duckdb_append_int32,
-	    duckdb_append_int64,
-	    duckdb_append_hugeint,
-	    duckdb_append_uint8,
-	    duckdb_append_uint16,
-	    duckdb_append_uint32,
-	    duckdb_append_uint64,
-	    duckdb_append_uhugeint,
-	    duckdb_append_float,
-	    duckdb_append_double,
-	    duckdb_append_date,
-	    duckdb_append_time,
-	    duckdb_append_timestamp,
-	    duckdb_append_interval,
-	    duckdb_append_varchar,
-	    duckdb_append_varchar_length,
-	    duckdb_append_blob,
-	    duckdb_append_null,
-	    duckdb_append_data_chunk,
-	    duckdb_execute_tasks,
-	    duckdb_create_task_state,
-	    duckdb_execute_tasks_state,
-	    duckdb_execute_n_tasks_state,
-	    duckdb_finish_execution,
-	    duckdb_task_state_is_finished,
-	    duckdb_destroy_task_state,
-	    duckdb_execution_is_finished,
-	    duckdb_open_ext,
-	    duckdb_fetch_chunk,
-	};
+inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {
+	duckdb_ext_api_v0 result;
+	if (minor_version >= 0 && patch_version >= 1) {
+		result.duckdb_open = duckdb_open;
+		result.duckdb_close = duckdb_close;
+		result.duckdb_connect = duckdb_connect;
+		result.duckdb_interrupt = duckdb_interrupt;
+		result.duckdb_query_progress = duckdb_query_progress;
+		result.duckdb_disconnect = duckdb_disconnect;
+		result.duckdb_library_version = duckdb_library_version;
+		result.duckdb_create_config = duckdb_create_config;
+		result.duckdb_config_count = duckdb_config_count;
+		result.duckdb_get_config_flag = duckdb_get_config_flag;
+		result.duckdb_set_config = duckdb_set_config;
+		result.duckdb_destroy_config = duckdb_destroy_config;
+		result.duckdb_query = duckdb_query;
+		result.duckdb_destroy_result = duckdb_destroy_result;
+		result.duckdb_column_name = duckdb_column_name;
+		result.duckdb_column_type = duckdb_column_type;
+		result.duckdb_result_statement_type = duckdb_result_statement_type;
+		result.duckdb_column_logical_type = duckdb_column_logical_type;
+		result.duckdb_column_count = duckdb_column_count;
+		result.duckdb_rows_changed = duckdb_rows_changed;
+		result.duckdb_result_error = duckdb_result_error;
+		result.duckdb_result_return_type = duckdb_result_return_type;
+		result.duckdb_malloc = duckdb_malloc;
+		result.duckdb_free = duckdb_free;
+		result.duckdb_vector_size = duckdb_vector_size;
+		result.duckdb_string_is_inlined = duckdb_string_is_inlined;
+		result.duckdb_from_date = duckdb_from_date;
+		result.duckdb_to_date = duckdb_to_date;
+		result.duckdb_is_finite_date = duckdb_is_finite_date;
+		result.duckdb_from_time = duckdb_from_time;
+		result.duckdb_create_time_tz = duckdb_create_time_tz;
+		result.duckdb_from_time_tz = duckdb_from_time_tz;
+		result.duckdb_to_time = duckdb_to_time;
+		result.duckdb_from_timestamp = duckdb_from_timestamp;
+		result.duckdb_to_timestamp = duckdb_to_timestamp;
+		result.duckdb_is_finite_timestamp = duckdb_is_finite_timestamp;
+		result.duckdb_hugeint_to_double = duckdb_hugeint_to_double;
+		result.duckdb_double_to_hugeint = duckdb_double_to_hugeint;
+		result.duckdb_uhugeint_to_double = duckdb_uhugeint_to_double;
+		result.duckdb_double_to_uhugeint = duckdb_double_to_uhugeint;
+		result.duckdb_double_to_decimal = duckdb_double_to_decimal;
+		result.duckdb_decimal_to_double = duckdb_decimal_to_double;
+		result.duckdb_prepare = duckdb_prepare;
+		result.duckdb_destroy_prepare = duckdb_destroy_prepare;
+		result.duckdb_prepare_error = duckdb_prepare_error;
+		result.duckdb_nparams = duckdb_nparams;
+		result.duckdb_parameter_name = duckdb_parameter_name;
+		result.duckdb_param_type = duckdb_param_type;
+		result.duckdb_clear_bindings = duckdb_clear_bindings;
+		result.duckdb_prepared_statement_type = duckdb_prepared_statement_type;
+		result.duckdb_bind_value = duckdb_bind_value;
+		result.duckdb_bind_parameter_index = duckdb_bind_parameter_index;
+		result.duckdb_bind_boolean = duckdb_bind_boolean;
+		result.duckdb_bind_int8 = duckdb_bind_int8;
+		result.duckdb_bind_int16 = duckdb_bind_int16;
+		result.duckdb_bind_int32 = duckdb_bind_int32;
+		result.duckdb_bind_int64 = duckdb_bind_int64;
+		result.duckdb_bind_hugeint = duckdb_bind_hugeint;
+		result.duckdb_bind_uhugeint = duckdb_bind_uhugeint;
+		result.duckdb_bind_decimal = duckdb_bind_decimal;
+		result.duckdb_bind_uint8 = duckdb_bind_uint8;
+		result.duckdb_bind_uint16 = duckdb_bind_uint16;
+		result.duckdb_bind_uint32 = duckdb_bind_uint32;
+		result.duckdb_bind_uint64 = duckdb_bind_uint64;
+		result.duckdb_bind_float = duckdb_bind_float;
+		result.duckdb_bind_double = duckdb_bind_double;
+		result.duckdb_bind_date = duckdb_bind_date;
+		result.duckdb_bind_time = duckdb_bind_time;
+		result.duckdb_bind_timestamp = duckdb_bind_timestamp;
+		result.duckdb_bind_timestamp_tz = duckdb_bind_timestamp_tz;
+		result.duckdb_bind_interval = duckdb_bind_interval;
+		result.duckdb_bind_varchar = duckdb_bind_varchar;
+		result.duckdb_bind_varchar_length = duckdb_bind_varchar_length;
+		result.duckdb_bind_blob = duckdb_bind_blob;
+		result.duckdb_bind_null = duckdb_bind_null;
+		result.duckdb_execute_prepared = duckdb_execute_prepared;
+		result.duckdb_extract_statements = duckdb_extract_statements;
+		result.duckdb_prepare_extracted_statement = duckdb_prepare_extracted_statement;
+		result.duckdb_extract_statements_error = duckdb_extract_statements_error;
+		result.duckdb_destroy_extracted = duckdb_destroy_extracted;
+		result.duckdb_pending_prepared = duckdb_pending_prepared;
+		result.duckdb_destroy_pending = duckdb_destroy_pending;
+		result.duckdb_pending_error = duckdb_pending_error;
+		result.duckdb_pending_execute_task = duckdb_pending_execute_task;
+		result.duckdb_pending_execute_check_state = duckdb_pending_execute_check_state;
+		result.duckdb_execute_pending = duckdb_execute_pending;
+		result.duckdb_pending_execution_is_finished = duckdb_pending_execution_is_finished;
+		result.duckdb_destroy_value = duckdb_destroy_value;
+		result.duckdb_create_varchar = duckdb_create_varchar;
+		result.duckdb_create_varchar_length = duckdb_create_varchar_length;
+		result.duckdb_create_int64 = duckdb_create_int64;
+		result.duckdb_create_struct_value = duckdb_create_struct_value;
+		result.duckdb_create_list_value = duckdb_create_list_value;
+		result.duckdb_create_array_value = duckdb_create_array_value;
+		result.duckdb_get_varchar = duckdb_get_varchar;
+		result.duckdb_get_int64 = duckdb_get_int64;
+		result.duckdb_create_logical_type = duckdb_create_logical_type;
+		result.duckdb_logical_type_get_alias = duckdb_logical_type_get_alias;
+		result.duckdb_create_list_type = duckdb_create_list_type;
+		result.duckdb_create_array_type = duckdb_create_array_type;
+		result.duckdb_create_map_type = duckdb_create_map_type;
+		result.duckdb_create_union_type = duckdb_create_union_type;
+		result.duckdb_create_struct_type = duckdb_create_struct_type;
+		result.duckdb_create_enum_type = duckdb_create_enum_type;
+		result.duckdb_create_decimal_type = duckdb_create_decimal_type;
+		result.duckdb_get_type_id = duckdb_get_type_id;
+		result.duckdb_decimal_width = duckdb_decimal_width;
+		result.duckdb_decimal_scale = duckdb_decimal_scale;
+		result.duckdb_decimal_internal_type = duckdb_decimal_internal_type;
+		result.duckdb_enum_internal_type = duckdb_enum_internal_type;
+		result.duckdb_enum_dictionary_size = duckdb_enum_dictionary_size;
+		result.duckdb_enum_dictionary_value = duckdb_enum_dictionary_value;
+		result.duckdb_list_type_child_type = duckdb_list_type_child_type;
+		result.duckdb_array_type_child_type = duckdb_array_type_child_type;
+		result.duckdb_array_type_array_size = duckdb_array_type_array_size;
+		result.duckdb_map_type_key_type = duckdb_map_type_key_type;
+		result.duckdb_map_type_value_type = duckdb_map_type_value_type;
+		result.duckdb_struct_type_child_count = duckdb_struct_type_child_count;
+		result.duckdb_struct_type_child_name = duckdb_struct_type_child_name;
+		result.duckdb_struct_type_child_type = duckdb_struct_type_child_type;
+		result.duckdb_union_type_member_count = duckdb_union_type_member_count;
+		result.duckdb_union_type_member_name = duckdb_union_type_member_name;
+		result.duckdb_union_type_member_type = duckdb_union_type_member_type;
+		result.duckdb_destroy_logical_type = duckdb_destroy_logical_type;
+		result.duckdb_create_data_chunk = duckdb_create_data_chunk;
+		result.duckdb_destroy_data_chunk = duckdb_destroy_data_chunk;
+		result.duckdb_data_chunk_reset = duckdb_data_chunk_reset;
+		result.duckdb_data_chunk_get_column_count = duckdb_data_chunk_get_column_count;
+		result.duckdb_data_chunk_get_vector = duckdb_data_chunk_get_vector;
+		result.duckdb_data_chunk_get_size = duckdb_data_chunk_get_size;
+		result.duckdb_data_chunk_set_size = duckdb_data_chunk_set_size;
+		result.duckdb_vector_get_column_type = duckdb_vector_get_column_type;
+		result.duckdb_vector_get_data = duckdb_vector_get_data;
+		result.duckdb_vector_get_validity = duckdb_vector_get_validity;
+		result.duckdb_vector_ensure_validity_writable = duckdb_vector_ensure_validity_writable;
+		result.duckdb_vector_assign_string_element = duckdb_vector_assign_string_element;
+		result.duckdb_vector_assign_string_element_len = duckdb_vector_assign_string_element_len;
+		result.duckdb_list_vector_get_child = duckdb_list_vector_get_child;
+		result.duckdb_list_vector_get_size = duckdb_list_vector_get_size;
+		result.duckdb_list_vector_set_size = duckdb_list_vector_set_size;
+		result.duckdb_list_vector_reserve = duckdb_list_vector_reserve;
+		result.duckdb_struct_vector_get_child = duckdb_struct_vector_get_child;
+		result.duckdb_array_vector_get_child = duckdb_array_vector_get_child;
+		result.duckdb_validity_row_is_valid = duckdb_validity_row_is_valid;
+		result.duckdb_validity_set_row_validity = duckdb_validity_set_row_validity;
+		result.duckdb_validity_set_row_invalid = duckdb_validity_set_row_invalid;
+		result.duckdb_validity_set_row_valid = duckdb_validity_set_row_valid;
+		result.duckdb_create_scalar_function = duckdb_create_scalar_function;
+		result.duckdb_destroy_scalar_function = duckdb_destroy_scalar_function;
+		result.duckdb_scalar_function_set_name = duckdb_scalar_function_set_name;
+		result.duckdb_scalar_function_add_parameter = duckdb_scalar_function_add_parameter;
+		result.duckdb_scalar_function_set_return_type = duckdb_scalar_function_set_return_type;
+		result.duckdb_scalar_function_set_extra_info = duckdb_scalar_function_set_extra_info;
+		result.duckdb_scalar_function_set_function = duckdb_scalar_function_set_function;
+		result.duckdb_register_scalar_function = duckdb_register_scalar_function;
+		result.duckdb_create_table_function = duckdb_create_table_function;
+		result.duckdb_destroy_table_function = duckdb_destroy_table_function;
+		result.duckdb_table_function_set_name = duckdb_table_function_set_name;
+		result.duckdb_table_function_add_parameter = duckdb_table_function_add_parameter;
+		result.duckdb_table_function_add_named_parameter = duckdb_table_function_add_named_parameter;
+		result.duckdb_table_function_set_extra_info = duckdb_table_function_set_extra_info;
+		result.duckdb_table_function_set_bind = duckdb_table_function_set_bind;
+		result.duckdb_table_function_set_init = duckdb_table_function_set_init;
+		result.duckdb_table_function_set_local_init = duckdb_table_function_set_local_init;
+		result.duckdb_table_function_set_function = duckdb_table_function_set_function;
+		result.duckdb_table_function_supports_projection_pushdown = duckdb_table_function_supports_projection_pushdown;
+		result.duckdb_register_table_function = duckdb_register_table_function;
+		result.duckdb_bind_get_extra_info = duckdb_bind_get_extra_info;
+		result.duckdb_bind_add_result_column = duckdb_bind_add_result_column;
+		result.duckdb_bind_get_parameter_count = duckdb_bind_get_parameter_count;
+		result.duckdb_bind_get_parameter = duckdb_bind_get_parameter;
+		result.duckdb_bind_get_named_parameter = duckdb_bind_get_named_parameter;
+		result.duckdb_bind_set_bind_data = duckdb_bind_set_bind_data;
+		result.duckdb_bind_set_cardinality = duckdb_bind_set_cardinality;
+		result.duckdb_bind_set_error = duckdb_bind_set_error;
+		result.duckdb_init_get_extra_info = duckdb_init_get_extra_info;
+		result.duckdb_init_get_bind_data = duckdb_init_get_bind_data;
+		result.duckdb_init_set_init_data = duckdb_init_set_init_data;
+		result.duckdb_init_get_column_count = duckdb_init_get_column_count;
+		result.duckdb_init_get_column_index = duckdb_init_get_column_index;
+		result.duckdb_init_set_max_threads = duckdb_init_set_max_threads;
+		result.duckdb_init_set_error = duckdb_init_set_error;
+		result.duckdb_function_get_extra_info = duckdb_function_get_extra_info;
+		result.duckdb_function_get_bind_data = duckdb_function_get_bind_data;
+		result.duckdb_function_get_init_data = duckdb_function_get_init_data;
+		result.duckdb_function_get_local_init_data = duckdb_function_get_local_init_data;
+		result.duckdb_function_set_error = duckdb_function_set_error;
+		result.duckdb_add_replacement_scan = duckdb_add_replacement_scan;
+		result.duckdb_replacement_scan_set_function_name = duckdb_replacement_scan_set_function_name;
+		result.duckdb_replacement_scan_add_parameter = duckdb_replacement_scan_add_parameter;
+		result.duckdb_replacement_scan_set_error = duckdb_replacement_scan_set_error;
+		result.duckdb_appender_create = duckdb_appender_create;
+		result.duckdb_appender_column_count = duckdb_appender_column_count;
+		result.duckdb_appender_column_type = duckdb_appender_column_type;
+		result.duckdb_appender_error = duckdb_appender_error;
+		result.duckdb_appender_flush = duckdb_appender_flush;
+		result.duckdb_appender_close = duckdb_appender_close;
+		result.duckdb_appender_destroy = duckdb_appender_destroy;
+		result.duckdb_appender_begin_row = duckdb_appender_begin_row;
+		result.duckdb_appender_end_row = duckdb_appender_end_row;
+		result.duckdb_append_default = duckdb_append_default;
+		result.duckdb_append_bool = duckdb_append_bool;
+		result.duckdb_append_int8 = duckdb_append_int8;
+		result.duckdb_append_int16 = duckdb_append_int16;
+		result.duckdb_append_int32 = duckdb_append_int32;
+		result.duckdb_append_int64 = duckdb_append_int64;
+		result.duckdb_append_hugeint = duckdb_append_hugeint;
+		result.duckdb_append_uint8 = duckdb_append_uint8;
+		result.duckdb_append_uint16 = duckdb_append_uint16;
+		result.duckdb_append_uint32 = duckdb_append_uint32;
+		result.duckdb_append_uint64 = duckdb_append_uint64;
+		result.duckdb_append_uhugeint = duckdb_append_uhugeint;
+		result.duckdb_append_float = duckdb_append_float;
+		result.duckdb_append_double = duckdb_append_double;
+		result.duckdb_append_date = duckdb_append_date;
+		result.duckdb_append_time = duckdb_append_time;
+		result.duckdb_append_timestamp = duckdb_append_timestamp;
+		result.duckdb_append_interval = duckdb_append_interval;
+		result.duckdb_append_varchar = duckdb_append_varchar;
+		result.duckdb_append_varchar_length = duckdb_append_varchar_length;
+		result.duckdb_append_blob = duckdb_append_blob;
+		result.duckdb_append_null = duckdb_append_null;
+		result.duckdb_append_data_chunk = duckdb_append_data_chunk;
+		result.duckdb_execute_tasks = duckdb_execute_tasks;
+		result.duckdb_create_task_state = duckdb_create_task_state;
+		result.duckdb_execute_tasks_state = duckdb_execute_tasks_state;
+		result.duckdb_execute_n_tasks_state = duckdb_execute_n_tasks_state;
+		result.duckdb_finish_execution = duckdb_finish_execution;
+		result.duckdb_task_state_is_finished = duckdb_task_state_is_finished;
+		result.duckdb_destroy_task_state = duckdb_destroy_task_state;
+		result.duckdb_execution_is_finished = duckdb_execution_is_finished;
+	} else {
+		result.duckdb_open = nullptr;
+		result.duckdb_close = nullptr;
+		result.duckdb_connect = nullptr;
+		result.duckdb_interrupt = nullptr;
+		result.duckdb_query_progress = nullptr;
+		result.duckdb_disconnect = nullptr;
+		result.duckdb_library_version = nullptr;
+		result.duckdb_create_config = nullptr;
+		result.duckdb_config_count = nullptr;
+		result.duckdb_get_config_flag = nullptr;
+		result.duckdb_set_config = nullptr;
+		result.duckdb_destroy_config = nullptr;
+		result.duckdb_query = nullptr;
+		result.duckdb_destroy_result = nullptr;
+		result.duckdb_column_name = nullptr;
+		result.duckdb_column_type = nullptr;
+		result.duckdb_result_statement_type = nullptr;
+		result.duckdb_column_logical_type = nullptr;
+		result.duckdb_column_count = nullptr;
+		result.duckdb_rows_changed = nullptr;
+		result.duckdb_result_error = nullptr;
+		result.duckdb_result_return_type = nullptr;
+		result.duckdb_malloc = nullptr;
+		result.duckdb_free = nullptr;
+		result.duckdb_vector_size = nullptr;
+		result.duckdb_string_is_inlined = nullptr;
+		result.duckdb_from_date = nullptr;
+		result.duckdb_to_date = nullptr;
+		result.duckdb_is_finite_date = nullptr;
+		result.duckdb_from_time = nullptr;
+		result.duckdb_create_time_tz = nullptr;
+		result.duckdb_from_time_tz = nullptr;
+		result.duckdb_to_time = nullptr;
+		result.duckdb_from_timestamp = nullptr;
+		result.duckdb_to_timestamp = nullptr;
+		result.duckdb_is_finite_timestamp = nullptr;
+		result.duckdb_hugeint_to_double = nullptr;
+		result.duckdb_double_to_hugeint = nullptr;
+		result.duckdb_uhugeint_to_double = nullptr;
+		result.duckdb_double_to_uhugeint = nullptr;
+		result.duckdb_double_to_decimal = nullptr;
+		result.duckdb_decimal_to_double = nullptr;
+		result.duckdb_prepare = nullptr;
+		result.duckdb_destroy_prepare = nullptr;
+		result.duckdb_prepare_error = nullptr;
+		result.duckdb_nparams = nullptr;
+		result.duckdb_parameter_name = nullptr;
+		result.duckdb_param_type = nullptr;
+		result.duckdb_clear_bindings = nullptr;
+		result.duckdb_prepared_statement_type = nullptr;
+		result.duckdb_bind_value = nullptr;
+		result.duckdb_bind_parameter_index = nullptr;
+		result.duckdb_bind_boolean = nullptr;
+		result.duckdb_bind_int8 = nullptr;
+		result.duckdb_bind_int16 = nullptr;
+		result.duckdb_bind_int32 = nullptr;
+		result.duckdb_bind_int64 = nullptr;
+		result.duckdb_bind_hugeint = nullptr;
+		result.duckdb_bind_uhugeint = nullptr;
+		result.duckdb_bind_decimal = nullptr;
+		result.duckdb_bind_uint8 = nullptr;
+		result.duckdb_bind_uint16 = nullptr;
+		result.duckdb_bind_uint32 = nullptr;
+		result.duckdb_bind_uint64 = nullptr;
+		result.duckdb_bind_float = nullptr;
+		result.duckdb_bind_double = nullptr;
+		result.duckdb_bind_date = nullptr;
+		result.duckdb_bind_time = nullptr;
+		result.duckdb_bind_timestamp = nullptr;
+		result.duckdb_bind_timestamp_tz = nullptr;
+		result.duckdb_bind_interval = nullptr;
+		result.duckdb_bind_varchar = nullptr;
+		result.duckdb_bind_varchar_length = nullptr;
+		result.duckdb_bind_blob = nullptr;
+		result.duckdb_bind_null = nullptr;
+		result.duckdb_execute_prepared = nullptr;
+		result.duckdb_extract_statements = nullptr;
+		result.duckdb_prepare_extracted_statement = nullptr;
+		result.duckdb_extract_statements_error = nullptr;
+		result.duckdb_destroy_extracted = nullptr;
+		result.duckdb_pending_prepared = nullptr;
+		result.duckdb_destroy_pending = nullptr;
+		result.duckdb_pending_error = nullptr;
+		result.duckdb_pending_execute_task = nullptr;
+		result.duckdb_pending_execute_check_state = nullptr;
+		result.duckdb_execute_pending = nullptr;
+		result.duckdb_pending_execution_is_finished = nullptr;
+		result.duckdb_destroy_value = nullptr;
+		result.duckdb_create_varchar = nullptr;
+		result.duckdb_create_varchar_length = nullptr;
+		result.duckdb_create_int64 = nullptr;
+		result.duckdb_create_struct_value = nullptr;
+		result.duckdb_create_list_value = nullptr;
+		result.duckdb_create_array_value = nullptr;
+		result.duckdb_get_varchar = nullptr;
+		result.duckdb_get_int64 = nullptr;
+		result.duckdb_create_logical_type = nullptr;
+		result.duckdb_logical_type_get_alias = nullptr;
+		result.duckdb_create_list_type = nullptr;
+		result.duckdb_create_array_type = nullptr;
+		result.duckdb_create_map_type = nullptr;
+		result.duckdb_create_union_type = nullptr;
+		result.duckdb_create_struct_type = nullptr;
+		result.duckdb_create_enum_type = nullptr;
+		result.duckdb_create_decimal_type = nullptr;
+		result.duckdb_get_type_id = nullptr;
+		result.duckdb_decimal_width = nullptr;
+		result.duckdb_decimal_scale = nullptr;
+		result.duckdb_decimal_internal_type = nullptr;
+		result.duckdb_enum_internal_type = nullptr;
+		result.duckdb_enum_dictionary_size = nullptr;
+		result.duckdb_enum_dictionary_value = nullptr;
+		result.duckdb_list_type_child_type = nullptr;
+		result.duckdb_array_type_child_type = nullptr;
+		result.duckdb_array_type_array_size = nullptr;
+		result.duckdb_map_type_key_type = nullptr;
+		result.duckdb_map_type_value_type = nullptr;
+		result.duckdb_struct_type_child_count = nullptr;
+		result.duckdb_struct_type_child_name = nullptr;
+		result.duckdb_struct_type_child_type = nullptr;
+		result.duckdb_union_type_member_count = nullptr;
+		result.duckdb_union_type_member_name = nullptr;
+		result.duckdb_union_type_member_type = nullptr;
+		result.duckdb_destroy_logical_type = nullptr;
+		result.duckdb_create_data_chunk = nullptr;
+		result.duckdb_destroy_data_chunk = nullptr;
+		result.duckdb_data_chunk_reset = nullptr;
+		result.duckdb_data_chunk_get_column_count = nullptr;
+		result.duckdb_data_chunk_get_vector = nullptr;
+		result.duckdb_data_chunk_get_size = nullptr;
+		result.duckdb_data_chunk_set_size = nullptr;
+		result.duckdb_vector_get_column_type = nullptr;
+		result.duckdb_vector_get_data = nullptr;
+		result.duckdb_vector_get_validity = nullptr;
+		result.duckdb_vector_ensure_validity_writable = nullptr;
+		result.duckdb_vector_assign_string_element = nullptr;
+		result.duckdb_vector_assign_string_element_len = nullptr;
+		result.duckdb_list_vector_get_child = nullptr;
+		result.duckdb_list_vector_get_size = nullptr;
+		result.duckdb_list_vector_set_size = nullptr;
+		result.duckdb_list_vector_reserve = nullptr;
+		result.duckdb_struct_vector_get_child = nullptr;
+		result.duckdb_array_vector_get_child = nullptr;
+		result.duckdb_validity_row_is_valid = nullptr;
+		result.duckdb_validity_set_row_validity = nullptr;
+		result.duckdb_validity_set_row_invalid = nullptr;
+		result.duckdb_validity_set_row_valid = nullptr;
+		result.duckdb_create_scalar_function = nullptr;
+		result.duckdb_destroy_scalar_function = nullptr;
+		result.duckdb_scalar_function_set_name = nullptr;
+		result.duckdb_scalar_function_add_parameter = nullptr;
+		result.duckdb_scalar_function_set_return_type = nullptr;
+		result.duckdb_scalar_function_set_extra_info = nullptr;
+		result.duckdb_scalar_function_set_function = nullptr;
+		result.duckdb_register_scalar_function = nullptr;
+		result.duckdb_create_table_function = nullptr;
+		result.duckdb_destroy_table_function = nullptr;
+		result.duckdb_table_function_set_name = nullptr;
+		result.duckdb_table_function_add_parameter = nullptr;
+		result.duckdb_table_function_add_named_parameter = nullptr;
+		result.duckdb_table_function_set_extra_info = nullptr;
+		result.duckdb_table_function_set_bind = nullptr;
+		result.duckdb_table_function_set_init = nullptr;
+		result.duckdb_table_function_set_local_init = nullptr;
+		result.duckdb_table_function_set_function = nullptr;
+		result.duckdb_table_function_supports_projection_pushdown = nullptr;
+		result.duckdb_register_table_function = nullptr;
+		result.duckdb_bind_get_extra_info = nullptr;
+		result.duckdb_bind_add_result_column = nullptr;
+		result.duckdb_bind_get_parameter_count = nullptr;
+		result.duckdb_bind_get_parameter = nullptr;
+		result.duckdb_bind_get_named_parameter = nullptr;
+		result.duckdb_bind_set_bind_data = nullptr;
+		result.duckdb_bind_set_cardinality = nullptr;
+		result.duckdb_bind_set_error = nullptr;
+		result.duckdb_init_get_extra_info = nullptr;
+		result.duckdb_init_get_bind_data = nullptr;
+		result.duckdb_init_set_init_data = nullptr;
+		result.duckdb_init_get_column_count = nullptr;
+		result.duckdb_init_get_column_index = nullptr;
+		result.duckdb_init_set_max_threads = nullptr;
+		result.duckdb_init_set_error = nullptr;
+		result.duckdb_function_get_extra_info = nullptr;
+		result.duckdb_function_get_bind_data = nullptr;
+		result.duckdb_function_get_init_data = nullptr;
+		result.duckdb_function_get_local_init_data = nullptr;
+		result.duckdb_function_set_error = nullptr;
+		result.duckdb_add_replacement_scan = nullptr;
+		result.duckdb_replacement_scan_set_function_name = nullptr;
+		result.duckdb_replacement_scan_add_parameter = nullptr;
+		result.duckdb_replacement_scan_set_error = nullptr;
+		result.duckdb_appender_create = nullptr;
+		result.duckdb_appender_column_count = nullptr;
+		result.duckdb_appender_column_type = nullptr;
+		result.duckdb_appender_error = nullptr;
+		result.duckdb_appender_flush = nullptr;
+		result.duckdb_appender_close = nullptr;
+		result.duckdb_appender_destroy = nullptr;
+		result.duckdb_appender_begin_row = nullptr;
+		result.duckdb_appender_end_row = nullptr;
+		result.duckdb_append_default = nullptr;
+		result.duckdb_append_bool = nullptr;
+		result.duckdb_append_int8 = nullptr;
+		result.duckdb_append_int16 = nullptr;
+		result.duckdb_append_int32 = nullptr;
+		result.duckdb_append_int64 = nullptr;
+		result.duckdb_append_hugeint = nullptr;
+		result.duckdb_append_uint8 = nullptr;
+		result.duckdb_append_uint16 = nullptr;
+		result.duckdb_append_uint32 = nullptr;
+		result.duckdb_append_uint64 = nullptr;
+		result.duckdb_append_uhugeint = nullptr;
+		result.duckdb_append_float = nullptr;
+		result.duckdb_append_double = nullptr;
+		result.duckdb_append_date = nullptr;
+		result.duckdb_append_time = nullptr;
+		result.duckdb_append_timestamp = nullptr;
+		result.duckdb_append_interval = nullptr;
+		result.duckdb_append_varchar = nullptr;
+		result.duckdb_append_varchar_length = nullptr;
+		result.duckdb_append_blob = nullptr;
+		result.duckdb_append_null = nullptr;
+		result.duckdb_append_data_chunk = nullptr;
+		result.duckdb_execute_tasks = nullptr;
+		result.duckdb_create_task_state = nullptr;
+		result.duckdb_execute_tasks_state = nullptr;
+		result.duckdb_execute_n_tasks_state = nullptr;
+		result.duckdb_finish_execution = nullptr;
+		result.duckdb_task_state_is_finished = nullptr;
+		result.duckdb_destroy_task_state = nullptr;
+		result.duckdb_execution_is_finished = nullptr;
+	}
+	if (minor_version >= 0 && patch_version >= 2) {
+		result.duckdb_open_ext = duckdb_open_ext;
+	} else {
+		result.duckdb_open_ext = nullptr;
+	}
+	if (minor_version >= 0 && patch_version >= 3) {
+		result.duckdb_fetch_chunk = duckdb_fetch_chunk;
+	} else {
+		result.duckdb_fetch_chunk = nullptr;
+	}
+	return result;
 }
 
 #define DUCKDB_EXTENSION_API_VERSION       "v0.0.3"
