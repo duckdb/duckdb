@@ -437,6 +437,14 @@ typedef struct _duckdb_value {
 } * duckdb_value;
 
 //===--------------------------------------------------------------------===//
+// C API Extension info
+//===--------------------------------------------------------------------===//
+//! Holds state during the C API extension intialization process
+typedef struct _duckdb_extension_info {
+	void *__val;
+} * duckdb_extension_info;
+
+//===--------------------------------------------------------------------===//
 // Function types
 //===--------------------------------------------------------------------===//
 //! Additional function info. When setting this info, it is necessary to pass a destroy-callback function.
@@ -520,6 +528,19 @@ typedef struct _duckdb_arrow_schema {
 typedef struct _duckdb_arrow_array {
 	void *__arra;
 } * duckdb_arrow_array;
+
+//===--------------------------------------------------------------------===//
+// DuckDB extension access
+//===--------------------------------------------------------------------===//
+//! Passed to C API extension as parameter to the entrypoint
+struct duckdb_extension_access {
+	//! Indicate that an error has occured
+	void *(*set_error)(duckdb_extension_info info, const char *error);
+	//! Fetch the database from duckdb to register extensions to
+	duckdb_database *(*get_database)(duckdb_extension_info info);
+	//! Fetch the API
+	void *(*get_api)(duckdb_extension_info info, const char *version);
+};
 
 //===--------------------------------------------------------------------===//
 // Functions

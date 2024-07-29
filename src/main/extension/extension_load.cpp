@@ -1,12 +1,15 @@
+#include "duckdb.h"
 #include "duckdb/common/dl.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "mbedtls_wrapper.hpp"
-#include "duckdb.h"
-#include "duckdb/main/capi/extension_api.hpp"
+
+#include <duckdb/function/table/system_functions.hpp>
 
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
@@ -18,6 +21,92 @@
 
 namespace duckdb {
 
+//! State that is kept during the load phase of a C API extension
+struct DuckDBExtensionLoadState {
+	DuckDBExtensionLoadState(DatabaseInstance &db_p) : db(db_p), database_data(nullptr) {
+	}
+
+	static DuckDBExtensionLoadState &Get(duckdb_extension_info info) {
+		D_ASSERT(info);
+		return *reinterpret_cast<duckdb::DuckDBExtensionLoadState *>(info);
+	}
+
+	duckdb_extension_info ToCStruct() {
+		return reinterpret_cast<duckdb_extension_info>(this);
+	}
+
+	//! Ref to the database being loaded
+	DatabaseInstance &db;
+
+	//! This is the duckdb_database struct that will be passed to the extension during initialization. Note that the
+	//! extension does not need to free it.
+	unique_ptr<DatabaseData> database_data;
+
+	//! Error handling
+	bool has_error = false;
+	//! The stored error from the loading process
+	ErrorData error_data;
+};
+
+
+struct duckdb_extension_access {
+	//! Indicate that an error has occured
+	void (*set_error)(duckdb_extension_info info, const char* version);
+	//! Fetch the database from duckdb to register extensions to. Note that this pointer is valid only during the extension initialization
+	duckdb_database* (*get_database)(duckdb_extension_info info);
+	//! Fetch the API
+	void* (*get_api)(duckdb_extension_info info, const char* version);
+};
+
+struct DuckDBExtensionAccess {
+	static duckdb_extension_access CreateAccessStruct() {
+		return {
+			SetError,
+			GetDatabase,
+			GetAPI
+		};
+	}
+
+	static void SetError(duckdb_extension_info info, const char* error) {
+		auto &load_state = DuckDBExtensionLoadState::Get(info);
+
+		load_state.has_error = true;
+		load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, error);
+	}
+
+	static duckdb_database* GetDatabase(duckdb_extension_info info) {
+		auto &load_state = DuckDBExtensionLoadState::Get(info);
+
+		try {
+			// Create the duckdb_database
+			load_state.database_data = make_uniq<DatabaseData>();
+			load_state.database_data->database = make_uniq<DuckDB>(load_state.db);
+			return (duckdb_database*) load_state.database_data.get();
+		} catch (std::exception &ex) {
+			load_state.error_data = ErrorData(ex);
+			return nullptr;
+		} catch (...) {
+			load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, "Unknown error in GetDatabase when trying to load extension!");
+			return nullptr;
+		}
+	}
+
+	static void* GetAPI(duckdb_extension_info info, const char* version) {
+		// TODO allow fine-grained match
+		if (strcmp(version, DUCKDB_EXTENSION_API_VERSION) != 0) {
+			auto &load_state = DuckDBExtensionLoadState::Get(info);
+			load_state.has_error = true;
+			load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, "Invalid version"); // TODO make nice
+			return nullptr;
+		}
+
+		// TODO prevent tripping up memleak detection
+		auto api = new duckdb_ext_api_v0();
+		*api = CreateApi();
+		return api;
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Load External Extension
 //===--------------------------------------------------------------------===//
@@ -25,7 +114,7 @@ namespace duckdb {
 // The C++ init function
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 // The C init function
-typedef void (*ext_init_capi_fun_t)(duckdb_connection con, void *);
+typedef void (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 typedef const char *(*ext_version_fun_t)(void);
 typedef bool (*ext_is_storage_t)(void);
 
@@ -406,30 +495,25 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 
+	// TODO: make this the only way of calling extensions
 	// "NEW WAY" of loading extensions enabling C API only
-	init_fun_name = res.filebase + "_init_capi";
-	ext_init_capi_fun_t init_fun_capi =
-	    TryLoadFunctionFromDLL<ext_init_capi_fun_t>(res.lib_hdl, init_fun_name, res.filename);
+	init_fun_name = res.filebase + "_init_c_api";
+	ext_init_c_api_fun_t init_fun_capi =
+	    TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(res.lib_hdl, init_fun_name, res.filename);
 
 	if (!init_fun_capi) {
 		throw IOException("File \"%s\" did not contain function \"%s\": %s", res.filename, init_fun_name, GetDLError());
 	}
 
-	try {
-		// Create a connection for the extension to load over
-		Connection conn(db);
-		duckdb_connection capi_con = (duckdb_connection)&conn;
+	// Create the load state
+	DuckDBExtensionLoadState load_state(db);
 
-		// This obviously leaks memory, but technically that is okay because the extension will never be unloaded
-		// Perhaps it is nice to reuse this across all extensions though
-		auto api = new duckdb_ext_api_v0();
-		*api = CreateApi();
+	auto access = DuckDBExtensionAccess::CreateAccessStruct();
+	(*init_fun_capi)(load_state.ToCStruct(), &access);
 
-		(*init_fun_capi)(capi_con, api);
-	} catch (std::exception &e) {
-		ErrorData error(e);
-		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-		                            init_fun_name, res.filename, error.RawMessage());
+	// Throw any error that the extension might have encountered
+	if (load_state.has_error) {
+		load_state.error_data.Throw("An error was thrown during initialization of the extension '" + extension + "': ");
 	}
 
 	D_ASSERT(res.install_info);

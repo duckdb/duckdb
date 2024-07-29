@@ -258,13 +258,14 @@ def parse_semver(version):
 
 def create_version_defines(version):
     major, minor, patch = parse_semver(EXT_API_VERSION)
+    version_string = f'v{major}.{minor}.{patch}'
 
-    result = f"#define DUCKDB_EXTENSION_API_VERSION_MAJOR {major}\n"
+    result = f"#define DUCKDB_EXTENSION_API_VERSION \"{version_string}\"\n"
+    result += f"#define DUCKDB_EXTENSION_API_VERSION_MAJOR {major}\n"
     result += f"#define DUCKDB_EXTENSION_API_VERSION_MINOR {minor}\n"
     result += f"#define DUCKDB_EXTENSION_API_VERSION_PATCH {patch}\n"
 
     return result
-
 
 # Create duckdb.h
 def create_duckdb_h(ext_api_version):
@@ -387,16 +388,20 @@ def create_duckdb_ext_h(ext_api_version):
 
     extension_header_body = create_extension_api_struct(ext_api_version) + '\n\n' + typedefs
 
-    extension_header_body += f'// Place in global scope of C/C++ file that contains the `init` function\n'
+    extension_header_body += f'// Place in global scope of C/C++ file that contains the DUCKDB_EXTENSION_REGISTER_ENTRYPOINT call\n'
     extension_header_body += (
-        f'# define DUCKDB_EXTENSION_MAIN const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME}=0;\n'
+        f'# define DUCKDB_EXTENSION_GLOBAL const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME}=0;\n'
     )
-    extension_header_body += f'// First line in the `init` function should load the api struct using this function\n'
-    extension_header_body += f'# define DUCKDB_EXTENSION_LOAD_API(v) {DUCKDB_EXT_API_PTR_NAME}=v;\n'
     extension_header_body += f'// Place in global scope of any C/C++ file that needs to access the extension API\n'
     extension_header_body += (
         f'# define DUCKDB_EXTENSION_EXTERN extern const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME};\n'
     )
+    extension_header_body += f'// Initializes the C Extension API: First thing to call in the extension entrypoint\n'
+    extension_header_body += f' #define DUCKDB_EXTENSION_API_INIT(info, access) {DUCKDB_EXT_API_PTR_NAME} = ({DUCKDB_EXT_API_STRUCT_NAME} *) access->get_api(info, DUCKDB_EXTENSION_API_VERSION); if (!{DUCKDB_EXT_API_PTR_NAME}) {{ return; }};\n'
+    extension_header_body += f'// Register the extension entrypoint\n'
+    extension_header_body += ' #define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint) DUCKDB_EXTENSION_API void extension_name##_init_c_api(duckdb_extension_info info, duckdb_extension_access *access) { DUCKDB_EXTENSION_API_INIT(info, access); duckdb_database *db = access->get_database(info); duckdb_connection conn; if (duckdb_connect(*db, &conn) == DuckDBError) { access->set_error(info, "Failed to open connection to database"); return; } entrypoint(conn, info, access); duckdb_disconnect(&conn);}\n'
+
+
     header_template = fetch_header_template_ext()
     duckdb_ext_h = DUCKDB_EXT_H_HEADER + header_template.replace(BASE_HEADER_CONTENT_MARK, extension_header_body)
     with open(DUCKDB_HEADER_EXT_OUT_FILE, 'w+') as f:

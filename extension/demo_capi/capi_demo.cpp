@@ -1,14 +1,9 @@
-#define DUCKB_NO_CAPI_FUNCTIONS
-#include "duckdb_extension.h"
 #include "add_numbers.h"
+#include "duckdb_extension.h"
 
-DUCKDB_EXTENSION_MAIN
+DUCKDB_EXTENSION_GLOBAL
 
-//===--------------------------------------------------------------------===//
-// Scalar function 1
-//===--------------------------------------------------------------------===//
-
-static void RegisterAdditionFunction(duckdb_connection connection) {
+static void Entrypoint(duckdb_connection connection, duckdb_extension_info info, duckdb_extension_access *access) {
 	// create a scalar function
 	auto function = duckdb_create_scalar_function();
 	duckdb_scalar_function_set_name(function, "add_numbers_together");
@@ -28,18 +23,9 @@ static void RegisterAdditionFunction(duckdb_connection connection) {
 
 	// register and cleanup
 	duckdb_register_scalar_function(connection, function);
-
 	duckdb_destroy_scalar_function(&function);
 }
 
-//===--------------------------------------------------------------------===//
-// Extension load + setup
-//===--------------------------------------------------------------------===//
 extern "C" {
-
-DUCKDB_EXTENSION_API void demo_capi_init_capi(duckdb_connection &db, duckdb_ext_api_v0 *api) {
-	DUCKDB_EXTENSION_LOAD_API(api);
-
-	RegisterAdditionFunction(db);
-}
+	DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(demo_capi, Entrypoint)
 }

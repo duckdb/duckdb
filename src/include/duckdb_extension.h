@@ -277,6 +277,7 @@ typedef struct {
 	duckdb_data_chunk (*duckdb_fetch_chunk)(duckdb_result result);
 } duckdb_ext_api_v0;
 
+#define DUCKDB_EXTENSION_API_VERSION       "v0.0.3"
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
 #define DUCKDB_EXTENSION_API_VERSION_MINOR 0
 #define DUCKDB_EXTENSION_API_VERSION_PATCH 3
@@ -571,9 +572,27 @@ typedef struct {
 #define duckdb_scalar_function_set_function    duckdb_ext_api->duckdb_scalar_function_set_function
 #define duckdb_register_scalar_function        duckdb_ext_api->duckdb_register_scalar_function
 
-// Place in global scope of C/C++ file that contains the `init` function
-#define DUCKDB_EXTENSION_MAIN const duckdb_ext_api_v0 *duckdb_ext_api = 0;
-// First line in the `init` function should load the api struct using this function
-#define DUCKDB_EXTENSION_LOAD_API(v) duckdb_ext_api = v;
+// Place in global scope of C/C++ file that contains the DUCKDB_EXTENSION_REGISTER_ENTRYPOINT call
+#define DUCKDB_EXTENSION_GLOBAL const duckdb_ext_api_v0 *duckdb_ext_api = 0;
 // Place in global scope of any C/C++ file that needs to access the extension API
 #define DUCKDB_EXTENSION_EXTERN extern const duckdb_ext_api_v0 *duckdb_ext_api;
+// Initializes the C Extension API: First thing to call in the extension entrypoint
+#define DUCKDB_EXTENSION_API_INIT(info, access)                                                                        \
+	duckdb_ext_api = (duckdb_ext_api_v0 *)access->get_api(info, DUCKDB_EXTENSION_API_VERSION);                         \
+	if (!duckdb_ext_api) {                                                                                             \
+		return;                                                                                                        \
+	};
+// Register the extension entrypoint
+#define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint)                                               \
+	DUCKDB_EXTENSION_API void extension_name##_init_c_api(duckdb_extension_info info,                                  \
+	                                                      duckdb_extension_access *access) {                           \
+		DUCKDB_EXTENSION_API_INIT(info, access);                                                                       \
+		duckdb_database *db = access->get_database(info);                                                              \
+		duckdb_connection conn;                                                                                        \
+		if (duckdb_connect(*db, &conn) == DuckDBError) {                                                               \
+			access->set_error(info, "Failed to open connection to database");                                          \
+			return;                                                                                                    \
+		}                                                                                                              \
+		entrypoint(conn, info, access);                                                                                \
+		duckdb_disconnect(&conn);                                                                                      \
+	}
