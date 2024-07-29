@@ -376,14 +376,14 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 			string extended_error;
 			if (has_error) {
 				if (retained_errno == ENOTSUP) {
-					// file lock not supported
+					// file lock not supported for this file system
 					if (flags.Lock() == FileLockType::READ_LOCK) {
 						// for read-only, we ignore not-supported errors
 						has_error = false;
 						errno = 0;
 					} else {
-						extended_error = "File locks are not supported, cannot open the file in read-write mode. Try "
-						                 "opening the file in read-only mode.";
+						extended_error = "File locks are not supported for this file system, cannot open the file in "
+						                 "read-write mode. Try opening the file in read-only mode";
 					}
 				}
 			}
