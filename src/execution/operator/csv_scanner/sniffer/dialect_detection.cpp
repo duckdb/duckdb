@@ -1,6 +1,6 @@
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -132,17 +132,20 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 }
 
 // Returns true if a comment is acceptable
-bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols) {
+bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, bool comment_set_by_user) {
 	// For a comment to be acceptable, we want 3/5th's majority of unmatches in the columns
 	constexpr double min_majority = 0.6;
 	// detected comments, are all lines that started with a comment character.
 	double detected_comments = 0;
+	// If at least one comment is a full line comment
+	bool has_full_line_comment = false;
 	// valid comments are all lines where the number of columns does not fit our expected number of columns.
 	double valid_comments = 0;
 	for (idx_t i = 0; i < result.result_position; i++) {
 		if (result.column_counts[i].is_comment || result.column_counts[i].is_mid_comment) {
 			detected_comments++;
 			if (result.column_counts[i].number_of_columns != num_cols && result.column_counts[i].is_comment) {
+				has_full_line_comment = true;
 				valid_comments++;
 			}
 			if (result.column_counts[i].number_of_columns == num_cols && result.column_counts[i].is_mid_comment) {
@@ -150,13 +153,15 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols) {
 			}
 		}
 	}
-	if (detected_comments == 0) {
+	// If we do not encounter at least one full line comment, we do not consider this comment option.
+	if (valid_comments == 0 || (!has_full_line_comment && !comment_set_by_user)) {
 		// this is only valid if our comment character is \0
 		if (result.state_machine.state_machine_options.comment.GetValue() == '\0') {
 			return true;
 		}
 		return false;
 	}
+
 	return valid_comments / detected_comments >= min_majority;
 }
 
@@ -267,7 +272,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If padding happened but it is not allowed.
 	bool invalid_padding = !allow_padding && padding_count > 0;
 
-	bool comments_are_acceptable = AreCommentsAcceptable(sniffed_column_counts, num_cols);
+	bool comments_are_acceptable = AreCommentsAcceptable(
+	    sniffed_column_counts, num_cols, options.dialect_options.state_machine_options.comment.IsSetByUser());
 
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
