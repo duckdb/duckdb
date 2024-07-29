@@ -369,7 +369,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 			fl.l_whence = SEEK_SET;
 			fl.l_start = 0;
 			fl.l_len = 0;
-			// ENOTSUP
 			rc = fcntl(fd, F_SETLK, &fl);
 			// Retain the original error.
 			int retained_errno = errno;
