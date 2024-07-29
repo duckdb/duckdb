@@ -1116,10 +1116,11 @@ DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t ro
 /*!
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
- * returns: The string value at the specified location. Attempts to cast the result value to string.
- * No support for nested types, and for other complex types.
- * The resulting field "string.data" must be freed with `duckdb_free.`
- */
+No support for nested types, and for other complex types.
+The resulting field "string.data" must be freed with `duckdb_free.`
+
+* returns: The string value at the specified location. Attempts to cast the result value to string.
+*/
 DUCKDB_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
@@ -1907,9 +1908,9 @@ DUCKDB_API duckdb_logical_type duckdb_create_array_type(duckdb_logical_type type
 Creates a MAP type from its key type and value type.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
-* @param key_type The map's key type.
-* @param value_type The map's value type.
-* @return The logical type.
+* key_type: The map's key type.
+* value_type: The map's value type.
+* returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type);
 
@@ -1917,10 +1918,10 @@ DUCKDB_API duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_ty
 Creates a UNION type from the passed arrays.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
-* @param member_types The array of union member types.
-* @param member_names The union member names.
-* @param member_count The number of union members.
-* @param return The logical type.
+* member_types: The array of union member types.
+* member_names: The union member names.
+* member_count: The number of union members.
+* returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_union_type(duckdb_logical_type *member_types, const char **member_names,
                                                         idx_t member_count);
@@ -2030,8 +2031,6 @@ Retrieves the child type of the given ARRAY type.
 
 The result must be freed with `duckdb_destroy_logical_type`.
 
-* @param type The logical type. Must be ARRAY.
-* @return The child type of the ARRAY type.
 * type: The logical type. Must be ARRAY.
 * returns: The child type of the ARRAY type.
 */
@@ -2140,9 +2139,9 @@ DUCKDB_API void duckdb_destroy_logical_type(duckdb_logical_type *type);
 Creates an empty data chunk with the specified column types.
 The result must be destroyed with `duckdb_destroy_data_chunk`.
 
-* @param types An array of column types. Column types can not contain ANY and INVALID types.
-* @param column_count The number of columns.
-* @return The data chunk.
+* types: An array of column types. Column types can not contain ANY and INVALID types.
+* column_count: The number of columns.
+* returns: The data chunk.
 */
 DUCKDB_API duckdb_data_chunk duckdb_create_data_chunk(duckdb_logical_type *types, idx_t column_count);
 
@@ -2309,7 +2308,7 @@ data and validity pointers
 
 * vector: The list vector.
 * required_capacity: the total capacity to reserve.
-* return: The duckdb state. Returns DuckDBError if the vector is nullptr.
+* returns: The duckdb state. Returns DuckDBError if the vector is nullptr.
 */
 DUCKDB_API duckdb_state duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity);
 
@@ -2380,7 +2379,6 @@ Equivalent to `duckdb_validity_set_row_validity` with valid set to true.
 */
 DUCKDB_API void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row);
 
-#ifndef DUCKDB_NO_EXTENSION_FUNCTIONS
 //===--------------------------------------------------------------------===//
 // Scalar Functions
 //===--------------------------------------------------------------------===//
@@ -2413,15 +2411,17 @@ DUCKDB_API void duckdb_scalar_function_set_name(duckdb_scalar_function scalar_fu
 Sets the parameters of the given scalar function to varargs. Does not require adding parameters with
 duckdb_scalar_function_add_parameter.
 
-* @param scalar_function: The scalar function;
-* @param type The type of the arguments.
+* scalar_function: The scalar function.
+* type: The type of the arguments.
+* returns: The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_scalar_function_set_varargs(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 
 /*!
-Sets the NULL handling of the scalar function to SPECIAL_HANDLING.
+Sets the parameters of the given scalar function to varargs. Does not require adding parameters with
+duckdb_scalar_function_add_parameter.
 
-* scalar_function: The scalar function
+* scalar_function: The scalar function.
 */
 DUCKDB_API void duckdb_scalar_function_set_special_handling(duckdb_scalar_function scalar_function);
 
@@ -2429,23 +2429,23 @@ DUCKDB_API void duckdb_scalar_function_set_special_handling(duckdb_scalar_functi
 Sets the Function Stability of the scalar function to VOLATILE, indicating the function should be re-run for every row.
 This limits optimization that can be performed for the function.
 
-* scalar_function: The scalar function
+* scalar_function: The scalar function.
 */
-DUCKDB_API void duckdb_scalar_function_set_volatile(duckdb_scalar_function function);
+DUCKDB_API void duckdb_scalar_function_set_volatile(duckdb_scalar_function scalar_function);
 
 /*!
 Adds a parameter to the scalar function.
 
-* @param scalar_function The scalar function.
-* @param type The parameter type. Cannot contain INVALID.
+* scalar_function: The scalar function.
+* type: The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_scalar_function_add_parameter(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 
 /*!
 Sets the return type of the scalar function.
 
-* @param scalar_function The scalar function.
-* @param type The return type. Cannot contain INVALID or ANY.
+* scalar_function: The scalar function
+* type: Cannot contain INVALID or ANY.
 */
 DUCKDB_API void duckdb_scalar_function_set_return_type(duckdb_scalar_function scalar_function,
                                                        duckdb_logical_type type);
@@ -2485,15 +2485,15 @@ DUCKDB_API duckdb_state duckdb_register_scalar_function(duckdb_connection con, d
 /*!
 Retrieves the extra info of the function as set in `duckdb_scalar_function_set_extra_info`.
 
-* info: The info object
-* returns: The extra info
+* info: The info object.
+* returns: The extra info.
 */
 DUCKDB_API void *duckdb_scalar_function_get_extra_info(duckdb_function_info info);
 
 /*!
 Report that an error has occurred while executing the scalar function.
 
-* info: The info object
+* info: The info object.
 * error: The error message
 */
 DUCKDB_API void duckdb_scalar_function_set_error(duckdb_function_info info, const char *error);
@@ -2529,17 +2529,17 @@ DUCKDB_API void duckdb_table_function_set_name(duckdb_table_function table_funct
 /*!
 Adds a parameter to the table function.
 
-* @param table_function The table function.
-* @param type The parameter type. Cannot contain INVALID.
+* table_function: The table function.
+* type: The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_table_function_add_parameter(duckdb_table_function table_function, duckdb_logical_type type);
 
 /*!
 Adds a named parameter to the table function.
 
-* @param table_function The table function.
-* @param name The parameter name.
-* @param type The parameter type. Cannot contain INVALID.
+* table_function: The table function.
+* name: The parameter name.
+* type: The parameter type. Cannot contain INVALID.
 */
 DUCKDB_API void duckdb_table_function_add_named_parameter(duckdb_table_function table_function, const char *name,
                                                           duckdb_logical_type type);
