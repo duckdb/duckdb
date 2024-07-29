@@ -72,6 +72,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'replacement_scans',
     'profiling_info',
     'appender',
+    'table_description',
     'arrow_interface',
     'threading_information',
     'streaming_result_interface',

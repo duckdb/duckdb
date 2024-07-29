@@ -315,6 +315,12 @@ typedef struct {
 #define duckdb_clear_bindings          duckdb_ext_api->duckdb_clear_bindings
 #define duckdb_prepared_statement_type duckdb_ext_api->duckdb_prepared_statement_type
 
+//! table_description
+#define duckdb_table_description_create  duckdb_ext_api->duckdb_table_description_create
+#define duckdb_table_description_destroy duckdb_ext_api->duckdb_table_description_destroy
+#define duckdb_table_description_error   duckdb_ext_api->duckdb_table_description_error
+#define duckdb_column_has_default        duckdb_ext_api->duckdb_column_has_default
+
 //! value_interface
 #define duckdb_destroy_value         duckdb_ext_api->duckdb_destroy_value
 #define duckdb_create_varchar        duckdb_ext_api->duckdb_create_varchar
