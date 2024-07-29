@@ -60,6 +60,7 @@ CMAKE_VARS_BUILD ?=
 CMAKE_LLVM_VARS ?=
 SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
+CORE_EXTENSIONS ?=
 ifdef OVERRIDE_GIT_DESCRIBE
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE="${OVERRIDE_GIT_DESCRIBE}"
 else
@@ -70,6 +71,9 @@ ifneq (${CXX_STANDARD}, )
 endif
 ifneq (${DUCKDB_EXTENSIONS}, )
 	BUILD_EXTENSIONS:=${DUCKDB_EXTENSIONS}
+endif
+ifneq (${CORE_EXTENSIONS}, )
+	CORE_EXTENSIONS:=${CORE_EXTENSIONS}
 endif
 ifeq (${DISABLE_PARQUET}, 1)
 	SKIP_EXTENSIONS:=${SKIP_EXTENSIONS};parquet
@@ -155,11 +159,17 @@ endif
 ifneq ($(TIDY_BINARY),)
 	TIDY_BINARY_PARAMETER := -clang-tidy-binary ${TIDY_BINARY}
 endif
+ifneq ($(TIDY_CHECKS),)
+        TIDY_PERFORM_CHECKS := '-checks=${TIDY_CHECKS}'
+endif
 ifneq ("${FORCE_QUERY_LOG}a", "a")
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_QUERY_LOG=${FORCE_QUERY_LOG}
 endif
 ifneq ($(BUILD_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS="$(BUILD_EXTENSIONS)"
+endif
+ifneq ($(CORE_EXTENSIONS),)
+	CMAKE_VARS:=${CMAKE_VARS} -DCORE_EXTENSIONS="$(CORE_EXTENSIONS)"
 endif
 ifneq ($(SKIP_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_EXTENSIONS="$(SKIP_EXTENSIONS)"
@@ -327,6 +337,10 @@ unittest: debug
 	build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
+unittest_release: release
+	build/release/test/unittest
+	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+
 unittestci:
 	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
@@ -374,7 +388,7 @@ tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
-	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER}
+	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
 
 tidy-fix:
 	mkdir -p ./build/tidy && \

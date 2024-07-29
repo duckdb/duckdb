@@ -130,8 +130,19 @@ void CSVReaderOptions::SetQuote(const string &quote_p) {
 	this->dialect_options.state_machine_options.quote.Set(quote_str[0]);
 }
 
-NewLineIdentifier CSVReaderOptions::GetNewline() const {
-	return dialect_options.state_machine_options.new_line.GetValue();
+string CSVReaderOptions::GetNewline() const {
+	switch (dialect_options.state_machine_options.new_line.GetValue()) {
+	case NewLineIdentifier::CARRY_ON:
+		return "\\r\\n";
+	case NewLineIdentifier::SINGLE_R:
+		return "\\r";
+	case NewLineIdentifier::SINGLE_N:
+		return "\\n";
+	case NewLineIdentifier::NOT_SET:
+		return "";
+	default:
+		throw NotImplementedException("New line type not supported");
+	}
 }
 
 void CSVReaderOptions::SetNewline(const string &input) {
@@ -458,6 +469,9 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 			ordered_user_defined_parameters[loption] = kv.second.ToSQLString();
 		}
 		if (loption == "columns") {
+			if (!name_list.empty()) {
+				throw BinderException("read_csv_auto column_names/names can only be supplied once");
+			}
 			columns_set = true;
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
@@ -581,7 +595,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 		named_params["delim"] = Value(GetDelimiter());
 	}
 	if (dialect_options.state_machine_options.new_line.IsSetByUser()) {
-		named_params["newline"] = Value(EnumUtil::ToString(GetNewline()));
+		named_params["new_line"] = Value(GetNewline());
 	}
 	if (quote.IsSetByUser()) {
 		named_params["quote"] = Value(GetQuote());
@@ -608,7 +622,8 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	}
 
 	named_params["normalize_names"] = Value::BOOLEAN(normalize_names);
-	if (!name_list.empty() && !named_params.count("column_names") && !named_params.count("names")) {
+	if (!name_list.empty() && !named_params.count("columns") && !named_params.count("column_names") &&
+	    !named_params.count("names")) {
 		named_params["column_names"] = StringVectorToValue(name_list);
 	}
 	named_params["all_varchar"] = Value::BOOLEAN(all_varchar);

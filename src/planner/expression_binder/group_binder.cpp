@@ -79,6 +79,29 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	return BindSelectRef(index - 1);
 }
 
+bool GroupBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) {
+	// failed to bind the column and the node is the root expression with depth = 0
+	// check if refers to an alias in the select clause
+	auto &alias_name = colref.GetColumnName();
+	auto entry = bind_state.alias_map.find(alias_name);
+	if (entry == bind_state.alias_map.end()) {
+		// no matching alias found
+		return false;
+	}
+	if (!root_expression) {
+		result = BindResult(BinderException(
+		    colref,
+		    "Alias with name \"%s\" exists, but aliases cannot be used as part of an expression in the GROUP BY",
+		    alias_name));
+		return true;
+	}
+	result = BindResult(BindSelectRef(entry->second));
+	if (!result.HasError()) {
+		group_alias_map[alias_name] = bind_index;
+	}
+	return true;
+}
+
 BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	// columns in GROUP BY clauses:
 	// FIRST refer to the original tables, and
@@ -86,26 +109,7 @@ BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	// THEN if no match is found, refer to outer queries
 
 	// first try to bind to the base columns (original tables)
-	auto result = ExpressionBinder::BindExpression(colref, 0);
-	if (result.HasError()) {
-		if (colref.IsQualified()) {
-			// explicit table name: not an alias reference
-			return result;
-		}
-		// failed to bind the column and the node is the root expression with depth = 0
-		// check if refers to an alias in the select clause
-		auto alias_name = colref.column_names[0];
-		auto entry = bind_state.alias_map.find(alias_name);
-		if (entry == bind_state.alias_map.end()) {
-			// no matching alias found
-			return result;
-		}
-		result = BindResult(BindSelectRef(entry->second));
-		if (!result.HasError()) {
-			group_alias_map[alias_name] = bind_index;
-		}
-	}
-	return result;
+	return ExpressionBinder::BindExpression(colref, 0, true);
 }
 
 } // namespace duckdb

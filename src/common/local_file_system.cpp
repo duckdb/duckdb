@@ -333,11 +333,18 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		filesec = 0666;
 	}
 
+	if (flags.ExclusiveCreate()) {
+		open_flags |= O_EXCL;
+	}
+
 	// Open the file
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
 		if (flags.ReturnNullIfNotExists() && errno == ENOENT) {
+			return nullptr;
+		}
+		if (flags.ReturnNullIfExists() && errno == EEXIST) {
 			return nullptr;
 		}
 		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
@@ -491,7 +498,8 @@ bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_
 	return false;
 #else
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset_bytes, length_bytes);
+	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, UnsafeNumericCast<int64_t>(offset_bytes),
+	                    UnsafeNumericCast<int64_t>(length_bytes));
 	return res == 0;
 #endif
 #else
