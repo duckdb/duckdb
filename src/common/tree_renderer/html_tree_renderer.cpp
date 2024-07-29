@@ -80,6 +80,29 @@ static string CreateStyleSection(RenderTree &root) {
             position: relative;
         }
 
+        .collapse_button {
+            position:relative;
+            color: black;
+            z-index: 2;
+            width: 2em;
+            background-color: white;
+            height: 2em;
+            border-radius: 50%;
+            top: 2.25em;
+        }
+
+        .collapse_button:hover {
+            background-color: #f0f0f0; /* Light gray */
+        }
+
+        .collapse_button:active {
+            background-color: #e0e0e0; /* Slightly darker gray */
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
         .title {
             font-weight: bold;
             padding-bottom: 5px;
@@ -122,9 +145,9 @@ static string CreateStyleSection(RenderTree &root) {
         }
 
         .tf-tree {
-            width: 100%;
-            height: 100%;
-            overflow: auto;
+            width: 100vw;
+            height: 100vh;
+            overflow: visible;
         }
     </style>
     )";
@@ -171,7 +194,11 @@ static string CreateGridItemContent(RenderTreeNode &node) {
 			items.push_back(StringUtil::Format(R"(                <div class="value">%s</div>)", split));
 		}
 	}
-	return StringUtil::Format(content_format, StringUtil::Join(items, "\n"));
+	auto result = StringUtil::Format(content_format, StringUtil::Join(items, "\n"));
+	if (!node.child_positions.empty()) {
+		result += "<button class=\"collapse_button\", onclick=\"toggleDisplay(this)\">-</button>";
+	}
+	return result;
 }
 
 static string CreateGridItem(RenderTree &root, idx_t x, idx_t y) {
@@ -214,6 +241,61 @@ static string CreateBodySection(RenderTree &root) {
     <div class="tf-tree">
         <ul>%s</ul>
     </div>
+
+<script>
+function toggleDisplay(button) {
+    const parentLi = button.closest('li');
+    const nestedUl = parentLi.querySelector('ul');
+    if (nestedUl) {
+        const currentDisplay = getComputedStyle(nestedUl).getPropertyValue('display');
+        if (currentDisplay === 'none') {
+            nestedUl.classList.toggle('hidden');
+            button.textContent = '-'; // Change button content to '-'
+        } else {
+            nestedUl.classList.toggle('hidden');
+            button.textContent = '+'; // Change button content to '+'
+        }
+    }
+}
+
+function updateTreeHeight() {
+	const tfTree = document.querySelector('.tf-tree');
+	if (!tfTree) {
+		return;
+	}
+
+	const closestElement = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
+	if (!closestElement) {
+		return;
+	}
+
+	console.log(closestElement);
+
+	const height = getComputedStyle(closestElement).getPropertyValue('height');
+	tfTree.style.height = height;
+}
+
+function resizeTFTree() {
+	updateTreeHeight();
+
+	const tfTree = document.querySelector('.tf-tree');
+	console.log(tfTree);
+	if (tfTree) {
+		const jupyterViewPort = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
+		console.log(jupyterViewPort);
+		if (jupyterViewPort) {
+			const resizeObserver = new ResizeObserver(() => {
+				updateTreeHeight();
+			});
+			resizeObserver.observe(jupyterViewPort);
+		}
+	}
+}
+
+resizeTFTree();
+
+</script>
+
 </body>
 </html>
     )";
