@@ -3165,7 +3165,7 @@ The error message should not be freed. It will be de-allocated when `duckdb_tabl
 * @param table_description The table_description to get the error from.
 * @return The error message, or `nullptr` if there is none.
 */
-DUCKDB_API const char *duckdb_table_description_error(duckdb_table_description *table_description);
+DUCKDB_API const char *duckdb_table_description_error(duckdb_table_description table_description);
 
 /*!
 Check if the column at 'index' index of the table has a DEFAULT expression.

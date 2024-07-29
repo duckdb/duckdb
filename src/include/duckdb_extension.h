@@ -594,7 +594,7 @@ typedef struct {
 #define DUCKDB_EXTENSION_EXTERN extern const duckdb_ext_api_v0 *duckdb_ext_api;
 // Initializes the C Extension API: First thing to call in the extension entrypoint
 #define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)                                                   \
-	duckdb_ext_api = (duckdb_ext_api_v0 *)access->get_api(info, minimum_api_version);                                  \
+	duckdb_ext_api = (duckdb_ext_api_v0 *)access->get_api(info, #minimum_api_version);                                 \
 	if (!duckdb_ext_api) {                                                                                             \
 		return;                                                                                                        \
 	};
