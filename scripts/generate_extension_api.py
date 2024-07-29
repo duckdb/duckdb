@@ -97,8 +97,9 @@ def fetch_header_template_main():
 
     return result[result.find(header_mark) + len(header_mark) :]
 
+
 def fetch_header_template_ext():
-        return """#pragma once
+    return """#pragma once
         
 #include "duckdb.h"
 
@@ -268,6 +269,7 @@ def create_version_defines(version):
 
     return result
 
+
 # Create duckdb.h
 def create_duckdb_h(ext_api_version):
     function_declarations_finished = ''
@@ -312,14 +314,25 @@ def create_duckdb_h(ext_api_version):
     with open(DUCKDB_HEADER_OUT_FILE, 'w+') as f:
         f.write(duckdb_h)
 
+
 def write_struct_member_definitions(version_entries, initialize=False):
     result = ""
     for function in version_entries:
         function_lookup = FUNCTION_MAP[function['name']]
         # Special case for C API functions that were already deprecated when the extension API started
-        if 'deprecated' in function_lookup and function_lookup['deprecated'] and 'excluded_from_struct' in function_lookup and function_lookup['excluded_from_struct']:
+        if (
+            'deprecated' in function_lookup
+            and function_lookup['deprecated']
+            and 'excluded_from_struct' in function_lookup
+            and function_lookup['excluded_from_struct']
+        ):
             continue
-        if 'group_deprecated' in function_lookup and function_lookup['group_deprecated'] and 'group_excluded_from_struct' in function_lookup and function_lookup['group_excluded_from_struct']:
+        if (
+            'group_deprecated' in function_lookup
+            and function_lookup['group_deprecated']
+            and 'group_excluded_from_struct' in function_lookup
+            and function_lookup['group_excluded_from_struct']
+        ):
             continue
         function_lookup_name = function_lookup['name']
 
@@ -330,6 +343,7 @@ def write_struct_member_definitions(version_entries, initialize=False):
 
     return result
 
+
 def create_extension_api_struct(ext_api_version, with_create_method=False):
     # Generate the struct
     extension_struct_finished = 'typedef struct {\n'
@@ -339,9 +353,19 @@ def create_extension_api_struct(ext_api_version, with_create_method=False):
         for function in api_version_entry['entries']:
             function_lookup = FUNCTION_MAP[function['name']]
             # Special case for C API functions that were already deprecated when the extension API started
-            if 'deprecated' in function_lookup and function_lookup['deprecated'] and 'excluded_from_struct' in function_lookup and function_lookup['excluded_from_struct']:
+            if (
+                'deprecated' in function_lookup
+                and function_lookup['deprecated']
+                and 'excluded_from_struct' in function_lookup
+                and function_lookup['excluded_from_struct']
+            ):
                 continue
-            if 'group_deprecated' in function_lookup and function_lookup['group_deprecated'] and 'group_excluded_from_struct' in function_lookup and function_lookup['group_excluded_from_struct']:
+            if (
+                'group_deprecated' in function_lookup
+                and function_lookup['group_deprecated']
+                and 'group_excluded_from_struct' in function_lookup
+                and function_lookup['group_excluded_from_struct']
+            ):
                 continue
 
             # TODO: comments inside the struct or no?
@@ -381,7 +405,12 @@ def create_duckdb_ext_h(ext_api_version):
     typedefs = ""
     for group in FUNCTION_GROUPS:
         # Special case for C API functions that were already deprecated when the extension API started
-        if 'deprecated' in group and group['deprecated'] and 'excluded_from_struct' in group and group['excluded_from_struct']:
+        if (
+            'deprecated' in group
+            and group['deprecated']
+            and 'excluded_from_struct' in group
+            and group['excluded_from_struct']
+        ):
             continue
 
         group_name = group['group']
@@ -407,7 +436,9 @@ def create_duckdb_ext_h(ext_api_version):
 
     extension_header_body = create_extension_api_struct(ext_api_version) + '\n\n' + typedefs
 
-    extension_header_body += f'// Place in global scope of C/C++ file that contains the DUCKDB_EXTENSION_REGISTER_ENTRYPOINT call\n'
+    extension_header_body += (
+        f'// Place in global scope of C/C++ file that contains the DUCKDB_EXTENSION_REGISTER_ENTRYPOINT call\n'
+    )
     extension_header_body += (
         f'# define DUCKDB_EXTENSION_GLOBAL const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME}=0;\n'
     )
@@ -420,11 +451,11 @@ def create_duckdb_ext_h(ext_api_version):
     extension_header_body += f'// Register the extension entrypoint\n'
     extension_header_body += ' #define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint, minimum_api_version) DUCKDB_EXTENSION_API void extension_name##_init_c_api(duckdb_extension_info info, duckdb_extension_access *access) { DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version); duckdb_database *db = access->get_database(info); duckdb_connection conn; if (duckdb_connect(*db, &conn) == DuckDBError) { access->set_error(info, "Failed to open connection to database"); return; } entrypoint(conn, info, access); duckdb_disconnect(&conn);}\n'
 
-
     header_template = fetch_header_template_ext()
     duckdb_ext_h = DUCKDB_EXT_H_HEADER + header_template.replace(BASE_HEADER_CONTENT_MARK, extension_header_body)
     with open(DUCKDB_HEADER_EXT_OUT_FILE, 'w+') as f:
         f.write(duckdb_ext_h)
+
 
 # Create duckdb_extension_internal.hpp
 def create_duckdb_ext_internal_h(ext_api_version):
@@ -433,6 +464,7 @@ def create_duckdb_ext_internal_h(ext_api_version):
     duckdb_ext_h = DUCKDB_EXT_H_HEADER + header_template.replace(BASE_HEADER_CONTENT_MARK, extension_header_body)
     with open(DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE, 'w+') as f:
         f.write(duckdb_ext_h)
+
 
 def get_extension_api_version():
     versions = []

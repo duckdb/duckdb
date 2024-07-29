@@ -50,36 +50,32 @@ struct DuckDBExtensionLoadState {
 	ErrorData error_data;
 };
 
-
 struct DuckDBExtensionAccess {
 	static duckdb_extension_access CreateAccessStruct() {
-		return {
-			SetError,
-			GetDatabase,
-			GetAPI
-		};
+		return {SetError, GetDatabase, GetAPI};
 	}
 
-	static void SetError(duckdb_extension_info info, const char* error) {
+	static void SetError(duckdb_extension_info info, const char *error) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
 		load_state.has_error = true;
 		load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, error);
 	}
 
-	static duckdb_database* GetDatabase(duckdb_extension_info info) {
+	static duckdb_database *GetDatabase(duckdb_extension_info info) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
 		try {
 			// Create the duckdb_database
 			load_state.database_data = make_uniq<DatabaseData>();
 			load_state.database_data->database = make_uniq<DuckDB>(load_state.db);
-			return (duckdb_database*) load_state.database_data.get();
+			return (duckdb_database *)load_state.database_data.get();
 		} catch (std::exception &ex) {
 			load_state.error_data = ErrorData(ex);
 			return nullptr;
 		} catch (...) {
-			load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, "Unknown error in GetDatabase when trying to load extension!");
+			load_state.error_data =
+			    ErrorData(ExceptionType::UNKNOWN_TYPE, "Unknown error in GetDatabase when trying to load extension!");
 			return nullptr;
 		}
 	}
@@ -115,7 +111,7 @@ struct DuckDBExtensionAccess {
 		return true;
 	}
 
-	static void* GetAPI(duckdb_extension_info info, const char* version) {
+	static void *GetAPI(duckdb_extension_info info, const char *version) {
 		// TODO allow fine-grained match
 
 		idx_t major, minor, patch;
@@ -124,7 +120,8 @@ struct DuckDBExtensionAccess {
 		if (!res) {
 			auto &load_state = DuckDBExtensionLoadState::Get(info);
 			load_state.has_error = true;
-			load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, "Failed to parse extension C API version: " + string(version));
+			load_state.error_data =
+			    ErrorData(ExceptionType::UNKNOWN_TYPE, "Failed to parse extension C API version: " + string(version));
 			return nullptr;
 		}
 

@@ -595,11 +595,11 @@ typedef struct _duckdb_arrow_array {
 //! Passed to C API extension as parameter to the entrypoint
 struct duckdb_extension_access {
 	//! Indicate that an error has occured
-	void (*set_error)(duckdb_extension_info info, const char* error);
+	void (*set_error)(duckdb_extension_info info, const char *error);
 	//! Fetch the database from duckdb to register extensions to
-	duckdb_database* (*get_database)(duckdb_extension_info info);
+	duckdb_database *(*get_database)(duckdb_extension_info info);
 	//! Fetch the API
-	void* (*get_api)(duckdb_extension_info info, const char* version);
+	void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
 //===--------------------------------------------------------------------===//
