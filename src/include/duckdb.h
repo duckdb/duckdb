@@ -1246,8 +1246,6 @@ Decompose a TIME_TZ objects into micros and a timezone offset.
 Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
 
 * micros: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
-* out_micros: The microsecond component of the time.
-* out_offset: The timezone offset component of the time.
 */
 DUCKDB_API duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz micros);
 
@@ -1816,9 +1814,9 @@ DUCKDB_API duckdb_value duckdb_create_int64(int64_t val);
 /*!
 Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.
 
-* @param type The type of the struct.
-* @param values The values for the struct fields.
-* @return The struct value, or nullptr, if any child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
+* type: The type of the struct
+* values: The values for the struct fields
+* returns: The struct value, or nullptr, if any child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 */
 DUCKDB_API duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *values);
 
@@ -1826,10 +1824,10 @@ DUCKDB_API duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duc
 Creates a list value from a child (element) type and an array of values of length `value_count`.
 Must be destroyed with `duckdb_destroy_value`.
 
-* @param type The child type of the list.
-* @param values The values for the list.
-* @param value_count The number of values in the list.
-* @return The list value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
+* type: The type of the list
+* values: The values for the list
+* value_count: The number of values in the list
+* returns: The list value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 */
 DUCKDB_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
@@ -1837,10 +1835,10 @@ DUCKDB_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckd
 Creates an array value from a child (element) type and an array of values of length `value_count`.
 Must be destroyed with `duckdb_destroy_value`.
 
-* @param type The type of the array.
-* @param values The values for the array.
-* @param value_count The number of values in the array.
-* @return The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
+* type: The type of the array
+* values: The values for the array
+* value_count: The number of values in the array
+* returns: The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 */
 DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
@@ -1872,8 +1870,8 @@ The resulting logical type must be destroyed with `duckdb_destroy_logical_type`.
 Returns an invalid logical type, if type is: `DUCKDB_TYPE_INVALID`, `DUCKDB_TYPE_DECIMAL`, `DUCKDB_TYPE_ENUM`,
 `DUCKDB_TYPE_LIST`, `DUCKDB_TYPE_STRUCT`, `DUCKDB_TYPE_MAP`, `DUCKDB_TYPE_ARRAY`, or `DUCKDB_TYPE_UNION`.
 
-* @param type The primitive type to create.
-* @return The logical type.
+* type: The primitive type to create.
+* returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
 
@@ -1881,17 +1879,17 @@ DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
 Returns the alias of a duckdb_logical_type, if set, else `nullptr`.
 The result must be destroyed with `duckdb_free`.
 
-* @param type The logical type.
-* @return The alias or `nullptr`.
- */
+* type: The logical type
+* returns: The alias or `nullptr`
+*/
 DUCKDB_API char *duckdb_logical_type_get_alias(duckdb_logical_type type);
 
 /*!
 Creates a LIST type from its child type.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
-* @param type The child type of the list.
-* @return The logical type.
+* type: The child type of the list
+* returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type);
 
@@ -1899,9 +1897,9 @@ DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type)
 Creates an ARRAY type from its child type.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
-* @param type The child type of the array.
-* @param array_size The number of elements in the array.
-* @return The logical type.
+* type: The child type of the array.
+* array_size: The number of elements in the array.
+* returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_array_type(duckdb_logical_type type, idx_t array_size);
 
@@ -1931,10 +1929,10 @@ DUCKDB_API duckdb_logical_type duckdb_create_union_type(duckdb_logical_type *mem
 Creates a STRUCT type based on the member types and names.
 The resulting type must be destroyed with `duckdb_destroy_logical_type`.
 
-* @param member_types The array of types of the struct members.
-* @param member_names The array of names of the struct members.
-* @param member_count The number of members of the struct.
-* @return The logical type.
+* member_types: The array of types of the struct members.
+* member_names: The array of names of the struct members.
+* member_count: The number of members of the struct.
+* returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types, const char **member_names,
                                                          idx_t member_count);
@@ -1943,7 +1941,6 @@ DUCKDB_API duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *me
 Creates an ENUM type from the passed member name array.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* enum_name: The name of the enum.
 * member_names: The array of names that the enum should consist of.
 * member_count: The number of elements that were specified in the array.
 * returns: The logical type.
@@ -1963,8 +1960,8 @@ DUCKDB_API duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t
 /*!
 Retrieves the enum `duckdb_type` of a `duckdb_logical_type`.
 
-* @param type The logical type.
-* @return The `duckdb_type` id.
+* type: The logical type.
+* returns: The `duckdb_type` id.
 */
 DUCKDB_API duckdb_type duckdb_get_type_id(duckdb_logical_type type);
 
@@ -2023,17 +2020,20 @@ DUCKDB_API char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t in
 Retrieves the child type of the given LIST type. Also accepts MAP types.
 The result must be freed with `duckdb_destroy_logical_type`.
 
-* @param type The logical type, either LIST or MAP.
-* @return The child type of the LIST or MAP type.
+* type: The logical type, either LIST or MAP.
+* returns: The child type of the LIST or MAP type.
 */
 DUCKDB_API duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type);
 
 /*!
 Retrieves the child type of the given ARRAY type.
+
 The result must be freed with `duckdb_destroy_logical_type`.
 
 * @param type The logical type. Must be ARRAY.
 * @return The child type of the ARRAY type.
+* type: The logical type. Must be ARRAY.
+* returns: The child type of the ARRAY type.
 */
 DUCKDB_API duckdb_logical_type duckdb_array_type_child_type(duckdb_logical_type type);
 
@@ -3137,43 +3137,6 @@ DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckd
 // TableDescription
 //===--------------------------------------------------------------------===//
 
-/*!
-Creates a table description object.
-Note that `duckdb_table_description_destroy` should always be called on the resulting table_description, even if the
-function returns `DuckDBError`.
-* connection: The connection context.
-* schema: The schema of the table, or `nullptr` for the default schema.
-* table: The table name.
-* out: The resulting table description object.
-* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-*/
-DUCKDB_API duckdb_state duckdb_table_description_create(duckdb_connection connection, const char *schema,
-                                                        const char *table, duckdb_table_description *out);
-
-/*!
-Destroy the TableDescription object.
-* table: The table_description to destroy.
-*/
-DUCKDB_API void duckdb_table_description_destroy(duckdb_table_description *table_description);
-
-/*!
-Returns the error message associated with the given table_description.
-If the table_description has no error message, this returns `nullptr` instead.
-The error message should not be freed. It will be de-allocated when `duckdb_table_description_destroy` is called.
-* table_description: The table_description to get the error from.
-* returns: The error message, or `nullptr` if there is none.
-*/
-DUCKDB_API const char *duckdb_table_description_error(duckdb_table_description table);
-
-/*!
-Check if the column at 'index' index of the table has a DEFAULT expression.
-* table: The table_description to query.
-* index: The index of the column to query.
-* out: The out-parameter used to store the result.
-* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-*/
-DUCKDB_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
-
 #ifndef DUCKDB_API_NO_DEPRECATED
 //===--------------------------------------------------------------------===//
 // Arrow Interface
@@ -3354,8 +3317,6 @@ DUCKDB_API duckdb_state duckdb_arrow_array_scan(duckdb_connection connection, co
                                                 duckdb_arrow_stream *out_stream);
 
 #endif
-
-#ifndef DUCKDB_NO_EXTENSION_FUNCTIONS
 //===--------------------------------------------------------------------===//
 // Threading Information
 //===--------------------------------------------------------------------===//
@@ -3436,11 +3397,11 @@ Returns true if the execution of the current query is finished.
 * con: The connection on which to check
 */
 DUCKDB_API bool duckdb_execution_is_finished(duckdb_connection con);
-#endif
 
 //===--------------------------------------------------------------------===//
 // Streaming Result Interface
 //===--------------------------------------------------------------------===//
+
 #ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
