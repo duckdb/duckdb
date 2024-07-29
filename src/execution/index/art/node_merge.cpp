@@ -43,7 +43,7 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 	IncreaseBufferId(flags.merge_buffer_counts[static_cast<uint8_t>(type) - 1]);
 }
 
-bool Node::Merge(ART &art, Node &other, const bool inside_gate) {
+bool Node::Merge(ART &art, Node &other, bool inside_gate) {
 	if (HasMetadata()) {
 		return MergeInternal(art, other, inside_gate);
 	}
@@ -55,25 +55,25 @@ bool Node::Merge(ART &art, Node &other, const bool inside_gate) {
 
 bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos, bool inside_gate) {
 	// r_node's prefix contains l_node's prefix.
-	// l_node cannot be a leaf by our construction.
-	D_ASSERT(!l_node.IsLeaf() && !l_node.IsGate());
+	// l_node must be a node allowing child nodes.
+	D_ASSERT(l_node.IsNode());
 
-	// Check if the next byte (mismatch_position) in r_node exists in l_node.
+	// Check if the next byte (mismatch_pos) in r_node exists in l_node.
 	auto mismatch_byte = Prefix::GetByte(art, r_node, mismatch_pos);
 	auto child_node = l_node.GetChildMutable(art, mismatch_byte);
 
-	// Reduce r_node's prefix to the bytes after mismatch_position.
+	// Reduce r_node's prefix to the bytes after mismatch_pos.
 	Prefix::Reduce(art, r_node, mismatch_pos);
 
-	if (!child_node) {
-		// Insert r_node as a child of l_node at the empty position.
-		Node::InsertChild(art, l_node, mismatch_byte, r_node);
-		r_node.Clear();
-		return true;
+	if (child_node) {
+		// Recurse into the child of l_node and the remaining prefix of r_node.
+		return child_node->MergeInternal(art, r_node, inside_gate);
 	}
 
-	// Recurse into the child of l_node and the remaining prefix of r_node.
-	return child_node->MergeInternal(art, r_node, inside_gate);
+	// Insert r_node as a child of l_node at the empty position.
+	Node::InsertChild(art, l_node, mismatch_byte, r_node);
+	r_node.Clear();
+	return true;
 }
 
 void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos) {
@@ -94,105 +94,88 @@ void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, idx_t mismatch_p
 	r_node.Clear();
 }
 
-// TODO
-bool Node::MergeInternal(ART &art, Node &other, const bool inside_gate) {
-	D_ASSERT(HasMetadata());
-	D_ASSERT(other.HasMetadata());
-
-	// Resolve leaves.
-	if (GetType() == NType::LEAF_INLINED) {
-		D_ASSERT(other.IsGate() || other.GetType() == NType::LEAF_INLINED);
-		if (art.IsUnique()) {
-			return false;
-		}
-		Leaf::Merge(art, *this, other);
-		return true;
-	}
-	if (other.GetType() == NType::LEAF_INLINED) {
-		D_ASSERT(IsGate() || GetType() == NType::LEAF_INLINED);
-		if (art.IsUnique()) {
-			return false;
-		}
-		Leaf::Merge(art, *this, other);
-		return true;
-	}
-	if (IsGate() && other.IsGate() && !inside_gate) {
-		Leaf::Merge(art, *this, other);
-		return true;
-	}
-
-	// case 1: both nodes have no prefix
-	if (GetType() != NType::PREFIX && other.GetType() != NType::PREFIX) {
-		return MergeNodes(art, other, inside_gate);
-	}
-
+bool Node::MergePrefixes(ART &art, Node &other, bool inside_gate) {
 	reference<Node> l_node(*this);
 	reference<Node> r_node(other);
+	auto mismatch_pos = DConstants::INVALID_INDEX;
 
-	auto mismatch_position = DConstants::INVALID_INDEX;
-
-	// traverse prefixes
-	if (l_node.get().GetType() == NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
-
-		if (!Prefix::Traverse(art, l_node, r_node, mismatch_position, inside_gate)) {
+	if (l_node.get().IsPrefix() && r_node.get().IsPrefix()) {
+		// Traverse prefixes. Possibly change the referenced nodes.
+		if (!Prefix::Traverse(art, l_node, r_node, mismatch_pos, inside_gate)) {
 			return false;
 		}
-		// we already recurse because the prefixes matched (so far)
-		if (mismatch_position == DConstants::INVALID_INDEX) {
+		if (mismatch_pos == DConstants::INVALID_INDEX) {
 			return true;
 		}
 
 	} else {
-
 		// l_prefix contains r_prefix
-		if (l_node.get().GetType() == NType::PREFIX) {
+		if (l_node.get().IsPrefix()) {
 			swap(*this, other);
 		}
-		mismatch_position = 0;
+		mismatch_pos = 0;
 	}
-	D_ASSERT(mismatch_position != DConstants::INVALID_INDEX);
+	D_ASSERT(mismatch_pos != DConstants::INVALID_INDEX);
 
-	// case 2: one prefix contains the other prefix
-	if (l_node.get().GetType() != NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
-		return PrefixContainsOther(art, l_node, r_node, mismatch_position, inside_gate);
+	// l_prefix contains r_prefix
+	if (l_node.get().IsPrefix() || !r_node.get().IsPrefix()) {
+		return PrefixContainsOther(art, l_node, r_node, mismatch_pos, inside_gate);
 	}
 
-	// case 3: prefixes differ at a specific byte
-	MergeIntoNode4(art, l_node, r_node, mismatch_position);
+	// The prefixes differ.
+	MergeIntoNode4(art, l_node, r_node, mismatch_pos);
 	return true;
 }
 
-// TODO
-bool Node::MergeNodes(ART &art, Node &other, const bool inside_gate) {
-	D_ASSERT(HasMetadata() && other.HasMetadata());
-	D_ASSERT(GetType() != NType::PREFIX && other.GetType() != NType::PREFIX);
-	D_ASSERT(!IsLeaf() && !IsGate());
-	D_ASSERT(!other.IsLeaf() && !other.IsGate());
+bool Node::MergeInternal(ART &art, Node &other, const bool inside_gate) {
+	D_ASSERT(HasMetadata());
+	D_ASSERT(other.HasMetadata());
 
-	// always try to merge the smaller node into the bigger node
-	// because maybe there is enough free space in the bigger node to fit the smaller one
-	// without too much recursion
-	if (GetType() < other.GetType()) {
+	// Merge inlined leaves.
+	if (GetType() == NType::LEAF_INLINED) {
 		swap(*this, other);
 	}
+	if (other.GetType() == NType::LEAF_INLINED) {
+		D_ASSERT(!inside_gate);
+		D_ASSERT(other.IsGate() || other.GetType() == NType::LEAF_INLINED);
+		if (art.IsUnique()) {
+			return false;
+		}
+		Leaf::MergeInlined(art, *this, other);
+		return true;
+	}
 
-	Node empty_node = Node();
-	auto &l_node = *this;
-	auto &r_node = other;
+	// Enter a gate.
+	if (IsGate() && other.IsGate() && !inside_gate) {
+		return Merge(art, other, true);
+	}
 
-	uint8_t byte = 0;
+	// Merge N4, N16, N48, N256 nodes.
+	if (IsNode() && other.IsNode()) {
+		return MergeNodes(art, other, inside_gate);
+	}
+	// Merge N7, N15, N256 leaf nodes.
+	if (IsLeafNode() && other.IsLeafNode()) {
+		D_ASSERT(inside_gate);
+		return MergeNodes(art, other, inside_gate);
+	}
+
+	// Merge prefixes.
+	return MergePrefixes(art, other, inside_gate);
+}
+
+bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, Node &empty_node, uint8_t byte, const bool inside_gate) {
+	// Merge N4, N16, N48, N256 nodes.
+	D_ASSERT(l_node.IsNode() && r_node.IsNode());
+	D_ASSERT(l_node.IsGate() && r_node.IsGate() || !l_node.IsGate() && !r_node.IsGate());
+
 	auto r_child = r_node.GetNextChildMutable(art, byte);
-
-	// while r_node still has children to merge
 	while (r_child) {
 		auto l_child = l_node.GetChildMutable(art, byte);
 		if (!l_child) {
-			// insert child at empty byte
-			InsertChild(art, l_node, byte, *r_child);
+			Node::InsertChild(art, l_node, byte, *r_child);
 			r_node.ReplaceChild(art, byte, empty_node);
-
 		} else {
-			// recurse
 			if (!l_child->MergeInternal(art, *r_child, inside_gate)) {
 				return false;
 			}
@@ -205,7 +188,40 @@ bool Node::MergeNodes(ART &art, Node &other, const bool inside_gate) {
 		r_child = r_node.GetNextChildMutable(art, byte);
 	}
 
-	Free(art, r_node);
+	Node::Free(art, r_node);
+	return true;
+}
+
+void MergeLeafNodes(ART &art, Node &l_node, Node &r_node, Node &empty_node, uint8_t byte) {
+	// Merge N7, N15, N256 leaf nodes.
+	D_ASSERT(l_node.IsLeafNode() && r_node.IsLeafNode());
+	D_ASSERT(!l_node.IsGate() && !r_node.IsGate());
+
+	auto has_next_byte = r_node.GetNextByte(art, byte);
+	while (has_next_byte) {
+		// Row IDs are always unique.
+		Node::InsertChild(art, l_node, byte, empty_node);
+		if (byte == NumericLimits<uint8_t>::Maximum()) {
+			break;
+		}
+		byte++;
+		has_next_byte = r_node.GetNextByte(art, byte);
+	}
+
+	Node::Free(art, r_node);
+}
+
+bool Node::MergeNodes(ART &art, Node &other, const bool inside_gate) {
+	// Merge the smaller node into the bigger node.
+	if (GetType() < other.GetType()) {
+		swap(*this, other);
+	}
+
+	Node empty_node = Node();
+	if (IsNode()) {
+		return MergeNormalNodes(art, *this, other, empty_node, 0, inside_gate);
+	}
+	MergeLeafNodes(art, *this, other, empty_node, 0);
 	return true;
 }
 

@@ -79,6 +79,15 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 			}
 			break;
 		}
+		case NType::PREFIX_INLINED: {
+			auto &prefix = Node::Ref<const PrefixInlined>(*art, last_leaf, NType::PREFIX_INLINED);
+			for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+				row_id[i + nested_depth] = prefix.data[i];
+			}
+			ARTKey key(&row_id[0], sizeof(row_t));
+			row_ids.push_back(key.GetRowID());
+			break;
+		}
 		default:
 			throw InternalException("Invalid leaf type for index scan.");
 		}
@@ -92,7 +101,7 @@ void Iterator::FindMinimum(const Node &node) {
 	D_ASSERT(node.HasMetadata());
 
 	// Found the minimum.
-	if (node.IsLeaf()) {
+	if (node.IsAnyLeaf()) {
 		last_leaf = node;
 		return;
 	}
@@ -137,7 +146,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 	}
 
 	// We found any leaf node, or a gate.
-	if (node.IsLeaf() || node.IsGate()) {
+	if (node.IsAnyLeaf() || node.IsGate()) {
 		D_ASSERT(!inside_gate);
 		D_ASSERT(current_key.Size() == key.len);
 		if (!equal && current_key.Contains(key)) {
@@ -208,7 +217,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 bool Iterator::Next() {
 	while (!nodes.empty()) {
 		auto &top = nodes.top();
-		D_ASSERT(!top.node.IsLeaf());
+		D_ASSERT(!top.node.IsAnyLeaf());
 
 		if (top.node.GetType() == NType::PREFIX) {
 			PopNode();

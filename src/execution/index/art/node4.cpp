@@ -108,7 +108,8 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) 
 
 		// Get the child and concatenate the prefixes.
 		auto child = *n4.GetChildMutable(n4.key[0]);
-		Prefix::Concatenate(art, prefix, n4.key[0], child, node.IsGate());
+		D_ASSERT(child.HasMetadata());
+		Prefix::Concat(art, prefix, n4.key[0], node.IsGate(), child);
 
 		n4.count--;
 		Node::Free(art, old_n4_node);

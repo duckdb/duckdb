@@ -49,11 +49,56 @@ Node15Leaf &Node15Leaf::ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &nod
 }
 
 void Node15Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
-	// TODO
+	D_ASSERT(node.HasMetadata());
+	auto &n15 = Node::RefMutable<Node15Leaf>(art, node, NType::NODE_15_LEAF);
+
+	// The node is full. Grow to Node256Leaf.
+	if (n15.count == Node::NODE_15_LEAF_CAPACITY) {
+		auto node15 = node;
+		Node256Leaf::GrowNode15Leaf(art, node, node15);
+		Node256Leaf::InsertByte(art, node, byte);
+		return;
+	}
+
+	// Still space. Insert the child.
+	idx_t child_pos = 0;
+	while (child_pos < n15.count && n15.key[child_pos] < byte) {
+		child_pos++;
+	}
+
+	// Move children backwards to make space.
+	for (idx_t i = n15.count; i > child_pos; i--) {
+		n15.key[i] = n15.key[i - 1];
+	}
+
+	n15.key[child_pos] = byte;
+	n15.count++;
 }
 
-void Node15Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte) {
-	// TODO
+void Node15Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
+	D_ASSERT(node.HasMetadata());
+	auto &n15 = Node::RefMutable<Node15Leaf>(art, node, NType::NODE_15_LEAF);
+
+	idx_t child_pos = 0;
+	for (; child_pos < n15.count; child_pos++) {
+		if (n15.key[child_pos] == byte) {
+			break;
+		}
+	}
+
+	D_ASSERT(child_pos < n15.count);
+	n15.count--;
+
+	// Possibly move children backwards.
+	for (idx_t i = child_pos; i < n15.count; i++) {
+		n15.key[i] = n15.key[i + 1];
+	}
+
+	// Shrink node to Node7.
+	if (n15.count < Node::NODE_4_CAPACITY) {
+		auto node15 = node;
+		Node7Leaf::ShrinkNode15Leaf(art, node, node15);
+	}
 }
 
 bool Node15Leaf::GetNextByte(uint8_t &byte) const {
@@ -64,11 +109,6 @@ bool Node15Leaf::GetNextByte(uint8_t &byte) const {
 		}
 	}
 	return false;
-}
-
-string Node15Leaf::VerifyAndToString(ART &art, const bool only_verify) const {
-	// TODO
-	return "";
 }
 
 } // namespace duckdb

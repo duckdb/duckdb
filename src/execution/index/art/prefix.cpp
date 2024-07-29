@@ -7,18 +7,26 @@
 
 namespace duckdb {
 
+template <class PREFIX>
+PREFIX &NewPrefix(ART &art, Node &node, const data_ptr_t data, uint8_t count, idx_t offset, NType type) {
+	node = Node::GetAllocator(art, type).New();
+	node.SetMetadata(static_cast<uint8_t>(type));
+
+	auto &prefix = Node::RefMutable<PREFIX>(art, node, type);
+	prefix.data[Node::PREFIX_SIZE] = count;
+	if (data) {
+		D_ASSERT(count);
+		memcpy(prefix.data, data + offset, count);
+	}
+	return prefix;
+}
+
 //===--------------------------------------------------------------------===//
 // PrefixInlined
 //===--------------------------------------------------------------------===//
 
-void PrefixInlined::New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, uint32_t count) {
-	node = Node::GetAllocator(art, NType::PREFIX_INLINED).New();
-	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX_INLINED));
-
-	auto &prefix = Node::RefMutable<PrefixInlined>(art, node, NType::PREFIX_INLINED);
-	auto this_count = MinValue((uint32_t)Node::PREFIX_SIZE, count);
-	prefix.data[Node::PREFIX_SIZE] = (uint8_t)this_count;
-	memcpy(prefix.data, key.data + depth, this_count);
+void PrefixInlined::New(ART &art, Node &node, const ARTKey &key, uint32_t depth, uint8_t count) {
+	NewPrefix<PrefixInlined>(art, node, key.data, count, depth, NType::PREFIX_INLINED);
 }
 
 //===--------------------------------------------------------------------===//
@@ -26,61 +34,36 @@ void PrefixInlined::New(ART &art, Node &node, const ARTKey &key, const uint32_t 
 //===--------------------------------------------------------------------===//
 
 Prefix &Prefix::New(ART &art, Node &node) {
-	node = Node::GetAllocator(art, NType::PREFIX).New();
-	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX));
-
-	auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
-	prefix.data[Node::PREFIX_SIZE] = 0;
-	return prefix;
+	return NewPrefix<Prefix>(art, node, nullptr, 0, 0, NType::PREFIX);
 }
 
-Prefix &Prefix::New(ART &art, Node &node, uint8_t byte, const Node &next) {
-	node = Node::GetAllocator(art, NType::PREFIX).New();
-	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX));
-
-	auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
-	prefix.data[Node::PREFIX_SIZE] = 1;
-	prefix.data[0] = byte;
-	prefix.ptr = next;
-	return prefix;
-}
-
-void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, const uint32_t depth, uint32_t count) {
-	if (count == 0) {
-		return;
-	}
-
-	idx_t copy_count = 0;
+void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, uint32_t depth, uint32_t count) {
+	idx_t offset = 0;
 	while (count) {
-		node.get() = Node::GetAllocator(art, NType::PREFIX).New();
-		node.get().SetMetadata(static_cast<uint8_t>(NType::PREFIX));
-		auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
-
-		auto this_count = MinValue((uint32_t)Node::PREFIX_SIZE, count);
-		prefix.data[Node::PREFIX_SIZE] = (uint8_t)this_count;
-		memcpy(prefix.data, key.data + depth + copy_count, this_count);
+		auto this_count = uint8_t(MinValue(uint32_t(Node::PREFIX_SIZE), count));
+		auto &prefix = NewPrefix<Prefix>(art, node, key.data, this_count, offset + depth, NType::PREFIX);
 
 		node = prefix.ptr;
-		copy_count += this_count;
+		offset += this_count;
 		count -= this_count;
 	}
 }
 
 void Prefix::Free(ART &art, Node &node) {
-	Node current_node = node;
-	Node next_node;
-	while (current_node.HasMetadata() && current_node.GetType() == NType::PREFIX) {
-		next_node = Node::RefMutable<Prefix>(art, current_node, NType::PREFIX).ptr;
-		Node::GetAllocator(art, NType::PREFIX).Free(current_node);
-		current_node = next_node;
+	Node next;
+	while (node.HasMetadata() && node.IsPrefix()) {
+		D_ASSERT(node.GetType() != NType::PREFIX_INLINED);
+		next = Node::RefMutable<Prefix>(art, node, NType::PREFIX).ptr;
+		Node::GetAllocator(art, NType::PREFIX).Free(node);
+		node = next;
 	}
 
-	Node::Free(art, current_node);
+	Node::Free(art, node);
 	node.Clear();
 }
 
 void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
-
+	D_ASSERT(node.GetType() != NType::PREFIX_INLINED);
 	auto merge_buffer_count = flags.merge_buffer_counts[static_cast<uint8_t>(NType::PREFIX) - 1];
 
 	Node next_node = node;
@@ -98,85 +81,145 @@ void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 	prefix.get().ptr.InitializeMerge(art, flags);
 }
 
-void ConcatenateGate(ART &art, Node &parent_node, const uint8_t byte, Node &child_node) {
+Prefix &GetTail(ART &art, Node &node) {
+	reference<Prefix> tail = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
+	while (tail.get().ptr.GetType() == NType::PREFIX) {
+		tail = Node::RefMutable<Prefix>(art, tail.get().ptr, NType::PREFIX);
+	}
+	return tail;
+}
+
+void PrependByte(ART &art, Node &node, uint8_t byte) {
+	auto &prefix = Node::RefMutable<PrefixInlined>(art, node, NType::PREFIX_INLINED);
+	memmove(prefix.data + 1, prefix.data, prefix.data[Node::PREFIX_SIZE]);
+	prefix.data[0] = byte;
+	prefix.data[Node::PREFIX_SIZE]++;
+}
+
+void ConcatGate(ART &art, Node &parent, uint8_t byte, const Node &child) {
 	Node new_prefix = Node();
 
-	if (child_node.GetType() == NType::PREFIX) {
-		auto &prefix = Prefix::New(art, new_prefix, byte);
-		prefix.Append(art, child_node);
+	if (!child.HasMetadata()) {
+		NewPrefix<PrefixInlined>(art, new_prefix, &byte, 1, 0, NType::PREFIX_INLINED);
+
+	} else if (child.GetType() == NType::PREFIX_INLINED) {
+		new_prefix = child;
+		PrependByte(art, new_prefix, byte);
+
+	} else if (child.GetType() == NType::PREFIX) {
+		auto &prefix = NewPrefix<Prefix>(art, new_prefix, &byte, 1, 0, NType::PREFIX);
+		prefix.ptr.Clear();
+		prefix.Append(art, child);
+
 	} else {
-		Prefix::New(art, new_prefix, byte, child_node);
+		auto &prefix = NewPrefix<Prefix>(art, new_prefix, &byte, 1, 0, NType::PREFIX);
+		prefix.ptr = child;
 	}
 
 	new_prefix.SetGate();
-	if (parent_node.GetType() != NType::PREFIX) {
-		parent_node = new_prefix;
+	if (parent.GetType() != NType::PREFIX) {
+		parent = new_prefix;
 		return;
 	}
-
-	// Get the tail.
-	reference<Prefix> prefix = Node::RefMutable<Prefix>(art, parent_node, NType::PREFIX);
-	while (prefix.get().ptr.GetType() == NType::PREFIX) {
-		prefix = Node::RefMutable<Prefix>(art, prefix.get().ptr, NType::PREFIX);
-	}
-	prefix.get().ptr = new_prefix;
+	GetTail(art, parent).ptr = new_prefix;
 }
 
-void Prefix::Concatenate(ART &art, Node &parent_node, const uint8_t byte, Node &child_node, const bool byte_was_gate) {
-	D_ASSERT(parent_node.HasMetadata());
-	D_ASSERT(child_node.HasMetadata());
-
-	// Create a new prefix holding the byte.
-	if (byte_was_gate) {
-		return ConcatenateGate(art, parent_node, byte, child_node);
-	}
-
-	// Create a new prefix containing the byte.
-	if (parent_node.GetType() != NType::PREFIX && (child_node.GetType() != NType::PREFIX || child_node.IsGate())) {
-		New(art, parent_node, byte, child_node);
+void ConcatChildIsGate(ART &art, Node &parent, uint8_t byte, const Node &child) {
+	// Create a new prefix and point it to the gate.
+	if (parent.GetType() != NType::PREFIX) {
+		auto &prefix = NewPrefix<Prefix>(art, parent, &byte, 1, 0, NType::PREFIX);
+		prefix.ptr = child;
 		return;
 	}
 
-	if (parent_node.GetType() != NType::PREFIX && child_node.GetType() == NType::PREFIX) {
-		auto &prefix = New(art, parent_node, byte);
-		prefix.Append(art, child_node);
-		return;
-	}
-
-	// Get the tail.
-	reference<Prefix> prefix = Node::RefMutable<Prefix>(art, parent_node, NType::PREFIX);
-	while (prefix.get().ptr.GetType() == NType::PREFIX) {
-		prefix = Node::RefMutable<Prefix>(art, prefix.get().ptr, NType::PREFIX);
-	}
-
-	// Append the byte.
-	prefix = prefix.get().Append(art, byte);
-
-	// Append the child. Also handles any gate nodes in the child.
-	if (child_node.GetType() == NType::PREFIX) {
-		prefix.get().Append(art, child_node);
-		return;
-	}
-
-	// Point to the child.
-	prefix.get().ptr = child_node;
+	reference<Prefix> tail = GetTail(art, parent);
+	tail = tail.get().Append(art, byte);
+	tail.get().ptr = child;
 }
 
-idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKey &key, idx_t &depth) {
-	D_ASSERT(prefix_node.get().HasMetadata());
-	D_ASSERT(prefix_node.get().GetType() == NType::PREFIX);
+void ConcatInlinedPrefix(ART &art, Node &parent, uint8_t byte, const Node &child) {
+	bool was_gate = parent.IsGate();
+	Node new_prefix = Node();
 
-	while (prefix_node.get().GetType() == NType::PREFIX) {
-		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, NType::PREFIX);
+	if (!child.HasMetadata()) {
+		NewPrefix<PrefixInlined>(art, new_prefix, &byte, 1, 0, NType::PREFIX_INLINED);
+
+	} else {
+		new_prefix = child;
+		PrependByte(art, new_prefix, byte);
+	}
+
+	if (parent.GetType() == NType::PREFIX) {
+		auto &parent_prefix = Node::RefMutable<Prefix>(art, parent, NType::PREFIX);
+		auto &prefix = Node::RefMutable<PrefixInlined>(art, new_prefix, NType::PREFIX_INLINED);
+
+		memmove(prefix.data + parent_prefix.data[Node::PREFIX_SIZE], prefix.data, prefix.data[Node::PREFIX_SIZE]);
+		memcpy(prefix.data, parent_prefix.data, parent_prefix.data[Node::PREFIX_SIZE]);
+		prefix.data[Node::PREFIX_SIZE] += parent_prefix.data[Node::PREFIX_SIZE];
+
+		GetTail(art, parent).ptr.Clear();
+		Node::Free(art, parent);
+	}
+
+	if (was_gate) {
+		new_prefix.SetGate();
+	}
+	parent = new_prefix;
+}
+
+void Prefix::Concat(ART &art, Node &parent, uint8_t byte, bool is_gate, const Node &child) {
+	D_ASSERT(parent.HasMetadata());
+	D_ASSERT(!parent.IsAnyLeaf());
+
+	if (is_gate) {
+		return ConcatGate(art, parent, byte, child);
+	}
+	if (child.IsGate()) {
+		return ConcatChildIsGate(art, parent, byte, child);
+	}
+
+	if (!child.HasMetadata() || child.GetType() == NType::PREFIX_INLINED) {
+		return ConcatInlinedPrefix(art, parent, byte, child);
+	}
+
+	if (parent.GetType() != NType::PREFIX) {
+		auto &prefix = NewPrefix<Prefix>(art, parent, &byte, 1, 0, NType::PREFIX);
+		if (child.GetType() == NType::PREFIX) {
+			prefix.Append(art, child);
+		} else {
+			prefix.ptr = child;
+		}
+		return;
+	}
+
+	reference<Prefix> tail = GetTail(art, parent);
+	tail = tail.get().Append(art, byte);
+
+	if (child.GetType() == NType::PREFIX) {
+		tail.get().Append(art, child);
+	} else {
+		tail.get().ptr = child;
+	}
+}
+
+template <class PREFIX, class NODE>
+idx_t Prefix::Traverse(ART &art, reference<NODE> &node, const ARTKey &key, idx_t &depth,
+                       PREFIX &(*func)(const ART &art, const Node ptr, const NType type)) {
+
+	D_ASSERT(node.get().HasMetadata());
+	D_ASSERT(node.get().GetType() == NType::PREFIX);
+
+	while (node.get().GetType() == NType::PREFIX) {
+		auto &prefix = func(art, node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			if (prefix.data[i] != key[depth]) {
 				return i;
 			}
 			depth++;
 		}
-		prefix_node = prefix.ptr;
-		D_ASSERT(prefix_node.get().HasMetadata());
-		if (prefix_node.get().IsGate()) {
+		node = prefix.ptr;
+		D_ASSERT(node.get().HasMetadata());
+		if (node.get().IsGate()) {
 			break;
 		}
 	}
@@ -184,65 +227,58 @@ idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKe
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Prefix::TraverseMutable(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth) {
-	D_ASSERT(prefix_node.get().HasMetadata());
-	D_ASSERT(prefix_node.get().GetType() == NType::PREFIX);
+bool TraverseInlined(ART &art, Node &l, Node &r, idx_t &mismatch_pos) {
+	D_ASSERT(r.GetType() == NType::PREFIX_INLINED);
 
-	while (prefix_node.get().GetType() == NType::PREFIX) {
-		auto &prefix = Node::RefMutable<Prefix>(art, prefix_node, NType::PREFIX);
-		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-			if (prefix.data[i] != key[depth]) {
-				return i;
-			}
-			depth++;
-		}
-		prefix_node = prefix.ptr;
-		D_ASSERT(prefix_node.get().HasMetadata());
-		if (prefix_node.get().IsGate()) {
-			break;
+	auto &l_prefix = Node::RefMutable<PrefixInlined>(art, l, NType::PREFIX_INLINED);
+	auto &r_prefix = Node::RefMutable<PrefixInlined>(art, r, NType::PREFIX_INLINED);
+
+	D_ASSERT(l_prefix.data[Node::PREFIX_SIZE] == r_prefix.data[Node::PREFIX_SIZE]);
+	for (idx_t i = 0; i < l_prefix.data[Node::PREFIX_SIZE]; i++) {
+		if (l_prefix.data[i] != r_prefix.data[i]) {
+			mismatch_pos = i;
+			return true;
 		}
 	}
-
-	return DConstants::INVALID_INDEX;
+	throw InternalException("Inlined prefixes cannot match.");
 }
 
-bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position,
-                      const bool inside_gate) {
-	D_ASSERT(l_node.get().HasMetadata() && l_node.get().GetType() == NType::PREFIX);
-	D_ASSERT(r_node.get().HasMetadata() && l_node.get().GetType() == NType::PREFIX);
+bool Prefix::Traverse(ART &art, reference<Node> &l, reference<Node> &r, idx_t &mismatch_pos, bool inside_gate) {
+	D_ASSERT(l.get().HasMetadata());
+	D_ASSERT(r.get().HasMetadata());
 
-	auto &l_prefix = Node::RefMutable<Prefix>(art, l_node.get(), NType::PREFIX);
-	auto &r_prefix = Node::RefMutable<Prefix>(art, r_node.get(), NType::PREFIX);
+	if (l.get().GetType() == NType::PREFIX_INLINED) {
+		return TraverseInlined(art, l, r, mismatch_pos);
+	}
 
-	// compare prefix bytes
+	auto &l_prefix = Node::RefMutable<Prefix>(art, l.get(), NType::PREFIX);
+	auto &r_prefix = Node::RefMutable<Prefix>(art, r.get(), NType::PREFIX);
+
 	idx_t max_count = MinValue(l_prefix.data[Node::PREFIX_SIZE], r_prefix.data[Node::PREFIX_SIZE]);
 	for (idx_t i = 0; i < max_count; i++) {
 		if (l_prefix.data[i] != r_prefix.data[i]) {
-			mismatch_position = i;
+			mismatch_pos = i;
 			break;
 		}
 	}
-
-	if (mismatch_position == DConstants::INVALID_INDEX) {
-
-		// prefixes match (so far)
-		if (l_prefix.data[Node::PREFIX_SIZE] == r_prefix.data[Node::PREFIX_SIZE]) {
-			return l_prefix.ptr.MergeInternal(art, r_prefix.ptr, inside_gate);
-		}
-
-		mismatch_position = max_count;
-
-		// l_prefix contains r_prefix
-		if (r_prefix.ptr.GetType() != NType::PREFIX && r_prefix.data[Node::PREFIX_SIZE] == max_count) {
-			swap(l_node.get(), r_node.get());
-			l_node = r_prefix.ptr;
-
-		} else {
-			// r_prefix contains l_prefix
-			l_node = l_prefix.ptr;
-		}
+	if (mismatch_pos != DConstants::INVALID_INDEX) {
+		return true;
 	}
 
+	// Match.
+	if (l_prefix.data[Node::PREFIX_SIZE] == r_prefix.data[Node::PREFIX_SIZE]) {
+		return l_prefix.ptr.MergeInternal(art, r_prefix.ptr, inside_gate);
+	}
+
+	mismatch_pos = max_count;
+	if (r_prefix.ptr.GetType() != NType::PREFIX && r_prefix.data[Node::PREFIX_SIZE] == max_count) {
+		// l_prefix contains r_prefix
+		swap(l.get(), r.get());
+		l = r_prefix.ptr;
+	} else {
+		// r_prefix contains l_prefix
+		l = l_prefix.ptr;
+	}
 	return true;
 }
 
@@ -306,6 +342,7 @@ void Prefix::Reduce(ART &art, Node &node, const idx_t n) {
 	}
 }
 
+// TODO
 bool Prefix::Split(ART &art, Node &node, Node &child, idx_t position) {
 	D_ASSERT(node.HasMetadata());
 	D_ASSERT(node.GetType() == NType::PREFIX);
@@ -417,6 +454,7 @@ void Prefix::TransformToDeprecated(ART &art, Node &node) {
 	Node::TransformToDeprecated(art, node_ref.get());
 }
 
+// TODO
 Prefix &Prefix::Append(ART &art, const uint8_t byte) {
 
 	reference<Prefix> prefix(*this);
@@ -431,6 +469,7 @@ Prefix &Prefix::Append(ART &art, const uint8_t byte) {
 	return prefix.get();
 }
 
+// TODO
 void Prefix::Append(ART &art, Node other_prefix) {
 	D_ASSERT(other_prefix.HasMetadata());
 

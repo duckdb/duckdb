@@ -67,7 +67,6 @@ void Node256::InsertChild(ART &art, Node &node, const uint8_t byte, const Node c
 	auto &n256 = Node::RefMutable<Node256>(art, node, NType::NODE_256);
 
 	n256.count++;
-	D_ASSERT(n256.count <= Node::NODE_256_CAPACITY);
 	n256.children[byte] = child;
 }
 

@@ -21,6 +21,7 @@ public:
 	Node256Leaf(const Node256Leaf &) = delete;
 	Node256Leaf &operator=(const Node256Leaf &) = delete;
 
+	uint16_t count;
 	validity_t mask[Node::NODE_256_CAPACITY / sizeof(validity_t)];
 
 public:
@@ -31,11 +32,9 @@ public:
 	//! Insert a byte.
 	static void InsertByte(ART &art, Node &node, const uint8_t byte);
 	//! Delete a byte.
-	static void DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte);
+	static void DeleteByte(ART &art, Node &node, const uint8_t byte);
 	//! Get the first byte that is greater or equal to the byte parameter.
 	bool GetNextByte(uint8_t &byte);
-	//! Returns the string representation of the node, or early-outs.
-	string VerifyAndToString(ART &art, const bool only_verify) const;
 };
 
 } // namespace duckdb

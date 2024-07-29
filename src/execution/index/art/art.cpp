@@ -449,7 +449,7 @@ bool ART::Construct(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKe
 	            UnsafeNumericCast<uint32_t>(prefix_length));
 
 	// Create the node.
-	auto node_type = Node::GetARTNodeTypeByCount(child_sections.size());
+	auto node_type = Node::NodeTypeByCount(child_sections.size());
 	Node::New(*this, ref_node, node_type);
 
 	// Recurse on each child section.
@@ -560,14 +560,14 @@ void ART::InsertIntoEmptyNode(Node &node, const ARTKey &key, idx_t depth, const 
 	D_ASSERT(depth <= key.len);
 
 	auto depth_byte = UnsafeNumericCast<uint32_t>(depth);
-	auto count = UnsafeNumericCast<uint32_t>(key.len - depth);
+	idx_t count = key.len - depth;
 	if (inside_gate) {
-		PrefixInlined::New(*this, node, key, depth_byte, count);
+		PrefixInlined::New(*this, node, key, depth_byte, UnsafeNumericCast<uint8_t>(count));
 		return;
 	}
 
 	reference<Node> ref_node(node);
-	Prefix::New(*this, ref_node, key, depth_byte, count);
+	Prefix::New(*this, ref_node, key, depth_byte, UnsafeNumericCast<uint32_t>(count));
 	Leaf::New(ref_node, row_id_key.GetRowID());
 }
 
@@ -581,7 +581,6 @@ bool ART::Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference
 
 	// Enter a nested leaf.
 	if (node.IsGate()) {
-		D_ASSERT(!node.IsLeaf());
 		key = row_id_key;
 		depth = 0;
 	}
@@ -643,7 +642,8 @@ bool ART::Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference
 	case NType::PREFIX: {
 		// If this is a prefix node, we traverse the prefix.
 		reference<Node> next_node(node);
-		auto mismatch_position = Prefix::TraverseMutable(*this, next_node, key, depth);
+		auto mismatch_position =
+		    Prefix::Traverse<Prefix, Node>(*this, next_node, key, depth, &Node::RefMutable<Prefix>);
 
 		// We recurse into the next node, if
 		// (1) the prefix matches the key, or
@@ -739,7 +739,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	// Traverse the prefix.
 	reference<Node> next_node(node);
 	if (next_node.get().GetType() == NType::PREFIX) {
-		Prefix::TraverseMutable(*this, next_node, key, depth);
+		Prefix::Traverse<Prefix, Node>(*this, next_node, key, depth, &Node::RefMutable<Prefix>);
 		if (next_node.get().GetType() == NType::PREFIX && !next_node.get().IsGate()) {
 			return;
 		}
@@ -786,7 +786,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	reference<Node> child_node(*child);
 
 	if (child_node.get().GetType() == NType::PREFIX) {
-		Prefix::TraverseMutable(*this, child_node, key, temp_depth);
+		Prefix::Traverse<Prefix, Node>(*this, child_node, key, temp_depth, &Node::RefMutable<Prefix>);
 		if (child_node.get().GetType() == NType::PREFIX && !child_node.get().IsGate()) {
 			return;
 		}
@@ -829,13 +829,13 @@ optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey &key, idx_t 
 	while (node_ref.get().HasMetadata()) {
 
 		// Return the leaf.
-		if (node_ref.get().IsLeaf() || node_ref.get().IsGate()) {
+		if (node_ref.get().IsAnyLeaf() || node_ref.get().IsGate()) {
 			return &node_ref.get();
 		}
 
 		// Traverse the prefix.
 		if (node_ref.get().GetType() == NType::PREFIX) {
-			Prefix::Traverse(*this, node_ref, key, depth);
+			Prefix::Traverse<const Prefix, const Node>(*this, node_ref, key, depth, &Node::Ref<const Prefix>);
 			if (node_ref.get().GetType() == NType::PREFIX && !node_ref.get().IsGate()) {
 				// Prefix mismatch, return nullptr.
 				return nullptr;

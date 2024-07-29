@@ -73,8 +73,8 @@ void Node::Free(ART &art, Node &node) {
 		Node256::Free(art, node);
 		break;
 	case NType::LEAF_INLINED:
-	case NType::PREFIX_INLINED:
 		return node.Clear();
+	case NType::PREFIX_INLINED:
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
 	case NType::NODE_256_LEAF:
@@ -129,9 +129,9 @@ void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chil
 	case NType::NODE_7_LEAF:
 		return Node7Leaf::InsertByte(art, node, byte);
 	case NType::NODE_15_LEAF:
-		return Node7Leaf::InsertByte(art, node, byte);
+		return Node15Leaf::InsertByte(art, node, byte);
 	case NType::NODE_256_LEAF:
-		return Node7Leaf::InsertByte(art, node, byte);
+		return Node256Leaf::InsertByte(art, node, byte);
 	default:
 		throw InternalException("Invalid node type for InsertChild.");
 	}
@@ -153,6 +153,12 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 		return Node48::DeleteChild(art, node, byte);
 	case NType::NODE_256:
 		return Node256::DeleteChild(art, node, byte);
+	case NType::NODE_7_LEAF:
+		return Node7Leaf::DeleteByte(art, node, prefix, byte);
+	case NType::NODE_15_LEAF:
+		return Node15Leaf::DeleteByte(art, node, byte);
+	case NType::NODE_256_LEAF:
+		return Node256Leaf::DeleteByte(art, node, byte);
 	default:
 		throw InternalException("Invalid node type for DeleteChild.");
 	}
@@ -253,10 +259,16 @@ idx_t GetCapacity(NType type) {
 	switch (type) {
 	case NType::NODE_4:
 		return Node::NODE_4_CAPACITY;
+	case NType::NODE_7_LEAF:
+		return Node::NODE_7_LEAF_CAPACITY;
+	case NType::NODE_15_LEAF:
+		return Node::NODE_15_LEAF_CAPACITY;
 	case NType::NODE_16:
 		return Node::NODE_16_CAPACITY;
 	case NType::NODE_48:
 		return Node::NODE_48_CAPACITY;
+	case NType::NODE_256_LEAF:
+		return Node::NODE_256_CAPACITY;
 	case NType::NODE_256:
 		return Node::NODE_256_CAPACITY;
 	default:
@@ -267,7 +279,6 @@ idx_t GetCapacity(NType type) {
 string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 	D_ASSERT(HasMetadata());
 
-	// Leaf types.
 	auto type = GetType();
 	switch (type) {
 	case NType::LEAF_INLINED:
@@ -281,20 +292,27 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 		}
 		return only_verify ? "" : "\n" + str;
 	}
-	case NType::NODE_7_LEAF:
-		return Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF).VerifyAndToString(art, only_verify);
-	case NType::NODE_15_LEAF:
-		return Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF).VerifyAndToString(art, only_verify);
-	case NType::NODE_256_LEAF:
-		return Ref<const Node256Leaf>(art, *this, NType::NODE_256_LEAF).VerifyAndToString(art, only_verify);
 	default:
 		break;
 	}
 
 	string str = "Node" + to_string(GetCapacity(type)) + ": [";
 	uint8_t byte = 0;
-	auto child = GetNextChild(art, byte);
 
+	if (IsLeafNode()) {
+		auto has_byte = GetNextByte(art, byte);
+		while (has_byte) {
+			str += to_string(byte) + "-";
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+			byte++;
+			has_byte = GetNextByte(art, byte);
+		}
+		return only_verify ? "" : "\n" + str + "]";
+	}
+
+	auto child = GetNextChild(art, byte);
 	while (child) {
 		str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
 		if (byte == NumericLimits<uint8_t>::Maximum()) {
@@ -303,14 +321,13 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 		byte++;
 		child = GetNextChild(art, byte);
 	}
-
 	if (IsGate()) {
 		str = "Nested Leaf [" + str + "]";
 	}
 	return only_verify ? "" : "\n" + str + "]";
 }
 
-NType Node::GetARTNodeTypeByCount(const idx_t count) {
+NType Node::NodeTypeByCount(const idx_t count) {
 	if (count <= NODE_4_CAPACITY) {
 		return NType::NODE_4;
 	} else if (count <= NODE_16_CAPACITY) {

@@ -27,7 +27,7 @@ void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row
 	node.get().SetGate();
 }
 
-void MergeInlined(ART &art, Node &l_node, Node &r_node) {
+void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
 	D_ASSERT(r_node.GetType() == NType::LEAF_INLINED);
 
 	// Create an ARTKey from the row ID.
@@ -38,28 +38,6 @@ void MergeInlined(ART &art, Node &l_node, Node &r_node) {
 	// Insert the key.
 	art.Insert(l_node, key, 0, key, l_node.IsGate());
 	r_node.Clear();
-}
-
-void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
-	D_ASSERT(l_node.HasMetadata());
-	D_ASSERT(r_node.HasMetadata());
-
-	// Copy the inlined row ID of r_node into l_node.
-	if (r_node.GetType() == NType::LEAF_INLINED) {
-		return MergeInlined(art, l_node, r_node);
-	}
-
-	// l_node has an inlined row ID, swap and insert.
-	if (l_node.GetType() == NType::LEAF_INLINED) {
-		auto temp_node = l_node;
-		l_node = r_node;
-		MergeInlined(art, l_node, temp_node);
-		return r_node.Clear();
-	}
-
-	D_ASSERT(l_node.GetType() != NType::LEAF_INLINED && l_node.IsGate());
-	D_ASSERT(r_node.GetType() != NType::LEAF_INLINED && r_node.IsGate());
-	l_node.Merge(art, r_node, true);
 }
 
 void Leaf::InsertIntoInlined(ART &art, Node &node, reference<const ARTKey> row_id) {

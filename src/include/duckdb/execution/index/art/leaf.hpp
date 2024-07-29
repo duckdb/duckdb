@@ -46,7 +46,7 @@ public:
 	                const idx_t count);
 
 	//! Merges two leaves.
-	static void Merge(ART &art, Node &l_node, Node &r_node);
+	static void MergeInlined(ART &art, Node &l_node, Node &r_node);
 
 	//! Inserts a row ID into an inlined leaf.
 	static void InsertIntoInlined(ART &art, Node &node, reference<const ARTKey> row_id);

@@ -86,11 +86,11 @@ public:
 		return GetAllocator(art, type).GetInMemoryPtr<NODE>(ptr);
 	}
 
-	//! Replace the child node at byte.
+	//! Replace the child at byte.
 	void ReplaceChild(const ART &art, const uint8_t byte, const Node child) const;
-	//! Insert the child node at byte.
+	//! Insert the child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
-	//! Delete the child node at byte.
+	//! Delete the child at byte.
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
 	//! Get the immutable child at byte.
@@ -108,33 +108,65 @@ public:
 	//! Else, it traverses and verifies the node and its subtree.
 	string VerifyAndToString(ART &art, const bool only_verify) const;
 	//! Returns the matching node type for a given count.
-	static NType GetARTNodeTypeByCount(const idx_t count);
+	static NType NodeTypeByCount(const idx_t count);
 
-	//! Initializes a merge by incrementing the buffer IDs of a node and its subtree.
+	//! Initialize a merge by incrementing the buffer IDs of a node.
 	void InitializeMerge(ART &art, const ARTFlags &flags);
-	//! Merge another node into this node.
+	//! Merge a node into this node.
 	bool Merge(ART &art, Node &other, const bool inside_gate);
-	//! Merge another node into this node.
+	//! Merge a node into this node.
 	bool MergeInternal(ART &art, Node &other, const bool inside_gate);
 
-	//! Vacuum all nodes that exceed their respective vacuum thresholds
+	//! Vacuum all nodes exceeding their vacuum threshold.
 	void Vacuum(ART &art, const ARTFlags &flags);
 
 	//! Transform the node storage to deprecated storage.
 	static void TransformToDeprecated(ART &art, Node &node);
 
-	//! Returns true, if the node is any leaf node.
-	inline bool IsLeaf() const {
+	//! Returns the node type.
+	inline NType GetType() const {
+		return NType(GetMetadata() & ~AND_GATE);
+	}
+	//! True, if the node is a Node4, Node16, Node48, or Node256.
+	inline bool IsNode() const {
 		switch (GetType()) {
-		case NType::LEAF_INLINED:
-		case NType::NODE_7_LEAF:
-		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF:
-		case NType::LEAF:
+		case NType::NODE_4:
+		case NType::NODE_16:
+		case NType::NODE_48:
+		case NType::NODE_256:
 			return true;
 		default:
 			return false;
 		}
+	}
+	//! True, if the node is a Node7Leaf, Node15Leaf, or Node256Leaf.
+	inline bool IsLeafNode() const {
+		switch (GetType()) {
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			return true;
+		default:
+			return false;
+		}
+	}
+	//! True, if the node is any leaf.
+	inline bool IsAnyLeaf() const {
+		if (IsLeafNode()) {
+			return true;
+		}
+		switch (GetType()) {
+		case NType::LEAF_INLINED:
+		case NType::LEAF:
+		case NType::PREFIX_INLINED:
+			return true;
+		default:
+			return false;
+		}
+	}
+	//! True, if the node is a Prefix or PrefixInlined.
+	inline bool IsPrefix() const {
+		return GetType() == NType::PREFIX || GetType() == NType::PREFIX_INLINED;
 	}
 
 	//! Get the row ID (8th to 63rd bit)
@@ -144,11 +176,6 @@ public:
 	//! Set the row ID (8th to 63rd bit)
 	inline void SetRowId(const row_t row_id) {
 		Set((Get() & AND_METADATA) | UnsafeNumericCast<idx_t>(row_id));
-	}
-
-	//! Returns the node type.
-	inline NType GetType() const {
-		return NType(GetMetadata() & ~AND_GATE);
 	}
 
 	//! Returns true, if the node is a gate node.
@@ -166,11 +193,13 @@ public:
 	}
 
 private:
-	//! Merge two nodes that have no prefix or the same prefix
-	bool MergeNodes(ART &art, Node &other, const bool inside_gate);
+	//! Merge two nodes.
+	bool MergeNodes(ART &art, Node &other, bool inside_gate);
 	//! Reduce r_node's prefix and insert it into l_node, or recurse.
 	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos, bool inside_gate);
 	//! Split l_node and reduce r_node, and insert them into a new Node4.
 	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos);
+	//! Merges two prefixes.
+	bool MergePrefixes(ART &art, Node &other, bool inside_gate);
 };
 } // namespace duckdb
