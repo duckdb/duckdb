@@ -196,7 +196,7 @@
                 }
             ],
             "comment": {
-                "description": "Sets the total capacity of the underlying child-vector of a list.\n\n",
+                "description": "Sets the total capacity of the underlying child-vector of a list.\n\nAfter calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current\ndata and validity pointers\n\n",
                 "param_comments": {
                     "vector": "The list vector.",
                     "required_capacity": "the total capacity to reserve."

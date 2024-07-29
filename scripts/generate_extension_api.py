@@ -70,6 +70,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'table_function_init',
     'table_function',
     'replacement_scans',
+    'profiling_info',
     'appender',
     'arrow_interface',
     'threading_information',

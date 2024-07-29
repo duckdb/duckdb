@@ -64,8 +64,8 @@
             "comment": {
                 "description": "Adds a parameter to the table function.\n\n",
                 "param_comments": {
-                    "table_function": "The table function",
-                    "type": "The type of the parameter to add."
+                    "table_function": "The table function.",
+                    "type": "The parameter type. Cannot contain INVALID."
                 }
             }
         },
@@ -89,9 +89,9 @@
             "comment": {
                 "description": "Adds a named parameter to the table function.\n\n",
                 "param_comments": {
-                    "table_function": "The table function",
-                    "name": "The name of the parameter",
-                    "type": "The type of the parameter to add."
+                    "table_function": "The table function.",
+                    "name": "The parameter name.",
+                    "type": "The parameter type. Cannot contain INVALID."
                 }
             }
         },

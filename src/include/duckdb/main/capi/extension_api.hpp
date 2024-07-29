@@ -37,7 +37,6 @@ typedef struct {
 	idx_t (*duckdb_column_count)(duckdb_result *result);
 	idx_t (*duckdb_rows_changed)(duckdb_result *result);
 	const char *(*duckdb_result_error)(duckdb_result *result);
-	duckdb_result_type (*duckdb_result_return_type)(duckdb_result result);
 	void *(*duckdb_malloc)(size_t size);
 	void (*duckdb_free)(void *ptr);
 	idx_t (*duckdb_vector_size)();
@@ -301,7 +300,6 @@ inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {
 		result.duckdb_column_count = duckdb_column_count;
 		result.duckdb_rows_changed = duckdb_rows_changed;
 		result.duckdb_result_error = duckdb_result_error;
-		result.duckdb_result_return_type = duckdb_result_return_type;
 		result.duckdb_malloc = duckdb_malloc;
 		result.duckdb_free = duckdb_free;
 		result.duckdb_vector_size = duckdb_vector_size;
@@ -533,7 +531,6 @@ inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {
 		result.duckdb_column_count = nullptr;
 		result.duckdb_rows_changed = nullptr;
 		result.duckdb_result_error = nullptr;
-		result.duckdb_result_return_type = nullptr;
 		result.duckdb_malloc = nullptr;
 		result.duckdb_free = nullptr;
 		result.duckdb_vector_size = nullptr;
@@ -757,7 +754,7 @@ inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {
 	return result;
 }
 
-#define DUCKDB_EXTENSION_API_VERSION       v0.0.3
+#define DUCKDB_EXTENSION_API_VERSION       v0 .0.3
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
 #define DUCKDB_EXTENSION_API_VERSION_MINOR 0
 #define DUCKDB_EXTENSION_API_VERSION_PATCH 3

@@ -245,6 +245,23 @@
                 },
                 "return_value": "The error of the result."
             }
+        },
+        {
+            "name": "duckdb_result_error_type",
+            "return_type": "duckdb_error_type",
+            "params": [
+                {
+                    "type": "duckdb_result *",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "Returns the result error type contained within the result. The error is only set if `duckdb_query` returns\n`DuckDBError`.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the error from."
+                },
+                "return_value": "The error type of the result."
+            }
         }
     ]
 }

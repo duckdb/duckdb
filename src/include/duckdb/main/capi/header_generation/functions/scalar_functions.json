@@ -49,6 +49,60 @@
             }
         },
         {
+            "name": "duckdb_scalar_function_set_varargs",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Sets the parameters of the given scalar function to varargs. Does not require adding parameters with\nduckdb_scalar_function_add_parameter.\n\n",
+                "return_value": "The parameter type. Cannot contain INVALID.",
+                "param_comments": {
+                    "scalar_function": "The scalar function.",
+                    "type": "The type of the arguments."
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_special_handling",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                }
+            ],
+            "comment": {
+                "description": "Sets the parameters of the given scalar function to varargs. Does not require adding parameters with\nduckdb_scalar_function_add_parameter.\n\n",
+                "param_comments": {
+                    "scalar_function": "The scalar function."
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_volatile",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                }
+            ],
+            "comment": {
+                "description": "Sets the Function Stability of the scalar function to VOLATILE, indicating the function should be re-run for every row.\nThis limits optimization that can be performed for the function.\n\n",
+                "param_comments": {
+                    "scalar_function": "The scalar function."
+                }
+            }
+        },
+        {
             "name": "duckdb_scalar_function_add_parameter",
             "return_type": "void",
             "params": [
@@ -64,8 +118,8 @@
             "comment": {
                 "description": "Adds a parameter to the scalar function.\n\n",
                 "param_comments": {
-                    "scalar_function": "The scalar function",
-                    "type": "The type of the parameter to add."
+                    "scalar_function": "The scalar function.",
+                    "type": "The parameter type. Cannot contain INVALID."
                 }
             }
         },
@@ -86,7 +140,7 @@
                 "description": "Sets the return type of the scalar function.\n\n",
                 "param_comments": {
                     "scalar_function": "The scalar function",
-                    "type": "The return type to set"
+                    "type": "Cannot contain INVALID or ANY."
                 }
             }
         },
@@ -157,6 +211,44 @@
                     "scalar_function": "The function pointer"
                 },
                 "return_value": "Whether or not the registration was successful."
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_get_extra_info",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the extra info of the function as set in `duckdb_scalar_function_set_extra_info`.\n\n",
+                "param_comments": {
+                    "info": "The info object."
+                },
+                "return_value": "The extra info."
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_error",
+            "return_type": "void ",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "error"
+                }
+            ],
+            "comment": {
+                "description": "Report that an error has occurred while executing the scalar function.\n\n",
+                "param_comments": {
+                    "info": "The info object.",
+                    "error": "The error message"
+                }
             }
         }
     ]

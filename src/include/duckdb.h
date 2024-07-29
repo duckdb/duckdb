@@ -2628,9 +2628,9 @@ DUCKDB_API void *duckdb_bind_get_extra_info(duckdb_bind_info info);
 /*!
 Adds a result column to the output of the table function.
 
-* @param info The table function's bind info.
-* @param name The column name.
-* @param type The logical column type.
+* info: The table function's bind info.
+* name: The column name.
+* type: The logical column type.
 */
 DUCKDB_API void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duckdb_logical_type type);
 
@@ -2844,63 +2844,63 @@ Report that an error has occurred while executing the replacement scan.
 * error: The error message
 */
 DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info info, const char *error);
-#endif
 
 //===--------------------------------------------------------------------===//
 // Profiling Info
 //===--------------------------------------------------------------------===//
 
 /*!
- * Returns the root node of the profiling information. Returns nullptr, if profiling is not enabled.
- *
- * @param connection A connection object.
- * @return A profiling information object.
- */
+Returns the root node of the profiling information. Returns nullptr, if profiling is not enabled.
+
+* connection: A connection object.
+* returns: A profiling information object.
+*/
 DUCKDB_API duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection);
 
 /*!
- * Returns the value of the metric of the current profiling info node. Returns nullptr, if the metric does
- * not exist or is not enabled. Currently, the value holds a string, and you can retrieve the string
- * by calling the corresponding function: char *duckdb_get_varchar(duckdb_value value).
- *
- * @param info A profiling information object.
- * @param key The name of the requested metric.
- * @return The value of the metric. Must be freed with `duckdb_destroy_value`.
- */
+Returns the value of the metric of the current profiling info node. Returns nullptr, if the metric does
+ not exist or is not enabled. Currently, the value holds a string, and you can retrieve the string
+ by calling the corresponding function: char *duckdb_get_varchar(duckdb_value value).
+
+* info: A profiling information object.
+* key: The name of the requested metric.
+* returns: The value of the metric. Must be freed with `duckdb_destroy_value`
+*/
 DUCKDB_API duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
 
 /*!
- * Returns the number of children in the current profiling info node.
- *
- * @param info A profiling information object.
- * @return The number of children in the current node.
- */
+Returns the number of children in the current profiling info node.
+
+* info: A profiling information object.
+* returns: The number of children in the current node.
+*/
 DUCKDB_API idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info);
 
 /*!
- * Returns the child node at the specified index.
- *
- * @param info A profiling information object.
- * @param index The index of the child node.
- * @return The child node at the specified index.
- */
+Returns the number of children in the current profiling info node.
+
+* info: A profiling information object.
+* index: The index of the child node.
+* returns: The child node at the specified index.
+*/
 DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
 
-/*! Returns the operator name of the current profiling info node, if the node is an Operator Node.
- *
- * @param info A profiling information object.
- * @return The name of the operator of the current node. Returns nullptr, if the node is not an Operator Node. The
- * result must be freed with `duckdb_free`.
- */
+/*!
+Returns the operator name of the current profiling info node, if the node is an Operator Node.
+
+* info: A profiling information object.
+* returns: The name of the operator of the current node. Returns nullptr, if the node is not an Operator Node. The
+result must be freed with `duckdb_free`.
+*/
 DUCKDB_API const char *duckdb_profiling_info_get_name(duckdb_profiling_info info);
 
 /*!
- * Returns the query of the current profiling info node, if the node is the root.
- *
- * @param info A profiling information object.
- * @return The query of the current node. Returns nullptr, if the node is not the root. The result must be freed
+Returns the query of the current profiling info node, if the node is the root.
+
+* info: A profiling information object.
+* returns: The query of the current node. Returns nullptr, if the node is not the root. The result must be freed
  * with `duckdb_free`.
- */
+*/
 DUCKDB_API const char *duckdb_profiling_info_get_query(duckdb_profiling_info info);
 
 //===--------------------------------------------------------------------===//
@@ -3134,14 +3134,10 @@ If the append is successful, DuckDBSuccess is returned.
 DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk);
 
 //===--------------------------------------------------------------------===//
-// TableDescription
-//===--------------------------------------------------------------------===//
-
-#ifndef DUCKDB_API_NO_DEPRECATED
-//===--------------------------------------------------------------------===//
 // Arrow Interface
 //===--------------------------------------------------------------------===//
 
+#ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 

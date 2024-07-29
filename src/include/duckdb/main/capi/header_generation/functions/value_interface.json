@@ -88,12 +88,12 @@
                 }
             ],
             "comment": {
-                "description": "Creates a struct value from a type and an array of values\n\n",
+                "description": "Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.\n\n",
                 "param_comments": {
                     "type": "The type of the struct",
                     "values": "The values for the struct fields"
                 },
-                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+                "return_value": "The struct value, or nullptr, if any child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`."
             }
         },
         {
@@ -114,13 +114,13 @@
                 }
             ],
             "comment": {
-                "description": "Creates a list value from a type and an array of values of length `value_count`\n\n",
+                "description": "Creates a list value from a child (element) type and an array of values of length `value_count`.\nMust be destroyed with `duckdb_destroy_value`.\n\n",
                 "param_comments": {
                     "type": "The type of the list",
                     "values": "The values for the list",
                     "value_count": "The number of values in the list"
                 },
-                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+                "return_value": "The list value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`."
             }
         },
         {
@@ -141,13 +141,13 @@
                 }
             ],
             "comment": {
-                "description": "Creates an array value from a type and an array of values of length `value_count`\n\n",
+                "description": "Creates an array value from a child (element) type and an array of values of length `value_count`.\nMust be destroyed with `duckdb_destroy_value`.\n\n",
                 "param_comments": {
                     "type": "The type of the array",
                     "values": "The values for the array",
                     "value_count": "The number of values in the array"
                 },
-                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+                "return_value": "The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`."
             }
         },
         {

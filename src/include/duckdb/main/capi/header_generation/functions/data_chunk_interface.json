@@ -16,9 +16,9 @@
                 }
             ],
             "comment": {
-                "description": "Creates an empty DataChunk with the specified set of types.\n\nNote that the result must be destroyed with `duckdb_destroy_data_chunk`.\n\n",
+                "description": "Creates an empty data chunk with the specified column types.\nThe result must be destroyed with `duckdb_destroy_data_chunk`.\n\n",
                 "param_comments": {
-                    "types": "An array of types of the data chunk.",
+                    "types": "An array of column types. Column types can not contain ANY and INVALID types.",
                     "column_count": "The number of columns."
                 },
                 "return_value": "The data chunk."
@@ -50,7 +50,7 @@
                 }
             ],
             "comment": {
-                "description": "Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.\n\n",
+                "description": "Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.\nAfter calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current\ndata and validity pointers\n\n",
                 "param_comments": {
                     "chunk": "The data chunk to reset."
                 }

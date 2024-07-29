@@ -12,7 +12,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a `duckdb_logical_type` from a standard primitive type.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\nThis should not be used with `DUCKDB_TYPE_DECIMAL`.\n\n",
+                "description": "Creates a `duckdb_logical_type` from a primitive type.\nThe resulting logical type must be destroyed with `duckdb_destroy_logical_type`.\n\nReturns an invalid logical type, if type is: `DUCKDB_TYPE_INVALID`, `DUCKDB_TYPE_DECIMAL`, `DUCKDB_TYPE_ENUM`,\n`DUCKDB_TYPE_LIST`, `DUCKDB_TYPE_STRUCT`, `DUCKDB_TYPE_MAP`, `DUCKDB_TYPE_ARRAY`, or `DUCKDB_TYPE_UNION`.\n\n",
                 "param_comments": {
                     "type": "The primitive type to create."
                 },
@@ -29,11 +29,11 @@
                 }
             ],
             "comment": {
-                "description": "Returns the alias of a duckdb_logical_type, if one is set, else `NULL`.\nThe result must be destroyed with `duckdb_free`.\n\n",
+                "description": "Returns the alias of a duckdb_logical_type, if set, else `nullptr`.\nThe result must be destroyed with `duckdb_free`.\n\n",
                 "param_comments": {
-                    "type": "The logical type to return the alias of"
+                    "type": "The logical type"
                 },
-                "return_value": "The alias or `NULL`"
+                "return_value": "The alias or `nullptr`"
             }
         },
         {
@@ -46,9 +46,9 @@
                 }
             ],
             "comment": {
-                "description": "Creates a list type from its child type.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Creates a LIST type from its child type.\nThe return type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
-                    "type": "The child type of list type to create."
+                    "type": "The child type of the list"
                 },
                 "return_value": "The logical type."
             }
@@ -67,9 +67,9 @@
                 }
             ],
             "comment": {
-                "description": "Creates an array type from its child type.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Creates an ARRAY type from its child type.\nThe return type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
-                    "type": "The child type of array type to create.",
+                    "type": "The child type of the array.",
                     "array_size": "The number of elements in the array."
                 },
                 "return_value": "The logical type."
@@ -89,10 +89,10 @@
                 }
             ],
             "comment": {
-                "description": "Creates a map type from its key type and value type.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Creates a MAP type from its key type and value type.\nThe return type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
-                    "key_type": "The key type of map type to create.",
-                    "value_type": "The value type of map type to create."
+                    "key_type": "The map's key type.",
+                    "value_type": "The map's value type."
                 },
                 "return_value": "The logical type."
             }
@@ -115,10 +115,11 @@
                 }
             ],
             "comment": {
-                "description": "Creates a UNION type from the passed types array.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Creates a UNION type from the passed arrays.\nThe return type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
-                    "member_types": "The array of types that the union should consist of.",
-                    "member_count": "The size of the types array."
+                    "member_types": "The array of union member types.",
+                    "member_names": "The union member names.",
+                    "member_count": "The number of union members."
                 },
                 "return_value": "The logical type."
             }
@@ -141,11 +142,11 @@
                 }
             ],
             "comment": {
-                "description": "Creates a STRUCT type from the passed member name and type arrays.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Creates a STRUCT type based on the member types and names.\nThe resulting type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
-                    "member_types": "The array of types that the struct should consist of.",
-                    "member_names": "The array of names that the struct should consist of.",
-                    "member_count": "The number of members that were specified for both arrays."
+                    "member_types": "The array of types of the struct members.",
+                    "member_names": "The array of names of the struct members.",
+                    "member_count": "The number of members of the struct."
                 },
                 "return_value": "The logical type."
             }
@@ -186,7 +187,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a `duckdb_logical_type` of type decimal with the specified width and scale.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Creates a DECIMAL type with the specified width and scale.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
                     "width": "The width of the decimal type",
                     "scale": "The scale of the decimal type"
@@ -204,11 +205,11 @@
                 }
             ],
             "comment": {
-                "description": "Retrieves the enum type class of a `duckdb_logical_type`.\n\n",
+                "description": "Retrieves the enum `duckdb_type` of a `duckdb_logical_type`.\n\n",
                 "param_comments": {
-                    "type": "The logical type object"
+                    "type": "The logical type."
                 },
-                "return_value": "The type id"
+                "return_value": "The `duckdb_type` id."
             }
         },
         {
@@ -328,11 +329,11 @@
                 }
             ],
             "comment": {
-                "description": "Retrieves the child type of the given list type.\n\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Retrieves the child type of the given LIST type. Also accepts MAP types.\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
-                    "type": "The logical type object"
+                    "type": "The logical type, either LIST or MAP."
                 },
-                "return_value": "The child type of the list type. Must be destroyed with `duckdb_destroy_logical_type`."
+                "return_value": "The child type of the LIST or MAP type."
             }
         },
         {
@@ -345,11 +346,11 @@
                 }
             ],
             "comment": {
-                "description": "Retrieves the child type of the given array type.\n\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Retrieves the child type of the given ARRAY type.\n\nThe result must be freed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
-                    "type": "The logical type object"
+                    "type": "The logical type. Must be ARRAY."
                 },
-                "return_value": "The child type of the array type. Must be destroyed with `duckdb_destroy_logical_type`."
+                "return_value": "The child type of the ARRAY type."
             }
         },
         {

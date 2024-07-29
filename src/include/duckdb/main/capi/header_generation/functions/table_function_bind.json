@@ -39,9 +39,9 @@
             "comment": {
                 "description": "Adds a result column to the output of the table function.\n\n",
                 "param_comments": {
-                    "info": "The info object",
-                    "name": "The name of the column",
-                    "type": "The logical type of the column"
+                    "info": "The table function's bind info.",
+                    "name": "The column name.",
+                    "type": "The logical column type."
                 }
             }
         },
