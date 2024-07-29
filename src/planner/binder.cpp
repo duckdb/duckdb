@@ -21,6 +21,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 
@@ -343,7 +344,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 
 BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
-	if (context.config.enable_optimizer && OptimizeCTEs(node)) {
+	if (context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
+	        context.db->config.options.disabled_optimizers.end() &&
+	    context.config.enable_optimizer && OptimizeCTEs(node)) {
 		switch (node.type) {
 		case QueryNodeType::SELECT_NODE:
 			result = BindWithCTE(node.Cast<SelectNode>());
