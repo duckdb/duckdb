@@ -238,8 +238,8 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
-
-	if ((table_function.in_out_function && !table_function.projection_pushdown) || table_function.with_ordinality) {
+	
+	if (!table_function.projection_pushdown && (table_function.in_out_function || table_function.with_ordinality)) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);
 		}
