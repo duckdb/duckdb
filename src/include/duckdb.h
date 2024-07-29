@@ -2397,6 +2397,14 @@ Sets the NULL handling of the scalar function to SPECIAL_HANDLING.
 DUCKDB_API void duckdb_scalar_function_set_special_handling(duckdb_scalar_function scalar_function);
 
 /*!
+Sets the Function Stability of the scalar function to VOLATILE, indicating the function should be re-run for every row.
+This limits optimization that can be performed for the function.
+
+* scalar_function: The scalar function
+*/
+DUCKDB_API void duckdb_scalar_function_set_volatile(duckdb_scalar_function function);
+
+/*!
 Adds a parameter to the scalar function.
 
 * @param scalar_function The scalar function.
