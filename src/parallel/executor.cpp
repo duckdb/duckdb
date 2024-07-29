@@ -698,8 +698,8 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 
 	for (size_t i = 0; i < progress.size(); i++) {
 		progress[i] = MaxValue(0.0, MinValue(100.0, progress[i]));
-		current_cardinality = NumericCast<idx_t>(static_cast<double>(
-		    current_cardinality +
+		current_cardinality = LossyNumericCast<idx_t>(static_cast<double>(
+		    static_cast<double>(current_cardinality) +
 		    static_cast<double>(progress[i]) * static_cast<double>(cardinality[i]) / static_cast<double>(100)));
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
 		D_ASSERT(current_cardinality <= total_cardinality);

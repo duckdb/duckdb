@@ -498,7 +498,8 @@ bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_
 	return false;
 #else
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset_bytes, length_bytes);
+	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, UnsafeNumericCast<int64_t>(offset_bytes),
+	                    UnsafeNumericCast<int64_t>(length_bytes));
 	return res == 0;
 #endif
 #else

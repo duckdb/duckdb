@@ -73,7 +73,7 @@ public:
 	}
 	static char CharacterToLower(char c) {
 		if (c >= 'A' && c <= 'Z') {
-			return c - ('A' - 'a');
+			return UnsafeNumericCast<char>(c - ('A' - 'a'));
 		}
 		return c;
 	}
