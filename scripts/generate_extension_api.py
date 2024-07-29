@@ -260,7 +260,7 @@ def create_version_defines(version):
     major, minor, patch = parse_semver(EXT_API_VERSION)
     version_string = f'v{major}.{minor}.{patch}'
 
-    result = f"#define DUCKDB_EXTENSION_API_VERSION \"{version_string}\"\n"
+    result = f"#define DUCKDB_EXTENSION_API_VERSION {version_string}\n"
     result += f"#define DUCKDB_EXTENSION_API_VERSION_MAJOR {major}\n"
     result += f"#define DUCKDB_EXTENSION_API_VERSION_MINOR {minor}\n"
     result += f"#define DUCKDB_EXTENSION_API_VERSION_PATCH {patch}\n"
@@ -415,9 +415,9 @@ def create_duckdb_ext_h(ext_api_version):
         f'# define DUCKDB_EXTENSION_EXTERN extern const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME};\n'
     )
     extension_header_body += f'// Initializes the C Extension API: First thing to call in the extension entrypoint\n'
-    extension_header_body += f' #define DUCKDB_EXTENSION_API_INIT(info, access, version) {DUCKDB_EXT_API_PTR_NAME} = ({DUCKDB_EXT_API_STRUCT_NAME} *) access->get_api(info, version); if (!{DUCKDB_EXT_API_PTR_NAME}) {{ return; }};\n'
+    extension_header_body += f' #define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version) {DUCKDB_EXT_API_PTR_NAME} = ({DUCKDB_EXT_API_STRUCT_NAME} *) access->get_api(info, minimum_api_version); if (!{DUCKDB_EXT_API_PTR_NAME}) {{ return; }};\n'
     extension_header_body += f'// Register the extension entrypoint\n'
-    extension_header_body += ' #define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint, version) DUCKDB_EXTENSION_API void extension_name##_init_c_api(duckdb_extension_info info, duckdb_extension_access *access) { DUCKDB_EXTENSION_API_INIT(info, access, version); duckdb_database *db = access->get_database(info); duckdb_connection conn; if (duckdb_connect(*db, &conn) == DuckDBError) { access->set_error(info, "Failed to open connection to database"); return; } entrypoint(conn, info, access); duckdb_disconnect(&conn);}\n'
+    extension_header_body += ' #define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint, minimum_api_version) DUCKDB_EXTENSION_API void extension_name##_init_c_api(duckdb_extension_info info, duckdb_extension_access *access) { DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version); duckdb_database *db = access->get_database(info); duckdb_connection conn; if (duckdb_connect(*db, &conn) == DuckDBError) { access->set_error(info, "Failed to open connection to database"); return; } entrypoint(conn, info, access); duckdb_disconnect(&conn);}\n'
 
 
     header_template = fetch_header_template_ext()

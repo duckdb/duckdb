@@ -757,7 +757,7 @@ inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {
 	return result;
 }
 
-#define DUCKDB_EXTENSION_API_VERSION       "v0.0.3"
+#define DUCKDB_EXTENSION_API_VERSION       v0.0.3
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
 #define DUCKDB_EXTENSION_API_VERSION_MINOR 0
 #define DUCKDB_EXTENSION_API_VERSION_PATCH 3
