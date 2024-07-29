@@ -145,8 +145,8 @@ static string CreateStyleSection(RenderTree &root) {
         }
 
         .tf-tree {
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             overflow: visible;
         }
     </style>
