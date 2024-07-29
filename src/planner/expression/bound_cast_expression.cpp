@@ -149,10 +149,14 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 		switch (target_type.id()) {
+		case LogicalTypeId::TIMESTAMP:
+			return source_type.id() == LogicalTypeId::TIMESTAMP;
 		case LogicalTypeId::DATE:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIME_TZ:
 			return false;
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return source_type.id() == LogicalTypeId::TIMESTAMP_TZ;
 		default:
 			break;
 		}

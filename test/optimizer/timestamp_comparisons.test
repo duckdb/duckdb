@@ -1,0 +1,75 @@
+# name: test/optimizer/timestamp_comparisons.test
+# description: timestampt comparisons should be correct
+# group: [optimizer]
+
+require icu
+
+statement ok
+create table t (t timestamptz);
+
+statement ok
+insert into t values('2028-02-28 01:00:00');
+
+# EQUAL is affected (and LOWER, GREATER too)
+
+query I
+select t::timestamp = timestamp '2028-02-28 01:00:00' from t;
+----
+true
+
+
+query II
+select timestamp '2028-02-28 01:00:00' = timestamp '2028-02-28 01:00:00', t = timestamp '2028-02-28 01:00:00' from t;
+----
+true	true
+
+# Leading to this strange behaviour: no match
+query I
+select count(*) from t where t::timestamp = timestamp '2028-02-28 01:00:00';
+----
+1
+
+
+## Same problem if the constant is a string (no match)
+query I
+select * from t where t::timestamp = '2028-02-28 01:00:00';
+----
+2028-02-28 01:00:00+01
+
+
+# Without the cast of 't', it matches:
+query I
+select * from t where t = timestamp '2028-02-28 01:00:00';
+----
+2028-02-28 01:00:00+01
+
+
+# IN is affected too (no match)
+query I
+select * from t where t::timestamp in (timestamp '2028-02-28 01:00:00',timestamp '2028-02-28 11:00:00');
+----
+2028-02-28 01:00:00+01
+
+
+# Same problem with the casting in the other direction
+statement ok
+create table u(t timestamp);
+
+statement ok
+insert into u values('1993-02-28 01:00:00');
+
+query IIIII
+select t, t::timestamptz, '1993-04-28 01:00:00'::timestamptz, t::timestamptz='1993-02-28 01:00:00', t='1993-02-28 01:00:00' from u;
+----
+1993-02-28 01:00:00	1993-02-28 01:00:00+01	1993-04-28 01:00:00+02	true	true
+
+# Cast is not invertible
+query II
+select '1993-03-28 02:00:00'::timestamp, '1993-03-28 02:00:00'::timestamp::timestamptz::timestamp;
+----
+1993-03-28 02:00:00	1993-03-28 03:00:00
+
+query II
+select '1993-03-28 02:00:00'::timestamp, '1993-03-28 02:00:00'::timestamp::timestamptz::timestamp;
+----
+1993-03-28 02:00:00	1993-03-28 03:00:00
