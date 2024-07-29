@@ -1390,7 +1390,7 @@ struct UUIDValueConversion {
 			result.lower <<= 8;
 			result.lower += input[i];
 		}
-		result.upper = UnsafeNumericCast<int64_t>(unsigned_upper ^ (uint64_t(1) << 63));
+		result.upper = static_cast<int64_t>(unsigned_upper ^ (uint64_t(1) << 63));
 		return result;
 	}
 
