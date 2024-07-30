@@ -1,9 +1,12 @@
 //===----------------------------------------------------------------------===//
 // WARNING
-#error "This header should not be included directly, it's used to generate duckdb.h
+#error "This header should not be included directly, it's used to generate DuckDB's C API headers"
 //===----------------------------------------------------------------------===//
 
-// Note: to modify DuckDB's CAPI, the codegen mechanism should be used
+// !!!!!!!
+// WARNING: this file is used for header generation by scripts/generate_c_api.py after modifying the code below, rerun
+//          the script to apply changes to the generated files
+// !!!!!!!
 
 // DUCKDB_START_OF_HEADER
 
