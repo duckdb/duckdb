@@ -263,7 +263,7 @@ def create_version_defines(version):
     major, minor, patch = parse_semver(EXT_API_VERSION)
     version_string = f'v{major}.{minor}.{patch}'
 
-    result = f"#define DUCKDB_EXTENSION_API_VERSION {version_string}\n"
+    result = ""
     result += f"#define DUCKDB_EXTENSION_API_VERSION_MAJOR {major}\n"
     result += f"#define DUCKDB_EXTENSION_API_VERSION_MINOR {minor}\n"
     result += f"#define DUCKDB_EXTENSION_API_VERSION_PATCH {patch}\n"
@@ -384,7 +384,10 @@ def create_extension_api_struct(ext_api_version, with_create_method=False):
                 continue
 
             major, minor, patch = parse_semver(api_version_entry['version'])
-            extension_struct_finished += f'if (minor_version >= {minor} && patch_version >= {patch})' + '{'
+            if (minor == 0):
+                extension_struct_finished += f'if (patch_version >= {patch})' + '{'
+            else:
+                extension_struct_finished += f'if (minor_version >= {minor} && patch_version >= {patch})' + '{'
             extension_struct_finished += write_struct_member_definitions(api_version_entry['entries'], initialize=True)
             extension_struct_finished += '} else {'
             extension_struct_finished += write_struct_member_definitions(api_version_entry['entries'], initialize=False)

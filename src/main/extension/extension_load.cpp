@@ -125,7 +125,7 @@ struct DuckDBExtensionAccess {
 			return nullptr;
 		}
 
-		// TODO prevent tripping up memleak detection
+		// TODO: can we free this on DatabaseInstance deletion?
 		auto api = new duckdb_ext_api_v0();
 		*api = CreateApi(minor, patch);
 		return api;

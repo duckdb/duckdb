@@ -278,7 +278,7 @@ typedef struct {
 
 inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {
 	duckdb_ext_api_v0 result;
-	if (minor_version >= 0 && patch_version >= 1) {
+	if (patch_version >= 1) {
 		result.duckdb_open = duckdb_open;
 		result.duckdb_close = duckdb_close;
 		result.duckdb_connect = duckdb_connect;
@@ -741,12 +741,12 @@ inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {
 		result.duckdb_destroy_task_state = nullptr;
 		result.duckdb_execution_is_finished = nullptr;
 	}
-	if (minor_version >= 0 && patch_version >= 2) {
+	if (patch_version >= 2) {
 		result.duckdb_open_ext = duckdb_open_ext;
 	} else {
 		result.duckdb_open_ext = nullptr;
 	}
-	if (minor_version >= 0 && patch_version >= 3) {
+	if (patch_version >= 3) {
 		result.duckdb_fetch_chunk = duckdb_fetch_chunk;
 	} else {
 		result.duckdb_fetch_chunk = nullptr;
@@ -754,7 +754,6 @@ inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {
 	return result;
 }
 
-#define DUCKDB_EXTENSION_API_VERSION       v0 .0.3
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
 #define DUCKDB_EXTENSION_API_VERSION_MINOR 0
 #define DUCKDB_EXTENSION_API_VERSION_PATCH 3

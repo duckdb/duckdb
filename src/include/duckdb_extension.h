@@ -276,7 +276,6 @@ typedef struct {
 	duckdb_data_chunk (*duckdb_fetch_chunk)(duckdb_result result);
 } duckdb_ext_api_v0;
 
-#define DUCKDB_EXTENSION_API_VERSION       v0 .0.3
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
 #define DUCKDB_EXTENSION_API_VERSION_MINOR 0
 #define DUCKDB_EXTENSION_API_VERSION_PATCH 3
