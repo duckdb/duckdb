@@ -7,7 +7,7 @@ using FixedPointDecimals
 using UUIDs
 
 using Aqua
-Aqua.test_all(DuckDB, ambiguities=false)
+Aqua.test_all(DuckDB, ambiguities = false)
 Aqua.test_ambiguities(DuckDB)
 
 test_files = [
