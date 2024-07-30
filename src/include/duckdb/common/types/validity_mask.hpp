@@ -423,13 +423,15 @@ struct ValidityArray {
 			}
 			*bits++ = entry;
 		}
-		validity_t entry = 0;
-		for (idx_t j = 0; j < ragged; ++j) {
-			if (RowIsValidUnsafe(row_idx++)) {
-				entry |= validity_t(1) << j;
+		if (ragged) {
+			validity_t entry = 0;
+			for (idx_t j = 0; j < ragged; ++j) {
+				if (RowIsValidUnsafe(row_idx++)) {
+					entry |= validity_t(1) << j;
+				}
 			}
+			*bits++ = entry;
 		}
-		*bits++ = entry;
 	}
 
 	bool *validity_mask = nullptr;

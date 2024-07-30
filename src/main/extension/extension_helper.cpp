@@ -220,7 +220,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
-static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileSystem &fs,
+static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
                                                      const string &full_extension_path, const string &extension_name) {
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
@@ -273,7 +273,7 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 	// We force install the full url found in this file, throwing
 	unique_ptr<ExtensionInstallInfo> install_result;
 	try {
-		install_result = ExtensionHelper::InstallExtension(config, fs, extension_name, true, repository_from_info);
+		install_result = ExtensionHelper::InstallExtension(context, extension_name, true, repository_from_info);
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
@@ -294,11 +294,9 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 
 vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	return ExtensionHelper::UpdateExtensions(DatabaseInstance::GetDatabase(context), fs);
-}
 
-vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance &db, FileSystem &fs) {
 	vector<ExtensionUpdateResult> result;
+	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 
 	auto &config = DBConfig::GetConfig(db);
 
@@ -317,7 +315,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 
 		seen_extensions.insert(extension_name);
 
-		result.push_back(UpdateExtensionInternal(db, fs, fs.JoinPath(ext_directory, path), extension_name));
+		result.push_back(UpdateExtensionInternal(context, db, fs, fs.JoinPath(ext_directory, path), extension_name));
 	});
 #endif
 
@@ -326,17 +324,13 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 
 ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	return ExtensionHelper::UpdateExtension(DatabaseInstance::GetDatabase(context), fs, extension_name);
-}
-
-ExtensionUpdateResult ExtensionHelper::UpdateExtension(DatabaseInstance &db, FileSystem &fs,
-                                                       const string &extension_name) {
+	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 	auto &config = DBConfig::GetConfig(db);
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
 
 	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
 
-	auto update_result = UpdateExtensionInternal(db, fs, full_extension_path, extension_name);
+	auto update_result = UpdateExtensionInternal(context, db, fs, full_extension_path, extension_name);
 
 	if (update_result.tag == ExtensionUpdateResultTag::NOT_INSTALLED) {
 		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",

@@ -8,6 +8,9 @@ namespace duckdb {
 ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_p)
     : TableFilter(TableFilterType::CONSTANT_COMPARISON), comparison_type(comparison_type_p),
       constant(std::move(constant_p)) {
+	if (constant.IsNull()) {
+		throw InternalException("ConstantFilter constant cannot be NULL - use IsNullFilter instead");
+	}
 }
 
 FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {

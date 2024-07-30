@@ -157,7 +157,7 @@ private:
 
 	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
 	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
-	                             idx_t &prev_padding_count);
+	                             idx_t &prev_padding_count, idx_t &min_ignored_rows);
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
 

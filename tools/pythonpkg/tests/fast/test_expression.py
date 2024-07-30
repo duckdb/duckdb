@@ -58,6 +58,7 @@ class TestExpression(object):
         res = rel.fetchall()
         assert res == [(5,)]
 
+    @pytest.mark.skipif(platform.system() == 'Windows', reason="There is some weird interaction in Windows CI")
     def test_column_expression(self):
         con = duckdb.connect()
 

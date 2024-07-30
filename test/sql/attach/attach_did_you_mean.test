@@ -30,6 +30,18 @@ SELECT * FROM blablabla;
 ----
 Did you mean "db1.myschema.blablabla"
 
+statement ok
+SET catalog_error_max_schemas=0
+
+# did you mean... error is skipped if max schemas is set to 0
+statement error
+SELECT * FROM blablabla;
+----
+Table with name blablabla does not exist
+
+statement ok
+RESET catalog_error_max_schemas
+
 # what if we switch the default database?
 statement ok
 USE db1

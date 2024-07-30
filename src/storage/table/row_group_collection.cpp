@@ -443,6 +443,26 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 	segment.RevertAppend(start_row);
 }
 
+void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+	auto row_group = row_groups->GetSegment(start);
+	D_ASSERT(row_group);
+	idx_t current_row = start;
+	idx_t remaining = count;
+	while (true) {
+		idx_t start_in_row_group = current_row - row_group->start;
+		idx_t append_count = MinValue<idx_t>(row_group->count - start_in_row_group, remaining);
+
+		row_group->CleanupAppend(lowest_transaction, start_in_row_group, append_count);
+
+		current_row += append_count;
+		remaining -= append_count;
+		if (remaining == 0) {
+			break;
+		}
+		row_group = row_groups->GetNextSegment(row_group);
+	}
+}
+
 void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
 	D_ASSERT(data.types == types);
 	auto index = row_start + total_rows.load();

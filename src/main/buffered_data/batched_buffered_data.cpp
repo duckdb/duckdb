@@ -11,14 +11,14 @@ namespace duckdb {
 void BatchedBufferedData::BlockSink(const InterruptState &blocked_sink, idx_t batch) {
 	lock_guard<mutex> lock(glock);
 	D_ASSERT(!blocked_sinks.count(batch));
-	blocked_sinks.emplace(std::make_pair(batch, blocked_sink));
+	blocked_sinks.emplace(batch, blocked_sink);
 }
 
 BatchedBufferedData::BatchedBufferedData(weak_ptr<ClientContext> context)
     : BufferedData(BufferedData::Type::BATCHED, std::move(context)), buffer_byte_count(0), read_queue_byte_count(0),
       min_batch(0) {
-	read_queue_capacity = (idx_t)(total_buffer_size * 0.6);
-	buffer_capacity = (idx_t)(total_buffer_size * 0.4);
+	read_queue_capacity = (idx_t)(static_cast<double>(total_buffer_size) * 0.6);
+	buffer_capacity = (idx_t)(static_cast<double>(total_buffer_size) * 0.4);
 }
 
 bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
