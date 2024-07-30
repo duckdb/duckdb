@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/test_all_quotes.test
+# description: Test the sniffer properly detects quotes values
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT quote FROM sniff_csv('data/csv/all_quotes.csv', ignore_errors = 1)
+----
+"

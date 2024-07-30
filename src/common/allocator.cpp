@@ -4,6 +4,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <cstdint>
 
@@ -128,7 +129,9 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 	auto result = allocate_function(private_data.get(), size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
-	private_data->debug_info->AllocateData(result, size);
+	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		private_data->debug_info->AllocateData(result, size);
+	}
 #endif
 	if (!result) {
 		throw OutOfMemoryException("Failed to allocate block of %llu bytes (bad allocation)", size);
@@ -143,7 +146,9 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 	D_ASSERT(size > 0);
 #ifdef DEBUG
 	D_ASSERT(private_data);
-	private_data->debug_info->FreeData(pointer, size);
+	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		private_data->debug_info->FreeData(pointer, size);
+	}
 #endif
 	free_function(private_data.get(), pointer, size);
 }
@@ -161,7 +166,9 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	auto new_pointer = reallocate_function(private_data.get(), pointer, old_size, size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
-	private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
+	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+		private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
+	}
 #endif
 	if (!new_pointer) {
 		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes (bad allocation)", size);
@@ -207,15 +214,43 @@ Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
 }
 
+int64_t Allocator::DecayDelay() {
+#ifdef USE_JEMALLOC
+	return JemallocExtension::DecayDelay();
+#else
+	return NumericLimits<int64_t>::Maximum();
+#endif
+}
+
+bool Allocator::SupportsFlush() {
+#ifdef USE_JEMALLOC
+	return true;
+#else
+	return false;
+#endif
+}
+
 void Allocator::ThreadFlush(idx_t threshold) {
 #ifdef USE_JEMALLOC
 	JemallocExtension::ThreadFlush(threshold);
 #endif
 }
 
+void Allocator::ThreadIdle() {
+#ifdef USE_JEMALLOC
+	JemallocExtension::ThreadIdle();
+#endif
+}
+
 void Allocator::FlushAll() {
 #ifdef USE_JEMALLOC
 	JemallocExtension::FlushAll();
+#endif
+}
+
+void Allocator::SetBackgroundThreads(bool enable) {
+#ifdef USE_JEMALLOC
+	JemallocExtension::SetBackgroundThreads(enable);
 #endif
 }
 

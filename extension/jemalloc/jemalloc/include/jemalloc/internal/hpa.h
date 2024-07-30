@@ -1,21 +1,19 @@
 #ifndef JEMALLOC_INTERNAL_HPA_H
 #define JEMALLOC_INTERNAL_HPA_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/base.h"
+#include "jemalloc/internal/edata_cache.h"
+#include "jemalloc/internal/emap.h"
 #include "jemalloc/internal/exp_grow.h"
 #include "jemalloc/internal/hpa_hooks.h"
 #include "jemalloc/internal/hpa_opts.h"
+#include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/pai.h"
 #include "jemalloc/internal/psset.h"
 
-namespace duckdb_jemalloc {
-
 typedef struct hpa_central_s hpa_central_t;
 struct hpa_central_s {
-	/*
-	 * The mutex guarding most of the operations on the central data
-	 * structure.
-	 */
-	malloc_mutex_t mtx;
 	/*
 	 * Guards expansion of eden.  We separate this from the regular mutex so
 	 * that cheaper operations can still continue while we're doing the OS
@@ -150,7 +148,7 @@ struct hpa_shard_s {
  * is not necessarily a guarantee that it backs its allocations by hugepages,
  * just that it can function properly given the system it's running on.
  */
-bool hpa_supported();
+bool hpa_supported(void);
 bool hpa_central_init(hpa_central_t *central, base_t *base, const hpa_hooks_t *hooks);
 bool hpa_shard_init(hpa_shard_t *shard, hpa_central_t *central, emap_t *emap,
     base_t *base, edata_cache_t *edata_cache, unsigned ind,
@@ -180,7 +178,5 @@ void hpa_shard_prefork3(tsdn_t *tsdn, hpa_shard_t *shard);
 void hpa_shard_prefork4(tsdn_t *tsdn, hpa_shard_t *shard);
 void hpa_shard_postfork_parent(tsdn_t *tsdn, hpa_shard_t *shard);
 void hpa_shard_postfork_child(tsdn_t *tsdn, hpa_shard_t *shard);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_HPA_H */

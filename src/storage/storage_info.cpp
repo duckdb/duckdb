@@ -1,4 +1,6 @@
 #include "duckdb/storage/storage_info.hpp"
+
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
@@ -30,8 +32,9 @@ static const StorageVersionInfo storage_version_info[] = {
 // END OF STORAGE VERSION INFO
 
 // START OF SERIALIZATION VERSION INFO
-static const SerializationVersionInfo serialization_version_info[] = {
-    {"v0.10.0", 1}, {"v0.10.1", 1}, {"v0.10.2", 1}, {"latest", 2}, {nullptr, 0}};
+static const SerializationVersionInfo serialization_version_info[] = {{"v0.10.0", 1}, {"v0.10.1", 1}, {"v0.10.2", 1},
+                                                                      {"v0.10.3", 2}, {"v1.0.0", 2},  {"v1.1.0", 3},
+                                                                      {"latest", 3},  {nullptr, 0}};
 // END OF SERIALIZATION VERSION INFO
 
 optional_idx GetStorageVersion(const char *version_string) {
@@ -80,6 +83,28 @@ string GetDuckDBVersion(idx_t version_number) {
 		result += versions[i];
 	}
 	return result;
+}
+
+void Storage::VerifyBlockAllocSize(const idx_t block_alloc_size) {
+	if (!IsPowerOfTwo(block_alloc_size)) {
+		throw InvalidInputException("the block size must be a power of two, got %llu", block_alloc_size);
+	}
+	if (block_alloc_size < MIN_BLOCK_ALLOC_SIZE) {
+		throw InvalidInputException(
+		    "the block size must be greater or equal than the minimum block size of %llu, got %llu",
+		    MIN_BLOCK_ALLOC_SIZE, block_alloc_size);
+	}
+	if (block_alloc_size > MAX_BLOCK_ALLOC_SIZE) {
+		throw InvalidInputException(
+		    "the block size must be lesser or equal than the maximum block size of %llu, got %llu",
+		    MAX_BLOCK_ALLOC_SIZE, block_alloc_size);
+	}
+	auto max_value = NumericCast<idx_t>(NumericLimits<int32_t>().Maximum());
+	if (block_alloc_size > max_value) {
+		throw InvalidInputException(
+		    "the block size must not be greater than the maximum 32-bit signed integer value of %llu, got %llu",
+		    max_value, block_alloc_size);
+	}
 }
 
 } // namespace duckdb

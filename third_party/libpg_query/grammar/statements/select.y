@@ -2559,6 +2559,15 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
+			| '*' COLUMNS '(' a_expr ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->expr = $4;
+					star->columns = true;
+					star->unpacked = true;
+					star->location = @1;
+					$$ = (PGNode *) star;
+				}
 			| COLUMNS '(' a_expr ')'
 				{
 					PGAStar *star = makeNode(PGAStar);
@@ -3677,6 +3686,8 @@ in_expr:	select_with_parens
 					$$ = (PGNode *)n;
 				}
 			| '(' expr_list_opt_comma ')'						{ $$ = (PGNode *)$2; }
+			| columnref
+			| indirection_expr { $$ = (PGNode *)$1; }
 		;
 
 /*

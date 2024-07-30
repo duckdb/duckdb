@@ -15,10 +15,13 @@ add_library_unity(
   logical_types-c.cpp
   pending-c.cpp
   prepared-c.cpp
+  profiling_info-c.cpp
   replacement_scan-c.cpp
   result-c.cpp
+  scalar_function-c.cpp
   stream-c.cpp
   table_function-c.cpp
+  table_description-c.cpp
   threading-c.cpp
   value-c.cpp)
 

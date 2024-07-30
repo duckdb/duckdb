@@ -2,27 +2,25 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
-#include <climits>
-
-namespace duckdb_jemalloc {
+#include <limits.h>
 
 /*
  * If JEMALLOC_PREFIX is defined via --with-jemalloc-prefix, it will cause all
  * public APIs to be prefixed.  This makes it possible, with some care, to use
  * multiple allocators simultaneously.
  */
-// #define JEMALLOC_PREFIX "je_"
-// #define JEMALLOC_CPREFIX "JE_"
+#define JEMALLOC_PREFIX  "duckdb_je_"
+#define JEMALLOC_CPREFIX "DUCKDB_JE_"
 
 /*
  * Define overrides for non-standard allocator-related functions if they are
  * present on the system.
  */
 /* #undef JEMALLOC_OVERRIDE___LIBC_CALLOC */
-// #define JEMALLOC_OVERRIDE___LIBC_FREE
-//#define JEMALLOC_OVERRIDE___LIBC_MALLOC
+/* #undef JEMALLOC_OVERRIDE___LIBC_FREE */
+/* #undef JEMALLOC_OVERRIDE___LIBC_MALLOC
 /* #undef JEMALLOC_OVERRIDE___LIBC_MEMALIGN */
-//#define JEMALLOC_OVERRIDE___LIBC_REALLOC
+/* #undef JEMALLOC_OVERRIDE___LIBC_REALLOC */
 /* #undef JEMALLOC_OVERRIDE___LIBC_VALLOC */
 /* #undef JEMALLOC_OVERRIDE___POSIX_MEMALIGN */
 
@@ -32,15 +30,19 @@ namespace duckdb_jemalloc {
  * from being exported, but for static libraries, naming collisions are a real
  * possibility.
  */
-#define JEMALLOC_PRIVATE_NAMESPACE je_
+#define JEMALLOC_PRIVATE_NAMESPACE duckdb_je_
 
 /*
  * Hyper-threaded CPUs may need a special instruction inside spin loops in
  * order to yield to another virtual CPU.
  */
-//#define CPU_SPINWAIT __asm__ volatile("isb")
+#if defined(__aarch64__) || defined(__ARM_ARCH)
+#define CPU_SPINWAIT __asm__ volatile("isb")
+#else
+#define CPU_SPINWAIT __asm__ volatile("pause")
+#endif
 /* 1 if CPU_SPINWAIT is defined, 0 otherwise. */
-//#define HAVE_CPU_SPINWAIT 1
+#define HAVE_CPU_SPINWAIT 1
 
 /*
  * Number of significant bits in virtual addresses.  This may be less than the
@@ -48,13 +50,13 @@ namespace duckdb_jemalloc {
  * bits are the same as bit 47.
  */
 #if INTPTR_MAX == INT64_MAX
-  #define LG_VADDR 48
+#define LG_VADDR 48
 #else
-  #define LG_VADDR 32
+#define LG_VADDR 32
 #endif
 
 /* Defined if C11 atomics are available. */
-#define JEMALLOC_C11_ATOMICS 
+#define JEMALLOC_C11_ATOMICS
 
 /* Defined if GCC __atomic atomics are available. */
 #ifndef _MSC_VER
@@ -75,12 +77,16 @@ namespace duckdb_jemalloc {
 /*
  * Defined if __builtin_clz() and __builtin_clzl() are available.
  */
-// #define JEMALLOC_HAVE_BUILTIN_CLZ
+#ifdef __GNUC__
+#define JEMALLOC_HAVE_BUILTIN_CLZ
+#endif
 
 /*
  * Defined if os_unfair_lock_*() functions are available, as provided by Darwin.
  */
+// #if defined(__APPLE__)
 // #define JEMALLOC_OS_UNFAIR_LOCK
+// #endif
 
 /* Defined if syscall(2) is usable. */
 /* #undef JEMALLOC_USE_SYSCALL */
@@ -96,13 +102,13 @@ namespace duckdb_jemalloc {
 // #define JEMALLOC_HAVE_ISSETUGID
 
 /* Defined if pthread_atfork(3) is available. */
-//#define JEMALLOC_HAVE_PTHREAD_ATFORK 
+// #define JEMALLOC_HAVE_PTHREAD_ATFORK
 
 /* Defined if pthread_setname_np(3) is available. */
 /* #undef JEMALLOC_HAVE_PTHREAD_SETNAME_NP */
 
 /* Defined if pthread_getname_np(3) is available. */
-#define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
+// #define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
 
 /* Defined if pthread_get_name_np(3) is available. */
 /* #undef JEMALLOC_HAVE_PTHREAD_GET_NAME_NP */
@@ -125,7 +131,7 @@ namespace duckdb_jemalloc {
 /*
  * Defined if clock_gettime(CLOCK_REALTIME, ...) is available.
  */
-#define JEMALLOC_HAVE_CLOCK_REALTIME 
+#define JEMALLOC_HAVE_CLOCK_REALTIME
 
 /*
  * Defined if _malloc_thread_cleanup() exists.  At least in the case of
@@ -134,7 +140,9 @@ namespace duckdb_jemalloc {
  * _malloc_thread_cleanup() exists, use it as the basis for thread cleanup in
  * malloc_tsd.
  */
-/* #undef JEMALLOC_MALLOC_THREAD_CLEANUP */
+#if defined(__APPLE__) || defined(__FreeBSD__)
+#define JEMALLOC_MALLOC_THREAD_CLEANUP
+#endif
 
 /*
  * Defined if threaded initialization is known to be safe on this platform.
@@ -151,7 +159,7 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_MUTEX_INIT_CB */
 
 /* Non-empty if the tls_model attribute is supported. */
-#define JEMALLOC_TLS_MODEL __attribute__((tls_model("initial-exec")))
+#define JEMALLOC_TLS_MODEL __attribute__((tls_model("global-dynamic")))
 
 /*
  * JEMALLOC_DEBUG enables assertions and other sanity checks, and disables
@@ -160,7 +168,7 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_DEBUG */
 
 /* JEMALLOC_STATS enables statistics calculation. */
-#define JEMALLOC_STATS 
+#define JEMALLOC_STATS
 
 /* JEMALLOC_EXPERIMENTAL_SMALLOCX_API enables experimental smallocx API. */
 /* #undef JEMALLOC_EXPERIMENTAL_SMALLOCX_API */
@@ -184,7 +192,7 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_DSS */
 
 /* Support memory filling (junk/zero). */
-#define JEMALLOC_FILL 
+#define JEMALLOC_FILL
 
 /* Support utrace(2)-based tracing. */
 /* #undef JEMALLOC_UTRACE */
@@ -196,7 +204,7 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_XMALLOC */
 
 /* Support lazy locking (avoid locking unless a second thread is launched). */
-/* #undef JEMALLOC_LAZY_LOCK */
+// #define JEMALLOC_LAZY_LOCK
 
 /*
  * Minimum allocation alignment is 2^LG_QUANTUM bytes (ignoring tiny size
@@ -205,11 +213,12 @@ namespace duckdb_jemalloc {
 /* #undef LG_QUANTUM */
 
 /* One page is 2^LG_PAGE bytes. */
-// NOTE: This is an attempt at setting a correct page size for multiple architectures without running getconf
-// This is compiled into DuckDB, which means that our distributions have a fixed page size
-// We only enable jemalloc for non-ARM Linux builds, virtually all of which have a page size of 4KB
-// The other definitions are just here for people who want to build DuckDB with jemalloc themselves
-#if defined(__i386__) || defined(__x86_64__) || defined(__amd64__) || defined(COMPILER_MSVC) && (defined(_M_IX86) || defined(_M_X64))
+// ----- DuckDB comment -----
+// The page size for jemalloc can always be bigger than the actual system page size
+#if INTPTR_MAX != INT64_MAX
+#define LG_PAGE 12 // 32-bit systems typically have a 4KB page size
+#elif defined(__i386__) || defined(__x86_64__) || defined(__amd64__) ||                                                \
+    defined(COMPILER_MSVC) && (defined(_M_IX86) || defined(_M_X64))
 #define LG_PAGE 12 // x86 and x86_64 typically have a 4KB page size
 #elif defined(__powerpc__) || defined(__ppc__)
 #define LG_PAGE 16 // PowerPC architectures often use 64KB page size
@@ -217,19 +226,11 @@ namespace duckdb_jemalloc {
 #define LG_PAGE 13 // SPARC architectures usually have an 8KB page size
 #elif defined(__aarch64__) || defined(__ARM_ARCH)
 
-// ARM architectures can have a wide range of page sizes
+// ARM architectures are less well-defined
 #if defined(__APPLE__)
 #define LG_PAGE 14 // Apple Silicon uses a 16KB page size
-
-// Best effort for other ARM versions
-#elif defined(__ARM_ARCH) && __ARM_ARCH >= 8
-#define LG_PAGE 16 // ARM architectures >= ARMv8 typically use a 64KB page size
-#elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
-#define LG_PAGE 14 // ARM architectures >= ARMv7 typically use a 16KB page size
-#elif defined(__ARM_ARCH) && __ARM_ARCH >= 6
-#define LG_PAGE 12 // ARM architectures >= ARMv6 typically use a 4KB page size
 #else
-#define LG_PAGE 12 // Default to a 4KB page size for unknown ARM architectures
+#define LG_PAGE 16 // Use max known page size for ARM
 #endif
 
 #else
@@ -253,7 +254,9 @@ namespace duckdb_jemalloc {
  * VirtualAlloc()/VirtualFree() operations must be precisely matched, i.e.
  * mappings do *not* coalesce/fragment.
  */
-#define JEMALLOC_MAPS_COALESCE 
+#ifndef _MSC_VER
+#define JEMALLOC_MAPS_COALESCE
+#endif
 
 /*
  * If defined, retain memory for later reuse by default rather than using e.g.
@@ -261,10 +264,15 @@ namespace duckdb_jemalloc {
  * common sequences of mmap()/munmap() calls will cause virtual memory map
  * holes.
  */
-/* #undef JEMALLOC_RETAIN */
+// ----- DuckDB comment -----
+// This makes it feasible to run the larger page size (https://github.com/duckdb/duckdb/discussions/11455),
+// but it causes DuckDB to retain RSS even after closing the connection, so we have to disable it
+// #if INTPTR_MAX == INT64_MAX
+// #define JEMALLOC_RETAIN
+// #endif
 
 /* TLS is used to map arenas and magazine caches to threads. */
-/* #undef JEMALLOC_TLS */
+#define JEMALLOC_TLS
 
 /*
  * Used to mark unreachable code to quiet "end of non-void" compiler warnings.
@@ -284,9 +292,7 @@ namespace duckdb_jemalloc {
  * use ffs_*() from util.h.
  */
 #ifdef _MSC_VER
-} // namespace duckdb_jemalloc
 #include "msvc_compat/strings.h"
-namespace duckdb_jemalloc {
 #define JEMALLOC_INTERNAL_FFSLL ffsll
 #define JEMALLOC_INTERNAL_FFSL  ffsl
 #define JEMALLOC_INTERNAL_FFS   ffs
@@ -299,14 +305,16 @@ namespace duckdb_jemalloc {
 /*
  * popcount*() functions to use for bitmapping.
  */
-//#define JEMALLOC_INTERNAL_POPCOUNTL __builtin_popcountl
-//#define JEMALLOC_INTERNAL_POPCOUNT __builtin_popcount
+#ifdef __GNUC__
+#define JEMALLOC_INTERNAL_POPCOUNTL __builtin_popcountl
+#define JEMALLOC_INTERNAL_POPCOUNT  __builtin_popcount
+#endif
 
 /*
  * If defined, explicitly attempt to more uniformly distribute large allocation
  * pointer alignments across all cache indices.
  */
-#define JEMALLOC_CACHE_OBLIVIOUS 
+// #define JEMALLOC_CACHE_OBLIVIOUS
 
 /*
  * If defined, enable logging facilities.  We make this a configure option to
@@ -323,7 +331,9 @@ namespace duckdb_jemalloc {
 /*
  * Darwin (OS X) uses zones to work around Mach-O symbol override shortcomings.
  */
-//#define JEMALLOC_ZONE
+// #if defined(__APPLE__)
+// #define JEMALLOC_ZONE
+// #endif
 
 /*
  * Methods for determining whether the OS overcommits.
@@ -331,8 +341,11 @@ namespace duckdb_jemalloc {
  *                                         /proc/sys/vm.overcommit_memory file.
  * JEMALLOC_SYSCTL_VM_OVERCOMMIT: FreeBSD's vm.overcommit sysctl.
  */
-/* #undef JEMALLOC_SYSCTL_VM_OVERCOMMIT */
-/* #undef JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY */
+#ifdef __FreeBSD__
+#define JEMALLOC_SYSCTL_VM_OVERCOMMIT
+#else
+#define JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY
+#endif
 
 /* Defined if madvise(2) is available. */
 #define JEMALLOC_HAVE_MADVISE
@@ -356,12 +369,12 @@ namespace duckdb_jemalloc {
  *                                 MADV_FREE, though typically with higher
  *                                 system overhead.
  */
-//#define JEMALLOC_PURGE_MADVISE_FREE
+#define JEMALLOC_PURGE_MADVISE_FREE
 #define JEMALLOC_PURGE_MADVISE_DONTNEED
 /* #undef JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */
-#undef JEMALLOC_DEFINE_MADVISE_FREE
+#define JEMALLOC_DEFINE_MADVISE_FREE
 
 /*
  * Defined if MADV_DO[NT]DUMP is supported as an argument to madvise.
@@ -401,7 +414,7 @@ namespace duckdb_jemalloc {
 /*
  * Defined if malloc_size is supported
  */
-//#define JEMALLOC_HAVE_MALLOC_SIZE
+// #define JEMALLOC_HAVE_MALLOC_SIZE
 
 /* Define if operating system has alloca.h header. */
 /* #undef JEMALLOC_HAS_ALLOCA_H */
@@ -435,30 +448,30 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_GLIBC_MEMALIGN_HOOK */
 
 /* pthread support */
-#define JEMALLOC_HAVE_PTHREAD 
+#define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
-#define JEMALLOC_HAVE_DLSYM 
+// #define JEMALLOC_HAVE_DLSYM
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
 
 /* GNU specific sched_getcpu support */
-/* #undef JEMALLOC_HAVE_SCHED_GETCPU */
+// #define JEMALLOC_HAVE_SCHED_GETCPU
 
 /* GNU specific sched_setaffinity support */
-/* #undef JEMALLOC_HAVE_SCHED_SETAFFINITY */
+// #define JEMALLOC_HAVE_SCHED_SETAFFINITY
 
 /*
  * If defined, all the features necessary for background threads are present.
  */
-/* #undef JEMALLOC_BACKGROUND_THREAD */
+#define JEMALLOC_BACKGROUND_THREAD
 
 /*
  * If defined, jemalloc symbols are not exported (doesn't work when
  * JEMALLOC_PREFIX is not defined).
  */
-/* #undef JEMALLOC_EXPORT */
+#define JEMALLOC_EXPORT
 
 /* config.malloc_conf options string. */
 #define JEMALLOC_CONFIG_MALLOC_CONF ""
@@ -469,13 +482,13 @@ namespace duckdb_jemalloc {
 /*
  * Defined if strerror_r returns char * if _GNU_SOURCE is defined.
  */
-//#define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
+// #define JEMALLOC_STRERROR_R_RETURNS_CHAR_WITH_GNU_SOURCE
 
 /* Performs additional safety checks when defined. */
 /* #undef JEMALLOC_OPT_SAFETY_CHECKS */
 
 /* Is C++ support being built? */
-#define JEMALLOC_ENABLE_CXX 
+#define JEMALLOC_ENABLE_CXX
 
 /* Performs additional size checks when defined. */
 /* #undef JEMALLOC_OPT_SIZE_CHECKS */
@@ -484,11 +497,11 @@ namespace duckdb_jemalloc {
 /* #undef JEMALLOC_UAF_DETECTION */
 
 /* Darwin VM_MAKE_TAG support */
-//#define JEMALLOC_HAVE_VM_MAKE_TAG
+// #if defined(__APPLE__)
+// #define JEMALLOC_HAVE_VM_MAKE_TAG
+// #endif
 
 /* If defined, realloc(ptr, 0) defaults to "free" instead of "alloc". */
 /* #undef JEMALLOC_ZERO_REALLOC_DEFAULT_FREE */
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_DEFS_H_ */

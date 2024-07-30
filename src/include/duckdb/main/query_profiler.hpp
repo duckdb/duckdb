@@ -9,18 +9,22 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
-#include "duckdb/common/reference_map.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/profiling_node.hpp"
+
 #include <stack>
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/deque.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -32,31 +36,46 @@ struct OperatorInformation {
 	explicit OperatorInformation(double time_p = 0, idx_t elements_p = 0) : time(time_p), elements(elements_p) {
 	}
 
-	double time = 0;
-	idx_t elements = 0;
+	double time;
+	idx_t elements;
 	string name;
+
+	void AddTime(double n_time) {
+		this->time += n_time;
+	}
+
+	void AddElements(idx_t n_elements) {
+		this->elements += n_elements;
+	}
 };
 
 //! The OperatorProfiler measures timings of individual operators
+//! This class exists once for all operators and collects `OperatorInfo` for each operator
 class OperatorProfiler {
 	friend class QueryProfiler;
 
 public:
-	DUCKDB_API explicit OperatorProfiler(bool enabled);
+	DUCKDB_API explicit OperatorProfiler(ClientContext &context);
 
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
+
+	//! Adds the timings gathered in the OperatorProfiler (tree) to the QueryProfiler (tree)
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor, const string &name,
 	                      int id);
+	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
+
+	static bool SettingEnabled(const MetricsType setting) {
+		return SettingSetFunctions::Enabled(ProfilingInfo::DefaultSettings(), setting);
+	}
 
 	~OperatorProfiler() {
 	}
 
 private:
-	void AddTiming(const PhysicalOperator &op, double time, idx_t elements);
-
 	//! Whether or not the profiler is enabled
 	bool enabled;
+	profiler_settings_t settings;
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
@@ -71,28 +90,19 @@ public:
 	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
-	struct TreeNode {
-		PhysicalOperatorType type;
-		string name;
-		string extra_info;
-		OperatorInformation info;
-		vector<unique_ptr<TreeNode>> children;
-		idx_t depth = 0;
-	};
-
 	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
 	void Propagate(QueryProfiler &qp);
 
-	using TreeMap = reference_map_t<const PhysicalOperator, reference<TreeNode>>;
+	using TreeMap = reference_map_t<const PhysicalOperator, reference<ProfilingNode>>;
 
 private:
-	unique_ptr<TreeNode> CreateTree(const PhysicalOperator &root, idx_t depth = 0);
-	void Render(const TreeNode &node, std::ostream &str) const;
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
+	void Render(const ProfilingNode &node, std::ostream &str) const;
 
 public:
 	DUCKDB_API bool IsEnabled() const;
 	DUCKDB_API bool IsDetailedEnabled() const;
-	DUCKDB_API ProfilerPrintFormat GetPrintFormat() const;
+	DUCKDB_API ProfilerPrintFormat GetPrintFormat(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	DUCKDB_API bool PrintOptimizerOutput() const;
 	DUCKDB_API string GetSaveLocation() const;
 
@@ -117,8 +127,11 @@ public:
 
 	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
 	//! the return value is formatted based on the current print format (see GetPrintFormat()).
-	DUCKDB_API string ToString() const;
+	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 
+	static InsertionOrderPreservingMap<string> JSONSanitize(const InsertionOrderPreservingMap<string> &input);
+	static string JSONSanitize(const string &text);
+	static string DrawPadded(const string &str, idx_t width);
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 
@@ -126,7 +139,12 @@ public:
 		return tree_map.size();
 	}
 
-	void Finalize(TreeNode &node);
+	void Finalize(ProfilingNode &node);
+
+	//! Return the root of the query tree
+	optional_ptr<ProfilingNode> GetRoot() {
+		return root.get();
+	}
 
 private:
 	ClientContext &context;
@@ -140,7 +158,8 @@ private:
 	bool query_requires_profiling;
 
 	//! The root of the query tree
-	unique_ptr<TreeNode> root;
+	unique_ptr<ProfilingNode> root;
+
 	//! The query string
 	string query;
 	//! The timer used to time the execution time of the entire query
@@ -171,6 +190,7 @@ private:
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+	void ReadAndSetCustomProfilerSettings(const string &settings_path);
 };
 
 } // namespace duckdb

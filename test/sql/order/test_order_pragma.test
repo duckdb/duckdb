@@ -36,16 +36,19 @@ PRAGMA default_order='ASC'
 statement error
 PRAGMA default_order())
 ----
+<REGEX>:Parser Error.*syntax error.*
 
 statement error
 PRAGMA default_order='UNKNOWN'
 ----
+<REGEX>:Invalid Input Error.*Unrecognized parameter for option.*
 
 statement error
 PRAGMA default_order=UNKNOWN)
 ----
+<REGEX>:Parser Error.*syntax error.*
 
 statement error
 PRAGMA default_order=3)
 ----
-
+<REGEX>:Parser Error.*syntax error.*

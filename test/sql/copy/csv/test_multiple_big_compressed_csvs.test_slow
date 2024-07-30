@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/test_multiple_big_compressed_csvs.test_slow
-# description: Test scan over multiple compressed big csv files
+# description: Test scan across multiple compressed big csv files
 # group: [csv]
 
 require tpch

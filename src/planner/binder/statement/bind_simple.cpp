@@ -35,9 +35,12 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (entry) {
 		D_ASSERT(!entry->deleted);
 		auto &catalog = entry->ParentCatalog();
+		if (catalog.IsSystemCatalog()) {
+			throw BinderException("Can not comment on System Catalog entries");
+		}
 		if (!entry->temporary) {
 			// we can only alter temporary tables/views in read-only mode
-			properties.modified_databases.insert(catalog.GetName());
+			properties.RegisterDBModify(catalog, context);
 		}
 		stmt.info->catalog = catalog.GetName();
 		stmt.info->schema = entry->ParentSchema().name;

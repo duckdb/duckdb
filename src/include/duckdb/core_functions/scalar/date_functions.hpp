@@ -363,6 +363,15 @@ struct MonthNameFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct NanosecondsFun {
+	static constexpr const char *Name = "nanosecond";
+	static constexpr const char *Parameters = "tsns";
+	static constexpr const char *Description = "Extract the nanosecond component from a date or timestamp";
+	static constexpr const char *Example = "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789') => 44123456789";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct QuarterFun {
 	static constexpr const char *Name = "quarter";
 	static constexpr const char *Parameters = "ts";

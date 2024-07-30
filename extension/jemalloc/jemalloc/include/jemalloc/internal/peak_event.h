@@ -1,7 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_PEAK_EVENT_H
 #define JEMALLOC_INTERNAL_PEAK_EVENT_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/tsd_types.h"
 
 /*
  * While peak.h contains the simple helper struct that tracks state, this
@@ -22,7 +23,5 @@ void peak_alloc_event_handler(tsd_t *tsd, uint64_t elapsed);
 uint64_t peak_dalloc_new_event_wait(tsd_t *tsd);
 uint64_t peak_dalloc_postponed_event_wait(tsd_t *tsd);
 void peak_dalloc_event_handler(tsd_t *tsd, uint64_t elapsed);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PEAK_EVENT_H */

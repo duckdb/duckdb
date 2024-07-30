@@ -1,0 +1,14 @@
+# name: test/sql/types/varint/test_int_varchar_varint_compatibility.test_slow
+# description: Test INT Varchar produces same blobs
+# group: [varint]
+
+# We skip this test since it tests a full integer range, only meant for local - release execution
+mode skip
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select distinct i::varchar::varint = i::varint from range(0, 2147483646) t(i);
+----
+true

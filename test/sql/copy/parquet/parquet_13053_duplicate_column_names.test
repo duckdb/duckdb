@@ -1,0 +1,36 @@
+# name: test/sql/copy/parquet/parquet_13053_duplicate_column_names.test
+# description: Issue #13053: Parquet reader can't deal with duplicate column names
+# group: [parquet]
+
+require parquet
+
+# original names
+query I
+select name from parquet_schema( 'data/parquet-testing/bug13053.parquet') offset 1;
+----
+column
+COLUMN
+Column
+
+# renamed names
+query I
+SELECT column_name FROM (DESCRIBE FROM 'data/parquet-testing/bug13053.parquet')
+----
+column
+COLUMN_1
+Column_2
+
+# case where _1 is already a column, maybe bit ugly but fine and consistent with CSV reader
+query I
+select name from parquet_schema( 'data/parquet-testing/bug13053-2.parquet') offset 1;
+----
+column
+column_1
+column
+
+query I
+SELECT column_name FROM (DESCRIBE FROM 'data/parquet-testing/bug13053-2.parquet')
+----
+column
+column_1
+column_1_1

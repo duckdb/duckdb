@@ -158,17 +158,7 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		}
 		break;
 	case LogicalTypeId::VARCHAR:
-		switch (target_type.id()) {
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::TIMESTAMP_TZ:
-			return true;
-		default:
-			return false;
-		}
-		break;
+		return false;
 	default:
 		break;
 	}
@@ -208,7 +198,7 @@ bool BoundCastExpression::Equals(const BaseExpression &other_p) const {
 	return true;
 }
 
-unique_ptr<Expression> BoundCastExpression::Copy() {
+unique_ptr<Expression> BoundCastExpression::Copy() const {
 	auto copy = make_uniq<BoundCastExpression>(child->Copy(), return_type, bound_cast.Copy(), try_cast);
 	copy->CopyProperties(*this);
 	return std::move(copy);

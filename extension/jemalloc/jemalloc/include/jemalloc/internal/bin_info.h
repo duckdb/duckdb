@@ -1,10 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_BIN_INFO_H
 #define JEMALLOC_INTERNAL_BIN_INFO_H
 
-#include "jemalloc/internal/jemalloc_internal_decls.h"
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/bitmap.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * Read-only information associated with each element of arena_t's bins array
@@ -49,7 +47,5 @@ struct bin_info_s {
 extern bin_info_t bin_infos[SC_NBINS];
 
 void bin_info_boot(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS]);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BIN_INFO_H */

@@ -117,13 +117,16 @@ unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) 
 void CreateMacroInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
-	serializer.WritePropertyWithDefault<unique_ptr<MacroFunction>>(201, "function", function);
+	serializer.WritePropertyWithDefault<unique_ptr<MacroFunction>>(201, "function", macros[0]);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions", GetAllButFirstFunction());
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo(deserializer.Get<CatalogType>()));
-	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
-	deserializer.ReadPropertyWithDefault<unique_ptr<MacroFunction>>(201, "function", result->function);
+	auto name = deserializer.ReadPropertyWithDefault<string>(200, "name");
+	auto function = deserializer.ReadPropertyWithDefault<unique_ptr<MacroFunction>>(201, "function");
+	auto extra_functions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions");
+	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo(deserializer.Get<CatalogType>(), std::move(function), std::move(extra_functions)));
+	result->name = std::move(name);
 	return std::move(result);
 }
 

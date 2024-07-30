@@ -101,8 +101,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_
 bool SubqueryDependentFilter(Expression &expr) {
 	if (expr.expression_class == ExpressionClass::BOUND_CONJUNCTION &&
 	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		auto &bound_conjuction = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : bound_conjuction.children) {
+		auto &bound_conjunction = expr.Cast<BoundConjunctionExpression>();
+		for (auto &child : bound_conjunction.children) {
 			if (SubqueryDependentFilter(*child)) {
 				return true;
 			}
@@ -667,6 +667,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		this->delim_offset = get.returned_types.size();
 		this->data_offset = 0;
+
+		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
+		rewriter.VisitOperator(*plan);
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:

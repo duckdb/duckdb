@@ -79,6 +79,12 @@
         "name": "encryption_config",
         "type": "shared_ptr<ParquetEncryptionConfig>",
         "default": "nullptr"
+      },
+      {
+        "id": 105,
+        "name": "debug_use_openssl",
+        "type": "bool",
+        "default": "true"
       }
     ],
     "pointer_type": "none"

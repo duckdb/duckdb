@@ -2,8 +2,6 @@
 # description: Test the list_mode aggregate function
 # group: [aggregates]
 
-require strinline
-
 # incorrect usage
 statement error
 select list_mode()

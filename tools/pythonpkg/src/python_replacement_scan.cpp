@@ -31,7 +31,32 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 	table_function.external_dependency = std::move(dependency);
 }
 
-static unique_ptr<TableRef> TryReplacementObject(const py::object &entry, const string &name, ClientContext &context) {
+static void ThrowScanFailureError(const py::object &entry, const string &name, const string &location = "") {
+	string error;
+	auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
+	error += StringUtil::Format("Python Object \"%s\" of type \"%s\"", name, py_object_type);
+	if (!location.empty()) {
+		error += StringUtil::Format(" found on line \"%s\"", location);
+	}
+	error +=
+	    StringUtil::Format(" not suitable for replacement scans.\nMake sure "
+	                       "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
+	                       "RecordBatchReader, Scanner, or NumPy ndarrays with supported format",
+	                       name);
+	throw InvalidInputException(error);
+}
+
+unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const py::object &entry, const string &name,
+                                                              ClientContext &context) {
+	auto replacement = TryReplacementObject(entry, name, context);
+	if (!replacement) {
+		ThrowScanFailureError(entry, name);
+	}
+	return replacement;
+}
+
+unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::object &entry, const string &name,
+                                                                 ClientContext &context) {
 	auto client_properties = context.GetClientProperties();
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
@@ -135,87 +160,58 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, const string &name, C
 		return nullptr;
 	}
 
-	auto result = TryReplacementObject(entry, name, context);
+	auto result = PythonReplacementScan::TryReplacementObject(entry, name, context);
 	if (!result) {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
 		location += py::cast<py::str>(current_frame.attr("f_lineno"));
-		std::string cpp_table_name = table_name;
-		auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
-
-		throw InvalidInputException(
-		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
-		    "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
-		    "RecordBatchReader, Scanner, or NumPy ndarrays with supported format",
-		    cpp_table_name, py_object_type, location, cpp_table_name);
+		ThrowScanFailureError(entry, name, location);
 	}
 	return result;
 }
 
 static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string &table_name) {
-	py::gil_scoped_acquire acquire;
-	// Here we do an exhaustive search on the frame lineage
-	auto current_frame = py::module::import("inspect").attr("currentframe")();
-	while (hasattr(current_frame, "f_locals")) {
-		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
-		// search local dictionary
-		if (local_dict) {
-			auto result = TryReplacement(local_dict, table_name, context, current_frame);
-			if (result) {
-				return result;
-			}
-		}
-		// search global dictionary
-		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
-		if (global_dict) {
-			auto result = TryReplacement(global_dict, table_name, context, current_frame);
-			if (result) {
-				return result;
-			}
-		}
-		current_frame = current_frame.attr("f_back");
+	Value result;
+	auto lookup_result = context.TryGetCurrentSetting("python_enable_replacements", result);
+	D_ASSERT((bool)lookup_result);
+	auto enabled = result.GetValue<bool>();
+
+	if (!enabled) {
+		return nullptr;
 	}
-	// Not found :(
+
+	py::gil_scoped_acquire acquire;
+	auto current_frame = py::module::import("inspect").attr("currentframe")();
+
+	auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
+	// search local dictionary
+	if (local_dict) {
+		auto result = TryReplacement(local_dict, table_name, context, current_frame);
+		if (result) {
+			return result;
+		}
+	}
+	// search global dictionary
+	auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
+	if (global_dict) {
+		auto result = TryReplacement(global_dict, table_name, context, current_frame);
+		if (result) {
+			return result;
+		}
+	}
 	return nullptr;
 }
+
 unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, ReplacementScanInput &input,
                                                     optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
-
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
 		return nullptr;
 	}
 
-	auto &table_ref = input.ref;
-	if (table_ref.external_dependency) {
-		auto dependency_item = table_ref.external_dependency->GetDependency("replacement_cache");
-		if (dependency_item) {
-			py::gil_scoped_acquire acquire;
-			auto &python_dependency = dependency_item->Cast<PythonDependencyItem>();
-			auto &registered_object = *python_dependency.object;
-			auto &py_object = registered_object.obj;
-			auto result = TryReplacementObject(py_object, table_name, context);
-			// This was cached, so it was successful before, it should be successfull now
-			D_ASSERT(result);
-			return std::move(result);
-		}
-	}
-
 	unique_ptr<TableRef> result;
 	result = ReplaceInternal(context, table_name);
-	if (!result) {
-		return nullptr;
-	}
-	if (table_ref.external_dependency) {
-		D_ASSERT(result->external_dependency);
-
-		D_ASSERT(result->external_dependency->GetDependency("replacement_cache") != nullptr);
-		result->external_dependency->ScanDependencies(
-		    [&table_ref](const string &name, shared_ptr<DependencyItem> item) {
-			    table_ref.external_dependency->AddDependency(name, std::move(item));
-		    });
-	}
 	return result;
 }
 

@@ -106,6 +106,7 @@ jobs:
       run: |
         pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+
     - name: Build
       shell: bash
       working-directory: tools/pythonpkg
@@ -121,6 +122,7 @@ jobs:
     needs: linux-python3-9
     env:
       GEN: ninja
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3

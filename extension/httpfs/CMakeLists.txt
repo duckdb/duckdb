@@ -11,10 +11,12 @@ build_static_extension(
   hffs.cpp
   s3fs.cpp
   httpfs.cpp
+  http_state.cpp
   crypto.cpp
   create_secret_functions.cpp
   http_functions.cpp
   httpfs_extension.cpp)
+
 set(PARAMETERS "-warnings")
 build_loadable_extension(
   httpfs
@@ -22,6 +24,7 @@ build_loadable_extension(
   hffs.cpp
   s3fs.cpp
   httpfs.cpp
+  http_state.cpp
   crypto.cpp
   create_secret_functions.cpp
   http_functions.cpp

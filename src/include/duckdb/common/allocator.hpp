@@ -23,10 +23,13 @@ class ThreadContext;
 
 struct AllocatorDebugInfo;
 
+enum class AllocatorFreeType { REQUIRES_FREE, DOES_NOT_REQUIRE_FREE };
+
 struct PrivateAllocatorData {
 	PrivateAllocatorData();
 	virtual ~PrivateAllocatorData();
 
+	AllocatorFreeType free_type = AllocatorFreeType::REQUIRES_FREE;
 	unique_ptr<AllocatorDebugInfo> debug_info;
 
 	template <class TARGET>
@@ -112,8 +115,12 @@ public:
 	DUCKDB_API static Allocator &DefaultAllocator();
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
+	static bool SupportsFlush();
+	static int64_t DecayDelay();
 	static void ThreadFlush(idx_t threshold);
+	static void ThreadIdle();
 	static void FlushAll();
+	static void SetBackgroundThreads(bool enable);
 
 private:
 	allocate_function_ptr_t allocate_function;

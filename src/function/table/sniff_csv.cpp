@@ -36,6 +36,10 @@ static unique_ptr<GlobalTableFunctionState> CSVSniffInitGlobal(ClientContext &co
 static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<CSVSniffFunctionData>();
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.options.enable_external_access) {
+		throw PermissionException("sniff_csv is disabled through configuration");
+	}
 	result->path = input.inputs[0].ToString();
 	auto it = input.named_parameters.find("auto_detect");
 	if (it != input.named_parameters.end()) {
@@ -45,7 +49,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 		// otherwise remove it
 		input.named_parameters.erase("auto_detect");
 	}
-	result->options.FromNamedParameters(input.named_parameters, context, result->return_types_csv, result->names_csv);
+	result->options.FromNamedParameters(input.named_parameters, context);
 	// We want to return the whole CSV Configuration
 	// 1. Delimiter
 	return_types.emplace_back(LogicalType::VARCHAR);

@@ -26,7 +26,7 @@ hash_t BoundConstantExpression::Hash() const {
 	return CombineHash(value.Hash(), result);
 }
 
-unique_ptr<Expression> BoundConstantExpression::Copy() {
+unique_ptr<Expression> BoundConstantExpression::Copy() const {
 	auto copy = make_uniq<BoundConstantExpression>(value);
 	copy->CopyProperties(*this);
 	return std::move(copy);

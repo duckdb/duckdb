@@ -1,21 +1,10 @@
-#include "duckdb/storage/compression/patas/patas.hpp"
-#include "duckdb/storage/compression/patas/patas_compress.hpp"
-#include "duckdb/storage/compression/patas/patas_scan.hpp"
-#include "duckdb/storage/compression/patas/patas_fetch.hpp"
-#include "duckdb/storage/compression/patas/patas_analyze.hpp"
-
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
-
-#include <functional>
+#include "duckdb/storage/compression/patas/patas_analyze.hpp"
+#include "duckdb/storage/compression/patas/patas_compress.hpp"
+#include "duckdb/storage/compression/patas/patas_fetch.hpp"
+#include "duckdb/storage/compression/patas/patas_scan.hpp"
 
 namespace duckdb {
 
@@ -51,8 +40,8 @@ CompressionFunction PatasCompressionFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool PatasCompressionFun::TypeIsSupported(PhysicalType type) {
-	switch (type) {
+bool PatasCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return true;

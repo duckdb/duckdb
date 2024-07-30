@@ -65,3 +65,18 @@ statement error
 SELECT 2.0 << 1
 ----
 
+# unsigned numbers
+query IIII
+SELECT 1::UTINYINT << 7, 1::USMALLINT << 15, 1::UINT32 << 31, 1::UBIGINT << 63
+----
+128	32768	2147483648	9223372036854775808
+
+statement error
+SELECT 1::UINT32 << 32
+----
+Overflow in left shift
+
+statement error
+SELECT 2::UINT32 << 31
+----
+Overflow in left shift

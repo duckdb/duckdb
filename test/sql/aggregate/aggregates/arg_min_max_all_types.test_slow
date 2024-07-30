@@ -1,0 +1,23 @@
+# name: test/sql/aggregate/aggregates/arg_min_max_all_types.test_slow
+# description: Test argmin and argmax operator for all types
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table all_types as from test_all_types()
+
+foreach col <all_types_columns>
+
+query I
+SELECT MIN("${col}") IS NOT DISTINCT FROM ARG_MIN("${col}", "${col}") FROM all_types
+----
+true
+
+query I
+SELECT MAX("${col}") IS NOT DISTINCT FROM ARG_MAX("${col}", "${col}") FROM all_types
+----
+true
+
+endloop

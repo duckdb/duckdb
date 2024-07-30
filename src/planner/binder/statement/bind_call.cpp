@@ -1,32 +1,25 @@
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/call_statement.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/planner/tableref/bound_table_function.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/tableref/bound_table_function.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
 
 BoundStatement Binder::Bind(CallStatement &stmt) {
-	BoundStatement result;
+	SelectStatement select_statement;
+	auto select_node = make_uniq<SelectNode>();
+	auto table_function = make_uniq<TableFunctionRef>();
+	table_function->function = std::move(stmt.function);
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(table_function);
+	select_statement.node = std::move(select_node);
 
-	TableFunctionRef ref;
-	ref.function = std::move(stmt.function);
-
-	auto bound_func = Bind(ref);
-	auto &bound_table_func = bound_func->Cast<BoundTableFunction>();
-	;
-	auto &get = bound_table_func.get->Cast<LogicalGet>();
-	D_ASSERT(get.returned_types.size() > 0);
-	for (idx_t i = 0; i < get.returned_types.size(); i++) {
-		get.column_ids.push_back(i);
-	}
-
-	result.types = get.returned_types;
-	result.names = get.names;
-	result.plan = CreatePlan(*bound_func);
-
+	auto result = Bind(select_statement);
 	auto &properties = GetStatementProperties();
-	properties.return_type = StatementReturnType::QUERY_RESULT;
+	properties.allow_stream_result = false;
 	return result;
 }
 

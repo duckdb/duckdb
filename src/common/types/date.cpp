@@ -362,7 +362,7 @@ string Date::ToString(date_t date) {
 	Date::Convert(date, date_units[0], date_units[1], date_units[2]);
 
 	auto length = DateToStringCast::Length(date_units, year_length, add_bc);
-	auto buffer = make_unsafe_uniq_array<char>(length);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(length);
 	DateToStringCast::Format(buffer.get(), date_units, year_length, add_bc);
 	return string(buffer.get(), length);
 }
@@ -450,22 +450,6 @@ int64_t Date::EpochMilliseconds(date_t date) {
 	return result;
 }
 
-int32_t Date::ExtractYear(date_t d, int32_t *last_year) {
-	auto n = d.days;
-	// cached look up: check if year of this date is the same as the last one we looked up
-	// note that this only works for years in the range [1970, 2370]
-	if (n >= Date::CUMULATIVE_YEAR_DAYS[*last_year] && n < Date::CUMULATIVE_YEAR_DAYS[*last_year + 1]) {
-		return Date::EPOCH_YEAR + *last_year;
-	}
-	int32_t year;
-	Date::ExtractYearOffset(n, year, *last_year);
-	return year;
-}
-
-int32_t Date::ExtractYear(timestamp_t ts, int32_t *last_year) {
-	return Date::ExtractYear(Timestamp::GetDate(ts), last_year);
-}
-
 int32_t Date::ExtractYear(date_t d) {
 	int32_t year, year_offset;
 	Date::ExtractYearOffset(d.days, year, year_offset);
@@ -515,10 +499,10 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	// 7  = 4
 	if (date.days < 0) {
 		// negative date: start off at 4 and cycle downwards
-		return (7 - ((-int64_t(date.days) + 3) % 7));
+		return UnsafeNumericCast<int32_t>((7 - ((-int64_t(date.days) + 3) % 7)));
 	} else {
 		// positive date: start off at 4 and cycle upwards
-		return ((int64_t(date.days) + 3) % 7) + 1;
+		return UnsafeNumericCast<int32_t>(((int64_t(date.days) + 3) % 7) + 1);
 	}
 }
 
