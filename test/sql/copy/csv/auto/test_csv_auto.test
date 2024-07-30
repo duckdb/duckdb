@@ -5,7 +5,7 @@
 require vector_size 512
 
 
-statement ok
+statement ok 
 PRAGMA verify_parallelism
 
 statement error
@@ -34,7 +34,7 @@ query ITT
 SELECT * FROM test ORDER BY column0;
 ----
 123	TEST1	one space
-345	TEST1	trailing_space
+345	TEST1	trailing_space 
 567	TEST1	no_space
 
 statement ok
@@ -49,7 +49,7 @@ query ITT
 SELECT * FROM test ORDER BY column0;
 ----
 123	TEST2	one space
-345	TEST2	trailing_space,
+345	TEST2	trailing_space, 
 567	TEST2	no"space
 
 statement ok
@@ -236,7 +236,7 @@ statement ok
 DROP TABLE test;
 
 
-# CSV file with trailing empty lines
+# CSV file with trailing empty lines 
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_1254.csv');
 
