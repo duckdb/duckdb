@@ -1,17 +1,18 @@
 #include "duckdb.h"
 #include "duckdb/common/dl.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "mbedtls_wrapper.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
 
 #include <duckdb/function/table/system_functions.hpp>
+#include <fmt/format.h>
 
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
@@ -185,7 +186,12 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *meta
 
 	std::reverse(metadata_field.begin(), metadata_field.end());
 
+	// Fetch the magic value and early out if this is invalid: the rest will just be bogus
 	result.magic_value = FilterZeroAtEnd(metadata_field[0]);
+	if (!result.AppearsValid()) {
+		return result;
+	}
+
 	result.platform = FilterZeroAtEnd(metadata_field[1]);
 
 	result.extension_version = FilterZeroAtEnd(metadata_field[3]);
@@ -353,8 +359,13 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	}
 
 	if (!config.options.allow_unsigned_extensions) {
-		bool signature_valid =
-		    CheckExtensionSignature(*handle, parsed_metadata, config.options.allow_community_extensions);
+		bool signature_valid;
+		if (parsed_metadata.AppearsValid()) {
+			signature_valid =
+			    CheckExtensionSignature(*handle, parsed_metadata, config.options.allow_community_extensions);
+		} else {
+			signature_valid = false;
+		}
 
 		if (!signature_valid) {
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) +
