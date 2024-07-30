@@ -6,6 +6,10 @@ using Dates
 using FixedPointDecimals
 using UUIDs
 
+using Aqua
+Aqua.test_all(DuckDB, ambiguities=false)
+Aqua.test_ambiguities(DuckDB)
+
 test_files = [
     "test_appender.jl",
     "test_basic_queries.jl",
