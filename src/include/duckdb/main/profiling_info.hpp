@@ -59,6 +59,7 @@ public:
 	// set of metrics with their values; only enabled metrics are present in the set
 	profiler_settings_t settings;
 	unordered_map<MetricsType, Value> metrics;
+	InsertionOrderPreservingMap<string> extra_info;
 
 public:
 	ProfilingInfo() = default;

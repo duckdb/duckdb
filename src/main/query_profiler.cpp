@@ -336,7 +336,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		auto &op = node.first.get();
 		auto entry = tree_map.find(op);
 		D_ASSERT(entry != tree_map.end());
-		auto &tree_node = entry->second.get();
+//		auto &tree_node = entry->second.get();
 
 //		if (profiler.SettingEnabled(MetricsType::OPERATOR_TIMING)) {
 //			tree_node.GetProfilingInfo().metrics.operator_timing += node.second.time;

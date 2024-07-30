@@ -56,7 +56,6 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) {
 
 	if (setting == MetricsType::EXTRA_INFO) {
 		string result;
-		auto extra_info = QueryProfiler::JSONSanitize(metrics[setting].GetValue<InsertionOrderPreservingMap<string>>());
 		for (auto &it : extra_info) {
 			if (!result.empty()) {
 				result += ", ";
@@ -66,25 +65,22 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) {
 		return "\"" + result + "\"";
 	}
 
-	if (metrics[setting].IsNull())
+	if (metrics[setting].IsNull()) {
 		return "0";
+	}
 	return metrics[setting].ToString();
 }
 
 void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) {
 	for (auto &metric : settings) {
 		auto metric_str = StringUtil::Lower(EnumUtil::ToString(metric));
+		auto key_val = yyjson_mut_strcpy(doc, metric_str.c_str());
+		auto key_ptr = yyjson_get_str(reinterpret_cast<yyjson_val *>(key_val));
 
-		switch (metric) {
-		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING:
-			yyjson_mut_obj_add_real(doc, dest, metric_str.c_str(), metrics[metric].GetValue<double>());
-			break;
-		case MetricsType::EXTRA_INFO: {
+		if (metric == MetricsType::EXTRA_INFO) {
 			auto extra_info_obj = yyjson_mut_obj(doc);
-			auto extra_info_map = metrics[metric].GetValue<InsertionOrderPreservingMap<string>>();
 
-			for (auto &it : extra_info_map) {
+			for (auto &it : extra_info) {
 				auto &key = it.first;
 				auto &value = it.second;
 				auto splits = StringUtil::Split(value, "\n");
@@ -98,12 +94,23 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 					yyjson_mut_obj_add_strcpy(doc, extra_info_obj, key.c_str(), value.c_str());
 				}
 			}
-			yyjson_mut_obj_add_val(doc, dest, metric_str.c_str(), extra_info_obj);
+			yyjson_mut_obj_add_val(doc, dest, key_ptr, extra_info_obj);
+		}
+
+		if (metrics[metric].IsNull()) {
+			yyjson_mut_obj_add_str(doc, dest, key_ptr, "0");
+			continue;
+		}
+
+		switch (metric) {
+		case MetricsType::CPU_TIME:
+		case MetricsType::OPERATOR_TIMING: {
+			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			break;
 		}
         case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY: {
-			yyjson_mut_obj_add_uint(doc, dest, metric_str.c_str(), metrics[metric].GetValue<uint64_t>());
+			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
 			break;
 		}
 		default:
