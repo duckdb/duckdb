@@ -75,7 +75,7 @@ struct from_chars_result {
  */
 template<typename T>
 from_chars_result from_chars(const char *first, const char *last,
-                             T &value, bool strict,
+                             T &value, bool strict=false,
                              const char decimal_separator = '.',
                              chars_format fmt = chars_format::general)  noexcept;
 
