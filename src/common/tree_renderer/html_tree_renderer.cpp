@@ -250,10 +250,10 @@ function toggleDisplay(button) {
         const currentDisplay = getComputedStyle(nestedUl).getPropertyValue('display');
         if (currentDisplay === 'none') {
             nestedUl.classList.toggle('hidden');
-            button.textContent = '-'; // Change button content to '-'
+            button.textContent = '-';
         } else {
             nestedUl.classList.toggle('hidden');
-            button.textContent = '+'; // Change button content to '+'
+            button.textContent = '+';
         }
     }
 }
