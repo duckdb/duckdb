@@ -450,6 +450,7 @@ coverage-check:
 	./scripts/coverage_check.sh
 
 generate-files:
+	python3 scripts/generate_c_api.py
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py

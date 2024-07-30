@@ -59,4 +59,13 @@ struct ParsedExtensionMetaData {
 	string GetInvalidMetadataError();
 };
 
+struct VersioningUtils {
+	//! Note: only supports format v{major}.{minor}.{patch}
+	static bool ParseSemver(string &semver, idx_t &major_out, idx_t &minor_out, idx_t &patch_out);
+
+	//! Note: only supports format v{major}.{minor}.{patch}
+	static bool IsSupportedCAPIVersion(string &capi_version_string);
+	static bool IsSupportedCAPIVersion(idx_t major, idx_t minor, idx_t patch);
+};
+
 } // namespace duckdb

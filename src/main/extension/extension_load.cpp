@@ -23,16 +23,22 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// Extension C API
+//===--------------------------------------------------------------------===//
+
 //! State that is kept during the load phase of a C API extension
 struct DuckDBExtensionLoadState {
 	DuckDBExtensionLoadState(DatabaseInstance &db_p) : db(db_p), database_data(nullptr) {
 	}
 
+	//! Create a DuckDBExtensionLoadState reference from a C API opaque pointer
 	static DuckDBExtensionLoadState &Get(duckdb_extension_info info) {
 		D_ASSERT(info);
 		return *reinterpret_cast<duckdb::DuckDBExtensionLoadState *>(info);
 	}
 
+	//! Convert to an opaque C API pointer
 	duckdb_extension_info ToCStruct() {
 		return reinterpret_cast<duckdb_extension_info>(this);
 	}
@@ -50,11 +56,14 @@ struct DuckDBExtensionLoadState {
 	ErrorData error_data;
 };
 
-struct DuckDBExtensionAccess {
+//! Contains the callbacks that are passed to CAPI extensions to allow initialization
+struct ExtensionAccess {
+	//! Create the struct of function pointers to pass to the extension for initialization
 	static duckdb_extension_access CreateAccessStruct() {
 		return {SetError, GetDatabase, GetAPI};
 	}
 
+	//! Called by the extension to indicate failure to initialize the extension
 	static void SetError(duckdb_extension_info info, const char *error) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
@@ -62,6 +71,7 @@ struct DuckDBExtensionAccess {
 		load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, error);
 	}
 
+	//! Called by the extension get a pointer to the database that is loading it
 	static duckdb_database *GetDatabase(duckdb_extension_info info) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
@@ -80,48 +90,18 @@ struct DuckDBExtensionAccess {
 		}
 	}
 
-	static bool ParseSemver(string semver, idx_t &major_out, idx_t &minor_out, idx_t &patch_out) {
-		if (!StringUtil::StartsWith(semver, "v")) {
-			return false;
-		}
-
-		auto without_v = semver.substr(1);
-
-		auto split = StringUtil::Split(without_v, '.');
-
-		if (split.size() != 3) {
-			return false;
-		}
-
-		idx_t major, minor, patch;
-		bool succeeded = true;
-
-		succeeded &= TryCast::Operation<string_t, idx_t>(split[0], major);
-		succeeded &= TryCast::Operation<string_t, idx_t>(split[1], minor);
-		succeeded &= TryCast::Operation<string_t, idx_t>(split[2], patch);
-
-		if (!succeeded) {
-			return false;
-		}
-
-		major_out = major;
-		minor_out = minor;
-		patch_out = patch;
-
-		return true;
-	}
-
+	//! Called by the extension get a pointer the correctly versioned extension C API struct.
 	static void *GetAPI(duckdb_extension_info info, const char *version) {
-		// TODO allow fine-grained match
-
+		string version_string = version;
 		idx_t major, minor, patch;
-		auto res = ParseSemver(version, major, minor, patch);
+		auto parsed = VersioningUtils::ParseSemver(version_string, major, minor, patch);
 
-		if (!res) {
+		if (!parsed || !VersioningUtils::IsSupportedCAPIVersion(major, minor, patch)) {
 			auto &load_state = DuckDBExtensionLoadState::Get(info);
 			load_state.has_error = true;
 			load_state.error_data =
-			    ErrorData(ExceptionType::UNKNOWN_TYPE, "Failed to parse extension C API version: " + string(version));
+			    ErrorData(ExceptionType::UNKNOWN_TYPE,
+			              "Unsupported C CAPI version detected during extension initialization: " + string(version));
 			return nullptr;
 		}
 
@@ -520,7 +500,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 
-	// TODO: make this the only way of calling extensions
+	// TODO: make this the only way of calling extensions?
 	// "NEW WAY" of loading extensions enabling C API only
 	init_fun_name = res.filebase + "_init_c_api";
 	ext_init_c_api_fun_t init_fun_capi =
@@ -533,7 +513,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	// Create the load state
 	DuckDBExtensionLoadState load_state(db);
 
-	auto access = DuckDBExtensionAccess::CreateAccessStruct();
+	auto access = ExtensionAccess::CreateAccessStruct();
 	(*init_fun_capi)(load_state.ToCStruct(), &access);
 
 	// Throw any error that the extension might have encountered

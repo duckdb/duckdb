@@ -34,38 +34,6 @@ static string PrettyPrintString(const string &s) {
 	return res;
 }
 
-static bool IsSupportedCAPIVersion(string &capi_version_string) {
-	if (!StringUtil::StartsWith(capi_version_string, "v")) {
-		return false;
-	}
-
-	auto without_v = capi_version_string.substr(1);
-
-	auto split = StringUtil::Split(without_v, '.');
-
-	if (split.size() != 3) {
-		return false;
-	}
-
-	idx_t major, minor, patch;
-	bool succeeded = true;
-
-	succeeded &= TryCast::Operation<string_t, idx_t>(split[0], major);
-	succeeded &= TryCast::Operation<string_t, idx_t>(split[1], minor);
-	succeeded &= TryCast::Operation<string_t, idx_t>(split[2], patch);
-
-	if (!succeeded) {
-		return false;
-	}
-
-	if (major > DUCKDB_EXTENSION_API_VERSION_MAJOR || minor > DUCKDB_EXTENSION_API_VERSION_MINOR ||
-	    patch > DUCKDB_EXTENSION_API_VERSION_PATCH) {
-		return false;
-	}
-
-	return true;
-}
-
 string ParsedExtensionMetaData::GetInvalidMetadataError() {
 	const string engine_platform = string(DuckDB::Platform());
 
@@ -85,7 +53,7 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 		}
 	} else if (abi_type == ExtensionABIType::C_STRUCT) {
 
-		if (!IsSupportedCAPIVersion(duckdb_capi_version)) {
+		if (!VersioningUtils::IsSupportedCAPIVersion(duckdb_capi_version)) {
 			result +=
 			    StringUtil::Format("The file was built for DuckDB C API version '%s', but we can only load extensions "
 			                       "built for DuckDB C API 'v%lld.%lld.%lld' and lower.",
@@ -108,6 +76,55 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 	}
 
 	return result;
+}
+
+bool VersioningUtils::IsSupportedCAPIVersion(string &capi_version_string) {
+	idx_t major, minor, patch;
+	if (!ParseSemver(capi_version_string, major, minor, patch)) {
+		return false;
+	}
+
+	return IsSupportedCAPIVersion(major, minor, patch);
+}
+
+bool VersioningUtils::IsSupportedCAPIVersion(idx_t major, idx_t minor, idx_t patch) {
+	if (major > DUCKDB_EXTENSION_API_VERSION_MAJOR || minor > DUCKDB_EXTENSION_API_VERSION_MINOR ||
+	    patch > DUCKDB_EXTENSION_API_VERSION_PATCH) {
+		return false;
+	}
+
+	return true;
+}
+
+bool VersioningUtils::ParseSemver(string &semver, idx_t &major_out, idx_t &minor_out, idx_t &patch_out) {
+	if (!StringUtil::StartsWith(semver, "v")) {
+		return false;
+	}
+
+	auto without_v = semver.substr(1);
+
+	auto split = StringUtil::Split(without_v, '.');
+
+	if (split.size() != 3) {
+		return false;
+	}
+
+	idx_t major, minor, patch;
+	bool succeeded = true;
+
+	succeeded &= TryCast::Operation<string_t, idx_t>(split[0], major);
+	succeeded &= TryCast::Operation<string_t, idx_t>(split[1], minor);
+	succeeded &= TryCast::Operation<string_t, idx_t>(split[2], patch);
+
+	if (!succeeded) {
+		return false;
+	}
+
+	major_out = major;
+	minor_out = minor;
+	patch_out = patch;
+
+	return true;
 }
 
 } // namespace duckdb

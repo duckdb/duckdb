@@ -27,5 +27,5 @@ static void Entrypoint(duckdb_connection connection, duckdb_extension_info info,
 }
 
 extern "C" {
-	DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(demo_capi, Entrypoint, CAPI_VERSION)
+DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(demo_capi, Entrypoint, CAPI_VERSION)
 }
