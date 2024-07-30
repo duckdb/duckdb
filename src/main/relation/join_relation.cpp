@@ -34,6 +34,72 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	return std::move(result);
 }
 
+// static void ReplaceQualificationRecursive(unique_ptr<ParsedExpression> &expr, case_insensitive_map_t<string>
+// &changed_bindings) { 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) { 		auto &col_ref =
+//expr->Cast<ColumnRefExpression>(); 		auto &col_names = col_ref.column_names; 		if (col_ref.IsQualified()) { 			auto it =
+//changed_bindings.find(col_ref.GetTableName()); 			if (it != changed_bindings.end()) { 				col_names
+//			}
+//			col_names.erase(col_names.begin());
+//		}
+//	} else {
+//		ParsedExpressionIterator::EnumerateChildren(*expr, [&table_name](unique_ptr<ParsedExpression> &child) {
+//			ReplaceQualificationRecursive(child, table_name);
+//		});
+//	}
+//}
+
+// unique_ptr<TableRef> DeduplicateBindings(unique_ptr<TableRef> original, ) {
+//	auto &ref = *original;
+//	switch (ref.type) {
+//	case TableReferenceType::EXPRESSION_LIST: {
+//		auto &el_ref = ref.Cast<ExpressionListRef>();
+//		for (idx_t i = 0; i < el_ref.values.size(); i++) {
+//			for (idx_t j = 0; j < el_ref.values[i].size(); j++) {
+//				expr_callback(el_ref.values[i][j]);
+//			}
+//		}
+//		break;
+//	}
+//	case TableReferenceType::JOIN: {
+//		auto &j_ref = ref.Cast<JoinRef>();
+//		EnumerateTableRefChildren(*j_ref.left, expr_callback, ref_callback);
+//		EnumerateTableRefChildren(*j_ref.right, expr_callback, ref_callback);
+//		if (j_ref.condition) {
+//			expr_callback(j_ref.condition);
+//		}
+//		break;
+//	}
+//	case TableReferenceType::PIVOT: {
+//		auto &p_ref = ref.Cast<PivotRef>();
+//		EnumerateTableRefChildren(*p_ref.source, expr_callback, ref_callback);
+//		for (auto &aggr : p_ref.aggregates) {
+//			expr_callback(aggr);
+//		}
+//		break;
+//	}
+//	case TableReferenceType::SUBQUERY: {
+//		auto &sq_ref = ref.Cast<SubqueryRef>();
+//		EnumerateQueryNodeChildren(*sq_ref.subquery->node, expr_callback, ref_callback);
+//		break;
+//	}
+//	case TableReferenceType::TABLE_FUNCTION: {
+//		auto &tf_ref = ref.Cast<TableFunctionRef>();
+//		expr_callback(tf_ref.function);
+//		break;
+//	}
+//	case TableReferenceType::BASE_TABLE:
+//	case TableReferenceType::EMPTY_FROM:
+//	case TableReferenceType::SHOW_REF:
+//	case TableReferenceType::COLUMN_DATA:
+//	case TableReferenceType::DELIM_GET:
+//		// these TableRefs do not need to be unfolded
+//		break;
+//	case TableReferenceType::INVALID:
+//	case TableReferenceType::CTE:
+//		throw NotImplementedException("TableRef type not implemented for traversal");
+//	}
+//}
+
 unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	auto join_ref = make_uniq<JoinRef>(join_ref_type);
 	join_ref->left = left->GetTableRef();
@@ -47,7 +113,6 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	for (auto &col : duplicate_eliminated_columns) {
 		join_ref->duplicate_eliminated_columns.emplace_back(col->Copy());
 	}
-
 	return std::move(join_ref);
 }
 

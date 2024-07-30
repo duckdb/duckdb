@@ -40,15 +40,42 @@ const string &ColumnRefExpression::GetColumnName() const {
 	return column_names.back();
 }
 
-const string &ColumnRefExpression::GetTableName() const {
-	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 4);
+void ColumnRefExpression::ReplaceOrRemoveTableName(const string &replacement) {
+	auto table_name_index = GetTableNameIndex();
+	D_ASSERT(table_name_index.IsValid());
+	D_ASSERT(column_names.size() > table_name_index.GetIndex());
+	if (replacement.empty()) {
+		// Remove all the qualifiers leading up to the table name
+		column_names.erase(column_names.begin(), column_names.begin() + table_name_index.GetIndex() + 1);
+	} else {
+		column_names[table_name_index.GetIndex()] = replacement;
+	}
+}
+
+optional_idx ColumnRefExpression::GetTableNameIndex() const {
+	if (column_names.size() < 2) {
+		return optional_idx();
+	}
+	// FIXME: this entire function is problematic in combination with structs
+	// column_names.size() could exceed 4
+	D_ASSERT(column_names.size() <= 4);
 	if (column_names.size() == 4) {
-		return column_names[2];
+		// catalog.schema.table.column
+		// FIXME: this also matches for: schema.table.struct_column.field1
+		return 2;
 	}
 	if (column_names.size() == 3) {
-		return column_names[1];
+		// schema.table.column
+		// FIXME: this also matches for: table.struct_column.field1
+		return 1;
 	}
-	return column_names[0];
+	return 0;
+}
+
+const string &ColumnRefExpression::GetTableName() const {
+	auto table_name_index = GetTableNameIndex();
+	D_ASSERT(table_name_index.IsValid());
+	return column_names[table_name_index.GetIndex()];
 }
 
 string ColumnRefExpression::GetName() const {

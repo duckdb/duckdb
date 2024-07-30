@@ -16,9 +16,8 @@ CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
 static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &expr, const string &table_name) {
 	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		auto &col_names = col_ref.column_names;
 		if (col_ref.IsQualified() && col_ref.GetTableName() == table_name) {
-			col_names.erase(col_names.begin());
+			col_ref.ReplaceOrRemoveTableName();
 		}
 	} else {
 		ParsedExpressionIterator::EnumerateChildren(*expr, [&table_name](unique_ptr<ParsedExpression> &child) {
