@@ -1,10 +1,10 @@
 # name: ${FILE_PATH}
 # description: ${DESCRIPTION}
-# group: [sf1]
+# group: [tpcds-sf100]
 
 name Q${QUERY_NUMBER_PADDED}
 group tpcds
-subgroup sf1
+subgroup sf100
 
 require tpcds
 
