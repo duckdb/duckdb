@@ -11,6 +11,11 @@ select md5('hello'), md5(NULL)
 5d41402abc4b2a76b9719d911017c592
 NULL
 
+query I
+select md5('\xff\xff'::BLOB)
+----
+ab2a0d28de6b77ffdd6c72afead099ab
+
 query II
 select md5_number('hello'), md5_number_upper(NULL)
 ----

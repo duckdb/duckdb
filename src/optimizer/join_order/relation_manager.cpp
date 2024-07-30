@@ -198,8 +198,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 
 		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(*op, children_stats);
 		if (!datasource_filters.empty()) {
-			combined_stats.cardinality =
-			    (idx_t)MaxValue(combined_stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+			combined_stats.cardinality = (idx_t)MaxValue(
+			    double(combined_stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
 		AddRelation(input_op, parent, combined_stats);
 		return true;
@@ -214,8 +214,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		auto &aggr = op->Cast<LogicalAggregate>();
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats);
 		if (!datasource_filters.empty()) {
-			operator_stats.cardinality = NumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
-			                                                RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+			operator_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
+			                                                     RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
 		ModifyStatsIfLimit(limit_op.get(), child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
@@ -229,8 +229,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
 		if (!datasource_filters.empty()) {
-			operator_stats.cardinality = NumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
-			                                                RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+			operator_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
+			                                                     RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
 		ModifyStatsIfLimit(limit_op.get(), child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
@@ -265,7 +265,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// table scan, apply another selectivity.
 		if (!datasource_filters.empty()) {
 			stats.cardinality =
-			    (idx_t)MaxValue(stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+			    (idx_t)MaxValue(double(stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
 		ModifyStatsIfLimit(limit_op.get(), stats);
 		AddRelation(input_op, parent, stats);

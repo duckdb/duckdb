@@ -23,6 +23,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
@@ -148,22 +149,12 @@ public:
 	static PythonImportCache *ImportCache();
 	static bool IsInteractive();
 
-	unique_ptr<DuckDBPyRelation>
-	ReadCSV(const py::object &name, const py::object &header = py::none(), const py::object &compression = py::none(),
-	        const py::object &sep = py::none(), const py::object &delimiter = py::none(),
-	        const py::object &dtype = py::none(), const py::object &na_values = py::none(),
-	        const py::object &skiprows = py::none(), const py::object &quotechar = py::none(),
-	        const py::object &escapechar = py::none(), const py::object &encoding = py::none(),
-	        const py::object &parallel = py::none(), const py::object &date_format = py::none(),
-	        const py::object &timestamp_format = py::none(), const py::object &sample_size = py::none(),
-	        const py::object &all_varchar = py::none(), const py::object &normalize_names = py::none(),
-	        const py::object &filename = py::none(), const py::object &null_padding = py::none(),
-	        const py::object &names = py::none());
+	unique_ptr<DuckDBPyRelation> ReadCSV(const py::object &name, py::kwargs &kwargs);
 
 	py::list ExtractStatements(const string &query);
 
 	unique_ptr<DuckDBPyRelation> ReadJSON(
-	    const string &name, const Optional<py::object> &columns = py::none(),
+	    const py::object &name, const Optional<py::object> &columns = py::none(),
 	    const Optional<py::object> &sample_size = py::none(), const Optional<py::object> &maximum_depth = py::none(),
 	    const Optional<py::str> &records = py::none(), const Optional<py::str> &format = py::none(),
 	    const Optional<py::object> &date_format = py::none(), const Optional<py::object> &timestamp_format = py::none(),

@@ -27,8 +27,8 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
-#include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
+#include "duckdb/transaction/transaction_context.hpp"
 
 namespace duckdb {
 class Appender;
@@ -51,6 +51,7 @@ class SimpleBufferedData;
 class BufferedData;
 struct ClientData;
 class ClientContextState;
+class RegisteredStateManager;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
@@ -78,7 +79,7 @@ public:
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
-	unordered_map<string, shared_ptr<ClientContextState>> registered_state;
+	unique_ptr<RegisteredStateManager> registered_state;
 	//! The client configuration
 	ClientConfig config;
 	//! The set of client-specific data
@@ -246,7 +247,8 @@ private:
 	unique_ptr<ClientContextLock> LockContext();
 
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
-	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
+	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
+	                           optional_ptr<ErrorData> previous_error);
 
 	//! Wait until a task is available to execute
 	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);

@@ -75,6 +75,7 @@ if (NOT MINGW)
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
             GIT_TAG 120c0b12258d27758e240d61f5dc22a4238a14a6
+            APPLY_PATCHES
             )
 endif()
 
@@ -85,6 +86,7 @@ duckdb_extension_load(spatial
     GIT_TAG dbb9971c900c5888e3e3598af91de3b9b884aca6
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
@@ -99,11 +101,13 @@ duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
         GIT_TAG 50b7870be099186f195bc72bac5e9e11247ee2f9
+        APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
         GIT_TAG 721460ff1f31ce1dc1e4a9c4a55c0faf0b466dcb
+        APPLY_PATCHES
         )
 
 ################# SUBSTRAIT
@@ -134,5 +138,6 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
             GIT_TAG 4dd5963cc5f7f04f81a0ea308b104e65791d9975
+            APPLY_PATCHES
             )
 endif()

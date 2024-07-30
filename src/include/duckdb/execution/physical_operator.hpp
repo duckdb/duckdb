@@ -12,12 +12,14 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 class Event;
@@ -59,10 +61,10 @@ public:
 
 public:
 	virtual string GetName() const;
-	virtual string ParamsToString() const {
-		return "";
+	virtual InsertionOrderPreservingMap<string> ParamsToString() const {
+		return InsertionOrderPreservingMap<string>();
 	}
-	virtual string ToString() const;
+	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 

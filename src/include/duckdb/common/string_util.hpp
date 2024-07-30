@@ -73,11 +73,11 @@ public:
 	}
 	static char CharacterToLower(char c) {
 		if (c >= 'A' && c <= 'Z') {
-			return c - ('A' - 'a');
+			return UnsafeNumericCast<char>(c - ('A' - 'a'));
 		}
 		return c;
 	}
-	static char CharacterIsAlpha(char c) {
+	static bool CharacterIsAlpha(char c) {
 		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 	}
 	static bool CharacterIsOperator(char c) {

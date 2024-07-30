@@ -167,7 +167,7 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 	}
 	idx_t scanned_rows = gstate.state.scan_state.processed_rows;
 	scanned_rows += gstate.state.local_state.processed_rows;
-	auto percentage = 100 * (double(scanned_rows) / total_rows);
+	auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
 	if (percentage > 100) {
 		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
 		//! It means we finished this table.
@@ -352,7 +352,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				auto index_scan_max_count = db_config.options.index_scan_max_count;
 
 				auto total_rows = storage.GetTotalRows();
-				auto total_rows_from_percentage = NumericCast<idx_t>(double(total_rows) * index_scan_percentage);
+				auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * index_scan_percentage);
 				auto max_count = MaxValue(index_scan_max_count, total_rows_from_percentage);
 
 				// Check if we can use an index scan, and already retrieve the matching row ids.

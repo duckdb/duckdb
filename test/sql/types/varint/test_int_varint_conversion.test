@@ -1,0 +1,137 @@
+# name: test/sql/types/varint/test_int_varint_conversion.test
+# description: Test basics of varint type
+# group: [varint]
+
+statement ok
+PRAGMA enable_verification
+
+foreach int_type tinyint utinyint smallint usmallint integer uinteger bigint ubigint hugeint uhugeint double float
+
+query I
+select distinct i::${int_type}::varint = i::varint from range(0, 100) t(i);
+----
+true
+
+endloop
+
+foreach int_type tinyint smallint integer bigint double float hugeint
+
+query I
+select distinct i::${int_type}::varint = i::varint from range(-100, 0) t(i);
+----
+true
+
+endloop
+
+query I
+select (-1)::varint
+----
+-1
+
+query I
+select 0::varint
+----
+0
+
+query I
+select 1::varint
+----
+1
+
+
+
+statement ok
+CREATE TABLE integers(a varint);
+
+statement ok
+insert into integers values (0), (1), (-1);
+
+query I
+SELECT * FROM integers;
+----
+0
+1
+-1
+
+query I
+select * from integers where a >= 0::VARINT
+----
+0
+1
+
+query I
+select * from integers where a < 0::VARINT
+----
+-1
+
+statement ok
+insert into integers values (300), (-300), (-10);
+
+query I
+select (300)::VARINT
+----
+300
+
+query I
+select (-300)::VARINT
+----
+-300
+
+query I
+SELECT * FROM integers;
+----
+0
+1
+-1
+300
+-300
+-10
+
+query I
+select * from integers where a >= 0::VARINT
+----
+0
+1
+300
+
+query I
+select * from integers where a < 0::VARINT
+----
+-1
+-300
+-10
+
+query I
+select * from integers where a >= (-10)::VARINT
+----
+0
+1
+-1
+300
+-10
+
+query I
+select * from integers where a = 1::VARINT
+----
+1
+
+query I
+select count(*) from integers where a = 0::VARINT
+----
+1
+
+query I
+select count(*) from integers where a < 0::VARINT
+----
+3
+
+# Check Border values
+query I
+select 2147483647::varint
+----
+2147483647
+
+query I
+select (-2147483647)::varint
+----
+-2147483647

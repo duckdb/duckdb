@@ -34,7 +34,8 @@ struct CSVStates {
 	inline bool EmptyLastValue() {
 		// It is a new row, if the previous state is not a record separator, and the current one is
 		return states[0] == CSVState::DELIMITER &&
-		       (states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN);
+		       (states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN ||
+		        states[1] == CSVState::DELIMITER);
 	}
 
 	inline bool EmptyLine() {
