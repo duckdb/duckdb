@@ -79,6 +79,21 @@ typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr
                                       const AggregateFunction &function);
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
 
+struct AggregateFunctionInfo {
+	DUCKDB_API virtual ~AggregateFunctionInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -162,6 +177,8 @@ public:
 	aggregate_deserialize_t deserialize;
 	//! Whether or not the aggregate is order dependent
 	AggregateOrderDependent order_dependent;
+	//! Additional function info, passed to the bind
+	shared_ptr<AggregateFunctionInfo> function_info;
 
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&

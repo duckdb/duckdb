@@ -3,6 +3,7 @@ add_subdirectory(cast)
 add_library_unity(
   duckdb_main_capi
   OBJECT
+  aggregate_function-c.cpp
   appender-c.cpp
   arrow-c.cpp
   config-c.cpp
