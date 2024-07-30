@@ -61,6 +61,7 @@ def run_shell_command(shell, cmd):
 
 
 def get_reduced_sql(shell, sql_query):
+
     reduce_query = get_reduced_query.replace('${QUERY}', sql_query.replace("'", "''"))
     (stdout, stderr, returncode) = run_shell_command(shell, reduce_query)
     if returncode != 0:

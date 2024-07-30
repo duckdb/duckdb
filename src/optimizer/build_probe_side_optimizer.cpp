@@ -101,7 +101,14 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 	return ret;
 }
 
-void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio) {
+idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		return 1 + ChildHasJoins(*op.children[0]) + ChildHasJoins(*op.children[1]);
+	}
+	return 0;
+}
+
+void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	auto &left_child = op.children[0];
 	auto &right_child = op.children[1];
 	auto lhs_cardinality = left_child->has_estimated_cardinality ? left_child->estimated_cardinality
