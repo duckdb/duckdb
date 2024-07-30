@@ -156,7 +156,20 @@ def parse_capi_function_definitions():
 
                 function_map[function['name']] = function
 
-    return (function_groups, function_map)
+    # Reorder to match original order: purely intended to keep the PR review sane
+    function_groups_ordered = []
+
+    if len(function_groups) != len(ORIGINAL_FUNCTION_GROUP_ORDER):
+        print(
+            "The list used to match the original order of function groups in the original the duckdb.h file does not match the new one. Did you add a new function group? please also add it to ORIGINAL_FUNCTION_GROUP_ORDER for now."
+        )
+
+    for order_group in ORIGINAL_FUNCTION_GROUP_ORDER:
+        curr_group = next(group for group in function_groups if group['group'] == order_group)
+        function_groups.remove(curr_group)
+        function_groups_ordered.append(curr_group)
+
+    return (function_groups_ordered, function_map)
 
 
 # Read extension API
@@ -288,16 +301,7 @@ def create_version_defines(version):
 def create_duckdb_h(ext_api_version):
     function_declarations_finished = ''
 
-    function_groups_copy = copy.deepcopy(FUNCTION_GROUPS)
-
-    if len(function_groups_copy) != len(ORIGINAL_FUNCTION_GROUP_ORDER):
-        print("original order list is wrong")
-
-    for order_group in ORIGINAL_FUNCTION_GROUP_ORDER:
-        # Lookup the group in the original order: purely intended to keep the PR review sane
-        curr_group = next(group for group in function_groups_copy if group['group'] == order_group)
-        function_groups_copy.remove(curr_group)
-
+    for curr_group in FUNCTION_GROUPS:
         function_declarations_finished += f'''//===--------------------------------------------------------------------===//
 // {to_camel_case(curr_group['group'])}
 //===--------------------------------------------------------------------===//\n\n'''
