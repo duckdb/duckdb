@@ -8,6 +8,9 @@ statement ok
 create table t (t timestamptz);
 
 statement ok
+SET TimeZone='ECT'
+
+statement ok
 insert into t values('2028-02-28 01:00:00');
 
 # EQUAL is affected (and LOWER, GREATER too)
