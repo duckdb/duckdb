@@ -13,9 +13,11 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 WeakRefStrings = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 
 [compat]
+Dates = "1"
 DBInterface = "2.5"
 DuckDB_jll = "1.0.0"
 FixedPointDecimals = "0.4, 0.5"
 Tables = "1.7"
+UUIDs = "1"
 WeakRefStrings = "1.4"
 julia = "1.6"
