@@ -145,15 +145,15 @@ void QueryProfiler::StartExplainAnalyze() {
 	this->is_explain_analyze = true;
 }
 
-static void GetTotalCPUTime(ProfilingNode &node) {
-//	node.GetProfilingInfo().metrics.cpu_time = node.GetProfilingInfo().metrics.operator_timing;
-//	if (node.GetChildCount() > 0) {
-//		for (idx_t i = 0; i < node.GetChildCount(); i++) {
-//			auto child = node.GetChild(i);
-//			GetTotalCPUTime(*child);
-//			node.GetProfilingInfo().metrics.cpu_time += child->GetProfilingInfo().metrics.cpu_time;
-//		}
-//	}
+template <class METRIC_TYPE>
+static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
+	node.GetProfilingInfo().metrics[cumulative_metric] = node.GetProfilingInfo().metrics[child_metric];
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		auto child = node.GetChild(i);
+		GetCumulativeMetric<METRIC_TYPE>(*child, cumulative_metric, child_metric);
+		node.GetProfilingInfo().AddToMetric(
+		    cumulative_metric, child->GetProfilingInfo().metrics[cumulative_metric].GetValue<METRIC_TYPE>());
+	}
 }
 
 void QueryProfiler::EndQuery() {
@@ -176,10 +176,9 @@ void QueryProfiler::EndQuery() {
 			query_info.query = query;
 			query_info.GetProfilingInfo() = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-//				query_info.GetProfilingInfo().metrics.operator_timing = main_query.Elapsed();
-			}
+				query_info.GetProfilingInfo().metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();			}
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::CPU_TIME)) {
-				GetTotalCPUTime(*root);
+				GetCumulativeMetric<double>(*root, MetricsType::CPU_TIME, MetricsType::OPERATOR_TIMING);
 			}
 		}
 
@@ -603,7 +602,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	node->depth = depth;
 	node->GetProfilingInfo() = ProfilingInfo(settings);
 	if (node->GetProfilingInfo().Enabled(MetricsType::EXTRA_INFO)) {
-//		node->GetProfilingInfo().metrics.extra_info = root.ParamsToString();
+		node->GetProfilingInfo().extra_info = root.ParamsToString();
 	}
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<ProfilingNode>(*node)));
 	auto children = root.GetChildren();

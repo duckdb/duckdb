@@ -33,7 +33,24 @@ void ProfilingInfo::ResetSettings() {
 }
 
 void ProfilingInfo::ResetMetrics() {
-	metrics = {};
+    metrics.clear();
+
+    for (auto &metric : settings) {
+		switch (metric) {
+		case MetricsType::CPU_TIME:
+		case MetricsType::OPERATOR_TIMING: {
+			metrics[metric] = Value::CreateValue(0.0);
+			break;
+		}
+		case MetricsType::CUMULATIVE_CARDINALITY:
+		case MetricsType::OPERATOR_CARDINALITY: {
+			metrics[metric] = Value::CreateValue<uint64_t>(0);
+			break;
+		}
+		case MetricsType::EXTRA_INFO:
+			break;
+		}
+	}
 }
 
 bool ProfilingInfo::Enabled(const MetricsType setting) const {
