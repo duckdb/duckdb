@@ -75,7 +75,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 	for (auto &metric : settings) {
 		auto metric_str = StringUtil::Lower(EnumUtil::ToString(metric));
 		auto key_val = yyjson_mut_strcpy(doc, metric_str.c_str());
-		auto key_ptr = yyjson_get_str(reinterpret_cast<yyjson_val *>(key_val));
+		auto key_ptr = yyjson_mut_get_str(key_val);
 
 		if (metric == MetricsType::EXTRA_INFO) {
 			auto extra_info_obj = yyjson_mut_obj(doc);
@@ -95,6 +95,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 				}
 			}
 			yyjson_mut_obj_add_val(doc, dest, key_ptr, extra_info_obj);
+			continue;
 		}
 
 		if (metrics[metric].IsNull()) {
