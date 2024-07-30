@@ -94,6 +94,8 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCTERef &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPivot &op);
 
+	unique_ptr<PhysicalOperator> PlanTableScan(LogicalGet &op, unique_ptr<TableFilterSet> table_filters);
+	unique_ptr<PhysicalOperator> PlanTableInOutFunction(LogicalGet &op);
 	unique_ptr<PhysicalOperator> PlanAsOfJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> PlanComparisonJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> PlanDelimJoin(LogicalComparisonJoin &op);

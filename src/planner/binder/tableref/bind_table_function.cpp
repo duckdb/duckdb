@@ -239,35 +239,25 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
+	get->user_provided_names = column_name_alias;
+	get->user_provided_types = column_type_hint;
+
+	if (!column_type_hint.empty()) {
+		D_ASSERT(column_name_alias.size() == column_type_hint.size());
+		if (column_type_hint.size() > return_types.size()) {
+			throw BinderException("The provided schema contains %d columns, but the function only returns %d columns",
+			                      column_type_hint.size(), return_types.size());
+		}
+		return_types = column_type_hint;
+		return_names = column_name_alias;
+	}
+
 	if (table_function.in_out_function && !table_function.projection_pushdown) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);
 		}
 	}
-	if (!column_type_hint.empty()) {
-		if (column_type_hint.size() > return_types.size()) {
-			throw BinderException("The provided schema contains %d columns, but the function only returns %d columns",
-			                      column_type_hint.size(), return_types.size());
-		}
-		vector<unique_ptr<Expression>> select_list;
-		auto column_bindings = get->GetColumnBindings();
-		for (idx_t i = 0; i < column_type_hint.size(); i++) {
-			auto &type = column_type_hint[i];
-			auto &name = column_name_alias[i];
-			auto expression = make_uniq_base<Expression, BoundColumnRefExpression>(return_types[i], column_bindings[i]);
-			if (return_types[i] != type) {
-				expression = BoundCastExpression::AddCastToType(context, std::move(expression), type);
-			}
-			expression->alias = name;
-			select_list.push_back(std::move(expression));
-		}
-		auto result = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
-	}
-	if (column_type_hint.size() < return_types.size()) {
-		// We need to add a projection to filter out the columns we don't need
-	}
-	get->user_provided_names = column_name_alias;
-	get->user_provided_types = column_type_hint;
+
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
 	                              get->GetTable().get());
