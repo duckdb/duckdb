@@ -414,7 +414,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	    RequiredSpace(state.current_tuple_count, state.current_unique_count, state.current_dict_size, width);
 
 	const auto total_space = state.segment_count * state.info.GetBlockSize() + req_space;
-	return NumericCast<idx_t>(MINIMUM_COMPRESSION_RATIO * float(total_space));
+	return LossyNumericCast<idx_t>(MINIMUM_COMPRESSION_RATIO * float(total_space));
 }
 
 //===--------------------------------------------------------------------===//

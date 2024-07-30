@@ -196,7 +196,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
 			// logical type
 			if (schema_ele.logicalType.TIME.unit.__isset.MILLIS) {
-				return Value::TIMETZ(ParquetIntToTimeMsTZ(val));
+				return Value::TIMETZ(ParquetIntToTimeMsTZ(NumericCast<int32_t>(val)));
 			} else if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
 				return Value::TIMETZ(ParquetIntToTimeTZ(val));
 			} else if (schema_ele.logicalType.TIME.unit.__isset.NANOS) {

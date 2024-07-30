@@ -859,7 +859,7 @@ void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value ErrorsAsJsonSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json ? 1 : 0);
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json);
 }
 
 //===--------------------------------------------------------------------===//

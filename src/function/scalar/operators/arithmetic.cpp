@@ -858,8 +858,8 @@ hugeint_t DivideOperator::Operation(hugeint_t left, hugeint_t right) {
 
 template <>
 interval_t DivideOperator::Operation(interval_t left, int64_t right) {
-	left.days /= right;
-	left.months /= right;
+	left.days = UnsafeNumericCast<int32_t>(left.days / right);
+	left.months = UnsafeNumericCast<int32_t>(left.months / right);
 	left.micros /= right;
 	return left;
 }
