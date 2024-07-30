@@ -33,7 +33,7 @@ public:
 	string ctename;
 
 public:
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	vector<ColumnBinding> GetColumnBindings() override {
 		return children[1]->GetColumnBindings();
 	}

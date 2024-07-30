@@ -37,7 +37,7 @@ string_t IntToVarInt(Vector &result, T int_value) {
 	idx_t wb_idx = Varint::VARINT_HEADER_SIZE;
 	for (int i = static_cast<int>(data_byte_size) - 1; i >= 0; --i) {
 		if (is_negative) {
-			writable_blob[wb_idx++] = ~static_cast<char>(abs_value >> i * 8 & 0xFF);
+			writable_blob[wb_idx++] = static_cast<char>(~(abs_value >> i * 8 & 0xFF));
 		} else {
 			writable_blob[wb_idx++] = static_cast<char>(abs_value >> i * 8 & 0xFF);
 		}
@@ -83,14 +83,14 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 	idx_t wb_idx = Varint::VARINT_HEADER_SIZE;
 	for (int i = static_cast<int>(upper_byte_size) - 1; i >= 0; --i) {
 		if (is_negative) {
-			writable_blob[wb_idx++] = ~static_cast<char>(abs_value_upper >> i * 8 & 0xFF);
+			writable_blob[wb_idx++] = static_cast<char>(~(abs_value_upper >> i * 8 & 0xFF));
 		} else {
 			writable_blob[wb_idx++] = static_cast<char>(abs_value_upper >> i * 8 & 0xFF);
 		}
 	}
 	for (int i = static_cast<int>(data_byte_size - upper_byte_size) - 1; i >= 0; --i) {
 		if (is_negative) {
-			writable_blob[wb_idx++] = ~static_cast<char>(int_value.lower >> i * 8 & 0xFF);
+			writable_blob[wb_idx++] = static_cast<char>(~(int_value.lower >> i * 8 & 0xFF));
 		} else {
 			writable_blob[wb_idx++] = static_cast<char>(int_value.lower >> i * 8 & 0xFF);
 		}
@@ -237,7 +237,7 @@ bool DoubleToVarInt(T double_value, string_t &result_value, Vector &result) {
 		uint8_t byte = static_cast<uint8_t>(abs_value - truncated * 256);
 		abs_value = truncated;
 		if (is_negative) {
-			value.push_back(~static_cast<char>(byte));
+			value.push_back(static_cast<char>(~byte));
 		} else {
 			value.push_back(static_cast<char>(byte));
 		}

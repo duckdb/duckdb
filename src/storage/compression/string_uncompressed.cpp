@@ -370,7 +370,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 			                                                UnsafeNumericCast<idx_t>(offset));
 			memcpy(target_ptr, handle.Ptr() + offset, to_write);
 			remaining -= to_write;
-			offset += to_write;
+			offset += UnsafeNumericCast<int32_t>(to_write);
 			target_ptr += to_write;
 			if (remaining > 0) {
 				// read the next block

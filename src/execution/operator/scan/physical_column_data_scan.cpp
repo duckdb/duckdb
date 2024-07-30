@@ -109,26 +109,23 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 	state.SetPipelineSource(current, *this);
 }
 
-string PhysicalColumnDataScan::ParamsToString() const {
-	string result = "";
+InsertionOrderPreservingMap<string> PhysicalColumnDataScan::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	switch (type) {
 	case PhysicalOperatorType::DELIM_SCAN:
 		if (delim_index.IsValid()) {
-			result += "\n[INFOSEPARATOR]\n";
-			result += StringUtil::Format("delim_idx: %llu", delim_index.GetIndex());
+			result["Delim Index"] = StringUtil::Format("%llu", delim_index.GetIndex());
 		}
 		break;
 	case PhysicalOperatorType::CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
-		result += "\n[INFOSEPARATOR]\n";
-		result += StringUtil::Format("idx: %llu", cte_index);
+		result["CTE Index"] = StringUtil::Format("%llu", cte_index);
 		break;
 	}
 	default:
 		break;
 	}
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
+	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
 
