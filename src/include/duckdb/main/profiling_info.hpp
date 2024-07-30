@@ -23,7 +23,13 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
-enum class MetricsType : uint8_t { CPU_TIME, EXTRA_INFO, OPERATOR_CARDINALITY, OPERATOR_TIMING };
+enum class MetricsType : uint8_t {
+	CPU_TIME,
+	EXTRA_INFO,
+	CUMULATIVE_CARDINALITY,
+	OPERATOR_CARDINALITY,
+	OPERATOR_TIMING
+};
 
 struct MetricsTypeHashFunction {
 	uint64_t operator()(const MetricsType &index) const {
@@ -41,17 +47,10 @@ struct SettingSetFunctions {
 		if (setting == MetricsType::OPERATOR_TIMING && Enabled(settings, MetricsType::CPU_TIME)) {
 			return true;
 		}
+		if (setting == MetricsType::OPERATOR_CARDINALITY && Enabled(settings, MetricsType::CUMULATIVE_CARDINALITY)) {
+			return true;
+		}
 		return false;
-	}
-};
-
-struct Metrics {
-	double cpu_time;
-	InsertionOrderPreservingMap<string> extra_info;
-	idx_t operator_cardinality;
-	double operator_timing;
-
-	Metrics() : cpu_time(0), operator_cardinality(0), operator_timing(0) {
 	}
 };
 
@@ -59,7 +58,7 @@ class ProfilingInfo {
 public:
 	// set of metrics with their values; only enabled metrics are present in the set
 	profiler_settings_t settings;
-	Metrics metrics;
+	unordered_map<MetricsType, Value> metrics;
 
 public:
 	ProfilingInfo() = default;
@@ -82,7 +81,7 @@ public:
 	bool Enabled(const MetricsType setting) const;
 
 public:
-	string GetMetricAsString(MetricsType setting) const;
+	string GetMetricAsString(MetricsType setting);
 	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination);
 };
 } // namespace duckdb

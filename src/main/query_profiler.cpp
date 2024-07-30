@@ -136,8 +136,7 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		Finalize(*child);
 		if (op_node.type == PhysicalOperatorType::UNION &&
 		    op_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-			op_node.GetProfilingInfo().metrics.operator_cardinality +=
-			    child->GetProfilingInfo().metrics.operator_cardinality;
+
 		}
 	}
 }
@@ -147,14 +146,14 @@ void QueryProfiler::StartExplainAnalyze() {
 }
 
 static void GetTotalCPUTime(ProfilingNode &node) {
-	node.GetProfilingInfo().metrics.cpu_time = node.GetProfilingInfo().metrics.operator_timing;
-	if (node.GetChildCount() > 0) {
-		for (idx_t i = 0; i < node.GetChildCount(); i++) {
-			auto child = node.GetChild(i);
-			GetTotalCPUTime(*child);
-			node.GetProfilingInfo().metrics.cpu_time += child->GetProfilingInfo().metrics.cpu_time;
-		}
-	}
+//	node.GetProfilingInfo().metrics.cpu_time = node.GetProfilingInfo().metrics.operator_timing;
+//	if (node.GetChildCount() > 0) {
+//		for (idx_t i = 0; i < node.GetChildCount(); i++) {
+//			auto child = node.GetChild(i);
+//			GetTotalCPUTime(*child);
+//			node.GetProfilingInfo().metrics.cpu_time += child->GetProfilingInfo().metrics.cpu_time;
+//		}
+//	}
 }
 
 void QueryProfiler::EndQuery() {
@@ -177,7 +176,7 @@ void QueryProfiler::EndQuery() {
 			query_info.query = query;
 			query_info.GetProfilingInfo() = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-				query_info.GetProfilingInfo().metrics.operator_timing = main_query.Elapsed();
+//				query_info.GetProfilingInfo().metrics.operator_timing = main_query.Elapsed();
 			}
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::CPU_TIME)) {
 				GetTotalCPUTime(*root);
@@ -339,12 +338,12 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		D_ASSERT(entry != tree_map.end());
 		auto &tree_node = entry->second.get();
 
-		if (profiler.SettingEnabled(MetricsType::OPERATOR_TIMING)) {
-			tree_node.GetProfilingInfo().metrics.operator_timing += node.second.time;
-		}
-		if (profiler.SettingEnabled(MetricsType::OPERATOR_CARDINALITY)) {
-			tree_node.GetProfilingInfo().metrics.operator_cardinality += node.second.elements;
-		}
+//		if (profiler.SettingEnabled(MetricsType::OPERATOR_TIMING)) {
+//			tree_node.GetProfilingInfo().metrics.operator_timing += node.second.time;
+//		}
+//		if (profiler.SettingEnabled(MetricsType::OPERATOR_CARDINALITY)) {
+//			tree_node.GetProfilingInfo().metrics.operator_cardinality += node.second.elements;
+//		}
 	}
 	profiler.timings.clear();
 }
@@ -604,7 +603,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	node->depth = depth;
 	node->GetProfilingInfo() = ProfilingInfo(settings);
 	if (node->GetProfilingInfo().Enabled(MetricsType::EXTRA_INFO)) {
-		node->GetProfilingInfo().metrics.extra_info = root.ParamsToString();
+//		node->GetProfilingInfo().metrics.extra_info = root.ParamsToString();
 	}
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<ProfilingNode>(*node)));
 	auto children = root.GetChildren();
