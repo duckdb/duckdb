@@ -31,6 +31,8 @@ class QueryProfilingNode;
 // Recursive tree that mirrors the operator tree
 class ProfilingNode {
 public:
+	explicit ProfilingNode(ProfilingNodeType node_type) : node_type(node_type) {
+	}
 	virtual ~ProfilingNode() {};
 
 private:
@@ -42,6 +44,8 @@ public:
 	ProfilingNodeType node_type = ProfilingNodeType::OPERATOR;
 
 public:
+	virtual string GetName() const = 0;
+
 	idx_t GetChildCount() {
 		return children.size();
 	}
@@ -83,23 +87,37 @@ public:
 // Holds the top level query info
 class QueryProfilingNode : public ProfilingNode {
 public:
+	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::QUERY_ROOT;
+
+public:
+	explicit QueryProfilingNode(const string &query) : ProfilingNode(TYPE), query(query) {
+	}
 	~QueryProfilingNode() override {};
 
 public:
-	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::QUERY_ROOT;
-
+	string GetName() const override {
+		return EnumUtil::ToString(node_type);
+	}
 	string query;
 };
 
 class OperatorProfilingNode : public ProfilingNode {
 public:
+	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::OPERATOR;
+
+public:
+	OperatorProfilingNode(const string &name, PhysicalOperatorType type) : ProfilingNode(TYPE), name(name), type(type) {
+	}
 	~OperatorProfilingNode() override {};
 
 public:
-	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::OPERATOR;
+	string GetName() const override {
+		return name;
+	}
 
-	PhysicalOperatorType type;
+public:
 	string name;
+	PhysicalOperatorType type;
 };
 
 } // namespace duckdb
