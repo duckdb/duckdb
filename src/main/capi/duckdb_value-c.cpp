@@ -1,7 +1,10 @@
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/null_value.hpp"
+
+using duckdb::LogicalTypeId;
 
 static duckdb_value WrapValue(duckdb::Value *list_value) {
 	return reinterpret_cast<duckdb_value>(list_value);
@@ -30,125 +33,130 @@ duckdb_value duckdb_create_varchar(const char *text) {
 	return duckdb_create_varchar_length(text, strlen(text));
 }
 
-duckdb_value duckdb_create_int64(int64_t input) {
-	auto val = duckdb::Value::BIGINT(input);
-	return reinterpret_cast<duckdb_value>(new duckdb::Value(val));
+template <class T>
+static duckdb_value CAPICreateValue(T input) {
+	return WrapValue(new Value(Value::CreateValue<T>(input)));
+}
+
+template <class T, LogicalTypeId TYPE_ID>
+static T CAPIGetValue(duckdb_value val) {
+	auto &v = UnwrapValue(val);
+	if (!v.DefaultTryCastAs(TYPE_ID)) {
+		return duckdb::NullValue<T>();
+	}
+	return v.GetValue<T>();
 }
 
 duckdb_value duckdb_create_bool(bool input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::BOOLEAN(input)));
+	return CAPICreateValue(input);
 }
 bool duckdb_get_bool(duckdb_value val) {
-	return UnwrapValue(val).GetValue<bool>();
+	return CAPIGetValue<bool, LogicalTypeId::BOOLEAN>(val);
 }
-duckdb_value duckdb_create_tinyint(int8_t input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::TINYINT(input)));
+duckdb_value duckdb_create_int8(int8_t input) {
+	return CAPICreateValue(input);
 }
-int8_t duckdb_get_tinyint(duckdb_value val) {
-	return UnwrapValue(val).GetValue<int8_t>();
+int8_t duckdb_get_int8(duckdb_value val) {
+	return CAPIGetValue<int8_t, LogicalTypeId::TINYINT>(val);
 }
-duckdb_value duckdb_create_utinyint(uint8_t input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::UTINYINT(input)));
+duckdb_value duckdb_create_uint8(uint8_t input) {
+	return CAPICreateValue(input);
 }
-uint8_t duckdb_get_utinyint(duckdb_value val) {
-	return UnwrapValue(val).GetValue<uint8_t>();
+uint8_t duckdb_get_uint8(duckdb_value val) {
+	return CAPIGetValue<uint8_t, LogicalTypeId::UTINYINT>(val);
 }
-duckdb_value duckdb_create_smallint(int16_t input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::SMALLINT(input)));
+duckdb_value duckdb_create_int16(int16_t input) {
+	return CAPICreateValue(input);
 }
-int16_t duckdb_get_smallint(duckdb_value val) {
-	return UnwrapValue(val).GetValue<int16_t>();
+int16_t duckdb_get_int16(duckdb_value val) {
+	return CAPIGetValue<int16_t, LogicalTypeId::SMALLINT>(val);
 }
-duckdb_value duckdb_create_usmallint(uint16_t input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::USMALLINT(input)));
+duckdb_value duckdb_create_uint16(uint16_t input) {
+	return CAPICreateValue(input);
 }
-uint16_t duckdb_get_usmallint(duckdb_value val) {
-	return UnwrapValue(val).GetValue<uint16_t>();
+uint16_t duckdb_get_uint16(duckdb_value val) {
+	return CAPIGetValue<uint16_t, LogicalTypeId::USMALLINT>(val);
 }
-duckdb_value duckdb_create_integer(int32_t input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::INTEGER(input)));
+duckdb_value duckdb_create_int32(int32_t input) {
+	return CAPICreateValue(input);
 }
-int32_t duckdb_get_integer(duckdb_value val) {
-	return UnwrapValue(val).GetValue<int32_t>();
+int32_t duckdb_get_int32(duckdb_value val) {
+	return CAPIGetValue<int32_t, LogicalTypeId::INTEGER>(val);
 }
-duckdb_value duckdb_create_uinteger(uint32_t input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::UINTEGER(input)));
+duckdb_value duckdb_create_uint32(uint32_t input) {
+	return CAPICreateValue(input);
 }
-uint32_t duckdb_get_uinteger(duckdb_value val) {
-	return UnwrapValue(val).GetValue<uint32_t>();
+uint32_t duckdb_get_uint32(duckdb_value val) {
+	return CAPIGetValue<uint32_t, LogicalTypeId::UINTEGER>(val);
 }
-duckdb_value duckdb_create_ubigint(uint64_t input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::UBIGINT(input)));
+duckdb_value duckdb_create_uint64(uint64_t input) {
+	return CAPICreateValue(input);
 }
-uint64_t duckdb_get_ubigint(duckdb_value val) {
-	return UnwrapValue(val).GetValue<uint64_t>();
+uint64_t duckdb_get_uint64(duckdb_value val) {
+	return CAPIGetValue<uint64_t, LogicalTypeId::UBIGINT>(val);
 }
-duckdb_value duckdb_create_bigint(int64_t input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::BIGINT(input)));
+duckdb_value duckdb_create_int64(int64_t input) {
+	return CAPICreateValue(input);
 }
-int64_t duckdb_get_bigint(duckdb_value val) {
-	return UnwrapValue(val).GetValue<int64_t>();
-}
-duckdb_value duckdb_create_float(float input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::FLOAT(input)));
-}
-float duckdb_get_float(duckdb_value val) {
-	return UnwrapValue(val).GetValue<float>();
-}
-duckdb_value duckdb_create_double(double input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::DOUBLE(input)));
-}
-double duckdb_get_double(duckdb_value val) {
-	return UnwrapValue(val).GetValue<double>();
-}
-duckdb_value duckdb_create_date(duckdb_date input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::DATE(duckdb::date_t(input.days))));
-}
-duckdb_date duckdb_get_date(duckdb_value val) {
-	auto res = UnwrapValue(val).GetValue<duckdb::date_t>();
-	return {res.days};
-}
-duckdb_value duckdb_create_time(duckdb_time input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::TIME(duckdb::dtime_t(input.micros))));
-}
-duckdb_time duckdb_get_time(duckdb_value val) {
-	auto dtime = UnwrapValue(val).GetValue<duckdb::dtime_t>();
-	return {dtime.micros};
-}
-duckdb_value duckdb_create_time_tz_value(duckdb_time_tz value) {
-	return WrapValue(new duckdb::Value(duckdb::Value::TIMETZ(duckdb::dtime_tz_t(value.bits))));
-}
-duckdb_time_tz duckdb_get_time_tz(duckdb_value val) {
-	auto time_tz = UnwrapValue(val).GetValue<duckdb::dtime_tz_t>();
-	return {time_tz.bits};
-}
-duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP(duckdb::timestamp_t(input.micros))));
-}
-duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
-	auto timestamp = UnwrapValue(val).GetValue<duckdb::timestamp_t>();
-	return {timestamp.value};
-}
-duckdb_value duckdb_create_interval(duckdb_interval input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(input.months, input.days, input.micros)));
-}
-duckdb_interval duckdb_get_interval(duckdb_value val) {
-	auto interval = UnwrapValue(val).GetValue<duckdb::interval_t>();
-	return {interval.months, interval.days, interval.micros};
+int64_t duckdb_get_int64(duckdb_value val) {
+	return CAPIGetValue<int64_t, LogicalTypeId::BIGINT>(val);
 }
 duckdb_value duckdb_create_hugeint(duckdb_hugeint input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::HUGEINT(duckdb::hugeint_t(input.upper, input.lower))));
 }
 duckdb_hugeint duckdb_get_hugeint(duckdb_value val) {
-	auto res = UnwrapValue(val).GetValue<duckdb::hugeint_t>();
+	auto res = CAPIGetValue<duckdb::hugeint_t, LogicalTypeId::HUGEINT>(val);
 	return {res.lower, res.upper};
 }
 duckdb_value duckdb_create_uhugeint(duckdb_uhugeint input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::UHUGEINT(duckdb::uhugeint_t(input.upper, input.lower))));
 }
 duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val) {
-	auto res = UnwrapValue(val).GetValue<duckdb::uhugeint_t>();
+	auto res = CAPIGetValue<duckdb::uhugeint_t, LogicalTypeId::UHUGEINT>(val);
 	return {res.lower, res.upper};
+}
+duckdb_value duckdb_create_float(float input) {
+	return CAPICreateValue(input);
+}
+float duckdb_get_float(duckdb_value val) {
+	return CAPIGetValue<float, LogicalTypeId::FLOAT>(val);
+}
+duckdb_value duckdb_create_double(double input) {
+	return CAPICreateValue(input);
+}
+double duckdb_get_double(duckdb_value val) {
+	return CAPIGetValue<double, LogicalTypeId::DOUBLE>(val);
+}
+duckdb_value duckdb_create_date(duckdb_date input) {
+	return CAPICreateValue(date_t(input.days));
+}
+duckdb_date duckdb_get_date(duckdb_value val) {
+	return {CAPIGetValue<date_t, LogicalTypeId::DATE>(val).days};
+}
+duckdb_value duckdb_create_time(duckdb_time input) {
+	return CAPICreateValue(duckdb::dtime_t(input.micros));
+}
+duckdb_time duckdb_get_time(duckdb_value val) {
+	return {CAPIGetValue<duckdb::dtime_t, LogicalTypeId::TIME>(val).micros};
+}
+duckdb_value duckdb_create_time_tz_value(duckdb_time_tz input) {
+	return CAPICreateValue(duckdb::dtime_tz_t(input.bits));
+}
+duckdb_time_tz duckdb_get_time_tz(duckdb_value val) {
+	return {CAPIGetValue<duckdb::dtime_tz_t, LogicalTypeId::TIME_TZ>(val).bits};
+}
+duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
+	return CAPICreateValue(duckdb::timestamp_t(input.micros));
+}
+duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
+	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP>(val).value};
+}
+duckdb_value duckdb_create_interval(duckdb_interval input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(input.months, input.days, input.micros)));
+}
+duckdb_interval duckdb_get_interval(duckdb_value val) {
+	auto interval = CAPIGetValue<duckdb::interval_t, LogicalTypeId::INTERVAL>(val);
+	return {interval.months, interval.days, interval.micros};
 }
 duckdb_value duckdb_create_blob(const uint8_t *data, idx_t length) {
 	return WrapValue(new duckdb::Value(duckdb::Value::BLOB((const uint8_t *)data, length)));
@@ -161,9 +169,10 @@ duckdb_blob duckdb_get_blob(duckdb_value val) {
 	memcpy(result, str.c_str(), str.size());
 	return {result, str.size()};
 }
+
 duckdb_logical_type duckdb_get_value_type(duckdb_value val) {
 	auto &type = UnwrapValue(val).type();
-	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(type));
+	return (duckdb_logical_type)(&type);
 }
 
 char *duckdb_get_varchar(duckdb_value value) {
@@ -176,15 +185,6 @@ char *duckdb_get_varchar(duckdb_value value) {
 	result[str.size()] = '\0';
 	return result;
 }
-
-int64_t duckdb_get_int64(duckdb_value value) {
-	auto val = reinterpret_cast<duckdb::Value *>(value);
-	if (!val->DefaultTryCastAs(duckdb::LogicalType::BIGINT)) {
-		return 0;
-	}
-	return duckdb::BigIntValue::Get(*val);
-}
-
 duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *values) {
 	if (!type || !values) {
 		return nullptr;

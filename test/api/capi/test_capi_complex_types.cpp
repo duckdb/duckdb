@@ -314,16 +314,36 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 		duckdb_destroy_value(&value);                                                                                  \
 	}
 
-	TEST_VALUE(duckdb_create_bool(true), duckdb_get_bool, true);
+#define TEST_NUMERIC_INTERNAL(creator, value)                                                                          \
+	{                                                                                                                  \
+		TEST_VALUE(creator, duckdb_get_int8, value);                                                                   \
+		TEST_VALUE(creator, duckdb_get_uint8, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_int16, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_uint16, value);                                                                 \
+		TEST_VALUE(creator, duckdb_get_int32, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_uint32, value);                                                                 \
+		TEST_VALUE(creator, duckdb_get_int64, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_uint64, value);                                                                 \
+		TEST_VALUE(creator, duckdb_get_float, value);                                                                  \
+		TEST_VALUE(creator, duckdb_get_double, value);                                                                 \
+	}
 
-	TEST_VALUE(duckdb_create_tinyint(42), duckdb_get_tinyint, 42);
-	TEST_VALUE(duckdb_create_utinyint(32), duckdb_get_utinyint, 32);
-	TEST_VALUE(duckdb_create_smallint(42), duckdb_get_smallint, 42);
-	TEST_VALUE(duckdb_create_usmallint(42), duckdb_get_usmallint, 42);
-	TEST_VALUE(duckdb_create_integer(42), duckdb_get_integer, 42);
-	TEST_VALUE(duckdb_create_uinteger(42), duckdb_get_uinteger, 42);
-	TEST_VALUE(duckdb_create_bigint(42), duckdb_get_bigint, 42);
-	TEST_VALUE(duckdb_create_ubigint(42), duckdb_get_ubigint, 42);
+#define TEST_NUMERIC(value)                                                                                            \
+	{                                                                                                                  \
+		TEST_NUMERIC_INTERNAL(duckdb_create_int8(value), value);                                                       \
+		TEST_NUMERIC_INTERNAL(duckdb_create_uint8(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_int16(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_uint16(value), value);                                                     \
+		TEST_NUMERIC_INTERNAL(duckdb_create_int32(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_uint32(value), value);                                                     \
+		TEST_NUMERIC_INTERNAL(duckdb_create_int64(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_uint64(value), value);                                                     \
+		TEST_NUMERIC_INTERNAL(duckdb_create_float(value), value);                                                      \
+		TEST_NUMERIC_INTERNAL(duckdb_create_double(value), value);                                                     \
+	}
+
+	TEST_VALUE(duckdb_create_bool(true), duckdb_get_bool, true);
+	TEST_NUMERIC(42);
 
 	{
 		auto val = duckdb_create_hugeint({42, 42});
@@ -340,13 +360,31 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 		duckdb_destroy_value(&val);
 	}
 
-	TEST_VALUE(duckdb_create_float(42.0), duckdb_get_float, 42.0);
-	TEST_VALUE(duckdb_create_double(42.0), duckdb_get_double, 42.0);
+	TEST_VALUE(duckdb_create_float(0.5), duckdb_get_float, 0.5);
+	TEST_VALUE(duckdb_create_float(0.5), duckdb_get_double, 0.5);
+	TEST_VALUE(duckdb_create_double(0.5), duckdb_get_double, 0.5);
 
 	{
 		auto val = duckdb_create_date({1});
 		auto result = duckdb_get_date(val);
 		REQUIRE(result.days == 1);
+		// conversion failure (date -> numeric)
+		REQUIRE(duckdb_get_int8(val) == NumericLimits<int8_t>::Minimum());
+		REQUIRE(duckdb_get_uint8(val) == NumericLimits<uint8_t>::Minimum());
+		REQUIRE(duckdb_get_int16(val) == NumericLimits<int16_t>::Minimum());
+		REQUIRE(duckdb_get_uint16(val) == NumericLimits<uint16_t>::Minimum());
+		REQUIRE(duckdb_get_int32(val) == NumericLimits<int32_t>::Minimum());
+		REQUIRE(duckdb_get_uint32(val) == NumericLimits<uint32_t>::Minimum());
+		REQUIRE(duckdb_get_int64(val) == NumericLimits<int64_t>::Minimum());
+		REQUIRE(duckdb_get_uint64(val) == NumericLimits<uint64_t>::Minimum());
+		REQUIRE(std::isnan(duckdb_get_float(val)));
+		REQUIRE(std::isnan(duckdb_get_double(val)));
+		auto min_hugeint = duckdb_get_hugeint(val);
+		REQUIRE(min_hugeint.lower == NumericLimits<uint64_t>::Minimum());
+		REQUIRE(min_hugeint.upper == NumericLimits<int64_t>::Minimum());
+		auto min_uhugeint = duckdb_get_uhugeint(val);
+		REQUIRE(min_uhugeint.lower == NumericLimits<uint64_t>::Minimum());
+		REQUIRE(min_uhugeint.upper == NumericLimits<uint64_t>::Minimum());
 		duckdb_destroy_value(&val);
 	}
 
@@ -393,7 +431,6 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 		auto val = duckdb_create_bool(true);
 		auto result = duckdb_get_value_type(val);
 		REQUIRE(duckdb_get_type_id(result) == DUCKDB_TYPE_BOOLEAN);
-		duckdb_destroy_logical_type(&result);
 		duckdb_destroy_value(&val);
 	}
 
