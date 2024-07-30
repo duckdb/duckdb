@@ -50,7 +50,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			// increment the total read variables as required
 			stream_data.out_buff_start += available;
 			total_read += available;
-			remaining -= available;
+			remaining = UnsafeNumericCast<int64_t>(UnsafeNumericCast<idx_t>(remaining) - available);
 			if (remaining == 0) {
 				// done! read enough
 				return UnsafeNumericCast<int64_t>(total_read);

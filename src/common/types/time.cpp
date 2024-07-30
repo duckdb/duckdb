@@ -103,7 +103,7 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 			}
 		}
 		if (nanos) {
-			*nanos = micros % Interval::NANOS_PER_MICRO;
+			*nanos = UnsafeNumericCast<int32_t>(micros % Interval::NANOS_PER_MICRO);
 			micros /= Interval::NANOS_PER_MICRO;
 		}
 	}

@@ -127,6 +127,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(duckdb_result_error(nullptr) == nullptr);
 	REQUIRE(duckdb_nullmask_data(nullptr, 0) == nullptr);
 	REQUIRE(duckdb_column_data(nullptr, 0) == nullptr);
+	REQUIRE(duckdb_result_error_type(nullptr) == DUCKDB_ERROR_INVALID);
 }
 
 TEST_CASE("Test different types of C API", "[capi]") {

@@ -34,6 +34,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"reorder_filter", OptimizerType::REORDER_FILTER},
     {"join_filter_pushdown", OptimizerType::JOIN_FILTER_PUSHDOWN},
     {"extension", OptimizerType::EXTENSION},
+    {"materialized_cte", OptimizerType::MATERIALIZED_CTE},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

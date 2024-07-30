@@ -235,8 +235,8 @@ void DuckTransaction::Rollback() noexcept {
 	undo_buffer.Rollback();
 }
 
-void DuckTransaction::Cleanup() {
-	undo_buffer.Cleanup();
+void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
+	undo_buffer.Cleanup(lowest_active_transaction);
 }
 
 void DuckTransaction::SetReadWrite() {
