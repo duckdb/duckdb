@@ -1,0 +1,7 @@
+# name: benchmark/tpcds/sf1/q74.benchmark
+# description: Run query 74 from the TPC-DS benchmark
+# group: [sf1]
+
+template benchmark/tpcds/sf1/tpcds_sf1.benchmark.in
+QUERY_NUMBER=74
+QUERY_NUMBER_PADDED=74
