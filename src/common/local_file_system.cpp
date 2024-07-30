@@ -372,32 +372,48 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 			rc = fcntl(fd, F_SETLK, &fl);
 			// Retain the original error.
 			int retained_errno = errno;
-			if (rc == -1) {
-				string message;
-				// try to find out who is holding the lock using F_GETLK
-				rc = fcntl(fd, F_GETLK, &fl);
-				if (rc == -1) { // fnctl does not want to help us
-					message = strerror(errno);
-				} else {
-					message = AdditionalProcessInfo(*this, fl.l_pid);
+			bool has_error = rc == -1;
+			string extended_error;
+			if (has_error) {
+				if (retained_errno == ENOTSUP) {
+					// file lock not supported for this file system
+					if (flags.Lock() == FileLockType::READ_LOCK) {
+						// for read-only, we ignore not-supported errors
+						has_error = false;
+						errno = 0;
+					} else {
+						extended_error = "File locks are not supported for this file system, cannot open the file in "
+						                 "read-write mode. Try opening the file in read-only mode";
+					}
 				}
-
-				if (flags.Lock() == FileLockType::WRITE_LOCK) {
-					// maybe we can get a read lock instead and tell this to the user.
-					fl.l_type = F_RDLCK;
-					rc = fcntl(fd, F_SETLK, &fl);
-					if (rc != -1) { // success!
-						message += ". However, you would be able to open this database in read-only mode, e.g. by "
-						           "using the -readonly parameter in the CLI";
+			}
+			if (has_error) {
+				if (extended_error.empty()) {
+					// try to find out who is holding the lock using F_GETLK
+					rc = fcntl(fd, F_GETLK, &fl);
+					if (rc == -1) { // fnctl does not want to help us
+						extended_error = strerror(errno);
+					} else {
+						extended_error = AdditionalProcessInfo(*this, fl.l_pid);
+					}
+					if (flags.Lock() == FileLockType::WRITE_LOCK) {
+						// maybe we can get a read lock instead and tell this to the user.
+						fl.l_type = F_RDLCK;
+						rc = fcntl(fd, F_SETLK, &fl);
+						if (rc != -1) { // success!
+							extended_error +=
+							    ". However, you would be able to open this database in read-only mode, e.g. by "
+							    "using the -readonly parameter in the CLI";
+						}
 					}
 				}
 				rc = close(fd);
 				if (rc == -1) {
-					message += ". Also, failed closing file";
+					extended_error += ". Also, failed closing file";
 				}
-				message += ". See also https://duckdb.org/docs/connect/concurrency";
+				extended_error += ". See also https://duckdb.org/docs/connect/concurrency";
 				throw IOException("Could not set lock on file \"%s\": %s", {{"errno", std::to_string(retained_errno)}},
-				                  path, message);
+				                  path, extended_error);
 			}
 		}
 	}

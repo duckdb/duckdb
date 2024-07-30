@@ -74,7 +74,7 @@ public:
 	}
 
 public:
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	//! Schedules tasks to merge the data during the Finalize phase
 	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalSinkState &state);
