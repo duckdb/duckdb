@@ -186,6 +186,10 @@ public:
 	inline void SetGate() {
 		SetMetadata(GetMetadata() | AND_GATE);
 	}
+	//! Removes the gate flag from a node.
+	inline void ResetGate() {
+		SetMetadata(GetMetadata() & ~AND_GATE);
+	}
 
 	//! Assign operator
 	inline void operator=(const IndexPointer &ptr) {
@@ -196,9 +200,9 @@ private:
 	//! Merge two nodes.
 	bool MergeNodes(ART &art, Node &other, bool inside_gate);
 	//! Reduce r_node's prefix and insert it into l_node, or recurse.
-	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos, bool inside_gate);
+	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t mismatch_pos, bool inside_gate);
 	//! Split l_node and reduce r_node, and insert them into a new Node4.
-	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos);
+	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t mismatch_pos);
 	//! Merges two prefixes.
 	bool MergePrefixes(ART &art, Node &other, bool inside_gate);
 };

@@ -642,13 +642,12 @@ bool ART::Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference
 	case NType::PREFIX: {
 		// If this is a prefix node, we traverse the prefix.
 		reference<Node> next_node(node);
-		auto mismatch_position =
-		    Prefix::Traverse<Prefix, Node>(*this, next_node, key, depth, &Node::RefMutable<Prefix>);
+		auto mismatch_pos = Prefix::Traverse<Prefix, Node>(*this, next_node, key, depth, &Node::RefMutable<Prefix>);
 
 		// We recurse into the next node, if
 		// (1) the prefix matches the key, or
 		// (2) we reach a gate (which can start with a PREFIX node).
-		if (mismatch_position == DConstants::INVALID_INDEX) {
+		if (mismatch_pos == DConstants::INVALID_INDEX) {
 			if (next_node.get().GetType() != NType::PREFIX || next_node.get().IsGate()) {
 				return Insert(next_node, key, depth, row_id_key, inside_gate);
 			}
@@ -657,8 +656,8 @@ bool ART::Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference
 		// If the prefix does not match the key, we create a new Node4. It has two children, which are
 		// the remaining part of the prefix, and the new inlined leaf.
 		Node remaining_prefix;
-		auto prefix_byte = Prefix::GetByte(*this, next_node, mismatch_position);
-		auto freed_gate = Prefix::Split(*this, next_node, remaining_prefix, mismatch_position);
+		auto prefix_byte = Prefix::GetByte(*this, next_node, UnsafeNumericCast<uint8_t>(mismatch_pos));
+		auto freed_gate = Prefix::Split(*this, next_node, remaining_prefix, UnsafeNumericCast<uint8_t>(mismatch_pos));
 		Node4::New(*this, next_node);
 		if (freed_gate) {
 			next_node.get().SetGate();

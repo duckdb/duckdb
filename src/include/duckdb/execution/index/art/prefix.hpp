@@ -18,6 +18,10 @@ class ARTKey;
 //! PrefixInlined is a special node containing up to PREFIX_SIZE bytes and a byte for the count.
 class PrefixInlined {
 public:
+	static constexpr NType PREFIX = NType::PREFIX;
+	static constexpr NType INLINED = NType::PREFIX_INLINED;
+
+public:
 	PrefixInlined() = delete;
 	PrefixInlined(const PrefixInlined &) = delete;
 	PrefixInlined &operator=(const PrefixInlined &) = delete;
@@ -35,8 +39,6 @@ public:
 	Node ptr;
 
 public:
-	//! Get a new empty prefix node.
-	static Prefix &New(ART &art, Node &node);
 	//! Get a new chain of prefix nodes. The node parameter holds the tail of the chain.
 	static void New(ART &art, reference<Node> &node, const ARTKey &key, uint32_t depth, uint32_t count);
 
@@ -65,7 +67,7 @@ public:
 	static bool Traverse(ART &art, reference<Node> &l, reference<Node> &r, idx_t &mismatch_pos, bool inside_gate);
 
 	//! Returns the byte at position.
-	static uint8_t GetByte(const ART &art, const Node &node, const idx_t pos);
+	static uint8_t GetByte(const ART &art, const Node &node, uint8_t pos);
 
 	//! Removes the first n bytes from the prefix.
 	//! Shifts all subsequent bytes by n. Frees empty prefix nodes.
@@ -74,7 +76,7 @@ public:
 	//! prefix_node points to the node that replaces the split byte.
 	//! child_node points to the remaining node after the split.
 	//! Returns true, if a gate was freed.
-	static bool Split(ART &art, Node &node, Node &child, idx_t pos);
+	static bool Split(ART &art, reference<Node> &node, Node &child, uint8_t pos);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
@@ -87,9 +89,8 @@ public:
 
 	//! Appends the other_prefix and all its subsequent prefix nodes to this prefix node.
 	//! Also frees all copied/appended nodes
-	void Append(ART &art, Node other_prefix);
-	//! Appends the byte to this prefix node, or creates a subsequent prefix node,
-	//! if this node is full
-	Prefix &Append(ART &art, const uint8_t byte);
+	void Append(ART &art, Node other);
+	//! Appends the byte.
+	Prefix &Append(ART &art, uint8_t byte);
 };
 } // namespace duckdb

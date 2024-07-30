@@ -53,7 +53,7 @@ bool Node::Merge(ART &art, Node &other, bool inside_gate) {
 	return true;
 }
 
-bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos, bool inside_gate) {
+bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t mismatch_pos, bool inside_gate) {
 	// r_node's prefix contains l_node's prefix.
 	// l_node must be a node allowing child nodes.
 	D_ASSERT(l_node.IsNode());
@@ -76,21 +76,23 @@ bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, idx_t misma
 	return true;
 }
 
-void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, idx_t mismatch_pos) {
+void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t mismatch_pos) {
 	Node l_child;
 	auto l_byte = Prefix::GetByte(art, l_node, mismatch_pos);
-	auto freed_gate = Prefix::Split(art, l_node, l_child, mismatch_pos);
 
-	Node4::New(art, l_node);
+	reference<Node> l_node_ref(l_node);
+	auto freed_gate = Prefix::Split(art, l_node_ref, l_child, mismatch_pos);
+
+	Node4::New(art, l_node_ref);
 	if (freed_gate) {
-		l_node.SetGate();
+		l_node_ref.get().SetGate();
 	}
 
 	// Insert the children.
-	Node4::InsertChild(art, l_node, l_byte, l_child);
+	Node4::InsertChild(art, l_node_ref, l_byte, l_child);
 	auto r_byte = Prefix::GetByte(art, r_node, mismatch_pos);
 	Prefix::Reduce(art, r_node, mismatch_pos);
-	Node4::InsertChild(art, l_node, r_byte, r_node);
+	Node4::InsertChild(art, l_node_ref, r_byte, r_node);
 	r_node.Clear();
 }
 
@@ -119,11 +121,11 @@ bool Node::MergePrefixes(ART &art, Node &other, bool inside_gate) {
 
 	// l_prefix contains r_prefix
 	if (l_node.get().IsPrefix() || !r_node.get().IsPrefix()) {
-		return PrefixContainsOther(art, l_node, r_node, mismatch_pos, inside_gate);
+		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(mismatch_pos), inside_gate);
 	}
 
 	// The prefixes differ.
-	MergeIntoNode4(art, l_node, r_node, mismatch_pos);
+	MergeIntoNode4(art, l_node, r_node, UnsafeNumericCast<uint8_t>(mismatch_pos));
 	return true;
 }
 
