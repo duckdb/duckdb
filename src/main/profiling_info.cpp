@@ -35,7 +35,13 @@ void ProfilingInfo::ResetSettings() {
 void ProfilingInfo::ResetMetrics() {
     metrics.clear();
 
-    for (auto &metric : settings) {
+	auto default_settings = DefaultSettings();
+
+    for (auto &metric : default_settings) {
+		if (!Enabled(metric)) {
+			continue;
+		}
+
 		switch (metric) {
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
@@ -87,6 +93,29 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) {
 	}
 	return metrics[setting].ToString();
 }
+
+string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
+	if (!Enabled(setting)) {
+		throw InternalException("Metric %s not enabled", EnumUtil::ToString(setting));
+	}
+
+	if (setting == MetricsType::EXTRA_INFO) {
+		string result;
+		for (auto &it : extra_info) {
+			if (!result.empty()) {
+				result += ", ";
+			}
+			result += StringUtil::Format("%s: %s", it.first, it.second);
+		}
+		return "\"" + result + "\"";
+	}
+
+	if (metrics.at(setting).IsNull()) {
+		return "0";
+	}
+	return metrics.at(setting).ToString();
+}
+
 
 void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) {
 	for (auto &metric : settings) {

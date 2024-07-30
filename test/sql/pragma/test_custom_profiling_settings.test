@@ -31,6 +31,7 @@ SELECT unnest(res) from (
 )
 ----
 "CPU_TIME": "true"
+"CUMULATIVE_CARDINALITY": "true"
 "EXTRA_INFO": "true"
 "OPERATOR_CARDINALITY": "true"
 "OPERATOR_TIMING": "true"

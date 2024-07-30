@@ -64,6 +64,7 @@ public:
 public:
 	ProfilingInfo() = default;
 	explicit ProfilingInfo(profiler_settings_t &n_settings) : settings(n_settings) {
+		ResetMetrics();
 	}
 	ProfilingInfo(ProfilingInfo &) = default;
 	ProfilingInfo &operator=(ProfilingInfo const &) = default;
@@ -83,6 +84,7 @@ public:
 
 public:
 	string GetMetricAsString(MetricsType setting);
+	string GetMetricAsString(MetricsType setting) const;
 	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination);
 
 public:
