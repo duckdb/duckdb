@@ -2094,6 +2094,15 @@ Returns the blob value of the given value.
 DUCKDB_API duckdb_blob duckdb_get_blob(duckdb_value val);
 
 /*!
+Obtains a string representation of the given value.
+The result must be destroyed with `duckdb_free`.
+
+* value: The value
+* returns: The string value. This must be destroyed with `duckdb_free`.
+*/
+DUCKDB_API char *duckdb_get_varchar(duckdb_value value);
+
+/*!
 Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.
 
 * @param type The type of the struct.
@@ -2124,14 +2133,6 @@ Must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
-/*!
-Obtains a string representation of the given value.
-The result must be destroyed with `duckdb_free`.
-
-* value: The value
-* returns: The string value. This must be destroyed with `duckdb_free`.
-*/
-DUCKDB_API char *duckdb_get_varchar(duckdb_value value);
 
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
