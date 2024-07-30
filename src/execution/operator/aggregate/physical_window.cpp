@@ -353,6 +353,8 @@ public:
 	bool HasUnfinishedTasks() const {
 		return !stopped && finished < tasks.size();
 	}
+	//! Try to advance the group stage
+	bool TryPrepareNextStage();
 	//! Get the next task given the current state
 	bool TryNextTask(TaskPtr &task);
 	//! Finish a task
@@ -558,12 +560,8 @@ public:
 	bool TaskFinished() const {
 		return !task || task->begin_idx == task->end_idx;
 	}
-	//! Does the task stage match the group stage?
-	bool IsBlocked() const;
 	//! Assign the next task
 	bool TryAssignTask();
-	//! Try to advance the group stage
-	bool TryPrepareNextStage();
 	//! Execute a step in the current task
 	void ExecuteTask(DataChunk &chunk);
 
@@ -696,13 +694,19 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
 
 	//	If the next task matches the current state of its group, then we can use it
 	//	Otherwise block.
-	task = &tasks[next_task++];
+	task = &tasks[next_task];
 
 	auto &gpart = *gsink.global_partition;
 	auto &window_hash_group = gpart.window_hash_groups[task->group_idx];
 	auto group_stage = window_hash_group->GetStage();
 
-	return (task->stage == group_stage);
+	if (task->stage == group_stage) {
+		++next_task;
+		return true;
+	}
+
+	task = nullptr;
+	return false;
 }
 
 void WindowGlobalSourceState::FinishTask(TaskPtr task) {
@@ -730,24 +734,13 @@ bool WindowLocalSourceState::TryAssignTask() {
 	return gsource.TryNextTask(task);
 }
 
-bool WindowLocalSourceState::IsBlocked() const {
-	D_ASSERT(task);
-
-	auto &gsink = gsource.gsink;
-	auto &gpart = *gsink.global_partition;
-	auto &window_hash_group = gpart.window_hash_groups[task->group_idx];
-	auto group_stage = window_hash_group->GetStage();
-
-	return (task->stage != group_stage);
-}
-
-bool WindowLocalSourceState::TryPrepareNextStage() {
-	if (!task) {
+bool WindowGlobalSourceState::TryPrepareNextStage() {
+	if (next_task >= tasks.size() || stopped) {
 		return true;
 	}
 
-	auto &gsink = gsource.gsink;
-	window_hash_group = gsink.global_partition->window_hash_groups[task->group_idx].get();
+	auto task = &tasks[next_task];
+	auto window_hash_group = gsink.global_partition->window_hash_groups[task->group_idx].get();
 	return window_hash_group->TryPrepareNextStage();
 }
 
@@ -882,8 +875,7 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
 
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
-		bool can_execute = lsource.TaskFinished() ? lsource.TryAssignTask() : !lsource.IsBlocked();
-		if (can_execute) {
+		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
 			try {
 				lsource.ExecuteTask(chunk);
 			} catch (...) {
@@ -892,7 +884,7 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 			}
 		} else {
 			lock_guard<mutex> guard(gsource.lock);
-			if (lsource.TryPrepareNextStage() || !gsource.HasMoreTasks()) {
+			if (gsource.TryPrepareNextStage() || !gsource.HasUnfinishedTasks()) {
 				for (auto &state : gsource.blocked_tasks) {
 					state.Callback();
 				}
