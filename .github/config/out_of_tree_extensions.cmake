@@ -101,6 +101,7 @@ duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
         GIT_TAG 50b7870be099186f195bc72bac5e9e11247ee2f9
+        APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith
@@ -137,5 +138,6 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
             GIT_TAG 4dd5963cc5f7f04f81a0ea308b104e65791d9975
+            APPLY_PATCHES
             )
 endif()
