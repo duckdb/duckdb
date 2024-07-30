@@ -2133,7 +2133,6 @@ Must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
-
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
 //===--------------------------------------------------------------------===//
