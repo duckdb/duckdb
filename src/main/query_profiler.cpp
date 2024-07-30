@@ -176,9 +176,14 @@ void QueryProfiler::EndQuery() {
 			query_info.query = query;
 			query_info.GetProfilingInfo() = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-				query_info.GetProfilingInfo().metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();			}
+				query_info.GetProfilingInfo().metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();
+			}
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::CPU_TIME)) {
 				GetCumulativeMetric<double>(*root, MetricsType::CPU_TIME, MetricsType::OPERATOR_TIMING);
+			}
+			if (query_info.GetProfilingInfo().Enabled(MetricsType::CUMULATIVE_CARDINALITY)) {
+				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_CARDINALITY,
+				                           MetricsType::OPERATOR_CARDINALITY);
 			}
 		}
 
@@ -335,14 +340,14 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		auto &op = node.first.get();
 		auto entry = tree_map.find(op);
 		D_ASSERT(entry != tree_map.end());
-//		auto &tree_node = entry->second.get();
+		auto &tree_node = entry->second.get();
 
-//		if (profiler.SettingEnabled(MetricsType::OPERATOR_TIMING)) {
-//			tree_node.GetProfilingInfo().metrics.operator_timing += node.second.time;
-//		}
-//		if (profiler.SettingEnabled(MetricsType::OPERATOR_CARDINALITY)) {
-//			tree_node.GetProfilingInfo().metrics.operator_cardinality += node.second.elements;
-//		}
+		if (profiler.SettingEnabled(MetricsType::OPERATOR_TIMING)) {
+			tree_node.GetProfilingInfo().AddToMetric<double>(MetricsType::OPERATOR_TIMING, node.second.time);
+		}
+		if (profiler.SettingEnabled(MetricsType::OPERATOR_CARDINALITY)) {
+			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements);
+		}
 	}
 	profiler.timings.clear();
 }
