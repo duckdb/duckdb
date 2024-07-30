@@ -39,7 +39,7 @@ public:
 		return function.in_out_function_final;
 	}
 
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 private:
 	//! The table function
