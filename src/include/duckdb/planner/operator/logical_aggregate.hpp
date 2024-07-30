@@ -40,7 +40,7 @@ public:
 	vector<unique_ptr<BaseStatistics>> group_stats;
 
 public:
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	vector<ColumnBinding> GetColumnBindings() override;
 

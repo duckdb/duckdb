@@ -18,6 +18,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
@@ -90,6 +91,7 @@ public:
 		return bound_columns;
 	}
 
+	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	ErrorData Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
 	//! Returns the STRUCT_EXTRACT operator expression
@@ -114,8 +116,7 @@ public:
 	//! Entry point for qualifying the column references of the expression
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
 
-	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
-	                          bool equality_only = false);
+	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type);
 	static void TestCollation(ClientContext &context, const string &collation);
 
 	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message);
@@ -128,6 +129,7 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
+	virtual bool TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result);
 	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
 
 	//! Bind the given expression. Unlike Bind(), this does *not* mute the given ParsedExpression.
@@ -135,10 +137,19 @@ public:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
 
-	//! Recursively replaces macro parameters with the provided input parameters
+	//! FIXME: Generalise this for extensibility.
+	//! Recursively replaces macro parameters with the provided input parameters.
 	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
-	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
+	//! Enables special-handling of lambda parameters during macro replacement by tracking them in the lambda_params
+	//! vector.
 	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+	//! Recursively qualifies column references in ON CONFLICT DO UPDATE SET expressions.
+	void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
+	                        vector<unordered_set<string>> &lambda_params);
+	//! Enables special-handling of lambda parameters during ON CONFLICT TO UPDATE SET qualification by tracking them in
+	//! the lambda_params vector.
+	void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
+	                                vector<unordered_set<string>> &lambda_params);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
@@ -156,7 +167,7 @@ protected:
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
-	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth);
+	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth, bool root_expression);
 	BindResult BindExpression(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
@@ -180,8 +191,10 @@ protected:
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
 	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
-	LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 	LogicalType ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+
+	BindResult BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
@@ -194,6 +207,9 @@ protected:
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
+	optional_ptr<CatalogEntry> GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
+	                                           const string &name, OnEntryNotFound on_entry_not_found,
+	                                           QueryErrorContext &error_context);
 
 	Binder &binder;
 	ClientContext &context;
@@ -202,9 +218,6 @@ protected:
 
 	//! Returns true if the function name is an alias for the UNNEST function
 	static bool IsUnnestFunction(const string &function_name);
-	//! Returns true, if the function contains a lambda expression and is not the '->>' operator
-	static bool IsLambdaFunction(const FunctionExpression &function);
-	//! Returns the bind result of binding a lambda or JSON function
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func);
 };
 

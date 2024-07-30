@@ -467,6 +467,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 
 	auto current_index = meta_data.vector_data_index;
 	idx_t remaining = copy_count;
+	auto block_size = meta_data.segment.allocator->GetBufferManager().GetBlockSize();
 	while (remaining > 0) {
 		// how many values fit in the current string vector
 		idx_t vector_remaining =
@@ -485,19 +486,18 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			if (entry.IsInlined()) {
 				continue;
 			}
-			if (heap_size + entry.GetSize() > Storage::BLOCK_SIZE) {
+			if (heap_size + entry.GetSize() > block_size) {
 				break;
 			}
 			heap_size += entry.GetSize();
 		}
 
 		if (vector_remaining != 0 && append_count == 0) {
-			// single string is longer than Storage::BLOCK_SIZE
-			// we allocate one block at a time for long strings
+			// The string exceeds Storage::DEFAULT_BLOCK_SIZE, so we allocate one block at a time for long strings.
 			auto source_idx = source_data.sel->get_index(offset + append_count);
 			D_ASSERT(source_data.validity.RowIsValid(source_idx));
 			D_ASSERT(!source_entries[source_idx].IsInlined());
-			D_ASSERT(source_entries[source_idx].GetSize() > Storage::BLOCK_SIZE);
+			D_ASSERT(source_entries[source_idx].GetSize() > block_size);
 			heap_size += source_entries[source_idx].GetSize();
 			append_count++;
 		}
@@ -690,8 +690,16 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 		}
 	}
 
-	child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
-	                        array_size * copy_count);
+	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	// If the array is constant, we need to copy the child vector n times
+	if (is_constant) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
+		}
+	} else {
+		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+		                        copy_count * array_size);
+	}
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {

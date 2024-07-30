@@ -185,6 +185,10 @@ shared_ptr<Relation> Relation::Aggregate(const string &aggregate_list) {
 	return make_shared_ptr<AggregateRelation>(shared_from_this(), std::move(expression_list));
 }
 
+shared_ptr<Relation> Relation::Aggregate(vector<unique_ptr<ParsedExpression>> expressions) {
+	return make_shared_ptr<AggregateRelation>(shared_from_this(), std::move(expressions));
+}
+
 shared_ptr<Relation> Relation::Aggregate(const string &aggregate_list, const string &group_list) {
 	auto expression_list = Parser::ParseExpressionList(aggregate_list, context.GetContext()->GetParserOptions());
 	auto groups = Parser::ParseGroupByList(group_list, context.GetContext()->GetParserOptions());
@@ -387,12 +391,16 @@ string Relation::RenderWhitespace(idx_t depth) {
 	return string(depth * 2, ' ');
 }
 
+void Relation::AddExternalDependency(shared_ptr<ExternalDependency> dependency) {
+	external_dependencies.push_back(std::move(dependency));
+}
+
 vector<shared_ptr<ExternalDependency>> Relation::GetAllDependencies() {
 	vector<shared_ptr<ExternalDependency>> all_dependencies;
 	Relation *cur = this;
 	while (cur) {
-		if (cur->extra_dependencies) {
-			all_dependencies.push_back(cur->extra_dependencies);
+		for (auto &dep : cur->external_dependencies) {
+			all_dependencies.push_back(dep);
 		}
 		cur = cur->ChildRelation();
 	}

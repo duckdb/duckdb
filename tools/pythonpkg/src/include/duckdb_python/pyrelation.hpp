@@ -25,33 +25,6 @@
 
 namespace duckdb {
 
-struct DuckDBPyConnection;
-
-class PythonDependencies : public ExternalDependency {
-public:
-	explicit PythonDependencies() : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-	}
-	~PythonDependencies() override {
-		py::gil_scoped_acquire gil;
-		py_object_list.clear();
-	}
-
-	explicit PythonDependencies(py::function map_function)
-	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
-	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
-	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(std::move(py_object));
-	};
-	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object_original,
-	                            unique_ptr<RegisteredObject> py_object_copy)
-	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(std::move(py_object_original));
-		py_object_list.push_back(std::move(py_object_copy));
-	};
-	py::function map_function;
-	vector<unique_ptr<RegisteredObject>> py_object_list;
-};
-
 struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
@@ -76,15 +49,14 @@ public:
 
 	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);
 	unique_ptr<DuckDBPyRelation> ProjectFromTypes(const py::object &types);
-	unique_ptr<DuckDBPyRelation> Project(const py::args &args, const py::kwargs &kwargs = py::kwargs());
-
+	unique_ptr<DuckDBPyRelation> Project(const py::args &args, const string &groups = "");
 	unique_ptr<DuckDBPyRelation> Filter(const py::object &expr);
 	unique_ptr<DuckDBPyRelation> FilterFromExpression(const string &expr);
 	unique_ptr<DuckDBPyRelation> Limit(int64_t n, int64_t offset = 0);
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
 	unique_ptr<DuckDBPyRelation> Sort(const py::args &args);
 
-	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Aggregate(const py::object &expr, const string &groups = "");
 
 	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name, const string &aggregated_columns,
 	                                               const string &groups = "", const string &function_parameter = "",
@@ -274,6 +246,8 @@ public:
 	static bool IsRelation(const py::object &object);
 
 	bool CanBeRegisteredBy(Connection &con);
+	bool CanBeRegisteredBy(ClientContext &context);
+	bool CanBeRegisteredBy(shared_ptr<ClientContext> &context);
 
 	Relation &GetRel();
 

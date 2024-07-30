@@ -36,6 +36,7 @@ struct CommonTableExpressionInfo;
 struct GroupingExpressionMap;
 class OnConflictInfo;
 class UpdateSetInfo;
+class MacroFunction;
 struct ParserOptions;
 struct PivotColumn;
 struct PivotColumnEntry;
@@ -158,6 +159,8 @@ private:
 	unique_ptr<DeleteStatement> TransformDelete(duckdb_libpgquery::PGDeleteStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGUpdateStmt node into a UpdateStatement
 	unique_ptr<UpdateStatement> TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt);
+	//! Transform a Postgres duckdb_libpgquery::T_PGUpdateExtensionsStmt node into a UpdateExtensionsStatement
+	unique_ptr<UpdateExtensionsStatement> TransformUpdateExtensions(duckdb_libpgquery::PGUpdateExtensionsStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGPragmaStmt node into a PragmaStatement
 	unique_ptr<SQLStatement> TransformPragma(duckdb_libpgquery::PGPragmaStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGExportStmt node into a ExportStatement
@@ -255,9 +258,8 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Constraints transform
 	//===--------------------------------------------------------------------===//
-	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell *cell);
-
-	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell *cell, ColumnDefinition &column,
+	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell &cell);
+	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell &cell, ColumnDefinition &column,
 	                                           idx_t index);
 
 	//===--------------------------------------------------------------------===//
@@ -321,6 +323,9 @@ private:
 	//! Transform a Postgres TypeName string into a LogicalType
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName &name);
 
+	//! Transform a list of type modifiers into a list of values
+	vector<Value> TransformTypeModifiers(duckdb_libpgquery::PGTypeName &name);
+
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(optional_ptr<duckdb_libpgquery::PGList> group, SelectNode &result);
 	void TransformGroupByNode(duckdb_libpgquery::PGNode &n, GroupingExpressionMap &map, SelectNode &result,
@@ -331,6 +336,9 @@ private:
 	                                vector<idx_t> &result_set);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
+
+	//! Transform to a IN or NOT IN expression
+	unique_ptr<ParsedExpression> TransformInExpression(const string &name, duckdb_libpgquery::PGAExpr &root);
 
 	//! Transform a Postgres SELECT clause into a list of Expressions
 	void TransformExpressionList(duckdb_libpgquery::PGList &list, vector<unique_ptr<ParsedExpression>> &result);
@@ -349,6 +357,8 @@ private:
 
 	Vector PGListToVector(optional_ptr<duckdb_libpgquery::PGList> column_list, idx_t &size);
 	vector<string> TransformConflictTarget(duckdb_libpgquery::PGList &list);
+
+	unique_ptr<MacroFunction> TransformMacroFunction(duckdb_libpgquery::PGFunctionDefinition &function);
 
 	void ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
 	                                 duckdb_libpgquery::PGNode *arg);

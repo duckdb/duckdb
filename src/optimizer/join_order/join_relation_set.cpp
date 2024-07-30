@@ -99,10 +99,14 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 			// left is smaller, progress left and add it to the set
 			relations[count++] = left.relations[i];
 			i++;
-		} else {
-			D_ASSERT(left.relations[i] > right.relations[j]);
+		} else if (left.relations[i] > right.relations[j]) {
 			// right is smaller, progress right and add it to the set
 			relations[count++] = right.relations[j];
+			j++;
+		} else {
+			D_ASSERT(left.relations[i] == right.relations[j]);
+			relations[count++] = left.relations[i];
+			i++;
 			j++;
 		}
 	}

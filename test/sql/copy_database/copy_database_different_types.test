@@ -37,6 +37,9 @@ statement ok
 INSERT INTO enums VALUES ('ok'), ('sad'), (NULL)
 
 statement ok
+select * from db1.enums
+
+statement ok
 CREATE SEQUENCE seq;
 
 query I

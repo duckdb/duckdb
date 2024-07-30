@@ -1,0 +1,43 @@
+# name: test/sql/attach/attach_icu_collation.test
+# description: ATTACH to a database that uses ICU collations in types
+# group: [attach]
+
+require skip_reload
+
+require no_extension_autoloading
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+unzip data/storage/german_collation.db.gz __TEST_DIR__/german_collation.db
+
+statement ok
+ATTACH '__TEST_DIR__/german_collation.db' AS db
+
+query I rowsort
+SELECT * FROM db.strings
+----
+Gabel
+Goethe
+Goldmann
+Göbel
+Göthe
+Götz
+
+# cannot order by without ICU
+statement error
+SELECT * FROM db.strings ORDER BY 1
+----
+not in the catalog
+
+require icu
+
+query I
+SELECT * FROM db.strings ORDER BY 1
+----
+Gabel
+Göbel
+Goethe
+Goldmann
+Göthe
+Götz

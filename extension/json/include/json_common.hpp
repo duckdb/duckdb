@@ -14,6 +14,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
 
+using namespace duckdb_yyjson; // NOLINT
+
 namespace duckdb {
 
 //! JSON allocator is a custom allocator for yyjson that prevents many tiny allocations
@@ -108,6 +110,7 @@ public:
 		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 			return JSONCommon::TYPE_STRING_NULL;
+		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 			return JSONCommon::TYPE_STRING_VARCHAR;
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -136,6 +139,7 @@ public:
 		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::SQLNULL;
+		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::VARCHAR;
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -286,7 +290,8 @@ public:
 private:
 	//! Get JSON pointer (/field/index/... syntax)
 	static inline yyjson_val *GetPointer(yyjson_val *val, const char *ptr, const idx_t &len) {
-		return len == 1 ? val : unsafe_yyjson_get_pointer(val, ptr, len);
+		yyjson_ptr_err err;
+		return len == 1 ? val : unsafe_yyjson_ptr_getx(val, ptr, len, &err);
 	}
 	//! Get JSON path ($.field[index]... syntax)
 	static yyjson_val *GetPath(yyjson_val *val, const char *ptr, const idx_t &len);

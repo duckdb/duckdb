@@ -15,6 +15,9 @@ static void ListInnerProduct(DataChunk &args, ExpressionState &, Vector &result)
 	auto &left_child = ListVector::GetEntry(left);
 	auto &right_child = ListVector::GetEntry(right);
 
+	left_child.Flatten(left_count);
+	right_child.Flatten(right_count);
+
 	D_ASSERT(left_child.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(right_child.GetVectorType() == VectorType::FLAT_VECTOR);
 

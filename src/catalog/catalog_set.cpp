@@ -11,6 +11,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -186,8 +187,8 @@ bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const strin
 	map.UpdateEntry(std::move(value));
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(value_ptr->Child());
+		DuckTransactionManager::Get(GetCatalog().GetAttached())
+		    .PushCatalogEntry(*transaction.transaction, value_ptr->Child());
 	}
 	return true;
 }
@@ -313,20 +314,18 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	if (!alter_info.allow_internal && entry->internal) {
 		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
 	}
-	if (!transaction.context) {
-		throw InternalException("Cannot AlterEntry without client context");
-	}
-
-	auto &context = *transaction.context;
 
 	unique_ptr<CatalogEntry> value;
 	if (alter_info.type == AlterType::SET_COMMENT) {
 		// Copy the existing entry; we are only changing metadata here
-		value = entry->Copy(context);
+		if (!transaction.context) {
+			throw InternalException("Cannot AlterEntry::SET_COMMENT without client context");
+		}
+		value = entry->Copy(*transaction.context);
 		value->comment = alter_info.Cast<SetCommentInfo>().comment_value;
 	} else {
 		// Use the existing entry to create the altered entry
-		value = entry->AlterEntry(context, alter_info);
+		value = entry->AlterEntry(transaction, alter_info);
 		if (!value) {
 			// alter failed, but did not result in an error
 			return true;
@@ -364,8 +363,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		serializer.WriteProperty(101, "alter_info", &alter_info);
 		serializer.End();
 
-		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(new_entry->Child(), stream.GetData(), stream.GetPosition());
+		DuckTransactionManager::Get(GetCatalog().GetAttached())
+		    .PushCatalogEntry(*transaction.transaction, new_entry->Child(), stream.GetData(), stream.GetPosition());
 	}
 
 	read_lock.unlock();
@@ -416,8 +415,8 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(value_ptr->Child());
+		DuckTransactionManager::Get(GetCatalog().GetAttached())
+		    .PushCatalogEntry(*transaction.transaction, value_ptr->Child());
 	}
 	return true;
 }
@@ -509,9 +508,9 @@ SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, con
 
 	SimilarCatalogEntry result;
 	for (auto &kv : map.Entries()) {
-		auto ldist = StringUtil::SimilarityScore(kv.first, name);
-		if (ldist < result.distance) {
-			result.distance = ldist;
+		auto entry_score = StringUtil::SimilarityRating(kv.first, name);
+		if (entry_score > result.score) {
+			result.score = entry_score;
 			result.name = kv.first;
 		}
 	}
@@ -525,14 +524,10 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 		// no defaults either: return null
 		return nullptr;
 	}
+	read_lock.unlock();
 	// this catalog set has a default map defined
 	// check if there is a default entry that we can create with this name
-	if (!transaction.context) {
-		// no context - cannot create default entry
-		return nullptr;
-	}
-	read_lock.unlock();
-	auto entry = defaults->CreateDefaultEntry(*transaction.context, name);
+	auto entry = defaults->CreateDefaultEntry(transaction, name);
 
 	read_lock.lock();
 	if (!entry) {
@@ -606,12 +601,10 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 		// This was the root of the entry chain
 		map.DropEntry(entry);
 	}
-	// we mark the catalog as being modified, since this action can lead to e.g. tables being dropped
-	catalog.ModifyCatalog();
 }
 
 void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &read_lock) {
-	if (!defaults || defaults->created_all_entries || !transaction.context) {
+	if (!defaults || defaults->created_all_entries) {
 		return;
 	}
 	// this catalog set has a default set defined:
@@ -622,7 +615,7 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 			// we unlock during the CreateEntry, since it might reference other catalog sets...
 			// specifically for views this can happen since the view will be bound
 			read_lock.unlock();
-			auto entry = defaults->CreateDefaultEntry(*transaction.context, default_entry);
+			auto entry = defaults->CreateDefaultEntry(transaction, default_entry);
 			if (!entry) {
 				throw InternalException("Failed to create default entry for %s", default_entry);
 			}

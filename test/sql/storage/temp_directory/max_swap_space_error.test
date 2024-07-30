@@ -1,9 +1,16 @@
 # name: test/sql/storage/temp_directory/max_swap_space_error.test
+# description: Test the maximum swap space.
 # group: [temp_directory]
 
 require skip_reload
 
 require noforcestorage
+
+# This test performs comparisons against the DEFAULT_BLOCK_ALLOC_SIZE of 256KiB.
+require block_size 262144
+
+# The temporary directory usage changes with the vector size.
+require vector_size 2048
 
 # Set a temp_directory to offload data
 statement ok
@@ -13,33 +20,33 @@ set temp_directory='__TEST_DIR__/max_swap_space_reached'
 statement ok
 PRAGMA memory_limit='1024KiB'
 
-# 0 blocks
+# Zero blocks
 statement ok
 set max_temp_directory_size='0KiB'
 
 statement error
 CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
 ----
-failed to offload data block of size 256.0 KiB (0 bytes/0 bytes used)
+failed to offload data block
 
 query I
 select "size" from duckdb_temporary_files()
 ----
 0
 
-# 1 block max
+# Max. one block for the default block allocation size
 statement ok
 set max_temp_directory_size='256KiB'
 
 statement error
 CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
 ----
-failed to offload data block of size 256.0 KiB (256.0 KiB/256.0 KiB used)
+failed to offload data block
 
 statement error
 CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
 ----
-failed to offload data block of size 256.0 KiB (256.0 KiB/256.0 KiB used)
+failed to offload data block
 
 query I
 select "size" from duckdb_temporary_files()
@@ -64,10 +71,10 @@ CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(200000);
 statement error
 CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(300000);
 ----
-failed to offload data block of size 256.0 KiB (1.5 MiB/1.5 MiB used)
+failed to offload data block
 
 query I
-select "size" from duckdb_temporary_files()
+SELECT "size" FROM duckdb_temporary_files();
 ----
 1572864
 

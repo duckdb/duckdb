@@ -27,6 +27,9 @@ struct CatalogTransaction {
 	transaction_t transaction_id;
 	transaction_t start_time;
 
+	bool HasContext() const {
+		return context;
+	}
 	ClientContext &GetContext();
 
 	static CatalogTransaction GetSystemCatalogTransaction(ClientContext &context);

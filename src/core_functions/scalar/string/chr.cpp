@@ -30,7 +30,7 @@ static void ChrFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	int utf8_bytes;
 	UnaryExecutor::Execute<int32_t, string_t>(code_vec, result, args.size(), [&](int32_t input) {
 		ChrOperator::GetCodepoint(input, c, utf8_bytes);
-		return StringVector::AddString(result, &c[0], utf8_bytes);
+		return StringVector::AddString(result, &c[0], UnsafeNumericCast<uint32_t>(utf8_bytes));
 	});
 }
 #endif

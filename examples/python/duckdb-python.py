@@ -100,7 +100,7 @@ print(rel.limit(2))
 print(rel.limit(2, offset=1))
 
 # of course these things can be chained
-print(rel.filter('i > 1').project('i + 1').order('j').limit(2))
+print(rel.filter('i > 1').project('i + 1, j').order('j').limit(2))
 
 # aggregate the relation
 print(rel.aggregate("sum(i)"))
@@ -136,7 +136,7 @@ print(duckdb.aggregate(test_df, "sum(i)"))
 print(duckdb.distinct(test_df))
 
 # when chaining only the first call needs to include the data frame parameter
-print(duckdb.filter(test_df, 'i > 1').project('i + 1').order('j').limit(2))
+print(duckdb.filter(test_df, 'i > 1').project('i + 1, j').order('j').limit(2))
 
 # turn the relation into something else again
 
@@ -181,5 +181,5 @@ print(res.fetchdf())
 print(res.df())
 
 # this also works directly on data frames
-res = duckdb.query(test_df, 'my_name_for_test_df', 'SELECT * FROM my_name_for_test_df')
+res = duckdb.query_df(test_df, 'my_name_for_test_df', 'SELECT * FROM my_name_for_test_df')
 print(res.df())

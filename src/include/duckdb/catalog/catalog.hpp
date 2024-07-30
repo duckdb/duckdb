@@ -14,6 +14,7 @@
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -102,10 +103,13 @@ public:
 	bool IsSystemCatalog() const;
 	bool IsTemporaryCatalog() const;
 
-	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
-	DUCKDB_API idx_t GetCatalogVersion();
-	//! Trigger a modification in the catalog, increasing the catalog version and returning the previous version
-	DUCKDB_API idx_t ModifyCatalog();
+	//! Returns a version number that uniquely characterizes the current catalog snapshot.
+	//! If there are transaction-local changes, the version returned is >= TRANSACTION_START, o.w. it is a simple number
+	//! starting at 0 that is incremented at each commit that has had catalog changes.
+	//! If the catalog does not support versioning, no index is returned.
+	DUCKDB_API virtual optional_idx GetCatalogVersion(ClientContext &context) {
+		return {}; // don't return anything by default
+	}
 
 	//! Returns the catalog name - based on how the catalog was attached
 	DUCKDB_API const string &GetName() const;
@@ -229,13 +233,6 @@ public:
 	                                         const string &schema, const string &name,
 	                                         QueryErrorContext error_context = QueryErrorContext());
 
-	//! Fetches a logical type from the catalog
-	DUCKDB_API LogicalType GetType(ClientContext &context, const string &schema, const string &names,
-	                               OnEntryNotFound if_not_found);
-
-	DUCKDB_API static LogicalType GetType(ClientContext &context, const string &catalog_name, const string &schema,
-	                                      const string &name);
-
 	template <class T>
 	optional_ptr<T> GetEntry(ClientContext &context, const string &schema_name, const string &name,
 	                         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {
@@ -259,6 +256,7 @@ public:
 	DUCKDB_API optional_ptr<CatalogEntry> AddFunction(ClientContext &context, CreateFunctionInfo &info);
 
 	//! Alter an existing entry in the catalog.
+	DUCKDB_API void Alter(CatalogTransaction transaction, AlterInfo &info);
 	DUCKDB_API void Alter(ClientContext &context, AlterInfo &info);
 
 	virtual unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,

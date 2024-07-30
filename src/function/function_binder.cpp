@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
 
@@ -238,21 +239,38 @@ LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const L
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }
 
-LogicalType PrepareTypeForCast(const LogicalType &type) {
+bool TypeRequiresPrepare(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::ANY) {
+		return true;
+	}
+	if (type.id() == LogicalTypeId::LIST) {
+		return TypeRequiresPrepare(ListType::GetChildType(type));
+	}
+	return false;
+}
+
+LogicalType PrepareTypeForCastRecursive(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::ANY) {
 		return AnyType::GetTargetType(type);
 	}
 	if (type.id() == LogicalTypeId::LIST) {
-		return LogicalType::LIST(PrepareTypeForCast(ListType::GetChildType(type)));
+		return LogicalType::LIST(PrepareTypeForCastRecursive(ListType::GetChildType(type)));
 	}
 	return type;
 }
 
+void PrepareTypeForCast(LogicalType &type) {
+	if (!TypeRequiresPrepare(type)) {
+		return;
+	}
+	type = PrepareTypeForCastRecursive(type);
+}
+
 void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children) {
 	for (auto &arg : function.arguments) {
-		arg = PrepareTypeForCast(arg);
+		PrepareTypeForCast(arg);
 	}
-	function.varargs = PrepareTypeForCast(function.varargs);
+	PrepareTypeForCast(function.varargs);
 
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
@@ -338,25 +356,35 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	return BindScalarFunction(bound_function, std::move(children), is_operator, binder);
 }
 
-unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
-                                                                       vector<unique_ptr<Expression>> children,
-                                                                       bool is_operator, optional_ptr<Binder> binder) {
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
+                                                          vector<unique_ptr<Expression>> children, bool is_operator,
+                                                          optional_ptr<Binder> binder) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
 	}
 	if (bound_function.get_modified_databases && binder) {
 		auto &properties = binder->GetStatementProperties();
-		FunctionModifiedDatabasesInput input(bind_info, properties.modified_databases);
-		bound_function.get_modified_databases(input);
+		FunctionModifiedDatabasesInput input(bind_info, properties);
+		bound_function.get_modified_databases(context, input);
 	}
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
 
 	// now create the function
 	auto return_type = bound_function.return_type;
-	return make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function), std::move(children),
-	                                          std::move(bind_info), is_operator);
+	unique_ptr<Expression> result;
+	auto result_func = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function),
+	                                                      std::move(children), std::move(bind_info), is_operator);
+	if (result_func->function.bind_expression) {
+		// if a bind_expression callback is registered - call it and emit the resulting expression
+		FunctionBindExpressionInput input(context, result_func->bind_info.get(), *result_func);
+		result = result_func->function.bind_expression(input);
+	}
+	if (!result) {
+		result = std::move(result_func);
+	}
+	return result;
 }
 
 unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(AggregateFunction bound_function,

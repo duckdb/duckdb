@@ -46,7 +46,7 @@ static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, Table
 	if (input.binder) {
 		auto &catalog = Catalog::GetCatalog(context, result->catalog);
 		auto &properties = input.binder->GetStatementProperties();
-		properties.modified_databases.insert(catalog.GetName());
+		properties.RegisterDBModify(catalog, context);
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
@@ -191,6 +191,14 @@ std::string TpcdsExtension::GetAnswer(double sf, int query) {
 
 std::string TpcdsExtension::Name() {
 	return "tpcds";
+}
+
+std::string TpcdsExtension::Version() const {
+#ifdef EXT_VERSION_TPCDS
+	return EXT_VERSION_TPCDS;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb

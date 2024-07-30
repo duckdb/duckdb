@@ -36,36 +36,15 @@ void StructColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	if (!state.segment_checked) {
-		if (!state.current) {
-			return true;
-		}
-		state.segment_checked = true;
-
-		FilterPropagateResult prune_result;
-		{
-			lock_guard<mutex> l(stats_lock);
-			prune_result = filter.CheckStatistics(state.current->stats.statistics);
-			if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return true;
-			}
-		}
-		lock_guard<mutex> l(update_lock);
-		if (updates) {
-			auto update_stats = updates->GetStatistics();
-			prune_result = filter.CheckStatistics(*update_stats);
-			return prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		} else {
-			return false;
-		}
-	} else {
-		return true;
-	}
-}
-
 idx_t StructColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
+}
+
+void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		sub_columns[i]->InitializePrefetch(prefetch_state, scan_state.child_states[i + 1], rows);
+	}
 }
 
 void StructColumnData::InitializeScan(ColumnScanState &state) {
@@ -96,20 +75,23 @@ void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t ro
 	}
 }
 
-idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result);
+idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             idx_t target_count) {
+	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], *child_entries[i]);
+		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], *child_entries[i], target_count);
 	}
 	return scan_count;
 }
 
-idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	auto scan_count = validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
+idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                      idx_t target_count) {
+	auto scan_count = validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		sub_columns[i]->ScanCommitted(vector_index, state.child_states[i + 1], *child_entries[i], allow_updates);
+		sub_columns[i]->ScanCommitted(vector_index, state.child_states[i + 1], *child_entries[i], allow_updates,
+		                              target_count);
 	}
 	return scan_count;
 }

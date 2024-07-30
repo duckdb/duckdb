@@ -2,6 +2,12 @@
 
 namespace duckdb {
 
+InsertionOrderPreservingMap<string> LogicalMaterializedCTE::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["Table Index"] = StringUtil::Format("%llu", table_index);
+	return result;
+}
+
 vector<idx_t> LogicalMaterializedCTE::GetTableIndex() const {
 	return vector<idx_t> {table_index};
 }

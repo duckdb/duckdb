@@ -224,7 +224,7 @@ protected:
 				out << 'd';
 				for (size_t i = 0; i < level.first.size(); ++i) {
 					out << ((i && i % level_width == 0) ? group_separator : separator);
-					out << std::setw(number_width) << level.first[i];
+					out << std::setw(NumericCast<int32_t>(number_width)) << level.first[i];
 				}
 				out << '\n';
 			}
@@ -237,7 +237,7 @@ protected:
 					for (idx_t idx = 0; idx < cascading_idcs_cnt; idx += FANOUT) {
 						out << ((idx && ((idx / FANOUT) % (level_width / CASCADING + 2) == 0)) ? group_separator
 						                                                                       : separator);
-						out << std::setw(number_width) << level.second[idx + child_nr];
+						out << std::setw(NumericCast<int32_t>(number_width)) << level.second[idx + child_nr];
 					}
 					out << '\n';
 				}

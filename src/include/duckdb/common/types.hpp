@@ -215,7 +215,7 @@ enum class LogicalTypeId : uint8_t {
 	BIT = 36,
 	STRING_LITERAL = 37, /* string literals, used for constant strings - only exists while binding */
 	INTEGER_LITERAL = 38,/* integer literals, used for constant integers - only exists while binding */
-
+	VARINT = 39,
 	UHUGEINT = 49,
 	HUGEINT = 50,
 	POINTER = 51,
@@ -273,6 +273,9 @@ struct LogicalType {
 		return type_info_;
 	}
 
+	//! DeepCopy() will make a unique copy of any ExtraTypeInfo as well
+	LogicalType DeepCopy() const;
+
 	inline void CopyAuxInfo(const LogicalType &other) {
 		type_info_ = other.type_info_;
 	}
@@ -315,10 +318,16 @@ struct LogicalType {
 	DUCKDB_API string ToString() const;
 	DUCKDB_API bool IsIntegral() const;
 	DUCKDB_API bool IsNumeric() const;
+	DUCKDB_API bool IsTemporal() const;
 	DUCKDB_API hash_t Hash() const;
 	DUCKDB_API void SetAlias(string alias);
 	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
+	DUCKDB_API void SetModifiers(vector<Value> modifiers);
+	DUCKDB_API bool HasModifiers() const;
+	DUCKDB_API vector<Value> GetModifiersCopy() const;
+	DUCKDB_API optional_ptr<vector<Value>> GetModifiers();
+	DUCKDB_API optional_ptr<const vector<Value>> GetModifiers() const;
 
 	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not possible
 	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right);
@@ -336,9 +345,6 @@ struct LogicalType {
 
 	DUCKDB_API bool IsValid() const;
 
-	template<class F>
-	bool Contains(F &&predicate) const;
-	bool Contains(LogicalTypeId type_id) const;
 
 private:
 	LogicalTypeId id_; // NOLINT: allow this naming for legacy reasons
@@ -374,6 +380,8 @@ public:
 	static constexpr const LogicalTypeId ANY = LogicalTypeId::ANY;
 	static constexpr const LogicalTypeId BLOB = LogicalTypeId::BLOB;
 	static constexpr const LogicalTypeId BIT = LogicalTypeId::BIT;
+	static constexpr const LogicalTypeId VARINT = LogicalTypeId::VARINT;
+
 	static constexpr const LogicalTypeId INTERVAL = LogicalTypeId::INTERVAL;
 	static constexpr const LogicalTypeId HUGEINT = LogicalTypeId::HUGEINT;
 	static constexpr const LogicalTypeId UHUGEINT = LogicalTypeId::UHUGEINT;
@@ -394,9 +402,7 @@ public:
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);                 // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);       // NOLINT
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);      // NOLINT
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, idx_t size);   // NOLINT
-	// an array of unknown size (only used for binding)
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);        // NOLINT
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index);   // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
@@ -405,7 +411,8 @@ public:
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name);                              // NOLINT
-	DUCKDB_API static LogicalType USER(string catalog, string schema, string name);                // NOLINT
+	DUCKDB_API static LogicalType USER(const string &user_type_name, const vector<Value> &user_type_mods); // NOLINT
+	DUCKDB_API static LogicalType USER(string catalog, string schema, string name, vector<Value> user_type_mods); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
@@ -440,6 +447,8 @@ struct UserType {
 	DUCKDB_API static const string &GetCatalog(const LogicalType &type);
 	DUCKDB_API static const string &GetSchema(const LogicalType &type);
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
+	DUCKDB_API static const vector<Value> &GetTypeModifiers(const LogicalType &type);
+	DUCKDB_API static vector<Value> &GetTypeModifiers(LogicalType &type);
 };
 
 struct EnumType {
@@ -535,37 +544,6 @@ struct aggregate_state_t {
 	vector<LogicalType> bound_argument_types;
 };
 
-template<class F>
-bool LogicalType::Contains(F &&predicate) const {
-	if(predicate(*this)) {
-		return true;
-	}
-	switch(id()) {
-	case LogicalTypeId::STRUCT: {
-		for(const auto &child : StructType::GetChildTypes(*this)) {
-			if(child.second.Contains(predicate)) {
-				return true;
-			}
-		}
-		}
-		break;
-	case LogicalTypeId::LIST:
-		return ListType::GetChildType(*this).Contains(predicate);
-	case LogicalTypeId::MAP:
-		return MapType::KeyType(*this).Contains(predicate) || MapType::ValueType(*this).Contains(predicate);
-	case LogicalTypeId::UNION:
-		for(const auto &child : UnionType::CopyMemberTypes(*this)) {
-			if(child.second.Contains(predicate)) {
-				return true;
-			}
-		}
-		break;
-	case LogicalTypeId::ARRAY:
-		return ArrayType::GetChildType(*this).Contains(predicate);
-	default:
-		return false;
-	}
-	return false;
-}
+
 
 } // namespace duckdb

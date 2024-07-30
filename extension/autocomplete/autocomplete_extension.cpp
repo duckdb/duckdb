@@ -62,7 +62,6 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 		} else {
 			score += StringUtil::SimilarityScore(str, prefix);
 		}
-		D_ASSERT(score >= 0);
 		scores.emplace_back(str, score);
 	}
 	auto results = StringUtil::TopNStrings(scores, 20, 999);
@@ -424,6 +423,14 @@ void AutocompleteExtension::Load(DuckDB &db) {
 
 std::string AutocompleteExtension::Name() {
 	return "autocomplete";
+}
+
+std::string AutocompleteExtension::Version() const {
+#ifdef EXT_VERSION_AUTOCOMPLETE
+	return EXT_VERSION_AUTOCOMPLETE;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb

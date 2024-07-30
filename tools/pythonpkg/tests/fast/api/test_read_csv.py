@@ -1,11 +1,10 @@
 from multiprocessing.sharedctypes import Value
-import numpy
 import datetime
-import pandas
 import pytest
+import platform
 import duckdb
 from io import StringIO, BytesIO
-from duckdb.typing import BIGINT, VARCHAR, INTEGER
+from duckdb import CSVLineTerminator
 
 
 def TestFile(name):
@@ -280,7 +279,8 @@ class TestReadCSV(object):
         assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_read_filelike(self, duckdb_cursor):
-        _ = pytest.importorskip("fsspec")
+        pytest.importorskip("fsspec")
+
         string = StringIO("c1,c2,c3\na,b,c")
         res = duckdb_cursor.read_csv(string).fetchall()
         assert res == [('a', 'b', 'c')]
@@ -323,7 +323,7 @@ class TestReadCSV(object):
             def __init__(self):
                 pass
 
-            def read(self, amount):
+            def read(self, amount=-1):
                 raise ValueError(amount)
 
             def seek(self, loc):
@@ -333,19 +333,20 @@ class TestReadCSV(object):
             def __init__(self):
                 pass
 
-            def read(self, amount):
+            def read(self, amount=-1):
                 return b'test'
 
             def seek(self, loc):
                 raise ValueError(loc)
 
+        # The MemoryFileSystem reads the content into another object, so this fails instantly
         obj = ReadError()
         with pytest.raises(ValueError):
             res = duckdb_cursor.read_csv(obj).fetchall()
 
+        # For that same reason, this will not error, because the data is retrieved with 'read' and then SeekError is never used again
         obj = SeekError()
-        with pytest.raises(ValueError):
-            res = duckdb_cursor.read_csv(obj).fetchall()
+        res = duckdb_cursor.read_csv(obj).fetchall()
 
     def test_filelike_custom(self, duckdb_cursor):
         _ = pytest.importorskip("fsspec")
@@ -359,8 +360,11 @@ class TestReadCSV(object):
                 self.loc = loc
                 return loc
 
-            def read(self, amount):
-                out = b"c1,c2,c3\na,b,c"[self.loc : self.loc + amount : 1]
+            def read(self, amount=-1):
+                file = b"c1,c2,c3\na,b,c"
+                if amount == -1:
+                    return file
+                out = file[self.loc : self.loc + amount : 1]
                 self.loc += amount
                 return out
 
@@ -441,6 +445,7 @@ class TestReadCSV(object):
         res = con.sql("select * from rel order by all").fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,), (6,)]
 
+    @pytest.mark.xfail(condition=platform.system() == "Emscripten", reason="time zones not working")
     def test_read_csv_combined(self, duckdb_cursor):
         CSV_FILE = TestFile('stress_test.csv')
         COLUMNS = {
@@ -469,10 +474,12 @@ class TestReadCSV(object):
         assert rel.columns == rel2.columns
         assert rel.types == rel2.types
 
-    def test_read_csv_names(self):
+    def test_read_csv_names(self, tmp_path):
+        file = tmp_path / "file.csv"
+        file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+
         con = duckdb.connect()
-        file = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
-        rel = con.read_csv(file, names=['a', 'b', 'c'])
+        rel = con.read_csv(str(file), names=['a', 'b', 'c'])
         assert rel.columns == ['a', 'b', 'c', 'four']
 
         with pytest.raises(duckdb.InvalidInputException, match="read_csv only accepts 'names' as a list of strings"):
@@ -487,9 +494,11 @@ class TestReadCSV(object):
             rel = con.read_csv(file, names=['a', 'b', 'a', 'b'])
             assert rel.columns == ['a', 'b', 'a', 'b']
 
-    def test_read_csv_names_mixed_with_dtypes(self):
+    def test_read_csv_names_mixed_with_dtypes(self, tmp_path):
+        file = tmp_path / "file.csv"
+        file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+
         con = duckdb.connect()
-        file = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
         rel = con.read_csv(
             file,
             names=['a', 'b', 'c'],
@@ -517,12 +526,18 @@ class TestReadCSV(object):
                 },
             )
 
-    def test_read_csv_multi_file(self):
+    def test_read_csv_multi_file(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+
+        file2 = tmp_path / "file2.csv"
+        file2.write_text('one,two,three,four\n5,6,7,8\n5,6,7,8\n5,6,7,8')
+
+        file3 = tmp_path / "file3.csv"
+        file3.write_text('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12')
+
         con = duckdb.connect()
-        file1 = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
-        file2 = StringIO('one,two,three,four\n5,6,7,8\n5,6,7,8\n5,6,7,8')
-        file3 = StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12')
-        files = [file1, file2, file3]
+        files = [str(file1), str(file2), str(file3)]
         rel = con.read_csv(files)
         res = rel.fetchall()
         assert res == [
@@ -546,13 +561,62 @@ class TestReadCSV(object):
             rel = con.read_csv(files)
             res = rel.fetchall()
 
-    def test_read_csv_list_invalid_path(self):
+    def test_read_csv_list_invalid_path(self, tmp_path):
         con = duckdb.connect()
-        files = [
-            StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4'),
-            'not_valid_path',
-            StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12'),
-        ]
+
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+
+        file3 = tmp_path / "file3.csv"
+        file3.write_text('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12')
+
+        files = [str(file1), 'not_valid_path', str(file3)]
         with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
             rel = con.read_csv(files)
+            res = rel.fetchall()
+
+    @pytest.mark.parametrize(
+        'options',
+        [
+            {'lineterminator': '\\r\\n'},
+            {'lineterminator': '\\n'},
+            {'lineterminator': 'LINE_FEED'},
+            {'lineterminator': 'CARRIAGE_RETURN_LINE_FEED'},
+            {'lineterminator': CSVLineTerminator.LINE_FEED},
+            {'lineterminator': CSVLineTerminator.CARRIAGE_RETURN_LINE_FEED},
+            {'columns': {'id': 'INTEGER', 'name': 'INTEGER', 'c': 'integer', 'd': 'INTEGER'}},
+            {'auto_type_candidates': ['INTEGER', 'INTEGER']},
+            {'max_line_size': 10000},
+            {'ignore_errors': True},
+            {'ignore_errors': False},
+            {'store_rejects': True},
+            {'store_rejects': False},
+            {'rejects_table': 'my_rejects_table'},
+            {'rejects_scan': 'my_rejects_scan'},
+            {'rejects_table': 'my_rejects_table', 'rejects_limit': 50},
+            {'force_not_null': ['one', 'two']},
+            {'buffer_size': 420000},
+            {'decimal': '.'},
+            {'allow_quoted_nulls': True},
+            {'allow_quoted_nulls': False},
+            {'filename': True},
+            {'filename': 'test'},
+            {'hive_partitioning': True},
+            {'hive_partitioning': False},
+            # {'union_by_name': True},
+            {'union_by_name': False},
+            {'hive_types_autocast': False},
+            {'hive_types_autocast': True},
+            {'hive_types': {'one': 'INTEGER', 'two': 'VARCHAR'}},
+        ],
+    )
+    def test_read_csv_options(self, duckdb_cursor, options, tmp_path):
+        file = tmp_path / "file.csv"
+        file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+        print(options)
+        if 'hive_types' in options:
+            with pytest.raises(duckdb.InvalidInputException, match=r'Unknown hive_type:'):
+                rel = duckdb_cursor.read_csv(file, **options)
+        else:
+            rel = duckdb_cursor.read_csv(file, **options)
             res = rel.fetchall()

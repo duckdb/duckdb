@@ -1,0 +1,254 @@
+# name: test/optimizer/join_dependent_filter.test
+# description: Join dependent filter rule test
+# group: [optimizer]
+
+statement ok
+create table test as select range i, range j from range(10)
+
+# can derive two filters for this query
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = 2 and t2.i = 4) or (t1.i = 0 and t2.i = 2)
+----
+2
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = 2 and t2.i = 4) or (t1.i = 0 and t2.i = 2)
+----
+physical_plan	<REGEX>:.*FILTER.*FILTER.*
+
+# not if the constants are volatile however
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = random() and t2.i = random()) or (t1.i = 0 and t2.i = 2)
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+# which wouldn't be there without the expression rewriter
+statement ok
+set disabled_optimizers to 'expression_rewriter'
+
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = 2 and t2.i = 4) or (t1.i = 0 and t2.i = 2)
+----
+2
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = 2 and t2.i = 4) or (t1.i = 0 and t2.i = 2)
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+statement ok
+set disabled_optimizers to ''
+
+# in this case we can only derive one filter
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i > 7) or (t1.i != t2.i and t1.i < 3)
+----
+29
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i > 7) or (t1.i != t2.i and t1.i < 3)
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+# a predicate for a column must show up on both sides,
+# so, adding a predicate for t2.i to only one side won't create a filter
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i > 7 and t2.i = 0) or (t1.i != t2.i and t1.i < 3)
+----
+27
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i > 7 and t2.i = 0) or (t1.i != t2.i and t1.i < 3)
+----
+physical_plan	<!REGEX>:.*FILTER.*FILTER.*
+
+# if we add another predicate to the other side, we get another filter
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i > 7 and t2.i = 0) or (t1.i != t2.i and t1.i < 3 and t2.i = 5)
+----
+3
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i > 7 and t2.i = 0) or (t1.i != t2.i and t1.i < 3 and t2.i = 5)
+----
+physical_plan	<REGEX>:.*FILTER.*FILTER.*
+
+# one side filters t1, and the other side filter t2, so we can't derive a filter
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i > 7) or (t1.i != t2.i and t2.i = 5)
+----
+11
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i > 7) or (t1.i != t2.i and t2.i = 5)
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
+# we can still derive filters if there's 3 entries in the OR
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = 0 and t2.i = 1) or (t1.i = 2 and t2.i = 3) or (t1.i = 3 and t2.i = 4)
+----
+3
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = 0 and t2.i = 1) or (t1.i = 2 and t2.i = 3) or (t1.i = 3 and t2.i = 4)
+----
+physical_plan	<REGEX>:.*FILTER.*FILTER.*
+
+# not everything in the OR needs to be an AND
+# we can still derive one filter (on t2.i)
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = 0 and t2.i = 1) or (t1.i = 2 and t2.i = 3) or (t1.i = 3 and t2.i = 4) or (t2.i = 8)
+----
+13
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = 0 and t2.i = 1) or (t1.i = 2 and t2.i = 3) or (t1.i = 3 and t2.i = 4) or (t2.i = 8)
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+# also works if we have a restriction i on and j, just needs to be the same table
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i = 7) or (t1.j = 3)
+----
+11
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i = 7) or (t1.j = 3)
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+# we can also do more complex expressions, like modulo
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i % 5 = 0) or (t1.j % 6 = 0)
+----
+21
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i % 5 = 0) or (t1.j % 6 = 0)
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+# or something like IN
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i IN (1, 2)) or (t1.j IN (3, 4))
+----
+22
+
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = t2.i and t1.i IN (1, 2)) or (t1.j IN (3, 4))
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.01)
+
+# there should be 3 filter operators instead of just one, because we derived two
+query II
+EXPLAIN SELECT
+    supp_nation,
+    cust_nation,
+    l_year,
+    sum(volume) AS revenue
+FROM (
+    SELECT
+        n1.n_name AS supp_nation,
+        n2.n_name AS cust_nation,
+        extract(year FROM l_shipdate) AS l_year,
+        l_extendedprice * (1 - l_discount) AS volume
+    FROM
+        supplier,
+        lineitem,
+        orders,
+        customer,
+        nation n1,
+        nation n2
+    WHERE
+        s_suppkey = l_suppkey
+        AND o_orderkey = l_orderkey
+        AND c_custkey = o_custkey
+        AND s_nationkey = n1.n_nationkey
+        AND c_nationkey = n2.n_nationkey
+        AND ((n1.n_name = 'FRANCE'
+                AND n2.n_name = 'GERMANY')
+            OR (n1.n_name = 'GERMANY'
+                AND n2.n_name = 'FRANCE'))
+        AND l_shipdate BETWEEN CAST('1995-01-01' AS date)
+        AND CAST('1996-12-31' AS date)) AS shipping
+GROUP BY
+    supp_nation,
+    cust_nation,
+    l_year
+ORDER BY
+    supp_nation,
+    cust_nation,
+    l_year;
+----
+physical_plan	<REGEX>:.*FILTER.*FILTER.*FILTER.*
+
+# results should still be the same
+query IIII
+PRAGMA tpch(7)
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q07.csv
+
+# if we put the join-dependent filter explicitly as a join condition, we get a blockwise NL join,
+# but we should still derive the same two filters
+query II
+EXPLAIN SELECT *
+FROM nation n1
+JOIN nation n2
+ON ((n1.n_name = 'FRANCE'
+        AND n2.n_name = 'GERMANY')
+    OR (n1.n_name = 'GERMANY'
+        AND n2.n_name = 'FRANCE'))
+----
+physical_plan	<REGEX>:.*FILTER.*FILTER.*

@@ -17,6 +17,7 @@ add_library_unity(
   OBJECT
   appender.cpp
   attached_database.cpp
+  client_config.cpp
   client_context_file_opener.cpp
   client_context.cpp
   client_context_wrapper.cpp
@@ -32,10 +33,12 @@ add_library_unity(
   db_instance_cache.cpp
   error_manager.cpp
   extension.cpp
+  extension_install_info.cpp
   materialized_query_result.cpp
   pending_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
+  profiling_info.cpp
   relation.cpp
   query_profiler.cpp
   query_result.cpp

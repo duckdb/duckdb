@@ -33,10 +33,6 @@ DRY_RUN="$REAL_RUN --dryrun"
 ## REAL_RUN_WASM is to be used to move Wasm extensions to new style path (no extra duckdb-wasm)
 REAL_RUN_WASM="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.wasm' --acl public-read --content-encoding br --content-type='application/wasm'"
 DRY_RUN_WASM="$REAL_RUN_WASM --dryrun"
-## REAL_RUN_WASM_OLD_STYLE is to be used to move Wasm extensions to old style path (additional /duckdb-wasm/ in the path)
-## This can be phased with release 0.10.0
-REAL_RUN_WASM_OLD_STYLE="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/duckdb-wasm/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.wasm' --acl public-read --content-encoding br --content-type='application/wasm'"
-DRY_RUN_WASM_OLD_STYLE="$REAL_RUN_WASM_OLD_STYLE --dryrun"
 
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   echo "DEPLOYING"
@@ -45,7 +41,6 @@ if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   echo "> AWS CLI deploy: "
   eval "$REAL_RUN"
   eval "$REAL_RUN_WASM"
-  eval "$REAL_RUN_WASM_OLD_STYLE"
 else
   echo "DEPLOYING (DRY RUN)"
   echo "> FROM: $FROM_BUCKET"
@@ -53,7 +48,6 @@ else
   echo "> AWS CLI Dry run: "
   eval "$DRY_RUN"
   eval "$DRY_RUN_WASM"
-  eval "$DRY_RUN_WASM_OLD_STYLE"
 fi
 
 echo ""

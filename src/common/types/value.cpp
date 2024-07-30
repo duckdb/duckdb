@@ -230,12 +230,23 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY),
 		                        dtime_t(0));
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
-	case LogicalTypeId::TIMESTAMP_MS:
-		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
-	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		//	Casting rounds up, which will overflow
+		const auto min_us = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPSEC(timestamp_t(Timestamp::GetEpochSeconds(min_us)));
+	}
+	case LogicalTypeId::TIMESTAMP_MS: {
+		//	Casting rounds up, which will overflow
+		const auto min_us = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPMS(timestamp_t(Timestamp::GetEpochMs(min_us)));
+	}
+	case LogicalTypeId::TIMESTAMP_NS: {
+		// Clear the fractional day.
+		auto min_ns = NumericLimits<int64_t>::Minimum();
+		min_ns /= Interval::NANOS_PER_DAY;
+		min_ns *= Interval::NANOS_PER_DAY;
+		return Value::TIMESTAMPNS(timestamp_t(min_ns));
+	}
 	case LogicalTypeId::TIME_TZ:
 		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
 		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));
@@ -303,12 +314,18 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_MS:
-		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
+	case LogicalTypeId::TIMESTAMP_MS: {
+		//	Casting rounds up, which will overflow
+		const auto max_us = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPMS(timestamp_t(Timestamp::GetEpochMs(max_us)));
+	}
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		//	Casting rounds up, which will overflow
+		const auto max_us = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPSEC(timestamp_t(Timestamp::GetEpochSeconds(max_us)));
+	}
 	case LogicalTypeId::TIME_TZ:
 		//	"24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59"
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
@@ -334,8 +351,10 @@ Value Value::MaximumValue(const LogicalType &type) {
 			throw InternalException("Unknown decimal type");
 		}
 	}
-	case LogicalTypeId::ENUM:
-		return Value::ENUM(EnumType::GetSize(type) - 1, type);
+	case LogicalTypeId::ENUM: {
+		auto enum_size = EnumType::GetSize(type);
+		return Value::ENUM(enum_size - (enum_size ? 1 : 0), type);
+	}
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}
@@ -387,9 +406,9 @@ Value Value::NegativeInfinity(const LogicalType &type) {
 	}
 }
 
-Value Value::BOOLEAN(int8_t value) {
+Value Value::BOOLEAN(bool value) {
 	Value result(LogicalType::BOOLEAN);
-	result.value_.boolean = bool(value);
+	result.value_.boolean = value;
 	result.is_null = false;
 	return result;
 }
@@ -715,6 +734,18 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 	return result;
 }
 
+Value Value::MAP(const unordered_map<string, string> &kv_pairs) {
+	Value result;
+	result.type_ = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	result.is_null = false;
+	vector<Value> pairs;
+	for (auto &kv : kv_pairs) {
+		pairs.push_back(Value::STRUCT({{"key", Value(kv.first)}, {"value", Value(kv.second)}}));
+	}
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(pairs));
+	return result;
+}
+
 Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) {
 	D_ASSERT(!members.empty());
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
@@ -812,6 +843,13 @@ Value Value::EMPTYARRAY(const LogicalType &child_type, uint32_t size) {
 
 Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
+Value Value::VARINT(const_data_ptr_t data, idx_t len) {
+	Value result(LogicalType::VARINT);
 	result.is_null = false;
 	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
@@ -1190,7 +1228,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		D_ASSERT(value == 0 || value == 1);
-		return Value::BOOLEAN(value ? 1 : 0);
+		return Value::BOOLEAN(value ? true : false);
 	case LogicalTypeId::TINYINT:
 		D_ASSERT(value >= NumericLimits<int8_t>::Minimum() && value <= NumericLimits<int8_t>::Maximum());
 		return Value::TINYINT((int8_t)value);
@@ -1605,6 +1643,16 @@ const vector<Value> &StructValue::GetChildren(const Value &value) {
 		throw InternalException("Calling StructValue::GetChildren on a NULL value");
 	}
 	D_ASSERT(value.type().InternalType() == PhysicalType::STRUCT);
+	D_ASSERT(value.value_info_);
+	return value.value_info_->Get<NestedValueInfo>().GetValues();
+}
+
+const vector<Value> &MapValue::GetChildren(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling MapValue::GetChildren on a NULL value");
+	}
+	D_ASSERT(value.type().id() == LogicalTypeId::MAP);
+	D_ASSERT(value.type().InternalType() == PhysicalType::LIST);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }

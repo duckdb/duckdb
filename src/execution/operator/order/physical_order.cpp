@@ -267,15 +267,17 @@ idx_t PhysicalOrder::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, 
 	return lstate.batch_index;
 }
 
-string PhysicalOrder::ParamsToString() const {
-	string result = "ORDERS:\n";
+InsertionOrderPreservingMap<string> PhysicalOrder::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string orders_info;
 	for (idx_t i = 0; i < orders.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			orders_info += "\n";
 		}
-		result += orders[i].expression->ToString() + " ";
-		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
+		orders_info += orders[i].expression->ToString() + " ";
+		orders_info += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
 	}
+	result["Order By"] = orders_info;
 	return result;
 }
 

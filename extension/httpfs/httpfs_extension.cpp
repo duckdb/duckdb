@@ -5,6 +5,8 @@
 #include "create_secret_functions.hpp"
 #include "duckdb.hpp"
 #include "s3fs.hpp"
+#include "hffs.hpp"
+#include "crypto.hpp"
 
 namespace duckdb {
 
@@ -13,6 +15,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 	auto &fs = instance.GetFileSystem();
 
 	fs.RegisterSubSystem(make_uniq<HTTPFileSystem>());
+	fs.RegisterSubSystem(make_uniq<HuggingFaceFileSystem>());
 	fs.RegisterSubSystem(make_uniq<S3FileSystem>(BufferManager::GetBufferManager(instance)));
 
 	auto &config = DBConfig::GetConfig(instance);
@@ -55,10 +58,17 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("s3_uploader_thread_limit", "S3 Uploader global thread limit", LogicalType::UBIGINT,
 	                          Value(50));
 
+	// HuggingFace options
+	config.AddExtensionOption("hf_max_per_page", "Debug option to limit number of items returned in list requests",
+	                          LogicalType::UBIGINT, Value::UBIGINT(0));
+
 	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
 	provider->SetAll();
 
 	CreateS3SecretFunctions::Register(instance);
+	CreateBearerTokenFunctions::Register(instance);
+	// set pointer to OpenSSL encryption state
+	config.encryption_util = make_shared_ptr<AESGCMStateSSLFactory>();
 }
 
 void HttpfsExtension::Load(DuckDB &db) {
@@ -66,6 +76,14 @@ void HttpfsExtension::Load(DuckDB &db) {
 }
 std::string HttpfsExtension::Name() {
 	return "httpfs";
+}
+
+std::string HttpfsExtension::Version() const {
+#ifdef EXT_VERSION_HTTPFS
+	return EXT_VERSION_HTTPFS;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb

@@ -435,7 +435,7 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	return inner_filter;
 }
 
-TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_ids) {
+TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &column_ids) {
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
@@ -561,6 +561,13 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			for (size_t i {1}; i < func.children.size(); i++) {
 				if (func.children[i]->type != ExpressionType::VALUE_CONSTANT) {
 					children_constant = false;
+					break;
+				}
+				auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
+				if (const_value_expr.value.IsNull()) {
+					// cannot simplify NULL values
+					children_constant = false;
+					break;
 				}
 			}
 			if (!children_constant) {
@@ -569,27 +576,34 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			auto &fst_const_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 			auto &type = fst_const_value_expr.value.type();
 
+			if ((type.IsNumeric() || type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BOOLEAN) &&
+			    func.children.size() == 2) {
+				auto bound_eq_comparison =
+				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
+				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
+				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
+				remaining_filters.erase_at(rem_fil_idx);
+				continue;
+			}
+
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			if (!type.IsIntegral()) {
 				continue;
 			}
 
-			bool can_simplify_in_clause = true;
 			for (idx_t i = 1; i < func.children.size(); i++) {
 				auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
-				if (const_value_expr.value.IsNull()) {
-					can_simplify_in_clause = false;
-					break;
-				}
+				D_ASSERT(!const_value_expr.value.IsNull());
 				in_values.push_back(const_value_expr.value.GetValue<hugeint_t>());
 			}
-			if (!can_simplify_in_clause || in_values.empty()) {
+			if (in_values.empty()) {
 				continue;
 			}
 
 			sort(in_values.begin(), in_values.end());
 
+			bool can_simplify_in_clause = true;
 			for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
 				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > 1) {
 					can_simplify_in_clause = false;
@@ -1170,7 +1184,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //
 //	for (auto child_conjunction : conjunctions_to_visit) {
 //		cur_conjunction = child_conjunction;
-//		// traverse child conjuction
+//		// traverse child conjunction
 //		if (!BFSLookUpConjunctions(child_conjunction)) {
 //			return false;
 //		}

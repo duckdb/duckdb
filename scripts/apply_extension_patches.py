@@ -17,7 +17,7 @@ def raise_error(error_msg):
     sys.exit(1)
 
 
-patches = os.listdir(directory)
+patches = sorted(os.listdir(directory))
 for patch in patches:
     if not patch.endswith('.patch'):
         raise_error(
@@ -36,6 +36,7 @@ if not patches:
 
 print(f"Resetting patches in {directory}\n")
 subprocess.run(["git", "log"], check=True)
+subprocess.run(["git", "clean", "-f"], check=True)
 subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
 # Apply each patch file using git apply
 for patch in patches:

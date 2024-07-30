@@ -1,9 +1,18 @@
-from .column import Column, _get_expr
-from typing import Any, Callable, overload, Union
+from typing import Any, Callable, Union, overload
 
-from duckdb import CaseExpression, ConstantExpression, ColumnExpression, FunctionExpression, Expression
-from ._typing import ColumnOrName
+from duckdb import (
+    CaseExpression,
+    CoalesceOperator,
+    ColumnExpression,
+    ConstantExpression,
+    Expression,
+    FunctionExpression,
+)
+
+from ..errors import PySparkTypeError
 from ..exception import ContributionsAcceptedError
+from ._typing import ColumnOrName
+from .column import Column, _get_expr
 
 
 def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
@@ -11,7 +20,7 @@ def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
     Invokes n-ary JVM function identified by name
     and wraps the result with :class:`~pyspark.sql.Column`.
     """
-    cols = [_to_column(expr) for expr in cols]
+    cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function(name, *cols)
 
 
@@ -66,7 +75,9 @@ def _inner_expr_or_val(val):
 
 
 def struct(*cols: Column) -> Column:
-    return Column(FunctionExpression('struct_pack', *[_inner_expr_or_val(x) for x in cols]))
+    return Column(
+        FunctionExpression("struct_pack", *[_inner_expr_or_val(x) for x in cols])
+    )
 
 
 def lit(col: Any) -> Column:
@@ -77,9 +88,16 @@ def _invoke_function(function: str, *arguments):
     return Column(FunctionExpression(function, *arguments))
 
 
-def _to_column(col: ColumnOrName) -> Expression:
-    return col.expr if isinstance(col, Column) else ColumnExpression(col)
-
+def _to_column_expr(col: ColumnOrName) -> Expression:
+    if isinstance(col, Column):
+        return col.expr
+    elif isinstance(col, str):
+        return ColumnExpression(col)
+    else:
+        raise PySparkTypeError(
+            error_class="NOT_COLUMN_OR_STR",
+            message_parameters={"arg_name": "col", "arg_type": type(col).__name__},
+        )
 
 def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Column:
     r"""Replace all substrings of the specified string value that match regexp with rep.
@@ -93,7 +111,11 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     [Row(d='-----')]
     """
     return _invoke_function(
-        "regexp_replace", _to_column(str), ConstantExpression(pattern), ConstantExpression(replacement), ConstantExpression('g')
+        "regexp_replace",
+        _to_column_expr(str),
+        ConstantExpression(pattern),
+        ConstantExpression(replacement),
+        ConstantExpression("g"),
     )
 
 
@@ -123,7 +145,7 @@ def array_contains(col: "ColumnOrName", value: Any) -> Column:
     [Row(array_contains(data, a)=True), Row(array_contains(data, a)=False)]
     """
     value = _get_expr(value)
-    return _invoke_function("array_contains", _to_column(col), value)
+    return _invoke_function("array_contains", _to_column_expr(col), value)
 
 
 def avg(col: "ColumnOrName") -> Column:
@@ -322,13 +344,11 @@ def count(col: "ColumnOrName") -> Column:
 
 
 @overload
-def transform(col: "ColumnOrName", f: Callable[[Column], Column]) -> Column:
-    ...
+def transform(col: "ColumnOrName", f: Callable[[Column], Column]) -> Column: ...
 
 
 @overload
-def transform(col: "ColumnOrName", f: Callable[[Column, Column], Column]) -> Column:
-    ...
+def transform(col: "ColumnOrName", f: Callable[[Column, Column], Column]) -> Column: ...
 
 
 def transform(
@@ -416,10 +436,8 @@ def concat_ws(sep: str, *cols: "ColumnOrName") -> "Column":
     >>> df.select(concat_ws('-', df.s, df.d).alias('s')).collect()
     [Row(s='abcd-123')]
     """
-    cols = [_to_column(expr) for expr in cols]
-    return _invoke_function(
-        "concat_ws", ConstantExpression(sep), *cols
-    )
+    cols = [_to_column_expr(expr) for expr in cols]
+    return _invoke_function("concat_ws", ConstantExpression(sep), *cols)
 
 
 def lower(col: "ColumnOrName") -> Column:
@@ -682,7 +700,7 @@ def greatest(*cols: "ColumnOrName") -> Column:
     if len(cols) < 2:
         raise ValueError("greatest should take at least 2 columns")
 
-    cols = [_to_column(expr) for expr in cols]
+    cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function("greatest", *cols)
 
 
@@ -715,7 +733,7 @@ def least(*cols: "ColumnOrName") -> Column:
     if len(cols) < 2:
         raise ValueError("least should take at least 2 columns")
 
-    cols = [_to_column(expr) for expr in cols]
+    cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function("least", *cols)
 
 
@@ -847,3 +865,690 @@ def length(col: "ColumnOrName") -> Column:
     [Row(length=4)]
     """
     return _invoke_function_over_columns("length", col)
+
+
+def coalesce(*cols: "ColumnOrName") -> Column:
+    """Returns the first column that is not null.
+    .. versionadded:: 1.4.0
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+    Parameters
+    ----------
+    cols : :class:`~pyspark.sql.Column` or str
+        list of columns to work on.
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        value of the first column that is not null.
+    Examples
+    --------
+    >>> cDf = spark.createDataFrame([(None, None), (1, None), (None, 2)], ("a", "b"))
+    >>> cDf.show()
+    +----+----+
+    |   a|   b|
+    +----+----+
+    |NULL|NULL|
+    |   1|NULL|
+    |NULL|   2|
+    +----+----+
+    >>> cDf.select(coalesce(cDf["a"], cDf["b"])).show()
+    +--------------+
+    |coalesce(a, b)|
+    +--------------+
+    |          NULL|
+    |             1|
+    |             2|
+    +--------------+
+    >>> cDf.select('*', coalesce(cDf["a"], lit(0.0))).show()
+    +----+----+----------------+
+    |   a|   b|coalesce(a, 0.0)|
+    +----+----+----------------+
+    |NULL|NULL|             0.0|
+    |   1|NULL|             1.0|
+    |NULL|   2|             0.0|
+    +----+----+----------------+
+    """
+
+    cols = [_to_column_expr(expr) for expr in cols]
+    return Column(CoalesceOperator(*cols))
+
+
+def nvl(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Returns `col2` if `col1` is null, or `col1` otherwise.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+    col2 : :class:`~pyspark.sql.Column` or str
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None, 8,), (1, 9,)], ["a", "b"])
+    >>> df.select(nvl(df.a, df.b).alias('r')).collect()
+    [Row(r=8), Row(r=1)]
+    """
+
+    return coalesce(col1, col2)
+
+
+def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Returns `col2` if `col1` is null, or `col1` otherwise.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+    col2 : :class:`~pyspark.sql.Column` or str
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> df = spark.createDataFrame([(None,), (1,)], ["e"])
+    >>> df.select(sf.ifnull(df.e, sf.lit(8))).show()
+    +------------+
+    |ifnull(e, 8)|
+    +------------+
+    |           8|
+    |           1|
+    +------------+
+    """
+    return coalesce(col1, col2)
+
+ 
+def md5(col: "ColumnOrName") -> Column:
+    """Calculates the MD5 digest and returns the value as a 32 character hex string.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([('ABC',)], ['a']).select(md5('a').alias('hash')).collect()
+    [Row(hash='902fbdd2b1df0c4f70b4a5d23525e932')]
+    """
+    return _invoke_function_over_columns("md5", col)
+
+
+def sha2(col: "ColumnOrName", numBits: int) -> Column:
+    """Returns the hex string result of SHA-2 family of hash functions (SHA-224, SHA-256, SHA-384,
+    and SHA-512). The numBits indicates the desired bit length of the result, which must have a
+    value of 224, 256, 384, 512, or 0 (which is equivalent to 256).
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+    numBits : int
+        the desired bit length of the result, which must have a
+        value of 224, 256, 384, 512, or 0 (which is equivalent to 256).
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([["Alice"], ["Bob"]], ["name"])
+    >>> df.withColumn("sha2", sha2(df.name, 256)).show(truncate=False)
+    +-----+----------------------------------------------------------------+
+    |name |sha2                                                            |
+    +-----+----------------------------------------------------------------+
+    |Alice|3bc51062973c458d5a6f2d8d64a023246354ad7e064b1e4e009ec8a0699a3043|
+    |Bob  |cd9fb1e148ccd8442e5aa74904cc73bf6fb54d1d54d333bd596aa9bb4bb4e961|
+    +-----+----------------------------------------------------------------+
+    """
+
+    if numBits not in {224, 256, 384, 512, 0}:
+        raise ValueError("numBits should be one of {224, 256, 384, 512, 0}")
+
+    if numBits == 256:
+        return _invoke_function_over_columns("sha256", col)
+
+    raise ContributionsAcceptedError(
+        "SHA-224, SHA-384, and SHA-512 are not supported yet."
+    )
+
+
+def curdate() -> Column:
+    """
+    Returns the current date at the start of query evaluation as a :class:`DateType` column.
+    All calls of current_date within the same query return the same value.
+
+    .. versionadded:: 3.5.0
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        current date.
+
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.range(1).select(sf.curdate()).show() # doctest: +SKIP
+    +--------------+
+    |current_date()|
+    +--------------+
+    |    2022-08-26|
+    +--------------+
+    """
+    return _invoke_function("today")
+
+
+def current_date() -> Column:
+    """
+    Returns the current date at the start of query evaluation as a :class:`DateType` column.
+    All calls of current_date within the same query return the same value.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        current date.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(current_date()).show() # doctest: +SKIP
+    +--------------+
+    |current_date()|
+    +--------------+
+    |    2022-08-26|
+    +--------------+
+    """
+    return curdate()
+
+
+def now() -> Column:
+    """
+    Returns the current timestamp at the start of query evaluation.
+
+    .. versionadded:: 3.5.0
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        current timestamp at the start of query evaluation.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(now()).show(truncate=False) # doctest: +SKIP
+    +-----------------------+
+    |now()    |
+    +-----------------------+
+    |2022-08-26 21:23:22.716|
+    +-----------------------+
+    """
+    return _invoke_function("now")
+
+
+def date_trunc(format: str, timestamp: "ColumnOrName") -> Column:
+    """
+    Returns timestamp truncated to the unit specified by the format.
+
+    .. versionadded:: 2.3.0
+
+    Parameters
+    ----------
+    format : str
+        'year', 'yyyy', 'yy', 'month', 'mon', 'mm',
+        'day', 'dd', 'hour', 'minute', 'second', 'week', 'quarter'
+    timestamp : :class:`~pyspark.sql.Column` or str
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('1997-02-28 05:02:11',)], ['t'])
+    >>> df.select(date_trunc('year', df.t).alias('year')).collect()
+    [Row(year=datetime.datetime(1997, 1, 1, 0, 0))]
+    >>> df.select(date_trunc('mon', df.t).alias('month')).collect()
+    [Row(month=datetime.datetime(1997, 2, 1, 0, 0))]
+    """
+    format = format.lower()
+    if format in ["yyyy", "yy"]:
+        format = "year"
+    elif format in ["mon", "mm"]:
+        format = "month"
+    elif format == "dd":
+        format = "day"
+    elif format == "hh":
+        format = "hour"
+    return _invoke_function_over_columns("date_trunc", lit(format), timestamp)
+
+
+def date_part(field: "ColumnOrName", source: "ColumnOrName") -> Column:
+    """
+    Extracts a part of the date/timestamp or interval source.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    field : :class:`~pyspark.sql.Column` or str
+        selects which part of the source should be extracted, and supported string values
+        are as same as the fields of the equivalent function `extract`.
+    source : :class:`~pyspark.sql.Column` or str
+        a date/timestamp or interval column from where `field` should be extracted.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a part of the date/timestamp or interval source.
+
+    Examples
+    --------
+    >>> import datetime
+    >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ['ts'])
+    >>> df.select(
+    ...     date_part(lit('YEAR'), 'ts').alias('year'),
+    ...     date_part(lit('month'), 'ts').alias('month'),
+    ...     date_part(lit('WEEK'), 'ts').alias('week'),
+    ...     date_part(lit('D'), 'ts').alias('day'),
+    ...     date_part(lit('M'), 'ts').alias('minute'),
+    ...     date_part(lit('S'), 'ts').alias('second')
+    ... ).collect()
+    [Row(year=2015, month=4, week=15, day=8, minute=8, second=Decimal('15.000000'))]
+    """
+    return _invoke_function_over_columns("date_part", field, source)
+
+
+def extract(field: "ColumnOrName", source: "ColumnOrName") -> Column:
+    """
+    Extracts a part of the date/timestamp or interval source.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    field : :class:`~pyspark.sql.Column` or str
+        selects which part of the source should be extracted.
+    source : :class:`~pyspark.sql.Column` or str
+        a date/timestamp or interval column from where `field` should be extracted.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a part of the date/timestamp or interval source.
+
+    Examples
+    --------
+    >>> import datetime
+    >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ['ts'])
+    >>> df.select(
+    ...     extract(lit('YEAR'), 'ts').alias('year'),
+    ...     extract(lit('month'), 'ts').alias('month'),
+    ...     extract(lit('WEEK'), 'ts').alias('week'),
+    ...     extract(lit('D'), 'ts').alias('day'),
+    ...     extract(lit('M'), 'ts').alias('minute'),
+    ...     extract(lit('S'), 'ts').alias('second')
+    ... ).collect()
+    [Row(year=2015, month=4, week=15, day=8, minute=8, second=Decimal('15.000000'))]
+    """
+    return date_part(field, source)
+
+
+def datepart(field: "ColumnOrName", source: "ColumnOrName") -> Column:
+    """
+    Extracts a part of the date/timestamp or interval source.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    field : :class:`~pyspark.sql.Column` or str
+        selects which part of the source should be extracted, and supported string values
+        are as same as the fields of the equivalent function `extract`.
+    source : :class:`~pyspark.sql.Column` or str
+        a date/timestamp or interval column from where `field` should be extracted.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a part of the date/timestamp or interval source.
+
+    Examples
+    --------
+    >>> import datetime
+    >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ['ts'])
+    >>> df.select(
+    ...     datepart(lit('YEAR'), 'ts').alias('year'),
+    ...     datepart(lit('month'), 'ts').alias('month'),
+    ...     datepart(lit('WEEK'), 'ts').alias('week'),
+    ...     datepart(lit('D'), 'ts').alias('day'),
+    ...     datepart(lit('M'), 'ts').alias('minute'),
+    ...     datepart(lit('S'), 'ts').alias('second')
+    ... ).collect()
+    [Row(year=2015, month=4, week=15, day=8, minute=8, second=Decimal('15.000000'))]
+    """
+    return date_part(field, source)
+
+
+def year(col: "ColumnOrName") -> Column:
+    """
+    Extract the year of a given date/timestamp as integer.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        year part of the date/timestamp as integer.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+    >>> df.select(year('dt').alias('year')).collect()
+    [Row(year=2015)]
+    """
+    return _invoke_function_over_columns("year", col)
+
+
+def quarter(col: "ColumnOrName") -> Column:
+    """
+    Extract the quarter of a given date/timestamp as integer.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        quarter of the date/timestamp as integer.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+    >>> df.select(quarter('dt').alias('quarter')).collect()
+    [Row(quarter=2)]
+    """
+    return _invoke_function_over_columns("quarter", col)
+
+
+def month(col: "ColumnOrName") -> Column:
+    """
+    Extract the month of a given date/timestamp as integer.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        month part of the date/timestamp as integer.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+    >>> df.select(month('dt').alias('month')).collect()
+    [Row(month=4)]
+    """
+    return _invoke_function_over_columns("month", col)
+
+
+def dayofweek(col: "ColumnOrName") -> Column:
+    """
+    Extract the day of the week of a given date/timestamp as integer.
+    Ranges from 1 for a Sunday through to 7 for a Saturday
+
+    .. versionadded:: 2.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        day of the week for given date/timestamp as integer.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+    >>> df.select(dayofweek('dt').alias('day')).collect()
+    [Row(day=4)]
+    """
+    return _invoke_function_over_columns("dayofweek", col) + lit(1)
+
+
+def day(col: "ColumnOrName") -> Column:
+    """
+    Extract the day of the month of a given date/timestamp as integer.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        day of the month for given date/timestamp as integer.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+    >>> df.select(day('dt').alias('day')).collect()
+    [Row(day=8)]
+    """
+    return _invoke_function_over_columns("day", col)
+
+
+def dayofmonth(col: "ColumnOrName") -> Column:
+    """
+    Extract the day of the month of a given date/timestamp as integer.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        day of the month for given date/timestamp as integer.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+    >>> df.select(dayofmonth('dt').alias('day')).collect()
+    [Row(day=8)]
+    """
+    return day(col)
+
+
+def dayofyear(col: "ColumnOrName") -> Column:
+    """
+    Extract the day of the year of a given date/timestamp as integer.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        day of the year for given date/timestamp as integer.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+    >>> df.select(dayofyear('dt').alias('day')).collect()
+    [Row(day=98)]
+    """
+    return _invoke_function_over_columns("dayofyear", col)
+
+
+def hour(col: "ColumnOrName") -> Column:
+    """
+    Extract the hours of a given timestamp as integer.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        hour part of the timestamp as integer.
+
+    Examples
+    --------
+    >>> import datetime
+    >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ['ts'])
+    >>> df.select(hour('ts').alias('hour')).collect()
+    [Row(hour=13)]
+    """
+    return _invoke_function_over_columns("hour", col)
+
+
+def minute(col: "ColumnOrName") -> Column:
+    """
+    Extract the minutes of a given timestamp as integer.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        minutes part of the timestamp as integer.
+
+    Examples
+    --------
+    >>> import datetime
+    >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ['ts'])
+    >>> df.select(minute('ts').alias('minute')).collect()
+    [Row(minute=8)]
+    """
+    return _invoke_function_over_columns("minute", col)
+
+
+def second(col: "ColumnOrName") -> Column:
+    """
+    Extract the seconds of a given date as integer.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        `seconds` part of the timestamp as integer.
+
+    Examples
+    --------
+    >>> import datetime
+    >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ['ts'])
+    >>> df.select(second('ts').alias('second')).collect()
+    [Row(second=15)]
+    """
+    return _invoke_function_over_columns("second", col)
+
+
+def weekofyear(col: "ColumnOrName") -> Column:
+    """
+    Extract the week number of a given date as integer.
+    A week is considered to start on a Monday and week 1 is the first week with more than 3 days,
+    as defined by ISO 8601
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        `week` of the year for given date as integer.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+    >>> df.select(weekofyear(df.dt).alias('week')).collect()
+    [Row(week=15)]
+    """
+    return _invoke_function_over_columns("weekofyear", col)

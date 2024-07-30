@@ -86,3 +86,8 @@ statement error
 SELECT '1.2.3.4#34'::INET
 ----
 ^
+
+statement error
+SELECT '999.999.999.999/24'::INET
+----
+^

@@ -1,0 +1,20 @@
+# name: test/sql/storage/bc/internal_schemas_0102.test
+# description: Verify internal schemas are not duplicated in the main schema when reading older databases
+# group: [bc]
+
+require skip_reload
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+unzip data/storage/bc_0102.db.gz __TEST_DIR__/bc_0102.db
+
+load __TEST_DIR__/bc_0102.db readonly
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT database_name, schema_name FROM duckdb_schemas WHERE NOT internal
+----
+bc_0102	s1

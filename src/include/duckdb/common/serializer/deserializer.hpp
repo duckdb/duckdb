@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/serializer/serialization_data.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
-#include "duckdb/common/serializer/deserialization_data.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
@@ -22,7 +22,7 @@ namespace duckdb {
 class Deserializer {
 protected:
 	bool deserialize_enum_from_string = false;
-	DeserializationData data;
+	SerializationData data;
 
 public:
 	virtual ~Deserializer() {
@@ -163,6 +163,14 @@ public:
 	template <class T>
 	void Unset() {
 		return data.Unset<T>();
+	}
+
+	SerializationData &GetSerializationData() {
+		return data;
+	}
+
+	void SetSerializationData(const SerializationData &other) {
+		data = other;
 	}
 
 	template <class FUNC>
@@ -308,6 +316,23 @@ private:
 		return map;
 	}
 
+	template <typename T = void>
+	inline typename std::enable_if<is_insertion_preserving_map<T>::value, T>::type Read() {
+		using VALUE_TYPE = typename is_insertion_preserving_map<T>::VALUE_TYPE;
+
+		T map;
+		auto size = OnListBegin();
+		for (idx_t i = 0; i < size; i++) {
+			OnObjectBegin();
+			auto key = ReadProperty<string>(0, "key");
+			auto value = ReadProperty<VALUE_TYPE>(1, "value");
+			OnObjectEnd();
+			map[key] = std::move(value);
+		}
+		OnListEnd();
+		return map;
+	}
+
 	// Deserialize an unordered set
 	template <typename T = void>
 	inline typename std::enable_if<is_unordered_set<T>::value, T>::type Read() {
@@ -344,6 +369,19 @@ private:
 		auto second = ReadProperty<SECOND_TYPE>(1, "second");
 		OnObjectEnd();
 		return std::make_pair(first, second);
+	}
+
+	// Deserialize a priority_queue
+	template <typename T = void>
+	inline typename std::enable_if<is_queue<T>::value, T>::type Read() {
+		using ELEMENT_TYPE = typename is_queue<T>::ELEMENT_TYPE;
+		T queue;
+		auto size = OnListBegin();
+		for (idx_t i = 0; i < size; i++) {
+			queue.emplace(Read<ELEMENT_TYPE>());
+		}
+		OnListEnd();
+		return queue;
 	}
 
 	// Primitive types

@@ -44,7 +44,7 @@ if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
       set(EXT_LOADER_BODY
           "${EXT_LOADER_BODY}\
     if (extension==\"${EXT_NAME}\") {
-        db.LoadExtension<${EXT_NAME_CAMELCASE}Extension>();
+        db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
         return true;
     }
 ")

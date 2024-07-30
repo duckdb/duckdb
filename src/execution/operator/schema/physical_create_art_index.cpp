@@ -4,9 +4,9 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/storage/index.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -34,14 +34,14 @@ PhysicalCreateARTIndex::PhysicalCreateARTIndex(LogicalOperator &op, TableCatalog
 class CreateARTIndexGlobalSinkState : public GlobalSinkState {
 public:
 	//! Global index to be added to the table
-	unique_ptr<Index> global_index;
+	unique_ptr<BoundIndex> global_index;
 };
 
 class CreateARTIndexLocalSinkState : public LocalSinkState {
 public:
 	explicit CreateARTIndexLocalSinkState(ClientContext &context) : arena_allocator(Allocator::Get(context)) {};
 
-	unique_ptr<Index> local_index;
+	unique_ptr<BoundIndex> local_index;
 	ArenaAllocator arena_allocator;
 	vector<ARTKey> keys;
 	DataChunk key_chunk;
@@ -82,9 +82,9 @@ SinkResultType PhysicalCreateARTIndex::SinkUnsorted(Vector &row_identifiers, Ope
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	auto count = l_state.key_chunk.size();
 
-	// get the corresponding row IDs
-	row_identifiers.Flatten(count);
-	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+	UnifiedVectorFormat row_id_data;
+	row_identifiers.ToUnifiedFormat(count, row_id_data);
+	auto row_ids = UnifiedVectorFormat::GetData<row_t>(row_id_data);
 
 	// insert the row IDs
 	auto &art = l_state.local_index->Cast<ART>();
@@ -104,9 +104,9 @@ SinkResultType PhysicalCreateARTIndex::SinkSorted(Vector &row_identifiers, Opera
 	auto &l_index = l_state.local_index;
 
 	// create an ART from the chunk
-	auto art =
-	    make_uniq<ART>(info->index_name, l_index->index_constraint_type, l_index->column_ids, l_index->table_io_manager,
-	                   l_index->unbound_expressions, storage.db, l_index->Cast<ART>().allocators);
+	auto art = make_uniq<ART>(info->index_name, l_index->GetConstraintType(), l_index->GetColumnIds(),
+	                          l_index->table_io_manager, l_index->unbound_expressions, storage.db,
+	                          l_index->Cast<ART>().allocators);
 	if (!art->ConstructFromSorted(l_state.key_chunk.size(), l_state.keys, row_identifiers)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
@@ -123,29 +123,29 @@ SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk
                                             OperatorSinkInput &input) const {
 
 	D_ASSERT(chunk.ColumnCount() >= 2);
-
-	// generate the keys for the given input
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	l_state.key_chunk.ReferenceColumns(chunk, l_state.key_column_ids);
 	l_state.arena_allocator.Reset();
-	ART::GenerateKeys(l_state.arena_allocator, l_state.key_chunk, l_state.keys);
 
-	// insert the keys and their corresponding row IDs
+	// Insert the keys and their corresponding row identifiers.
 	auto &row_identifiers = chunk.data[chunk.ColumnCount() - 1];
 	if (sorted) {
+		ART::GenerateKeys<true>(l_state.arena_allocator, l_state.key_chunk, l_state.keys);
 		return SinkSorted(row_identifiers, input);
 	}
+
+	ART::GenerateKeys(l_state.arena_allocator, l_state.key_chunk, l_state.keys);
 	return SinkUnsorted(row_identifiers, input);
 }
 
 SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
                                                       OperatorSinkCombineInput &input) const {
 
-	auto &gstate = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
-	auto &lstate = input.local_state.Cast<CreateARTIndexLocalSinkState>();
+	auto &g_state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
+	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 
 	// merge the local index into the global index
-	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
+	if (!g_state.global_index->MergeIndexes(*l_state.local_index)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 
@@ -169,7 +169,7 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 
 	auto &schema = table.schema;
 	info->column_ids = storage_ids;
-	auto index_entry = schema.CreateIndex(context, *info, table).get();
+	auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
 	if (!index_entry) {
 		D_ASSERT(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
 		// index already exists, but error ignored because of IF NOT EXISTS
@@ -177,11 +177,6 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 	}
 	auto &index = index_entry->Cast<DuckIndexEntry>();
 	index.initial_index_size = state.global_index->GetInMemorySize();
-
-	index.info = make_shared_ptr<IndexDataTableInfo>(storage.GetDataTableInfo(), index.name);
-	for (auto &parsed_expr : info->parsed_expressions) {
-		index.parsed_expressions.push_back(parsed_expr->Copy());
-	}
 
 	// add index to storage
 	storage.AddIndex(std::move(state.global_index));

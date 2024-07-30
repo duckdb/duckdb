@@ -16,6 +16,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/main/chunk_scan_state/query_result.hpp"
 
@@ -62,6 +63,28 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &query_result) {
 	    !query_result.Cast<StreamQueryResult>().IsOpen()) {
 		result_closed = true;
 		return nullptr;
+	}
+	if (query_result.type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = query_result.Cast<StreamQueryResult>();
+		StreamExecutionResult execution_result;
+		while (!StreamQueryResult::IsChunkReady(execution_result = stream_result.ExecuteTask())) {
+			{
+				py::gil_scoped_acquire gil;
+				if (PyErr_CheckSignals() != 0) {
+					throw std::runtime_error("Query interrupted");
+				}
+			}
+			if (execution_result == StreamExecutionResult::BLOCKED) {
+				stream_result.WaitForTask();
+			}
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_CANCELLED) {
+			throw InvalidInputException("The execution of the query was cancelled before it could finish, likely "
+			                            "caused by executing a different query");
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_ERROR) {
+			stream_result.ThrowError();
+		}
 	}
 	auto chunk = query_result.Fetch();
 	if (query_result.HasError()) {
@@ -152,6 +175,9 @@ void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversi
 		res[name] = py::module::import("pandas")
 		                .attr("Categorical")
 		                .attr("from_codes")(conversion.ToArray(col_idx), py::arg("dtype") = categories_type[col_idx]);
+		if (!conversion.ToPandas()) {
+			res[name] = res[name].attr("to_numpy")();
+		}
 	} else {
 		res[name] = conversion.ToArray(col_idx);
 	}

@@ -17,6 +17,9 @@ static void ListCosineSimilarity(DataChunk &args, ExpressionState &, Vector &res
 	auto &left_child = ListVector::GetEntry(left);
 	auto &right_child = ListVector::GetEntry(right);
 
+	left_child.Flatten(left_count);
+	right_child.Flatten(right_count);
+
 	D_ASSERT(left_child.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(right_child.GetVectorType() == VectorType::FLAT_VECTOR);
 
@@ -40,6 +43,10 @@ static void ListCosineSimilarity(DataChunk &args, ExpressionState &, Vector &res
 		    }
 
 		    auto dimensions = left.length;
+
+		    if (dimensions == 0) {
+			    throw InvalidInputException("The cosine similarity for empty vectors is not defined");
+		    }
 
 		    NUMERIC_TYPE distance = 0;
 		    NUMERIC_TYPE norm_l = 0;

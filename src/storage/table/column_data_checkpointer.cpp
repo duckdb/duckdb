@@ -13,6 +13,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
       is_validity(GetType().id() == LogicalTypeId::VALIDITY),
       intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity),
       checkpoint_info(checkpoint_info_p) {
+
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	auto functions = config.GetCompressionFunctions(GetType().InternalType());
 	for (auto &func : functions) {

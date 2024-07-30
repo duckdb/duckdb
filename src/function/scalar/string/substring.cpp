@@ -224,11 +224,7 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 	if (offset < 0) {
 		// negative offset, this case is more difficult
 		// we first need to count the number of characters in the string
-		idx_t num_characters = 0;
-		utf8proc_grapheme_callback(input_data, input_size, [&](size_t start, size_t end) {
-			num_characters++;
-			return true;
-		});
+		idx_t num_characters = Utf8Proc::GraphemeCount(input_data, input_size);
 		// now call substring start and end again, but with the number of unicode characters this time
 		SubstringStartEnd(UnsafeNumericCast<int64_t>(num_characters), offset, length, start, end);
 	}
@@ -236,16 +232,15 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 	// now scan the graphemes of the string to find the positions of the start and end characters
 	int64_t current_character = 0;
 	idx_t start_pos = DConstants::INVALID_INDEX, end_pos = input_size;
-	utf8proc_grapheme_callback(input_data, input_size, [&](size_t gstart, size_t gend) {
+	for (auto cluster : Utf8Proc::GraphemeClusters(input_data, input_size)) {
 		if (current_character == start) {
-			start_pos = gstart;
+			start_pos = cluster.start;
 		} else if (current_character == end) {
-			end_pos = gstart;
-			return false;
+			end_pos = cluster.start;
+			break;
 		}
 		current_character++;
-		return true;
-	});
+	}
 	if (start_pos == DConstants::INVALID_INDEX) {
 		return SubstringEmptyString(result);
 	}

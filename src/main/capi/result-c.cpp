@@ -146,7 +146,18 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 	auto &collection = result.Collection();
 	idx_t row_count = collection.Count();
 	column->__deprecated_nullmask = (bool *)duckdb_malloc(sizeof(bool) * collection.Count());
-	column->__deprecated_data = duckdb_malloc(GetCTypeSize(column->__deprecated_type) * row_count);
+
+	auto type_size = GetCTypeSize(column->__deprecated_type);
+	if (type_size == 0) {
+		for (idx_t row_id = 0; row_id < row_count; row_id++) {
+			column->__deprecated_nullmask[row_id] = false;
+		}
+		// Unsupported type, e.g., a LIST. By returning DuckDBSuccess here,
+		// we allow filling other columns, and return NULL for all unsupported types.
+		return DuckDBSuccess;
+	}
+
+	column->__deprecated_data = duckdb_malloc(type_size * row_count);
 	if (!column->__deprecated_nullmask || !column->__deprecated_data) { // LCOV_EXCL_START
 		// malloc failure
 		return DuckDBError;
@@ -295,7 +306,7 @@ duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result_p, duckdb_resu
 		return DuckDBError;
 	}
 	// copy the data
-	// first write the meta data
+	// first write the metadata
 	out->__deprecated_column_count = result.ColumnCount();
 	out->__deprecated_rows_changed = 0;
 	return DuckDBSuccess;
@@ -329,6 +340,7 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 		// malloc failure
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
+
 	if (result_data->result->type == QueryResultType::STREAM_RESULT) {
 		// if we are dealing with a stream result, convert it to a materialized result first
 		auto &stream_result = (StreamQueryResult &)*result_data->result;
@@ -344,6 +356,7 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 		result->__deprecated_columns[i].__deprecated_type = ConvertCPPTypeToC(result_data->result->types[i]);
 		result->__deprecated_columns[i].__deprecated_name = (char *)result_data->result->names[i].c_str(); // NOLINT
 	}
+
 	result->__deprecated_row_count = materialized.RowCount();
 	if (result->__deprecated_row_count > 0 &&
 	    materialized.properties.return_type == StatementReturnType::CHANGED_ROWS) {
@@ -353,7 +366,8 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 			result->__deprecated_rows_changed = NumericCast<idx_t>(row_changes.GetValue<int64_t>());
 		}
 	}
-	// now write the data
+
+	// Now write the data and skip any unsupported columns.
 	for (idx_t col = 0; col < column_count; col++) {
 		auto state = deprecated_duckdb_translate_column(materialized, &result->__deprecated_columns[col], col);
 		if (state != DuckDBSuccess) {
@@ -361,6 +375,96 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 		}
 	}
 	return true;
+}
+
+duckdb_error_type CAPIErrorType(ExceptionType type) {
+	switch (type) {
+	case ExceptionType::INVALID:
+		return DUCKDB_ERROR_INVALID;
+	case ExceptionType::OUT_OF_RANGE:
+		return DUCKDB_ERROR_OUT_OF_RANGE;
+	case ExceptionType::CONVERSION:
+		return DUCKDB_ERROR_CONVERSION;
+	case ExceptionType::UNKNOWN_TYPE:
+		return DUCKDB_ERROR_UNKNOWN_TYPE;
+	case ExceptionType::DECIMAL:
+		return DUCKDB_ERROR_DECIMAL;
+	case ExceptionType::MISMATCH_TYPE:
+		return DUCKDB_ERROR_MISMATCH_TYPE;
+	case ExceptionType::DIVIDE_BY_ZERO:
+		return DUCKDB_ERROR_DIVIDE_BY_ZERO;
+	case ExceptionType::OBJECT_SIZE:
+		return DUCKDB_ERROR_OBJECT_SIZE;
+	case ExceptionType::INVALID_TYPE:
+		return DUCKDB_ERROR_INVALID_TYPE;
+	case ExceptionType::SERIALIZATION:
+		return DUCKDB_ERROR_SERIALIZATION;
+	case ExceptionType::TRANSACTION:
+		return DUCKDB_ERROR_TRANSACTION;
+	case ExceptionType::NOT_IMPLEMENTED:
+		return DUCKDB_ERROR_NOT_IMPLEMENTED;
+	case ExceptionType::EXPRESSION:
+		return DUCKDB_ERROR_EXPRESSION;
+	case ExceptionType::CATALOG:
+		return DUCKDB_ERROR_CATALOG;
+	case ExceptionType::PARSER:
+		return DUCKDB_ERROR_PARSER;
+	case ExceptionType::PLANNER:
+		return DUCKDB_ERROR_PLANNER;
+	case ExceptionType::SCHEDULER:
+		return DUCKDB_ERROR_SCHEDULER;
+	case ExceptionType::EXECUTOR:
+		return DUCKDB_ERROR_EXECUTOR;
+	case ExceptionType::CONSTRAINT:
+		return DUCKDB_ERROR_CONSTRAINT;
+	case ExceptionType::INDEX:
+		return DUCKDB_ERROR_INDEX;
+	case ExceptionType::STAT:
+		return DUCKDB_ERROR_STAT;
+	case ExceptionType::CONNECTION:
+		return DUCKDB_ERROR_CONNECTION;
+	case ExceptionType::SYNTAX:
+		return DUCKDB_ERROR_SYNTAX;
+	case ExceptionType::SETTINGS:
+		return DUCKDB_ERROR_SETTINGS;
+	case ExceptionType::BINDER:
+		return DUCKDB_ERROR_BINDER;
+	case ExceptionType::NETWORK:
+		return DUCKDB_ERROR_NETWORK;
+	case ExceptionType::OPTIMIZER:
+		return DUCKDB_ERROR_OPTIMIZER;
+	case ExceptionType::NULL_POINTER:
+		return DUCKDB_ERROR_NULL_POINTER;
+	case ExceptionType::IO:
+		return DUCKDB_ERROR_IO;
+	case ExceptionType::INTERRUPT:
+		return DUCKDB_ERROR_INTERRUPT;
+	case ExceptionType::FATAL:
+		return DUCKDB_ERROR_FATAL;
+	case ExceptionType::INTERNAL:
+		return DUCKDB_ERROR_INTERNAL;
+	case ExceptionType::INVALID_INPUT:
+		return DUCKDB_ERROR_INVALID_INPUT;
+	case ExceptionType::OUT_OF_MEMORY:
+		return DUCKDB_ERROR_OUT_OF_MEMORY;
+	case ExceptionType::PERMISSION:
+		return DUCKDB_ERROR_PERMISSION;
+	case ExceptionType::PARAMETER_NOT_RESOLVED:
+		return DUCKDB_ERROR_PARAMETER_NOT_RESOLVED;
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+		return DUCKDB_ERROR_PARAMETER_NOT_ALLOWED;
+	case ExceptionType::DEPENDENCY:
+		return DUCKDB_ERROR_DEPENDENCY;
+	case ExceptionType::HTTP:
+		return DUCKDB_ERROR_HTTP;
+	case ExceptionType::MISSING_EXTENSION:
+		return DUCKDB_ERROR_MISSING_EXTENSION;
+	case ExceptionType::AUTOLOAD:
+		return DUCKDB_ERROR_AUTOLOAD;
+	case ExceptionType::SEQUENCE:
+		return DUCKDB_ERROR_SEQUENCE;
+	}
+	return DUCKDB_ERROR_INVALID;
 }
 
 } // namespace duckdb
@@ -497,6 +601,17 @@ const char *duckdb_result_error(duckdb_result *result) {
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
 	return !result_data.result->HasError() ? nullptr : result_data.result->GetError().c_str();
+}
+
+duckdb_error_type duckdb_result_error_type(duckdb_result *result) {
+	if (!result || !result->internal_data) {
+		return DUCKDB_ERROR_INVALID;
+	}
+	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
+	if (!result_data.result->HasError()) {
+		return DUCKDB_ERROR_INVALID;
+	}
+	return duckdb::CAPIErrorType(result_data.result->GetErrorType());
 }
 
 idx_t duckdb_result_chunk_count(duckdb_result result) {

@@ -18,7 +18,7 @@ EqualOrNullSimplification::EqualOrNullSimplification(ExpressionRewriter &rewrite
 	equal_child->policy = SetMatcher::Policy::SOME;
 	op->matchers.push_back(std::move(equal_child));
 
-	// AND conjuction on the other
+	// AND conjunction on the other
 	auto and_child = make_uniq<ConjunctionExpressionMatcher>();
 	and_child->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::CONJUNCTION_AND);
 	and_child->policy = SetMatcher::Policy::SOME;
@@ -49,7 +49,7 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Ex
 		return nullptr;
 	}
 
-	// Make sure on the AND conjuction the relevant conditions appear
+	// Make sure on the AND conjunction the relevant conditions appear
 	auto &a_exp = *equal_cast.left;
 	auto &b_exp = *equal_cast.right;
 	bool a_is_null_found = false;

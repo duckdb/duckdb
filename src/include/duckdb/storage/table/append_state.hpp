@@ -22,6 +22,7 @@ class DataTable;
 class LocalTableStorage;
 class RowGroup;
 class UpdateSegment;
+class TableCatalogEntry;
 
 struct TableAppendState;
 

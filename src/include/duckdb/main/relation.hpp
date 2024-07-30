@@ -44,10 +44,8 @@ public:
 	}
 
 	ClientContextWrapper context;
-
 	RelationType type;
-
-	shared_ptr<ExternalDependency> extra_dependencies;
+	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
 public:
 	DUCKDB_API virtual const vector<ColumnDefinition> &Columns() = 0;
@@ -121,6 +119,7 @@ public:
 	// AGGREGATES
 	DUCKDB_API shared_ptr<Relation> Aggregate(const string &aggregate_list);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates);
+	DUCKDB_API shared_ptr<Relation> Aggregate(vector<unique_ptr<ParsedExpression>> expressions);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const string &aggregate_list, const string &group_list);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates, const vector<string> &groups);
 	DUCKDB_API shared_ptr<Relation> Aggregate(vector<unique_ptr<ParsedExpression>> expressions,
@@ -172,6 +171,7 @@ public:
 	virtual Relation *ChildRelation() {
 		return nullptr;
 	}
+	void AddExternalDependency(shared_ptr<ExternalDependency> dependency);
 	DUCKDB_API vector<shared_ptr<ExternalDependency>> GetAllDependencies();
 
 protected:

@@ -1,7 +1,10 @@
 #ifndef JEMALLOC_INTERNAL_BACKGROUND_THREAD_EXTERNS_H
 #define JEMALLOC_INTERNAL_BACKGROUND_THREAD_EXTERNS_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/background_thread_structs.h"
+#include "jemalloc/internal/base.h"
+#include "jemalloc/internal/mutex.h"
 
 extern bool opt_background_thread;
 extern size_t opt_max_background_threads;
@@ -31,7 +34,5 @@ extern int pthread_create_wrapper(pthread_t *__restrict, const pthread_attr_t *,
 #endif
 bool background_thread_boot0(void);
 bool background_thread_boot1(tsdn_t *tsdn, base_t *base);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BACKGROUND_THREAD_EXTERNS_H */

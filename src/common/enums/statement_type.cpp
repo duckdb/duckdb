@@ -1,5 +1,7 @@
 #include "duckdb/common/enums/statement_type.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+
 namespace duckdb {
 
 // LCOV_EXCL_START
@@ -61,6 +63,8 @@ string StatementTypeToString(StatementType type) {
 		return "DETACH";
 	case StatementType::MULTI_STATEMENT:
 		return "MULTI";
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+		return "UPDATE_EXTENSIONS";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}
@@ -79,5 +83,18 @@ string StatementReturnTypeToString(StatementReturnType type) {
 	return "INVALID";
 }
 // LCOV_EXCL_STOP
+
+void StatementProperties::RegisterDBRead(Catalog &catalog, ClientContext &context) {
+	auto catalog_identity = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
+	D_ASSERT(read_databases.count(catalog.GetName()) == 0 || read_databases[catalog.GetName()] == catalog_identity);
+	read_databases[catalog.GetName()] = catalog_identity;
+}
+
+void StatementProperties::RegisterDBModify(Catalog &catalog, ClientContext &context) {
+	auto catalog_identity = CatalogIdentity {catalog.GetOid(), catalog.GetCatalogVersion(context)};
+	D_ASSERT(modified_databases.count(catalog.GetName()) == 0 ||
+	         modified_databases[catalog.GetName()] == catalog_identity);
+	modified_databases[catalog.GetName()] = catalog_identity;
+}
 
 } // namespace duckdb

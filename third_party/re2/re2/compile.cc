@@ -487,8 +487,8 @@ int Compiler::CachedRuneByteSuffix(uint8_t lo, uint8_t hi, bool foldcase,
 }
 
 bool Compiler::IsCachedRuneByteSuffix(int id) {
-  uint8_t lo = inst_[id].lo_;
-  uint8_t hi = inst_[id].hi_;
+  uint8_t lo = inst_[id].byte_range.lo_;
+  uint8_t hi = inst_[id].byte_range.hi_;
   bool foldcase = inst_[id].foldcase() != 0;
   int next = inst_[id].out();
 

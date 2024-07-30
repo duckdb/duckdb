@@ -133,6 +133,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPORT";
 	case PhysicalOperatorType::SET:
 		return "SET";
+	case PhysicalOperatorType::SET_VARIABLE:
+		return "SET_VARIABLE";
 	case PhysicalOperatorType::RESET:
 		return "RESET";
 	case PhysicalOperatorType::LOAD:
@@ -155,6 +157,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "COPY_DATABASE";
 	case PhysicalOperatorType::VERIFY_VECTOR:
 		return "VERIFY_VECTOR";
+	case PhysicalOperatorType::UPDATE_EXTENSIONS:
+		return "UPDATE_EXTENSIONS";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}

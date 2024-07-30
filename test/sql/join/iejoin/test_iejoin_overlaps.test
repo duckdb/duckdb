@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET merge_join_threshold=0
+
 # We read from CSVs to prevent the optimiser from
 # using statistics to decide the join is a NOP
 query II

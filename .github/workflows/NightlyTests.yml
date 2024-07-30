@@ -24,7 +24,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: "9f2f87b"
+  DUCKDB_WASM_VERSION: "66a481954b89a046cb7c48c448163ea5e9179199"
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
@@ -67,20 +67,17 @@ jobs:
     name: Release Assertions
     runs-on: ubuntu-20.04
     needs: linux-memory-leaks
-    timeout-minutes: 120
     env:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_EXCEL: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_JEMALLOC: 1
+      BUILD_EXTENSIONS: "inet"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
@@ -107,7 +104,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
 
   linux-clang:
@@ -157,6 +154,8 @@ jobs:
     needs: linux-memory-leaks
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
     - uses: actions/checkout@v3
       with:
@@ -184,6 +183,7 @@ jobs:
     env:
       CC: /usr/bin/gcc
       CXX: /usr/bin/g++
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - uses: actions/checkout@v3
@@ -201,7 +201,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json;excel' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
       - name: Test
         shell: bash
@@ -255,6 +255,7 @@ jobs:
         GEN: ninja
         DUCKDEBUG: 1
         ASAN_OPTIONS: detect_leaks=0
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
      steps:
      - uses: actions/checkout@v3
@@ -401,6 +402,56 @@ jobs:
        shell: bash
        run: python3 scripts/test_zero_initialize.py
 
+  extension-updating:
+    name: Extension updating test
+    runs-on: ubuntu-20.04
+#    needs: linux-memory-leaks TODO revert
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install
+        shell: bash
+        run: pip install awscli
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: BUILD_TPCH=1 make
+
+      - name: Start Minio
+        shell: bash
+        run: |
+          sudo ./scripts/install_s3_test_server.sh
+          ./scripts/generate_presigned_url.sh
+          source ./scripts/run_s3_test_server.sh
+          source ./scripts/set_s3_test_server_variables.sh
+          sleep 60
+
+      - name: Build
+        shell: bash
+        run: |
+          ./scripts/run_extension_medata_tests.sh
+
   no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-20.04
@@ -410,14 +461,12 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
+      BUILD_EXTENSIONS: "inet"
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
@@ -468,14 +517,12 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
+      BUILD_EXTENSIONS: "inet"
       VERIFY_VECTOR: ${{ matrix.vector_type }}
 
     steps:
@@ -510,14 +557,12 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
+      BUILD_EXTENSIONS: "inet"
       FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
@@ -629,21 +674,19 @@ jobs:
 
   threadsan:
     name: Thread Sanitizer
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: clang
+      CXX: clang++
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      BUILD_EXTENSIONS: "inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:
@@ -653,7 +696,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -672,52 +715,9 @@ jobs:
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]" --no-exit --timeout 600
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage --force-reload
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
-
-
-  threadsan-relassert-all:
-    name: Thread Sanitizer (Relassert + All tests)
-    runs-on: ubuntu-latest
-    needs: linux-memory-leaks
-    env:
-      GEN: ninja
-      EXTENSION_STATIC_BUILD: 1
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_JEMALLOC: 1
-      DUCKDB_PLATFORM: linux_amd64
-      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
-
-    - name: Build
-      shell: bash
-      run: THREADSAN=1 make relassert
-
-    - name: Test
-      shell: bash
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit
 
   vector-sizes:
     name: Vector Sizes
@@ -777,10 +777,6 @@ jobs:
     name: WebAssembly duckdb-wasm builds
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
     - uses: mymindstorm/setup-emsdk@v12
       with:
         version: 'latest'
@@ -797,6 +793,18 @@ jobs:
         done
         git submodule init
         git submodule update
+        git rm -r submodules/duckdb
+
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        path: duckdb-wasm/submodules/duckdb
+
+    - name: Setup
+      shell: bash
+      run: |
+        cd duckdb-wasm
+        make patch_duckdb || echo "done"
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -813,19 +821,19 @@ jobs:
       shell: bash
       run: |
         cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/submodules/duckdb
 
     - name: Build WebAssembly EH
       shell: bash
       run: |
         cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/submodules/duckdb
 
     - name: Build WebAssembly COI
       shell: bash
       run: |
         cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/submodules/duckdb
 
     - name: Package
       shell: bash
@@ -881,3 +889,61 @@ jobs:
           name: coverage
           path: coverage.zip
           if-no-files-found: error
+
+  pyodide:
+    uses: ./.github/workflows/Pyodide.yml
+    secrets: inherit
+
+  linux-httpfs:
+    name: Linux HTTPFS
+    runs-on: ubuntu-20.04
+    env:
+      BUILD_HTTPFS: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_PARQUET: 1
+      BUILD_JSON: 1
+      S3_TEST_SERVER_AVAILABLE: 1
+      AWS_DEFAULT_REGION: eu-west-1
+      AWS_ACCESS_KEY_ID: minio_duckdb_user
+      AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password
+      DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
+      DUCKDB_S3_USE_SSL: false
+
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Start test server & run tests
+      shell: bash
+      run: |
+        sudo ./scripts/install_s3_test_server.sh
+        ./scripts/generate_presigned_url.sh
+        source ./scripts/run_s3_test_server.sh
+        source ./scripts/set_s3_test_server_variables.sh
+        sleep 60
+       
+        python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
+        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
+        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'

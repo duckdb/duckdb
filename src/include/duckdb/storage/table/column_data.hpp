@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/table/column_segment_tree.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/enums/scan_vector_type.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -25,11 +26,11 @@ class RowGroup;
 class RowGroupWriter;
 class TableDataWriter;
 class TableStorageInfo;
-struct TransactionData;
-struct TableScanOptions;
-
 struct DataTableInfo;
+struct PrefetchState;
 struct RowGroupWriteInfo;
+struct TableScanOptions;
+struct TransactionData;
 
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
@@ -66,7 +67,7 @@ public:
 	optional_ptr<ColumnData> parent;
 
 public:
-	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
+	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
 
 	BlockManager &GetBlockManager() {
 		return block_manager;
@@ -83,17 +84,27 @@ public:
 	//! The root type of the column
 	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
-	virtual bool HasUpdates() const;
+	bool HasUpdates() const;
+	//! Whether or not we can scan an entire vector
+	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count);
 
+	//! Initialize prefetch state with required I/O data for the next N rows
+	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows);
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state);
 	//! Initialize a scan starting at the specified offset
 	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx);
 	//! Scan the next vector from the column
-	virtual idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
-	virtual idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
+	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
+	virtual idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                   idx_t scan_count);
+	virtual idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+	                            idx_t scan_count);
+
 	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
 	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count);
+
 	//! Select
 	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                    SelectionVector &sel, idx_t &count, const TableFilter &filter);
@@ -143,7 +154,7 @@ public:
 	virtual void GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path, vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
-	bool CheckZonemap(TableFilter &filter);
+	FilterPropagateResult CheckZonemap(TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           idx_t start_row, const LogicalType &type,
@@ -161,11 +172,12 @@ protected:
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
 
 	//! Scans a base vector from the column
-	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, bool has_updates);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type);
 	//! Scans a vector from the column merged with any potential updates
 	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
-	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                 idx_t target_scan);
 
 	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
@@ -173,6 +185,8 @@ protected:
 	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
 	void UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
 	                    idx_t update_count, Vector &base_vector);
+
+	idx_t GetVectorCount(idx_t vector_index) const;
 
 protected:
 	//! The segments holding the data of this column segment

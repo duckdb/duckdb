@@ -91,7 +91,8 @@ else()
       duckdb_hyperloglog
       duckdb_fastpforlib
       duckdb_skiplistlib
-      duckdb_mbedtls)
+      duckdb_mbedtls
+      duckdb_yyjson)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
@@ -115,7 +116,8 @@ else()
     DIRECTORY "${PROJECT_SOURCE_DIR}/src/include/duckdb"
     DESTINATION "${INSTALL_INCLUDE_DIR}"
     FILES_MATCHING
-    PATTERN "*.hpp")
+    PATTERN "*.hpp"
+    PATTERN "*.ipp")
   install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
                 "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
           DESTINATION "${INSTALL_INCLUDE_DIR}")
