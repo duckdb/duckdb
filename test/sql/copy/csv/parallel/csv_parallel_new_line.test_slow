@@ -6,6 +6,9 @@
 statement ok
 PRAGMA verify_parallelism
 
+statement ok
+PRAGMA enable_verification
+
 loop i 25 100
 
 

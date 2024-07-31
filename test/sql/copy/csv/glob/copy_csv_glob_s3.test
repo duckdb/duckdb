@@ -2,6 +2,9 @@
 # description: Test globbing CSVs on s3
 # group: [glob]
 
+statement ok
+PRAGMA enable_verification
+
 require httpfs
 
 require-env S3_TEST_SERVER_AVAILABLE 1

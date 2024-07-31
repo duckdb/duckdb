@@ -3,6 +3,9 @@
 # group: [glob]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE dates(d DATE);
 
 # simple globbing

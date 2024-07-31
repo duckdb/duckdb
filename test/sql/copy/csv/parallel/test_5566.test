@@ -6,6 +6,9 @@
 statement ok
 PRAGMA verify_parallelism
 
+statement ok
+PRAGMA enable_verification
+
 query I
 select * from read_csv_auto('test/sql/copy/csv/data/auto/test_single_column.csv')
 ----
