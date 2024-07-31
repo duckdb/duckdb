@@ -303,9 +303,9 @@ uint32_t duckdb_string_t_length(duckdb_string_t string_p) {
 	return static_cast<uint32_t>(string.GetSize());
 }
 
-const char *duckdb_string_t_data(duckdb_string_t string_p) {
+const char *duckdb_string_t_data(duckdb_string_t *string_p) {
 	static_assert(sizeof(duckdb_string_t) == sizeof(duckdb::string_t),
 	              "duckdb_string_t should have the same memory layout as duckdb::string_t");
-	auto &string = *reinterpret_cast<duckdb::string_t *>(&string_p);
+	auto &string = *reinterpret_cast<duckdb::string_t *>(string_p);
 	return string.GetData();
 }

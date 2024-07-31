@@ -1208,7 +1208,7 @@ DUCKDB_API uint32_t duckdb_string_t_length(duckdb_string_t string);
 Returns a pointer to the string data of a string_t
 
 */
-DUCKDB_API const char *duckdb_string_t_data(duckdb_string_t string);
+DUCKDB_API const char *duckdb_string_t_data(duckdb_string_t *string);
 
 //===--------------------------------------------------------------------===//
 // Date/Time/Timestamp Helpers

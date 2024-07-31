@@ -163,7 +163,7 @@ void RepeatedStringAggUpdate(duckdb_function_info info, duckdb_data_chunk input,
 	for (idx_t i = 0; i < row_count; i++) {
 		if (duckdb_validity_row_is_valid(input_validity, i) && duckdb_validity_row_is_valid(weight_validity, i)) {
 			auto length = duckdb_string_t_length(input_data[i]);
-			auto data = duckdb_string_t_data(input_data[i]);
+			auto data = duckdb_string_t_data(input_data + i);
 			auto weight = weight_data[i];
 			auto new_data = (char *)malloc(state[i]->size + length * weight + 1);
 			if (state[i]->size > 0) {
