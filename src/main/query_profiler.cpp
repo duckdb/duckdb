@@ -136,7 +136,6 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		Finalize(*child);
 		if (op_node.type == PhysicalOperatorType::UNION &&
 		    op_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-
 		}
 	}
 }

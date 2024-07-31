@@ -33,11 +33,11 @@ void ProfilingInfo::ResetSettings() {
 }
 
 void ProfilingInfo::ResetMetrics() {
-    metrics.clear();
+	metrics.clear();
 
 	auto default_settings = DefaultSettings();
 
-    for (auto &metric : default_settings) {
+	for (auto &metric : default_settings) {
 		if (!Enabled(metric)) {
 			continue;
 		}
@@ -116,7 +116,6 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 	return metrics.at(setting).ToString();
 }
 
-
 void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) {
 	for (auto &metric : settings) {
 		auto metric_str = StringUtil::Lower(EnumUtil::ToString(metric));
@@ -155,7 +154,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			break;
 		}
-        case MetricsType::CUMULATIVE_CARDINALITY:
+		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY: {
 			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
 			break;
