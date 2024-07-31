@@ -457,20 +457,74 @@ def create_duckdb_ext_h(ext_api_version):
 
     extension_header_body = create_extension_api_struct(ext_api_version) + '\n\n' + typedefs
 
-    extension_header_body += (
-        f'// Place in global scope of C/C++ file that contains the DUCKDB_EXTENSION_REGISTER_ENTRYPOINT call\n'
-    )
-    extension_header_body += (
-        f'# define DUCKDB_EXTENSION_GLOBAL const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME}=0;\n'
-    )
-    extension_header_body += f'// Place in global scope of any C/C++ file that needs to access the extension API\n'
-    extension_header_body += (
-        f'# define DUCKDB_EXTENSION_EXTERN extern const {DUCKDB_EXT_API_STRUCT_NAME} *{DUCKDB_EXT_API_PTR_NAME};\n'
-    )
-    extension_header_body += f'// Initializes the C Extension API: First thing to call in the extension entrypoint\n'
-    extension_header_body += f' #define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version) {DUCKDB_EXT_API_PTR_NAME} = ({DUCKDB_EXT_API_STRUCT_NAME} *) access->get_api(info, #minimum_api_version); if (!{DUCKDB_EXT_API_PTR_NAME}) {{ return; }};\n'
-    extension_header_body += f'// Register the extension entrypoint\n'
-    extension_header_body += ' #define DUCKDB_EXTENSION_REGISTER_ENTRYPOINT(extension_name, entrypoint, minimum_api_version) DUCKDB_EXTENSION_API void extension_name##_init_c_api(duckdb_extension_info info, duckdb_extension_access *access) { DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version); duckdb_database *db = access->get_database(info); duckdb_connection conn; if (duckdb_connect(*db, &conn) == DuckDBError) { access->set_error(info, "Failed to open connection to database"); return; } entrypoint(conn, info, access); duckdb_disconnect(&conn);}\n'
+    # Add the Macros
+    extension_header_body += """
+//! Internal MACROS
+#ifdef __cplusplus
+#define DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN  extern "C" {
+#define DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE }
+#else
+#define DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN
+#define DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE
+#endif
+
+#define DUCKDB_EXTENSION_GLUE_HELPER(x, y) x##y
+#define DUCKDB_EXTENSION_GLUE(x, y) DUCKDB_EXTENSION_GLUE_HELPER(x, y)
+#define DUCKDB_EXTENSION_STR_HELPER(x) #x
+#define DUCKDB_EXTENSION_STR(x) DUCKDB_EXTENSION_STR_HELPER(x)
+
+// This goes in the c/c++ file containing the entrypoint (handle
+#define DUCKDB_EXTENSION_GLOBAL const duckdb_ext_api_v0 *duckdb_ext_api = 0;
+// Initializes the C Extension API: First thing to call in the extension entrypoint
+#define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)\
+	duckdb_ext_api = (duckdb_ext_api_v0 *)access->get_api(info, minimum_api_version);\
+	if (!duckdb_ext_api) {\
+		return;\
+	};
+
+// Place in global scope of any C/C++ file that needs to access the extension API
+#define DUCKDB_EXTENSION_EXTERN extern const duckdb_ext_api_v0 *duckdb_ext_api;
+
+//===--------------------------------------------------------------------===//
+// ENTRYPOINT Macros
+//===--------------------------------------------------------------------===//
+// Note: the DUCKDB_EXTENSION_ENTRYPOINT macro requires the DUCKDB_EXTENSION_NAME and DUCKDB_EXTENSION_CAPI_VERSION to be set
+
+#ifdef DUCKDB_EXTENSION_NAME
+#ifdef DUCKDB_EXTENSION_CAPI_VERSION
+
+// Main entrypoint: opens (and closes) a connection automatically for the extension to register its functionality through 
+#define DUCKDB_EXTENSION_ENTRYPOINT\
+	DUCKDB_EXTENSION_GLOBAL static void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)(duckdb_connection connection, duckdb_extension_info info, duckdb_extension_access *access);\
+	    DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN\
+	    DUCKDB_EXTENSION_API void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api)(\
+	    duckdb_extension_info info, duckdb_extension_access *access) {\
+		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_STR(DUCKDB_EXTENSION_CAPI_VERSION));\
+		duckdb_database *db = access->get_database(info);\
+		duckdb_connection conn;\
+		if (duckdb_connect(*db, &conn) == DuckDBError) {\
+			access->set_error(info, "Failed to open connection to database");\
+			return;\
+		}\
+		DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)(conn, info, access);\
+		duckdb_disconnect(&conn);\
+	}\
+	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)
+
+// Custom entrypoint: just forwards the info and access
+#define DUCKDB_EXTENSION_ENTRYPOINT_CUSTOM\
+	DUCKDB_EXTENSION_GLOBAL static void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)(\
+	    duckdb_extension_info info, duckdb_extension_access *access);\
+	    DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN\
+	    DUCKDB_EXTENSION_API void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api)(\
+	    duckdb_extension_info info, duckdb_extension_access *access) {\
+		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_STR(DUCKDB_EXTENSION_CAPI_VERSION));\
+		DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)(info, access);\
+	}\
+	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static void DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)
+#endif
+#endif
+    """
 
     header_template = fetch_header_template_ext()
     duckdb_ext_h = DUCKDB_EXT_H_HEADER + header_template.replace(BASE_HEADER_CONTENT_MARK, extension_header_body)

@@ -3,10 +3,8 @@
 
 DUCKDB_EXTENSION_EXTERN
 
-//===--------------------------------------------------------------------===//
-// Scalar function
-//===--------------------------------------------------------------------===//
-void AddNumbersTogether(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
+// Scalar function that adds two numbers together
+static void AddNumbersTogether(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
 	// get the total number of rows in this chunk
 	idx_t input_size = duckdb_data_chunk_get_size(input);
 	// extract the two input vectors
@@ -38,4 +36,28 @@ void AddNumbersTogether(duckdb_function_info info, duckdb_data_chunk input, duck
 			result_data[row] = a_data[row] + b_data[row];
 		}
 	}
+}
+
+// Register the AddNumbersFunction
+void RegisterAddNumbersFunction(duckdb_connection connection) {
+	// create a scalar function
+	auto function = duckdb_create_scalar_function();
+	duckdb_scalar_function_set_name(function, "add_numbers_together");
+
+	// add a two bigint parameters
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	duckdb_scalar_function_add_parameter(function, type);
+	duckdb_scalar_function_add_parameter(function, type);
+
+	// set the return type to bigint
+	duckdb_scalar_function_set_return_type(function, type);
+
+	duckdb_destroy_logical_type(&type);
+
+	// set up the function
+	duckdb_scalar_function_set_function(function, AddNumbersTogether);
+
+	// register and cleanup
+	duckdb_register_scalar_function(connection, function);
+	duckdb_destroy_scalar_function(&function);
 }

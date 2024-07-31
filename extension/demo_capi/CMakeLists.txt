@@ -4,9 +4,11 @@ project(DemoCapiExtension)
 
 include_directories(include)
 
-set(CAPI_VERSION "v0.0.1")
+set(EXTENSION_NAME demo_capi)
+set(CAPI_VERSION v0.0.1)
 
-add_definitions(-DCAPI_VERSION=${CAPI_VERSION})
+add_definitions(-DDUCKDB_EXTENSION_CAPI_VERSION=${CAPI_VERSION})
+add_definitions(-DDUCKDB_EXTENSION_NAME=${EXTENSION_NAME})
 
-build_loadable_extension_capi(demo_capi ${CAPI_VERSION} capi_demo.cpp
+build_loadable_extension_capi(${EXTENSION_NAME} ${CAPI_VERSION} capi_demo.cpp
                               add_numbers.cpp)

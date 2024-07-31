@@ -16,4 +16,4 @@ duckdb_extension_load(tpcds)
 duckdb_extension_load(tpch)
 
 # Test extension for the upcoming C CAPI extensions
-duckdb_extension_load(capi_demo DONT_LINK)
+duckdb_extension_load(demo_capi DONT_LINK)
