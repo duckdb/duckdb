@@ -32,12 +32,7 @@ enum class NType : uint8_t {
 
 class ART;
 class Prefix;
-class MetadataReader;
-class MetadataWriter;
-
-struct BlockPointer;
 struct ARTFlags;
-struct MetaBlockPointer;
 
 //! The Node is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
@@ -107,15 +102,16 @@ public:
 	//! Returns the string representation of the node, if only_verify is false.
 	//! Else, it traverses and verifies the node and its subtree.
 	string VerifyAndToString(ART &art, const bool only_verify) const;
-	//! Returns the matching node type for a given count.
-	static NType NodeTypeByCount(const idx_t count);
+	//! Returns the node leaf type for a count.
+	static NType GetNodeLeafType(const idx_t count);
+	//! Returns the node type for a count.
+	static NType GetNodeType(const idx_t count);
 
 	//! Initialize a merge by incrementing the buffer IDs of a node.
 	void InitializeMerge(ART &art, const ARTFlags &flags);
 	//! Merge a node into this node.
-	bool Merge(ART &art, Node &other, const bool inside_gate);
-	//! Merge a node into this node.
-	bool MergeInternal(ART &art, Node &other, const bool inside_gate);
+	bool Merge(ART &art, Node &other, const bool in_gate);
+	bool MergeInternal(ART &art, Node &other, const bool in_gate);
 
 	//! Vacuum all nodes exceeding their vacuum threshold.
 	void Vacuum(ART &art, const ARTFlags &flags);
@@ -198,12 +194,12 @@ public:
 
 private:
 	//! Merge two nodes.
-	bool MergeNodes(ART &art, Node &other, bool inside_gate);
+	bool MergeNodes(ART &art, Node &other, const bool in_gate);
 	//! Reduce r_node's prefix and insert it into l_node, or recurse.
-	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t mismatch_pos, bool inside_gate);
+	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t pos, const bool in_gate);
 	//! Split l_node and reduce r_node, and insert them into a new Node4.
-	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t mismatch_pos);
+	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t pos);
 	//! Merges two prefixes.
-	bool MergePrefixes(ART &art, Node &other, bool inside_gate);
+	bool MergePrefixes(ART &art, Node &other, const bool in_gate);
 };
 } // namespace duckdb

@@ -43,9 +43,9 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 	IncreaseBufferId(flags.merge_buffer_counts[static_cast<uint8_t>(type) - 1]);
 }
 
-bool Node::Merge(ART &art, Node &other, bool inside_gate) {
+bool Node::Merge(ART &art, Node &other, bool in_gate) {
 	if (HasMetadata()) {
-		return MergeInternal(art, other, inside_gate);
+		return MergeInternal(art, other, in_gate);
 	}
 
 	*this = other;
@@ -53,7 +53,7 @@ bool Node::Merge(ART &art, Node &other, bool inside_gate) {
 	return true;
 }
 
-bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t mismatch_pos, bool inside_gate) {
+bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t mismatch_pos, bool in_gate) {
 	// r_node's prefix contains l_node's prefix.
 	// l_node must be a node allowing child nodes.
 	D_ASSERT(l_node.IsNode());
@@ -67,7 +67,7 @@ bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t mis
 
 	if (child_node) {
 		// Recurse into the child of l_node and the remaining prefix of r_node.
-		return child_node->MergeInternal(art, r_node, inside_gate);
+		return child_node->MergeInternal(art, r_node, in_gate);
 	}
 
 	// Insert r_node as a child of l_node at the empty position.
@@ -76,12 +76,12 @@ bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t mis
 	return true;
 }
 
-void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t mismatch_pos) {
+void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t pos) {
 	Node l_child;
-	auto l_byte = Prefix::GetByte(art, l_node, mismatch_pos);
+	auto l_byte = Prefix::GetByte(art, l_node, pos);
 
 	reference<Node> l_node_ref(l_node);
-	auto freed_gate = Prefix::Split(art, l_node_ref, l_child, mismatch_pos);
+	auto freed_gate = Prefix::Split(art, l_node_ref, l_child, pos);
 
 	Node4::New(art, l_node_ref);
 	if (freed_gate) {
@@ -90,20 +90,20 @@ void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t mismatch
 
 	// Insert the children.
 	Node4::InsertChild(art, l_node_ref, l_byte, l_child);
-	auto r_byte = Prefix::GetByte(art, r_node, mismatch_pos);
-	Prefix::Reduce(art, r_node, mismatch_pos);
+	auto r_byte = Prefix::GetByte(art, r_node, pos);
+	Prefix::Reduce(art, r_node, pos);
 	Node4::InsertChild(art, l_node_ref, r_byte, r_node);
 	r_node.Clear();
 }
 
-bool Node::MergePrefixes(ART &art, Node &other, bool inside_gate) {
+bool Node::MergePrefixes(ART &art, Node &other, bool in_gate) {
 	reference<Node> l_node(*this);
 	reference<Node> r_node(other);
 	auto mismatch_pos = DConstants::INVALID_INDEX;
 
 	if (l_node.get().IsPrefix() && r_node.get().IsPrefix()) {
 		// Traverse prefixes. Possibly change the referenced nodes.
-		if (!Prefix::Traverse(art, l_node, r_node, mismatch_pos, inside_gate)) {
+		if (!Prefix::Traverse(art, l_node, r_node, mismatch_pos, in_gate)) {
 			return false;
 		}
 		if (mismatch_pos == DConstants::INVALID_INDEX) {
@@ -121,7 +121,7 @@ bool Node::MergePrefixes(ART &art, Node &other, bool inside_gate) {
 
 	// l_prefix contains r_prefix
 	if (l_node.get().IsPrefix() || !r_node.get().IsPrefix()) {
-		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(mismatch_pos), inside_gate);
+		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(mismatch_pos), in_gate);
 	}
 
 	// The prefixes differ.
@@ -129,7 +129,7 @@ bool Node::MergePrefixes(ART &art, Node &other, bool inside_gate) {
 	return true;
 }
 
-bool Node::MergeInternal(ART &art, Node &other, const bool inside_gate) {
+bool Node::MergeInternal(ART &art, Node &other, bool in_gate) {
 	D_ASSERT(HasMetadata());
 	D_ASSERT(other.HasMetadata());
 
@@ -138,7 +138,7 @@ bool Node::MergeInternal(ART &art, Node &other, const bool inside_gate) {
 		swap(*this, other);
 	}
 	if (other.GetType() == NType::LEAF_INLINED) {
-		D_ASSERT(!inside_gate);
+		D_ASSERT(!in_gate);
 		D_ASSERT(other.IsGate() || other.GetType() == NType::LEAF_INLINED);
 		if (art.IsUnique()) {
 			return false;
@@ -148,25 +148,25 @@ bool Node::MergeInternal(ART &art, Node &other, const bool inside_gate) {
 	}
 
 	// Enter a gate.
-	if (IsGate() && other.IsGate() && !inside_gate) {
+	if (IsGate() && other.IsGate() && !in_gate) {
 		return Merge(art, other, true);
 	}
 
 	// Merge N4, N16, N48, N256 nodes.
 	if (IsNode() && other.IsNode()) {
-		return MergeNodes(art, other, inside_gate);
+		return MergeNodes(art, other, in_gate);
 	}
 	// Merge N7, N15, N256 leaf nodes.
 	if (IsLeafNode() && other.IsLeafNode()) {
-		D_ASSERT(inside_gate);
-		return MergeNodes(art, other, inside_gate);
+		D_ASSERT(in_gate);
+		return MergeNodes(art, other, in_gate);
 	}
 
 	// Merge prefixes.
-	return MergePrefixes(art, other, inside_gate);
+	return MergePrefixes(art, other, in_gate);
 }
 
-bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, Node &empty_node, uint8_t byte, const bool inside_gate) {
+bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, Node &empty_node, uint8_t byte, bool in_gate) {
 	// Merge N4, N16, N48, N256 nodes.
 	D_ASSERT(l_node.IsNode() && r_node.IsNode());
 	D_ASSERT(l_node.IsGate() && r_node.IsGate() || !l_node.IsGate() && !r_node.IsGate());
@@ -178,7 +178,7 @@ bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, Node &empty_node, ui
 			Node::InsertChild(art, l_node, byte, *r_child);
 			r_node.ReplaceChild(art, byte, empty_node);
 		} else {
-			if (!l_child->MergeInternal(art, *r_child, inside_gate)) {
+			if (!l_child->MergeInternal(art, *r_child, in_gate)) {
 				return false;
 			}
 		}
@@ -213,7 +213,7 @@ void MergeLeafNodes(ART &art, Node &l_node, Node &r_node, Node &empty_node, uint
 	Node::Free(art, r_node);
 }
 
-bool Node::MergeNodes(ART &art, Node &other, const bool inside_gate) {
+bool Node::MergeNodes(ART &art, Node &other, bool in_gate) {
 	// Merge the smaller node into the bigger node.
 	if (GetType() < other.GetType()) {
 		swap(*this, other);
@@ -221,7 +221,7 @@ bool Node::MergeNodes(ART &art, Node &other, const bool inside_gate) {
 
 	Node empty_node = Node();
 	if (IsNode()) {
-		return MergeNormalNodes(art, *this, other, empty_node, 0, inside_gate);
+		return MergeNormalNodes(art, *this, other, empty_node, 0, in_gate);
 	}
 	MergeLeafNodes(art, *this, other, empty_node, 0);
 	return true;

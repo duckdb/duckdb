@@ -14,42 +14,33 @@
 
 namespace duckdb {
 
-class MetadataWriter;
-class MetadataReader;
-struct BlockPointer;
-
 //! There are three types of leaves.
 //! 1. LEAF_INLINED: Inlines a row ID in a Node pointer.
 //! 2. LEAF: Deprecated. A list of Leaf nodes containing row IDs.
 //! 3. Nested leaves indicated by gate nodes. If an ART key contains multiple row IDs, then we use the row IDs as keys
-//!  and create a nested ART behind the gate node. As row IDs are always unique, these nested ARTs never contain
-//! duplicates themselves. I.e., their row IDs are always inlined. This allows for fast insertions and deletions
-//! in the presence of duplicates. Constraint checking is not affected, as we never enter nested leaves.
+//! and create a nested ART behind the gate node. As row IDs are always unique, these nested ARTs never contain
+//! duplicates themselves.
 class Leaf {
 public:
 	Leaf() = delete;
 	Leaf(const Leaf &) = delete;
 	Leaf &operator=(const Leaf &) = delete;
 
-	//! The number of row IDs in this leaf.
-	uint8_t count;
-	//! Up to LEAF_SIZE row IDs.
-	row_t row_ids[Node::LEAF_SIZE];
-	//! A pointer to the next LEAF node.
-	Node ptr;
+	uint8_t count;                  // Deprecated.
+	row_t row_ids[Node::LEAF_SIZE]; // Deprecated.
+	Node ptr;                       // Deprecated.
 
 public:
 	//! Inline a row ID into a node pointer.
 	static void New(Node &node, const row_t row_id);
 	//! Get a new non-inlined nested leaf node. Might cause new buffer allocations.
-	static void New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
-	                const idx_t count);
+	static void New(ART &art, reference<Node> &node, unsafe_vector<ARTKey> &row_ids, idx_t start, idx_t count);
 
 	//! Merges two leaves.
 	static void MergeInlined(ART &art, Node &l_node, Node &r_node);
 
 	//! Inserts a row ID into an inlined leaf.
-	static void InsertIntoInlined(ART &art, Node &node, reference<const ARTKey> row_id);
+	static void InsertIntoInlined(ART &art, Node &node, reference<ARTKey> row_id);
 	//! Erase a row ID from a nested leaf.
 	static void EraseFromNested(ART &art, Node &node, const ARTKey &row_id);
 

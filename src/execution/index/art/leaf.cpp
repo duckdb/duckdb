@@ -17,13 +17,12 @@ void Leaf::New(Node &node, const row_t row_id) {
 	node.SetRowId(row_id);
 }
 
-void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
-               const idx_t count) {
+void Leaf::New(ART &art, reference<Node> &node, unsafe_vector<ARTKey> &row_ids, idx_t start, idx_t count) {
 	D_ASSERT(count > 1);
 	D_ASSERT(!node.get().HasMetadata());
 
 	ARTKeySection section(start, start + count - 1, 0, 0);
-	art.Construct(row_ids, row_ids, node, section);
+	art.ConstructInternal(row_ids, row_ids, node, section, true);
 	node.get().SetGate();
 }
 
@@ -32,23 +31,21 @@ void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
 
 	// Create an ARTKey from the row ID.
 	ArenaAllocator arena_allocator(Allocator::Get(art.db));
-	auto logical_type = LogicalType(LogicalType::ROW_TYPE);
-	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, logical_type, r_node.GetRowId());
+	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, r_node.GetRowId());
 
 	// Insert the key.
 	art.Insert(l_node, key, 0, key, l_node.IsGate());
 	r_node.Clear();
 }
 
-void Leaf::InsertIntoInlined(ART &art, Node &node, reference<const ARTKey> row_id) {
+void Leaf::InsertIntoInlined(ART &art, Node &node, reference<ARTKey> row_id) {
 	D_ASSERT(node.GetType() == NType::LEAF_INLINED);
 
 	auto inlined_row_id = node.GetRowId();
 	node.Clear();
 
 	ArenaAllocator allocator(Allocator::Get(art.db));
-	auto logical_type = LogicalType(LogicalType::ROW_TYPE);
-	auto inlined_row_id_key = ARTKey::CreateARTKey<row_t>(allocator, logical_type, inlined_row_id);
+	auto inlined_row_id_key = ARTKey::CreateARTKey<row_t>(allocator, inlined_row_id);
 
 	// Insert both row IDs into the nested ART.
 	// Row IDs are always unique.
@@ -86,12 +83,11 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 	Node root = Node();
 
 	// Move all row IDs into the nested leaf.
-	auto logical_type = LogicalType(LogicalType::ROW_TYPE);
 	reference<const Node> leaf_ref(node);
 	while (leaf_ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, NType::LEAF);
 		for (idx_t i = 0; i < leaf.count; i++) {
-			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, logical_type, leaf.row_ids[i]);
+			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, leaf.row_ids[i]);
 			art.Insert(root, row_id, 0, row_id, true);
 		}
 		leaf_ref = leaf.ptr;

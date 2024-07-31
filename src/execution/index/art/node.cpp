@@ -19,7 +19,7 @@ namespace duckdb {
 // New / Free
 //===--------------------------------------------------------------------===//
 
-void Node::New(ART &art, Node &node, const NType type) {
+void Node::New(ART &art, Node &node, NType type) {
 	switch (type) {
 	case NType::NODE_7_LEAF:
 		Node7Leaf::New(art, node);
@@ -89,7 +89,7 @@ void Node::Free(ART &art, Node &node) {
 // Get Allocators
 //===--------------------------------------------------------------------===//
 
-FixedSizeAllocator &Node::GetAllocator(const ART &art, const NType type) {
+FixedSizeAllocator &Node::GetAllocator(const ART &art, NType type) {
 	return *(*art.allocators)[static_cast<uint8_t>(type) - 1];
 }
 
@@ -114,7 +114,7 @@ void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) co
 	}
 }
 
-void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
+void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child = Node()) {
 	D_ASSERT(node.HasMetadata());
 
 	switch (node.GetType()) {
@@ -327,7 +327,16 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 	return only_verify ? "" : "\n" + str + "]";
 }
 
-NType Node::NodeTypeByCount(const idx_t count) {
+NType Node::GetNodeLeafType(idx_t count) {
+	if (count <= NODE_7_LEAF_CAPACITY) {
+		return NType::NODE_7_LEAF;
+	} else if (count <= NODE_15_LEAF_CAPACITY) {
+		return NType::NODE_15_LEAF;
+	}
+	return NType::NODE_256_LEAF;
+}
+
+NType Node::GetNodeType(idx_t count) {
 	if (count <= NODE_4_CAPACITY) {
 		return NType::NODE_4;
 	} else if (count <= NODE_16_CAPACITY) {

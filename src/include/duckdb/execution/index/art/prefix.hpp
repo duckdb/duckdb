@@ -30,7 +30,11 @@ public:
 
 public:
 	//! Get a new inlined prefix.
-	static void New(ART &art, Node &node, const ARTKey &key, uint32_t depth, uint8_t count);
+	static void New(ART &art, Node &node, const ARTKey &key, idx_t depth, uint8_t count);
+	//! Traverse a prefix and a key until a mismatching byte.
+	template <class PREFIX_TYPE, class NODE>
+	static idx_t Traverse(ART &art, NODE &node, const ARTKey &key, idx_t &depth,
+	                      PREFIX_TYPE &(*func)(const ART &art, const Node ptr, const NType type));
 };
 
 //! Prefix additionally contains a Node pointer.
@@ -40,7 +44,7 @@ public:
 
 public:
 	//! Get a new chain of prefix nodes. The node parameter holds the tail of the chain.
-	static void New(ART &art, reference<Node> &node, const ARTKey &key, uint32_t depth, uint32_t count);
+	static void New(ART &art, reference<Node> &node, const ARTKey &key, idx_t depth, idx_t count);
 
 	//! Free the node and its subtree.
 	static void Free(ART &art, Node &node);

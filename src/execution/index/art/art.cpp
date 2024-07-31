@@ -219,17 +219,16 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 
 template <class T, bool IS_NOT_NULL>
 static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
-
 	D_ASSERT(keys.size() >= count);
-	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(count, idata);
-	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
+
+	UnifiedVectorFormat data;
+	input.ToUnifiedFormat(count, data);
+	auto input_data = UnifiedVectorFormat::GetData<T>(data);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = idata.sel->get_index(i);
-
-		if (IS_NOT_NULL || idata.validity.RowIsValid(idx)) {
-			ARTKey::CreateARTKey<T>(allocator, input.GetType(), keys[i], input_data[idx]);
+		auto idx = data.sel->get_index(i);
+		if (IS_NOT_NULL || data.validity.RowIsValid(idx)) {
+			ARTKey::CreateARTKey<T>(allocator, keys[i], input_data[idx]);
 			continue;
 		}
 
@@ -240,17 +239,16 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 
 template <class T, bool IS_NOT_NULL>
 static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
-
-	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(count, idata);
-	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
+	UnifiedVectorFormat data;
+	input.ToUnifiedFormat(count, data);
+	auto input_data = UnifiedVectorFormat::GetData<T>(data);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = idata.sel->get_index(i);
+		auto idx = data.sel->get_index(i);
 
 		if (IS_NOT_NULL) {
-			auto other_key = ARTKey::CreateARTKey<T>(allocator, input.GetType(), input_data[idx]);
-			keys[i].ConcatenateARTKey(allocator, other_key);
+			auto other_key = ARTKey::CreateARTKey<T>(allocator, input_data[idx]);
+			keys[i].Concat(allocator, other_key);
 			continue;
 		}
 
@@ -260,14 +258,14 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 		}
 
 		// This column entry is NULL, so we set the whole key to NULL.
-		if (!idata.validity.RowIsValid(idx)) {
+		if (!data.validity.RowIsValid(idx)) {
 			keys[i] = ARTKey();
 			continue;
 		}
 
 		// Concatenate the keys.
-		auto other_key = ARTKey::CreateARTKey<T>(allocator, input.GetType(), input_data[idx]);
-		keys[i].ConcatenateARTKey(allocator, other_key);
+		auto other_key = ARTKey::CreateARTKey<T>(allocator, input_data[idx]);
+		keys[i].Concat(allocator, other_key);
 	}
 }
 
@@ -396,67 +394,93 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector
 // Construct from sorted data (only during CREATE (UNIQUE) INDEX statements)
 //===--------------------------------------------------------------------===//
 
-bool ART::Construct(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-                    ARTKeySection &section) {
+void ConstructLeafNode(ART &art, unsafe_vector<ARTKey> &keys, Node &node, ARTKeySection &section) {
+	unsafe_vector<ARTKeySection> children;
+	section.GetChildSections(children, keys);
+
+	// Create the node.
+	auto node_type = Node::GetNodeLeafType(children.size());
+	Node::New(art, node, node_type);
+
+	// Insert bytes.
+	for (auto &child : children) {
+		Node::InsertChild(art, node, child.key_byte);
+	}
+}
+
+bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, Node &node,
+                            ARTKeySection &section, bool inside_gate) {
 	D_ASSERT(section.start < keys.size());
 	D_ASSERT(section.end < keys.size());
 	D_ASSERT(section.start <= section.end);
 
-	auto &start_key = keys[section.start];
-	auto &end_key = keys[section.end];
+	auto &start = keys[section.start];
+	auto &end = keys[section.end];
+
+	if (inside_gate && start.len - 1 == section.depth) {
+		// Create a nested leaf node, or an inlined prefix.
+		auto num_row_ids = section.end - section.start + 1;
+		if (num_row_ids != 1) {
+			ConstructLeafNode(*this, keys, node, section);
+		} else {
+			PrefixInlined::New(*this, node, start, section.depth, 1);
+		}
+		return true;
+	}
 
 	// Increment the depth until we reach a leaf or find a mismatching byte.
 	auto prefix_start = section.depth;
-	while (start_key.len != section.depth &&
-	       start_key.ByteMatches(end_key, UnsafeNumericCast<uint32_t>(section.depth))) {
+	while (start.len != section.depth && start.ByteMatches(end, section.depth)) {
 		section.depth++;
 	}
 
 	// We reached a leaf, i.e. all the bytes of start_key and end_key match.
-	if (start_key.len == section.depth) {
-		// end_idx is inclusive.
-		auto num_row_ids = section.end - section.start + 1;
+	if (start.len == section.depth) {
 
-		// Check for a possible constraint violation.
+		// Get the number of row IDs and check for a constraint violation.
+		auto num_row_ids = section.end - section.start + 1;
 		if (IsUnique() && num_row_ids != 1) {
 			return false;
 		}
 
-		// Create the prefix.
-		reference<Node> ref_node(node);
-		Prefix::New(*this, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
-		            UnsafeNumericCast<uint32_t>(start_key.len - prefix_start));
+		// Early-out, if inlined prefix.
+		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_start);
+		if (num_row_ids == 1 && inside_gate) {
+			PrefixInlined::New(*this, node, start, prefix_start, count);
+			return true;
+		}
 
-		// Create the leaf.
+		reference<Node> ref_node(node);
+		Prefix::New(*this, ref_node, start, prefix_start, count);
 		if (num_row_ids == 1) {
+			// Inlined leaf.
 			Leaf::New(ref_node, row_ids[section.start].GetRowID());
 		} else {
+			// Nested leaf.
 			Leaf::New(*this, ref_node, row_ids, section.start, num_row_ids);
 		}
 		return true;
 	}
 
+	// There are at least two child entries for this node.
 	// Create a new node and recurse.
-
-	// There are at least two child entries for this node. Otherwise, we would have reached a leaf.
-	unsafe_vector<ARTKeySection> child_sections;
-	section.GetChildSections(child_sections, keys);
+	unsafe_vector<ARTKeySection> children;
+	section.GetChildSections(children, keys);
 
 	// Create the prefix.
 	reference<Node> ref_node(node);
 	auto prefix_length = section.depth - prefix_start;
-	Prefix::New(*this, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
-	            UnsafeNumericCast<uint32_t>(prefix_length));
+	Prefix::New(*this, ref_node, start, prefix_start, prefix_length);
 
 	// Create the node.
-	auto node_type = Node::NodeTypeByCount(child_sections.size());
+	auto node_type = Node::GetNodeType(children.size());
 	Node::New(*this, ref_node, node_type);
 
 	// Recurse on each child section.
-	for (auto &child_section : child_sections) {
+	for (auto &child : children) {
 		Node new_child;
-		auto success = Construct(keys, row_ids, new_child, child_section);
-		Node::InsertChild(*this, ref_node, child_section.key_byte, new_child);
+		auto success = ConstructInternal(keys, row_ids, new_child, child, inside_gate);
+		Node::InsertChild(*this, ref_node, child.key_byte, new_child);
 		if (!success) {
 			return false;
 		}
@@ -464,10 +488,11 @@ bool ART::Construct(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKe
 	return true;
 }
 
-bool ART::ConstructFromSorted(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_id_keys,
-                              const idx_t row_count) {
+bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids) {
+	auto row_count = keys.size();
+
 	ARTKeySection section(0, row_count - 1, 0, 0);
-	if (!Construct(keys, row_id_keys, tree, section)) {
+	if (!ConstructInternal(keys, row_ids, tree, section, tree.IsGate())) {
 		return false;
 	}
 
@@ -476,7 +501,7 @@ bool ART::ConstructFromSorted(const unsafe_vector<ARTKey> &keys, const unsafe_ve
 	for (idx_t i = 0; i < row_count; i++) {
 		D_ASSERT(!keys[i].Empty());
 		auto leaf = Lookup(tree, keys[i], 0);
-		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_id_keys[i]));
+		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_ids[i]));
 	}
 #endif
 
@@ -555,132 +580,139 @@ void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
 	CheckConstraintsForChunk(chunk, conflict_manager);
 }
 
-void ART::InsertIntoEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key,
-                              const bool inside_gate) {
+void ART::InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_id, bool inside_gate) {
 	D_ASSERT(depth <= key.len);
 
-	auto depth_byte = UnsafeNumericCast<uint32_t>(depth);
 	idx_t count = key.len - depth;
 	if (inside_gate) {
-		PrefixInlined::New(*this, node, key, depth_byte, UnsafeNumericCast<uint8_t>(count));
+		PrefixInlined::New(*this, node, key, depth, UnsafeNumericCast<uint8_t>(count));
 		return;
 	}
 
 	reference<Node> ref_node(node);
-	Prefix::New(*this, ref_node, key, depth_byte, UnsafeNumericCast<uint32_t>(count));
-	Leaf::New(ref_node, row_id_key.GetRowID());
+	Prefix::New(*this, ref_node, key, depth, count);
+	Leaf::New(ref_node, row_id.GetRowID());
 }
 
-bool ART::Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key,
-                 const bool inside_gate) {
-	// If the node is empty, we create a new inlined leaf.
-	if (!node.HasMetadata()) {
-		InsertIntoEmptyNode(node, key, depth, row_id_key, inside_gate);
-		return true;
+bool InsertIntoNode(ART &art, Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id,
+                    bool inside_gate) {
+	D_ASSERT(depth < key.get().len);
+	auto child = node.GetChildMutable(art, key.get()[depth]);
+
+	// Recurse, if a child exists at key[depth].
+	if (child) {
+		bool success = art.Insert(*child, key, depth + 1, row_id, inside_gate);
+		node.ReplaceChild(art, key.get()[depth], *child);
+		return success;
 	}
 
+	// Insert a new inlined leaf at key[depth].
+	D_ASSERT(!inside_gate);
+	Node leaf_node;
+	reference<Node> ref_node(leaf_node);
+
+	// Create the prefix.
+	if (depth + 1 < key.get().len) {
+		auto count = key.get().len - depth - 1;
+		Prefix::New(art, ref_node, key, depth + 1, count);
+	}
+
+	// Create the inlined leaf.
+	Leaf::New(ref_node, row_id.get().GetRowID());
+	Node::InsertChild(art, node, key.get()[depth], leaf_node);
+	return true;
+}
+
+bool InsertIntoPrefix(ART &art, Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id,
+                      bool inside_gate) {
+	// If this is a prefix node, we traverse the prefix.
+	reference<Node> next_node(node);
+	auto pos = Prefix::Traverse<Prefix, Node>(art, next_node, key, depth, &Node::RefMutable<Prefix>);
+
+	// We recurse into the next node, if
+	// (1) the prefix matches the key, or
+	// (2) we reach a gate (which can start with a PREFIX node).
+	if (pos == DConstants::INVALID_INDEX) {
+		if (next_node.get().GetType() != NType::PREFIX || next_node.get().IsGate()) {
+			return art.Insert(next_node, key, depth, row_id, inside_gate);
+		}
+	}
+
+	// If the prefix does not match the key, we create a new Node4.
+	// It has two children, which are the remaining part of the prefix, and the new inlined leaf.
+	Node remaining_prefix;
+	auto prefix_byte = Prefix::GetByte(art, next_node, UnsafeNumericCast<uint8_t>(pos));
+	auto freed_gate = Prefix::Split(art, next_node, remaining_prefix, UnsafeNumericCast<uint8_t>(pos));
+	Node4::New(art, next_node);
+	if (freed_gate) {
+		next_node.get().SetGate();
+	}
+
+	// Insert the remaining prefix into the new Node4.
+	Node4::InsertChild(art, next_node, prefix_byte, remaining_prefix);
+
+	D_ASSERT(!inside_gate);
+	Node leaf_node;
+	reference<Node> ref_node(leaf_node);
+	if (depth + 1 < key.get().len) {
+		// Create the prefix.
+		auto count = key.get().len - depth - 1;
+		Prefix::New(art, ref_node, key, depth + 1, count);
+	}
+	// Create the inlined leaf.
+	Leaf::New(ref_node, row_id.get().GetRowID());
+	Node4::InsertChild(art, next_node, key.get()[depth], leaf_node);
+	return true;
+}
+
+bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool inside_gate) {
+	// If the node is empty, we create a new inlined leaf.
+	if (!node.HasMetadata()) {
+		InsertIntoEmptyNode(node, key, depth, row_id, inside_gate);
+		return true;
+	}
 	// Enter a nested leaf.
 	if (node.IsGate()) {
-		key = row_id_key;
+		key = row_id;
 		depth = 0;
 	}
 
 	switch (node.GetType()) {
-	case NType::LEAF_INLINED:
+	case NType::LEAF_INLINED: {
 		// Insert the row ID into an existing inlined leaf.
 		if (IsUnique()) {
 			return false;
 		}
 		D_ASSERT(!inside_gate);
-		Leaf::InsertIntoInlined(*this, node, row_id_key);
+		Leaf::InsertIntoInlined(*this, node, row_id);
 		return true;
-
+	}
 	case NType::LEAF: {
 		// Transform a deprecated leaf.
 		Leaf::TransformToNested(*this, node);
-		return Insert(node, key, depth, row_id_key, inside_gate);
+		return Insert(node, key, depth, row_id, inside_gate);
 	}
-
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
-	case NType::NODE_256_LEAF:
+	case NType::NODE_256_LEAF: {
+		auto byte = key.get()[sizeof(row_t) - 1];
+		Node::InsertChild(*this, node, byte);
+		return true;
+	}
+	case NType::PREFIX_INLINED: {
+		auto pos =
+		    PrefixInlined::Traverse<PrefixInlined, Node>(*this, node, key, depth, &Node::RefMutable<PrefixInlined>);
+		D_ASSERT(pos != DConstants::INVALID_INDEX);
 		// TODO
-
-	case NType::PREFIX_INLINED:
-		// TODO
-
+		return true;
+	}
 	case NType::NODE_4:
 	case NType::NODE_16:
 	case NType::NODE_48:
-	case NType::NODE_256: {
-		D_ASSERT(depth < key.get().len);
-		auto child = node.GetChildMutable(*this, key.get()[depth]);
-
-		// Recurse, if a child exists at key[depth].
-		if (child) {
-			bool success = Insert(*child, key, depth + 1, row_id_key, inside_gate);
-			node.ReplaceChild(*this, key.get()[depth], *child);
-			return success;
-		}
-
-		// Insert a new inlined leaf at key[depth].
-		D_ASSERT(!inside_gate);
-		Node leaf_node;
-		reference<Node> ref_node(leaf_node);
-		if (depth + 1 < key.get().len) {
-			// Create the prefix.
-			auto byte = UnsafeNumericCast<uint32_t>(depth + 1);
-			auto count = UnsafeNumericCast<uint32_t>(key.get().len - depth - 1);
-			Prefix::New(*this, ref_node, key, byte, count);
-		}
-		// Create the inlined leaf.
-		Leaf::New(ref_node, row_id_key.get().GetRowID());
-		Node::InsertChild(*this, node, key.get()[depth], leaf_node);
-		return true;
-	}
-
-	case NType::PREFIX: {
-		// If this is a prefix node, we traverse the prefix.
-		reference<Node> next_node(node);
-		auto mismatch_pos = Prefix::Traverse<Prefix, Node>(*this, next_node, key, depth, &Node::RefMutable<Prefix>);
-
-		// We recurse into the next node, if
-		// (1) the prefix matches the key, or
-		// (2) we reach a gate (which can start with a PREFIX node).
-		if (mismatch_pos == DConstants::INVALID_INDEX) {
-			if (next_node.get().GetType() != NType::PREFIX || next_node.get().IsGate()) {
-				return Insert(next_node, key, depth, row_id_key, inside_gate);
-			}
-		}
-
-		// If the prefix does not match the key, we create a new Node4. It has two children, which are
-		// the remaining part of the prefix, and the new inlined leaf.
-		Node remaining_prefix;
-		auto prefix_byte = Prefix::GetByte(*this, next_node, UnsafeNumericCast<uint8_t>(mismatch_pos));
-		auto freed_gate = Prefix::Split(*this, next_node, remaining_prefix, UnsafeNumericCast<uint8_t>(mismatch_pos));
-		Node4::New(*this, next_node);
-		if (freed_gate) {
-			next_node.get().SetGate();
-		}
-
-		// Insert the remaining prefix into the new Node4.
-		Node4::InsertChild(*this, next_node, prefix_byte, remaining_prefix);
-
-		// Insert the new inlined leaf.
-		D_ASSERT(!inside_gate);
-		Node leaf_node;
-		reference<Node> ref_node(leaf_node);
-		if (depth + 1 < key.get().len) {
-			// Create the prefix.
-			auto byte = UnsafeNumericCast<uint32_t>(depth + 1);
-			auto count = UnsafeNumericCast<uint32_t>(key.get().len - depth - 1);
-			Prefix::New(*this, ref_node, key, byte, count);
-		}
-		// Create the inlined leaf.
-		Leaf::New(ref_node, row_id_key.get().GetRowID());
-		Node4::InsertChild(*this, next_node, key.get()[depth], leaf_node);
-		return true;
-	}
+	case NType::NODE_256:
+		return InsertIntoNode(*this, node, key, depth, row_id, inside_gate);
+	case NType::PREFIX:
+		return InsertIntoPrefix(*this, node, key, depth, row_id, inside_gate);
 	default:
 		throw InternalException("Invalid node type for Insert.");
 	}

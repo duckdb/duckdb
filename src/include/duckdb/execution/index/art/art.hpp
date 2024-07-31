@@ -80,12 +80,10 @@ public:
 	//! Insert a chunk of entries into the index
 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
-	//! Construct an ART from a vector of sorted keys and verify the result.
-	bool ConstructFromSorted(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_id_keys,
-	                         const idx_t row_count);
-	//! Recursively construct an ART by appending key sections.
-	bool Construct(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-	               ARTKeySection &section);
+	//! Construct an ART from a vector of sorted keys and the corresponding row IDs.
+	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids);
+	bool ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, Node &node,
+	                       ARTKeySection &section, bool inside_gate);
 
 	//! Search equal values and fetches the row IDs
 	bool SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids);
@@ -122,16 +120,14 @@ public:
 	//! Find the node with a matching key, or return nullptr if not found
 	optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
 	//! Insert a key into the tree.
-	bool Insert(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key,
-	            const bool inside_gate);
+	bool Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool inside_gate);
 	//! Erase a key from the tree (non-inlined) or erase the leaf itself (inlined).
 	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key,
 	           bool inside_gate);
 
 private:
 	//! Insert a row ID into an empty node.
-	void InsertIntoEmptyNode(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id_key,
-	                         const bool inside_gate);
+	void InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_id, bool inside_gate);
 
 	//! Returns all row IDs greater than or equal to the search key.
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
