@@ -129,10 +129,10 @@ unique_ptr<TableRef> DeduplicateBindings(unique_ptr<TableRef> original, case_ins
 		ReplaceQualificationRecursive(tf_ref.function, bindings);
 		return std::move(original);
 	}
-	case TableReferenceType::INVALID:
-	case TableReferenceType::CTE:
-		throw NotImplementedException("TableRef type not implemented for traversal");
+	default:
+		break;
 	}
+	throw NotImplementedException("TableRef type (%s) not implemented for traversal", EnumUtil::ToString(ref.type));
 }
 
 unique_ptr<TableRef> JoinRelation::GetTableRef() {
