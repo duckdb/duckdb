@@ -27,7 +27,8 @@ DUCKDB_EXT_API_PTR_NAME = 'duckdb_ext_api'
 DUCKDB_EXT_API_STRUCT_NAME = 'duckdb_ext_api_v0'
 
 # Define the extension struct
-EXT_API_DEFINITION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/extension_api_v0.json'
+EXT_API_DEFINITION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/v0/api.json'
+EXT_API_EXCLUSION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/v0/exclusion_list.json'
 
 # The JSON files that define all available CAPI functions
 CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation/functions/**/*.json'
@@ -178,9 +179,25 @@ def parse_ext_api_definition():
         try:
             return json.loads(f.read())
         except json.decoder.JSONDecodeError as err:
-            print(f"Invalid JSON found in {extension_api_v0_file}: {err}")
+            print(f"Invalid JSON found in {EXT_API_DEFINITION_FILE}: {err}")
             exit(1)
 
+def parse_exclusion_list(function_map):
+    exclusion_set = set()
+    with open(EXT_API_EXCLUSION_FILE, 'r') as f:
+        try:
+            data = json.loads(f.read())
+        except json.decoder.JSONDecodeError as err:
+            print(f"Invalid JSON found in {EXT_API_EXCLUSION_FILE}: {err}")
+            exit(1)
+
+        for group in data['exclusion_list']:
+            for entry in group['entries']:
+                if entry not in function_map:
+                    print(f"Invalid item found in exclusion list: {entry}. This entry does not occur in the API!")
+                    exit(1)
+                exclusion_set.add(entry)
+    return exclusion_set
 
 # Creates the comment that accompanies describing a C api function
 def create_function_comment(function_obj):
@@ -335,8 +352,8 @@ def create_duckdb_h(ext_api_version):
 
 def write_struct_member_definitions(version_entries, initialize=False):
     result = ""
-    for function in version_entries:
-        function_lookup = FUNCTION_MAP[function['name']]
+    for function_name in version_entries:
+        function_lookup = FUNCTION_MAP[function_name]
         # Special case for C API functions that were already deprecated when the extension API started
         if (
             'deprecated' in function_lookup
@@ -361,15 +378,16 @@ def write_struct_member_definitions(version_entries, initialize=False):
 
     return result
 
+def create_extension_api_struct(ext_api_version, with_create_method=False, validate_exclusion_list=True):
+    functions_in_struct = set()
 
-def create_extension_api_struct(ext_api_version, with_create_method=False):
     # Generate the struct
     extension_struct_finished = 'typedef struct {\n'
     for api_version_entry in EXT_API_DEFINITION['version_entries']:
         version = api_version_entry['version']
         extension_struct_finished += f'    // Version {version}\n'
-        for function in api_version_entry['entries']:
-            function_lookup = FUNCTION_MAP[function['name']]
+        for function_name in api_version_entry['entries']:
+            function_lookup = FUNCTION_MAP[function_name]
             # Special case for C API functions that were already deprecated when the extension API started
             if (
                 'deprecated' in function_lookup
@@ -386,11 +404,21 @@ def create_extension_api_struct(ext_api_version, with_create_method=False):
             ):
                 continue
 
-            # TODO: comments inside the struct or no?
-            # extension_struct_finished += create_function_comment(function_lookup)
+            functions_in_struct.add(function_lookup['name']);
             extension_struct_finished += create_struct_member(function_lookup)
             extension_struct_finished += '\n'
     extension_struct_finished += '} ' + f'{DUCKDB_EXT_API_STRUCT_NAME};\n\n'
+
+    if validate_exclusion_list:
+        missing_entries = []
+        for group in FUNCTION_GROUPS:
+            for function in group['entries']:
+                if function['name'] not in functions_in_struct and function['name'] not in EXT_API_EXCLUSION_SET:
+                    missing_entries.append(function['name'])
+        if missing_entries:
+            print("Exclusion list validation failed! This means a C API function has been defined but not added to the API struct nor the exclusion list")
+            print(f"Missing functions are: {missing_entries}")
+            exit(1)
 
     if with_create_method:
         extension_struct_finished += "inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {\n"
@@ -565,6 +593,7 @@ if __name__ == "__main__":
     EXT_API_DEFINITION = parse_ext_api_definition()
     EXT_API_VERSION = get_extension_api_version()
     FUNCTION_GROUPS, FUNCTION_MAP = parse_capi_function_definitions()
+    EXT_API_EXCLUSION_SET = parse_exclusion_list(FUNCTION_MAP)
 
     print("C API Versioning")
     print(f" * Latest Extension C API Version: {EXT_API_VERSION}")
