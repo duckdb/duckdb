@@ -50,7 +50,7 @@ function get_validity(chunk::DataChunk, col_idx::Int64)::ValidityMask
 end
 
 function all_valid(chunk::DataChunk, col_idx::Int64)
-    return all_valid(get_vector(chunk, col_idx))
+    return all_valid(get_vector(chunk, col_idx), get_size(chunk))
 end
 
 # this is only required when we own the data chunk
