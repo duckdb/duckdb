@@ -33,6 +33,7 @@ WHERE sb.ss_store_sk = sc.ss_store_sk
   AND s_store_sk = sc.ss_store_sk
   AND i_item_sk = sc.ss_item_sk
 ORDER BY s_store_name NULLS FIRST,
-         i_item_desc NULLS FIRST
+         i_item_desc NULLS FIRST,
+         revenue
 LIMIT 100;
 

@@ -41,7 +41,5 @@ GROUP BY i_brand,
          i_brand_id,
          t_hour,
          t_minute
-ORDER BY ext_price DESC NULLS FIRST,
-         i_brand_id NULLS FIRST,
-         t_hour NULLS FIRST;
+ORDER BY ALL;
 
