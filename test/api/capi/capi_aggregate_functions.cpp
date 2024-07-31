@@ -279,6 +279,8 @@ void RepeatedStringAggCombine(duckdb_function_info info, duckdb_aggregate_state 
 		auto new_data = (char *)malloc(target[i]->size + source[i]->size + 1);
 		if (target[i]->size > 0) {
 			memcpy((void *)new_data, target[i]->data, target[i]->size);
+		}
+		if (target[i]->data) {
 			free((void *)target[i]->data);
 		}
 		memcpy((void *)(new_data + target[i]->size), source[i]->data, source[i]->size);
