@@ -1,3 +1,7 @@
+# name: test/sql/copy/csv/test_csv_column_count_mismatch.test_slow
+# description: Test cranlogs broken gzip copy and temp table
+# group: [csv]
+
 statement ok
 pragma enable_verification;
 

@@ -1,8 +1,11 @@
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
+
+constexpr idx_t CSVReaderOptions::sniff_size;
 
 bool IsQuoteDefault(char quote) {
 	if (quote == '\"' || quote == '\'' || quote == '\0') {
@@ -88,11 +91,12 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 						}
 						column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
 						    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,
-						    sniff_size, first_iterator));
+						    CSVReaderOptions::sniff_size, first_iterator));
 						continue;
 					}
-					column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
-					    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,sniff_size));
+					column_count_scanners.emplace_back(
+					    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine),
+					                                  detection_error_handler, CSVReaderOptions::sniff_size));
 				}
 			}
 		}
