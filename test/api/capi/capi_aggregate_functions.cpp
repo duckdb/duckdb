@@ -101,38 +101,116 @@ static void CAPIRegisterWeightedSum(duckdb_connection connection, const char *na
 	duckdb_destroy_aggregate_function(nullptr);
 }
 
+struct CAPICallbacks {
+	duckdb_aggregate_state_size state_size;
+	duckdb_aggregate_init_t init;
+	duckdb_aggregate_update_t update;
+	duckdb_aggregate_combine_t combine;
+	duckdb_aggregate_finalize_t finalize;
+};
+
+idx_t CallbackSize(duckdb_function_info info) {
+	auto callbacks = (CAPICallbacks *)duckdb_aggregate_function_get_extra_info(info);
+	return callbacks->state_size(info);
+}
+
+void CallbackInit(duckdb_function_info info, duckdb_aggregate_state state_p) {
+	auto callbacks = (CAPICallbacks *)duckdb_aggregate_function_get_extra_info(info);
+	callbacks->init(info, state_p);
+}
+
+void CallbackUpdate(duckdb_function_info info, duckdb_data_chunk input, duckdb_aggregate_state *states) {
+	auto callbacks = (CAPICallbacks *)duckdb_aggregate_function_get_extra_info(info);
+	callbacks->update(info, input, states);
+}
+
+void CallbackCombine(duckdb_function_info info, duckdb_aggregate_state *source_p, duckdb_aggregate_state *target_p,
+                     idx_t count) {
+	auto callbacks = (CAPICallbacks *)duckdb_aggregate_function_get_extra_info(info);
+	callbacks->combine(info, source_p, target_p, count);
+}
+
+void CallbackFinalize(duckdb_function_info info, duckdb_aggregate_state *source_p, duckdb_vector result, idx_t count,
+                      idx_t offset) {
+	auto callbacks = (CAPICallbacks *)duckdb_aggregate_function_get_extra_info(info);
+	callbacks->finalize(info, source_p, result, count, offset);
+}
+
+static void CAPIRegisterWeightedSumExtraInfo(duckdb_connection connection, const char *name,
+                                             duckdb_state expected_outcome) {
+	duckdb_state status;
+
+	// create a scalar function
+	auto function = duckdb_create_aggregate_function();
+	duckdb_aggregate_function_set_name(function, name);
+
+	// add a two bigint parameters
+	auto type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	duckdb_aggregate_function_add_parameter(function, type);
+	duckdb_aggregate_function_add_parameter(function, type);
+
+	// set the return type to bigint
+	duckdb_aggregate_function_set_return_type(function, type);
+	duckdb_destroy_logical_type(&type);
+
+	auto callback_ptr = malloc(sizeof(CAPICallbacks));
+	auto callback_struct = (CAPICallbacks *)callback_ptr;
+	callback_struct->state_size = WeightedSumSize;
+	callback_struct->init = WeightedSumInit;
+	callback_struct->update = WeightedSumUpdate;
+	callback_struct->combine = WeightedSumCombine;
+	callback_struct->finalize = WeightedSumFinalize;
+
+	duckdb_aggregate_function_set_extra_info(function, callback_ptr, free);
+
+	// set up the function
+	duckdb_aggregate_function_set_functions(function, CallbackSize, CallbackInit, CallbackUpdate, CallbackCombine,
+	                                        CallbackFinalize);
+
+	// register and cleanup
+	status = duckdb_register_aggregate_function(connection, function);
+	REQUIRE(status == expected_outcome);
+
+	duckdb_destroy_aggregate_function(&function);
+}
+
 TEST_CASE("Test Aggregate Functions C API", "[capi]") {
-	CAPITester tester;
-	duckdb::unique_ptr<CAPIResult> result;
+	typedef void (*register_function_t)(duckdb_connection, const char *, duckdb_state);
 
-	REQUIRE(tester.OpenDatabase(nullptr));
-	CAPIRegisterWeightedSum(tester.connection, "my_weighted_sum", DuckDBSuccess);
-	// try to register it again - this should be an error
-	CAPIRegisterWeightedSum(tester.connection, "my_weighted_sum", DuckDBError);
+	duckdb::vector<register_function_t> register_functions {CAPIRegisterWeightedSum, CAPIRegisterWeightedSumExtraInfo};
+	for (auto &register_function : register_functions) {
+		CAPITester tester;
+		duckdb::unique_ptr<CAPIResult> result;
 
-	// now call it
-	result = tester.Query("SELECT my_weighted_sum(40, 2)");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->Fetch<int64_t>(0, 0) == 80);
+		REQUIRE(tester.OpenDatabase(nullptr));
+		register_function(tester.connection, "my_weighted_sum", DuckDBSuccess);
+		// try to register it again - this should be an error
+		register_function(tester.connection, "my_weighted_sum", DuckDBError);
 
-	result = tester.Query("SELECT my_weighted_sum(40, NULL)");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->IsNull(0, 0));
+		// now call it
+		result = tester.Query("SELECT my_weighted_sum(40, 2)");
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->Fetch<int64_t>(0, 0) == 80);
 
-	result = tester.Query("SELECT my_weighted_sum(NULL, 2)");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->IsNull(0, 0));
+		result = tester.Query("SELECT my_weighted_sum(40, NULL)");
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->IsNull(0, 0));
 
-	result = tester.Query("SELECT my_weighted_sum(i, 2) FROM range(100) t(i)");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->Fetch<int64_t>(0, 0) == 9900);
+		result = tester.Query("SELECT my_weighted_sum(NULL, 2)");
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->IsNull(0, 0));
 
-	result = tester.Query("SELECT i % 2 AS gr, my_weighted_sum(i, 2) FROM range(100) t(i) GROUP BY gr ORDER BY gr");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
-	REQUIRE(result->Fetch<int64_t>(1, 0) == 4900);
-	REQUIRE(result->Fetch<int64_t>(0, 1) == 1);
-	REQUIRE(result->Fetch<int64_t>(1, 1) == 5000);
+		result = tester.Query("SELECT my_weighted_sum(i, 2) FROM range(100) t(i)");
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->Fetch<int64_t>(0, 0) == 9900);
+
+		result = tester.Query("SELECT i % 2 AS gr, my_weighted_sum(i, 2) FROM range(100) t(i) GROUP BY gr ORDER BY gr");
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<int64_t>(1, 0) == 4900);
+		REQUIRE(result->Fetch<int64_t>(0, 1) == 1);
+		REQUIRE(result->Fetch<int64_t>(1, 1) == 5000);
+	}
 }
 
 struct RepeatedStringAggState {
