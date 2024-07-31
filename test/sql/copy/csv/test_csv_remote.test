@@ -10,20 +10,20 @@ PRAGMA enable_verification
 
 # regular csv file
 query ITTTIITITTIIII nosort webpagecsv
-SELECT * FROM read_csv_auto('test/sql/copy/csv/data/real/web_page.csv') ORDER BY 1;
+SELECT * FROM read_csv_auto('data/csv/real/web_page.csv') ORDER BY 1;
 ----
 
 # file with gzip
 query IIIIIIIIIIIIIII nosort lineitemcsv
-SELECT * FROM read_csv_auto('test/sql/copy/csv/data/lineitem1k.tbl.gz') ORDER BY ALL;
+SELECT * FROM read_csv_auto('data/csv/lineitem1k.tbl.gz') ORDER BY ALL;
 ----
 
 query ITTTIITITTIIII nosort webpagecsv
-SELECT * FROM read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/test/sql/copy/csv/data/real/web_page.csv') ORDER BY 1;
+SELECT * FROM read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/data/csv/real/web_page.csv') ORDER BY 1;
 ----
 
 query IIIIIIIIIIIIIII nosort lineitemcsv
-select * from read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/test/sql/copy/csv/data/lineitem1k.tbl.gz') ORDER BY ALL;
+select * from read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/data/csv/lineitem1k.tbl.gz') ORDER BY ALL;
 ----
 
 statement ok
