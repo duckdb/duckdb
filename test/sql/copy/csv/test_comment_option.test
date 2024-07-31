@@ -118,10 +118,10 @@ select count(*) FROM read_csv('data/csv/comments/error.csv', ignore_errors = tru
 query II
 select comment, columns from sniff_csv('data/csv/comments/error.csv', ignore_errors = true);
 ----
-\0	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]
+#	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]
 
 query II
-select comment, columns from sniff_csv('data/csv/comments/error.csv', ignore_errors = true, comment = '#');
+select comment, columns from sniff_csv('data/csv/comments/error.csv', ignore_errors = true);
 ----
 #	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]
 
