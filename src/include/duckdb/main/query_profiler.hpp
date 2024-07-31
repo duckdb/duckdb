@@ -129,6 +129,7 @@ public:
 	//! the return value is formatted based on the current print format (see GetPrintFormat()).
 	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 
+	static InsertionOrderPreservingMap<string> JSONSanitize(const InsertionOrderPreservingMap<string> &input);
 	static string JSONSanitize(const string &text);
 	static string DrawPadded(const string &str, idx_t width);
 	DUCKDB_API string ToJSON() const;

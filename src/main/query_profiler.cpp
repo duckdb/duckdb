@@ -16,8 +16,12 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
+#include "yyjson.hpp"
+
 #include <algorithm>
 #include <utility>
+
+using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
@@ -206,7 +210,7 @@ string QueryProfiler::ToString(ExplainFormat explain_format) const {
 	case ProfilerPrintFormat::NO_OUTPUT:
 		return "";
 	default:
-		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", format);
+		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", EnumUtil::ToString(format));
 	}
 }
 
@@ -454,6 +458,14 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	}
 }
 
+InsertionOrderPreservingMap<string> QueryProfiler::JSONSanitize(const InsertionOrderPreservingMap<string> &input) {
+	InsertionOrderPreservingMap<string> result;
+	for (auto &it : input) {
+		result[it.first] = JSONSanitize(it.second);
+	}
+	return result;
+}
+
 string QueryProfiler::JSONSanitize(const std::string &text) {
 	string result;
 	result.reserve(text.size());
@@ -488,68 +500,79 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 	return result;
 }
 
-static void ToJSONRecursive(ProfilingNode &node, std::stringstream &ss, idx_t depth = 1) {
+static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node) {
 	auto &op_node = node.Cast<OperatorProfilingNode>();
 
-	ss << string(depth * 3, ' ') << " {\n";
-	ss << string(depth * 3, ' ') << "   \"name\": \"" + QueryProfiler::JSONSanitize(op_node.name) + "\",\n";
-	op_node.GetProfilingInfo().PrintAllMetricsToSS(ss, string(depth * 3, ' '));
-	ss << string(depth * 3, ' ') << "   \"children\": [\n";
-	if (op_node.GetChildCount() == 0) {
-		ss << string(depth * 3, ' ') << "   ]\n";
-	} else {
-		for (idx_t i = 0; i < op_node.GetChildCount(); i++) {
-			if (i > 0) {
-				ss << ",\n";
-			}
-			ToJSONRecursive(*op_node.GetChild(i), ss, depth + 1);
-		}
-		ss << string(depth * 3, ' ') << "   ]\n";
+	auto result_obj = yyjson_mut_obj(doc);
+	auto node_name = QueryProfiler::JSONSanitize(op_node.name);
+	yyjson_mut_obj_add_strcpy(doc, result_obj, "name", node_name.c_str());
+	op_node.GetProfilingInfo().WriteMetricsToJSON(doc, result_obj);
+
+	auto children_list = yyjson_mut_arr(doc);
+	for (idx_t i = 0; i < op_node.GetChildCount(); i++) {
+		auto child = ToJSONRecursive(doc, *op_node.GetChild(i));
+		yyjson_mut_arr_add_val(children_list, child);
 	}
-	ss << string(depth * 3, ' ') << " }\n";
+	yyjson_mut_obj_add_val(doc, result_obj, "children", children_list);
+	return result_obj;
+}
+
+static string StringifyAndFree(yyjson_mut_doc *doc, yyjson_mut_val *object) {
+	auto data = yyjson_mut_val_write_opts(object, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
+	                                      nullptr, nullptr);
+	if (!data) {
+		yyjson_mut_doc_free(doc);
+		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
+	}
+	auto result = string(data);
+	free(data);
+	yyjson_mut_doc_free(doc);
+	return result;
 }
 
 string QueryProfiler::ToJSON() const {
+	auto doc = yyjson_mut_doc_new(nullptr);
+	auto result_obj = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, result_obj);
+
 	if (!IsEnabled()) {
-		return "{ \"result\": \"disabled\" }\n";
+		yyjson_mut_obj_add_str(doc, result_obj, "result", "disabled");
+		return StringifyAndFree(doc, result_obj);
 	}
 	if (query.empty() && !root) {
-		return "{ \"result\": \"empty\" }\n";
+		yyjson_mut_obj_add_str(doc, result_obj, "result", "empty");
+		return StringifyAndFree(doc, result_obj);
 	}
 	if (!root) {
-		return "{ \"result\": \"error\" }\n";
+		yyjson_mut_obj_add_str(doc, result_obj, "result", "error");
+		return StringifyAndFree(doc, result_obj);
 	}
 
 	auto &query_info = root->Cast<QueryProfilingNode>();
 	auto &settings = query_info.GetProfilingInfo();
 
-	std::stringstream ss;
-	ss << "{\n";
-	ss << "   \"query\": \"" + JSONSanitize(query_info.query) + "\",\n";
+	auto query = JSONSanitize(query_info.query);
+	yyjson_mut_obj_add_strcpy(doc, result_obj, "query", query.c_str());
 
-	settings.PrintAllMetricsToSS(ss, "");
-	// JSON cannot have literal control characters in string literals
+	settings.WriteMetricsToJSON(doc, result_obj);
 	if (settings.Enabled(MetricsType::EXTRA_INFO)) {
-		ss << "   \"timings\": [\n";
+		auto timings_list = yyjson_mut_arr(doc);
 		const auto &ordered_phase_timings = GetOrderedPhaseTimings();
 		for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
-			if (i > 0) {
-				ss << ",\n";
-			}
-			ss << "      {\n";
-			ss << "         \"annotation\": \"" + ordered_phase_timings[i].first + "\", \n";
-			ss << "         \"timing\": " + to_string(ordered_phase_timings[i].second) + "\n";
-			ss << "      }";
+			auto timing_object = yyjson_mut_arr_add_obj(doc, timings_list);
+			yyjson_mut_obj_add_strcpy(doc, timing_object, "annotation", ordered_phase_timings[i].first.c_str());
+			yyjson_mut_obj_add_real(doc, timing_object, "timing", ordered_phase_timings[i].second);
 		}
-		ss << "\n";
-		ss << "   ],\n";
+		yyjson_mut_obj_add_val(doc, result_obj, "timings", timings_list);
 	}
+
 	// recursively print the physical operator tree
-	ss << "   \"children\": [\n";
-	ToJSONRecursive(*root->GetChild(0), ss);
-	ss << "   ]\n";
-	ss << "}";
-	return ss.str();
+
+	auto children_list = yyjson_mut_arr(doc);
+	yyjson_mut_obj_add_val(doc, result_obj, "children", children_list);
+	auto child = ToJSONRecursive(doc, *root->GetChild(0));
+	yyjson_mut_arr_add_val(children_list, child);
+	return StringifyAndFree(doc, result_obj);
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {
@@ -571,13 +594,10 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	unique_ptr<ProfilingNode> node;
 
 	if (depth == 0) {
-		auto query_node = make_uniq<QueryProfilingNode>();
-		query_node->node_type = ProfilingNodeType::QUERY_ROOT;
+		auto query_node = make_uniq<QueryProfilingNode>("");
 		node = std::move(query_node);
 	} else {
-		auto op_node = make_uniq<OperatorProfilingNode>();
-		op_node->type = root.type;
-		op_node->name = root.GetName();
+		auto op_node = make_uniq<OperatorProfilingNode>(root.GetName(), root.type);
 		node = std::move(op_node);
 	}
 

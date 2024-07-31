@@ -30,28 +30,36 @@ optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
 	return function.get_bind_info(bind_data.get()).table;
 }
 
-string LogicalGet::ParamsToString() const {
-	string result = "";
+InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+
+	string filters_info;
+	bool first_item = true;
 	for (auto &kv : table_filters.filters) {
 		auto &column_index = kv.first;
 		auto &filter = kv.second;
 		if (column_index < names.size()) {
-			result += filter->ToString(names[column_index]);
+			if (!first_item) {
+				filters_info += "\n";
+			}
+			first_item = false;
+			filters_info += filter->ToString(names[column_index]);
 		}
-		result += "\n";
 	}
+	result["Filters"] = filters_info;
+
 	if (!extra_info.file_filters.empty()) {
-		result += "\n[INFOSEPARATOR]\n";
-		result += "File Filters: " + extra_info.file_filters;
+		result["File Filters"] = extra_info.file_filters;
 		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
-			result += StringUtil::Format("\nScanning: %llu/%llu files", extra_info.filtered_files.GetIndex(),
-			                             extra_info.total_files.GetIndex());
+			result["Scanning Files"] = StringUtil::Format("%llu/%llu", extra_info.filtered_files.GetIndex(),
+			                                              extra_info.total_files.GetIndex());
 		}
 	}
-	if (!function.to_string) {
-		return result;
+
+	if (function.to_string) {
+		result["Stringified"] = function.to_string(bind_data.get());
 	}
-	return result + "\n" + function.to_string(bind_data.get());
+	return result;
 }
 
 void LogicalGet::SetColumnIds(vector<column_t> &&column_ids) {

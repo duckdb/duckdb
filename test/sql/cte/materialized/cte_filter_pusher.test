@@ -1,0 +1,23 @@
+# name: test/sql/cte/materialized/cte_filter_pusher.test
+# description: Test that the cte_filter_pusher optimizer works
+# group: [materialized]
+
+query I
+WITH
+  a(x) AS MATERIALIZED (
+    SELECT *
+    FROM   generate_series(1, 10)
+  ),
+  b(x) AS MATERIALIZED (
+    SELECT *
+    FROM   a
+    WHERE  x < 8
+  )
+SELECT *
+FROM   b
+WHERE  x % 3 = 1
+ORDER BY x;
+----
+1
+4
+7

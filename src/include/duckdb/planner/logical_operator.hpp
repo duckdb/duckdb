@@ -15,6 +15,8 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -53,7 +55,7 @@ public:
 	void ResolveOperatorTypes();
 
 	virtual string GetName() const;
-	virtual string ParamsToString() const;
+	virtual InsertionOrderPreservingMap<string> ParamsToString() const;
 	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained

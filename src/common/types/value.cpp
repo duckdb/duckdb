@@ -406,9 +406,9 @@ Value Value::NegativeInfinity(const LogicalType &type) {
 	}
 }
 
-Value Value::BOOLEAN(int8_t value) {
+Value Value::BOOLEAN(bool value) {
 	Value result(LogicalType::BOOLEAN);
-	result.value_.boolean = bool(value);
+	result.value_.boolean = value;
 	result.is_null = false;
 	return result;
 }
@@ -1224,7 +1224,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		D_ASSERT(value == 0 || value == 1);
-		return Value::BOOLEAN(value ? 1 : 0);
+		return Value::BOOLEAN(value ? true : false);
 	case LogicalTypeId::TINYINT:
 		D_ASSERT(value >= NumericLimits<int8_t>::Minimum() && value <= NumericLimits<int8_t>::Maximum());
 		return Value::TINYINT((int8_t)value);
