@@ -53,7 +53,11 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 	default:
 		throw ParserException("Not a function call or value function");
 	}
-	result->alias = TransformAlias(root.alias, result->column_name_alias);
+	vector<string> column_name_alias;
+	result->alias = TransformAlias(root.alias, column_name_alias);
+	if (!root.coldeflist) {
+		result->column_name_alias = column_name_alias;
+	}
 	if (root.sample) {
 		result->sample = TransformSampleOptions(root.sample);
 	}
