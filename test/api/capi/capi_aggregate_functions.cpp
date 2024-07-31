@@ -245,16 +245,16 @@ void RepeatedStringAggUpdate(duckdb_function_info info, duckdb_data_chunk input,
 		auto length = duckdb_string_t_length(input_data[i]);
 		auto data = duckdb_string_t_data(input_data + i);
 		auto weight = weight_data[i];
+		if (weight < 0) {
+			duckdb_aggregate_function_set_error(info, "Weight must be >= 0");
+			return;
+		}
 		auto new_data = (char *)malloc(state[i]->size + length * weight + 1);
 		if (state[i]->size > 0) {
 			memcpy((void *)(new_data), state[i]->data, state[i]->size);
 		}
 		if (state[i]->data) {
 			free((void *)(state[i]->data));
-		}
-		if (weight < 0) {
-			duckdb_aggregate_function_set_error(info, "Weight must be >= 0");
-			return;
 		}
 		idx_t offset = state[i]->size;
 		for (idx_t rep_idx = 0; rep_idx < static_cast<idx_t>(weight); rep_idx++) {
