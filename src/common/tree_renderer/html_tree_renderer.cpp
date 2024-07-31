@@ -114,11 +114,6 @@ static string CreateStyleSection(RenderTree &root) {
             padding: 10px;
         }
 
-        .tf-nc > .title:only-child {
-            border-bottom-left-radius: 0.5rem;
-            border-bottom-right-radius: 0.5rem;
-        }
-
         .content {
             border-top: 1px solid #000;
             text-align: center;
@@ -175,10 +170,6 @@ static string CreateGridItemContent(RenderTreeNode &node) {
             </div>
     )";
 
-	if (node.extra_text.empty()) {
-		return "";
-	}
-
 	vector<string> items;
 	for (auto &item : node.extra_text) {
 		auto &key = item.first;
@@ -194,7 +185,10 @@ static string CreateGridItemContent(RenderTreeNode &node) {
 			items.push_back(StringUtil::Format(R"(                <div class="value">%s</div>)", split));
 		}
 	}
-	auto result = StringUtil::Format(content_format, StringUtil::Join(items, "\n"));
+	string result;
+	if (!items.empty()) {
+		result = StringUtil::Format(content_format, StringUtil::Join(items, "\n"));
+	}
 	if (!node.child_positions.empty()) {
 		result += "<button class=\"collapse_button\", onclick=\"toggleDisplay(this)\">-</button>";
 	}
@@ -258,8 +252,7 @@ function toggleDisplay(button) {
     }
 }
 
-function updateTreeHeight() {
-	const tfTree = document.querySelector('.tf-tree');
+function updateTreeHeight(tfTree) {
 	if (!tfTree) {
 		return;
 	}
@@ -276,20 +269,20 @@ function updateTreeHeight() {
 }
 
 function resizeTFTree() {
-	updateTreeHeight();
-
-	const tfTree = document.querySelector('.tf-tree');
-	console.log(tfTree);
-	if (tfTree) {
-		const jupyterViewPort = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
-		console.log(jupyterViewPort);
-		if (jupyterViewPort) {
-			const resizeObserver = new ResizeObserver(() => {
-				updateTreeHeight();
-			});
-			resizeObserver.observe(jupyterViewPort);
+	const tfTrees = document.querySelectorAll('.tf-tree');
+	tfTrees.forEach(tfTree => {
+		console.log(tfTree);
+		if (tfTree) {
+			const jupyterViewPort = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
+			console.log(jupyterViewPort);
+			if (jupyterViewPort) {
+				const resizeObserver = new ResizeObserver(() => {
+					updateTreeHeight(tfTree);
+				});
+				resizeObserver.observe(jupyterViewPort);
+			}
 		}
-	}
+	});
 }
 
 resizeTFTree();

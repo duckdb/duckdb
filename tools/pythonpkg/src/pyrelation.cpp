@@ -1470,38 +1470,47 @@ static ExplainFormat GetExplainFormat() {
 	}
 }
 
+static void DisplayHTML(const string &html) {
+	py::gil_scoped_acquire gil;
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto html_attr = import_cache.IPython.display.HTML();
+	auto html_object = html_attr(py::str(html));
+	auto display_attr = import_cache.IPython.display.display();
+	display_attr(html_object);
+}
+
 string DuckDBPyRelation::Explain(ExplainType type) {
 	AssertRelation();
 	py::gil_scoped_release release;
 
-	auto res = rel->Explain(type, GetExplainFormat());
+	auto explain_format = GetExplainFormat();
+	auto res = rel->Explain(type, explain_format);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = res->Cast<MaterializedQueryResult>();
 	auto &coll = materialized.Collection();
-	string result;
-	for (auto &row : coll.Rows()) {
-		// Skip the first column because it just contains 'physical plan'
-		for (idx_t col_idx = 1; col_idx < coll.ColumnCount(); col_idx++) {
-			if (col_idx > 1) {
-				result += "\t";
+	if (explain_format != ExplainFormat::HTML || !DuckDBPyConnection::IsJupyter()) {
+		string result;
+		for (auto &row : coll.Rows()) {
+			// Skip the first column because it just contains 'physical plan'
+			for (idx_t col_idx = 1; col_idx < coll.ColumnCount(); col_idx++) {
+				if (col_idx > 1) {
+					result += "\t";
+				}
+				auto val = row.GetValue(col_idx);
+				result += val.IsNull() ? "NULL" : StringUtil::Replace(val.ToString(), string("\0", 1), "\\0");
 			}
-			auto val = row.GetValue(col_idx);
-			result += val.IsNull() ? "NULL" : StringUtil::Replace(val.ToString(), string("\0", 1), "\\0");
+			result += "\n";
 		}
-		result += "\n";
+		return result;
 	}
 
-	if (DuckDBPyConnection::IsJupyter()) {
-		py::gil_scoped_acquire gil;
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
-		auto html_attr = import_cache.IPython.display.HTML();
-		auto html_object = html_attr(py::str(result));
-		auto display_attr = import_cache.IPython.display.display();
-		display_attr(html_object);
-		return "";
+	auto chunk = materialized.Fetch();
+	for (idx_t i = 0; i < chunk->size(); i++) {
+		auto plan = chunk->GetValue(1, i);
+		auto plan_string = plan.GetValue<string>();
+		DisplayHTML(plan_string);
 	}
-
-	return result;
+	return "";
 }
 
 // TODO: RelationType to a python enum
