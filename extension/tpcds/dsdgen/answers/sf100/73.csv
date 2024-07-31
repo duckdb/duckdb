@@ -8,8 +8,8 @@ Baker|Julie|Mrs.|Y|14972491|5
 Barton|William|Mr.|N|17923145|5
 Berry|Anissa|Dr.|Y|14902499|5
 Bridges|Glenn|Mr.|N|22515307|5
-Bullock|Thomas|Dr.|Y|8511089|5
 Bullock|Carl|Mr.|N|14966899|5
+Bullock|Thomas|Dr.|Y|8511089|5
 Burleson|Charlotte|Mrs.|Y|23018382|5
 Byrd|Michael|Sir|Y|1331979|5
 Carson|Lecia|Dr.|Y|7162305|5
@@ -80,8 +80,8 @@ Ross|Daniel|Mr.|N|16162295|5
 Salinas|Nicholas|Sir|N|2382248|5
 Santiago|Julie|Miss|Y|10084085|5
 Sayre|Cory|Sir|N|23437184|5
-Shaw|Jon|Mr.|N|5500591|5
 Shaw|Jessica|Miss|Y|19977491|5
+Shaw|Jon|Mr.|N|5500591|5
 Silva|Frank|Mr.|Y|18146811|5
 Sousa|Sandra|Dr.|N|13713884|5
 Steffen|Charles|Mr.|NULL|21009521|5
@@ -89,18 +89,18 @@ Stone|Herbert|Mr.|N|21304324|5
 Storey|Jacklyn|Mrs.|N|22727443|5
 Summers|Randee|Mrs.|Y|8388097|5
 Tackett|Denise|Ms.|Y|15864859|5
+Thompson|Claudine|Miss|Y|967375|5
 Thompson|Diane|Dr.|Y|18143203|5
 Thompson|Michael|Dr.|Y|2390052|5
-Thompson|Claudine|Miss|Y|967375|5
 Turner|Clarence|Dr.|N|22995846|5
 Warner|Steven|NULL|NULL|20215411|5
 Watson|Brian|Dr.|Y|1593040|5
 Webb|Jonathan|Sir|Y|6402105|5
 Young|Irma|Ms.|N|4232678|5
-NULL|Jose|NULL|NULL|5163632|5
 NULL|Alfred|Dr.|Y|5766890|5
-NULL|Lisa|NULL|Y|22367076|5
 NULL|Andre|Dr.|NULL|2010779|5
+NULL|Jose|NULL|NULL|5163632|5
+NULL|Lisa|NULL|Y|22367076|5
 NULL|NULL|NULL|N|7247518|5
 Blum|Richard|Sir|N|1948949|4
 Clinton|Faye|Ms.|N|12610650|4
@@ -116,5 +116,3 @@ Reynolds|Gabriel|Sir|Y|8394722|4
 Washington|Jesse|Dr.|Y|10494533|4
 NULL|NULL|NULL|NULL|14581417|4
 Adams|Steven|Sir|Y|2583138|3
-
-
