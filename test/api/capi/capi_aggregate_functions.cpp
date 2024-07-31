@@ -73,14 +73,14 @@ static void CAPIRegisterWeightedSum(duckdb_connection connection, const char *na
 	duckdb_aggregate_function_set_name(function, name);
 	duckdb_aggregate_function_set_name(function, name);
 
-	// add a two double parameters
+	// add a two bigint parameters
 	auto type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	duckdb_aggregate_function_add_parameter(nullptr, type);
 	duckdb_aggregate_function_add_parameter(function, nullptr);
 	duckdb_aggregate_function_add_parameter(function, type);
 	duckdb_aggregate_function_add_parameter(function, type);
 
-	// set the return type to double
+	// set the return type to bigint
 	duckdb_aggregate_function_set_return_type(nullptr, type);
 	duckdb_aggregate_function_set_return_type(function, nullptr);
 	duckdb_aggregate_function_set_return_type(function, type);
@@ -126,4 +126,165 @@ TEST_CASE("Test Aggregate Functions C API", "[capi]") {
 	result = tester.Query("SELECT my_weighted_sum(i, 2) FROM range(100) t(i)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 9900);
+
+	result = tester.Query("SELECT i % 2 AS gr, my_weighted_sum(i, 2) FROM range(100) t(i) GROUP BY gr ORDER BY gr");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+	REQUIRE(result->Fetch<int64_t>(1, 0) == 4900);
+	REQUIRE(result->Fetch<int64_t>(0, 1) == 1);
+	REQUIRE(result->Fetch<int64_t>(1, 1) == 5000);
+}
+
+struct RepeatedStringAggState {
+	char *data;
+	idx_t size;
+};
+
+idx_t RepeatedStringAggSize() {
+	return sizeof(RepeatedStringAggState);
+}
+
+void RepeatedStringAggInit(duckdb_aggregate_state state_p) {
+	auto state = reinterpret_cast<RepeatedStringAggState *>(state_p);
+	state->data = nullptr;
+	state->size = 0;
+}
+
+void RepeatedStringAggUpdate(duckdb_function_info info, duckdb_data_chunk input, duckdb_aggregate_state *states) {
+	auto state = reinterpret_cast<RepeatedStringAggState **>(states);
+	auto row_count = duckdb_data_chunk_get_size(input);
+	auto input_vector = duckdb_data_chunk_get_vector(input, 0);
+	auto input_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(input_vector));
+	auto input_validity = duckdb_vector_get_validity(input_vector);
+
+	auto weight_vector = duckdb_data_chunk_get_vector(input, 1);
+	auto weight_data = static_cast<int64_t *>(duckdb_vector_get_data(weight_vector));
+	auto weight_validity = duckdb_vector_get_validity(weight_vector);
+	for (idx_t i = 0; i < row_count; i++) {
+		if (duckdb_validity_row_is_valid(input_validity, i) && duckdb_validity_row_is_valid(weight_validity, i)) {
+			auto length = duckdb_string_t_length(input_data[i]);
+			auto data = duckdb_string_t_data(input_data[i]);
+			auto weight = weight_data[i];
+			auto new_data = (char *)malloc(state[i]->size + length * weight + 1);
+			if (state[i]->size > 0) {
+				memcpy((void *)(new_data), state[i]->data, state[i]->size);
+				free((void *)(state[i]->data));
+			}
+			idx_t offset = state[i]->size;
+			for (idx_t rep_idx = 0; rep_idx < weight; rep_idx++) {
+				memcpy((void *)(new_data + offset), data, length);
+				offset += length;
+			}
+			state[i]->data = new_data;
+			state[i]->size = offset;
+			state[i]->data[state[i]->size] = '\0';
+		}
+	}
+}
+
+void RepeatedStringAggCombine(duckdb_function_info info, duckdb_aggregate_state *source_p,
+                              duckdb_aggregate_state *target_p, idx_t count) {
+	auto source = reinterpret_cast<RepeatedStringAggState **>(source_p);
+	auto target = reinterpret_cast<RepeatedStringAggState **>(target_p);
+
+	for (idx_t i = 0; i < count; i++) {
+		if (source[i]->size == 0) {
+			continue;
+		}
+		auto new_data = (char *)malloc(target[i]->size + source[i]->size + 1);
+		if (target[i]->size > 0) {
+			memcpy((void *)new_data, target[i]->data, target[i]->size);
+			free((void *)target[i]->data);
+		}
+		memcpy((void *)(new_data + target[i]->size), source[i]->data, source[i]->size);
+		target[i]->data = new_data;
+		target[i]->size += source[i]->size;
+		target[i]->data[target[i]->size] = '\0';
+	}
+}
+
+void RepeatedStringAggFinalize(duckdb_function_info info, duckdb_aggregate_state *source_p, duckdb_vector result,
+                               idx_t count, idx_t offset) {
+	auto source = reinterpret_cast<RepeatedStringAggState **>(source_p);
+	duckdb_vector_ensure_validity_writable(result);
+	auto result_validity = duckdb_vector_get_validity(result);
+
+	for (idx_t i = 0; i < count; i++) {
+		if (!source[i]->data) {
+			duckdb_validity_set_row_invalid(result_validity, offset + i);
+		} else {
+			duckdb_vector_assign_string_element_len(result, offset + i, reinterpret_cast<const char *>(source[i]->data),
+			                                        source[i]->size);
+		}
+	}
+}
+
+void RepeatedStringAggDestructor(duckdb_aggregate_state *states, idx_t count) {
+	auto source = reinterpret_cast<RepeatedStringAggState **>(states);
+	for (idx_t i = 0; i < count; i++) {
+		if (source[i]->data) {
+			free(source[i]->data);
+		}
+	}
+}
+
+static void CAPIRegisterRepeatedStringAgg(duckdb_connection connection) {
+	duckdb_state status;
+
+	// create a scalar function
+	auto function = duckdb_create_aggregate_function();
+	duckdb_aggregate_function_set_name(function, "repeated_string_agg");
+
+	// add a varchar/bigint parameter
+	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto bigint_type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	duckdb_aggregate_function_add_parameter(function, varchar_type);
+	duckdb_aggregate_function_add_parameter(function, bigint_type);
+
+	// set the return type to varchar
+	duckdb_aggregate_function_set_return_type(function, varchar_type);
+	duckdb_destroy_logical_type(&varchar_type);
+	duckdb_destroy_logical_type(&bigint_type);
+
+	// set up the function
+	duckdb_aggregate_function_set_functions(function, RepeatedStringAggSize, RepeatedStringAggInit,
+	                                        RepeatedStringAggUpdate, RepeatedStringAggCombine,
+	                                        RepeatedStringAggFinalize);
+	duckdb_aggregate_function_set_destructor(function, RepeatedStringAggDestructor);
+
+	// register and cleanup
+	status = duckdb_register_aggregate_function(connection, function);
+	REQUIRE(status == DuckDBSuccess);
+
+	duckdb_destroy_aggregate_function(&function);
+}
+
+TEST_CASE("Test String Aggregate Function", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	CAPIRegisterRepeatedStringAgg(tester.connection);
+
+	// now call it
+	result = tester.Query("SELECT repeated_string_agg('x', 2)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<string>(0, 0) == "xx");
+
+	result = tester.Query("SELECT repeated_string_agg('', 2)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<string>(0, 0) == "");
+
+	result = tester.Query("SELECT repeated_string_agg('abcdefgh', 3)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<string>(0, 0) == "abcdefghabcdefghabcdefgh");
+
+	result = tester.Query("SELECT repeated_string_agg(NULL, 2)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->IsNull(0, 0));
+
+	result = tester.Query(
+	    "SELECT repeated_string_agg(CASE WHEN i%10=0 THEN i::VARCHAR ELSE '' END, 2) FROM range(100) t(i)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<string>(0, 0) == "00101020203030404050506060707080809090");
 }

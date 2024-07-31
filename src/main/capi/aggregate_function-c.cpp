@@ -212,6 +212,14 @@ duckdb_state duckdb_register_aggregate_function(duckdb_connection connection, du
 	return DuckDBSuccess;
 }
 
+void duckdb_aggregate_function_set_special_handling(duckdb_aggregate_function function) {
+	if (!function) {
+		return;
+	}
+	auto &aggregate_function = GetCAggregateFunction(function);
+	aggregate_function.null_handling = duckdb::FunctionNullHandling::SPECIAL_HANDLING;
+}
+
 void duckdb_aggregate_function_set_extra_info(duckdb_aggregate_function function, void *extra_info,
                                               duckdb_delete_callback_t destroy) {
 	if (!function || !extra_info) {

@@ -1198,6 +1198,18 @@ This means that the data of the string does not have a separate allocation.
 */
 DUCKDB_API bool duckdb_string_is_inlined(duckdb_string_t string);
 
+/*!
+Returns the string length of a string_t
+
+*/
+DUCKDB_API uint32_t duckdb_string_t_length(duckdb_string_t string);
+
+/*!
+Returns a pointer to the string data of a string_t
+
+*/
+DUCKDB_API const char *duckdb_string_t_data(duckdb_string_t string);
+
 //===--------------------------------------------------------------------===//
 // Date/Time/Timestamp Helpers
 //===--------------------------------------------------------------------===//
@@ -2581,6 +2593,13 @@ If the function is incomplete or a function with this name already exists DuckDB
 */
 DUCKDB_API duckdb_state duckdb_register_aggregate_function(duckdb_connection con,
                                                            duckdb_aggregate_function aggregate_function);
+
+/*!
+Sets the NULL handling of the aggregate function to SPECIAL_HANDLING.
+
+* aggregate_function: The aggregate function
+*/
+DUCKDB_API void duckdb_aggregate_function_set_special_handling(duckdb_aggregate_function aggregate_function);
 
 /*!
 Assigns extra information to the scalar function that can be fetched during binding, etc.
