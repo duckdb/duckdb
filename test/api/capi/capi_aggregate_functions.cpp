@@ -248,6 +248,8 @@ void RepeatedStringAggUpdate(duckdb_function_info info, duckdb_data_chunk input,
 		auto new_data = (char *)malloc(state[i]->size + length * weight + 1);
 		if (state[i]->size > 0) {
 			memcpy((void *)(new_data), state[i]->data, state[i]->size);
+		}
+		if (state[i]->data) {
 			free((void *)(state[i]->data));
 		}
 		if (weight < 0) {
