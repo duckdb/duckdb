@@ -3,6 +3,10 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
 
 # test if null value is correctly converted into string

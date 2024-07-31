@@ -2,6 +2,9 @@
 # description: Test replacement scan aliases
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # implicit alias is equal to the file name
 
 statement ok

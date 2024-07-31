@@ -2,6 +2,9 @@
 # description: Test copy with a ZSTD stream
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 require parquet
 
 # Zstd comes with the parquet extension but we currently can not autoload parquet for zstd. Parquet is generally bundled

@@ -11,7 +11,9 @@ select * from read_csv_auto('test/sql/copy/csv/data/people.csv');
 
 # Specifying columns, but not specifying the right amount throws an error
 statement error
-select * from read_csv_auto('test/sql/copy/csv/data/people.csv', columns={'a': 'VARCHAR'})
+select * from read_csv_auto('test/sql/copy/csv/data/people.csv', columns={'a': 'VARCHAR'}, auto_detect = false)
+----
+Expected Number of Columns: 1 Found: 2
 
 # When we do specify the right amount of columns, everything works
 statement ok

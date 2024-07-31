@@ -4,6 +4,10 @@
 
 require httpfs
 
+statement ok
+PRAGMA enable_verification
+
+
 # regular csv file
 query ITTTIITITTIIII nosort webpagecsv
 SELECT * FROM read_csv_auto('test/sql/copy/csv/data/real/web_page.csv') ORDER BY 1;

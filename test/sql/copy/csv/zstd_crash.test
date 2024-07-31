@@ -2,6 +2,9 @@
 # description: Test that reading a ZSTD file with auto-detect does not crash
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 require no_extension_autoloading
 
 # zstd requires the parquet extension

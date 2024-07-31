@@ -2,6 +2,10 @@
 # description: Test copy statement with many empty lines
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
+
 # CSV file with many empty lines
 # load CSV file into a table
 statement ok

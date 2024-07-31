@@ -2,7 +2,6 @@
 # description: IGNORE_ERRORS test
 # group: [csv]
 
-
 # Try without sniffing
 
 statement ok

@@ -3,6 +3,10 @@
 # group: [auto]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE movie_info AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/imdb_movie_info_escaped.csv');
 
 query I

@@ -3,6 +3,10 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE no_quote(a VARCHAR, b VARCHAR);
 
 # empty quote

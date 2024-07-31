@@ -3,6 +3,9 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 copy (select 'name' as name, 1 as i from range(10000000) union all select 'name', 'hello world' union all select 'name', 'xxxxx' union all select 'name', 1 from range(10000)) to '__TEST_DIR__/bigcsv.csv';
 
 query I

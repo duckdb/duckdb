@@ -3,6 +3,10 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE bgzf AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/bgzf.gz');
 
 query I

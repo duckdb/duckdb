@@ -3,6 +3,10 @@
 # group: [auto]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE voters AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/voter.tsv');
 
 query I

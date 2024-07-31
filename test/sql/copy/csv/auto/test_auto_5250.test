@@ -3,6 +3,9 @@
 # group: [auto]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 PRAGMA verify_parallelism
 
 # We need to run this test with sample-size set to all, since the different option shows up ~ line 250, which is not

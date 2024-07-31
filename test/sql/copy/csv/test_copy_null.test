@@ -2,6 +2,10 @@
 # description: Test NULL option of copy statement
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
+
 # generate CSV file with default delimiter
 # create a table
 statement ok

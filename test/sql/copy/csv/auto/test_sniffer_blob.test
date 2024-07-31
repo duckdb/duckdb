@@ -2,6 +2,10 @@
 # description: Test reading a blob with the sniffer
 # group: [auto]
 
+statement ok
+PRAGMA enable_verification
+
+
 # This is the only way to try to trick the sniffer into checking blobs and it is not valid
 statement error
 select count(*) from read_csv('test/sql/copy/csv/data/test/blob.csv',auto_type_candidates=['blob'])

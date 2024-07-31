@@ -2,6 +2,9 @@
 # description: Test sniff_csv function with user set options
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # requires notwindows because tests will return \r\n to be used in the parameters
 require notwindows
 

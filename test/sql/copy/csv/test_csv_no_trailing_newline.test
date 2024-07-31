@@ -2,6 +2,10 @@
 # description: Test CSV file without trailing newline
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
+
 # no newline at end of file with simple delimiter
 # load CSV file into a table
 statement ok

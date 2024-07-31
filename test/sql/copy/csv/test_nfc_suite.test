@@ -2,6 +2,9 @@
 # description: Test CSV with Unicode NFC Normalization test suite
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # http:www.unicode.org/Public/UCD/latest/ucd/NormalizationTest.txt
 statement ok
 CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);

@@ -3,6 +3,10 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE lineitem(l_orderkey INT NOT NULL,
                       l_partkey INT NOT NULL,
                       l_suppkey INT NOT NULL,

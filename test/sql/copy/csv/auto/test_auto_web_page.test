@@ -1,6 +1,7 @@
 # name: test/sql/copy/csv/auto/test_auto_web_page.test
 # description: Test read_csv_auto from web_page csv
 # group: [auto]
+
 statement ok
 CREATE TABLE web_page AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/web_page.csv');
 

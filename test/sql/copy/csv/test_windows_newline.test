@@ -2,6 +2,9 @@
 # description: Test Windows Newlines with a long file
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # many strings with windows newlines
 # load CSV file into a table
 statement ok
