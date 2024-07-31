@@ -34,11 +34,10 @@ select * from repeat_row(5, true, num_rows=2) as (a integer, b);
 syntax error at or near ")"
 
 # Additional columns in the schema (are ignored)
-query II
+statement error
 select * from repeat_row(5, true, num_rows=2) as (a integer, b varchar, c boolean);
 ----
-5	true
-5	true
+The provided schema contains 3 columns, but the function only returns 2 columns
 
 # Only a subset of columns are provided: only emit those columns
 query I
