@@ -4,6 +4,7 @@ namespace duckdb {
 
 ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size)
     : ScannerResult(states, state_machine, result_size) {
+	column_counts.resize(result_size);
 }
 
 void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos) {

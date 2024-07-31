@@ -88,11 +88,11 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 						}
 						column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
 						    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,
-						    STANDARD_VECTOR_SIZE, first_iterator));
+						    sniff_size, first_iterator));
 						continue;
 					}
 					column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
-					    buffer_manager, std::move(sniffing_state_machine), detection_error_handler));
+					    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,sniff_size));
 				}
 			}
 		}

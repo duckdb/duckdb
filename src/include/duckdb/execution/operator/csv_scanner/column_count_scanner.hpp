@@ -28,21 +28,21 @@ public:
 		return column_counts[index];
 	}
 
-	ColumnCount column_counts[STANDARD_VECTOR_SIZE];
+	vector<ColumnCount> column_counts;
 	idx_t current_column_count = 0;
 	bool error = false;
 	idx_t result_position = 0;
 
 	//! Adds a Value to the result
-	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos);
+	static inline void AddValue(ColumnCountResult &result, idx_t buffer_pos);
 	//! Adds a Row to the result
-	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos);
+	static inline bool AddRow(ColumnCountResult &result, idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void InvalidState(ColumnCountResult &result);
 	//! Handles QuotedNewline State
 	static inline void QuotedNewLine(ColumnCountResult &result);
 	//! Handles EmptyLine states
-	static inline bool EmptyLine(ColumnCountResult &result, const idx_t buffer_pos);
+	static inline bool EmptyLine(ColumnCountResult &result, idx_t buffer_pos);
 	inline void InternalAddRow();
 };
 

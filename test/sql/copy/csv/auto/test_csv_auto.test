@@ -2,9 +2,6 @@
 # description: Test csv dialect detection
 # group: [auto]
 
-require vector_size 512
-
-
 statement ok 
 PRAGMA verify_parallelism
 

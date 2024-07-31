@@ -135,6 +135,8 @@ private:
 	SetColumns set_columns;
 	shared_ptr<CSVErrorHandler> error_handler;
 	shared_ptr<CSVErrorHandler> detection_error_handler;
+	//! Result size of sniffing phases
+	const idx_t sniff_size = 2048;
 	//! Sets the result options
 	void SetResultOptions();
 

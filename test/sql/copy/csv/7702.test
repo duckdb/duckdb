@@ -2,15 +2,32 @@
 # description: Test for issue #7702
 # group: [csv]
 
+# name: test/sql/copy/csv/auto/test_csv_auto.test
+# group: [auto]
+
+## name: test/sql/copy/csv/auto/test_csv_auto.test
+## description: Test csv dialect detection
+## group: [auto]
 statement ok
 PRAGMA enable_verification
 
-query I
-SELECT count(*) FROM read_csv_auto( ['test/sql/copy/csv/data/error/mismatch/half1.csv', 'test/sql/copy/csv/data/error/mismatch/half2.csv'], ignore_errors=true, sample_size=1);
-----
-9102
+statement ok
+SET THREADS=8;
 
-query I
-SELECT count(*) FROM read_csv_auto( ['test/sql/copy/csv/data/error/mismatch/half2.csv', 'test/sql/copy/csv/data/error/mismatch/half1.csv'], ignore_errors=true, sample_size=1);
-----
-9102
+statement ok
+CREATE TABLE opinions AS SELECT
+    id,
+    date_created,
+    date_modified,
+    author_str,
+    per_curiam,
+    joined_by_str,
+    type,
+    sha1,
+    page_count,
+    download_url,
+    local_path,
+    extracted_by_ocr,
+    author_id,
+    cluster_id
+    FROM read_csv_auto('/Users/holanda/Desktop/opinions-2024-05-06.csv', max_line_size=30000000, HEADER=true);

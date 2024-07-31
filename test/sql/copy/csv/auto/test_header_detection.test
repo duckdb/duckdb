@@ -2,8 +2,6 @@
 # description: Test csv header detection
 # group: [auto]
 
-require vector_size 512
-
 # CSV file with two lines, none header
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/no_header.csv');
