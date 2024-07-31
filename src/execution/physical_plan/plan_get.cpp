@@ -152,24 +152,25 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		// push a projection to the expected return types+names
 		vector<LogicalType> types;
 		vector<unique_ptr<Expression>> expressions;
-		for (auto &column_id : column_ids) {
+		D_ASSERT(plan->types.size() == column_ids.size());
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto &column_id = column_ids[i];
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				types.emplace_back(LogicalType::BIGINT);
 				expressions.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
-			} else {
-				auto &type = op.returned_types[column_id];
-				// FIXME: is it possible for column_id to be out of range of 'user_provided_types' ??
-				auto &target_type = op.user_provided_types[column_id];
-
-				types.push_back(target_type);
-				unique_ptr<Expression> expr;
-				expr = make_uniq<BoundReferenceExpression>(type, column_id);
-				if (type != target_type) {
-					auto cast = BoundCastExpression::AddCastToType(context, std::move(expr), target_type);
-					expr = std::move(cast);
-				}
-				expressions.push_back(std::move(expr));
+				continue;
 			}
+			auto &type = op.returned_types[column_id];
+			auto &target_type = op.user_provided_types[column_id];
+
+			types.push_back(target_type);
+			unique_ptr<Expression> expr;
+			expr = make_uniq<BoundReferenceExpression>(type, i);
+			if (type != target_type) {
+				auto cast = BoundCastExpression::AddCastToType(context, std::move(expr), target_type);
+				expr = std::move(cast);
+			}
+			expressions.push_back(std::move(expr));
 		}
 
 		auto projection =

@@ -1,0 +1,35 @@
+# name: test/sql/table_function/user_specified_schema.test
+# group: [table_function]
+
+statement ok
+pragma enable_verification;
+
+query IIII
+select * from read_csv('tmp/csv_per_thread/csv_file1.csv') as (a varchar, b boolean, c double, d bigint);
+----
+b	true	3.0	123
+b	true	4.0	321
+
+query I
+select typeof(b) from read_csv('tmp/csv_per_thread/csv_file1.csv') as (a varchar, b VARCHAR);
+----
+VARCHAR
+VARCHAR
+
+query I
+select typeof(b) from read_csv('tmp/csv_per_thread/csv_file1.csv') as (a varchar, b VARCHAR);
+----
+VARCHAR
+VARCHAR
+
+query II
+select * from read_csv('tmp/csv_per_thread/csv_file1.csv') as (a varchar, b VARCHAR);
+----
+b	true
+b	true
+
+query I
+select b from read_csv('tmp/csv_per_thread/csv_file1.csv') as (a varchar, b boolean, c double, d bigint);
+----
+true
+true
