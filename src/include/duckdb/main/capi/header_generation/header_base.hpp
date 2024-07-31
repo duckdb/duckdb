@@ -38,31 +38,6 @@
 #endif
 #endif
 
-//! In the future, we are planning to move extension functions to a separate header. For now you can set the define
-//! below to remove the functions that are planned to be moved out of this header.
-// #define DUCKDB_NO_EXTENSION_FUNCTIONS
-
-//! Set the define below to remove all functions that are deprecated or planned to be deprecated
-// #define DUCKDB_API_NO_DEPRECATED
-
-//! API versions
-//! If no explicit API version is defined, the latest API version is used.
-//! Note that using older API versions (i.e. not using DUCKDB_API_LATEST) is deprecated.
-//! These will not be supported long-term, and will be removed in future versions.
-#ifndef DUCKDB_API_0_3_1
-#define DUCKDB_API_0_3_1 1
-#endif
-#ifndef DUCKDB_API_0_3_2
-#define DUCKDB_API_0_3_2 2
-#endif
-#ifndef DUCKDB_API_LATEST
-#define DUCKDB_API_LATEST DUCKDB_API_0_3_2
-#endif
-
-#ifndef DUCKDB_API_VERSION
-#define DUCKDB_API_VERSION DUCKDB_API_LATEST
-#endif
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -365,12 +340,6 @@ typedef struct {
 //! duckdb_column_type, and duckdb_column_name, which take the result and the column index
 //! as their parameters
 typedef struct {
-#if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
-	void *data;
-	bool *nullmask;
-	duckdb_type type;
-	char *name;
-#else
 	// deprecated, use duckdb_column_data
 	void *__deprecated_data;
 	// deprecated, use duckdb_nullmask_data
@@ -379,7 +348,6 @@ typedef struct {
 	duckdb_type __deprecated_type;
 	// deprecated, use duckdb_column_name
 	char *__deprecated_name;
-#endif
 	void *internal_data;
 } duckdb_column;
 
@@ -410,13 +378,6 @@ typedef struct {
 //! A query result consists of a pointer to its internal data.
 //! Must be freed with 'duckdb_destroy_result'.
 typedef struct {
-#if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
-	idx_t column_count;
-	idx_t row_count;
-	idx_t rows_changed;
-	duckdb_column *columns;
-	char *error_message;
-#else
 	// deprecated, use duckdb_column_count
 	idx_t __deprecated_column_count;
 	// deprecated, use duckdb_row_count
@@ -427,7 +388,6 @@ typedef struct {
 	duckdb_column *__deprecated_columns;
 	// deprecated, use duckdb_result_error
 	char *__deprecated_error_message;
-#endif
 	void *internal_data;
 } duckdb_result;
 
@@ -530,7 +490,6 @@ typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_
 // Table function types
 //===--------------------------------------------------------------------===//
 
-#ifndef DUCKDB_NO_EXTENSION_FUNCTIONS
 //! A table function. Must be destroyed with `duckdb_destroy_table_function`.
 typedef struct _duckdb_table_function {
 	void *__val;
@@ -566,7 +525,6 @@ typedef struct _duckdb_replacement_scan_info {
 
 //! A replacement scan function that can be added to a database.
 typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info, const char *table_name, void *data);
-#endif
 
 //===--------------------------------------------------------------------===//
 // Arrow-related types
