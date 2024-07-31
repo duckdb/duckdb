@@ -499,10 +499,10 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	// 7  = 4
 	if (date.days < 0) {
 		// negative date: start off at 4 and cycle downwards
-		return (7 - ((-int64_t(date.days) + 3) % 7));
+		return UnsafeNumericCast<int32_t>((7 - ((-int64_t(date.days) + 3) % 7)));
 	} else {
 		// positive date: start off at 4 and cycle upwards
-		return ((int64_t(date.days) + 3) % 7) + 1;
+		return UnsafeNumericCast<int32_t>(((int64_t(date.days) + 3) % 7) + 1);
 	}
 }
 

@@ -74,7 +74,9 @@ int Varint::CharToDigit(char c) {
 }
 
 char Varint::DigitToChar(int digit) {
-	return static_cast<char>(digit) + '0';
+	// FIXME: this would be the proper solution:
+	// return UnsafeNumericCast<char>(digit + '0');
+	return static_cast<char>(digit + '0');
 }
 
 bool Varint::VarcharFormatting(string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative, bool &is_zero) {
@@ -200,9 +202,9 @@ bool Varint::VarintToDouble(string_t &blob, double &result, bool &strict) {
 	idx_t byte_pos = 0;
 	for (idx_t i = blob.GetSize() - 1; i > 2; i--) {
 		if (is_negative) {
-			result += static_cast<uint8_t>(~blob_ptr[i]) * pow(256, byte_pos);
+			result += static_cast<uint8_t>(~blob_ptr[i]) * pow(256, static_cast<double>(byte_pos));
 		} else {
-			result += static_cast<uint8_t>(blob_ptr[i]) * pow(256, byte_pos);
+			result += static_cast<uint8_t>(blob_ptr[i]) * pow(256, static_cast<double>(byte_pos));
 		}
 		byte_pos++;
 	}

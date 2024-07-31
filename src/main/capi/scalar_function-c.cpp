@@ -113,6 +113,14 @@ void duckdb_scalar_function_set_special_handling(duckdb_scalar_function function
 	scalar_function.null_handling = duckdb::FunctionNullHandling::SPECIAL_HANDLING;
 }
 
+void duckdb_scalar_function_set_volatile(duckdb_scalar_function function) {
+	if (!function) {
+		return;
+	}
+	auto &scalar_function = GetCScalarFunction(function);
+	scalar_function.stability = duckdb::FunctionStability::VOLATILE;
+}
+
 void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckdb_logical_type type) {
 	if (!function || !type) {
 		return;

@@ -137,7 +137,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		if (error.HasError()) {
 			return false;
 		}
-		start_row += chunk.size();
+		start_row += UnsafeNumericCast<row_t>(chunk.size());
 		return true;
 	});
 	return error;
@@ -180,7 +180,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 				return false;
 			} // LCOV_EXCL_STOP
 
-			current_row += chunk.size();
+			current_row += UnsafeNumericCast<row_t>(chunk.size());
 			if (current_row >= append_state.current_row) {
 				// finished deleting all rows from the index: abort now
 				return false;

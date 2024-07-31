@@ -1241,20 +1241,28 @@ double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &
 	return progress * 100.0;
 }
 
-string PhysicalHashJoin::ParamsToString() const {
-	string result = EnumUtil::ToString(join_type) + "\n";
-	for (auto &it : conditions) {
-		string op = ExpressionTypeToOperator(it.comparison);
-		result += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
+InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["Join Type"] = EnumUtil::ToString(join_type);
+
+	string condition_info;
+	for (idx_t i = 0; i < conditions.size(); i++) {
+		auto &join_condition = conditions[i];
+		if (i > 0) {
+			condition_info += "\n";
+		}
+		condition_info +=
+		    StringUtil::Format("%s %s %s", join_condition.left->GetName(),
+		                       ExpressionTypeToOperator(join_condition.comparison), join_condition.right->GetName());
 	}
-	result += "\n[INFOSEPARATOR]\n";
+	result["Conditions"] = condition_info;
+
 	if (perfect_join_statistics.is_build_small) {
 		// perfect hash join
-		result += "Build Min: " + perfect_join_statistics.build_min.ToString() + "\n";
-		result += "Build Max: " + perfect_join_statistics.build_max.ToString() + "\n";
-		result += "\n[INFOSEPARATOR]\n";
+		result["Build Min"] = perfect_join_statistics.build_min.ToString();
+		result["Build Max"] = perfect_join_statistics.build_max.ToString();
 	}
-	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
+	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
 

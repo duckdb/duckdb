@@ -54,7 +54,7 @@ public:
 	PerfectHashJoinStats perfect_join_statistics;
 
 public:
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 public:
 	// Operator Interface

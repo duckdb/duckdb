@@ -32,6 +32,7 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	}
 	return (T)function;
 }
+#endif
 
 static void ComputeSHA256String(const string &to_hash, string *res) {
 	// Invoke MbedTls function to actually compute sha256
@@ -57,7 +58,6 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 
 	*res = state.Finalize();
 }
-#endif
 
 static string FilterZeroAtEnd(string s) {
 	while (!s.empty() && s.back() == '\0') {

@@ -19,6 +19,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 class Event;
@@ -60,8 +61,8 @@ public:
 
 public:
 	virtual string GetName() const;
-	virtual string ParamsToString() const {
-		return "";
+	virtual InsertionOrderPreservingMap<string> ParamsToString() const {
+		return InsertionOrderPreservingMap<string>();
 	}
 	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	void Print() const;
