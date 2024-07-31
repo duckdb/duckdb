@@ -358,8 +358,7 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 	}
 
 	result->deprecated_row_count = materialized.RowCount();
-	if (result->deprecated_row_count > 0 &&
-	    materialized.properties.return_type == StatementReturnType::CHANGED_ROWS) {
+	if (result->deprecated_row_count > 0 && materialized.properties.return_type == StatementReturnType::CHANGED_ROWS) {
 		// update total changes
 		auto row_changes = materialized.GetValue(0, 0);
 		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
