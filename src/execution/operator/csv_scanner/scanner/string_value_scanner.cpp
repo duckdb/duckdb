@@ -507,7 +507,7 @@ bool LineError::HandleErrors(StringValueResult &result) {
 	// Reconstruct CSV Line
 	for (auto &cur_error : current_errors) {
 		LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.lines_read);
-		bool first_nl;
+		bool first_nl = false;
 		auto borked_line = result.current_line_position.ReconstructCurrentLine(first_nl, result.buffer_handles,
 		                                                                       result.PrintErrorLine());
 		CSVError csv_error;
