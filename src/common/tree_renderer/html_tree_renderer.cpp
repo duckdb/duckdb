@@ -251,42 +251,6 @@ function toggleDisplay(button) {
         }
     }
 }
-
-function updateTreeHeight(tfTree) {
-	if (!tfTree) {
-		return;
-	}
-
-	const closestElement = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
-	if (!closestElement) {
-		return;
-	}
-
-	console.log(closestElement);
-
-	const height = getComputedStyle(closestElement).getPropertyValue('height');
-	tfTree.style.height = height;
-}
-
-function resizeTFTree() {
-	const tfTrees = document.querySelectorAll('.tf-tree');
-	tfTrees.forEach(tfTree => {
-		console.log(tfTree);
-		if (tfTree) {
-			const jupyterViewPort = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
-			console.log(jupyterViewPort);
-			if (jupyterViewPort) {
-				const resizeObserver = new ResizeObserver(() => {
-					updateTreeHeight(tfTree);
-				});
-				resizeObserver.observe(jupyterViewPort);
-			}
-		}
-	});
-}
-
-resizeTFTree();
-
 </script>
 
 </body>

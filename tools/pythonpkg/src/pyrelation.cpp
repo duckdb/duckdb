@@ -1510,6 +1510,62 @@ string DuckDBPyRelation::Explain(ExplainType type) {
 		auto plan_string = plan.GetValue<string>();
 		DisplayHTML(plan_string);
 	}
+
+	const string tree_resize_script = R"(
+<script>
+function toggleDisplay(button) {
+    const parentLi = button.closest('li');
+    const nestedUl = parentLi.querySelector('ul');
+    if (nestedUl) {
+        const currentDisplay = getComputedStyle(nestedUl).getPropertyValue('display');
+        if (currentDisplay === 'none') {
+            nestedUl.classList.toggle('hidden');
+            button.textContent = '-';
+        } else {
+            nestedUl.classList.toggle('hidden');
+            button.textContent = '+';
+        }
+    }
+}
+
+function updateTreeHeight(tfTree) {
+	if (!tfTree) {
+		return;
+	}
+
+	const closestElement = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
+	if (!closestElement) {
+		return;
+	}
+
+	console.log(closestElement);
+
+	const height = getComputedStyle(closestElement).getPropertyValue('height');
+	tfTree.style.height = height;
+}
+
+function resizeTFTree() {
+	const tfTrees = document.querySelectorAll('.tf-tree');
+	tfTrees.forEach(tfTree => {
+		console.log(tfTree);
+		if (tfTree) {
+			const jupyterViewPort = tfTree.closest('.lm-Widget.jp-OutputArea.jp-Cell-outputArea');
+			console.log(jupyterViewPort);
+			if (jupyterViewPort) {
+				const resizeObserver = new ResizeObserver(() => {
+					updateTreeHeight(tfTree);
+				});
+				resizeObserver.observe(jupyterViewPort);
+			}
+		}
+	});
+}
+
+resizeTFTree();
+
+</script>
+	)";
+	DisplayHTML(tree_resize_script);
 	return "";
 }
 
