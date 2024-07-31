@@ -35,7 +35,7 @@ duckdb_value duckdb_create_varchar(const char *text) {
 
 template <class T>
 static duckdb_value CAPICreateValue(T input) {
-	return WrapValue(new Value(Value::CreateValue<T>(input)));
+	return WrapValue(new duckdb::Value(duckdb::Value::CreateValue<T>(input)));
 }
 
 template <class T, LogicalTypeId TYPE_ID>
@@ -128,10 +128,10 @@ double duckdb_get_double(duckdb_value val) {
 	return CAPIGetValue<double, LogicalTypeId::DOUBLE>(val);
 }
 duckdb_value duckdb_create_date(duckdb_date input) {
-	return CAPICreateValue(date_t(input.days));
+	return CAPICreateValue(duckdb::date_t(input.days));
 }
 duckdb_date duckdb_get_date(duckdb_value val) {
-	return {CAPIGetValue<date_t, LogicalTypeId::DATE>(val).days};
+	return {CAPIGetValue<duckdb::date_t, LogicalTypeId::DATE>(val).days};
 }
 duckdb_value duckdb_create_time(duckdb_time input) {
 	return CAPICreateValue(duckdb::dtime_t(input.micros));
