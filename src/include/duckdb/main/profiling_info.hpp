@@ -38,6 +38,7 @@ struct MetricsTypeHashFunction {
 };
 
 typedef unordered_set<MetricsType, MetricsTypeHashFunction> profiler_settings_t;
+typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metrics_t;
 
 struct SettingSetFunctions {
 	static bool Enabled(const profiler_settings_t &settings, const MetricsType setting) {
@@ -58,7 +59,7 @@ class ProfilingInfo {
 public:
 	// set of metrics with their values; only enabled metrics are present in the set
 	profiler_settings_t settings;
-	unordered_map<MetricsType, Value> metrics;
+	profiler_metrics_t metrics;
 	InsertionOrderPreservingMap<string> extra_info;
 
 public:
