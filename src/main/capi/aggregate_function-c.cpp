@@ -27,6 +27,13 @@ struct CAggregateFunctionInfo : public AggregateFunctionInfo {
 	duckdb_aggregate_destroy_t destroy = nullptr;
 	duckdb_function_info extra_info = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
+};
+
+struct CAggregateExecuteInfo {
+	explicit CAggregateExecuteInfo(CAggregateFunctionInfo &info) : info(info) {
+	}
+
+	CAggregateFunctionInfo &info;
 	bool success = true;
 	string error;
 };
@@ -59,14 +66,23 @@ unique_ptr<FunctionData> CAPIAggregateBind(ClientContext &context, AggregateFunc
 
 idx_t CAPIAggregateStateSize(const AggregateFunction &function) {
 	auto &function_info = function.function_info->Cast<duckdb::CAggregateFunctionInfo>();
-	auto c_function_info = reinterpret_cast<duckdb_function_info>(&function_info);
-	return function_info.state_size(c_function_info);
+	CAggregateExecuteInfo exec_info(function_info);
+	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
+	auto result = function_info.state_size(c_function_info);
+	if (!exec_info.success) {
+		throw InvalidInputException(exec_info.error);
+	}
+	return result;
 }
 
 void CAPIAggregateStateInit(const AggregateFunction &function, data_ptr_t state) {
 	auto &function_info = function.function_info->Cast<duckdb::CAggregateFunctionInfo>();
-	auto c_function_info = reinterpret_cast<duckdb_function_info>(&function_info);
+	CAggregateExecuteInfo exec_info(function_info);
+	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
 	function_info.state_init(c_function_info, reinterpret_cast<duckdb_aggregate_state>(state));
+	if (!exec_info.success) {
+		throw InvalidInputException(exec_info.error);
+	}
 }
 
 void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &state,
@@ -81,10 +97,12 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
 	auto state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
 	auto c_input_chunk = reinterpret_cast<duckdb_data_chunk>(&chunk);
-	auto c_function_info = reinterpret_cast<duckdb_function_info>(&bind_data.info);
+
+	CAggregateExecuteInfo exec_info(bind_data.info);
+	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
 	bind_data.info.update(c_function_info, c_input_chunk, state_data);
-	if (!bind_data.info.success) {
-		throw InvalidInputException(bind_data.info.error);
+	if (!exec_info.success) {
+		throw InvalidInputException(exec_info.error);
 	}
 }
 
@@ -93,10 +111,11 @@ void CAPIAggregateCombine(Vector &state, Vector &combined, AggregateInputData &a
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
 	auto input_state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
 	auto result_state_data = FlatVector::GetData<duckdb_aggregate_state>(combined);
-	auto c_function_info = reinterpret_cast<duckdb_function_info>(&bind_data.info);
+	CAggregateExecuteInfo exec_info(bind_data.info);
+	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
 	bind_data.info.combine(c_function_info, input_state_data, result_state_data, count);
-	if (!bind_data.info.success) {
-		throw InvalidInputException(bind_data.info.error);
+	if (!exec_info.success) {
+		throw InvalidInputException(exec_info.error);
 	}
 }
 
@@ -106,10 +125,12 @@ void CAPIAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, V
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
 	auto input_state_data = FlatVector::GetData<duckdb_aggregate_state>(state);
 	auto result_vector = reinterpret_cast<duckdb_vector>(&result);
-	auto c_function_info = reinterpret_cast<duckdb_function_info>(&bind_data.info);
+
+	CAggregateExecuteInfo exec_info(bind_data.info);
+	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
 	bind_data.info.finalize(c_function_info, input_state_data, result_vector, count, offset);
-	if (!bind_data.info.success) {
-		throw InvalidInputException(bind_data.info.error);
+	if (!exec_info.success) {
+		throw InvalidInputException(exec_info.error);
 	}
 }
 
@@ -243,18 +264,18 @@ void duckdb_aggregate_function_set_extra_info(duckdb_aggregate_function function
 	function_info.delete_callback = destroy;
 }
 
-duckdb::CAggregateFunctionInfo &GetCAggregateFunctionInfo(duckdb_function_info info) {
+duckdb::CAggregateExecuteInfo &GetCAggregateExecuteInfo(duckdb_function_info info) {
 	D_ASSERT(info);
-	return *reinterpret_cast<duckdb::CAggregateFunctionInfo *>(info);
+	return *reinterpret_cast<duckdb::CAggregateExecuteInfo *>(info);
 }
 
 void *duckdb_aggregate_function_get_extra_info(duckdb_function_info info_p) {
-	auto &info = GetCAggregateFunctionInfo(info_p);
-	return info.extra_info;
+	auto &exec_info = GetCAggregateExecuteInfo(info_p);
+	return exec_info.info.extra_info;
 }
 
 void duckdb_aggregate_function_set_error(duckdb_function_info info_p, const char *error) {
-	auto &info = GetCAggregateFunctionInfo(info_p);
-	info.error = error;
-	info.success = false;
+	auto &exec_info = GetCAggregateExecuteInfo(info_p);
+	exec_info.error = error;
+	exec_info.success = false;
 }
