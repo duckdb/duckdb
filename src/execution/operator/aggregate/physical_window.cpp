@@ -898,7 +898,15 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 
 	gsource.returned += chunk.size();
 
-	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	if (chunk.size() == 0) {
+		lock_guard<mutex> guard(gsource.lock);
+		for (auto &state : gsource.blocked_tasks) {
+			state.Callback();
+		}
+		gsource.blocked_tasks.clear();
+		return SourceResultType::FINISHED;
+	}
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 InsertionOrderPreservingMap<string> PhysicalWindow::ParamsToString() const {
