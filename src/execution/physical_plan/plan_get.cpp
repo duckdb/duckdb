@@ -153,7 +153,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		vector<LogicalType> types;
 		vector<unique_ptr<Expression>> expressions;
 		D_ASSERT(plan->types.size() == column_ids.size());
-		for (idx_t i = 0; i < column_ids.size(); i++) {
+		idx_t column_count = MinValue(column_ids.size(), op.user_provided_types.size());
+		for (idx_t i = 0; i < column_count; i++) {
 			auto &column_id = column_ids[i];
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				types.emplace_back(LogicalType::BIGINT);

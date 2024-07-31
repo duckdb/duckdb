@@ -61,13 +61,15 @@ bool TableRef::Equals(const TableRef &other) const {
 	if (column_type_hint.size() != other.column_type_hint.size()) {
 		return false;
 	}
-	D_ASSERT(column_name_alias.size() == column_type_hint.size());
 	for (idx_t i = 0; i < column_name_alias.size(); i++) {
 		if (!StringUtil::CIEquals(column_name_alias[i], other.column_name_alias[i])) {
 			return false;
 		}
-		if (column_type_hint[i] != other.column_type_hint[i]) {
-			return false;
+
+		if (!column_type_hint.empty()) {
+			if (column_type_hint[i] != other.column_type_hint[i]) {
+				return false;
+			}
 		}
 	}
 	return true;

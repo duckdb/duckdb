@@ -4,6 +4,8 @@
 statement ok
 pragma enable_verification;
 
+## -- Table Function -- With projection pushdown
+
 # Select only a subset of columns
 query IIII
 select * from read_csv('data/csv/multiple_files/more_columns/file_3.csv') as (a integer, b integer, c integer, d varchar);
@@ -49,3 +51,116 @@ statement error
 select * from read_csv('data/csv/multiple_files/more_columns/file_3.csv') as (a integer, b integer, c integer, d integer);
 ----
 Could not convert string 'bla' to INT32
+
+## -- Table Function -- Without projection pushdown
+
+# Select only a subset of columns
+query II
+SELECT * FROM repeat_row(1, 2, 'foo', num_rows=3) as (a integer, b integer);
+----
+1	2
+1	2
+1	2
+
+# Too many columns
+statement error
+SELECT * FROM repeat_row(1, 2, 'foo', num_rows=3) as (a integer, b integer, c VARCHAR, d varchar);
+----
+The provided schema contains 4 columns, but the function only returns 3 columns
+
+# Could not be cast
+statement error
+SELECT * FROM repeat_row(1, 'foo', 3, num_rows=3) as (a integer, b integer);
+----
+Could not convert string 'foo' to INT32
+
+# Duplicate name
+statement error
+select * from repeat_row(1, 'foo', 3, num_rows=3) as (a integer, a VARCHAR);
+----
+table "repeat_row" has duplicate column name "a"
+
+# Select only one column from the projection
+query I
+select b from repeat_row(1, 'foo', 3, num_rows=3) as (a integer, b VARCHAR);
+----
+foo
+foo
+foo
+
+# Cast a column to another type than the original type
+query I
+select typeof(b) from repeat_row(1, 't', 3, num_rows=3) as (a integer, b bool);
+----
+BOOLEAN
+BOOLEAN
+BOOLEAN
+
+## -- Table In-Out Function --
+
+# Cast to the type of the schema
+query II
+select * from SUMMARY(
+	(
+		select * from (VALUES
+			(1,10),
+			(42,420)
+		) t(i, j)
+	)
+) as (summ INTEGER[], i INTEGER)
+----
+[1, 10]	1
+[42, 420]	42
+
+# Select only 1 column from the subset
+query I
+select i from SUMMARY(
+	(
+		select * from (VALUES
+			(1,10),
+			(42,420)
+		) t(i, j)
+	)
+) as (summ INTEGER[], i INTEGER)
+----
+1
+42
+
+# Could not cast to specified schema
+statement error
+select i from SUMMARY(
+	(
+		select * from (VALUES
+			(1,10),
+			(42,420)
+		) t(i, j)
+	)
+) as (summ INTEGER[], i DATE)
+----
+Conversion Error: Unimplemented type for cast (INTEGER -> DATE)
+
+# Too many columns
+statement error
+select * from SUMMARY(
+	(
+		select * from (VALUES
+			(1,10),
+			(42,420)
+		) t(i, j)
+	)
+) as (summ VARCHAR, i INTEGER, j INTEGER, a VARCHAR)
+----
+The provided schema contains 4 columns, but the function only returns 3 columns
+
+# Duplicate name
+statement error
+select * from SUMMARY(
+	(
+		select * from (VALUES
+			(1,10),
+			(42,420)
+		) t(i, j)
+	)
+) as (summ VARCHAR, i INTEGER, summ INTEGER)
+----
+table "summary" has duplicate column name "summ"

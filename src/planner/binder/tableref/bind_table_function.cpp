@@ -242,6 +242,12 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->user_provided_names = column_name_alias;
 	get->user_provided_types = column_type_hint;
 
+	if (table_function.in_out_function && !table_function.projection_pushdown) {
+		for (idx_t i = 0; i < return_types.size(); i++) {
+			get->AddColumnId(i);
+		}
+	}
+
 	if (!column_type_hint.empty()) {
 		D_ASSERT(column_name_alias.size() == column_type_hint.size());
 		if (column_type_hint.size() > return_types.size()) {
@@ -250,12 +256,6 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		}
 		return_types = column_type_hint;
 		return_names = column_name_alias;
-	}
-
-	if (table_function.in_out_function && !table_function.projection_pushdown) {
-		for (idx_t i = 0; i < return_types.size(); i++) {
-			get->AddColumnId(i);
-		}
 	}
 
 	// now add the table function to the bind context so its columns can be bound
