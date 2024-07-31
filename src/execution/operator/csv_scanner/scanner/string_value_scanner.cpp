@@ -14,7 +14,6 @@
 #include <algorithm>
 
 namespace duckdb {
-
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
                                      idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
@@ -427,11 +426,30 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		if (!result.HandleTooManyColumnsError(result.buffer_ptr + result.quoted_position + 1,
 		                                      buffer_pos - result.quoted_position - 2)) {
 			// If it's an escaped value we have to remove all the escapes, this is not really great
-			auto value = StringValueScanner::RemoveEscape(
-			    result.buffer_ptr + result.quoted_position + 1, buffer_pos - result.quoted_position - 2,
-			    result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
-			    result.parse_chunk.data[result.chunk_col_id]);
-			result.AddValueToVector(value.GetData(), value.GetSize());
+			// If we are going to escape, this vector must be a varchar vector
+			if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
+				result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id, result.last_position);
+				if (!result.state_machine.options.IgnoreErrors()) {
+					// We have to write the cast error message.
+					std::ostringstream error;
+					// Casting Error Message
+
+					error << "Could not convert string \""
+					      << std::string(result.buffer_ptr + result.quoted_position + 1,
+					                     buffer_pos - result.quoted_position - 2)
+					      << "\" to \'" << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id)
+					      << "\'";
+					result.current_errors.ModifyErrorMessageOfLastError(error.str());
+				}
+				result.cur_col_id++;
+				result.chunk_col_id++;
+			} else {
+				auto value = StringValueScanner::RemoveEscape(
+				    result.buffer_ptr + result.quoted_position + 1, buffer_pos - result.quoted_position - 2,
+				    result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
+				    result.parse_chunk.data[result.chunk_col_id]);
+				result.AddValueToVector(value.GetData(), value.GetSize());
+			}
 		}
 	} else {
 		if (buffer_pos < result.last_position.buffer_pos + 2) {
@@ -463,7 +481,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_position) {
 
 	bool first_nl;
-	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
+	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles, PrintErrorLine());
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 	if (current_line_position.begin == error_position) {
 		auto csv_error = CSVError::InvalidUTF8(state_machine.options, col_idx, lines_per_batch, borked_line,
@@ -489,8 +507,9 @@ bool LineError::HandleErrors(StringValueResult &result) {
 	// Reconstruct CSV Line
 	for (auto &cur_error : current_errors) {
 		LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.lines_read);
-		bool first_nl;
-		auto borked_line = result.current_line_position.ReconstructCurrentLine(first_nl, result.buffer_handles);
+		bool first_nl = false;
+		auto borked_line = result.current_line_position.ReconstructCurrentLine(first_nl, result.buffer_handles,
+		                                                                       result.PrintErrorLine());
 		CSVError csv_error;
 		auto col_idx = cur_error.col_idx;
 		auto &line_pos = cur_error.error_position;
@@ -590,7 +609,11 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 
 //! Reconstructs the current line to be used in error messages
 string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
-                                                unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles) {
+                                                unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
+                                                bool reconstruct_line) {
+	if (!reconstruct_line) {
+		return {};
+	}
 	string result;
 	if (end.buffer_idx == begin.buffer_idx) {
 		if (buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
@@ -683,7 +706,8 @@ bool StringValueResult::AddRowInternal() {
 			// If we are not null-padding this is an error
 			if (!state_machine.options.IgnoreErrors()) {
 				bool first_nl;
-				auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
+				auto borked_line =
+				    current_line_position.ReconstructCurrentLine(first_nl, buffer_handles, PrintErrorLine());
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 				if (current_line_position.begin == last_position) {
 					auto csv_error = CSVError::IncorrectColumnAmountError(
@@ -894,7 +918,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					                                 lines_read - parse_chunk.size() + line_error);
 					bool first_nl;
 					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
-					    first_nl, result.buffer_handles);
+					    first_nl, result.buffer_handles, result.PrintErrorLine());
 					std::ostringstream error;
 					error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 					      << LogicalTypeIdToString(type.id()) << "\'";
@@ -923,7 +947,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						                                 lines_read - parse_chunk.size() + line_error);
 						bool first_nl;
 						auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
-						    first_nl, result.buffer_handles);
+						    first_nl, result.buffer_handles, result.PrintErrorLine());
 						std::ostringstream error;
 						// Casting Error Message
 						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
@@ -1245,6 +1269,13 @@ void StringValueResult::SkipBOM() {
 	    iterator.pos.buffer_pos == 0) {
 		iterator.pos.buffer_pos = 3;
 	}
+}
+
+bool StringValueResult::PrintErrorLine() {
+	// To print a lint, result size must be different than one (i.e., this is a SetStart() trying to figure out new
+	// lines) And must either not be ignoring errors. OR must be storing them in a rejects table.
+	return result_size != 1 &&
+	       (state_machine.options.store_rejects.GetValue() || !state_machine.options.ignore_errors.GetValue());
 }
 
 void StringValueScanner::SkipUntilNewLine() {

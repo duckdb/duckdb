@@ -64,7 +64,8 @@ public:
 
 	//! Reconstructs the current line to be used in error messages
 	string ReconstructCurrentLine(bool &first_char_nl,
-	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles);
+	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
+	                              bool reconstruct_line);
 };
 
 class StringValueResult;
@@ -251,6 +252,9 @@ public:
 
 	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
 	void SkipBOM();
+	//! If we should Print Error Lines
+	//! We only really care about error lines if we are going to error or store them in a rejects table
+	bool PrintErrorLine();
 };
 
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
