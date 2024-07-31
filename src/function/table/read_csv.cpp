@@ -51,20 +51,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 
-	if (!input.user_provided_names.empty()) {
-		D_ASSERT(input.user_provided_types.size() == input.user_provided_names.size());
-		if (input.named_parameters.count("columns")) {
-			throw InvalidInputException("Can not provide both 'columns' and define a schema for the table function");
-		}
-		child_list_t<Value> children;
-		for (idx_t i = 0; i < input.user_provided_names.size(); i++) {
-			auto &user_provided_name = input.user_provided_names[i];
-			auto &user_provided_type = input.user_provided_types[i];
-			children.emplace_back(make_pair(user_provided_name, user_provided_type.ToString()));
-		}
-		input.named_parameters["columns"] = Value::STRUCT(std::move(children));
-	}
-
 	options.FromNamedParameters(input.named_parameters, context);
 	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
 	    options.store_rejects.IsSetByUser()) {
