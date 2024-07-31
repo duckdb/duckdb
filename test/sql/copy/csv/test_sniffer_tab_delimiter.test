@@ -2,6 +2,10 @@
 # description: Test sniff_csv function with user set options
 # group: [csv]
 
+# Sniffer dialect detection is currently limited to at least one vector.
+
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification
 
