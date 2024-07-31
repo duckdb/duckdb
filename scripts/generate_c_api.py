@@ -182,6 +182,7 @@ def parse_ext_api_definition():
             print(f"Invalid JSON found in {EXT_API_DEFINITION_FILE}: {err}")
             exit(1)
 
+
 def parse_exclusion_list(function_map):
     exclusion_set = set()
     with open(EXT_API_EXCLUSION_FILE, 'r') as f:
@@ -198,6 +199,7 @@ def parse_exclusion_list(function_map):
                     exit(1)
                 exclusion_set.add(entry)
     return exclusion_set
+
 
 # Creates the comment that accompanies describing a C api function
 def create_function_comment(function_obj):
@@ -378,6 +380,7 @@ def write_struct_member_definitions(version_entries, initialize=False):
 
     return result
 
+
 def create_extension_api_struct(ext_api_version, with_create_method=False, validate_exclusion_list=True):
     functions_in_struct = set()
 
@@ -404,21 +407,38 @@ def create_extension_api_struct(ext_api_version, with_create_method=False, valid
             ):
                 continue
 
-            functions_in_struct.add(function_lookup['name']);
+            functions_in_struct.add(function_lookup['name'])
             extension_struct_finished += create_struct_member(function_lookup)
             extension_struct_finished += '\n'
     extension_struct_finished += '} ' + f'{DUCKDB_EXT_API_STRUCT_NAME};\n\n'
 
     if validate_exclusion_list:
+
+        # Check for missing entries
         missing_entries = []
         for group in FUNCTION_GROUPS:
             for function in group['entries']:
                 if function['name'] not in functions_in_struct and function['name'] not in EXT_API_EXCLUSION_SET:
                     missing_entries.append(function['name'])
         if missing_entries:
-            print("Exclusion list validation failed! This means a C API function has been defined but not added to the API struct nor the exclusion list")
+            print(
+                "Exclusion list validation failed! This means a C API function has been defined but not added to the API struct nor the exclusion list"
+            )
             print(f"Missing functions are: {missing_entries}")
             exit(1)
+        # Check for entries both in the API definition and the exclusion list
+        double_entries = []
+        for api_version_entry in EXT_API_DEFINITION['version_entries']:
+            for function_name in api_version_entry['entries']:
+                if function_name in EXT_API_EXCLUSION_SET:
+                    double_entries.append(function_name)
+        if double_entries:
+            print(
+                "Exclusion list is invalid, there are entries in the extension api that are also in the exclusion list!"
+            )
+            print(f"Missing functions are: {double_entries}")
+            exit(1)
+
 
     if with_create_method:
         extension_struct_finished += "inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {\n"
