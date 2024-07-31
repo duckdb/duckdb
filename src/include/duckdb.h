@@ -529,9 +529,9 @@ typedef struct _duckdb_aggregate_state {
 } * duckdb_aggregate_state;
 
 //! Returns the aggregate state size
-typedef idx_t (*duckdb_aggregate_state_size)(void);
+typedef idx_t (*duckdb_aggregate_state_size)(duckdb_function_info info);
 //! Initialize the aggregate state
-typedef void (*duckdb_aggregate_init_t)(duckdb_aggregate_state state);
+typedef void (*duckdb_aggregate_init_t)(duckdb_function_info info, duckdb_aggregate_state state);
 //! Destroy aggregate state (optional)
 typedef void (*duckdb_aggregate_destroy_t)(duckdb_aggregate_state *states, idx_t count);
 //! Update a set of aggregate states with new values

@@ -56,7 +56,7 @@ public:
 WindowAggregator::WindowAggregator(AggregateObject aggr_p, const vector<LogicalType> &arg_types_p,
                                    const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p)
     : aggr(std::move(aggr_p)), arg_types(arg_types_p), result_type(result_type_p),
-      state_size(aggr.function.state_size()), exclude_mode(exclude_mode_p) {
+      state_size(aggr.function.state_size(aggr.function)), exclude_mode(exclude_mode_p) {
 }
 
 WindowAggregator::~WindowAggregator() {
@@ -129,7 +129,7 @@ struct WindowAggregateStates {
 };
 
 WindowAggregateStates::WindowAggregateStates(const AggregateObject &aggr)
-    : aggr(aggr), state_size(aggr.function.state_size()), allocator(Allocator::DefaultAllocator()) {
+    : aggr(aggr), state_size(aggr.function.state_size(aggr.function)), allocator(Allocator::DefaultAllocator()) {
 }
 
 void WindowAggregateStates::Initialize(idx_t count) {
@@ -141,7 +141,7 @@ void WindowAggregateStates::Initialize(idx_t count) {
 
 	for (idx_t i = 0; i < count; ++i, state_ptr += state_size) {
 		state_f_data[i] = state_ptr;
-		aggr.function.initialize(state_ptr);
+		aggr.function.initialize(aggr.function, state_ptr);
 	}
 
 	// Prevent conversion of results to constants
@@ -487,10 +487,10 @@ public:
 
 WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr,
                                                          const WindowExcludeMode exclude_mode)
-    : aggr(aggr), state(aggr.function.state_size()), statef(Value::POINTER(CastPointerToValue(state.data()))),
-      frames(3, {0, 0}) {
+    : aggr(aggr), state(aggr.function.state_size(aggr.function)),
+      statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
-	aggr.function.initialize(state.data());
+	aggr.function.initialize(aggr.function, state.data());
 
 	InitSubFrames(frames, exclude_mode);
 }
@@ -771,7 +771,7 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 
 	EvaluateSubFrames(bounds, aggregator.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
 		auto agg_state = fdata[rid];
-		aggr.function.initialize(agg_state);
+		aggr.function.initialize(aggr.function, agg_state);
 
 		//	Just update the aggregate with the unfiltered input rows
 		row_set.clear();
@@ -962,8 +962,9 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
                                              const DataChunk &inputs, const ValidityArray &filter_mask)
     : allocator(allocator), aggr(aggr),
       order_insensitive(aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT), inputs(inputs),
-      filter_mask(filter_mask), state_size(aggr.function.state_size()), state(state_size * STANDARD_VECTOR_SIZE),
-      statep(LogicalType::POINTER), statel(LogicalType::POINTER), statef(LogicalType::POINTER), flush_count(0) {
+      filter_mask(filter_mask), state_size(aggr.function.state_size(aggr.function)),
+      state(state_size * STANDARD_VECTOR_SIZE), statep(LogicalType::POINTER), statel(LogicalType::POINTER),
+      statef(LogicalType::POINTER), flush_count(0) {
 	if (inputs.ColumnCount() > 0) {
 		leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
 		filter_sel.Initialize();
@@ -1239,7 +1240,7 @@ void WindowSegmentTreePart::Initialize(idx_t count) {
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 	for (idx_t rid = 0; rid < count; ++rid) {
 		auto state_ptr = fdata[rid];
-		aggr.function.initialize(state_ptr);
+		aggr.function.initialize(aggr.function, state_ptr);
 	}
 }
 

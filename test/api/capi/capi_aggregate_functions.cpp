@@ -8,11 +8,11 @@ struct WeightedSumState {
 	uint64_t count;
 };
 
-idx_t WeightedSumSize() {
+idx_t WeightedSumSize(duckdb_function_info info) {
 	return sizeof(WeightedSumState);
 }
 
-void WeightedSumInit(duckdb_aggregate_state state_p) {
+void WeightedSumInit(duckdb_function_info info, duckdb_aggregate_state state_p) {
 	auto state = reinterpret_cast<WeightedSumState *>(state_p);
 	state->sum = 0;
 	state->count = 0;
@@ -140,11 +140,11 @@ struct RepeatedStringAggState {
 	idx_t size;
 };
 
-idx_t RepeatedStringAggSize() {
+idx_t RepeatedStringAggSize(duckdb_function_info info) {
 	return sizeof(RepeatedStringAggState);
 }
 
-void RepeatedStringAggInit(duckdb_aggregate_state state_p) {
+void RepeatedStringAggInit(duckdb_function_info info, duckdb_aggregate_state state_p) {
 	auto state = reinterpret_cast<RepeatedStringAggState *>(state_p);
 	state->data = nullptr;
 	state->size = 0;

@@ -42,9 +42,9 @@ struct WindowPartitionInput {
 };
 
 //! The type used for sizing hashed aggregate function states
-typedef idx_t (*aggregate_size_t)();
+typedef idx_t (*aggregate_size_t)(const AggregateFunction &function);
 //! The type used for initializing hashed aggregate function states
-typedef void (*aggregate_initialize_t)(data_ptr_t state);
+typedef void (*aggregate_initialize_t)(const AggregateFunction &function, data_ptr_t state);
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                    Vector &state, idx_t count);
@@ -228,12 +228,12 @@ public:
 
 public:
 	template <class STATE>
-	static idx_t StateSize() {
+	static idx_t StateSize(const AggregateFunction &) {
 		return sizeof(STATE);
 	}
 
 	template <class STATE, class OP>
-	static void StateInitialize(data_ptr_t state) {
+	static void StateInitialize(const AggregateFunction &, data_ptr_t state) {
 		OP::Initialize(*reinterpret_cast<STATE *>(state));
 	}
 
