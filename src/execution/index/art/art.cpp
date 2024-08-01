@@ -38,7 +38,8 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
-         AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
+         AttachedDatabase &db,
+         const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
@@ -71,19 +72,20 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	if (!allocators) {
 		owns_data = true;
 		auto &block_manager = table_io_manager.GetIndexBlockManager();
-		array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
-		    make_uniq<FixedSizeAllocator>(sizeof(Prefix), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node7Leaf), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node15Leaf), block_manager),
-		    make_uniq<FixedSizeAllocator>(sizeof(Node256Leaf), block_manager),
+		array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Prefix), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(PrefixInlined), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node7Leaf), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node15Leaf), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256Leaf), block_manager),
 		};
 		allocators =
-		    make_shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
+		    make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
 	if (!info.IsValid()) {
@@ -409,7 +411,7 @@ void ConstructLeafNode(ART &art, unsafe_vector<ARTKey> &keys, Node &node, ARTKey
 }
 
 bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, Node &node,
-                            ARTKeySection &section, bool inside_gate) {
+                            ARTKeySection &section, bool in_gate) {
 	D_ASSERT(section.start < keys.size());
 	D_ASSERT(section.end < keys.size());
 	D_ASSERT(section.start <= section.end);
@@ -417,13 +419,13 @@ bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &
 	auto &start = keys[section.start];
 	auto &end = keys[section.end];
 
-	if (inside_gate && start.len - 1 == section.depth) {
-		// Create a nested leaf node, or an inlined prefix.
+	if (in_gate && start.len - 1 == section.depth) {
+		// Create an inlined prefix, or a nested leaf node.
 		auto num_row_ids = section.end - section.start + 1;
-		if (num_row_ids != 1) {
-			ConstructLeafNode(*this, keys, node, section);
-		} else {
+		if (num_row_ids == 1) {
 			PrefixInlined::New(*this, node, start, section.depth, 1);
+		} else {
+			ConstructLeafNode(*this, keys, node, section);
 		}
 		return true;
 	}
@@ -432,6 +434,21 @@ bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &
 	auto prefix_start = section.depth;
 	while (start.len != section.depth && start.ByteMatches(end, section.depth)) {
 		section.depth++;
+	}
+
+	if (in_gate && start.len - 1 == section.depth) {
+		D_ASSERT(section.depth < start.len);
+		D_ASSERT(section.depth > prefix_start);
+
+		// Create a nested leaf node.
+		auto num_row_ids = section.end - section.start + 1;
+		D_ASSERT(num_row_ids != 1);
+
+		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_start - 1);
+		reference<Node> ref_node(node);
+		Prefix::New(*this, ref_node, start, prefix_start, count);
+		ConstructLeafNode(*this, keys, ref_node, section);
+		return true;
 	}
 
 	// We reached a leaf, i.e. all the bytes of start_key and end_key match.
@@ -445,7 +462,7 @@ bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &
 
 		// Early-out, if inlined prefix.
 		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_start);
-		if (num_row_ids == 1 && inside_gate) {
+		if (num_row_ids == 1 && in_gate) {
 			PrefixInlined::New(*this, node, start, prefix_start, count);
 			return true;
 		}
@@ -479,7 +496,7 @@ bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &
 	// Recurse on each child section.
 	for (auto &child : children) {
 		Node new_child;
-		auto success = ConstructInternal(keys, row_ids, new_child, child, inside_gate);
+		auto success = ConstructInternal(keys, row_ids, new_child, child, in_gate);
 		Node::InsertChild(*this, ref_node, child.key_byte, new_child);
 		if (!success) {
 			return false;
@@ -488,9 +505,7 @@ bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &
 	return true;
 }
 
-bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids) {
-	auto row_count = keys.size();
-
+bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
 	ARTKeySection section(0, row_count - 1, 0, 0);
 	if (!ConstructInternal(keys, row_ids, tree, section, tree.IsGate())) {
 		return false;
@@ -580,11 +595,11 @@ void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
 	CheckConstraintsForChunk(chunk, conflict_manager);
 }
 
-void ART::InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_id, bool inside_gate) {
+void ART::InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_id, bool in_gate) {
 	D_ASSERT(depth <= key.len);
 
 	idx_t count = key.len - depth;
-	if (inside_gate) {
+	if (in_gate) {
 		PrefixInlined::New(*this, node, key, depth, UnsafeNumericCast<uint8_t>(count));
 		return;
 	}
@@ -594,20 +609,19 @@ void ART::InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_
 	Leaf::New(ref_node, row_id.GetRowID());
 }
 
-bool InsertIntoNode(ART &art, Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id,
-                    bool inside_gate) {
+bool InsertIntoNode(ART &art, Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool in_gate) {
 	D_ASSERT(depth < key.get().len);
 	auto child = node.GetChildMutable(art, key.get()[depth]);
 
 	// Recurse, if a child exists at key[depth].
 	if (child) {
-		bool success = art.Insert(*child, key, depth + 1, row_id, inside_gate);
+		bool success = art.Insert(*child, key, depth + 1, row_id, in_gate);
 		node.ReplaceChild(art, key.get()[depth], *child);
 		return success;
 	}
 
 	// Insert a new inlined leaf at key[depth].
-	D_ASSERT(!inside_gate);
+	D_ASSERT(!in_gate);
 	Node leaf_node;
 	reference<Node> ref_node(leaf_node);
 
@@ -624,7 +638,7 @@ bool InsertIntoNode(ART &art, Node &node, reference<ARTKey> key, idx_t depth, re
 }
 
 bool InsertIntoPrefix(ART &art, Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id,
-                      bool inside_gate) {
+                      bool in_gate) {
 	// If this is a prefix node, we traverse the prefix.
 	reference<Node> next_node(node);
 	auto pos = Prefix::Traverse<Prefix, Node>(art, next_node, key, depth, &Node::RefMutable<Prefix>);
@@ -634,7 +648,7 @@ bool InsertIntoPrefix(ART &art, Node &node, reference<ARTKey> key, idx_t depth, 
 	// (2) we reach a gate (which can start with a PREFIX node).
 	if (pos == DConstants::INVALID_INDEX) {
 		if (next_node.get().GetType() != NType::PREFIX || next_node.get().IsGate()) {
-			return art.Insert(next_node, key, depth, row_id, inside_gate);
+			return art.Insert(next_node, key, depth, row_id, in_gate);
 		}
 	}
 
@@ -651,7 +665,15 @@ bool InsertIntoPrefix(ART &art, Node &node, reference<ARTKey> key, idx_t depth, 
 	// Insert the remaining prefix into the new Node4.
 	Node4::InsertChild(art, next_node, prefix_byte, remaining_prefix);
 
-	D_ASSERT(!inside_gate);
+	if (in_gate) {
+		D_ASSERT(pos != sizeof(row_t) - 1);
+		Node new_prefix;
+		auto count = key.get().len - depth - 1;
+		PrefixInlined::New(art, new_prefix, key.get(), depth + 1, UnsafeNumericCast<uint8_t>(count));
+		Node::InsertChild(art, next_node, key.get()[depth], new_prefix);
+		return true;
+	}
+
 	Node leaf_node;
 	reference<Node> ref_node(leaf_node);
 	if (depth + 1 < key.get().len) {
@@ -665,10 +687,10 @@ bool InsertIntoPrefix(ART &art, Node &node, reference<ARTKey> key, idx_t depth, 
 	return true;
 }
 
-bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool inside_gate) {
+bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool in_gate) {
 	// If the node is empty, we create a new inlined leaf.
 	if (!node.HasMetadata()) {
-		InsertIntoEmptyNode(node, key, depth, row_id, inside_gate);
+		InsertIntoEmptyNode(node, key, depth, row_id, in_gate);
 		return true;
 	}
 	// Enter a nested leaf.
@@ -677,20 +699,21 @@ bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKe
 		depth = 0;
 	}
 
-	switch (node.GetType()) {
+	auto type = node.GetType();
+	switch (type) {
 	case NType::LEAF_INLINED: {
 		// Insert the row ID into an existing inlined leaf.
 		if (IsUnique()) {
 			return false;
 		}
-		D_ASSERT(!inside_gate);
+		D_ASSERT(!in_gate);
 		Leaf::InsertIntoInlined(*this, node, row_id);
 		return true;
 	}
 	case NType::LEAF: {
 		// Transform a deprecated leaf.
 		Leaf::TransformToNested(*this, node);
-		return Insert(node, key, depth, row_id, inside_gate);
+		return Insert(node, key, depth, row_id, in_gate);
 	}
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
@@ -700,19 +723,51 @@ bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKe
 		return true;
 	}
 	case NType::PREFIX_INLINED: {
-		auto pos =
-		    PrefixInlined::Traverse<PrefixInlined, Node>(*this, node, key, depth, &Node::RefMutable<PrefixInlined>);
+		auto pos = DConstants::INVALID_INDEX;
+		auto &prefix = Node::Ref<PrefixInlined>(*this, node, type);
+		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			if (prefix.data[i] != key.get()[depth]) {
+				pos = i;
+				break;
+			}
+			depth++;
+		}
 		D_ASSERT(pos != DConstants::INVALID_INDEX);
-		// TODO
+
+		reference<Node> next_node(node);
+		Node remaining_prefix;
+		auto prefix_byte = Prefix::GetByte(*this, next_node, UnsafeNumericCast<uint8_t>(pos));
+		auto freed_gate = Prefix::Split(*this, next_node, remaining_prefix, UnsafeNumericCast<uint8_t>(pos));
+		if (depth == sizeof(row_t) - 1) {
+			Node7Leaf::New(*this, next_node);
+		} else {
+			Node4::New(*this, next_node);
+		}
+		if (freed_gate) {
+			next_node.get().SetGate();
+		}
+
+		// Insert the remaining prefix into the new node.
+		Node::InsertChild(*this, next_node, prefix_byte, remaining_prefix);
+
+		// Insert the new key into the new node.
+		if (depth == sizeof(row_t) - 1) {
+			Node::InsertChild(*this, next_node, key.get()[depth]);
+		} else {
+			Node new_prefix;
+			auto count = key.get().len - depth - 1;
+			PrefixInlined::New(*this, new_prefix, key.get(), depth + 1, UnsafeNumericCast<uint8_t>(count));
+			Node::InsertChild(*this, next_node, key.get()[depth], new_prefix);
+		}
 		return true;
 	}
 	case NType::NODE_4:
 	case NType::NODE_16:
 	case NType::NODE_48:
 	case NType::NODE_256:
-		return InsertIntoNode(*this, node, key, depth, row_id, inside_gate);
+		return InsertIntoNode(*this, node, key, depth, row_id, in_gate);
 	case NType::PREFIX:
-		return InsertIntoPrefix(*this, node, key, depth, row_id, inside_gate);
+		return InsertIntoPrefix(*this, node, key, depth, row_id, in_gate);
 	default:
 		throw InternalException("Invalid node type for Insert.");
 	}
@@ -759,10 +814,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #endif
 }
 
-void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key,
-                bool inside_gate) {
-	// TODO: add description with "ahead looking for inlined leaf, otherwise recurse
-
+void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, bool in_gate) {
 	if (!node.HasMetadata()) {
 		return;
 	}
@@ -779,7 +831,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	//	Delete the row ID from the leaf.
 	//	This is the root node, which can be a leaf with possible prefix nodes.
 	if (next_node.get().GetType() == NType::LEAF_INLINED) {
-		if (next_node.get().GetRowId() == row_id_key.get().GetRowID()) {
+		if (next_node.get().GetRowId() == row_id.get().GetRowID()) {
 			Node::Free(*this, node);
 		}
 		return;
@@ -787,16 +839,25 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 
 	// Transform a deprecated leaf.
 	if (next_node.get().GetType() == NType::LEAF) {
-		D_ASSERT(!inside_gate);
+		D_ASSERT(!in_gate);
 		Leaf::TransformToNested(*this, next_node);
 	}
 
 	// Enter a nested leaf.
-	if (!inside_gate && next_node.get().IsGate()) {
-		return Leaf::EraseFromNested(*this, next_node, row_id_key);
+	if (!in_gate && next_node.get().IsGate()) {
+		return Leaf::EraseFromNested(*this, next_node, row_id);
 	}
 
 	D_ASSERT(depth < key.get().len);
+
+	if (next_node.get().IsLeafNode()) {
+		auto next_byte = key.get()[depth];
+		if (next_node.get().GetNextByte(*this, next_byte)) {
+			Node::DeleteChild(*this, next_node, node, key.get()[depth]);
+		}
+		return;
+	}
+
 	auto child = next_node.get().GetChildMutable(*this, key.get()[depth]);
 	if (!child) {
 		return;
@@ -804,17 +865,33 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 
 	// Transform a deprecated leaf.
 	if (child->GetType() == NType::LEAF) {
-		D_ASSERT(!inside_gate);
+		D_ASSERT(!in_gate);
 		Leaf::TransformToNested(*this, *child);
 	}
 
 	// Enter a nested leaf.
-	if (!inside_gate && child->IsGate()) {
-		return Leaf::EraseFromNested(*this, *child, row_id_key);
+	if (!in_gate && child->IsGate()) {
+		return Leaf::EraseFromNested(*this, *child, row_id);
 	}
 
 	auto temp_depth = depth + 1;
 	reference<Node> child_node(*child);
+
+	if (child_node.get().GetType() == NType::PREFIX_INLINED) {
+		auto pos = DConstants::INVALID_INDEX;
+		auto &prefix = Node::Ref<PrefixInlined>(*this, child_node, NType::PREFIX_INLINED);
+		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			if (prefix.data[i] != key.get()[temp_depth]) {
+				pos = i;
+				break;
+			}
+			temp_depth++;
+		}
+		if (pos == DConstants::INVALID_INDEX) {
+			Node::DeleteChild(*this, next_node, node, key.get()[depth]);
+		}
+		return;
+	}
 
 	if (child_node.get().GetType() == NType::PREFIX) {
 		Prefix::Traverse<Prefix, Node>(*this, child_node, key, temp_depth, &Node::RefMutable<Prefix>);
@@ -824,14 +901,14 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	}
 
 	if (child_node.get().GetType() == NType::LEAF_INLINED) {
-		if (child_node.get().GetRowId() == row_id_key.get().GetRowID()) {
+		if (child_node.get().GetRowId() == row_id.get().GetRowID()) {
 			Node::DeleteChild(*this, next_node, node, key.get()[depth]);
 		}
 		return;
 	}
 
 	// Recurse.
-	Erase(*child, key, depth + 1, row_id_key, inside_gate);
+	Erase(*child, key, depth + 1, row_id, in_gate);
 	next_node.get().ReplaceChild(*this, key.get()[depth], *child);
 }
 
@@ -855,7 +932,7 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_id
 // Lookup
 //===--------------------------------------------------------------------===//
 
-optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey &key, idx_t depth) {
+const Node *ART::Lookup(const Node &node, const ARTKey &key, idx_t depth) {
 	reference<const Node> node_ref(node);
 	while (node_ref.get().HasMetadata()) {
 
@@ -1106,14 +1183,14 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 
 #ifdef DEBUG
 	if (v1_0_0_storage) {
-		D_ASSERT((*allocators)[ALLOCATOR_COUNT - 4]->IsEmpty());
-		D_ASSERT((*allocators)[ALLOCATOR_COUNT - 3]->IsEmpty());
-		D_ASSERT((*allocators)[ALLOCATOR_COUNT - 2]->IsEmpty());
-		D_ASSERT((*allocators)[ALLOCATOR_COUNT - 1]->IsEmpty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::PREFIX_INLINED)]->IsEmpty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->IsEmpty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_15_LEAF)]->IsEmpty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_256_LEAF)]->IsEmpty());
 	}
 #endif
 
-	idx_t allocator_count = v1_0_0_storage ? ALLOCATOR_COUNT - 4 : ALLOCATOR_COUNT;
+	idx_t allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 	if (!to_wal) {
 		// Store the data on disk as partial blocks and set the block ids.
 		WritePartialBlocks(v1_0_0_storage);
@@ -1135,7 +1212,7 @@ void ART::WritePartialBlocks(const bool v1_0_0_storage) {
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
 
-	idx_t allocator_count = v1_0_0_storage ? ALLOCATOR_COUNT - 4 : ALLOCATOR_COUNT;
+	idx_t allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
 	for (idx_t i = 0; i < allocator_count; i++) {
 		(*allocators)[i]->SerializeBuffers(partial_block_manager);
 	}
@@ -1155,7 +1232,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 	MetadataReader reader(metadata_manager, pointer);
 	tree = reader.Read<Node>();
 
-	for (idx_t i = 0; i < ALLOCATOR_COUNT - 4; i++) {
+	for (idx_t i = 0; i < DEPRECATED_ALLOCATOR_COUNT; i++) {
 		(*allocators)[i]->Deserialize(metadata_manager, reader.Read<BlockPointer>());
 	}
 }

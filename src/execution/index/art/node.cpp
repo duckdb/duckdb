@@ -89,8 +89,35 @@ void Node::Free(ART &art, Node &node) {
 // Get Allocators
 //===--------------------------------------------------------------------===//
 
-FixedSizeAllocator &Node::GetAllocator(const ART &art, NType type) {
-	return *(*art.allocators)[static_cast<uint8_t>(type) - 1];
+FixedSizeAllocator &Node::GetAllocator(const ART &art, const NType type) {
+	return *(*art.allocators)[GetAllocatorIdx(type)];
+}
+
+uint8_t Node::GetAllocatorIdx(const NType type) {
+	switch (type) {
+	case NType::PREFIX:
+		return 0;
+	case NType::LEAF:
+		return 1;
+	case NType::NODE_4:
+		return 2;
+	case NType::NODE_16:
+		return 3;
+	case NType::NODE_48:
+		return 4;
+	case NType::NODE_256:
+		return 5;
+	case NType::PREFIX_INLINED:
+		return 6;
+	case NType::NODE_7_LEAF:
+		return 7;
+	case NType::NODE_15_LEAF:
+		return 8;
+	case NType::NODE_256_LEAF:
+		return 9;
+	default:
+		throw InternalException("Invalid node type for GetAllocatorIdx.");
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -282,14 +309,24 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 	auto type = GetType();
 	switch (type) {
 	case NType::LEAF_INLINED:
-		return only_verify ? "" : "Leaf Inlined [count: 1, row ID: " + to_string(GetRowId()) + "]";
+		return only_verify ? "" : "Inlined Leaf [count: 1, row ID: " + to_string(GetRowId()) + "]";
 	case NType::LEAF:
 		return Leaf::DeprecatedVerifyAndToString(art, *this, only_verify);
 	case NType::PREFIX: {
 		auto str = Prefix::VerifyAndToString(art, *this, only_verify);
 		if (IsGate()) {
-			str = "Nested Leaf [" + str + "]";
+			str = "Gate [" + str + "]";
 		}
+		return only_verify ? "" : "\n" + str;
+	}
+	case NType::PREFIX_INLINED: {
+		auto &prefix = Node::Ref<const PrefixInlined>(art, *this, NType::PREFIX_INLINED);
+		string str = " Inlined Prefix:[";
+		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			str += to_string(prefix.data[i]) + "-";
+		}
+		str += "] ";
+		D_ASSERT(!IsGate());
 		return only_verify ? "" : "\n" + str;
 	}
 	default:
@@ -300,6 +337,7 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 	uint8_t byte = 0;
 
 	if (IsLeafNode()) {
+		str = "Leaf " + str;
 		auto has_byte = GetNextByte(art, byte);
 		while (has_byte) {
 			str += to_string(byte) + "-";
@@ -309,20 +347,20 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 			byte++;
 			has_byte = GetNextByte(art, byte);
 		}
-		return only_verify ? "" : "\n" + str + "]";
+	} else {
+		auto child = GetNextChild(art, byte);
+		while (child) {
+			str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+			byte++;
+			child = GetNextChild(art, byte);
+		}
 	}
 
-	auto child = GetNextChild(art, byte);
-	while (child) {
-		str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
-		if (byte == NumericLimits<uint8_t>::Maximum()) {
-			break;
-		}
-		byte++;
-		child = GetNextChild(art, byte);
-	}
 	if (IsGate()) {
-		str = "Nested Leaf [" + str + "]";
+		str = "Gate [" + str + "]";
 	}
 	return only_verify ? "" : "\n" + str + "]";
 }

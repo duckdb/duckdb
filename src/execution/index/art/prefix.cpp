@@ -29,22 +29,6 @@ void PrefixInlined::New(ART &art, Node &node, const ARTKey &key, idx_t depth, ui
 	NewPrefix<PrefixInlined>(art, node, key.data, count, depth, INLINED);
 }
 
-template <class PREFIX_TYPE, class NODE>
-idx_t PrefixInlined::Traverse(ART &art, NODE &node, const ARTKey &key, idx_t &depth,
-                              PREFIX_TYPE &(*func)(const ART &art, const Node ptr, const NType type)) {
-	D_ASSERT(node.HasMetadata());
-	D_ASSERT(node.GetType() == INLINED);
-
-	auto &prefix = func(art, node, PREFIX);
-	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-		if (prefix.data[i] != key[depth]) {
-			return i;
-		}
-		depth++;
-	}
-	return DConstants::INVALID_INDEX;
-}
-
 //===--------------------------------------------------------------------===//
 // Prefix
 //===--------------------------------------------------------------------===//
@@ -465,7 +449,7 @@ string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_ver
 		D_ASSERT(prefix.data[Node::PREFIX_SIZE] != 0);
 		D_ASSERT(prefix.data[Node::PREFIX_SIZE] <= Node::PREFIX_SIZE);
 
-		str += " prefix_bytes:[";
+		str += " Prefix :[";
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			str += to_string(prefix.data[i]) + "-";
 		}
@@ -502,7 +486,7 @@ void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 void Prefix::TransformToDeprecated(ART &art, Node &node) {
 
 	reference<Node> node_ref(node);
-	while (node_ref.get().GetType() == PREFIX) {
+	while (node_ref.get().GetType() == PREFIX && !node_ref.get().IsGate()) {
 		auto prefix_ptr = Node::GetInMemoryPtr<Prefix>(art, node_ref, PREFIX);
 		if (!prefix_ptr) {
 			return;

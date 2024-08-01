@@ -9,7 +9,7 @@ namespace duckdb {
 ARTKey::ARTKey() : len(0) {
 }
 
-ARTKey::ARTKey(data_ptr_t data, idx_t len) : len(len), data(data) {
+ARTKey::ARTKey(const data_ptr_t data, idx_t len) : len(len), data(data) {
 }
 
 ARTKey::ARTKey(ArenaAllocator &allocator, idx_t len) : len(len) {

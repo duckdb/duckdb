@@ -58,22 +58,16 @@ void Leaf::EraseFromNested(ART &art, Node &node, const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
 
 	art.Erase(node, row_id, 0, row_id, true);
-
-	// Traverse the prefix.
-	reference<const Node> prefix_node(node);
-	while (prefix_node.get().GetType() == NType::PREFIX) {
-		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, NType::PREFIX);
-		prefix_node = prefix.ptr;
-		D_ASSERT(prefix.ptr.HasMetadata());
+	if (node.GetType() != NType::PREFIX_INLINED) {
+		return;
 	}
 
-	// If the first non-prefix node is an inlined leaf,
-	// then we can inline it into child_node.
-	if (prefix_node.get().GetType() == NType::LEAF_INLINED) {
-		auto remaining_row_id = prefix_node.get().GetRowId();
-		Node::Free(art, node);
-		Leaf::New(node, remaining_row_id);
-	}
+	// Inline the row ID.
+	auto &prefix = Node::RefMutable<PrefixInlined>(art, node, NType::PREFIX_INLINED);
+	auto data_ptr = &prefix.data[0];
+	auto remaining_row_id = ARTKey(data_ptr, sizeof(row_t)).GetRowID();
+	Node::Free(art, node);
+	Leaf::New(node, remaining_row_id);
 }
 
 void Leaf::TransformToNested(ART &art, Node &node) {

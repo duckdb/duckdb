@@ -35,11 +35,11 @@ Node15Leaf &Node15Leaf::ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &nod
 	}
 	auto &n256 = Node::RefMutable<Node256Leaf>(art, node256_leaf, NType::NODE_256_LEAF);
 	ValidityMask mask(&n256.mask[0]);
+	D_ASSERT(mask.CountValid(Node::NODE_256_CAPACITY) == Node::NODE_48_SHRINK_THRESHOLD);
 
-	auto max = NumericLimits<uint8_t>().Maximum();
-	for (uint8_t i = 0; i <= max; i++) {
+	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (mask.RowIsValid(i)) {
-			n15.key[n15.count] = i;
+			n15.key[n15.count] = UnsafeNumericCast<uint8_t>(i);
 			n15.count++;
 		}
 	}

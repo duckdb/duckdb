@@ -64,6 +64,8 @@ public:
 
 	//! Get a reference to the allocator.
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
+	//! Get the index of the matching allocator.
+	static uint8_t GetAllocatorIdx(const NType type);
 
 	//! Get an immutable reference to the node.
 	template <class NODE>

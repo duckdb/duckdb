@@ -110,6 +110,7 @@ const Node *Node256::GetNextChild(uint8_t &byte) const {
 }
 
 Node *Node256::GetNextChildMutable(uint8_t &byte) {
+	// FIXME: use <= and traverse byte directly?
 	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
 		if (children[i].HasMetadata()) {
 			byte = UnsafeNumericCast<uint8_t>(i);

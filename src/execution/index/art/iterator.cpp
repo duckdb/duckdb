@@ -68,14 +68,18 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF: {
-			uint8_t last_byte = 0;
-			while (last_leaf.GetNextByte(*art, last_byte)) {
+			uint8_t byte = 0;
+			while (last_leaf.GetNextByte(*art, byte)) {
 				if (row_ids.size() + 1 > max_count) {
 					return false;
 				}
-				row_id[sizeof(row_t) - 1] = last_byte;
+				row_id[sizeof(row_t) - 1] = byte;
 				ARTKey key(&row_id[0], sizeof(row_t));
 				row_ids.push_back(key.GetRowID());
+				if (byte == NumericLimits<uint8_t>::Maximum()) {
+					break;
+				}
+				byte++;
 			}
 			break;
 		}
@@ -118,8 +122,10 @@ void Iterator::FindMinimum(const Node &node) {
 		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			current_key.Push(prefix.data[i]);
-			row_id[nested_depth] = prefix.data[i];
-			nested_depth++;
+			if (inside_gate) {
+				row_id[nested_depth] = prefix.data[i];
+				nested_depth++;
+			}
 		}
 		nodes.emplace(node, 0);
 		return FindMinimum(prefix.ptr);
@@ -242,6 +248,9 @@ bool Iterator::Next() {
 
 		current_key.Pop(1);
 		current_key.Push(top.byte);
+		if (inside_gate) {
+			row_id[nested_depth - 1] = top.byte;
+		}
 
 		FindMinimum(*next_node);
 		return true;

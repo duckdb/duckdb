@@ -31,10 +31,6 @@ public:
 public:
 	//! Get a new inlined prefix.
 	static void New(ART &art, Node &node, const ARTKey &key, idx_t depth, uint8_t count);
-	//! Traverse a prefix and a key until a mismatching byte.
-	template <class PREFIX_TYPE, class NODE>
-	static idx_t Traverse(ART &art, NODE &node, const ARTKey &key, idx_t &depth,
-	                      PREFIX_TYPE &(*func)(const ART &art, const Node ptr, const NType type));
 };
 
 //! Prefix additionally contains a Node pointer.

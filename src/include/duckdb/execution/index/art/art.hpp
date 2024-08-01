@@ -34,21 +34,22 @@ class ART : public BoundIndex {
 public:
 	// Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
-	//! FixedSizeAllocator count of the ART. One allocator per node type.
-	static constexpr uint8_t ALLOCATOR_COUNT = 9;
+	//! FixedSizeAllocator count of the ART.
+	static constexpr uint8_t ALLOCATOR_COUNT = 10;
+	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 4;
 
 public:
 	//! Constructs an ART.
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
-	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
+	    const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
 	    const IndexStorageInfo &info = IndexStorageInfo());
 
 	//! Root of the tree
 	Node tree = Node();
 	//! Fixed-size allocators holding the ART nodes
-	shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
+	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data
 	bool owns_data;
 
@@ -81,9 +82,9 @@ public:
 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Construct an ART from a vector of sorted keys and the corresponding row IDs.
-	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids);
+	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
 	bool ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, Node &node,
-	                       ARTKeySection &section, bool inside_gate);
+	                       ARTKeySection &section, bool in_gate);
 
 	//! Search equal values and fetches the row IDs
 	bool SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids);
@@ -118,16 +119,15 @@ public:
 	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
 
 	//! Find the node with a matching key, or return nullptr if not found
-	optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
+	const Node *Lookup(const Node &node, const ARTKey &key, idx_t depth);
 	//! Insert a key into the tree.
-	bool Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool inside_gate);
+	bool Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool in_gate);
 	//! Erase a key from the tree (non-inlined) or erase the leaf itself (inlined).
-	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id_key,
-	           bool inside_gate);
+	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, bool in_gate);
 
 private:
 	//! Insert a row ID into an empty node.
-	void InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_id, bool inside_gate);
+	void InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_id, bool in_gate);
 
 	//! Returns all row IDs greater than or equal to the search key.
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);

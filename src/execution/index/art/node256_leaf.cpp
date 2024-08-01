@@ -44,6 +44,8 @@ void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 	D_ASSERT(node.HasMetadata());
 	auto &n256 = Node::RefMutable<Node256Leaf>(art, node, NType::NODE_256_LEAF);
 	n256.count--;
+	ValidityMask mask(&n256.mask[0]);
+	mask.SetInvalid(byte);
 
 	// Shrink node to Node15
 	if (n256.count <= Node::NODE_48_SHRINK_THRESHOLD) {
@@ -55,9 +57,9 @@ void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 bool Node256Leaf::GetNextByte(uint8_t &byte) {
 	// FIXME: Implement const validity masks.
 	ValidityMask v_mask(&mask[0]);
-	auto max = NumericLimits<uint8_t>().Maximum();
-	for (auto i = byte; i <= max; i++) {
+	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
 		if (v_mask.RowIsValid(i)) {
+			byte = UnsafeNumericCast<uint8_t>(i);
 			return true;
 		}
 	}

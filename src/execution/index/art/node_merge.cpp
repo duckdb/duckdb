@@ -120,7 +120,7 @@ bool Node::MergePrefixes(ART &art, Node &other, bool in_gate) {
 	D_ASSERT(mismatch_pos != DConstants::INVALID_INDEX);
 
 	// l_prefix contains r_prefix
-	if (l_node.get().IsPrefix() || !r_node.get().IsPrefix()) {
+	if (!l_node.get().IsPrefix() && r_node.get().IsPrefix()) {
 		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(mismatch_pos), in_gate);
 	}
 
