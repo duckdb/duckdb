@@ -1352,7 +1352,7 @@ void StringValueResult::SkipBOM() {
 
 void StringValueResult::RemoveLastLine() {
 	// potentially de-nullify values
-	for (idx_t i = 0; i < number_of_columns; i++) {
+	for (idx_t i = 0; i < chunk_col_id; i++) {
 		validity_mask[i]->SetValid(number_of_rows);
 	}
 	// reset column trackers
