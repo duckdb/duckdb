@@ -12,6 +12,7 @@
 #include "duckdb/parallel/event.hpp"
 
 namespace duckdb {
+class PhysicalOperator;
 class ThreadContext;
 
 //! Execute a task within an executor, including exception handling
