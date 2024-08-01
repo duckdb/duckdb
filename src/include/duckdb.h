@@ -1207,6 +1207,7 @@ DUCKDB_API duckdb_time_struct duckdb_from_time(duckdb_time time);
 
 /*!
 Create a `duckdb_time_tz` object from micros and a timezone offset.
+Not to be confused with `duckdb_create_time_tz_value`, which creates a duckdb_value.
 
 * micros: The microsecond component of the time.
 * offset: The timezone offset component of the time.
@@ -1778,12 +1779,328 @@ Creates a value from a string
 DUCKDB_API duckdb_value duckdb_create_varchar_length(const char *text, idx_t length);
 
 /*!
+Creates a value from a boolean
+
+ * value: The boolean value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_bool(bool input);
+
+/*!
+Creates a value from a int8_t (a tinyint)
+
+ * value: The tinyint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_int8(int8_t input);
+
+/*!
+Creates a value from a uint8_t (a utinyint)
+
+ * value: The utinyint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_uint8(uint8_t input);
+
+/*!
+Creates a value from a int16_t (a smallint)
+
+ * value: The smallint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_int16(int16_t input);
+
+/*!
+Creates a value from a uint16_t (a usmallint)
+
+ * value: The usmallint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_uint16(uint16_t input);
+
+/*!
+Creates a value from a int32_t (an integer)
+
+ * value: The integer value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_int32(int32_t input);
+
+/*!
+Creates a value from a uint32_t (a uinteger)
+
+ * value: The uinteger value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_uint32(uint32_t input);
+
+/*!
+Creates a value from a uint64_t (a ubigint)
+
+ * value: The ubigint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_uint64(uint64_t input);
+
+/*!
 Creates a value from an int64
 
 * value: The bigint value
 * returns: The value. This must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_int64(int64_t val);
+
+/*!
+Creates a value from a hugeint
+
+ * value: The hugeint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_hugeint(duckdb_hugeint input);
+
+/*!
+Creates a value from a uhugeint
+
+ * value: The uhugeint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_uhugeint(duckdb_uhugeint input);
+
+/*!
+Creates a value from a float
+
+ * value: The float value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_float(float input);
+
+/*!
+Creates a value from a double
+
+ * value: The double value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_double(double input);
+
+/*!
+Creates a value from a date
+
+ * value: The date value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_date(duckdb_date input);
+
+/*!
+Creates a value from a time
+
+ * value: The time value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_time(duckdb_time input);
+
+/*!
+Creates a value from a time_tz.
+Not to be confused with `duckdb_create_time_tz`, which creates a duckdb_time_tz_t.
+
+ * value: The time_tz value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_time_tz_value(duckdb_time_tz value);
+
+/*!
+Creates a value from a timestamp
+
+ * value: The timestamp value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_timestamp(duckdb_timestamp input);
+
+/*!
+Creates a value from an interval
+
+ * value: The interval value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_interval(duckdb_interval input);
+
+/*!
+Creates a value from a blob
+
+ * data: The blob data
+ * length: The length of the blob data
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_blob(const uint8_t *data, idx_t length);
+
+/*!
+Returns the boolean value of the given value.
+
+ * val: A duckdb_value containing a boolean
+ * returns: A boolean, or false if the value cannot be converted
+ */
+DUCKDB_API bool duckdb_get_bool(duckdb_value val);
+
+/*!
+Returns the int8_t value of the given value.
+
+ * val: A duckdb_value containing a tinyint
+ * returns: A int8_t, or MinValue<int8> if the value cannot be converted
+ */
+DUCKDB_API int8_t duckdb_get_int8(duckdb_value val);
+
+/*!
+Returns the uint8_t value of the given value.
+
+ * val: A duckdb_value containing a utinyint
+ * returns: A uint8_t, or MinValue<uint8> if the value cannot be converted
+ */
+DUCKDB_API uint8_t duckdb_get_uint8(duckdb_value val);
+
+/*!
+Returns the int16_t value of the given value.
+
+ * val: A duckdb_value containing a smallint
+ * returns: A int16_t, or MinValue<int16> if the value cannot be converted
+ */
+DUCKDB_API int16_t duckdb_get_int16(duckdb_value val);
+
+/*!
+Returns the uint16_t value of the given value.
+
+ * val: A duckdb_value containing a usmallint
+ * returns: A uint16_t, or MinValue<uint16> if the value cannot be converted
+ */
+DUCKDB_API uint16_t duckdb_get_uint16(duckdb_value val);
+
+/*!
+Returns the int32_t value of the given value.
+
+ * val: A duckdb_value containing a integer
+ * returns: A int32_t, or MinValue<int32> if the value cannot be converted
+ */
+DUCKDB_API int32_t duckdb_get_int32(duckdb_value val);
+
+/*!
+Returns the uint32_t value of the given value.
+
+ * val: A duckdb_value containing a uinteger
+ * returns: A uint32_t, or MinValue<uint32> if the value cannot be converted
+ */
+DUCKDB_API uint32_t duckdb_get_uint32(duckdb_value val);
+
+/*!
+Returns the int64_t value of the given value.
+
+ * val: A duckdb_value containing a bigint
+ * returns: A int64_t, or MinValue<int64> if the value cannot be converted
+ */
+DUCKDB_API int64_t duckdb_get_int64(duckdb_value val);
+
+/*!
+Returns the uint64_t value of the given value.
+
+ * val: A duckdb_value containing a ubigint
+ * returns: A uint64_t, or MinValue<uint64> if the value cannot be converted
+ */
+DUCKDB_API uint64_t duckdb_get_uint64(duckdb_value val);
+
+/*!
+Returns the hugeint value of the given value.
+
+ * val: A duckdb_value containing a hugeint
+ * returns: A duckdb_hugeint, or MinValue<hugeint> if the value cannot be converted
+ */
+DUCKDB_API duckdb_hugeint duckdb_get_hugeint(duckdb_value val);
+
+/*!
+Returns the uhugeint value of the given value.
+
+ * val: A duckdb_value containing a uhugeint
+ * returns: A duckdb_uhugeint, or MinValue<uhugeint> if the value cannot be converted
+ */
+DUCKDB_API duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val);
+
+/*!
+Returns the float value of the given value.
+
+ * val: A duckdb_value containing a float
+ * returns: A float, or NAN if the value cannot be converted
+ */
+DUCKDB_API float duckdb_get_float(duckdb_value val);
+
+/*!
+Returns the double value of the given value.
+
+ * val: A duckdb_value containing a double
+ * returns: A double, or NAN if the value cannot be converted
+ */
+DUCKDB_API double duckdb_get_double(duckdb_value val);
+
+/*!
+Returns the date value of the given value.
+
+ * val: A duckdb_value containing a date
+ * returns: A duckdb_date, or MinValue<date> if the value cannot be converted
+ */
+DUCKDB_API duckdb_date duckdb_get_date(duckdb_value val);
+
+/*!
+Returns the time value of the given value.
+
+ * val: A duckdb_value containing a time
+ * returns: A duckdb_time, or MinValue<time> if the value cannot be converted
+ */
+DUCKDB_API duckdb_time duckdb_get_time(duckdb_value val);
+
+/*!
+Returns the time_tz value of the given value.
+
+ * val: A duckdb_value containing a time_tz
+ * returns: A duckdb_time_tz, or MinValue<time_tz> if the value cannot be converted
+ */
+DUCKDB_API duckdb_time_tz duckdb_get_time_tz(duckdb_value val);
+
+/*!
+Returns the timestamp value of the given value.
+
+ * val: A duckdb_value containing a timestamp
+ * returns: A duckdb_timestamp, or MinValue<timestamp> if the value cannot be converted
+ */
+DUCKDB_API duckdb_timestamp duckdb_get_timestamp(duckdb_value val);
+
+/*!
+Returns the interval value of the given value.
+
+ * val: A duckdb_value containing a interval
+ * returns: A duckdb_interval, or MinValue<interval> if the value cannot be converted
+ */
+DUCKDB_API duckdb_interval duckdb_get_interval(duckdb_value val);
+
+/*!
+Returns the type of the given value. The type is valid as long as the value is not destroyed.
+The type itself must not be destroyed.
+
+ * val: A duckdb_value
+ * returns: A duckdb_logical_type.
+ */
+DUCKDB_API duckdb_logical_type duckdb_get_value_type(duckdb_value val);
+
+/*!
+Returns the blob value of the given value.
+
+ * val: A duckdb_value containing a blob
+ * returns: A duckdb_blob
+ */
+DUCKDB_API duckdb_blob duckdb_get_blob(duckdb_value val);
+
+/*!
+Obtains a string representation of the given value.
+The result must be destroyed with `duckdb_free`.
+
+* value: The value
+* returns: The string value. This must be destroyed with `duckdb_free`.
+*/
+DUCKDB_API char *duckdb_get_varchar(duckdb_value value);
 
 /*!
 Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.
@@ -1815,23 +2132,6 @@ Must be destroyed with `duckdb_destroy_value`.
 * @return The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 */
 DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
-
-/*!
-Obtains a string representation of the given value.
-The result must be destroyed with `duckdb_free`.
-
-* value: The value
-* returns: The string value. This must be destroyed with `duckdb_free`.
-*/
-DUCKDB_API char *duckdb_get_varchar(duckdb_value value);
-
-/*!
-Obtains an int64 of the given value.
-
-* value: The value
-* returns: The int64 value, or 0 if no conversion is possible
-*/
-DUCKDB_API int64_t duckdb_get_int64(duckdb_value value);
 
 //===--------------------------------------------------------------------===//
 // Logical Type Interface

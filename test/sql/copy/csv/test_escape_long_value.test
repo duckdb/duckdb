@@ -6,6 +6,21 @@ statement ok
 PRAGMA enable_verification
 
 
+loop buffer_size 28 50
+
+statement ok
+CREATE TABLE T AS FROM read_csv('data/csv/big_escape.csv', buffer_size = ${buffer_size}, quote = '"', escape = '"', delim = ';', columns = {'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, auto_detect = false)
+
+query I
+select count(*) from T;
+----
+10
+
+statement ok
+DROP TABLE T;
+
+endloop
+
 # long value with escape and simple delimiter
 # load CSV file into a table
 statement ok

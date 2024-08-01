@@ -297,7 +297,7 @@ void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
 	}
 	auto &config = DBConfig::Get(db);
-	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::FORCE_CHECKPOINT) {
+	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
 			SingleFileCheckpointWriter checkpointer(db, *block_manager, options.type);
