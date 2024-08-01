@@ -519,7 +519,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	}
 
 	auto &table_entry_ptr =
-	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, bfk.info.schema, bfk.info.table);
+	    Catalog::GetEntry<TableCatalogEntry>(context, db.GetName(), bfk.info.schema, bfk.info.table);
 	// make the data chunk to check
 	vector<LogicalType> types;
 	for (auto &col : table_entry_ptr.GetColumns().Physical()) {
