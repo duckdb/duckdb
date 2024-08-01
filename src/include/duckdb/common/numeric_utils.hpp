@@ -111,7 +111,7 @@ template <class TO>
 TO NumericCast(double val) {
 	auto res = LossyNumericCast<TO>(val);
 	if (val != double(res)) {
-		throw InternalException("Information loss on integer cast: value %lf outside of target range [%lf, %lf]", val,
+		throw InternalException("Information loss on double cast: value %lf outside of target range [%lf, %lf]", val,
 		                        double(res), double(res));
 	}
 	return res;
@@ -121,7 +121,7 @@ template <class TO>
 TO NumericCast(float val) {
 	auto res = LossyNumericCast<TO>(val);
 	if (val != float(res)) {
-		throw InternalException("Information loss on integer cast: value %f outside of target range [%f, %f]", val,
+		throw InternalException("Information loss on float cast: value %f outside of target range [%f, %f]", val,
 		                        float(res), float(res));
 	}
 	return res;

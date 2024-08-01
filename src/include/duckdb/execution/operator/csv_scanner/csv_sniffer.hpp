@@ -31,6 +31,34 @@ struct SnifferResult {
 	vector<string> names;
 };
 
+//! All the options that will be used to sniff the dialect of the CSV file
+struct DialectCandidates {
+	//! The constructor populates all of our the options that will be used in our sniffer search space
+	explicit DialectCandidates(const CSVStateMachineOptions &options);
+
+	//! Static functions to get defaults of the search space
+	static vector<char> GetDefaultDelimiter();
+
+	static vector<vector<char>> GetDefaultQuote();
+
+	static vector<QuoteRule> GetDefaultQuoteRule();
+
+	static vector<vector<char>> GetDefaultEscape();
+
+	static vector<char> GetDefaultComment();
+
+	//! Candidates for the delimiter
+	vector<char> delim_candidates;
+	//! Candidates for the comment
+	vector<char> comment_candidates;
+	//! Quote-Rule Candidates
+	vector<QuoteRule> quoterule_candidates;
+	//! Candidates for the quote option
+	unordered_map<uint8_t, vector<char>> quote_candidates_map;
+	//! Candidates for the escape option
+	unordered_map<uint8_t, vector<char>> escape_candidates_map;
+};
+
 //! This represents the data related to columns that have been set by the user
 //! e.g., from a copy command
 struct SetColumns {
@@ -144,21 +172,14 @@ private:
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	void DetectDialect();
 	//! Functions called in the main DetectDialect(); function
-	//! 1. Generates the search space candidates for the dialect
-	void GenerateCandidateDetectionSearchSpace(vector<char> &delim_candidates, vector<QuoteRule> &quoterule_candidates,
-	                                           unordered_map<uint8_t, vector<char>> &quote_candidates_map,
-	                                           unordered_map<uint8_t, vector<char>> &escape_candidates_map);
-	//! 2. Generates the search space candidates for the state machines
+	//! 1. Generates the search space candidates for the state machines
 	void GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountScanner>> &column_count_scanners,
-	                                     const vector<char> &delimiter_candidates,
-	                                     const vector<QuoteRule> &quoterule_candidates,
-	                                     const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
-	                                     const unordered_map<uint8_t, vector<char>> &escape_candidates_map);
+	                                     const DialectCandidates &dialect_candidates);
 
-	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
+	//! 2. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
 	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
 	                             idx_t &prev_padding_count, idx_t &min_ignored_rows);
-	//! 4. Refine Candidates over remaining chunks
+	//! 3. Refine Candidates over remaining chunks
 	void RefineCandidates();
 
 	//! Checks if candidate still produces good values for the next chunk
