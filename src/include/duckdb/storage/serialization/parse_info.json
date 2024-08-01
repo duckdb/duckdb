@@ -258,6 +258,28 @@
     ]
   },
   {
+    "class": "ChangeOwnershipInfo",
+    "base": "AlterInfo",
+    "enum": "CHANGE_OWNERSHIP",
+    "members": [
+      {
+        "id": 300,
+        "name": "entry_catalog_type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 301,
+        "name": "owner_schema",
+        "type": "string"
+      },
+      {
+        "id": 302,
+        "name": "owner_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
     "class": "SetColumnCommentInfo",
     "base": "AlterInfo",
     "enum": "SET_COLUMN_COMMENT",

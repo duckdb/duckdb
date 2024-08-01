@@ -1335,13 +1335,14 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 
 	// otherwise global storage
 	if (n_global_update > 0) {
+		auto &transaction = DuckTransaction::Get(context, db);
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten(n_global_update);
 
-		row_groups->Update(DuckTransaction::Get(context, db), FlatVector::GetData<row_t>(row_ids_slice), column_ids,
-		                   updates_slice);
+		transaction.UpdateCollection(row_groups);
+		row_groups->Update(transaction, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
 	}
 }
 

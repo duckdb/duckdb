@@ -1,0 +1,21 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_delete_all.test_slow
+# description: Test optimistic writes to a table followed by deleting all rows
+# group: [optimistic_write]
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_delete_all.db
+
+statement ok
+create table foo  (d double);
+
+statement ok
+begin;
+
+statement ok
+insert into foo select random() from generate_series(1, 1000000) g(g);
+
+statement ok
+delete from foo;
+
+statement ok
+commit;

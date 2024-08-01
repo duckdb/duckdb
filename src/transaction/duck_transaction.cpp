@@ -142,6 +142,16 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	}
 }
 
+void DuckTransaction::UpdateCollection(shared_ptr<RowGroupCollection> &collection) {
+	auto collection_ref = reference<RowGroupCollection>(*collection);
+	auto entry = updated_collections.find(collection_ref);
+	if (entry != updated_collections.end()) {
+		// already exists
+		return;
+	}
+	updated_collections.insert(make_pair(collection_ref, collection));
+}
+
 bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }

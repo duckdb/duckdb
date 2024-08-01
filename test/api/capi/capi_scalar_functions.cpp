@@ -146,7 +146,7 @@ void ReturnStringInfo(duckdb_function_info info, duckdb_data_chunk input, duckdb
 			if (duckdb_string_is_inlined(input_string)) {
 				result += string(input_string.value.inlined.inlined, input_string.value.inlined.length);
 			} else {
-				result += input_string.value.pointer.ptr;
+				result += string(input_string.value.pointer.ptr, input_string.value.pointer.length);
 			}
 			duckdb_vector_assign_string_element_len(output, row, result.c_str(), result.size());
 		} else {
