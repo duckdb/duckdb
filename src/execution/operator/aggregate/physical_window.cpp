@@ -65,17 +65,29 @@ public:
 
 	// The processing stage for this group
 	WindowGroupStage GetStage() const {
-		auto result = WindowGroupStage::SINK;
+		return stage;
+	}
 
-		if (sunk == count) {
-			result = WindowGroupStage::FINALIZE;
+	bool TryPrepareNextStage() {
+		lock_guard<mutex> prepare_guard(lock);
+		switch (stage.load()) {
+		case WindowGroupStage::SINK:
+			if (sunk == count) {
+				stage = WindowGroupStage::FINALIZE;
+				return true;
+			}
+			break;
+		case WindowGroupStage::FINALIZE:
+			if (finalized == blocks) {
+				stage = WindowGroupStage::GETDATA;
+				return true;
+			}
+			break;
+		default:
+			break;
 		}
 
-		if (finalized == blocks) {
-			result = WindowGroupStage::GETDATA;
-		}
-
-		return result;
+		return false;
 	}
 
 	//! The hash partition data
@@ -93,6 +105,8 @@ public:
 	OrderMasks order_masks;
 	//! External paging
 	bool external;
+	// The processing stage for this group
+	atomic<WindowGroupStage> stage;
 	//! The function global states for this hash group
 	ExecutorGlobalStates gestates;
 	//! Executor local states, one per thread
@@ -332,12 +346,19 @@ public:
 
 	WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p);
 
+	//! Are there any more tasks?
+	bool HasMoreTasks() const {
+		return !stopped && next_task < tasks.size();
+	}
+	bool HasUnfinishedTasks() const {
+		return !stopped && finished < tasks.size();
+	}
+	//! Try to advance the group stage
+	bool TryPrepareNextStage();
 	//! Get the next task given the current state
 	bool TryNextTask(TaskPtr &task);
 	//! Finish a task
 	void FinishTask(TaskPtr task);
-	//! Single-threaded manipulation of the interrupt queue
-	bool UpdateBlockedTasks(bool blocked, InterruptState &interrupt_state) const;
 
 	//! Context for executing computations
 	ClientContext &context;
@@ -348,7 +369,9 @@ public:
 	//! The list of tasks
 	vector<Task> tasks;
 	//! The the next task
-	idx_t next_task;
+	atomic<idx_t> next_task;
+	//! The the number of finished tasks
+	atomic<idx_t> finished;
 	//! Stop producing tasks
 	atomic<bool> stopped;
 	//! The number of rows returned
@@ -363,7 +386,7 @@ public:
 };
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
-    : context(context_p), gsink(gsink_p), next_task(0), stopped(false), returned(0) {
+    : context(context_p), gsink(gsink_p), next_task(0), finished(0), stopped(false), returned(0) {
 	auto &gpart = gsink.global_partition;
 	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
 
@@ -465,7 +488,8 @@ void WindowHashGroup::MaterializeSortedData() {
 }
 
 WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash_bin_p)
-    : count(0), blocks(0), hash_bin(hash_bin_p), sunk(0), finalized(0), tasks_remaining(0), batch_base(0) {
+    : count(0), blocks(0), stage(WindowGroupStage::SINK), hash_bin(hash_bin_p), sunk(0), finalized(0),
+      tasks_remaining(0), batch_base(0) {
 	// There are three types of partitions:
 	// 1. No partition (no sorting)
 	// 2. One partition (sorting, but no hashing)
@@ -531,11 +555,15 @@ public:
 	using TaskPtr = optional_ptr<Task>;
 
 	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
-	void BeginHashGroup();
-	void Sink();
-	void Finalize();
-	bool GetData(DataChunk &chunk);
-	void FinishHashGroup(TaskPtr prev_task);
+
+	//! Does the task have more work to do?
+	bool TaskFinished() const {
+		return !task || task->begin_idx == task->end_idx;
+	}
+	//! Assign the next task
+	bool TryAssignTask();
+	//! Execute a step in the current task
+	void ExecuteTask(DataChunk &chunk);
 
 	//! The shared source state
 	WindowGlobalSourceState &gsource;
@@ -551,6 +579,11 @@ public:
 	DataChunk input_chunk;
 	//! Buffer for window results
 	DataChunk output_chunk;
+
+protected:
+	void Sink();
+	void Finalize();
+	void GetData(DataChunk &chunk);
 };
 
 WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(WindowGlobalSinkState &gsink) {
@@ -571,26 +604,16 @@ WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(WindowGlobalS
 	return gestates;
 }
 
-void WindowLocalSourceState::BeginHashGroup() {
-	if (!task) {
-		return;
-	}
-
-	auto &gsink = gsource.gsink;
-	auto &gpart = *gsink.global_partition;
-	window_hash_group = gpart.window_hash_groups[task->group_idx].get();
-
-	// Create the executor state for each function
-	// These can be large so we defer building them until we are ready.
-	window_hash_group->Initialize(gsink);
-}
-
 void WindowLocalSourceState::Sink() {
+	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::SINK);
 
 	auto &gsink = gsource.gsink;
 	const auto &executors = gsink.executors;
-	auto &gestates = window_hash_group->gestates;
+
+	// Create the global state for each function
+	// These can be large so we defer building them until we are ready.
+	auto &gestates = window_hash_group->Initialize(gsink);
 
 	//	Set up the local states
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
@@ -615,7 +638,6 @@ void WindowLocalSourceState::Sink() {
 				break;
 			}
 
-			//	TODO: Stagger functions to reduce contention?
 			for (idx_t w = 0; w < executors.size(); ++w) {
 				executors[w]->Sink(input_chunk, input_idx, window_hash_group->count, *gestates[w], *local_states[w]);
 			}
@@ -630,6 +652,7 @@ void WindowLocalSourceState::Sink() {
 }
 
 void WindowLocalSourceState::Finalize() {
+	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::FINALIZE);
 
 	// Finalize all the executors.
@@ -666,7 +689,7 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
 	lock_guard<mutex> task_guard(lock);
 	if (next_task >= tasks.size() || stopped) {
 		task = nullptr;
-		return true;
+		return false;
 	}
 
 	//	If the next task matches the current state of its group, then we can use it
@@ -700,64 +723,61 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 	}
 }
 
-void WindowLocalSourceState::FinishHashGroup(TaskPtr prev_task) {
-	scanner.reset();
-	if (window_hash_group && prev_task && prev_task->stage == WindowGroupStage::GETDATA) {
-		auto &local_states = window_hash_group->thread_states.at(prev_task->thread_idx);
-		local_states.clear();
-	}
+bool WindowLocalSourceState::TryAssignTask() {
+	// Because downstream operators may be using our internal buffers,
+	// we can't "finish" a task until we are about to get the next one.
 
-	gsource.FinishTask(prev_task);
+	// Scanner first, as it may be referencing sort blocks in the hash group
+	scanner.reset();
+	gsource.FinishTask(task);
+
+	return gsource.TryNextTask(task);
 }
 
-bool WindowLocalSourceState::GetData(DataChunk &result) {
-	// Are we done with this scanner?
-	if (scanner && !scanner->Remaining()) {
-		scanner.reset();
-		++task->begin_idx;
+bool WindowGlobalSourceState::TryPrepareNextStage() {
+	if (next_task >= tasks.size() || stopped) {
+		return true;
 	}
 
-	//	Are we done with this task?
-	while (!task || task->begin_idx >= task->end_idx || task->stage != WindowGroupStage::GETDATA) {
-		auto prev_task = task;
-		while (!gsource.TryNextTask(task)) {
-			FinishHashGroup(prev_task);
-			return false;
-		}
+	auto task = &tasks[next_task];
+	auto window_hash_group = gsink.global_partition->window_hash_groups[task->group_idx].get();
+	return window_hash_group->TryPrepareNextStage();
+}
 
-		const auto new_group = (!task || !prev_task || task->group_idx != prev_task->group_idx);
-		// Release all the old group's data if we started a new group
-		if (new_group) {
-			FinishHashGroup(prev_task);
-			BeginHashGroup();
-		}
+void WindowLocalSourceState::ExecuteTask(DataChunk &result) {
+	auto &gsink = gsource.gsink;
 
-		// Are we done?
-		if (!task) {
-			return true;
-		}
+	// Update the hash group
+	window_hash_group = gsink.global_partition->window_hash_groups[task->group_idx].get();
 
-		// Process the new state
-		switch (task->stage) {
-		case WindowGroupStage::SINK:
-			Sink();
-			D_ASSERT(task->begin_idx == task->end_idx);
-			continue;
-		case WindowGroupStage::FINALIZE:
-			Finalize();
-			D_ASSERT(task->begin_idx == task->end_idx);
-			continue;
-		case WindowGroupStage::GETDATA:
-			D_ASSERT(task->begin_idx < task->end_idx);
-			break;
-		default:
-			throw InternalException("Invalid window source state.");
-		}
+	// Process the new state
+	switch (task->stage) {
+	case WindowGroupStage::SINK:
+		Sink();
+		D_ASSERT(TaskFinished());
+		break;
+	case WindowGroupStage::FINALIZE:
+		Finalize();
+		D_ASSERT(TaskFinished());
+		break;
+	case WindowGroupStage::GETDATA:
+		D_ASSERT(!TaskFinished());
+		GetData(result);
+		break;
+	default:
+		throw InternalException("Invalid window source state.");
 	}
 
+	// Count this task as finished.
+	if (TaskFinished()) {
+		++gsource.finished;
+	}
+}
+
+void WindowLocalSourceState::GetData(DataChunk &result) {
 	D_ASSERT(window_hash_group->GetStage() == WindowGroupStage::GETDATA);
 
-	if (!scanner) {
+	if (!scanner || !scanner->Remaining()) {
 		scanner = window_hash_group->GetEvaluateScanner(task->begin_idx);
 		batch_index = window_hash_group->batch_base + task->begin_idx;
 	}
@@ -788,9 +808,17 @@ bool WindowLocalSourceState::GetData(DataChunk &result) {
 	for (idx_t col_idx = 0; col_idx < output_chunk.ColumnCount(); col_idx++) {
 		result.data[out_idx++].Reference(output_chunk.data[col_idx]);
 	}
-	result.Verify();
 
-	return true;
+	// If we done with this block, move to the next one
+	if (!scanner->Remaining()) {
+		++task->begin_idx;
+	}
+
+	// If that was the last block, release out local state memory.
+	if (TaskFinished()) {
+		local_states.clear();
+	}
+	result.Verify();
 }
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
@@ -841,50 +869,44 @@ idx_t PhysicalWindow::GetBatchIndex(ExecutionContext &context, DataChunk &chunk,
 	return lstate.batch_index;
 }
 
-bool WindowGlobalSourceState::UpdateBlockedTasks(bool blocked, InterruptState &interrupt_state) const {
-	lock_guard<mutex> guard(lock);
-	if (blocked) {
-		blocked_tasks.push_back(interrupt_state);
-	} else {
-		// The pipeline is unblocked, so flush tasks
-		for (auto &state : blocked_tasks) {
-			state.Callback();
-		}
-		blocked_tasks.clear();
-	}
-	return blocked;
-}
-
 SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
 
-#if 1
-	//	Debugging variant
-	try {
-		while (!lsource.GetData(chunk)) {
-			TaskScheduler::GetScheduler(context.client).YieldThread();
+	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
+		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
+			try {
+				lsource.ExecuteTask(chunk);
+			} catch (...) {
+				gsource.stopped = true;
+				throw;
+			}
+		} else {
+			lock_guard<mutex> guard(gsource.lock);
+			if (gsource.TryPrepareNextStage() || !gsource.HasUnfinishedTasks()) {
+				for (auto &state : gsource.blocked_tasks) {
+					state.Callback();
+				}
+				gsource.blocked_tasks.clear();
+			} else {
+				gsource.blocked_tasks.push_back(input.interrupt_state);
+				return SourceResultType::BLOCKED;
+			}
 		}
-	} catch (...) {
-		gsource.stopped = true;
-		throw;
 	}
-#else
-	try {
-		const auto blocked = !lsource.GetData(chunk);
-		if (gsource.UpdateBlockedTasks(blocked, input.interrupt_state)) {
-			return SourceResultType::BLOCKED;
-		}
-	} catch (...) {
-		gsource.stopped = true;
-		gsource.UpdateBlockedTasks(false, input.interrupt_state);
-		throw;
-	}
-#endif
+
 	gsource.returned += chunk.size();
 
-	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	if (chunk.size() == 0) {
+		lock_guard<mutex> guard(gsource.lock);
+		for (auto &state : gsource.blocked_tasks) {
+			state.Callback();
+		}
+		gsource.blocked_tasks.clear();
+		return SourceResultType::FINISHED;
+	}
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 InsertionOrderPreservingMap<string> PhysicalWindow::ParamsToString() const {
