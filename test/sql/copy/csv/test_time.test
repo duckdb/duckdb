@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/test_time.test
+# description: Test the time type is sniffed
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+from 'data/csv/auto/time.csv'
+----
+05:40:00
+21:30:00
+17:45:00
