@@ -140,5 +140,13 @@
         "description": "Identical to list_value, but generated as part of unpivot for better error messages",
         "example": "unpivot_list(4, 5, 6)",
         "type": "scalar_function"
+    },
+    {
+        "name": "list_has_any",
+        "parameters": "l1, l2",
+        "description": "Returns true if the lists have any element in common. NULLs are ignored.",
+        "example": "list_has_any([1, 2, 3], [2, 3, 4])",
+        "type": "scalar_function",
+        "aliases": ["array_has_any", "&&"]
     }
 ]

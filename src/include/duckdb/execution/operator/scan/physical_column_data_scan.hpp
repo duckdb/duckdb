@@ -42,11 +42,10 @@ public:
 		return true;
 	}
 
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	bool ParallelSource() const override {
 		return true;
 	}
-
-	string ParamsToString() const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;

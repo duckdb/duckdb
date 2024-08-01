@@ -14,7 +14,7 @@ EXPLAIN ANALYZE SELECT SUM(i) FROM integers
 analyzed_plan	<REGEX>:.*integers.*
 
 query II
-EXPLAIN ANALYZE SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+EXPLAIN (ANALYZE) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
 ----
 analyzed_plan	<REGEX>:.*CROSS_PRODUCT.*
 

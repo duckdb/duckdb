@@ -895,28 +895,32 @@ double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceSt
 	return total_progress / double(groupings.size());
 }
 
-string PhysicalHashAggregate::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> PhysicalHashAggregate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	auto &groups = grouped_aggregate_data.groups;
 	auto &aggregates = grouped_aggregate_data.aggregates;
+	string groups_info;
 	for (idx_t i = 0; i < groups.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			groups_info += "\n";
 		}
-		result += groups[i]->GetName();
+		groups_info += groups[i]->GetName();
 	}
+	result["Groups"] = groups_info;
+
+	string aggregate_info;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
-		if (i > 0 || !groups.empty()) {
-			result += "\n";
+		if (i > 0) {
+			aggregate_info += "\n";
 		}
-		result += aggregates[i]->GetName();
+		aggregate_info += aggregates[i]->GetName();
 		if (aggregate.filter) {
-			result += " Filter: " + aggregate.filter->GetName();
+			aggregate_info += " Filter: " + aggregate.filter->GetName();
 		}
 	}
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
+	result["Aggregates"] = aggregate_info;
+	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
 

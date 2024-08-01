@@ -491,7 +491,7 @@ def test_jsonlines(shell):
     result = test.run()
     result.check_stdout('{"42":42,"43":43}')
 
-def test_nested_jsonlines(shell):
+def test_nested_jsonlines(shell, json_extension):
     test = (
         ShellTest(shell)
         .statement(".mode jsonlines")
