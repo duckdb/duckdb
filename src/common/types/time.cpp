@@ -66,11 +66,15 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		return false;
 	}
 
-	if (!Date::ParseDoubleDigit(buf, len, pos, min)) {
-		return false;
-	}
-	if (min < 0 || min >= 60) {
-		return false;
+	if (pos == len) {
+		min = 0;
+	} else {
+		if (!Date::ParseDoubleDigit(buf, len, pos, min)) {
+			return false;
+		}
+		if (min < 0 || min >= 60) {
+			return false;
+		}
 	}
 
 	if (pos > len) {
@@ -83,11 +87,15 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 			return false;
 		}
 
-		if (!Date::ParseDoubleDigit(buf, len, pos, sec)) {
-			return false;
-		}
-		if (sec < 0 || sec >= 60) {
-			return false;
+		if (pos == len) {
+			sec = 0;
+		} else {
+			if (!Date::ParseDoubleDigit(buf, len, pos, sec)) {
+				return false;
+			}
+			if (sec < 0 || sec >= 60) {
+				return false;
+			}
 		}
 	}
 
