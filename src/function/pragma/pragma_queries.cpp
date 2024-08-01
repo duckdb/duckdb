@@ -128,6 +128,11 @@ string PragmaVersion(ClientContext &context, const FunctionParameters &parameter
 	return "SELECT * FROM pragma_version();";
 }
 
+string PragmaExtensionVersions(ClientContext &context, const FunctionParameters &parameters) {
+	return "select extension_name, extension_version, install_mode, installed_from from duckdb_extensions() where "
+	       "installed";
+}
+
 string PragmaPlatform(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_platform();";
 }
@@ -207,6 +212,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", PragmaCollations));
 	set.AddFunction(PragmaFunction::PragmaCall("show", PragmaShow, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("version", PragmaVersion));
+	set.AddFunction(PragmaFunction::PragmaStatement("extension_versions", PragmaExtensionVersions));
 	set.AddFunction(PragmaFunction::PragmaStatement("platform", PragmaPlatform));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_size", PragmaDatabaseSize));
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));

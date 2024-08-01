@@ -41,7 +41,7 @@ public:
 	CTEMaterialize materialized_cte;
 
 public:
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, chunk_types.size());
 	}

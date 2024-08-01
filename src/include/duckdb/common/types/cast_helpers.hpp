@@ -228,7 +228,7 @@ struct DateToStringCast {
 			ptr[0] = '-';
 			if (date[i] < 10) {
 				ptr[1] = '0';
-				ptr[2] = '0' + UnsafeNumericCast<char>(date[i]);
+				ptr[2] = UnsafeNumericCast<char>('0' + date[i]);
 			} else {
 				auto index = UnsafeNumericCast<idx_t>(date[i] * 2);
 				ptr[1] = duckdb_fmt::internal::data::digits[index];

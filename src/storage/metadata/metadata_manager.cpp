@@ -52,7 +52,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 
 MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
-	auto &block = blocks[pointer.block_index];
+	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
 
 	MetadataHandle handle;
 	handle.pointer.block_index = pointer.block_index;

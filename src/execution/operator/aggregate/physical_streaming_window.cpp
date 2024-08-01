@@ -600,14 +600,16 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 	return OperatorFinalizeResultType::FINISHED;
 }
 
-string PhysicalStreamingWindow::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> PhysicalStreamingWindow::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string projections;
 	for (idx_t i = 0; i < select_list.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			projections += "\n";
 		}
-		result += select_list[i]->GetName();
+		projections += select_list[i]->GetName();
 	}
+	result["Projections"] = projections;
 	return result;
 }
 

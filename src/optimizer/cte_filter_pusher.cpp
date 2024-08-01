@@ -18,11 +18,20 @@ CTEFilterPusher::CTEFilterPusher(Optimizer &optimizer_p) : optimizer(optimizer_p
 
 unique_ptr<LogicalOperator> CTEFilterPusher::Optimize(unique_ptr<LogicalOperator> op) {
 	FindCandidates(*op);
-	for (auto it = cte_info_map.rbegin(); it != cte_info_map.rend(); it++) {
+	auto ctes = std::move(cte_info_map);
+
+	// Iterate once over all materialized CTEs
+	for (auto it = ctes.rbegin(); it != ctes.rend(); it++) {
 		if (!it->second->all_cte_refs_are_filtered) {
 			continue;
 		}
-		PushFilterIntoCTE(*it->second);
+
+		// The cte_info_map must be reconstructed each time.
+		// Changes to the plan otherwise break the non-unique_ptr references.
+		cte_info_map = InsertionOrderPreservingMap<unique_ptr<MaterializedCTEInfo>>();
+		FindCandidates(*op);
+
+		PushFilterIntoCTE(*cte_info_map[it->first]);
 	}
 	return op;
 }

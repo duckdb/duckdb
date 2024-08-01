@@ -211,14 +211,14 @@ char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) const {
 char *StrfTimeFormat::WritePadded(char *target, uint32_t value, size_t padding) const {
 	D_ASSERT(padding > 1);
 	if (padding % 2) {
-		int decimals = value % 1000;
-		WritePadded3(target + padding - 3, UnsafeNumericCast<uint32_t>(decimals));
+		uint32_t decimals = value % 1000u;
+		WritePadded3(target + padding - 3, decimals);
 		value /= 1000;
 		padding -= 3;
 	}
 	for (size_t i = 0; i < padding / 2; i++) {
-		int decimals = value % 100;
-		WritePadded2(target + padding - 2 * (i + 1), UnsafeNumericCast<uint32_t>(decimals));
+		uint32_t decimals = value % 100u;
+		WritePadded2(target + padding - 2 * (i + 1), decimals);
 		value /= 100;
 	}
 	return target + padding;
@@ -1430,7 +1430,7 @@ bool StrpTimeFormat::ParseResult::TryToDate(date_t &result) {
 }
 
 int32_t StrpTimeFormat::ParseResult::GetMicros() const {
-	return (data[6] + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO;
+	return UnsafeNumericCast<int32_t>((data[6] + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO);
 }
 
 dtime_t StrpTimeFormat::ParseResult::ToTime() {

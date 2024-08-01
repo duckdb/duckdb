@@ -3,8 +3,8 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -14,6 +14,7 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
+#include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -38,11 +39,9 @@
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/main/client_context_state.hpp"
 
 namespace duckdb {
 
@@ -160,7 +159,7 @@ void ClientContext::Destroy() {
 	if (transaction.HasActiveTransaction()) {
 		transaction.ResetActiveQuery();
 		if (!transaction.IsAutoCommit()) {
-			transaction.Rollback();
+			transaction.Rollback(nullptr);
 		}
 	}
 	CleanupInternal(*lock);
@@ -202,15 +201,12 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	}
 }
 
-ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
+ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
+                                          optional_ptr<ErrorData> previous_error) {
 	client_data->profiler->EndQuery();
 
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
-	}
-	// Notify any registered state of query end
-	for (auto &state : registered_state->States()) {
-		state->QueryEnd(*this);
 	}
 	active_query->progress_bar.reset();
 
@@ -225,7 +221,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 				if (success) {
 					transaction.Commit();
 				} else {
-					transaction.Rollback();
+					transaction.Rollback(previous_error);
 				}
 			} else if (invalidate_transaction) {
 				D_ASSERT(!success);
@@ -241,6 +237,16 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	} catch (...) { // LCOV_EXCL_START
 		error = ErrorData("Unhandled exception!");
 	} // LCOV_EXCL_STOP
+
+	// Notify any registered state of query end
+	for (auto const &s : registered_state->States()) {
+		if (error.HasError()) {
+			s->QueryEnd(*this, &error);
+		} else {
+			s->QueryEnd(*this, previous_error);
+		}
+	}
+
 	return error;
 }
 
@@ -258,7 +264,11 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	auto &scheduler = TaskScheduler::GetScheduler(*this);
 	scheduler.RelaunchThreads();
 
-	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction);
+	optional_ptr<ErrorData> passed_error = nullptr;
+	if (result && result->HasError()) {
+		passed_error = result->GetErrorObject();
+	}
+	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction, passed_error);
 	if (result && !result->HasError()) {
 		// if an error occurred while committing report it in the result
 		result->SetError(error);
@@ -576,7 +586,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(ErrorData("Unhandled exception in ExecuteTaskInternal"));
 	} // LCOV_EXCL_STOP
-	EndQueryInternal(lock, false, invalidate_transaction);
+	EndQueryInternal(lock, false, invalidate_transaction, result.GetErrorObject());
 	return PendingExecutionResult::EXECUTION_ERROR;
 }
 
@@ -861,7 +871,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	}
 	if (pending->HasError()) {
 		// query failed: abort now
-		EndQueryInternal(lock, false, invalidate_query);
+		EndQueryInternal(lock, false, invalidate_query, pending->GetErrorObject());
 		return pending;
 	}
 	D_ASSERT(active_query->IsOpenResult(*pending));
@@ -1076,7 +1086,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
 		if (require_new_transaction) {
-			transaction.Rollback();
+			transaction.Rollback(error);
 		} else if (invalidates_transaction) {
 			ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
 		}

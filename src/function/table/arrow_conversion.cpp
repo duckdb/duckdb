@@ -75,7 +75,7 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, const ArrowSc
 			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1);
 			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes + 1);
 			ShiftRight(temp_nullmask.data(), NumericCast<int>(n_bitmask_bytes + 1),
-			           bit_offset % 8); //! why this has to be a right shift is a mystery to me
+			           NumericCast<int>(bit_offset % 8ull)); //! why this has to be a right shift is a mystery to me
 			memcpy((void *)mask.GetData(), data_ptr_cast(temp_nullmask.data()), n_bitmask_bytes);
 		}
 #else
