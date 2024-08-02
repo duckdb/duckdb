@@ -525,8 +525,9 @@ void StandardBufferManager::DeleteTemporaryFile(block_id_t id) {
 	if (fs.FileExists(path)) {
 		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 		auto content_size = handle->GetFileSize();
-		temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(content_size);
+		handle.reset();
 		fs.RemoveFile(path);
+		temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(content_size);
 	}
 }
 
