@@ -94,6 +94,9 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	case AlterType::ALTER_VIEW:
 		result = AlterViewInfo::Deserialize(deserializer);
 		break;
+	case AlterType::CHANGE_OWNERSHIP:
+		result = ChangeOwnershipInfo::Deserialize(deserializer);
+		break;
 	case AlterType::SET_COLUMN_COMMENT:
 		result = SetColumnCommentInfo::Deserialize(deserializer);
 		break;
@@ -234,6 +237,21 @@ unique_ptr<AlterTableInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<string>(400, "column_name", result->column_name);
 	deserializer.ReadProperty<LogicalType>(401, "target_type", result->target_type);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(402, "expression", result->expression);
+	return std::move(result);
+}
+
+void ChangeOwnershipInfo::Serialize(Serializer &serializer) const {
+	AlterInfo::Serialize(serializer);
+	serializer.WriteProperty<CatalogType>(300, "entry_catalog_type", entry_catalog_type);
+	serializer.WritePropertyWithDefault<string>(301, "owner_schema", owner_schema);
+	serializer.WritePropertyWithDefault<string>(302, "owner_name", owner_name);
+}
+
+unique_ptr<AlterInfo> ChangeOwnershipInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ChangeOwnershipInfo>(new ChangeOwnershipInfo());
+	deserializer.ReadProperty<CatalogType>(300, "entry_catalog_type", result->entry_catalog_type);
+	deserializer.ReadPropertyWithDefault<string>(301, "owner_schema", result->owner_schema);
+	deserializer.ReadPropertyWithDefault<string>(302, "owner_name", result->owner_name);
 	return std::move(result);
 }
 

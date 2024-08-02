@@ -274,6 +274,9 @@ jobs:
        with:
          python-version: '3.12'
 
+     - name: Setup Rust
+       uses: dtolnay/rust-toolchain@stable
+
      - uses: ./.github/actions/build_extensions
        with:
          vcpkg_target_triplet: x64-windows-static-md
