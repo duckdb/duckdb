@@ -255,24 +255,19 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			delim_column_offset = aggr.groups.size() - correlated_columns.size();
 			delim_data_offset = aggr.groups.size();
 		}
-		bool requires_left_join = false;
-		for (auto &grouping_set : aggr.grouping_sets) {
-			if (grouping_set.size() == new_group_count) {
-				requires_left_join = true;
-			}
-		}
-		if (requires_left_join) {
-			// we have to perform an INNER or LEFT OUTER JOIN between the result of this aggregate and the delim scan
-			// this does not always have to be a LEFT OUTER JOIN, depending on whether aggr.expressions return
-			// NULL or a value
-			unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-			for (auto &aggr_exp : aggr.expressions) {
-				auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
-				if (!b_aggr_exp.PropagatesNullValues() || any_join || !parent_propagate_null_values) {
-					join = make_uniq<LogicalComparisonJoin>(JoinType::LEFT);
-					break;
+		bool ungrouped_join = false;
+		if (aggr.grouping_sets.empty()) {
+			ungrouped_join = aggr.groups.size() == new_group_count;
+		} else {
+			for (auto &grouping_set : aggr.grouping_sets) {
+				if (grouping_set.size() == new_group_count) {
+					ungrouped_join = true;
 				}
 			}
+		}
+		if (ungrouped_join) {
+			// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
+			auto join = make_uniq<LogicalComparisonJoin>(JoinType::LEFT);
 			auto left_index = binder.GenerateTableIndex();
 			delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
 			join->children.push_back(std::move(delim_scan));
