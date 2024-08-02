@@ -351,10 +351,15 @@ bool SplitInlined(ART &art, reference<Node> &node, Node &child, uint8_t pos) {
 		prefix.data[Node::PREFIX_SIZE]--;
 		memmove(prefix.data, prefix.data + 1, prefix.data[Node::PREFIX_SIZE]);
 
-		// Reset a potential gate, and assign the remaining prefix to the child.
-		node.get().ResetGate();
-		child = node;
-		node.get().Clear();
+		if (prefix.data[Node::PREFIX_SIZE] == 0) {
+			// Free the now empty prefix.
+			Node::Free(art, node);
+		} else {
+			// Reset a potential gate, and assign the remaining prefix to the child.
+			node.get().ResetGate();
+			child = node;
+			node.get().Clear();
+		}
 		return was_gate;
 	}
 

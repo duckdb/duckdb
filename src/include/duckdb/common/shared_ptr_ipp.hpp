@@ -130,13 +130,13 @@ public:
 	}
 
 	// Assign from moved shared_ptr
-	shared_ptr<T> &operator=(shared_ptr &&other) noexcept {
+	shared_ptr<T, SAFE> &operator=(shared_ptr &&other) noexcept {
 		// Create a new shared_ptr using the move constructor, then swap out the ownership to *this
 		shared_ptr(std::move(other)).swap(*this);
 		return *this;
 	}
 	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
-	shared_ptr<T> &operator=(shared_ptr<U> &&other) {
+	shared_ptr<T, SAFE> &operator=(shared_ptr<U, SAFE> &&other) {
 		shared_ptr(std::move(other)).swap(*this);
 		return *this;
 	}
