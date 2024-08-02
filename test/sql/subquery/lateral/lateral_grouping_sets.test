@@ -1,0 +1,18 @@
+# name: test/sql/subquery/lateral/lateral_grouping_sets.test
+# description: Test LATERAL join with empty grouping sets
+# group: [lateral]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+select x, a, b
+from
+(values (1), (2)) t2(x),
+lateral (select count(*), count(a) from (select 1, 2 where 1 = x) t(a, b) group by grouping sets ((), (b), (a, b))) t3(a, b)
+order by all;
+----
+1	1	1
+1	1	1
+1	1	1
+2	0	0
