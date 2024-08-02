@@ -16,6 +16,11 @@ select format('{:d}', 123456789)
 ----
 123456789
 
+query I
+select printf('%,d', 123456789123456789123456789::HUGEINT)
+----
+123,456,789,123,456,789,123,456,789
+
 # other supported thousand separators
 query I
 select printf('%.d', 123456789)
@@ -52,6 +57,11 @@ query I
 select format('{:''}', 123456789)
 ----
 123'456'789
+
+query I
+select format('{:,}', 123456789123456789123456789::UHUGEINT)
+----
+123,456,789,123,456,789,123,456,789
 
 # custom thousand separator
 query I
