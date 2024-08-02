@@ -4,6 +4,7 @@ import ctypes
 import os
 import platform
 import sys
+import sysconfig
 import traceback
 from functools import lru_cache
 from glob import glob
@@ -161,9 +162,13 @@ def open_utf8(fpath, flags):
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-if os.name == 'nt':
-    # windows:
+python_platform = sysconfig.get_platform()
+if os.name == 'nt' and not python_platform.startswith("mingw"):
+    # windows with msvc:
     toolchain_args = ['/wd4244', '/wd4267', '/wd4200', '/wd26451', '/wd26495', '/D_CRT_SECURE_NO_WARNINGS', '/utf-8']
+elif os.name == 'posix' and sys.platform == 'cygwin':
+    # windows with msys or cygwin
+    toolchain_args = ['-std=c++11', '-std=gnu++11', '-g0']
 else:
     # macos/linux
     toolchain_args = ['-std=c++11', '-g0']
@@ -210,7 +215,10 @@ if not is_pyodide:
 
 linker_args = toolchain_args[:]
 if platform.system() == 'Windows':
-    linker_args.extend(['rstrtmgr.lib', 'bcrypt.lib'])
+    if python_platform.startswith("mingw"):
+        linker_args.extend(['-lws2_32', '-lrstrtmgr'])
+    else:
+        linker_args.extend(['rstrtmgr.lib', 'bcrypt.lib'])
 
 short_paths = False
 if platform.system() == 'Windows':
