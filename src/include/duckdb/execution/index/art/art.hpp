@@ -32,8 +32,11 @@ struct ARTFlags {
 
 class ART : public BoundIndex {
 public:
-	// Index type name for the ART.
+	//! Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
+	//! Prefix size for nested leaves containing row IDs.
+	static constexpr idx_t ROW_ID_PREFIX_SIZE = 7;
+	static constexpr idx_t DEPRECATED_PREFIX_SIZE = 15;
 	//! FixedSizeAllocator count of the ART.
 	static constexpr uint8_t ALLOCATOR_COUNT = 10;
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 4;
@@ -51,8 +54,10 @@ public:
 	Node tree = Node();
 	//! Fixed-size allocators holding the ART nodes
 	unsafe_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
-	//! True, if the ART owns its data
+	//! True, if the ART owns its data.
 	bool owns_data;
+	//! The prefix size, which is the minimum of ROW_ID_PREFIX_SIZE and the key type's size.
+	idx_t prefix_size;
 
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);

@@ -1,5 +1,8 @@
 #include "duckdb/execution/index/art/node15_leaf.hpp"
 
+#include "duckdb/execution/index/art/node7_leaf.hpp"
+#include "duckdb/execution/index/art/node256_leaf.hpp"
+
 namespace duckdb {
 
 Node15Leaf &Node15Leaf::New(ART &art, Node &node) {

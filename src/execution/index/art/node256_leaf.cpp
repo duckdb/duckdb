@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/art/node256_leaf.hpp"
 
+#include "duckdb/execution/index/art/node15_leaf.hpp"
+
 namespace duckdb {
 
 Node256Leaf &Node256Leaf::New(ART &art, Node &node) {

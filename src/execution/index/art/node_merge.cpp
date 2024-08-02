@@ -169,7 +169,7 @@ bool Node::MergeInternal(ART &art, Node &other, bool in_gate) {
 bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, Node &empty_node, uint8_t byte, bool in_gate) {
 	// Merge N4, N16, N48, N256 nodes.
 	D_ASSERT(l_node.IsNode() && r_node.IsNode());
-	D_ASSERT(l_node.IsGate() && r_node.IsGate() || !l_node.IsGate() && !r_node.IsGate());
+	D_ASSERT((l_node.IsGate() && r_node.IsGate()) || (!l_node.IsGate() && !r_node.IsGate()));
 
 	auto r_child = r_node.GetNextChildMutable(art, byte);
 	while (r_child) {

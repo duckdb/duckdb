@@ -6,10 +6,13 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node15_leaf.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/execution/index/art/node256_leaf.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/node7_leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -68,12 +71,26 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		}
 	}
 
+	if (info.IsValid() && info.root_block_ptr.IsValid()) {
+		prefix_size = DEPRECATED_PREFIX_SIZE;
+	} else if (info.IsValid()) {
+		prefix_size = info.allocator_infos[0].segment_size;
+	} else if (!IsUnique()) {
+		prefix_size = ROW_ID_PREFIX_SIZE;
+	} else {
+		idx_t compound_size = 0;
+		for (const auto &type : types) {
+			compound_size += GetTypeIdSize(type);
+		}
+		prefix_size = AlignValue(compound_size) - 1;
+	}
+
 	// Initialize the allocators.
 	if (!allocators) {
 		owns_data = true;
 		auto &block_manager = table_io_manager.GetIndexBlockManager();
 		array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
-		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Prefix), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(prefix_size + 1, block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
