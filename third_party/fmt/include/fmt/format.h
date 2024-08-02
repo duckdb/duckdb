@@ -873,7 +873,7 @@ inline Char* format_uint(Char* buffer, UInt value, int num_digits,
   Char* end = buffer;
   do {
     const char* digits = upper ? "0123456789ABCDEF" : data::hex_digits;
-    unsigned digit = (value & ((1 << BASE_BITS) - 1));
+    unsigned digit = (unsigned(value) & ((1 << BASE_BITS) - 1));
     *--buffer = static_cast<Char>(BASE_BITS < 4 ? static_cast<char>('0' + digit)
                                                 : digits[digit]);
   } while ((value >>= BASE_BITS) != 0);
