@@ -81,7 +81,7 @@ bool CanUseDeprecatedFetch(duckdb_result *result, idx_t col, idx_t row) {
 	if (!duckdb::DeprecatedMaterializeResult(result)) {
 		return false;
 	}
-	if (col >= result->__deprecated_column_count || row >= result->__deprecated_row_count) {
+	if (col >= result->deprecated_column_count || row >= result->deprecated_row_count) {
 		return false;
 	}
 	return true;
@@ -91,7 +91,7 @@ bool CanFetchValue(duckdb_result *result, idx_t col, idx_t row) {
 	if (!CanUseDeprecatedFetch(result, col, row)) {
 		return false;
 	}
-	if (result->__deprecated_columns[col].__deprecated_nullmask[row]) {
+	if (result->deprecated_columns[col].deprecated_nullmask[row]) {
 		return false;
 	}
 	return true;

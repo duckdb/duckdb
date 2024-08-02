@@ -64,7 +64,8 @@ public:
 
 	//! Reconstructs the current line to be used in error messages
 	string ReconstructCurrentLine(bool &first_char_nl,
-	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles);
+	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
+	                              bool reconstruct_line);
 };
 
 class StringValueResult;
@@ -172,6 +173,7 @@ public:
 	LinePosition last_position;
 	char *buffer_ptr;
 	idx_t buffer_size;
+	idx_t position_before_comment;
 
 	//! CSV Options that impact the parsing
 	const uint32_t number_of_columns;
@@ -226,6 +228,10 @@ public:
 
 	const string path;
 
+	//! Variable used when trying to figure out where a new segment starts, we must always start from a Valid
+	//! (i.e., non-comment) line.
+	bool first_line_is_comment = false;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -244,6 +250,8 @@ public:
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
+	static inline void SetComment(StringValueResult &result, idx_t buffer_pos);
+	static inline bool UnsetComment(StringValueResult &result, idx_t buffer_pos);
 
 	DataChunk &ToChunk();
 	//! Resets the state of the result
@@ -251,6 +259,9 @@ public:
 
 	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
 	void SkipBOM();
+	//! If we should Print Error Lines
+	//! We only really care about error lines if we are going to error or store them in a rejects table
+	bool PrintErrorLine();
 };
 
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t

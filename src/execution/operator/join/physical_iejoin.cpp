@@ -87,13 +87,13 @@ public:
 		lhs_layout.Initialize(op.children[0]->types);
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
-		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_layout);
+		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_layout, op);
 
 		RowLayout rhs_layout;
 		rhs_layout.Initialize(op.children[1]->types);
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
-		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout);
+		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
 	}
 
 	IEJoinGlobalState(IEJoinGlobalState &prev)
@@ -389,7 +389,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(order1.type, order1.null_order, std::move(ref));
 
-	l1 = make_uniq<SortedTable>(context, orders, payload_layout);
+	l1 = make_uniq<SortedTable>(context, orders, payload_layout, op);
 
 	// LHS has positive rids
 	ExpressionExecutor l_executor(context);
@@ -432,7 +432,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	ExpressionExecutor executor(context);
 	executor.AddExpression(*orders[0].expression);
 
-	l2 = make_uniq<SortedTable>(context, orders, payload_layout);
+	l2 = make_uniq<SortedTable>(context, orders, payload_layout, op);
 	for (idx_t base = 0, block_idx = 0; block_idx < l1->BlockCount(); ++block_idx) {
 		base += AppendKey(*l1, executor, *l2, 1, NumericCast<int64_t>(base), block_idx);
 	}
