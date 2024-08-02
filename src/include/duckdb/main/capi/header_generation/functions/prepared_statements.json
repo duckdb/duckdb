@@ -144,7 +144,7 @@
                 }
             ],
             "comment": {
-                "description": "Returns the statement type of the statement to be executed\n\n ",
+                "description": "Returns the statement type of the statement to be executed\n\n",
                 "param_comments": {
                     "statement": "The prepared statement."
                 },

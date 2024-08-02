@@ -72,7 +72,7 @@
                 }
             ],
             "comment": {
-                "description": "Returns the number of children in the current profiling info node.\n\n",
+                "description": "Returns the child node at the specified index.\n\n",
                 "param_comments": {
                     "info": "A profiling information object.",
                     "index": "The index of the child node."

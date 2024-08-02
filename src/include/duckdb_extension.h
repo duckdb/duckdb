@@ -129,7 +129,7 @@ typedef struct {
 	duckdb_value (*duckdb_create_list_value)(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 	duckdb_value (*duckdb_create_array_value)(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 	char *(*duckdb_get_varchar)(duckdb_value value);
-	int64_t (*duckdb_get_int64)(duckdb_value value);
+	int64_t (*duckdb_get_int64)(duckdb_value val);
 	duckdb_logical_type (*duckdb_create_logical_type)(duckdb_type type);
 	char *(*duckdb_logical_type_get_alias)(duckdb_logical_type type);
 	duckdb_logical_type (*duckdb_create_list_type)(duckdb_logical_type type);
@@ -319,6 +319,8 @@ typedef struct {
 #define duckdb_free              duckdb_ext_api->duckdb_free
 #define duckdb_vector_size       duckdb_ext_api->duckdb_vector_size
 #define duckdb_string_is_inlined duckdb_ext_api->duckdb_string_is_inlined
+#define duckdb_string_t_length   duckdb_ext_api->duckdb_string_t_length
+#define duckdb_string_t_data     duckdb_ext_api->duckdb_string_t_data
 
 //! date_time_timestamp_helpers
 #define duckdb_from_date           duckdb_ext_api->duckdb_from_date
@@ -403,12 +405,49 @@ typedef struct {
 #define duckdb_destroy_value         duckdb_ext_api->duckdb_destroy_value
 #define duckdb_create_varchar        duckdb_ext_api->duckdb_create_varchar
 #define duckdb_create_varchar_length duckdb_ext_api->duckdb_create_varchar_length
+#define duckdb_create_bool           duckdb_ext_api->duckdb_create_bool
+#define duckdb_create_int8           duckdb_ext_api->duckdb_create_int8
+#define duckdb_create_uint8          duckdb_ext_api->duckdb_create_uint8
+#define duckdb_create_int16          duckdb_ext_api->duckdb_create_int16
+#define duckdb_create_uint16         duckdb_ext_api->duckdb_create_uint16
+#define duckdb_create_int32          duckdb_ext_api->duckdb_create_int32
+#define duckdb_create_uint32         duckdb_ext_api->duckdb_create_uint32
+#define duckdb_create_uint64         duckdb_ext_api->duckdb_create_uint64
 #define duckdb_create_int64          duckdb_ext_api->duckdb_create_int64
+#define duckdb_create_hugeint        duckdb_ext_api->duckdb_create_hugeint
+#define duckdb_create_uhugeint       duckdb_ext_api->duckdb_create_uhugeint
+#define duckdb_create_float          duckdb_ext_api->duckdb_create_float
+#define duckdb_create_double         duckdb_ext_api->duckdb_create_double
+#define duckdb_create_date           duckdb_ext_api->duckdb_create_date
+#define duckdb_create_time           duckdb_ext_api->duckdb_create_time
+#define duckdb_create_time_tz_value  duckdb_ext_api->duckdb_create_time_tz_value
+#define duckdb_create_timestamp      duckdb_ext_api->duckdb_create_timestamp
+#define duckdb_create_interval       duckdb_ext_api->duckdb_create_interval
+#define duckdb_create_blob           duckdb_ext_api->duckdb_create_blob
+#define duckdb_get_bool              duckdb_ext_api->duckdb_get_bool
+#define duckdb_get_int8              duckdb_ext_api->duckdb_get_int8
+#define duckdb_get_uint8             duckdb_ext_api->duckdb_get_uint8
+#define duckdb_get_int16             duckdb_ext_api->duckdb_get_int16
+#define duckdb_get_uint16            duckdb_ext_api->duckdb_get_uint16
+#define duckdb_get_int32             duckdb_ext_api->duckdb_get_int32
+#define duckdb_get_uint32            duckdb_ext_api->duckdb_get_uint32
+#define duckdb_get_int64             duckdb_ext_api->duckdb_get_int64
+#define duckdb_get_uint64            duckdb_ext_api->duckdb_get_uint64
+#define duckdb_get_hugeint           duckdb_ext_api->duckdb_get_hugeint
+#define duckdb_get_uhugeint          duckdb_ext_api->duckdb_get_uhugeint
+#define duckdb_get_float             duckdb_ext_api->duckdb_get_float
+#define duckdb_get_double            duckdb_ext_api->duckdb_get_double
+#define duckdb_get_date              duckdb_ext_api->duckdb_get_date
+#define duckdb_get_time              duckdb_ext_api->duckdb_get_time
+#define duckdb_get_time_tz           duckdb_ext_api->duckdb_get_time_tz
+#define duckdb_get_timestamp         duckdb_ext_api->duckdb_get_timestamp
+#define duckdb_get_interval          duckdb_ext_api->duckdb_get_interval
+#define duckdb_get_value_type        duckdb_ext_api->duckdb_get_value_type
+#define duckdb_get_blob              duckdb_ext_api->duckdb_get_blob
+#define duckdb_get_varchar           duckdb_ext_api->duckdb_get_varchar
 #define duckdb_create_struct_value   duckdb_ext_api->duckdb_create_struct_value
 #define duckdb_create_list_value     duckdb_ext_api->duckdb_create_list_value
 #define duckdb_create_array_value    duckdb_ext_api->duckdb_create_array_value
-#define duckdb_get_varchar           duckdb_ext_api->duckdb_get_varchar
-#define duckdb_get_int64             duckdb_ext_api->duckdb_get_int64
 
 //! logical_type_interface
 #define duckdb_create_logical_type     duckdb_ext_api->duckdb_create_logical_type
@@ -483,6 +522,20 @@ typedef struct {
 #define duckdb_register_scalar_function             duckdb_ext_api->duckdb_register_scalar_function
 #define duckdb_scalar_function_get_extra_info       duckdb_ext_api->duckdb_scalar_function_get_extra_info
 #define duckdb_scalar_function_set_error            duckdb_ext_api->duckdb_scalar_function_set_error
+
+//! aggregate_functions
+#define duckdb_create_aggregate_function               duckdb_ext_api->duckdb_create_aggregate_function
+#define duckdb_destroy_aggregate_function              duckdb_ext_api->duckdb_destroy_aggregate_function
+#define duckdb_aggregate_function_set_name             duckdb_ext_api->duckdb_aggregate_function_set_name
+#define duckdb_aggregate_function_add_parameter        duckdb_ext_api->duckdb_aggregate_function_add_parameter
+#define duckdb_aggregate_function_set_return_type      duckdb_ext_api->duckdb_aggregate_function_set_return_type
+#define duckdb_aggregate_function_set_functions        duckdb_ext_api->duckdb_aggregate_function_set_functions
+#define duckdb_aggregate_function_set_destructor       duckdb_ext_api->duckdb_aggregate_function_set_destructor
+#define duckdb_register_aggregate_function             duckdb_ext_api->duckdb_register_aggregate_function
+#define duckdb_aggregate_function_set_special_handling duckdb_ext_api->duckdb_aggregate_function_set_special_handling
+#define duckdb_aggregate_function_set_extra_info       duckdb_ext_api->duckdb_aggregate_function_set_extra_info
+#define duckdb_aggregate_function_get_extra_info       duckdb_ext_api->duckdb_aggregate_function_get_extra_info
+#define duckdb_aggregate_function_set_error            duckdb_ext_api->duckdb_aggregate_function_set_error
 
 //! table_functions
 #define duckdb_create_table_function              duckdb_ext_api->duckdb_create_table_function

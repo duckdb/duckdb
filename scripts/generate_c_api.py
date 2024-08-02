@@ -57,6 +57,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'vector_interface',
     'validity_mask_functions',
     'scalar_functions',
+    'aggregate_functions',
     'table_functions',
     'table_function_bind',
     'table_function_init',
@@ -438,7 +439,6 @@ def create_extension_api_struct(ext_api_version, with_create_method=False, valid
             )
             print(f"Missing functions are: {double_entries}")
             exit(1)
-
 
     if with_create_method:
         extension_struct_finished += "inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {\n"
