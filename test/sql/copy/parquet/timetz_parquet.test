@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/timetz_parquet.test
+# description: Test correct reading of stats for timetz columns
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query II
+select * from 'data/parquet-testing/timetz_4byte_stats.parquet' order by 1;
+----
+00:00:00+00	00:00:00+00
