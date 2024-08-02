@@ -1,7 +1,7 @@
 # name: test/sql/storage/temp_directory/offloading_block_files.test_slow
 # group: [temp_directory]
 
-load __TEST_DIR__/my_peristent_db.db
+load __TEST_DIR__/offloading_block_files.db
 
 statement ok
 create table counting2 as
