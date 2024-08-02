@@ -49,22 +49,6 @@ public:
 		return (T *)Get(ptr, dirty);
 	}
 
-	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
-	template <class T>
-	inline T *GetInMemoryPtr(const IndexPointer ptr) {
-		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
-
-		auto &buffer = buffers.find(ptr.GetBufferId())->second;
-		if (!buffer.InMemory()) {
-			return nullptr;
-		}
-
-		auto buffer_ptr = buffer.Get(true);
-		auto raw_ptr = buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
-		return (T *)raw_ptr;
-	}
-
 	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment.
 	inline data_ptr_t Get(const IndexPointer ptr, const bool dirty = true) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
@@ -73,6 +57,27 @@ public:
 		auto &buffer = buffers.find(ptr.GetBufferId())->second;
 		auto buffer_ptr = buffer.Get(dirty);
 		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+	}
+
+	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
+	template <class T>
+	inline T *GetInMemoryPtr(const IndexPointer ptr) {
+		return (T *)GetInMemoryPtr(ptr);
+	}
+
+	//! Returns the data_ptr_t to a segment, or nullptr, if the buffer is not in memory.
+	inline data_ptr_t GetInMemoryPtr(const IndexPointer ptr) {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
+
+		auto &buffer = buffers.find(ptr.GetBufferId())->second;
+		if (!buffer.InMemory()) {
+			return nullptr;
+		}
+
+		auto buffer_ptr = buffer.Get();
+		auto raw_ptr = buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+		return raw_ptr;
 	}
 
 	//! Resets the allocator, e.g., during 'DELETE FROM table'

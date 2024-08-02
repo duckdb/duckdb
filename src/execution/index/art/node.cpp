@@ -141,7 +141,7 @@ void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) co
 	}
 }
 
-void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child = Node()) {
+void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 	D_ASSERT(node.HasMetadata());
 
 	switch (node.GetType()) {
@@ -320,9 +320,9 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 		return only_verify ? "" : "\n" + str;
 	}
 	case NType::PREFIX_INLINED: {
-		auto &prefix = Node::Ref<const PrefixInlined>(art, *this, NType::PREFIX_INLINED);
+		Prefix prefix(art, *this);
 		string str = " Inlined Prefix:[";
-		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 			str += to_string(prefix.data[i]) + "-";
 		}
 		str += "] ";

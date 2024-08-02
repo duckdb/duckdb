@@ -35,8 +35,8 @@ public:
 	//! Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
 	//! Prefix size for nested leaves containing row IDs.
-	static constexpr idx_t ROW_ID_PREFIX_SIZE = 7;
-	static constexpr idx_t DEPRECATED_PREFIX_SIZE = 15;
+	static constexpr uint8_t ROW_ID_PREFIX_COUNT = 7;
+	static constexpr uint8_t DEPRECATED_PREFIX_COUNT = 15;
 	//! FixedSizeAllocator count of the ART.
 	static constexpr uint8_t ALLOCATOR_COUNT = 10;
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 4;
@@ -57,7 +57,7 @@ public:
 	//! True, if the ART owns its data.
 	bool owns_data;
 	//! The prefix size, which is the minimum of ROW_ID_PREFIX_SIZE and the key type's size.
-	idx_t prefix_size;
+	uint8_t prefix_count;
 
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);

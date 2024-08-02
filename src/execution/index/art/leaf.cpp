@@ -63,7 +63,7 @@ void Leaf::EraseFromNested(ART &art, Node &node, const ARTKey &row_id) {
 	}
 
 	// Inline the row ID.
-	auto &prefix = Node::RefMutable<PrefixInlined>(art, node, NType::PREFIX_INLINED);
+	Prefix prefix(art, node, true);
 	auto data_ptr = &prefix.data[0];
 	auto remaining_row_id = ARTKey(data_ptr, sizeof(row_t)).GetRowID();
 	Node::Free(art, node);

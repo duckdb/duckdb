@@ -71,18 +71,28 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		}
 	}
 
+	auto max_prefix_count = NumericLimits<uint8_t>().Maximum();
 	if (info.IsValid() && info.root_block_ptr.IsValid()) {
-		prefix_size = DEPRECATED_PREFIX_SIZE;
+		prefix_count = DEPRECATED_PREFIX_COUNT;
 	} else if (info.IsValid()) {
-		prefix_size = info.allocator_infos[0].segment_size;
+		if (info.allocator_infos[0].segment_size > NumericCast<idx_t>(max_prefix_count)) {
+			prefix_count = max_prefix_count;
+		} else {
+			prefix_count = NumericCast<uint8_t>(info.allocator_infos[0].segment_size);
+		}
 	} else if (!IsUnique()) {
-		prefix_size = ROW_ID_PREFIX_SIZE;
+		prefix_count = ROW_ID_PREFIX_COUNT;
 	} else {
 		idx_t compound_size = 0;
 		for (const auto &type : types) {
 			compound_size += GetTypeIdSize(type);
 		}
-		prefix_size = AlignValue(compound_size) - 1;
+		auto aligned_value = AlignValue(compound_size) - 1;
+		if (aligned_value > NumericCast<idx_t>(max_prefix_count)) {
+			prefix_count = max_prefix_count;
+		} else {
+			prefix_count = NumericCast<uint8_t>(aligned_value);
+		}
 	}
 
 	// Initialize the allocators.
@@ -90,13 +100,13 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		owns_data = true;
 		auto &block_manager = table_io_manager.GetIndexBlockManager();
 		array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
-		    make_unsafe_uniq<FixedSizeAllocator>(prefix_size + 1, block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(Prefix::Size(*this) + sizeof(Node), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager),
-		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(PrefixInlined), block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(Prefix::Size(*this), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node7Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node15Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256Leaf), block_manager),
@@ -440,7 +450,7 @@ bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &
 		// Create an inlined prefix, or a nested leaf node.
 		auto num_row_ids = section.end - section.start + 1;
 		if (num_row_ids == 1) {
-			PrefixInlined::New(*this, node, start, section.depth, 1);
+			Prefix::NewInlined(*this, node, start, section.depth, 1);
 		} else {
 			ConstructLeafNode(*this, keys, node, section);
 		}
@@ -480,7 +490,7 @@ bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &
 		// Early-out, if inlined prefix.
 		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_start);
 		if (num_row_ids == 1 && in_gate) {
-			PrefixInlined::New(*this, node, start, prefix_start, count);
+			Prefix::NewInlined(*this, node, start, prefix_start, count);
 			return true;
 		}
 
@@ -617,7 +627,7 @@ void ART::InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_
 
 	idx_t count = key.len - depth;
 	if (in_gate) {
-		PrefixInlined::New(*this, node, key, depth, UnsafeNumericCast<uint8_t>(count));
+		Prefix::NewInlined(*this, node, key, depth, UnsafeNumericCast<uint8_t>(count));
 		return;
 	}
 
@@ -658,7 +668,7 @@ bool InsertIntoPrefix(ART &art, Node &node, reference<ARTKey> key, idx_t depth, 
                       bool in_gate) {
 	// If this is a prefix node, we traverse the prefix.
 	reference<Node> next_node(node);
-	auto pos = Prefix::Traverse<Prefix, Node>(art, next_node, key, depth, &Node::RefMutable<Prefix>);
+	auto pos = Prefix::Traverse<Node>(art, next_node, key, depth, true);
 
 	// We recurse into the next node, if
 	// (1) the prefix matches the key, or
@@ -686,7 +696,7 @@ bool InsertIntoPrefix(ART &art, Node &node, reference<ARTKey> key, idx_t depth, 
 		D_ASSERT(pos != sizeof(row_t) - 1);
 		Node new_prefix;
 		auto count = key.get().len - depth - 1;
-		PrefixInlined::New(art, new_prefix, key.get(), depth + 1, UnsafeNumericCast<uint8_t>(count));
+		Prefix::NewInlined(art, new_prefix, key.get(), depth + 1, UnsafeNumericCast<uint8_t>(count));
 		Node::InsertChild(art, next_node, key.get()[depth], new_prefix);
 		return true;
 	}
@@ -741,8 +751,8 @@ bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKe
 	}
 	case NType::PREFIX_INLINED: {
 		auto pos = DConstants::INVALID_INDEX;
-		auto &prefix = Node::Ref<PrefixInlined>(*this, node, type);
-		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+		Prefix prefix(*this, node);
+		for (idx_t i = 0; i < prefix.data[Prefix::Count(*this)]; i++) {
 			if (prefix.data[i] != key.get()[depth]) {
 				pos = i;
 				break;
@@ -773,7 +783,7 @@ bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKe
 		} else {
 			Node new_prefix;
 			auto count = key.get().len - depth - 1;
-			PrefixInlined::New(*this, new_prefix, key.get(), depth + 1, UnsafeNumericCast<uint8_t>(count));
+			Prefix::NewInlined(*this, new_prefix, key.get(), depth + 1, UnsafeNumericCast<uint8_t>(count));
 			Node::InsertChild(*this, next_node, key.get()[depth], new_prefix);
 		}
 		return true;
@@ -839,7 +849,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	// Traverse the prefix.
 	reference<Node> next_node(node);
 	if (next_node.get().GetType() == NType::PREFIX) {
-		Prefix::Traverse<Prefix, Node>(*this, next_node, key, depth, &Node::RefMutable<Prefix>);
+		Prefix::Traverse<Node>(*this, next_node, key, depth, true);
 		if (next_node.get().GetType() == NType::PREFIX && !next_node.get().IsGate()) {
 			return;
 		}
@@ -896,8 +906,8 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 
 	if (child_node.get().GetType() == NType::PREFIX_INLINED) {
 		auto pos = DConstants::INVALID_INDEX;
-		auto &prefix = Node::Ref<PrefixInlined>(*this, child_node, NType::PREFIX_INLINED);
-		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+		Prefix prefix(*this, child_node);
+		for (idx_t i = 0; i < prefix.data[Prefix::Count(*this)]; i++) {
 			if (prefix.data[i] != key.get()[temp_depth]) {
 				pos = i;
 				break;
@@ -911,7 +921,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	}
 
 	if (child_node.get().GetType() == NType::PREFIX) {
-		Prefix::Traverse<Prefix, Node>(*this, child_node, key, temp_depth, &Node::RefMutable<Prefix>);
+		Prefix::Traverse<Node>(*this, child_node, key, temp_depth, true);
 		if (child_node.get().GetType() == NType::PREFIX && !child_node.get().IsGate()) {
 			return;
 		}
@@ -960,7 +970,7 @@ const Node *ART::Lookup(const Node &node, const ARTKey &key, idx_t depth) {
 
 		// Traverse the prefix.
 		if (node_ref.get().GetType() == NType::PREFIX) {
-			Prefix::Traverse<const Prefix, const Node>(*this, node_ref, key, depth, &Node::Ref<const Prefix>);
+			Prefix::Traverse<const Node>(*this, node_ref, key, depth, false);
 			if (node_ref.get().GetType() == NType::PREFIX && !node_ref.get().IsGate()) {
 				// Prefix mismatch, return nullptr.
 				return nullptr;

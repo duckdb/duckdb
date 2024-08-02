@@ -84,8 +84,8 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 			break;
 		}
 		case NType::PREFIX_INLINED: {
-			auto &prefix = Node::Ref<const PrefixInlined>(*art, last_leaf, NType::PREFIX_INLINED);
-			for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			Prefix prefix(*art, last_leaf);
+			for (idx_t i = 0; i < prefix.data[Prefix::Count(*art)]; i++) {
 				row_id[i + nested_depth] = prefix.data[i];
 			}
 			ARTKey key(&row_id[0], sizeof(row_t));
@@ -120,7 +120,7 @@ void Iterator::FindMinimum(const Node &node) {
 	// Traverse the prefix.
 	if (node.GetType() == NType::PREFIX) {
 		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
-		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+		for (idx_t i = 0; i < prefix.data[Prefix::Count(*art)]; i++) {
 			current_key.Push(prefix.data[i]);
 			if (inside_gate) {
 				row_id[nested_depth] = prefix.data[i];
@@ -128,7 +128,7 @@ void Iterator::FindMinimum(const Node &node) {
 			}
 		}
 		nodes.emplace(node, 0);
-		return FindMinimum(prefix.ptr);
+		return FindMinimum(*prefix.ptr);
 	}
 
 	// Go to the leftmost entry in the current node.
@@ -192,13 +192,13 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 
 	// Push back all prefix bytes.
 	auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
-	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+	for (idx_t i = 0; i < prefix.data[Prefix::Count(*art)]; i++) {
 		current_key.Push(prefix.data[i]);
 	}
 	nodes.emplace(node, 0);
 
 	// We compare the prefix bytes with the key bytes.
-	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+	for (idx_t i = 0; i < prefix.data[Prefix::Count(*art)]; i++) {
 		// We found a prefix byte that is less than its corresponding key byte.
 		// I.e., the subsequent node is lesser than the key. Thus, the next node
 		// is the lower bound.
@@ -210,14 +210,14 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 		// I.e., the subsequent node is greater than the key. Thus, the minimum is
 		// the lower bound.
 		if (prefix.data[i] > key[depth + i]) {
-			FindMinimum(prefix.ptr);
+			FindMinimum(*prefix.ptr);
 			return true;
 		}
 	}
 
 	// The prefix matches the key. We recurse into the child.
-	depth += prefix.data[Node::PREFIX_SIZE];
-	return LowerBound(prefix.ptr, key, equal, depth);
+	depth += prefix.data[Prefix::Count(*art)];
+	return LowerBound(*prefix.ptr, key, equal, depth);
 }
 
 bool Iterator::Next() {
@@ -277,7 +277,7 @@ void Iterator::PopNode() {
 
 	// Pop all prefix bytes and the node.
 	auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, NType::PREFIX);
-	auto prefix_byte_count = prefix.data[Node::PREFIX_SIZE];
+	auto prefix_byte_count = prefix.data[Prefix::Count(*art)];
 	current_key.Pop(prefix_byte_count);
 	if (inside_gate) {
 		nested_depth -= prefix_byte_count;

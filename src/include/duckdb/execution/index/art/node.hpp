@@ -50,7 +50,6 @@ public:
 
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint8_t LEAF_SIZE = 4; // Deprecated.
-	static constexpr uint8_t PREFIX_SIZE = 15;
 	static constexpr idx_t AND_ROW_ID = 0x00FFFFFFFFFFFFFF;
 
 	//! A gate sets the leftmost bit of the metadata, binary: 1000-0000.
@@ -70,23 +69,26 @@ public:
 	//! Get an immutable reference to the node.
 	template <class NODE>
 	static inline const NODE &Ref(const ART &art, const Node ptr, const NType type) {
+		D_ASSERT(!ptr.IsPrefix());
 		return *(GetAllocator(art, type).Get<const NODE>(ptr, false));
 	}
 	//! Get a mutable reference to the node.
 	template <class NODE>
 	static inline NODE &RefMutable(const ART &art, const Node ptr, const NType type) {
+		D_ASSERT(!ptr.IsPrefix());
 		return *(GetAllocator(art, type).Get<NODE>(ptr));
 	}
 	//! Get a node pointer, if the node is in memory, else nullptr.
 	template <class NODE>
 	static inline NODE *GetInMemoryPtr(const ART &art, const Node ptr, const NType type) {
+		D_ASSERT(!ptr.IsPrefix());
 		return GetAllocator(art, type).GetInMemoryPtr<NODE>(ptr);
 	}
 
 	//! Replace the child at byte.
 	void ReplaceChild(const ART &art, const uint8_t byte, const Node child) const;
 	//! Insert the child at byte.
-	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
+	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child = Node());
 	//! Delete the child at byte.
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
