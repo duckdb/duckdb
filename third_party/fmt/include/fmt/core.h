@@ -237,6 +237,14 @@ template <typename T> struct std_string_view {};
 using int128_t = duckdb::hugeint_t;
 using uint128_t = duckdb::uhugeint_t;
 
+#ifdef FMT_USE_INT128
+// Do nothing.
+#elif defined(__SIZEOF_INT128__)
+#  define FMT_USE_INT128 1
+#else
+#  define FMT_USE_INT128 0
+#endif
+
 // Casts a nonnegative integer to unsigned.
 template <typename Int>
 FMT_CONSTEXPR typename std::make_unsigned<Int>::type to_unsigned(Int value) {

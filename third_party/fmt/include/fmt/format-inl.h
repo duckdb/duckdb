@@ -389,9 +389,20 @@ inline bool operator==(fp x, fp y) { return x.f == y.f && x.e == y.e; }
 
 // Computes lhs * rhs / pow(2, 64) rounded to nearest with half-up tie breaking.
 inline uint64_t multiply(uint64_t lhs, uint64_t rhs) {
-  auto product = static_cast<uint128_t>(lhs) * rhs;
+#if FMT_USE_INT128
+  auto product = static_cast<__uint128_t>(lhs) * rhs;
   auto f = static_cast<uint64_t>(product >> 64);
   return (static_cast<uint64_t>(product) & (1ULL << 63)) != 0 ? f + 1 : f;
+#else
+  // Multiply 32-bit parts of significands.
+  uint64_t mask = (1ULL << 32) - 1;
+  uint64_t a = lhs >> 32, b = lhs & mask;
+  uint64_t c = rhs >> 32, d = rhs & mask;
+  uint64_t ac = a * c, bc = b * c, ad = a * d, bd = b * d;
+  // Compute mid 64-bit of result and round.
+  uint64_t mid = (bd >> 32) + (ad & mask) + (bc & mask) + (1U << 31);
+  return ac + (ad >> 32) + (bc >> 32) + (mid >> 32);
+#endif
 }
 
 inline fp operator*(fp x, fp y) { return {multiply(x.f, y.f), x.e + y.e + 64}; }
@@ -415,6 +426,27 @@ FMT_FUNC fp get_cached_power(int min_exponent, int& pow10_exponent) {
   pow10_exponent = first_dec_exp + index * dec_exp_step;
   return {data::pow10_significands[index], data::pow10_exponents[index]};
 }
+
+// A simple accumulator to hold the sums of terms in bigint::square if uint128_t
+// is not available.
+struct accumulator {
+  uint64_t lower;
+  uint64_t upper;
+
+  accumulator() : lower(0), upper(0) {}
+  explicit operator uint32_t() const { return static_cast<uint32_t>(lower); }
+
+  void operator+=(uint64_t n) {
+    lower += n;
+    if (lower < n) ++upper;
+  }
+  void operator>>=(int shift) {
+    assert(shift == 32);
+    (void)shift;
+    lower = (upper << 32) | (lower >> 32);
+    upper >>= 32;
+  }
+};
 
 class bigint {
  private:
@@ -597,7 +629,8 @@ class bigint {
     int num_bigits = static_cast<int>(bigits_.size());
     int num_result_bigits = 2 * num_bigits;
     bigits_.resize(num_result_bigits);
-    uint128_t sum = 0;
+    using accumulator_t = conditional_t<FMT_USE_INT128, __uint128_t, accumulator>;
+    auto sum = accumulator_t();
     for (int bigit_index = 0; bigit_index < num_bigits; ++bigit_index) {
       // Compute bigit at position bigit_index of the result by adding
       // cross-product terms n[i] * n[j] such that i + j == bigit_index.
