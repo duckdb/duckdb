@@ -12,6 +12,7 @@
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include <algorithm>
 #include <numeric>
 #include <stdlib.h>
