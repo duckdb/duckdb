@@ -4,6 +4,7 @@ import re
 import glob
 import copy
 from packaging.version import Version
+from functools import reduce
 
 ###
 # DuckDB C API header generation
@@ -27,7 +28,7 @@ DUCKDB_EXT_API_PTR_NAME = 'duckdb_ext_api'
 DUCKDB_EXT_API_STRUCT_NAME = 'duckdb_ext_api_v0'
 
 # Define the extension struct
-EXT_API_DEFINITION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/v0/api.json'
+EXT_API_DEFINITION_PATTERN = 'src/include/duckdb/main/capi/header_generation/apis/v0/*/*.json'
 EXT_API_EXCLUSION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/v0/exclusion_list.json'
 
 # The JSON files that define all available CAPI functions
@@ -175,14 +176,21 @@ def parse_capi_function_definitions():
 
 
 # Read extension API
-def parse_ext_api_definition():
-    with open(EXT_API_DEFINITION_FILE, 'r') as f:
-        try:
-            return json.loads(f.read())
-        except json.decoder.JSONDecodeError as err:
-            print(f"Invalid JSON found in {EXT_API_DEFINITION_FILE}: {err}")
-            exit(1)
+def parse_ext_api_definitions():
+    api_definitions = {}
+    versions = []
+    for file in list(glob.glob(EXT_API_DEFINITION_PATTERN)):
+        with open(file, 'r') as f:
+            try:
+                obj = json.loads(f.read())
+                api_definitions[obj['version']] = obj
+                versions.append(obj['version'])
+            except json.decoder.JSONDecodeError as err:
+                print(f"\nInvalid JSON found in {file}: {err}")
+                exit(1)
 
+    versions.sort(key=Version)
+    return [api_definitions[x] for x in versions]
 
 def parse_exclusion_list(function_map):
     exclusion_set = set()
@@ -190,13 +198,13 @@ def parse_exclusion_list(function_map):
         try:
             data = json.loads(f.read())
         except json.decoder.JSONDecodeError as err:
-            print(f"Invalid JSON found in {EXT_API_EXCLUSION_FILE}: {err}")
+            print(f"\nInvalid JSON found in {EXT_API_EXCLUSION_FILE}: {err}")
             exit(1)
 
         for group in data['exclusion_list']:
             for entry in group['entries']:
                 if entry not in function_map:
-                    print(f"Invalid item found in exclusion list: {entry}. This entry does not occur in the API!")
+                    print(f"\nInvalid item found in exclusion list: {entry}. This entry does not occur in the API!")
                     exit(1)
                 exclusion_set.add(entry)
     return exclusion_set
@@ -219,14 +227,14 @@ def create_function_comment(function_obj):
                 if not 'param_comments' in comment:
                     if not ALLOW_UNCOMMENTED_PARAMS:
                         print(comment)
-                        print(f'Missing param comments for function {function_name}')
+                        print(f'\nMissing param comments for function {function_name}')
                         exit(1)
                     continue
                 if param['name'] in comment['param_comments']:
                     param_comment = comment['param_comments'][param['name']]
                     result += f'* @param {param_name} {param_comment}\n'
                 elif not ALLOW_UNCOMMENTED_PARAMS:
-                    print(f'Uncommented parameter found: {param_name} of function {function_name}')
+                    print(f'\nUncommented parameter found: {param_name} of function {function_name}')
                     exit(1)
         if 'return_value' in comment:
             comment_return_value = comment['return_value']
@@ -293,13 +301,13 @@ def to_camel_case(snake_str):
 
 def parse_semver(version):
     if version[0] != 'v':
-        print(f"Version string {version} does not start with a v")
+        print(f"\nVersion string {version} does not start with a v")
         exit(1)
 
     versions = version[1:].split(".")
 
     if len(versions) != 3:
-        print(f"Version string {version} is invalid, only vx.y.z is supported")
+        print(f"\nVersion string {version} is invalid, only vx.y.z is supported")
         exit(1)
 
     return int(versions[0]), int(versions[1]), int(versions[2])
@@ -387,7 +395,7 @@ def create_extension_api_struct(ext_api_version, with_create_method=False, valid
 
     # Generate the struct
     extension_struct_finished = 'typedef struct {\n'
-    for api_version_entry in EXT_API_DEFINITION['version_entries']:
+    for api_version_entry in EXT_API_DEFINITIONS:
         version = api_version_entry['version']
         extension_struct_finished += f'    // Version {version}\n'
         for function_name in api_version_entry['entries']:
@@ -423,27 +431,27 @@ def create_extension_api_struct(ext_api_version, with_create_method=False, valid
                     missing_entries.append(function['name'])
         if missing_entries:
             print(
-                "Exclusion list validation failed! This means a C API function has been defined but not added to the API struct nor the exclusion list"
+                "\nExclusion list validation failed! This means a C API function has been defined but not added to the API struct nor the exclusion list"
             )
-            print(f"Missing functions are: {missing_entries}")
+            print(f" * Missing functions: {missing_entries}")
             exit(1)
         # Check for entries both in the API definition and the exclusion list
         double_entries = []
-        for api_version_entry in EXT_API_DEFINITION['version_entries']:
+        for api_version_entry in EXT_API_DEFINITIONS:
             for function_name in api_version_entry['entries']:
                 if function_name in EXT_API_EXCLUSION_SET:
                     double_entries.append(function_name)
         if double_entries:
             print(
-                "Exclusion list is invalid, there are entries in the extension api that are also in the exclusion list!"
+                "\nExclusion list is invalid, there are entries in the extension api that are also in the exclusion list!"
             )
-            print(f"Missing functions are: {double_entries}")
+            print(f" * Missing functions: {double_entries}")
             exit(1)
 
     if with_create_method:
         extension_struct_finished += "inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {\n"
         extension_struct_finished += "    duckdb_ext_api_v0 result;\n"
-        for api_version_entry in EXT_API_DEFINITION['version_entries']:
+        for api_version_entry in EXT_API_DEFINITIONS:
 
             if len(api_version_entry['entries']) == 0:
                 continue
@@ -594,7 +602,7 @@ def create_duckdb_ext_internal_h(ext_api_version):
 def get_extension_api_version():
     versions = []
 
-    for version_entry in EXT_API_DEFINITION['version_entries']:
+    for version_entry in EXT_API_DEFINITIONS:
         versions.append(version_entry['version'])
 
     versions_copy = copy.deepcopy(versions)
@@ -602,7 +610,7 @@ def get_extension_api_version():
     versions.sort(key=Version)
 
     if versions != versions_copy:
-        print("Failed to parse extension api: versions are not ordered correctly")
+        print("\nFailed to parse extension api: versions are not ordered correctly")
         exit(1)
 
     return versions[-1]
@@ -610,13 +618,20 @@ def get_extension_api_version():
 
 # TODO make this code less spaghetti
 if __name__ == "__main__":
-    EXT_API_DEFINITION = parse_ext_api_definition()
+    EXT_API_DEFINITIONS = parse_ext_api_definitions()
     EXT_API_VERSION = get_extension_api_version()
     FUNCTION_GROUPS, FUNCTION_MAP = parse_capi_function_definitions()
+    FUNCTION_MAP_SIZE = len(FUNCTION_MAP)
+    API_STRUCT_FUNCTION_COUNT = reduce(lambda x, y: len(x['entries']) + len(y['entries']), EXT_API_DEFINITIONS)
     EXT_API_EXCLUSION_SET = parse_exclusion_list(FUNCTION_MAP)
+    EXT_API_EXCLUSION_SET_SIZE = len(EXT_API_EXCLUSION_SET)
 
-    print("C API Versioning")
-    print(f" * Latest Extension C API Version: {EXT_API_VERSION}")
+    print("Information")
+    print(f" * Current Extension C API Version: {EXT_API_VERSION}")
+    print(f" * Total functions: {FUNCTION_MAP_SIZE}")
+    print(f" * Functions in C API struct: {API_STRUCT_FUNCTION_COUNT}")
+    print(f" * Functions in C API but excluded from struct: {EXT_API_EXCLUSION_SET_SIZE}")
+
     print()
 
     print("Generating headers")
@@ -624,9 +639,13 @@ if __name__ == "__main__":
     create_duckdb_h(EXT_API_VERSION)
     print(f" * {DUCKDB_HEADER_EXT_OUT_FILE}")
     create_duckdb_ext_h(DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE)
-    print(f" * {DUCKDB_HEADER_OUT_FILE}")
+    print(f" * {DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE}")
+
     print()
 
     os.system(f"python3 scripts/format.py {DUCKDB_HEADER_OUT_FILE} --fix --noconfirm")
     os.system(f"python3 scripts/format.py {DUCKDB_HEADER_EXT_OUT_FILE} --fix --noconfirm")
     os.system(f"python3 scripts/format.py {DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE} --fix --noconfirm")
+
+    print()
+    print("C API headers generated successfully!")
