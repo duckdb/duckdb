@@ -135,7 +135,6 @@ TEST_CASE("Test File Full", "[parallel-csv][.]") {
 	RunFull(path);
 }
 
-
 //! Test case with specific parameters that allow us to run the no_quote.tsv we were skipping
 TEST_CASE("Test Parallel CSV All Files - data/csv/no_quote.csv", "[parallel-csv][.]") {
 	string add_parameters = ", quote=''";
