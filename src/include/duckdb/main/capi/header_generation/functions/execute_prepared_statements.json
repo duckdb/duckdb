@@ -38,7 +38,6 @@
                 }
             ],
             "deprecated": true,
-            "excluded_from_struct": true,
             "comment": {
                 "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nExecutes the prepared statement with the given bound parameters, and returns an optionally-streaming query result.\nTo determine if the resulting query was in fact streamed, use `duckdb_result_is_streaming`\n\nThis method can be called multiple times for each prepared statement, and the parameters can be modified\nbetween calls to this function.\n\nNote that the result must be freed with `duckdb_destroy_result`.\n\n",
                 "param_comments": {

@@ -154,8 +154,6 @@ def parse_capi_function_definitions():
                 function['group'] = json_data['group']
                 if 'deprecated' in json_data:
                     function['group_deprecated'] = json_data['deprecated']
-                if 'excluded_from_struct' in json_data:
-                    function['group_excluded_from_struct'] = json_data['excluded_from_struct']
 
                 function_map[function['name']] = function
 
@@ -365,21 +363,6 @@ def write_struct_member_definitions(version_entries, initialize=False):
     result = ""
     for function_name in version_entries:
         function_lookup = FUNCTION_MAP[function_name]
-        # Special case for C API functions that were already deprecated when the extension API started
-        if (
-            'deprecated' in function_lookup
-            and function_lookup['deprecated']
-            and 'excluded_from_struct' in function_lookup
-            and function_lookup['excluded_from_struct']
-        ):
-            continue
-        if (
-            'group_deprecated' in function_lookup
-            and function_lookup['group_deprecated']
-            and 'group_excluded_from_struct' in function_lookup
-            and function_lookup['group_excluded_from_struct']
-        ):
-            continue
         function_lookup_name = function_lookup['name']
 
         if initialize:
@@ -400,22 +383,6 @@ def create_extension_api_struct(ext_api_version, with_create_method=False, valid
         extension_struct_finished += f'    // Version {version}\n'
         for function_name in api_version_entry['entries']:
             function_lookup = FUNCTION_MAP[function_name]
-            # Special case for C API functions that were already deprecated when the extension API started
-            if (
-                'deprecated' in function_lookup
-                and function_lookup['deprecated']
-                and 'excluded_from_struct' in function_lookup
-                and function_lookup['excluded_from_struct']
-            ):
-                continue
-            if (
-                'group_deprecated' in function_lookup
-                and function_lookup['group_deprecated']
-                and 'group_excluded_from_struct' in function_lookup
-                and function_lookup['group_excluded_from_struct']
-            ):
-                continue
-
             functions_in_struct.add(function_lookup['name'])
             extension_struct_finished += create_struct_member(function_lookup)
             extension_struct_finished += '\n'
@@ -476,40 +443,24 @@ def create_extension_api_struct(ext_api_version, with_create_method=False, valid
 
 
 # Create duckdb_extension_api.h
-def create_duckdb_ext_h(ext_api_version):
+def create_duckdb_ext_h(ext_api_version, ext_struct_api_function_set):
 
     # Generate the typedefs
     typedefs = ""
     for group in FUNCTION_GROUPS:
-        # Special case for C API functions that were already deprecated when the extension API started
-        if (
-            'deprecated' in group
-            and group['deprecated']
-            and 'excluded_from_struct' in group
-            and group['excluded_from_struct']
-        ):
-            continue
-
-        group_name = group['group']
-        typedefs += f'//! {group_name}\n'
-        if 'deprecated' in group and group['deprecated']:
-            typedefs += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
-
+        functions_to_add = []
         for function in group['entries']:
-            if 'deprecated' in function and function['deprecated']:
-                # Special case for C API functions that were already deprecated when the extension API started
-                if 'excluded_from_struct' in function and function['excluded_from_struct']:
-                    continue
-                typedefs += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
+            if function['name'] not in ext_struct_api_function_set:
+                continue
+            functions_to_add.append(function)
 
-            typedefs += create_function_typedef(function)
+        if functions_to_add:
+            group_name = group['group']
+            typedefs += f'//! {group_name}\n'
+            for fun_to_add in functions_to_add:
+                typedefs += create_function_typedef(fun_to_add)
 
-            if 'deprecated' in function and function['deprecated']:
-                typedefs += '#endif\n'
-
-        if 'deprecated' in group and group['deprecated']:
-            typedefs += '#endif\n'
-        typedefs += '\n'
+            typedefs += '\n'
 
     extension_header_body = create_extension_api_struct(ext_api_version) + '\n\n' + typedefs
 
@@ -615,13 +566,21 @@ def get_extension_api_version():
 
     return versions[-1]
 
+def create_struct_function_set():
+    result = set()
+    for api in EXT_API_DEFINITIONS:
+        for entry in api['entries']:
+            result.add(entry)
+    return result
 
 # TODO make this code less spaghetti
 if __name__ == "__main__":
     EXT_API_DEFINITIONS = parse_ext_api_definitions()
+    EXT_API_SET = create_struct_function_set()
     EXT_API_VERSION = get_extension_api_version()
     FUNCTION_GROUPS, FUNCTION_MAP = parse_capi_function_definitions()
     FUNCTION_MAP_SIZE = len(FUNCTION_MAP)
+
     API_STRUCT_FUNCTION_COUNT = reduce(lambda x, y: len(x['entries']) + len(y['entries']), EXT_API_DEFINITIONS)
     EXT_API_EXCLUSION_SET = parse_exclusion_list(FUNCTION_MAP)
     EXT_API_EXCLUSION_SET_SIZE = len(EXT_API_EXCLUSION_SET)
@@ -638,7 +597,7 @@ if __name__ == "__main__":
     print(f" * {DUCKDB_HEADER_OUT_FILE}")
     create_duckdb_h(EXT_API_VERSION)
     print(f" * {DUCKDB_HEADER_EXT_OUT_FILE}")
-    create_duckdb_ext_h(DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE)
+    create_duckdb_ext_h(DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE, EXT_API_SET)
     print(f" * {DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE}")
 
     print()

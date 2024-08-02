@@ -706,7 +706,6 @@ typedef struct {
 #define duckdb_table_description_create  duckdb_ext_api->duckdb_table_description_create
 #define duckdb_table_description_destroy duckdb_ext_api->duckdb_table_description_destroy
 #define duckdb_table_description_error   duckdb_ext_api->duckdb_table_description_error
-#define duckdb_column_has_default        duckdb_ext_api->duckdb_column_has_default
 
 //! threading_information
 #define duckdb_execute_tasks          duckdb_ext_api->duckdb_execute_tasks
