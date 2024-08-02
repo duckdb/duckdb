@@ -190,10 +190,10 @@ void Node48::Vacuum(ART &art, const ARTFlags &flags) {
 	}
 }
 
-void Node48::TransformToDeprecated(ART &art) {
+void Node48::TransformToDeprecated(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != Node::EMPTY_MARKER) {
-			Node::TransformToDeprecated(art, children[child_index[i]]);
+			Node::TransformToDeprecated(art, children[child_index[i]], allocator);
 		}
 	}
 }

@@ -121,7 +121,7 @@ public:
 	void Vacuum(ART &art, const ARTFlags &flags);
 
 	//! Transform the node storage to deprecated storage.
-	static void TransformToDeprecated(ART &art, Node &node);
+	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
 
 	//! Returns the node type.
 	inline NType GetType() const {

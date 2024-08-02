@@ -71,14 +71,15 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		}
 	}
 
-	auto max_prefix_count = NumericLimits<uint8_t>().Maximum();
+	auto max_prefix_count =
+	    NumericCast<uint8_t>(AlignValueFloor(NumericLimits<uint8_t>().Maximum()) - sizeof(Node) - 1);
 	if (info.IsValid() && info.root_block_ptr.IsValid()) {
 		prefix_count = DEPRECATED_PREFIX_COUNT;
 	} else if (info.IsValid()) {
 		if (info.allocator_infos[0].segment_size > NumericCast<idx_t>(max_prefix_count)) {
 			prefix_count = max_prefix_count;
 		} else {
-			prefix_count = NumericCast<uint8_t>(info.allocator_infos[0].segment_size);
+			prefix_count = NumericCast<uint8_t>(info.allocator_infos[0].segment_size - sizeof(Node) - 1);
 		}
 	} else if (!IsUnique()) {
 		prefix_count = ROW_ID_PREFIX_COUNT;
@@ -1196,8 +1197,26 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 	// then we need to transform all nested leaves before serialization.
 	auto v1_0_0_option = options.find("v1_0_0_storage");
 	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
-	if (v1_0_0_storage && tree.HasMetadata()) {
-		Node::TransformToDeprecated(*this, tree);
+	if (v1_0_0_storage) {
+		unsafe_unique_ptr<FixedSizeAllocator> deprecated_allocator;
+		if (prefix_count != DEPRECATED_PREFIX_COUNT) {
+			auto &block_manager = (*allocators)[0]->block_manager;
+			deprecated_allocator =
+			    make_unsafe_uniq<FixedSizeAllocator>(DEPRECATED_PREFIX_COUNT + 1 + sizeof(Node), block_manager);
+		}
+
+		// Transform all leaves, and possibly the prefixes.
+		if (tree.HasMetadata()) {
+			Node::TransformToDeprecated(*this, tree, deprecated_allocator);
+		}
+
+		// Replace the prefix allocator with the deprecated allocator.
+		if (deprecated_allocator) {
+			D_ASSERT((*allocators)[0]->IsEmpty());
+			(*allocators)[0]->Reset();
+			(*allocators)[0] = std::move(deprecated_allocator);
+			prefix_count = DEPRECATED_PREFIX_COUNT;
+		}
 	}
 
 	IndexStorageInfo info(name);
@@ -1214,6 +1233,8 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->IsEmpty());
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_15_LEAF)]->IsEmpty());
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_256_LEAF)]->IsEmpty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::PREFIX)]->GetSegmentSize() ==
+		         DEPRECATED_PREFIX_COUNT + 1 + sizeof(Node));
 	}
 #endif
 

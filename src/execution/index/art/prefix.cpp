@@ -14,12 +14,19 @@ Prefix::Prefix(const ART &art, const Node ptr_p, const bool is_mutable, const bo
 	} else {
 		data = Node::GetAllocator(art, type).GetInMemoryPtr(ptr_p);
 		if (!data) {
+			ptr = nullptr;
 			in_memory = false;
 			return;
 		}
-		in_memory = true;
 	}
 	ptr = type == INLINED ? nullptr : (Node *)(data + Size(art));
+	in_memory = true;
+};
+
+Prefix::Prefix(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node ptr_p, const idx_t count) {
+	data = allocator->Get(ptr_p, true);
+	ptr = (Node *)(data + count + 1);
+	in_memory = true;
 };
 
 void Prefix::NewInlined(ART &art, Node &node, const ARTKey &key, idx_t depth, uint8_t count) {
@@ -290,20 +297,73 @@ void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 	node_ref.get().Vacuum(art, flags);
 }
 
-void Prefix::TransformToDeprecated(ART &art, Node &node) {
+void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
+	// Early-out, if we do not need any transformations.
+	if (!allocator) {
+		reference<Node> node_ref(node);
+		while (node_ref.get().GetType() == PREFIX && !node_ref.get().IsGate()) {
+			Prefix prefix(art, node_ref, true, true);
+			if (!prefix.in_memory) {
+				return;
+			}
+			node_ref = *prefix.ptr;
+		}
+		return Node::TransformToDeprecated(art, node_ref, allocator);
+	}
+
+	// Fast path with memcpy.
+	if (art.prefix_count <= ART::DEPRECATED_PREFIX_COUNT) {
+		reference<Node> node_ref(node);
+		while (node_ref.get().GetType() == PREFIX && !node_ref.get().IsGate()) {
+			Prefix prefix(art, node_ref, true, true);
+			if (!prefix.in_memory) {
+				return;
+			}
+
+			Node new_node;
+			new_node = allocator->New();
+			new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
+
+			Prefix new_prefix(allocator, new_node, ART::DEPRECATED_PREFIX_COUNT);
+			new_prefix.data[ART::DEPRECATED_PREFIX_COUNT] = prefix.data[Count(art)];
+			memcpy(new_prefix.data, prefix.data, new_prefix.data[ART::DEPRECATED_PREFIX_COUNT]);
+			*new_prefix.ptr = *prefix.ptr;
+
+			prefix.ptr->Clear();
+			Node::Free(art, node_ref);
+			node_ref.get() = new_node;
+			node_ref = *new_prefix.ptr;
+		}
+
+		return Node::TransformToDeprecated(art, node_ref, allocator);
+	}
+
+	// Else, we need to create a new prefix chain.
+	Node new_node;
+	new_node = allocator->New();
+	new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
+	Prefix new_prefix(allocator, new_node, ART::DEPRECATED_PREFIX_COUNT);
+
 	reference<Node> node_ref(node);
 	while (node_ref.get().GetType() == PREFIX && !node_ref.get().IsGate()) {
 		Prefix prefix(art, node_ref, true, true);
 		if (!prefix.in_memory) {
 			return;
 		}
-		node_ref = *prefix.ptr;
+
+		for (idx_t i = 0; i < prefix.data[Count(art)]; i++) {
+			new_prefix = new_prefix.TransformToDeprecatedAppend(art, allocator, prefix.data[i]);
+		}
+
+		*new_prefix.ptr = *prefix.ptr;
+		Node::GetAllocator(art, PREFIX).Free(node_ref);
+		node_ref = *new_prefix.ptr;
 	}
 
-	Node::TransformToDeprecated(art, node_ref.get());
+	return Node::TransformToDeprecated(art, node_ref, allocator);
 }
 
-Prefix &Prefix::Append(ART &art, uint8_t byte) {
+Prefix Prefix::Append(ART &art, uint8_t byte) {
 	if (data[Count(art)] != Count(art)) {
 		data[data[Count(art)]] = byte;
 		data[Count(art)]++;
@@ -317,21 +377,21 @@ Prefix &Prefix::Append(ART &art, uint8_t byte) {
 void Prefix::Append(ART &art, Node other) {
 	D_ASSERT(other.HasMetadata());
 
-	reference<Prefix> prefix(*this);
+	Prefix prefix = *this;
 	while (other.GetType() == PREFIX) {
 		if (other.IsGate()) {
-			*prefix.get().ptr = other;
+			*prefix.ptr = other;
 			return;
 		}
 
 		Prefix other_prefix(art, other, true);
 		for (idx_t i = 0; i < other_prefix.data[Count(art)]; i++) {
-			prefix = prefix.get().Append(art, other_prefix.data[i]);
+			prefix = prefix.Append(art, other_prefix.data[i]);
 		}
 
-		*prefix.get().ptr = *other_prefix.ptr;
+		*prefix.ptr = *other_prefix.ptr;
 		Node::GetAllocator(art, PREFIX).Free(other);
-		other = *prefix.get().ptr;
+		other = *prefix.ptr;
 	}
 }
 
@@ -525,6 +585,19 @@ bool Prefix::SplitInlined(ART &art, reference<Node> &node, Node &child, uint8_t 
 	node.get() = new_node;
 	node = *new_prefix.ptr;
 	return false;
+}
+
+Prefix Prefix::TransformToDeprecatedAppend(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator, uint8_t byte) {
+	if (data[ART::DEPRECATED_PREFIX_COUNT] != ART::DEPRECATED_PREFIX_COUNT) {
+		data[data[ART::DEPRECATED_PREFIX_COUNT]] = byte;
+		data[ART::DEPRECATED_PREFIX_COUNT]++;
+		return *this;
+	}
+
+	*ptr = allocator->New();
+	ptr->SetMetadata(static_cast<uint8_t>(PREFIX));
+	Prefix prefix(allocator, *ptr, ART::DEPRECATED_PREFIX_COUNT);
+	return prefix.TransformToDeprecatedAppend(art, allocator, byte);
 }
 
 } // namespace duckdb

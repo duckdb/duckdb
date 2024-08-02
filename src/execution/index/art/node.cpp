@@ -439,7 +439,7 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 // TransformToDeprecated
 //===--------------------------------------------------------------------===//
 
-void Node::TransformToDeprecated(ART &art, Node &node) {
+void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
 	D_ASSERT(node.HasMetadata());
 
 	if (node.IsGate()) {
@@ -449,7 +449,7 @@ void Node::TransformToDeprecated(ART &art, Node &node) {
 	auto node_type = node.GetType();
 	switch (node_type) {
 	case NType::PREFIX:
-		return Prefix::TransformToDeprecated(art, node);
+		return Prefix::TransformToDeprecated(art, node, allocator);
 	case NType::LEAF_INLINED:
 		return;
 	case NType::LEAF:
@@ -457,28 +457,28 @@ void Node::TransformToDeprecated(ART &art, Node &node) {
 	case NType::NODE_4: {
 		auto n4_ptr = GetInMemoryPtr<Node4>(art, node, node_type);
 		if (n4_ptr) {
-			n4_ptr->TransformToDeprecated(art);
+			n4_ptr->TransformToDeprecated(art, allocator);
 		}
 		return;
 	}
 	case NType::NODE_16: {
 		auto n16_ptr = GetInMemoryPtr<Node16>(art, node, node_type);
 		if (n16_ptr) {
-			n16_ptr->TransformToDeprecated(art);
+			n16_ptr->TransformToDeprecated(art, allocator);
 		}
 		return;
 	}
 	case NType::NODE_48: {
 		auto n48_ptr = GetInMemoryPtr<Node48>(art, node, node_type);
 		if (n48_ptr) {
-			n48_ptr->TransformToDeprecated(art);
+			n48_ptr->TransformToDeprecated(art, allocator);
 		}
 		return;
 	}
 	case NType::NODE_256: {
 		auto n256_ptr = GetInMemoryPtr<Node256>(art, node, node_type);
 		if (n256_ptr) {
-			n256_ptr->TransformToDeprecated(art);
+			n256_ptr->TransformToDeprecated(art, allocator);
 		}
 		return;
 	}

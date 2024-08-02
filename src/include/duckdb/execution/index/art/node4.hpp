@@ -61,6 +61,6 @@ public:
 	void Vacuum(ART &art, const ARTFlags &flags);
 
 	//! Transform the children of the node.
-	void TransformToDeprecated(ART &art);
+	void TransformToDeprecated(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
 };
 } // namespace duckdb

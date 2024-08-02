@@ -178,9 +178,9 @@ void Node4::Vacuum(ART &art, const ARTFlags &flags) {
 	}
 }
 
-void Node4::TransformToDeprecated(ART &art) {
+void Node4::TransformToDeprecated(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
 	for (idx_t i = 0; i < count; i++) {
-		Node::TransformToDeprecated(art, children[i]);
+		Node::TransformToDeprecated(art, children[i], allocator);
 	}
 }
 

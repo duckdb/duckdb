@@ -85,6 +85,10 @@ public:
 
 	//! Returns the in-memory size in bytes
 	idx_t GetInMemorySize() const;
+	//! Returns the segment size.
+	inline idx_t GetSegmentSize() const {
+		return segment_size;
+	}
 
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;

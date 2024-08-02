@@ -27,6 +27,7 @@ public:
 public:
 	Prefix() = delete;
 	Prefix(const ART &art, const Node ptr_p, const bool is_mutable = false, const bool set_in_memory = false);
+	Prefix(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node ptr_p, const idx_t count);
 
 	data_ptr_t data;
 	Node *ptr;
@@ -88,13 +89,13 @@ public:
 	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
 
 	//! Transform the child of the node.
-	static void TransformToDeprecated(ART &art, Node &node);
+	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
 
 	//! Appends the other_prefix and all its subsequent prefix nodes to this prefix node.
 	//! Also frees all copied/appended nodes
 	void Append(ART &art, Node other);
 	//! Appends the byte.
-	Prefix &Append(ART &art, uint8_t byte);
+	Prefix Append(ART &art, uint8_t byte);
 
 private:
 	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, uint8_t count, idx_t offset, NType type);
@@ -107,5 +108,6 @@ private:
 	static void ReduceInlinedPrefix(ART &art, Node &node, const idx_t n);
 	static void ReducePrefix(ART &art, Node &node, const idx_t n);
 	static bool SplitInlined(ART &art, reference<Node> &node, Node &child, uint8_t pos);
+	Prefix TransformToDeprecatedAppend(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator, uint8_t byte);
 };
 } // namespace duckdb
