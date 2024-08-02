@@ -250,3 +250,19 @@ DROP TABLE reject_errors;
 
 statement ok
 DROP TABLE reject_scans;
+
+# Test rejects table with comments
+statement ok
+FROM read_csv('data/csv/comments/error.csv', store_rejects = true, comment = '#');
+
+query IIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY column_name;
+----
+2726	10963	10968	1	b	MISSING COLUMNS	oh no	Expected Number of Columns: 2 Found: 1
+2733	11009	11014	1	b	MISSING COLUMNS	oh no	Expected Number of Columns: 2 Found: 1
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
