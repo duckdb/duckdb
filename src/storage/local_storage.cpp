@@ -378,7 +378,9 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 }
 
 void LocalStorage::FinalizeAppend(LocalAppendState &state) {
-	if (state.fetch_result.created && state.fetch_result.storage->row_groups->GetTotalRows() == 0) {
+	const bool storage_is_empty = state.fetch_result.storage->row_groups->GetTotalRows() == 0;
+	const bool append_state_is_empty = state.append_state.total_append_count == 0;
+	if (state.fetch_result.created && append_state_is_empty && storage_is_empty) {
 		auto &manager = *state.fetch_result.manager;
 		auto &data_table = state.fetch_result.storage->table_ref;
 		// Remove the empty table storage, we created it and it didn't get populated with any tuples

@@ -24,8 +24,10 @@ statement ok
 insert into tbl(a, b) values(1, 2) on conflict do nothing;
 
 # Scan from the table, hitting the local storage
-statement ok
+query II
 select * from tbl where a = 1;
+----
+1	2
 
 # Do it again to test proper cleanup of state
 statement ok
@@ -49,5 +51,8 @@ statement ok
 insert into tbl(a, b) values(1, 2) on conflict do nothing;
 
 # Scan from the table, hitting the local storage
-statement ok
-select * from tbl where a = 1;
+query II
+select * from tbl order by a;
+----
+1	2
+5	4
