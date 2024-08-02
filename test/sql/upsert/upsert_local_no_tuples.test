@@ -34,3 +34,20 @@ insert into tbl(a, b) values(1, 2) on conflict do nothing;
 # Scan from the table, hitting the local storage
 statement ok
 select * from tbl where a = 1;
+
+statement ok
+commit;
+
+statement ok
+begin transaction;
+
+# Now create a LocalStorage with tuples before doing an append with 0 tuples
+statement ok
+insert into tbl (a, b) values (5,4);
+
+statement ok
+insert into tbl(a, b) values(1, 2) on conflict do nothing;
+
+# Scan from the table, hitting the local storage
+statement ok
+select * from tbl where a = 1;
