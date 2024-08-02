@@ -536,7 +536,6 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 	}
 }
 
-
 bool LineError::HandleErrors(StringValueResult &result) {
 	if (ignore_errors && is_error_in_line && !result.figure_out_new_line) {
 		result.RemoveLastLine();
