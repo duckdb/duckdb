@@ -244,6 +244,12 @@ CreateBearerTokenFunctions::CreateHuggingFaceSecretFromCredentialChain(ClientCon
 
 	// Step 4: Check the default path
 	auto token = TryReadTokenFile("~/.cache/huggingface/token", "", false);
-	return CreateSecretFunctionInternal(context, input, token);
+
+	if (!token.empty()) {
+		return CreateSecretFunctionInternal(context, input, token);
+	}
+
+	// Return nullptr to indicate failure to automatically create a secret
+	return nullptr;
 }
 } // namespace duckdb

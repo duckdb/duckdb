@@ -20,7 +20,9 @@ public:
 
 public:
 	PhysicalCreateSecret(CreateSecretInfo info_p, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_SECRET, {LogicalType::BOOLEAN}, estimated_cardinality),
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_SECRET,
+	                       {LogicalType::BOOLEAN, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
+	                       estimated_cardinality),
 	      info(std::move(info_p)) {
 	}
 
