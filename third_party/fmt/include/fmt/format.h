@@ -696,9 +696,10 @@ FMT_CONSTEXPR bool is_negative(T) {
 // Smallest of uint32_t, uint64_t, uint128_t that is large enough to
 // represent all values of T.
 template <typename T>
-using uint32_or_64_or_128_t = conditional_t<
-    std::numeric_limits<T>::digits <= 32, uint32_t,
-    conditional_t<std::numeric_limits<T>::digits <= 64, uint64_t, uint128_t>>;
+using uint32_or_64_or_128_t =
+    conditional_t<std::is_same<T, int128_t>::value || std::is_same<T, uint128_t>::value, uint128_t,
+                  conditional_t<std::numeric_limits<T>::digits <= 32, uint32_t,
+                                conditional_t<std::numeric_limits<T>::digits <= 64, uint64_t, uint128_t>>>;
 
 // Static data is placed in this class template for the header-only config.
 template <typename T = void> struct FMT_EXTERN_TEMPLATE_API basic_data {
@@ -748,7 +749,6 @@ inline int count_digits(uint64_t n) {
 }
 #endif
 
-#if FMT_USE_INT128
 inline int count_digits(uint128_t n) {
   int count = 1;
   for (;;) {
@@ -763,7 +763,6 @@ inline int count_digits(uint128_t n) {
     count += 4;
   }
 }
-#endif
 
 // Counts the number of digits in n. BITS = log2(radix).
 template <unsigned BITS, typename UInt> inline int count_digits(UInt n) {
@@ -835,7 +834,7 @@ inline Char* format_decimal(Char* buffer, UInt value, int num_digits,
     add_thousands_sep(buffer);
   }
   if (value < 10) {
-    *--buffer = static_cast<Char>('0' + value);
+    *--buffer = static_cast<Char>('0' + uint8_t(value));
     return end;
   }
   auto index = static_cast<unsigned>(value * 2);
@@ -1448,7 +1447,7 @@ template <typename Range> class basic_writer {
       if (is_negative(value)) {
         prefix[0] = '-';
         ++prefix_size;
-        abs_value = 0 - abs_value;
+        abs_value = -abs_value;
       } else if (specs.sign != sign::none && specs.sign != sign::minus) {
         prefix[0] = specs.sign == sign::plus ? '+' : ' ';
         ++prefix_size;
@@ -1644,10 +1643,8 @@ template <typename Range> class basic_writer {
   void write(unsigned long value) { write_decimal(value); }
   void write(unsigned long long value) { write_decimal(value); }
 
-#if FMT_USE_INT128
   void write(int128_t value) { write_decimal(value); }
   void write(uint128_t value) { write_decimal(value); }
-#endif
 
   template <typename T, typename Spec>
   void write_int(T value, const Spec& spec) {
@@ -1970,13 +1967,13 @@ template <typename ErrorHandler> class width_checker {
   explicit FMT_CONSTEXPR width_checker(ErrorHandler& eh) : handler_(eh) {}
 
   template <typename T, FMT_ENABLE_IF(is_integer<T>::value)>
-  FMT_CONSTEXPR unsigned long long operator()(T value) {
+  FMT_CONSTEXPR uint64_t operator()(T value) {
     if (is_negative(value)) handler_.on_error("negative width");
-    return static_cast<unsigned long long>(value);
+    return static_cast<uint64_t>(value);
   }
 
   template <typename T, FMT_ENABLE_IF(!is_integer<T>::value)>
-  FMT_CONSTEXPR unsigned long long operator()(T) {
+  FMT_CONSTEXPR uint64_t operator()(T) {
     handler_.on_error("width is not integer");
     return 0;
   }
@@ -1990,13 +1987,13 @@ template <typename ErrorHandler> class precision_checker {
   explicit FMT_CONSTEXPR precision_checker(ErrorHandler& eh) : handler_(eh) {}
 
   template <typename T, FMT_ENABLE_IF(is_integer<T>::value)>
-  FMT_CONSTEXPR unsigned long long operator()(T value) {
+  FMT_CONSTEXPR uint64_t operator()(T value) {
     if (is_negative(value)) handler_.on_error("negative precision");
-    return static_cast<unsigned long long>(value);
+    return static_cast<uint64_t>(value);
   }
 
   template <typename T, FMT_ENABLE_IF(!is_integer<T>::value)>
-  FMT_CONSTEXPR unsigned long long operator()(T) {
+  FMT_CONSTEXPR uint64_t operator()(T) {
     handler_.on_error("precision is not integer");
     return 0;
   }
@@ -2121,7 +2118,7 @@ template <typename Handler> class specs_checker : public Handler {
 template <template <typename> class Handler, typename FormatArg,
           typename ErrorHandler>
 FMT_CONSTEXPR int get_dynamic_spec(FormatArg arg, ErrorHandler eh) {
-  unsigned long long value = visit_format_arg(Handler<ErrorHandler>(eh), arg);
+  uint64_t value = visit_format_arg(Handler<ErrorHandler>(eh), arg);
   if (value > to_unsigned(max_value<int>())) eh.on_error("number is too big");
   return static_cast<int>(value);
 }
