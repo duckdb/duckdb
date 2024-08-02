@@ -397,8 +397,6 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	state.start_row_group = nullptr;
 
 	Verify();
-	// Leaving the RowGroupCollection empty makes it fail an assertion when scanning
-	D_ASSERT(total_rows.load() != 0);
 }
 
 void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {

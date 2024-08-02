@@ -13,7 +13,6 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/transaction/local_storage_fetch_result.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -79,7 +78,7 @@ public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
 	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
-	LocalTableStorageFetchResult GetOrCreateStorage(ClientContext &context, DataTable &table);
+	LocalTableStorage &GetOrCreateStorage(ClientContext &context, DataTable &table);
 	idx_t EstimatedSize();
 	bool IsEmpty();
 	void InsertEntry(DataTable &table, shared_ptr<LocalTableStorage> entry);
