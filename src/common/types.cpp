@@ -117,6 +117,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -203,6 +204,8 @@ constexpr const LogicalTypeId LogicalType::VARCHAR;
 
 constexpr const LogicalTypeId LogicalType::BLOB;
 constexpr const LogicalTypeId LogicalType::BIT;
+constexpr const LogicalTypeId LogicalType::VARINT;
+
 constexpr const LogicalTypeId LogicalType::INTERVAL;
 constexpr const LogicalTypeId LogicalType::ROW_TYPE;
 
@@ -236,14 +239,14 @@ const vector<LogicalType> LogicalType::Real() {
 
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
-	    LogicalType::BOOLEAN,      LogicalType::TINYINT,  LogicalType::SMALLINT,  LogicalType::INTEGER,
-	    LogicalType::BIGINT,       LogicalType::DATE,     LogicalType::TIMESTAMP, LogicalType::DOUBLE,
-	    LogicalType::FLOAT,        LogicalType::VARCHAR,  LogicalType::BLOB,      LogicalType::BIT,
-	    LogicalType::INTERVAL,     LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
-	    LogicalType::USMALLINT,    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::UHUGEINT,
-	    LogicalType::TIME,         LogicalTypeId::LIST,   LogicalTypeId::STRUCT,  LogicalType::TIME_TZ,
-	    LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,    LogicalTypeId::UNION,   LogicalType::UUID,
-	    LogicalTypeId::ARRAY};
+	    LogicalType::BOOLEAN,  LogicalType::TINYINT,      LogicalType::SMALLINT,  LogicalType::INTEGER,
+	    LogicalType::BIGINT,   LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::DOUBLE,
+	    LogicalType::FLOAT,    LogicalType::VARCHAR,      LogicalType::BLOB,      LogicalType::BIT,
+	    LogicalType::VARINT,   LogicalType::INTERVAL,     LogicalType::HUGEINT,   LogicalTypeId::DECIMAL,
+	    LogicalType::UTINYINT, LogicalType::USMALLINT,    LogicalType::UINTEGER,  LogicalType::UBIGINT,
+	    LogicalType::UHUGEINT, LogicalType::TIME,         LogicalTypeId::LIST,    LogicalTypeId::STRUCT,
+	    LogicalType::TIME_TZ,  LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,     LogicalTypeId::UNION,
+	    LogicalType::UUID,     LogicalTypeId::ARRAY};
 	return types;
 }
 
@@ -596,12 +599,24 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
-bool LogicalType::IsValid() const {
-	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
+bool LogicalType::IsTemporal() const {
+	switch (id_) {
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+		return true;
+	default:
+		return false;
+	}
 }
 
-bool LogicalType::Contains(LogicalTypeId type_id) const {
-	return Contains([&](const LogicalType &type) { return type.id() == type_id; });
+bool LogicalType::IsValid() const {
+	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
 }
 
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
@@ -752,6 +767,8 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 		return LogicalType::VARCHAR;
 	case LogicalTypeId::INTEGER_LITERAL:
 		return IntegerLiteral::GetType(type);
+	case LogicalTypeId::UNKNOWN:
+		throw ParameterNotResolvedException();
 	default:
 		return type;
 	}
@@ -767,7 +784,7 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		return OP::Operation(left, LogicalType::VARCHAR, result);
 	}
 	// NULL/string literals/unknown (parameter) types always take the other type
-	LogicalTypeId other_types[] = {LogicalTypeId::UNKNOWN, LogicalTypeId::SQLNULL, LogicalTypeId::STRING_LITERAL};
+	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN, LogicalTypeId::STRING_LITERAL};
 	for (auto &other_type : other_types) {
 		if (left.id() == other_type) {
 			result = LogicalType::NormalizeType(right);
@@ -1048,6 +1065,8 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 101;
 	case LogicalTypeId::UUID:
 		return 102;
+	case LogicalTypeId::VARINT:
+		return 103;
 	// nested types
 	case LogicalTypeId::STRUCT:
 		return 125;
@@ -1370,7 +1389,7 @@ bool StructType::IsUnnamed(const LogicalType &type) {
 	if (child_types.empty()) {
 		return false;
 	}
-	return child_types[0].first.empty();
+	return child_types[0].first.empty(); // NOLINT
 }
 
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {

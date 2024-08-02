@@ -9,4 +9,4 @@ PRAGMA enable_verification
 statement error
 CREATE TABLE t0();
 ----
-
+<REGEX>:Parser Error:.*at least one column.*

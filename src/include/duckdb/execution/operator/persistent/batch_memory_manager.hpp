@@ -52,7 +52,8 @@ public:
 			return;
 		}
 
-		memory_state->SetRemainingSize(context, size);
+		memory_state->SetRemainingSize(size);
+		memory_state->UpdateReservation(context);
 		auto next_reservation = memory_state->GetReservation();
 		if (available_memory >= next_reservation) {
 			// we tried to ask for more memory but were declined

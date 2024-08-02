@@ -10,16 +10,17 @@
 
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 
+class JoinOrderOptimizer;
 class FilterInfo;
 
 //! Represents a single relation and any metadata accompanying that relation
@@ -42,7 +43,8 @@ public:
 
 	idx_t NumRelations();
 
-	bool ExtractJoinRelations(LogicalOperator &input_op, vector<reference<LogicalOperator>> &filter_operators,
+	bool ExtractJoinRelations(JoinOrderOptimizer &optimizer, LogicalOperator &input_op,
+	                          vector<reference<LogicalOperator>> &filter_operators,
 	                          optional_ptr<LogicalOperator> parent = nullptr);
 
 	//! for each join filter in the logical plan op, extract the relations that are referred to on

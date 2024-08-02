@@ -1,0 +1,73 @@
+# name: test/sql/transactions/transaction_insert_delete_chunks.test
+# description: Test clean-up of chunks when mixing inserts and deletes
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers FROM range(1000);
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# con1 inserts rows 1000..3000
+statement ok con1
+INSERT INTO integers FROM range(1000, 3000);
+
+statement ok con1
+COMMIT
+
+# con2 deletes the rows 1000.3000
+query I con2
+DELETE FROM integers
+----
+1000
+
+statement ok con2
+COMMIT
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+----
+1000	2999	2000
+
+# now do the same but with bigger chunks
+statement ok
+INSERT INTO integers FROM range(10000);
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# con1 inserts rows 1000..3000
+statement ok con1
+INSERT INTO integers FROM range(10000, 30000);
+
+statement ok con1
+COMMIT
+
+# con2 deletes the rows 1000.3000
+query I con2
+DELETE FROM integers
+----
+12000
+
+statement ok con2
+COMMIT
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+----
+10000	29999	20000

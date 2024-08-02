@@ -48,3 +48,8 @@ endloop
 endloop
 
 endloop
+
+statement error
+select cast('9.99' as decimal(1,0));
+----
+Conversion Error: Could not convert string

@@ -1,12 +1,13 @@
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -212,7 +213,47 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	double new_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
 	case JoinType::INNER: {
-		new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+		bool set = false;
+		ExpressionType comparison_type = ExpressionType::COMPARE_EQUAL;
+		ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
+			if (expr.expression_class == ExpressionClass::BOUND_COMPARISON) {
+				comparison_type = expr.type;
+				set = true;
+				return;
+			}
+		});
+		if (!set) {
+			new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+			// no comparison is taking place, so the denominator is just the product of the left and right
+			return new_denom;
+		}
+		// extra_ratio helps represents how many tuples will be filtered out if the comparison evaluates to
+		// false. set to 1 to assume cross product.
+		double extra_ratio = 1;
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			// extra ration stays 1
+			extra_ratio = filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+			// start with the selectivity of equality
+			extra_ratio = filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+			// now assume every tuple will match 2.5 times (on average)
+			extra_ratio *= static_cast<double>(1) / CardinalityEstimator::DEFAULT_LT_GT_MULTIPLIER;
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			// basically assume cross product.
+			extra_ratio = 1;
+			break;
+		default:
+			break;
+		}
+		new_denom *= extra_ratio;
 		return new_denom;
 	}
 	case JoinType::SEMI:

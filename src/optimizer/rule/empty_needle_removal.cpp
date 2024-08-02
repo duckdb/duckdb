@@ -41,6 +41,9 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	}
 
 	D_ASSERT(prefix_value.type() == prefix_expr.return_type);
+	if (prefix_value.type().InternalType() != PhysicalType::VARCHAR) {
+		return nullptr;
+	}
 	auto &needle_string = StringValue::Get(prefix_value);
 
 	// PREFIX('xyz', '') is TRUE

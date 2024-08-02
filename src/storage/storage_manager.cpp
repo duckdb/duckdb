@@ -59,15 +59,12 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 	return context.db->config.options.object_cache_enable;
 }
 
-int64_t StorageManager::GetWALSize() {
-	if (!wal && !GetWAL()) {
+idx_t StorageManager::GetWALSize() {
+	auto wal_ptr = GetWAL();
+	if (!wal_ptr) {
 		return 0;
 	}
-	if (!wal->Initialized()) {
-		D_ASSERT(!FileSystem::Get(db).FileExists(GetWALPath()));
-		return 0;
-	}
-	return wal->GetWriter().GetFileSize();
+	return wal_ptr->GetWALSize();
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -78,11 +75,6 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	if (!wal) {
 		auto wal_path = GetWALPath();
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
-
-		// If the WAL file exists, then we initialize it.
-		if (FileSystem::Get(db).FileExists(wal_path)) {
-			wal->Initialize();
-		}
 	}
 	return wal.get();
 }
@@ -148,10 +140,6 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 
 void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size) {
 	if (InMemory()) {
-		// NOTE: this becomes DEFAULT_BLOCK_ALLOC_SIZE once we start supporting different block sizes.
-		if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != Storage::BLOCK_ALLOC_SIZE) {
-			throw InternalException("in-memory databases must have the compiled block allocation size");
-		}
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;
@@ -211,6 +199,12 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 
+		if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != block_manager->GetBlockAllocSize()) {
+			throw InvalidInputException(
+			    "block size parameter does not match the file's block size, got %llu, expected %llu",
+			    block_alloc_size.GetIndex(), block_manager->GetBlockAllocSize());
+		}
+
 		// load the db from storage
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
 		checkpoint_reader.LoadFromStorage();
@@ -231,68 +225,64 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 
 ///////////////////////////////////////////////////////////////////////////////
 
+enum class WALCommitState { IN_PROGRESS, FLUSHED, TRUNCATED };
+
 class SingleFileStorageCommitState : public StorageCommitState {
-	idx_t initial_wal_size = 0;
-	idx_t initial_written = 0;
-	optional_ptr<WriteAheadLog> log;
-	bool checkpoint;
-
 public:
-	SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint);
-	~SingleFileStorageCommitState() override {
-		// If log is non-null, then commit threw an exception before flushing.
-		if (log) {
-			auto &wal = *log.get();
-			wal.skip_writing = false;
-			if (wal.GetTotalWritten() > initial_written) {
-				// remove any entries written into the WAL by truncating it
-				wal.Truncate(NumericCast<int64_t>(initial_wal_size));
-			}
-		}
-	}
+	SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &log);
+	~SingleFileStorageCommitState() override;
 
+	//! Revert the commit
+	void RevertCommit() override;
 	// Make the commit persistent
 	void FlushCommit() override;
+
+private:
+	idx_t initial_wal_size = 0;
+	idx_t initial_written = 0;
+	WriteAheadLog &wal;
+	WALCommitState state;
 };
 
-SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint)
-    : checkpoint(checkpoint) {
+SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
+    : wal(wal), state(WALCommitState::IN_PROGRESS) {
+	auto initial_size = storage.GetWALSize();
+	initial_written = wal.GetTotalWritten();
+	initial_wal_size = initial_size;
+}
 
-	log = storage_manager.GetWAL();
-	if (!log) {
+SingleFileStorageCommitState::~SingleFileStorageCommitState() {
+	if (state != WALCommitState::IN_PROGRESS) {
 		return;
 	}
-
-	auto initial_size = storage_manager.GetWALSize();
-	initial_written = log->GetTotalWritten();
-	initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
-
-	if (checkpoint) {
-		// True, if we are checkpointing after the current commit.
-		// If true, we don't need to write to the WAL, saving unnecessary writes to disk.
-		log->skip_writing = true;
+	try {
+		// truncate the WAL in case of a destructor
+		RevertCommit();
+	} catch (...) { // NOLINT
 	}
 }
 
-// Make the commit persistent
+void SingleFileStorageCommitState::RevertCommit() {
+	if (state != WALCommitState::IN_PROGRESS) {
+		return;
+	}
+	if (wal.GetTotalWritten() > initial_written) {
+		// remove any entries written into the WAL by truncating it
+		wal.Truncate(initial_wal_size);
+	}
+	state = WALCommitState::TRUNCATED;
+}
+
 void SingleFileStorageCommitState::FlushCommit() {
-	if (log) {
-		// flush the WAL if any changes were made
-		if (log->GetTotalWritten() > initial_written) {
-			(void)checkpoint;
-			D_ASSERT(!checkpoint);
-			D_ASSERT(!log->skip_writing);
-			log->Flush();
-		}
-		log->skip_writing = false;
+	if (state != WALCommitState::IN_PROGRESS) {
+		return;
 	}
-	// Null so that the destructor will not truncate the log.
-	log = nullptr;
+	wal.Flush();
+	state = WALCommitState::FLUSHED;
 }
 
-unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(Transaction &transaction,
-                                                                               bool checkpoint) {
-	return make_uniq<SingleFileStorageCommitState>(*this, checkpoint);
+unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {
+	return make_uniq<SingleFileStorageCommitState>(*this, wal);
 }
 
 bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id) {
@@ -307,7 +297,7 @@ void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
 	}
 	auto &config = DBConfig::Get(db);
-	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::FORCE_CHECKPOINT) {
+	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
 			SingleFileCheckpointWriter checkpointer(db, *block_manager, options.type);
@@ -331,7 +321,7 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 	DatabaseSize ds;
 	if (!InMemory()) {
 		ds.total_blocks = block_manager->TotalBlocks();
-		ds.block_size = Storage::BLOCK_ALLOC_SIZE;
+		ds.block_size = block_manager->GetBlockAllocSize();
 		ds.free_blocks = block_manager->FreeBlocks();
 		ds.used_blocks = ds.total_blocks - ds.free_blocks;
 		ds.bytes = (ds.total_blocks * ds.block_size);

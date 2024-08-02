@@ -122,7 +122,7 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	info.schema = schema_obj.name;
 	if (!info.temporary) {
 		auto &properties = GetStatementProperties();
-		properties.modified_databases.insert(schema_obj.catalog.GetName());
+		properties.RegisterDBModify(schema_obj.catalog, context);
 	}
 	return schema_obj;
 }
@@ -172,60 +172,70 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = info.Cast<CreateMacroInfo>();
-	auto &scalar_function = base.function->Cast<ScalarMacroFunction>();
 
-	if (scalar_function.expression->HasParameter()) {
-		throw BinderException("Parameter expressions within macro's are not supported!");
-	}
-
-	// create macro binding in order to bind the function
-	vector<LogicalType> dummy_types;
-	vector<string> dummy_names;
-	// positional parameters
-	for (auto &param_expr : base.function->parameters) {
-		auto param = param_expr->Cast<ColumnRefExpression>();
-		if (param.IsQualified()) {
-			throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
-		}
-		dummy_types.emplace_back(LogicalType::SQLNULL);
-		dummy_names.push_back(param.GetColumnName());
-	}
-	// default parameters
-	for (auto &entry : base.function->default_parameters) {
-		auto &val = entry.second->Cast<ConstantExpression>();
-		dummy_types.push_back(val.value.type());
-		dummy_names.push_back(entry.first);
-	}
-	auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
-	macro_binding = this_macro_binding.get();
-
-	// create a copy of the expression because we do not want to alter the original
-	auto expression = scalar_function.expression->Copy();
-	ExpressionBinder::QualifyColumnNames(*this, expression);
-
-	// bind it to verify the function was defined correctly
-	ErrorData error;
-	BoundSelectNode sel_node;
-	BoundGroupInformation group_info;
-	SelectBinder binder(*this, context, sel_node, group_info);
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, info.catalog);
 	auto &db_config = DBConfig::GetConfig(context);
-	auto should_create_dependencies = db_config.options.enable_macro_dependencies;
+	// try to bind each of the included functions
+	unordered_set<idx_t> positional_parameters;
+	for (auto &function : base.macros) {
+		auto &scalar_function = function->Cast<ScalarMacroFunction>();
+		if (scalar_function.expression->HasParameter()) {
+			throw BinderException("Parameter expressions within macro's are not supported!");
+		}
+		vector<LogicalType> dummy_types;
+		vector<string> dummy_names;
+		auto parameter_count = function->parameters.size();
+		if (positional_parameters.find(parameter_count) != positional_parameters.end()) {
+			throw BinderException(
+			    "Ambiguity in macro overloads - macro \"%s\" has multiple definitions with %llu parameters", base.name,
+			    parameter_count);
+		}
+		positional_parameters.insert(parameter_count);
 
-	if (should_create_dependencies) {
-		binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-			if (&catalog != &entry.ParentCatalog()) {
-				// Don't register any cross-catalog dependencies
-				return;
+		// positional parameters
+		for (auto &param_expr : function->parameters) {
+			auto param = param_expr->Cast<ColumnRefExpression>();
+			if (param.IsQualified()) {
+				throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
 			}
-			// Register any catalog entry required to bind the macro function
-			dependencies.AddDependency(entry);
-		});
-	}
-	error = binder.Bind(expression, 0, false);
-	if (error.HasError()) {
-		error.Throw();
+			dummy_types.emplace_back(LogicalType::SQLNULL);
+			dummy_names.push_back(param.GetColumnName());
+		}
+		// default parameters
+		for (auto &entry : function->default_parameters) {
+			auto &val = entry.second->Cast<ConstantExpression>();
+			dummy_types.push_back(val.value.type());
+			dummy_names.push_back(entry.first);
+		}
+		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
+		macro_binding = this_macro_binding.get();
+
+		// create a copy of the expression because we do not want to alter the original
+		auto expression = scalar_function.expression->Copy();
+		ExpressionBinder::QualifyColumnNames(*this, expression);
+
+		// bind it to verify the function was defined correctly
+		ErrorData error;
+		BoundSelectNode sel_node;
+		BoundGroupInformation group_info;
+		SelectBinder binder(*this, context, sel_node, group_info);
+		auto should_create_dependencies = db_config.options.enable_macro_dependencies;
+
+		if (should_create_dependencies) {
+			binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+				if (&catalog != &entry.ParentCatalog()) {
+					// Don't register any cross-catalog dependencies
+					return;
+				}
+				// Register any catalog entry required to bind the macro function
+				dependencies.AddDependency(entry);
+			});
+		}
+		error = binder.Bind(expression, 0, false);
+		if (error.HasError()) {
+			error.Throw();
+		}
 	}
 
 	return BindCreateSchema(info);
@@ -560,7 +570,8 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	}
 
 	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
-	for (auto &column_id : get.column_ids) {
+	auto &column_ids = get.GetColumnIds();
+	for (auto &column_id : column_ids) {
 		if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 			throw BinderException("Cannot create an index on the rowid!");
 		}
@@ -568,10 +579,10 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	}
 	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
 	create_index_info->names = get.names;
-	create_index_info->column_ids = get.column_ids;
+	create_index_info->column_ids = column_ids;
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
-	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	// the logical CREATE INDEX also needs all fields to scan the referenced table
 	auto result = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table);
@@ -590,7 +601,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
 		auto catalog = BindCatalog(base.catalog);
-		properties.modified_databases.insert(catalog);
+		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
 	}
@@ -639,7 +650,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
-		properties.modified_databases.insert(table.catalog.GetName());
+		properties.RegisterDBModify(table.catalog, context);
 
 		// create a plan over the bound table
 		auto plan = CreatePlan(*bound_table);

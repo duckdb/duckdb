@@ -107,8 +107,9 @@ DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 	header.block_count = source.Read<uint64_t>();
 
 	header.block_alloc_size = source.Read<idx_t>();
+
+	// backwards compatibility
 	if (!header.block_alloc_size) {
-		// backwards compatibility
 		header.block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	}
 
@@ -142,7 +143,7 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size), db(db), path(path_p),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                    Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
+                    Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
 }
 
@@ -264,7 +265,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	// compute the checksum
 	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
-	uint64_t computed_checksum = Checksum(block.buffer, block.size);
+	auto computed_checksum = Checksum(block.buffer, block.size);
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
@@ -293,14 +294,6 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		                            "size: %llu, file block size: %llu",
 		                            GetBlockAllocSize(), header.block_alloc_size);
 	}
-
-	// NOTE: remove this once we start supporting different block sizes.
-	if (Storage::BLOCK_ALLOC_SIZE != header.block_alloc_size) {
-		throw NotImplementedException("cannot initialize a database with a different block size than the default block "
-		                              "size: default block size: %llu, file block size: %llu",
-		                              Storage::BLOCK_ALLOC_SIZE, header.block_alloc_size);
-	}
-
 	SetBlockAllocSize(header.block_alloc_size);
 }
 
@@ -425,7 +418,7 @@ bool SingleFileBlockManager::IsRemote() {
 }
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
-	D_ASSERT(source_buffer.AllocSize() == Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
 	return make_uniq<Block>(source_buffer, block_id);
 }
 
@@ -434,14 +427,14 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id);
+		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize());
 	}
 	result->Initialize(options.debug_initialize);
 	return result;
 }
 
 idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) {
-	return BLOCK_START + NumericCast<idx_t>(block_id) * Storage::BLOCK_ALLOC_SIZE;
+	return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
 }
 
 void SingleFileBlockManager::Read(Block &block) {
@@ -462,22 +455,22 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 	auto ptr = buffer.InternalBuffer();
 	for (idx_t i = 0; i < block_count; i++) {
 		// compute the checksum
-		auto start_ptr = ptr + i * Storage::BLOCK_ALLOC_SIZE;
+		auto start_ptr = ptr + i * GetBlockAllocSize();
 		auto stored_checksum = Load<uint64_t>(start_ptr);
-		uint64_t computed_checksum = Checksum(start_ptr + Storage::BLOCK_HEADER_SIZE, Storage::BLOCK_SIZE);
+		uint64_t computed_checksum = Checksum(start_ptr + Storage::DEFAULT_BLOCK_HEADER_SIZE, GetBlockSize());
 		// verify the checksum
 		if (stored_checksum != computed_checksum) {
 			throw IOException(
 			    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
 			    "at location %llu",
-			    computed_checksum, stored_checksum, location + i * Storage::BLOCK_ALLOC_SIZE);
+			    computed_checksum, stored_checksum, location + i * GetBlockAllocSize());
 		}
 	}
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * Storage::BLOCK_ALLOC_SIZE);
+	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
 }
 
 void SingleFileBlockManager::Truncate() {
@@ -499,15 +492,16 @@ void SingleFileBlockManager::Truncate() {
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
-	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * Storage::BLOCK_ALLOC_SIZE));
+	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	vector<MetadataHandle> free_list_blocks;
+	auto &metadata_manager = GetMetadataManager();
 
 	// reserve all blocks that we are going to write the free list to
 	// since these blocks are no longer free we cannot just include them in the free list!
-	auto block_size = MetadataManager::METADATA_BLOCK_SIZE - sizeof(idx_t);
+	auto block_size = metadata_manager.GetMetadataBlockSize() - sizeof(idx_t);
 	idx_t allocated_size = 0;
 	while (true) {
 		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
@@ -630,8 +624,8 @@ void SingleFileBlockManager::TrimFreeBlocks() {
 			// We are now one too far.
 			--itr;
 			// Trim the range.
-			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * Storage::BLOCK_ALLOC_SIZE),
-			             NumericCast<idx_t>(last + 1 - first) * Storage::BLOCK_ALLOC_SIZE);
+			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * GetBlockAllocSize()),
+			             NumericCast<idx_t>(last + 1 - first) * GetBlockAllocSize());
 		}
 	}
 	newly_freed_list.clear();

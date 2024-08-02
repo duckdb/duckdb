@@ -137,7 +137,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		if (error.HasError()) {
 			return false;
 		}
-		start_row += chunk.size();
+		start_row += UnsafeNumericCast<row_t>(chunk.size());
 		return true;
 	});
 	return error;
@@ -180,7 +180,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 				return false;
 			} // LCOV_EXCL_STOP
 
-			current_row += chunk.size();
+			current_row += UnsafeNumericCast<row_t>(chunk.size());
 			if (current_row >= append_state.current_row) {
 				// finished deleting all rows from the index: abort now
 				return false;
@@ -436,7 +436,13 @@ void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<Physic
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
+	if (storage.is_dropped) {
+		return;
+	}
 	if (storage.row_groups->GetTotalRows() <= storage.deleted_rows) {
+		// all rows that we added were deleted
+		// rollback any partial blocks that are still outstanding
+		storage.Rollback();
 		return;
 	}
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
@@ -472,7 +478,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	table.VacuumIndexes();
 }
 
-void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction) {
+void LocalStorage::Commit() {
 	// commit local storage
 	// iterate over all entries in the table storage map and commit them
 	// after this, the local storage is no longer required and can be cleared
@@ -506,6 +512,14 @@ idx_t LocalStorage::AddedRows(DataTable &table) {
 		return 0;
 	}
 	return storage->row_groups->GetTotalRows() - storage->deleted_rows;
+}
+
+void LocalStorage::DropTable(DataTable &table) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		return;
+	}
+	storage->is_dropped = true;
 }
 
 void LocalStorage::MoveStorage(DataTable &old_dt, DataTable &new_dt) {

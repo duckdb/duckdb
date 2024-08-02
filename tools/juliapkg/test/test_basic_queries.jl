@@ -1,5 +1,7 @@
 # test_basic_queries.jl
 
+using Tables: partitions
+
 @testset "Test DBInterface.execute" begin
     con = DBInterface.connect(DuckDB.DB)
 
@@ -28,7 +30,7 @@ end
         """
 SELECT 42::TINYINT a, 42::INT16 b, 42::INT32 c, 42::INT64 d, 42::UINT8 e, 42::UINT16 f, 42::UINT32 g, 42::UINT64 h
 UNION ALL
-SELECT NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+SELECT NULL, NULL, NULL, NULL, NULL, NULL, 43, NULL
 """
     )
 
@@ -41,7 +43,7 @@ SELECT NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
     @test isequal(df.d, [42, missing])
     @test isequal(df.e, [42, missing])
     @test isequal(df.f, [42, missing])
-    @test isequal(df.g, [42, missing])
+    @test isequal(df.g::Vector{Int}, [42, 43])
     @test isequal(df.h, [42, missing])
 
     DBInterface.close!(con)
@@ -68,6 +70,11 @@ SELECT '🦆🍞🦆'
     df = DataFrame(results)
     @test size(df, 1) == 5
     @test isequal(df.s, ["hello world", missing, "this is a long string", "obligatory mühleisen", "🦆🍞🦆"])
+
+    for s in ["foo", "🦆DB", SubString("foobar", 1, 3), SubString("🦆ling", 1, 6)]
+        results = DBInterface.execute(con, "SELECT length(?) as len", [s])
+        @test only(results).len == 3
+    end
 
     DBInterface.close!(con)
 end
@@ -132,5 +139,15 @@ end
 
     @test DataFrame(DuckDB.query(db, "select 'a'; select 2;"))[1, 1] == "a"
 
+    DBInterface.close!(con)
+end
+
+@testset "Test chunked response" begin
+    con = DBInterface.connect(DuckDB.DB)
+    DBInterface.execute(con, "CREATE TABLE chunked_table AS SELECT * FROM range(2049)")
+    result = DBInterface.execute(con, "SELECT * FROM chunked_table ;")
+    chunks_it = partitions(result)
+    chunks = collect(chunks_it)
+    @test length(chunks) == 2
     DBInterface.close!(con)
 end

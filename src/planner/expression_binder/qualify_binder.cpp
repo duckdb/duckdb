@@ -30,8 +30,8 @@ BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, 
 		return alias_result;
 	}
 
-	return BindResult(
-	    StringUtil::Format("Referenced column %s not found in FROM clause and can't find in alias map.", expr_string));
+	return BindResult(BinderException(
+	    *expr_ptr, "Referenced column %s not found in FROM clause and can't find in alias map.", expr_string));
 }
 
 } // namespace duckdb

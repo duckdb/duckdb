@@ -229,11 +229,36 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sort(const py::args &args) {
 	return make_uniq<DuckDBPyRelation>(rel->Order(std::move(order_nodes)));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, const string &groups) {
-	if (!groups.empty()) {
-		return make_uniq<DuckDBPyRelation>(rel->Aggregate(expr, groups));
+vector<unique_ptr<ParsedExpression>> GetExpressions(ClientContext &context, const py::object &expr) {
+	if (py::is_list_like(expr)) {
+		vector<unique_ptr<ParsedExpression>> expressions;
+		auto aggregate_list = py::list(expr);
+		for (auto &item : aggregate_list) {
+			shared_ptr<DuckDBPyExpression> py_expr;
+			if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(item, py_expr)) {
+				throw InvalidInputException("Please provide arguments of type Expression!");
+			}
+			auto expr = py_expr->GetExpression().Copy();
+			expressions.push_back(std::move(expr));
+		}
+		return expressions;
+	} else if (py::isinstance<py::str>(expr)) {
+		auto aggregate_list = std::string(py::str(expr));
+		return Parser::ParseExpressionList(aggregate_list, context.GetParserOptions());
+	} else {
+		string actual_type = py::str(expr.get_type());
+		throw InvalidInputException("Please provide either a string or list of Expression objects, not %s",
+		                            actual_type);
 	}
-	return make_uniq<DuckDBPyRelation>(rel->Aggregate(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const py::object &expr, const string &groups) {
+	AssertRelation();
+	auto expressions = GetExpressions(*rel->context.GetContext(), expr);
+	if (!groups.empty()) {
+		return make_uniq<DuckDBPyRelation>(rel->Aggregate(std::move(expressions), groups));
+	}
+	return make_uniq<DuckDBPyRelation>(rel->Aggregate(std::move(expressions)));
 }
 
 void DuckDBPyRelation::AssertResult() const {
@@ -393,7 +418,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &f
 	//! Construct Aggregation Expression
 	auto expr = GenerateExpressionList(function_name, aggregated_columns, groups, function_parameter, false,
 	                                   projected_columns, "");
-	return Aggregate(expr, groups);
+	return Aggregate(py::str(expr), groups);
 }
 
 unique_ptr<DuckDBPyRelation>
@@ -1280,9 +1305,6 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 // should this return a rel with the new view?
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_name, bool replace) {
 	rel->CreateView(view_name, replace);
-	// We need to pass ownership of any Python Object Dependencies to the connection
-	auto all_dependencies = rel->GetAllDependencies();
-	rel->context.GetContext()->external_dependencies[view_name] = std::move(all_dependencies);
 	return make_uniq<DuckDBPyRelation>(rel);
 }
 
@@ -1300,7 +1322,6 @@ static bool IsDescribeStatement(SQLStatement &statement) {
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
 	auto view_relation = CreateView(view_name);
 	auto all_dependencies = rel->GetAllDependencies();
-	rel->context.GetContext()->external_dependencies[view_name] = std::move(all_dependencies);
 
 	Parser parser(rel->context.GetContext()->GetParserOptions());
 	parser.ParseQuery(sql_query);
@@ -1310,8 +1331,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	auto &statement = *parser.statements[0];
 	if (statement.type == StatementType::SELECT_STATEMENT) {
 		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
-		auto query_relation =
-		    make_shared_ptr<QueryRelation>(rel->context.GetContext(), std::move(select_statement), "query_relation");
+		auto query_relation = make_shared_ptr<QueryRelation>(rel->context.GetContext(), std::move(select_statement),
+		                                                     sql_query, "query_relation");
 		return make_uniq<DuckDBPyRelation>(std::move(query_relation));
 	} else if (IsDescribeStatement(statement)) {
 		auto query = PragmaShow(view_name);

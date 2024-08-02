@@ -17,7 +17,7 @@ namespace duckdb {
 template <class T>
 class optional_ptr { // NOLINT: mimic std casing
 public:
-	optional_ptr() : ptr(nullptr) {
+	optional_ptr() noexcept : ptr(nullptr) {
 	}
 	optional_ptr(T *ptr_p) : ptr(ptr_p) { // NOLINT: allow implicit creation from pointer
 	}

@@ -8,9 +8,12 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -22,12 +25,10 @@
 #include "duckdb/planner/expression_binder/having_binder.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/expression_binder/qualify_binder.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
@@ -314,7 +315,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 				}
 			}
 			for (auto &expr : distinct.target_distincts) {
-				ExpressionBinder::PushCollation(context, expr, expr->return_type, true);
+				ExpressionBinder::PushCollation(context, expr, expr->return_type);
 			}
 			break;
 		}
@@ -361,6 +362,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 
 unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	D_ASSERT(statement.from_table);
+
 	// first bind the FROM table statement
 	auto from = std::move(statement.from_table);
 	auto from_table = Bind(*from);
@@ -480,7 +482,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			bool contains_subquery = bound_expr_ref.HasSubquery();
 
 			// push a potential collation, if necessary
-			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type, true);
+			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type);
 			if (!contains_subquery && requires_collation) {
 				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)

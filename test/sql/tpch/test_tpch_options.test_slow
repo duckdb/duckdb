@@ -107,7 +107,7 @@ select n_nationkey, n_name, n_regionkey from nation
 24	UNITED STATES	1
 
 
-# Go over the number of children
+# Loop through the number of children
 loop i 50 110
 
 statement ok

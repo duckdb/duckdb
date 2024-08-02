@@ -68,6 +68,14 @@ void BaseCSVData::Finalize() {
 		                options.dialect_options.state_machine_options.escape.GetValue(), "QUOTE", "ESCAPE");
 	}
 
+	// delimiter and quote must not be substrings of each other
+	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
+	                options.dialect_options.state_machine_options.quote.GetValue(), "COMMENT", "QUOTE");
+
+	// delimiter and quote must not be substrings of each other
+	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
+	                options.dialect_options.state_machine_options.delimiter.GetValue(), "COMMENT", "DELIMITER");
+
 	// null string and delimiter must not be substrings of each other
 	for (auto &null_str : options.null_str) {
 		if (!null_str.empty()) {
@@ -172,6 +180,21 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	}
 	bind_data->Finalize();
 
+	switch (bind_data->options.compression) {
+	case FileCompressionType::GZIP:
+		if (!StringUtil::EndsWith(input.file_extension, ".gz")) {
+			input.file_extension += ".gz";
+		}
+		break;
+	case FileCompressionType::ZSTD:
+		if (!StringUtil::EndsWith(input.file_extension, ".zst")) {
+			input.file_extension += ".zst";
+		}
+		break;
+	default:
+		break;
+	}
+
 	auto expressions = CreateCastExpressions(*bind_data, context, names, sql_types);
 	bind_data->cast_expressions = std::move(expressions);
 
@@ -223,14 +246,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	options.file_path = bind_data->files[0];
 	options.name_list = expected_names;
 	options.sql_type_list = expected_types;
+	options.columns_set = true;
 	for (idx_t i = 0; i < expected_types.size(); i++) {
 		options.sql_types_per_column[expected_names[i]] = i;
 	}
 
 	if (options.auto_detect) {
 		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, bind_data->files[0], 0);
-		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context),
-		                   {&expected_types, &expected_names});
+		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context));
 		sniffer.SniffCSV();
 	}
 	bind_data->FinalizeRead(context);

@@ -5,6 +5,7 @@ add_library_unity(
   flatten.cpp
   list_aggregates.cpp
   list_filter.cpp
+  list_has_any.cpp
   list_sort.cpp
   list_distance.cpp
   list_cosine_similarity.cpp

@@ -516,47 +516,48 @@ extern int base_yydebug;
     VALUE_P = 717,                 /* VALUE_P  */
     VALUES = 718,                  /* VALUES  */
     VARCHAR = 719,                 /* VARCHAR  */
-    VARIADIC = 720,                /* VARIADIC  */
-    VARYING = 721,                 /* VARYING  */
-    VERBOSE = 722,                 /* VERBOSE  */
-    VERSION_P = 723,               /* VERSION_P  */
-    VIEW = 724,                    /* VIEW  */
-    VIEWS = 725,                   /* VIEWS  */
-    VIRTUAL = 726,                 /* VIRTUAL  */
-    VOLATILE = 727,                /* VOLATILE  */
-    WEEK_P = 728,                  /* WEEK_P  */
-    WEEKS_P = 729,                 /* WEEKS_P  */
-    WHEN = 730,                    /* WHEN  */
-    WHERE = 731,                   /* WHERE  */
-    WHITESPACE_P = 732,            /* WHITESPACE_P  */
-    WINDOW = 733,                  /* WINDOW  */
-    WITH = 734,                    /* WITH  */
-    WITHIN = 735,                  /* WITHIN  */
-    WITHOUT = 736,                 /* WITHOUT  */
-    WORK = 737,                    /* WORK  */
-    WRAPPER = 738,                 /* WRAPPER  */
-    WRITE_P = 739,                 /* WRITE_P  */
-    XML_P = 740,                   /* XML_P  */
-    XMLATTRIBUTES = 741,           /* XMLATTRIBUTES  */
-    XMLCONCAT = 742,               /* XMLCONCAT  */
-    XMLELEMENT = 743,              /* XMLELEMENT  */
-    XMLEXISTS = 744,               /* XMLEXISTS  */
-    XMLFOREST = 745,               /* XMLFOREST  */
-    XMLNAMESPACES = 746,           /* XMLNAMESPACES  */
-    XMLPARSE = 747,                /* XMLPARSE  */
-    XMLPI = 748,                   /* XMLPI  */
-    XMLROOT = 749,                 /* XMLROOT  */
-    XMLSERIALIZE = 750,            /* XMLSERIALIZE  */
-    XMLTABLE = 751,                /* XMLTABLE  */
-    YEAR_P = 752,                  /* YEAR_P  */
-    YEARS_P = 753,                 /* YEARS_P  */
-    YES_P = 754,                   /* YES_P  */
-    ZONE = 755,                    /* ZONE  */
-    NOT_LA = 756,                  /* NOT_LA  */
-    NULLS_LA = 757,                /* NULLS_LA  */
-    WITH_LA = 758,                 /* WITH_LA  */
-    POSTFIXOP = 759,               /* POSTFIXOP  */
-    UMINUS = 760                   /* UMINUS  */
+    VARIABLE_P = 720,              /* VARIABLE_P  */
+    VARIADIC = 721,                /* VARIADIC  */
+    VARYING = 722,                 /* VARYING  */
+    VERBOSE = 723,                 /* VERBOSE  */
+    VERSION_P = 724,               /* VERSION_P  */
+    VIEW = 725,                    /* VIEW  */
+    VIEWS = 726,                   /* VIEWS  */
+    VIRTUAL = 727,                 /* VIRTUAL  */
+    VOLATILE = 728,                /* VOLATILE  */
+    WEEK_P = 729,                  /* WEEK_P  */
+    WEEKS_P = 730,                 /* WEEKS_P  */
+    WHEN = 731,                    /* WHEN  */
+    WHERE = 732,                   /* WHERE  */
+    WHITESPACE_P = 733,            /* WHITESPACE_P  */
+    WINDOW = 734,                  /* WINDOW  */
+    WITH = 735,                    /* WITH  */
+    WITHIN = 736,                  /* WITHIN  */
+    WITHOUT = 737,                 /* WITHOUT  */
+    WORK = 738,                    /* WORK  */
+    WRAPPER = 739,                 /* WRAPPER  */
+    WRITE_P = 740,                 /* WRITE_P  */
+    XML_P = 741,                   /* XML_P  */
+    XMLATTRIBUTES = 742,           /* XMLATTRIBUTES  */
+    XMLCONCAT = 743,               /* XMLCONCAT  */
+    XMLELEMENT = 744,              /* XMLELEMENT  */
+    XMLEXISTS = 745,               /* XMLEXISTS  */
+    XMLFOREST = 746,               /* XMLFOREST  */
+    XMLNAMESPACES = 747,           /* XMLNAMESPACES  */
+    XMLPARSE = 748,                /* XMLPARSE  */
+    XMLPI = 749,                   /* XMLPI  */
+    XMLROOT = 750,                 /* XMLROOT  */
+    XMLSERIALIZE = 751,            /* XMLSERIALIZE  */
+    XMLTABLE = 752,                /* XMLTABLE  */
+    YEAR_P = 753,                  /* YEAR_P  */
+    YEARS_P = 754,                 /* YEARS_P  */
+    YES_P = 755,                   /* YES_P  */
+    ZONE = 756,                    /* ZONE  */
+    NOT_LA = 757,                  /* NOT_LA  */
+    NULLS_LA = 758,                /* NULLS_LA  */
+    WITH_LA = 759,                 /* WITH_LA  */
+    POSTFIXOP = 760,               /* POSTFIXOP  */
+    UMINUS = 761                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -616,7 +617,7 @@ union YYSTYPE
 	PGLoadInstallType loadinstalltype;
 	PGTransactionStmtType transactiontype;
 
-#line 620 "third_party/libpg_query/grammar/grammar_out.hpp"
+#line 621 "third_party/libpg_query/grammar/grammar_out.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

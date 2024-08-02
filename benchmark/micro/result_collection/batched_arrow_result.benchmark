@@ -1,0 +1,17 @@
+# name: benchmark/micro/result_collection/batched_arrow_result.benchmark
+# description: Show the performance of the Batched ArrowQueryResult
+# group: [result_collection]
+
+name batched_arrow_result
+group micro
+subgroup result_collection
+
+resultmode arrow 10000
+
+# By not disabling order preservation we make use of the batched collector
+load
+create table tbl (a varchar);
+insert into tbl select 'this is a long string' from range(300000000)
+
+run
+select * from tbl;

@@ -491,7 +491,7 @@ def test_jsonlines(shell):
     result = test.run()
     result.check_stdout('{"42":42,"43":43}')
 
-def test_nested_jsonlines(shell):
+def test_nested_jsonlines(shell, json_extension):
     test = (
         ShellTest(shell)
         .statement(".mode jsonlines")
@@ -612,7 +612,7 @@ def test_mode_html(shell):
         .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
     )
     result = test.run()
-    result.check_stdout('<TD>fourty-two</TD>')
+    result.check_stdout('<td>fourty-two</td>')
 
 # Original comment: FIXME sqlite3_column_blob
 def test_mode_insert(shell):

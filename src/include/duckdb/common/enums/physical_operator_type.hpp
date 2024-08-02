@@ -108,6 +108,7 @@ enum class PhysicalOperatorType : uint8_t {
 	VACUUM,
 	EXPORT,
 	SET,
+	SET_VARIABLE,
 	LOAD,
 	INOUT_FUNCTION,
 	RESULT_COLLECTOR,

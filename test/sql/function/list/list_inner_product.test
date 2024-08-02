@@ -1,6 +1,11 @@
 # name: test/sql/function/list/list_inner_product.test
 # group: [list]
 
+query I
+SELECT list_inner_product([], []);
+----
+0.0
+
 foreach type FLOAT DOUBLE
 
 query I

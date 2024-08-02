@@ -42,11 +42,11 @@ void RemoveQualificationRecursive(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
-string ScalarMacroFunction::ToSQL(const string &schema, const string &name) const {
+string ScalarMacroFunction::ToSQL() const {
 	// In case of nested macro's we need to fix it a bit
 	auto expression_copy = expression->Copy();
 	RemoveQualificationRecursive(expression_copy);
-	return MacroFunction::ToSQL(schema, name) + StringUtil::Format("(%s);", expression_copy->ToString());
+	return MacroFunction::ToSQL() + StringUtil::Format("(%s)", expression_copy->ToString());
 }
 
 } // namespace duckdb

@@ -48,19 +48,22 @@ else()
 endif()
 
 # Determine install paths
+# default to gnu standard installation directories (lib, bin, include)
+# https://cmake.org/cmake/help/latest/module/GNUInstallDirs.html
+include(GNUInstallDirs)
 set(INSTALL_LIB_DIR
-    lib
+    ${CMAKE_INSTALL_LIBDIR}
     CACHE PATH "Installation directory for libraries")
 set(INSTALL_BIN_DIR
-    bin
+    ${CMAKE_INSTALL_BINDIR}
     CACHE PATH "Installation directory for executables")
 set(INSTALL_INCLUDE_DIR
-    include
+    ${CMAKE_INSTALL_INCLUDEDIR}
     CACHE PATH "Installation directory for header files")
 if(WIN32 AND NOT CYGWIN)
   set(DEF_INSTALL_CMAKE_DIR cmake)
 else()
-  set(DEF_INSTALL_CMAKE_DIR lib/cmake/DuckDB)
+  set(DEF_INSTALL_CMAKE_DIR ${INSTALL_LIB_DIR}/cmake/DuckDB)
 endif()
 set(INSTALL_CMAKE_DIR
     ${DEF_INSTALL_CMAKE_DIR}
@@ -373,7 +376,6 @@ option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
-option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
@@ -568,7 +570,7 @@ if(NOT MSVC)
   endif()
 else()
   set(CMAKE_CXX_WINDOWS_FLAGS
-      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8 /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR")
+      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()
@@ -1046,6 +1048,14 @@ function(duckdb_extension_load NAME)
     return()
   endif()
 
+  # Running this function in whitelist mode will only build the extensions in the whitelist
+  if (${DUCKDB_EXTENSION_LOAD_WHITELIST_SET})
+    list (FIND DUCKDB_EXTENSION_LOAD_WHITELIST ${EXTENSION_NAME_LOWERCASE} _index)
+    if (${_index} EQUAL -1)
+      return()
+    endif()
+  endif()
+
   list (FIND SKIP_EXTENSIONS ${EXTENSION_NAME_LOWERCASE} _index)
   if (${_index} GREATER -1)
     return()
@@ -1135,6 +1145,15 @@ foreach(EXT IN LISTS BUILD_EXTENSIONS)
     duckdb_extension_load(${EXT})
   endif()
 endforeach()
+
+if (NOT "${CORE_EXTENSIONS}" STREQUAL "")
+    SET(DUCKDB_EXTENSION_LOAD_WHITELIST ${CORE_EXTENSIONS})
+    SET(DUCKDB_EXTENSION_LOAD_WHITELIST_SET 1)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/.github/config/out_of_tree_extensions.cmake)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/.github/config/in_tree_extensions.cmake)
+    SET(DUCKDB_EXTENSION_LOAD_WHITELIST "")
+    SET(DUCKDB_EXTENSION_LOAD_WHITELIST_SET 0)
+endif()
 
 # Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
 foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)

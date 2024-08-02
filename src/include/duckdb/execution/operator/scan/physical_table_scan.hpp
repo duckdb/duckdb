@@ -42,14 +42,16 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
-	//! Currently stores any filters applied to file names (as strings)
+	//! Currently stores info related to filters pushed down into MultiFileLists
 	ExtraOperatorInfo extra_info;
 	//! Parameters
 	vector<Value> parameters;
+	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
+	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 
 public:
 	string GetName() const override;
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	bool Equals(const PhysicalOperator &other) const override;
 

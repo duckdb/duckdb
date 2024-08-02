@@ -21,7 +21,7 @@ struct ListValueAssign {
 struct ListValueStringAssign {
 	template <class T>
 	static T Assign(const T &input, Vector &result) {
-		return StringVector::AddString(result, input);
+		return StringVector::AddStringOrBlob(result, input);
 	}
 };
 
@@ -68,20 +68,19 @@ static void TemplatedListValueFunctionFallback(DataChunk &args, Vector &result) 
 static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-	}
 	if (args.ColumnCount() == 0) {
 		// no columns - early out - result is a constant empty list
 		auto result_data = FlatVector::GetData<list_entry_t>(result);
 		result_data[0].length = 0;
 		result_data[0].offset = 0;
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
 	}
-	auto &result_type = result.GetType();
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
+		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+		}
+	}
+	auto &result_type = ListVector::GetEntry(result).GetType();
 	switch (result_type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

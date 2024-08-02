@@ -106,7 +106,11 @@ def run_test(test_case):
             exit(1)
         ps_proc = subprocess.Popen(f'ps -o rss= -p {pid}'.split(' '), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         res = ps_proc.stdout.read().decode('utf8').strip()
-        rss.append(int(res))
+        memory_usage_in_bytes = int(res) * 1024
+        if verbose:
+            print(f"{i / measurements_per_second}: {sizeof_fmt(memory_usage_in_bytes)}")
+
+        rss.append(memory_usage_in_bytes)
         if not has_memory_leak(rss):
             leak = False
             break

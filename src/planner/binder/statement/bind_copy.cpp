@@ -18,6 +18,7 @@
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 #include <algorithm>
 
@@ -27,7 +28,7 @@ static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 }
 
-BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
+BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
@@ -126,21 +127,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
 		} else {
-			if (loption == "compression") {
-				if (option.second.empty()) {
-					// This can't be empty
-					throw BinderException("COMPRESSION option, in the file scanner, can't be empty. It should be set "
-					                      "to AUTO, UNCOMPRESSED, GZIP, SNAPPY or ZSTD. Depending on the file format.");
-				}
-				auto parameter = StringUtil::Lower(option.second[0].ToString());
-				if (parameter == "gzip" && !StringUtil::EndsWith(bind_input.file_extension, ".gz")) {
-					// We just add .gz
-					bind_input.file_extension += ".gz";
-				} else if (parameter == "zstd" && !StringUtil::EndsWith(bind_input.file_extension, ".zst")) {
-					// We just add .zst
-					bind_input.file_extension += ".zst";
-				}
-			}
 			stmt.info->options[option.first] = option.second;
 		}
 	}
@@ -171,6 +157,40 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		bool is_stdout = stmt.info->file_path == "/dev/stdout";
 		if (!user_set_use_tmp_file) {
 			use_tmp_file = is_file_and_exists && !per_thread_output && partition_cols.empty() && !is_stdout;
+		}
+	}
+
+	// Allow the copy function to intercept the select list and types and push a new projection on top of the plan
+	if (copy_function.function.copy_to_select) {
+		auto bindings = select_node.plan->GetColumnBindings();
+
+		CopyToSelectInput input = {context, stmt.info->options, {}, copy_to_type};
+		input.select_list.reserve(bindings.size());
+
+		// Create column references for the select list
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			auto &binding = bindings[i];
+			auto &name = select_node.names[i];
+			auto &type = select_node.types[i];
+			input.select_list.push_back(make_uniq<BoundColumnRefExpression>(name, type, binding));
+		}
+
+		auto new_select_list = copy_function.function.copy_to_select(input);
+		if (!new_select_list.empty()) {
+
+			// We have a new select list, create a projection on top of the current plan
+			auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(new_select_list));
+			projection->children.push_back(std::move(select_node.plan));
+			projection->ResolveOperatorTypes();
+
+			// Update the names and types of the select node
+			select_node.names.clear();
+			select_node.types.clear();
+			for (auto &expr : projection->expressions) {
+				select_node.names.push_back(expr->GetName());
+				select_node.types.push_back(expr->return_type);
+			}
+			select_node.plan = std::move(projection);
 		}
 	}
 
@@ -295,14 +315,14 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function.function.copy_from_function,
 	                                 std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
-		get->column_ids.push_back(i);
+		get->AddColumnId(i);
 	}
 	insert_statement.plan->children.push_back(std::move(get));
 	result.plan = std::move(insert_statement.plan);
 	return result;
 }
 
-BoundStatement Binder::Bind(CopyStatement &stmt) {
+BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	if (!stmt.info->is_from && !stmt.info->select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
@@ -329,7 +349,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt);
 	} else {
-		return BindCopyTo(stmt);
+		return BindCopyTo(stmt, copy_to_type);
 	}
 }
 

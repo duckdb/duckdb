@@ -79,6 +79,22 @@ Value AllowPersistentSecrets::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Access Mode
+//===--------------------------------------------------------------------===//
+void CatalogErrorMaxSchema::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.catalog_error_max_schemas = UBigIntValue::Get(input);
+}
+
+void CatalogErrorMaxSchema::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.catalog_error_max_schemas = DBConfig().options.catalog_error_max_schemas;
+}
+
+Value CatalogErrorMaxSchema::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.catalog_error_max_schemas);
+}
+
+//===--------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===--------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -644,18 +660,23 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	auto &config = ClientConfig::GetConfig(context);
+	config.enable_profiler = true;
+	config.emit_profiler_output = true;
+
 	if (parameter == "json") {
 		config.profiler_print_format = ProfilerPrintFormat::JSON;
 	} else if (parameter == "query_tree") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else if (parameter == "query_tree_optimizer") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	} else if (parameter == "no_output") {
+		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
+		config.emit_profiler_output = false;
 	} else {
 		throw ParserException(
-		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", parameter);
+		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]",
+		    parameter);
 	}
-	config.enable_profiler = true;
-	config.emit_profiler_output = true;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
@@ -670,6 +691,8 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 		return Value("query_tree");
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
 		return Value("query_tree_optimizer");
+	case ProfilerPrintFormat::NO_OUTPUT:
+		return Value("no_output");
 	default:
 		throw InternalException("Unsupported profiler print format");
 	}
@@ -852,7 +875,7 @@ void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value ErrorsAsJsonSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json ? 1 : 0);
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1135,6 +1158,24 @@ Value MaximumMemorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Streaming Buffer Size
+//===--------------------------------------------------------------------===//
+void StreamingBufferSize::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
+}
+
+void StreamingBufferSize::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.SetDefaultStreamingBufferSize();
+}
+
+Value StreamingBufferSize::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.streaming_buffer_size));
+}
+
+//===--------------------------------------------------------------------===//
 // Maximum Temp Directory Size
 //===--------------------------------------------------------------------===//
 void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1180,6 +1221,40 @@ Value MaximumTempDirectorySize::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Merge Join Threshold
+//===--------------------------------------------------------------------===//
+void MergeJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.merge_join_threshold = input.GetValue<idx_t>();
+}
+
+void MergeJoinThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).merge_join_threshold = ClientConfig().merge_join_threshold;
+}
+
+Value MergeJoinThreshold::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::UBIGINT(config.merge_join_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Nested Loop Join Threshold
+//===--------------------------------------------------------------------===//
+void NestedLoopJoinThreshold::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.nested_loop_join_threshold = input.GetValue<idx_t>();
+}
+
+void NestedLoopJoinThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).nested_loop_join_threshold = ClientConfig().nested_loop_join_threshold;
+}
+
+Value NestedLoopJoinThreshold::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::UBIGINT(config.nested_loop_join_threshold);
+}
+
+//===--------------------------------------------------------------------===//
 // Old Implicit Casting
 //===--------------------------------------------------------------------===//
 void OldImplicitCasting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1208,14 +1283,29 @@ void PartitionedWriteFlushThreshold::SetLocal(ClientContext &context, const Valu
 }
 
 Value PartitionedWriteFlushThreshold::GetSetting(const ClientContext &context) {
-	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).partitioned_write_flush_threshold));
+	return Value::UBIGINT(ClientConfig::GetConfig(context).partitioned_write_flush_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Partitioned Write Flush Threshold
+//===--------------------------------------------------------------------===//
+void PartitionedWriteMaxOpenFiles::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).partitioned_write_max_open_files = ClientConfig().partitioned_write_max_open_files;
+}
+
+void PartitionedWriteMaxOpenFiles::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).partitioned_write_max_open_files = input.GetValue<idx_t>();
+}
+
+Value PartitionedWriteMaxOpenFiles::GetSetting(const ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).partitioned_write_max_open_files);
 }
 
 //===--------------------------------------------------------------------===//
 // Preferred block allocation size
 //===--------------------------------------------------------------------===//
 void DefaultBlockAllocSize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	idx_t block_alloc_size = input.GetValue<uint64_t>();
+	auto block_alloc_size = input.GetValue<uint64_t>();
 	Storage::VerifyBlockAllocSize(block_alloc_size);
 	config.options.default_block_alloc_size = block_alloc_size;
 }
@@ -1227,6 +1317,43 @@ void DefaultBlockAllocSize::ResetGlobal(DatabaseInstance *db, DBConfig &config) 
 Value DefaultBlockAllocSize::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::UBIGINT(config.options.default_block_alloc_size);
+}
+
+//===--------------------------------------------------------------------===//
+// Index scan percentage
+//===--------------------------------------------------------------------===//
+void IndexScanPercentage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto index_scan_percentage = input.GetValue<double>();
+	if (index_scan_percentage < 0 || index_scan_percentage > 1.0) {
+		throw InvalidInputException("the index scan percentage must be within [0, 1]");
+	}
+	config.options.index_scan_percentage = index_scan_percentage;
+}
+
+void IndexScanPercentage::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.index_scan_percentage = DBConfig().options.index_scan_percentage;
+}
+
+Value IndexScanPercentage::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::DOUBLE(config.options.index_scan_percentage);
+}
+
+//===--------------------------------------------------------------------===//
+// Index scan max count
+//===--------------------------------------------------------------------===//
+void IndexScanMaxCount::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto index_scan_max_count = input.GetValue<uint64_t>();
+	config.options.index_scan_max_count = index_scan_max_count;
+}
+
+void IndexScanMaxCount::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.index_scan_max_count = DBConfig().options.index_scan_max_count;
+}
+
+Value IndexScanMaxCount::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.index_scan_max_count);
 }
 
 //===--------------------------------------------------------------------===//
