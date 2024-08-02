@@ -442,12 +442,12 @@ struct UDFSum {
 	} sum_state_t;
 
 	template <class STATE>
-	static idx_t StateSize() {
+	static idx_t StateSize(const AggregateFunction &function) {
 		return sizeof(STATE);
 	}
 
 	template <class STATE>
-	static void Initialize(data_ptr_t state) {
+	static void Initialize(const AggregateFunction &function, data_ptr_t state) {
 		((STATE *)state)->value = 0;
 		((STATE *)state)->isset = false;
 	}

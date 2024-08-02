@@ -830,6 +830,8 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "QUOTED_NEW_LINE";
 	case CSVState::EMPTY_SPACE:
 		return "EMPTY_SPACE";
+	case CSVState::COMMENT:
+		return "COMMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -869,6 +871,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EMPTY_SPACE")) {
 		return CSVState::EMPTY_SPACE;
+	}
+	if (StringUtil::Equals(value, "COMMENT")) {
+		return CSVState::COMMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -158,7 +158,7 @@ duckdb_string duckdb_value_string_internal(duckdb_result *result, idx_t col, idx
 }
 
 duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
-	if (CanFetchValue(result, col, row) && result->__deprecated_columns[col].__deprecated_type == DUCKDB_TYPE_BLOB) {
+	if (CanFetchValue(result, col, row) && result->deprecated_columns[col].deprecated_type == DUCKDB_TYPE_BLOB) {
 		auto internal_result = UnsafeFetch<duckdb_blob>(result, col, row);
 
 		duckdb_blob result_blob;
@@ -174,5 +174,5 @@ bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row) {
 	if (!CanUseDeprecatedFetch(result, col, row)) {
 		return false;
 	}
-	return result->__deprecated_columns[col].__deprecated_nullmask[row];
+	return result->deprecated_columns[col].deprecated_nullmask[row];
 }
