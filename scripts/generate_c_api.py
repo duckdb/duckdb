@@ -5,6 +5,7 @@ import glob
 import copy
 from packaging.version import Version
 from functools import reduce
+from pathlib import Path
 
 ###
 # DuckDB C API header generation
@@ -183,6 +184,9 @@ def parse_ext_api_definitions():
                 obj = json.loads(f.read())
                 api_definitions[obj['version']] = obj
                 versions.append(obj['version'])
+                if Path(file).stem != obj['version']:
+                    print(f"\nMismatch between filename and version in file for {file}")
+                    exit(1)
             except json.decoder.JSONDecodeError as err:
                 print(f"\nInvalid JSON found in {file}: {err}")
                 exit(1)
