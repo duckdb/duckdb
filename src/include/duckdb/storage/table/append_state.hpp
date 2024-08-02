@@ -15,6 +15,7 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/transaction/local_storage_fetch_result.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -82,7 +83,7 @@ struct ConstraintState {
 
 struct LocalAppendState {
 	TableAppendState append_state;
-	LocalTableStorage *storage;
+	LocalTableStorageFetchResult fetch_result;
 	unique_ptr<ConstraintState> constraint_state;
 };
 

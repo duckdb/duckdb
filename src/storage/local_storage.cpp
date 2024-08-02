@@ -240,17 +240,23 @@ optional_ptr<LocalTableStorage> LocalTableManager::GetStorage(DataTable &table) 
 	return entry == table_storage.end() ? nullptr : entry->second.get();
 }
 
-LocalTableStorage &LocalTableManager::GetOrCreateStorage(ClientContext &context, DataTable &table) {
+LocalTableStorageFetchResult LocalTableManager::GetOrCreateStorage(ClientContext &context, DataTable &table) {
 	lock_guard<mutex> l(table_storage_lock);
 	auto entry = table_storage.find(table);
+	LocalTableStorageFetchResult result;
+	result.manager = this;
 	if (entry == table_storage.end()) {
 		auto new_storage = make_shared_ptr<LocalTableStorage>(context, table);
 		auto storage = new_storage.get();
 		table_storage.insert(make_pair(reference<DataTable>(table), std::move(new_storage)));
-		return *storage;
+
+		result.created = true;
+		result.storage = storage;
 	} else {
-		return *entry->second.get();
+		result.created = false;
+		result.storage = entry->second.get();
 	}
+	return result;
 }
 
 bool LocalTableManager::IsEmpty() {
@@ -349,13 +355,13 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, Pa
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
 	table.InitializeIndexes(context);
-	state.storage = &table_manager.GetOrCreateStorage(context, table);
-	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
+	state.fetch_result = table_manager.GetOrCreateStorage(context, table);
+	state.fetch_result.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
 }
 
 void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	// append to unique indices (if any)
-	auto storage = state.storage;
+	auto storage = state.fetch_result.storage;
 	idx_t base_id =
 	    NumericCast<idx_t>(MAX_ROW_ID) + storage->row_groups->GetTotalRows() + state.append_state.total_append_count;
 	auto error = DataTable::AppendToIndexes(storage->indexes, chunk, NumericCast<row_t>(base_id));
@@ -372,11 +378,19 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 }
 
 void LocalStorage::FinalizeAppend(LocalAppendState &state) {
-	state.storage->row_groups->FinalizeAppend(state.append_state.transaction, state.append_state);
+	if (state.fetch_result.created && state.fetch_result.storage->row_groups->GetTotalRows() == 0) {
+		auto &manager = *state.fetch_result.manager;
+		auto &data_table = state.fetch_result.storage->table_ref;
+		// Remove the empty table storage, we created it and it didn't get populated with any tuples
+		manager.MoveEntry(data_table);
+		return;
+	}
+	state.fetch_result.storage->row_groups->FinalizeAppend(state.append_state.transaction, state.append_state);
 }
 
 void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) {
-	auto &storage = table_manager.GetOrCreateStorage(context, table);
+	auto fetch_result = table_manager.GetOrCreateStorage(context, table);
+	auto &storage = *fetch_result.storage;
 	if (!storage.indexes.Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.row_groups->GetTotalRows());
@@ -390,12 +404,14 @@ void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) 
 }
 
 OptimisticDataWriter &LocalStorage::CreateOptimisticWriter(DataTable &table) {
-	auto &storage = table_manager.GetOrCreateStorage(context, table);
+	auto fetch_result = table_manager.GetOrCreateStorage(context, table);
+	auto &storage = *fetch_result.storage;
 	return storage.CreateOptimisticWriter();
 }
 
 void LocalStorage::FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer) {
-	auto &storage = table_manager.GetOrCreateStorage(context, table);
+	auto fetch_result = table_manager.GetOrCreateStorage(context, table);
+	auto &storage = *fetch_result.storage;
 	storage.FinalizeOptimisticWriter(writer);
 }
 
