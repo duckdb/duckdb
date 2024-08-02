@@ -34,6 +34,7 @@
 #define FMT_FORMAT_H_
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
 #include "fmt/core.h"
 
 #include <algorithm>
@@ -247,9 +248,23 @@ inline fallback_uintptr to_uintptr(const void* p) {
 template <typename T> constexpr T max_value() {
   return (std::numeric_limits<T>::max)();
 }
+template <> constexpr int128_t max_value<int128_t>() {
+  return duckdb::NumericLimits<int128_t>::Maximum();
+}
+template <> constexpr uint128_t max_value<uint128_t>() {
+  return duckdb::NumericLimits<uint128_t>::Maximum();
+}
+
 template <typename T> constexpr int num_bits() {
   return std::numeric_limits<T>::digits;
 }
+template <> constexpr int num_bits<int128_t>() {
+  return 127;
+}
+template <> constexpr int num_bits<uint128_t>() {
+  return 128;
+}
+
 template <> constexpr int num_bits<fallback_uintptr>() {
   return static_cast<int>(sizeof(void*) *
                           std::numeric_limits<unsigned char>::digits);
@@ -684,11 +699,11 @@ namespace internal {
 
 // Returns true if value is negative, false otherwise.
 // Same as `value < 0` but doesn't produce warnings if T is an unsigned type.
-template <typename T, FMT_ENABLE_IF(std::numeric_limits<T>::is_signed)>
+template <typename T, FMT_ENABLE_IF(std::numeric_limits<T>::is_signed || std::is_same<T, int128_t>::value)>
 FMT_CONSTEXPR bool is_negative(T value) {
   return value < 0;
 }
-template <typename T, FMT_ENABLE_IF(!std::numeric_limits<T>::is_signed)>
+template <typename T, FMT_ENABLE_IF(!std::numeric_limits<T>::is_signed && !std::is_same<T, int128_t>::value)>
 FMT_CONSTEXPR bool is_negative(T) {
   return false;
 }
