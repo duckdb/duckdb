@@ -357,10 +357,6 @@ typedef struct {
 	void (*duckdb_aggregate_function_set_error)(duckdb_function_info info, const char *error);
 } duckdb_ext_api_v0;
 
-#define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
-#define DUCKDB_EXTENSION_API_VERSION_MINOR 0
-#define DUCKDB_EXTENSION_API_VERSION_PATCH 2
-
 //! open_connect
 #define duckdb_open            duckdb_ext_api->duckdb_open
 #define duckdb_open_ext        duckdb_ext_api->duckdb_open_ext
@@ -720,6 +716,10 @@ typedef struct {
 //! streaming_result_interface
 #define duckdb_fetch_chunk duckdb_ext_api->duckdb_fetch_chunk
 
+#define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
+#define DUCKDB_EXTENSION_API_VERSION_MINOR 0
+#define DUCKDB_EXTENSION_API_VERSION_PATCH 2
+
 //! Internal MACROS
 #ifdef __cplusplus
 #define DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN  extern "C" {
@@ -733,7 +733,6 @@ typedef struct {
 #define DUCKDB_EXTENSION_GLUE(x, y)        DUCKDB_EXTENSION_GLUE_HELPER(x, y)
 #define DUCKDB_EXTENSION_STR_HELPER(x)     #x
 #define DUCKDB_EXTENSION_STR(x)            DUCKDB_EXTENSION_STR_HELPER(x)
-
 // This goes in the c/c++ file containing the entrypoint (handle
 #define DUCKDB_EXTENSION_GLOBAL const duckdb_ext_api_v0 *duckdb_ext_api = 0;
 // Initializes the C Extension API: First thing to call in the extension entrypoint

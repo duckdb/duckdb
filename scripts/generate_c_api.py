@@ -175,10 +175,10 @@ def parse_capi_function_definitions():
 
 
 # Read extension API
-def parse_ext_api_definitions():
+def parse_ext_api_definitions(ext_api_definition):
     api_definitions = {}
     versions = []
-    for file in list(glob.glob(EXT_API_DEFINITION_PATTERN)):
+    for file in list(glob.glob(ext_api_definition)):
         with open(file, 'r') as f:
             try:
                 obj = json.loads(f.read())
@@ -316,8 +316,7 @@ def parse_semver(version):
 
 
 def create_version_defines(version):
-    major, minor, patch = parse_semver(EXT_API_VERSION)
-    version_string = f'v{major}.{minor}.{patch}'
+    major, minor, patch = parse_semver(version)
 
     result = ""
     result += f"#define DUCKDB_EXTENSION_API_VERSION_MAJOR {major}\n"
@@ -328,10 +327,10 @@ def create_version_defines(version):
 
 
 # Create duckdb.h
-def create_duckdb_h(ext_api_version):
+def create_duckdb_h(ext_api_version, function_groups):
     function_declarations_finished = ''
 
-    for curr_group in FUNCTION_GROUPS:
+    for curr_group in function_groups:
         function_declarations_finished += f'''//===--------------------------------------------------------------------===//
 // {to_camel_case(curr_group['group'])}
 //===--------------------------------------------------------------------===//\n\n'''
@@ -363,42 +362,43 @@ def create_duckdb_h(ext_api_version):
         f.write(duckdb_h)
 
 
-def write_struct_member_definitions(version_entries, initialize=False):
+def write_struct_member_definitions(function_map, version_entries, initialize=False):
     result = ""
-    for function_name in version_entries:
-        function_lookup = FUNCTION_MAP[function_name]
-        function_lookup_name = function_lookup['name']
-
-        if initialize:
+    if initialize:
+        for function_name in version_entries:
+            function_lookup = function_map[function_name]
+            function_lookup_name = function_lookup['name']
             result += f'        result.{function_lookup_name} = {function_lookup_name};\n'
-        else:
-            result += f'        result.{function_lookup_name} = nullptr;\n'
+    elif len(version_entries) > 0:
+        count = len(version_entries)
+        first_function = version_entries[0]
+        result += f'        memset(&result.{first_function}, 0, sizeof(result.{first_function}) * {count});\n'
 
     return result
 
 
-def create_extension_api_struct(ext_api_version, with_create_method=False, validate_exclusion_list=True):
+def create_extension_api_struct(struct_name, function_groups, function_map, api_definition, exclusion_set, with_create_method=False, create_method_name='', validate_exclusion_list=True):
     functions_in_struct = set()
 
     # Generate the struct
     extension_struct_finished = 'typedef struct {\n'
-    for api_version_entry in EXT_API_DEFINITIONS:
+    for api_version_entry in api_definition:
         version = api_version_entry['version']
         extension_struct_finished += f'    // Version {version}\n'
         for function_name in api_version_entry['entries']:
-            function_lookup = FUNCTION_MAP[function_name]
+            function_lookup = function_map[function_name]
             functions_in_struct.add(function_lookup['name'])
             extension_struct_finished += create_struct_member(function_lookup)
             extension_struct_finished += '\n'
-    extension_struct_finished += '} ' + f'{DUCKDB_EXT_API_STRUCT_NAME};\n\n'
+    extension_struct_finished += '} ' + f'{struct_name};\n\n'
 
     if validate_exclusion_list:
 
         # Check for missing entries
         missing_entries = []
-        for group in FUNCTION_GROUPS:
+        for group in function_groups:
             for function in group['entries']:
-                if function['name'] not in functions_in_struct and function['name'] not in EXT_API_EXCLUSION_SET:
+                if function['name'] not in functions_in_struct and function['name'] not in exclusion_set:
                     missing_entries.append(function['name'])
         if missing_entries:
             print(
@@ -408,9 +408,9 @@ def create_extension_api_struct(ext_api_version, with_create_method=False, valid
             exit(1)
         # Check for entries both in the API definition and the exclusion list
         double_entries = []
-        for api_version_entry in EXT_API_DEFINITIONS:
+        for api_version_entry in api_definition:
             for function_name in api_version_entry['entries']:
-                if function_name in EXT_API_EXCLUSION_SET:
+                if function_name in exclusion_set:
                     double_entries.append(function_name)
         if double_entries:
             print(
@@ -420,9 +420,9 @@ def create_extension_api_struct(ext_api_version, with_create_method=False, valid
             exit(1)
 
     if with_create_method:
-        extension_struct_finished += "inline duckdb_ext_api_v0 CreateApi(idx_t minor_version, idx_t patch_version) {\n"
-        extension_struct_finished += "    duckdb_ext_api_v0 result;\n"
-        for api_version_entry in EXT_API_DEFINITIONS:
+        extension_struct_finished += f"inline {struct_name} {create_method_name}(idx_t minor_version, idx_t patch_version) {{\n"
+        extension_struct_finished += f"    {struct_name} result;\n"
+        for api_version_entry in api_definition:
 
             if len(api_version_entry['entries']) == 0:
                 continue
@@ -432,29 +432,26 @@ def create_extension_api_struct(ext_api_version, with_create_method=False, valid
                 extension_struct_finished += f'if (patch_version >= {patch})' + '{'
             else:
                 extension_struct_finished += f'if (minor_version >= {minor} && patch_version >= {patch})' + '{'
-            extension_struct_finished += write_struct_member_definitions(api_version_entry['entries'], initialize=True)
+            extension_struct_finished += write_struct_member_definitions(function_map, api_version_entry['entries'], initialize=True)
             extension_struct_finished += '} else {'
-            extension_struct_finished += write_struct_member_definitions(api_version_entry['entries'], initialize=False)
+            extension_struct_finished += write_struct_member_definitions(function_map, api_version_entry['entries'], initialize=False)
             extension_struct_finished += '}'
 
         extension_struct_finished += "    return result;\n"
         extension_struct_finished += "}\n\n"
 
-    extension_struct_finished += create_version_defines(ext_api_version)
-    extension_struct_finished += "\n"
-
     return extension_struct_finished
 
 
 # Create duckdb_extension_api.h
-def create_duckdb_ext_h(ext_api_version, ext_struct_api_function_set):
+def create_duckdb_ext_h(file, ext_api_version, struct_name, function_groups, api_struct_definition, struct_function_set, exclusion_set, version_defines=True):
 
     # Generate the typedefs
     typedefs = ""
-    for group in FUNCTION_GROUPS:
+    for group in function_groups:
         functions_to_add = []
         for function in group['entries']:
-            if function['name'] not in ext_struct_api_function_set:
+            if function['name'] not in struct_function_set:
                 continue
             functions_to_add.append(function)
 
@@ -466,7 +463,10 @@ def create_duckdb_ext_h(ext_api_version, ext_struct_api_function_set):
 
             typedefs += '\n'
 
-    extension_header_body = create_extension_api_struct(ext_api_version) + '\n\n' + typedefs
+    extension_header_body = create_extension_api_struct(struct_name, function_groups, function_map, api_struct_definition, exclusion_set) + '\n\n' + typedefs
+    if version_defines:
+        extension_header_body += create_version_defines(ext_api_version)
+    extension_header_body += "\n"
 
     # Add the Macros
     extension_header_body += """
@@ -482,20 +482,19 @@ def create_duckdb_ext_h(ext_api_version, ext_struct_api_function_set):
 #define DUCKDB_EXTENSION_GLUE_HELPER(x, y) x##y
 #define DUCKDB_EXTENSION_GLUE(x, y) DUCKDB_EXTENSION_GLUE_HELPER(x, y)
 #define DUCKDB_EXTENSION_STR_HELPER(x) #x
-#define DUCKDB_EXTENSION_STR(x) DUCKDB_EXTENSION_STR_HELPER(x)
+#define DUCKDB_EXTENSION_STR(x) DUCKDB_EXTENSION_STR_HELPER(x)"""
 
+    extension_header_body += f"""
 // This goes in the c/c++ file containing the entrypoint (handle
-#define DUCKDB_EXTENSION_GLOBAL const duckdb_ext_api_v0 *duckdb_ext_api = 0;
+#define DUCKDB_EXTENSION_GLOBAL const {struct_name} *duckdb_ext_api = 0;
 // Initializes the C Extension API: First thing to call in the extension entrypoint
-#define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)\
-	duckdb_ext_api = (duckdb_ext_api_v0 *)access->get_api(info, minimum_api_version);\
-	if (!duckdb_ext_api) {\
-		return;\
-	};
-
+#define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version) duckdb_ext_api = ({struct_name} *)access->get_api(info, minimum_api_version); if (!duckdb_ext_api) {{return;}};
+"""
+    extension_header_body += f"""
 // Place in global scope of any C/C++ file that needs to access the extension API
-#define DUCKDB_EXTENSION_EXTERN extern const duckdb_ext_api_v0 *duckdb_ext_api;
-
+#define DUCKDB_EXTENSION_EXTERN extern const {struct_name} *duckdb_ext_api;
+"""
+    extension_header_body += """
 //===--------------------------------------------------------------------===//
 // ENTRYPOINT Macros
 //===--------------------------------------------------------------------===//
@@ -539,13 +538,14 @@ def create_duckdb_ext_h(ext_api_version, ext_struct_api_function_set):
 
     header_template = fetch_header_template_ext()
     duckdb_ext_h = DUCKDB_EXT_H_HEADER + header_template.replace(BASE_HEADER_CONTENT_MARK, extension_header_body)
-    with open(DUCKDB_HEADER_EXT_OUT_FILE, 'w+') as f:
+    with open(file, 'w+') as f:
         f.write(duckdb_ext_h)
 
-
 # Create duckdb_extension_internal.hpp
-def create_duckdb_ext_internal_h(ext_api_version):
-    extension_header_body = create_extension_api_struct(ext_api_version, with_create_method=True)
+def create_duckdb_ext_internal_h(ext_api_version, function_groups, function_map, ext_api_definitions, exclusion_set):
+    extension_header_body = create_extension_api_struct(DUCKDB_EXT_API_STRUCT_NAME, function_groups, function_map, ext_api_definitions, exclusion_set, with_create_method=True, create_method_name='CreateAPIv0')
+    extension_header_body += create_version_defines(ext_api_version)
+    extension_header_body += "\n"
     header_template = fetch_header_template_ext()
     duckdb_ext_h = DUCKDB_EXT_INTERNAL_H_HEADER + header_template.replace(
         BASE_HEADER_CONTENT_MARK, extension_header_body
@@ -553,11 +553,10 @@ def create_duckdb_ext_internal_h(ext_api_version):
     with open(DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE, 'w+') as f:
         f.write(duckdb_ext_h)
 
-
-def get_extension_api_version():
+def get_extension_api_version(ext_api_definitions):
     versions = []
 
-    for version_entry in EXT_API_DEFINITIONS:
+    for version_entry in ext_api_definitions:
         versions.append(version_entry['version'])
 
     versions_copy = copy.deepcopy(versions)
@@ -570,39 +569,43 @@ def get_extension_api_version():
 
     return versions[-1]
 
-def create_struct_function_set():
+def create_struct_function_set(api_definitions):
     result = set()
-    for api in EXT_API_DEFINITIONS:
+    for api in api_definitions:
         for entry in api['entries']:
             result.add(entry)
     return result
 
-# TODO make this code less spaghetti
 if __name__ == "__main__":
-    EXT_API_DEFINITIONS = parse_ext_api_definitions()
-    EXT_API_SET = create_struct_function_set()
-    EXT_API_VERSION = get_extension_api_version()
-    FUNCTION_GROUPS, FUNCTION_MAP = parse_capi_function_definitions()
-    FUNCTION_MAP_SIZE = len(FUNCTION_MAP)
+    # parse the api definition (which fields make it into the struct)
+    ext_api_definitions = parse_ext_api_definitions(EXT_API_DEFINITION_PATTERN)
 
-    API_STRUCT_FUNCTION_COUNT = reduce(lambda x, y: len(x['entries']) + len(y['entries']), EXT_API_DEFINITIONS)
-    EXT_API_EXCLUSION_SET = parse_exclusion_list(FUNCTION_MAP)
-    EXT_API_EXCLUSION_SET_SIZE = len(EXT_API_EXCLUSION_SET)
+    # extract a set of the function names and the latest version of the api definition
+    ext_api_set = create_struct_function_set(ext_api_definitions)
+    ext_api_version = get_extension_api_version(ext_api_definitions)
+
+    function_groups, function_map = parse_capi_function_definitions()
+    function_map_size = len(function_map)
+
+    api_struct_function_count = reduce(lambda x, y: len(x['entries']) + len(y['entries']), ext_api_definitions)
+    ext_api_exclusion_set = parse_exclusion_list(function_map)
+    ext_api_exclusion_set_size = len(ext_api_exclusion_set)
 
     print("Information")
-    print(f" * Current Extension C API Version: {EXT_API_VERSION}")
-    print(f" * Total functions: {FUNCTION_MAP_SIZE}")
-    print(f" * Functions in C API struct: {API_STRUCT_FUNCTION_COUNT}")
-    print(f" * Functions in C API but excluded from struct: {EXT_API_EXCLUSION_SET_SIZE}")
+    print(f" * Current Extension C API Version: {ext_api_version}")
+    print(f" * Total functions: {function_map_size}")
+    print(f" * Functions in C API struct: {api_struct_function_count}")
+    print(f" * Functions in C API but excluded from struct: {ext_api_exclusion_set_size}")
 
     print()
 
     print("Generating headers")
     print(f" * {DUCKDB_HEADER_OUT_FILE}")
-    create_duckdb_h(EXT_API_VERSION)
+    create_duckdb_h(ext_api_version, function_groups)
     print(f" * {DUCKDB_HEADER_EXT_OUT_FILE}")
-    create_duckdb_ext_h(DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE, EXT_API_SET)
+    create_duckdb_ext_h(DUCKDB_HEADER_EXT_OUT_FILE, ext_api_version, DUCKDB_EXT_API_STRUCT_NAME, function_groups, ext_api_definitions, ext_api_set, ext_api_exclusion_set)
     print(f" * {DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE}")
+    create_duckdb_ext_internal_h(ext_api_version, function_groups, function_map, ext_api_definitions, ext_api_exclusion_set)
 
     print()
 
