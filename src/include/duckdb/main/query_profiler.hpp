@@ -29,6 +29,7 @@
 namespace duckdb {
 class ClientContext;
 class ExpressionExecutor;
+class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
 

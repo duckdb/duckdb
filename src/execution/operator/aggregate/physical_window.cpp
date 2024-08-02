@@ -313,7 +313,7 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	}
 
 	// Schedule all the sorts for maximum thread utilisation
-	auto new_event = make_shared_ptr<PartitionMergeEvent>(*state.global_partition, pipeline);
+	auto new_event = make_shared_ptr<PartitionMergeEvent>(*state.global_partition, pipeline, *this);
 	event.InsertEvent(std::move(new_event));
 
 	return SinkFinalizeType::READY;
