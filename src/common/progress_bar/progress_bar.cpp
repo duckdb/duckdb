@@ -121,7 +121,7 @@ void ProgressBar::Update(bool final) {
 		if (final) {
 			FinishProgressBarPrint();
 		} else {
-			PrintProgress(NumericCast<int>(query_progress.percentage.load()));
+			PrintProgress(LossyNumericCast<int>(query_progress.percentage.load()));
 		}
 #endif
 	}

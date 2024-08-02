@@ -12,6 +12,7 @@
 #include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
+class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
@@ -76,6 +77,8 @@ public:
 		return write_lock.get();
 	}
 
+	void UpdateCollection(shared_ptr<RowGroupCollection> &collection);
+
 private:
 	DuckTransactionManager &transaction_manager;
 	//! The undo buffer is used to store old versions of rows that are updated
@@ -89,6 +92,8 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
+	//! Collections that are updated by this transaction
+	reference_map_t<RowGroupCollection, shared_ptr<RowGroupCollection>> updated_collections;
 };
 
 } // namespace duckdb

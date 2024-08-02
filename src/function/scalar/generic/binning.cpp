@@ -129,15 +129,15 @@ struct EquiWidthBinsInteger {
 		hugeint_t step = span / Hugeint::Convert(bin_count);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
-			step = MakeNumberNice(step, step, NiceRounding::ROUND);
-			max = RoundToNumber(max, step, NiceRounding::CEILING);
+			hugeint_t new_step = MakeNumberNice(step, step, NiceRounding::ROUND);
+			hugeint_t new_max = RoundToNumber(max, new_step, NiceRounding::CEILING);
+			if (new_max != min && new_step != 0) {
+				max = new_max;
+				step = new_step;
+			}
 			// we allow for more bins when doing nice rounding since the bin count is approximate
 			bin_count *= 2;
 		}
-		if (step == 0) {
-			throw InternalException("step is 0!?");
-		}
-
 		for (hugeint_t bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			const hugeint_t target_boundary = bin_boundary / FACTOR;
 			int64_t real_boundary = Hugeint::Cast<int64_t>(target_boundary);
