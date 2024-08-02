@@ -36,6 +36,18 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	result->right_binder = Binder::CreateBinder(context, this);
 
+	if (!statement.key_targets.empty()) {
+		result->recurring_index = GenerateTableIndex();
+		// Retrieves the recursive CTE information in order to add it to the own context for the recurring table.
+		vector<std::reference_wrapper<CommonTableExpressionInfo>> current_cte_info = FindCTE(statement.ctename);
+		string recurring_name = "recurring_" + statement.ctename;
+		if (!current_cte_info.empty()) {
+			AddCTE(recurring_name, current_cte_info[0]);
+			result->right_binder->bind_context.AddCTEBinding(result->recurring_index, recurring_name, result->names,
+			                                                 result->types);
+		}
+	}
+
 	// Add bindings of left side to temporary CTE bindings context
 	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
 	                                                 result->types);
@@ -47,6 +59,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// move the correlated expressions from the child binders to this binder
 	MoveCorrelatedExpressions(*result->left_binder);
 	MoveCorrelatedExpressions(*result->right_binder);
+
+	// bind specified keys to the referenced column
+	auto expression_binder = ExpressionBinder(*this, context);
+	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
+		auto bound_expr = expression_binder.Bind(expr);
+		D_ASSERT(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
+		result->key_targets.push_back(std::move(bound_expr));
+	}
 
 	// now both sides have been bound we can resolve types
 	if (result->left->types.size() != result->right->types.size()) {

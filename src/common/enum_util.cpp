@@ -5123,6 +5123,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "UNION";
 	case PhysicalOperatorType::RECURSIVE_CTE:
 		return "RECURSIVE_CTE";
+	case PhysicalOperatorType::RECURSIVE_KEY_CTE:
+		return "RECURSIVE_KEY_CTE";
 	case PhysicalOperatorType::CTE:
 		return "CTE";
 	case PhysicalOperatorType::INSERT:
@@ -5326,6 +5328,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "RECURSIVE_CTE")) {
 		return PhysicalOperatorType::RECURSIVE_CTE;
+	}
+	if (StringUtil::Equals(value, "RECURSIVE_KEY_CTE")) {
+		return PhysicalOperatorType::RECURSIVE_KEY_CTE;
 	}
 	if (StringUtil::Equals(value, "CTE")) {
 		return PhysicalOperatorType::CTE;

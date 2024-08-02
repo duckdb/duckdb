@@ -33,4 +33,10 @@ struct FirstFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct LastFun {
+	static AggregateFunction GetFunction(const LogicalType &type);
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
