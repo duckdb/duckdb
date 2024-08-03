@@ -76,18 +76,17 @@ public:
 				stage = WindowGroupStage::FINALIZE;
 				return true;
 			}
-			break;
+			return false;
 		case WindowGroupStage::FINALIZE:
 			if (finalized == blocks) {
 				stage = WindowGroupStage::GETDATA;
 				return true;
 			}
-			break;
+			return false;
 		default:
-			break;
+			// never block in GETDATA
+			return true;
 		}
-
-		return false;
 	}
 
 	//! The hash partition data
@@ -899,11 +898,6 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 	gsource.returned += chunk.size();
 
 	if (chunk.size() == 0) {
-		lock_guard<mutex> guard(gsource.lock);
-		for (auto &state : gsource.blocked_tasks) {
-			state.Callback();
-		}
-		gsource.blocked_tasks.clear();
 		return SourceResultType::FINISHED;
 	}
 	return SourceResultType::HAVE_MORE_OUTPUT;
