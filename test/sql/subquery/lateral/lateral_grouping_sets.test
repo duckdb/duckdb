@@ -37,3 +37,12 @@ order by all
 ----
 1	42
 2	NULL
+
+query II
+select *
+  from
+  (values (1), (2)) t2(x) left join (select sum(a) from (select 42 a) where x=1) on (1=1)
+order by all
+----
+1	42
+2	NULL
