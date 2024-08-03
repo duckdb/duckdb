@@ -16,6 +16,9 @@ statement ok
 COPY ${tpch_tbl}_original TO '__TEST_DIR__/${tpch_tbl}.csv' (DELIMITER '|', HEADER);
 
 statement ok
+DROP TABLE ${tpch_tbl}_original
+
+statement ok
 CREATE VIEW ${tpch_tbl} AS FROM read_csv_auto('__TEST_DIR__/${tpch_tbl}.csv', sep='|');
 
 endloop
