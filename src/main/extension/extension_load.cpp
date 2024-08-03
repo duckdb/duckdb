@@ -50,6 +50,10 @@ struct DuckDBExtensionLoadState {
 	//! extension does not need to free it.
 	unique_ptr<DatabaseData> database_data;
 
+	//! The function pointer struct passed to the extension. The extension is expected to copy this struct during
+	//! initialization
+	duckdb_ext_api_v0 api_struct;
+
 	//! Error handling
 	bool has_error = false;
 	//! The stored error from the loading process
@@ -93,32 +97,21 @@ struct ExtensionAccess {
 	//! Called by the extension get a pointer the correctly versioned extension C API struct.
 	static void *GetAPI(duckdb_extension_info info, const char *version) {
 
-		// Special case for extensions requesting "dev" struct. They will get the development version which as ALL C functions and has no
-		// stability guarantees
-		if (string(version) == "dev") {
-			// TODO: can we free this on DatabaseInstance deletion?
-			auto api = new duckdb_ext_api_dev();
-			*api = CreateAPIdev(0, 0);
-			return api;
-		}
-
 		string version_string = version;
 		idx_t major, minor, patch;
 		auto parsed = VersioningUtils::ParseSemver(version_string, major, minor, patch);
 
+		auto &load_state = DuckDBExtensionLoadState::Get(info);
+
 		if (!parsed || !VersioningUtils::IsSupportedCAPIVersion(major, minor, patch)) {
-			auto &load_state = DuckDBExtensionLoadState::Get(info);
 			load_state.has_error = true;
 			load_state.error_data =
 			    ErrorData(ExceptionType::UNKNOWN_TYPE,
 			              "Unsupported C CAPI version detected during extension initialization: " + string(version));
 			return nullptr;
 		}
-
-		// TODO: can we free this on DatabaseInstance deletion?
-		auto api = new duckdb_ext_api_v0();
-		*api = CreateAPIv0(minor, patch);
-		return api;
+		load_state.api_struct = CreateAPIv0();
+		return &load_state.api_struct;
 	}
 };
 
