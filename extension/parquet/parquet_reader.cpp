@@ -1043,7 +1043,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 			uint64_t total_row_group_span = GetGroupSpan(state);
 
-			double scan_percentage = (double)(to_scan_compressed_bytes) / total_row_group_span;
+			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
 
 			if (to_scan_compressed_bytes > total_row_group_span) {
 				throw InvalidInputException(

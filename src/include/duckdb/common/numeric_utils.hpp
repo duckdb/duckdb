@@ -98,13 +98,33 @@ TO NumericCast(FROM val) {
 }
 
 template <class TO>
-TO NumericCast(double val) {
+TO LossyNumericCast(double val) {
 	return static_cast<TO>(val);
 }
 
 template <class TO>
-TO NumericCast(float val) {
+TO LossyNumericCast(float val) {
 	return static_cast<TO>(val);
+}
+
+template <class TO>
+TO NumericCast(double val) {
+	auto res = LossyNumericCast<TO>(val);
+	if (val != double(res)) {
+		throw InternalException("Information loss on double cast: value %lf outside of target range [%lf, %lf]", val,
+		                        double(res), double(res));
+	}
+	return res;
+}
+
+template <class TO>
+TO NumericCast(float val) {
+	auto res = LossyNumericCast<TO>(val);
+	if (val != float(res)) {
+		throw InternalException("Information loss on float cast: value %f outside of target range [%f, %f]", val,
+		                        float(res), float(res));
+	}
+	return res;
 }
 
 template <class TO, class FROM>
@@ -117,12 +137,18 @@ TO UnsafeNumericCast(FROM in) {
 
 template <class TO>
 TO UnsafeNumericCast(double val) {
+#ifdef DEBUG
 	return NumericCast<TO>(val);
+#endif
+	return LossyNumericCast<TO>(val);
 }
 
 template <class TO>
 TO UnsafeNumericCast(float val) {
+#ifdef DEBUG
 	return NumericCast<TO>(val);
+#endif
+	return LossyNumericCast<TO>(val);
 }
 
 } // namespace duckdb

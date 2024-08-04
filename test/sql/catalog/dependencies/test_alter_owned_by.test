@@ -3,6 +3,9 @@
 
 require skip_reload
 
+statement ok
+PRAGMA verify_serializer
+
 ##TEST: If the table is dropped, then the sequence is also droppped
 statement ok
 CREATE SEQUENCE sequence1;

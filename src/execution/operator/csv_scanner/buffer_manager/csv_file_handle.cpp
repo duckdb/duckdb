@@ -32,7 +32,7 @@ unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &all
 }
 
 double CSVFileHandle::GetProgress() {
-	return file_handle->GetProgress();
+	return static_cast<double>(file_handle->GetProgress());
 }
 
 bool CSVFileHandle::CanSeek() {

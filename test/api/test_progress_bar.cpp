@@ -229,30 +229,29 @@ TEST_CASE("Test Progress Bar CSV", "[progress-bar][.]") {
 
 	// Create Tables From CSVs
 	test_progress.Start();
-	REQUIRE_NO_FAIL(
-	    con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/test/test.csv')"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/test/test.csv')"));
 	test_progress.End();
 
 	test_progress.Start();
-	REQUIRE_NO_FAIL(con.Query(
-	    "CREATE TABLE test_2 AS SELECT * FROM  read_csv('test/sql/copy/csv/data/test/test.csv', columns=STRUCT_PACK(a "
-	    ":= 'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE test_2 AS SELECT * FROM  read_csv('data/csv/test/test.csv', columns=STRUCT_PACK(a "
+	              ":= 'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
 	test_progress.End();
 
 	// Insert into existing tables
 	test_progress.Start();
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/test.csv')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM read_csv_auto('data/csv/test/test.csv')"));
 	test_progress.End();
 
 	test_progress.Start();
-	REQUIRE_NO_FAIL(con.Query(
-	    "INSERT INTO test SELECT * FROM  read_csv('test/sql/copy/csv/data/test/test.csv', columns=STRUCT_PACK(a := "
-	    "'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO test SELECT * FROM  read_csv('data/csv/test/test.csv', columns=STRUCT_PACK(a := "
+	              "'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
 	test_progress.End();
 
 	// copy from
 	test_progress.Start();
-	REQUIRE_NO_FAIL(con.Query("COPY test FROM 'test/sql/copy/csv/data/test/test.csv'"));
+	REQUIRE_NO_FAIL(con.Query("COPY test FROM 'data/csv/test/test.csv'"));
 	test_progress.End();
 
 	// Repeat but in parallel
@@ -264,30 +263,29 @@ TEST_CASE("Test Progress Bar CSV", "[progress-bar][.]") {
 	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 	// Create Tables From CSVs
 	test_progress.Start();
-	REQUIRE_NO_FAIL(
-	    con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/test/test.csv')"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/test/test.csv')"));
 	test_progress.End();
 
 	test_progress.Start();
-	REQUIRE_NO_FAIL(con.Query(
-	    "CREATE TABLE test_2 AS SELECT * FROM  read_csv('test/sql/copy/csv/data/test/test.csv', columns=STRUCT_PACK(a "
-	    ":= 'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE test_2 AS SELECT * FROM  read_csv('data/csv/test/test.csv', columns=STRUCT_PACK(a "
+	              ":= 'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
 	test_progress.End();
 
 	// Insert into existing tables
 	test_progress.Start();
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/test.csv')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM read_csv_auto('data/csv/test/test.csv')"));
 	test_progress.End();
 
 	test_progress.Start();
-	REQUIRE_NO_FAIL(con.Query(
-	    "INSERT INTO test SELECT * FROM  read_csv('test/sql/copy/csv/data/test/test.csv', columns=STRUCT_PACK(a := "
-	    "'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO test SELECT * FROM  read_csv('data/csv/test/test.csv', columns=STRUCT_PACK(a := "
+	              "'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
 	test_progress.End();
 
 	// copy from
 	test_progress.Start();
-	REQUIRE_NO_FAIL(con.Query("COPY test FROM 'test/sql/copy/csv/data/test/test.csv'"));
+	REQUIRE_NO_FAIL(con.Query("COPY test FROM 'data/csv/test/test.csv'"));
 	test_progress.End();
 }
 #endif

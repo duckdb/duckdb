@@ -562,10 +562,19 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
+	auto &config = DBConfig::GetConfig(context);
+
+	auto max_schema_count = config.options.catalog_error_max_schemas;
 	for (auto database : databases) {
+		if (unseen_schemas.size() >= max_schema_count) {
+			break;
+		}
 		auto &catalog = database.get().GetCatalog();
 		auto current_schemas = catalog.GetAllSchemas(context);
 		for (auto &current_schema : current_schemas) {
+			if (unseen_schemas.size() >= max_schema_count) {
+				break;
+			}
 			unseen_schemas.insert(current_schema.get());
 		}
 	}

@@ -377,7 +377,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 
 	// populate root schema object
 	file_meta_data.schema[0].name = "duckdb_schema";
-	file_meta_data.schema[0].num_children = sql_types.size();
+	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
 	file_meta_data.schema[0].__isset.num_children = true;
 	file_meta_data.schema[0].repetition_type = duckdb_parquet::format::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
@@ -402,8 +402,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
-	row_group.num_rows = buffer.Count();
-	row_group.total_byte_size = buffer.SizeInBytes();
+	row_group.num_rows = NumericCast<int64_t>(buffer.Count());
+	row_group.total_byte_size = NumericCast<int64_t>(buffer.SizeInBytes());
 	row_group.__isset.file_offset = true;
 
 	auto &states = result.states;
@@ -505,7 +505,7 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	if (states.empty()) {
 		throw InternalException("Attempting to flush a row group with no rows");
 	}
-	row_group.file_offset = writer->GetTotalWritten();
+	row_group.file_offset = NumericCast<int64_t>(writer->GetTotalWritten());
 	for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
 		auto write_state = std::move(states[col_idx]);

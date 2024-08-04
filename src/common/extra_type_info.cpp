@@ -428,6 +428,9 @@ IntegerLiteralTypeInfo::IntegerLiteralTypeInfo() : ExtraTypeInfo(ExtraTypeInfoTy
 
 IntegerLiteralTypeInfo::IntegerLiteralTypeInfo(Value constant_value_p)
     : ExtraTypeInfo(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), constant_value(std::move(constant_value_p)) {
+	if (constant_value.IsNull()) {
+		throw InternalException("Integer literal cannot be NULL");
+	}
 }
 
 bool IntegerLiteralTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {

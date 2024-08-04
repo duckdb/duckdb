@@ -302,6 +302,11 @@ SELECT LIST_RESIZE([1, 2, 3], 9999999999999999999);
 ----
 maximum allowed vector size
 
+statement error
+SELECT LIST_RESIZE([1, 2, 3], 4000999999999999999)
+----
+maximum allowed vector size
+
 endloop
 
 query I

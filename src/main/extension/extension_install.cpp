@@ -335,6 +335,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 	return make_uniq<ExtensionInstallInfo>(info);
 }
 
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, const string &url,
                                                            const string &extension_name, const string &temp_path,
                                                            const string &local_extension_path, bool force_install,
@@ -426,8 +427,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 #ifndef DUCKDB_NO_THREADS
 		// retry
 		// sleep first
-		uint64_t sleep_amount =
-		    static_cast<uint64_t>(static_cast<double>(RETRY_WAIT_MS) * pow(RETRY_BACKOFF, retry_count - 1));
+		uint64_t sleep_amount = static_cast<uint64_t>(static_cast<double>(RETRY_WAIT_MS) *
+		                                              pow(RETRY_BACKOFF, static_cast<double>(retry_count) - 1));
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
 #endif
 	}
@@ -506,6 +507,7 @@ static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string 
 		}
 	}
 }
+#endif // DUCKDB_DISABLE_EXTENSION_LOAD
 
 unique_ptr<ExtensionInstallInfo>
 ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
