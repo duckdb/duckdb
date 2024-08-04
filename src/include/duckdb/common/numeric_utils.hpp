@@ -138,17 +138,17 @@ TO UnsafeNumericCast(FROM in) {
 template <class TO>
 TO UnsafeNumericCast(double val) {
 #ifdef DEBUG
-	return LossyNumericCast<TO>(val);
-#endif
 	return NumericCast<TO>(val);
+#endif
+	return LossyNumericCast<TO>(val);
 }
 
 template <class TO>
 TO UnsafeNumericCast(float val) {
 #ifdef DEBUG
-	return LossyNumericCast<TO>(val);
-#endif
 	return NumericCast<TO>(val);
+#endif
+	return LossyNumericCast<TO>(val);
 }
 
 } // namespace duckdb
