@@ -11,8 +11,6 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "mbedtls_wrapper.hpp"
 
-#include <fmt/format.h>
-
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
 #endif // DUCKDB_NO_THREADS
