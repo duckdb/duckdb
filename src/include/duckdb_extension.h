@@ -413,7 +413,7 @@ typedef struct {
 //===--------------------------------------------------------------------===//
 // Typedefs mapping functions to struct entries
 //===--------------------------------------------------------------------===//
-#if DUCKDB_EXTENSION_API_VERSION_MINOR >= 0 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 1 // Version v0.0.1
+// Version v0.0.1
 #define duckdb_open            duckdb_ext_api.duckdb_open
 #define duckdb_open_ext        duckdb_ext_api.duckdb_open_ext
 #define duckdb_close           duckdb_ext_api.duckdb_close
@@ -674,9 +674,7 @@ typedef struct {
 
 #define duckdb_fetch_chunk duckdb_ext_api.duckdb_fetch_chunk
 
-#endif
-
-#if DUCKDB_EXTENSION_API_VERSION_MINOR >= 0 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 2 // Version v0.0.2
+// Version v0.0.2
 #define duckdb_result_error_type duckdb_ext_api.duckdb_result_error_type
 
 #define duckdb_string_t_length duckdb_ext_api.duckdb_string_t_length
@@ -737,9 +735,7 @@ typedef struct {
 #define duckdb_table_description_destroy duckdb_ext_api.duckdb_table_description_destroy
 #define duckdb_table_description_error   duckdb_ext_api.duckdb_table_description_error
 
-#endif
-
-#if DUCKDB_EXTENSION_API_VERSION_DEV // Version dev
+// Version dev
 #define duckdb_create_aggregate_function               duckdb_ext_api.duckdb_create_aggregate_function
 #define duckdb_destroy_aggregate_function              duckdb_ext_api.duckdb_destroy_aggregate_function
 #define duckdb_aggregate_function_set_name             duckdb_ext_api.duckdb_aggregate_function_set_name
@@ -752,8 +748,6 @@ typedef struct {
 #define duckdb_aggregate_function_set_extra_info       duckdb_ext_api.duckdb_aggregate_function_set_extra_info
 #define duckdb_aggregate_function_get_extra_info       duckdb_ext_api.duckdb_aggregate_function_get_extra_info
 #define duckdb_aggregate_function_set_error            duckdb_ext_api.duckdb_aggregate_function_set_error
-
-#endif
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
