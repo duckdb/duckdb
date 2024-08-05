@@ -2,6 +2,9 @@
 # description: Test copy statement with file overwrite
 # group: [overwrite]
 
+statement ok
+PRAGMA enable_verification
+
 # create a table and insert some values
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR(10));

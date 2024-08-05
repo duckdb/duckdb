@@ -66,16 +66,9 @@ jobs:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
-    - name: Handrolled checkout
-      shell: bash
-      env:
-        REPO_NAME: ${{ github.repository }}
-        REPO_REF: ${{ inputs.git_ref }}
-      run: |
-        git config --global --add safe.directory $(pwd)
-        git clone https://github.com/$REPO_NAME .
-        git fetch
-        git checkout $REPO_REF
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.git_ref }}
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:

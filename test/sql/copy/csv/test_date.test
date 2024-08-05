@@ -3,10 +3,13 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE date_test(d date);
 
 query I
-COPY date_test FROM 'test/sql/copy/csv/data/test/date.csv';
+COPY date_test FROM 'data/csv/test/date.csv';
 ----
 1
 
