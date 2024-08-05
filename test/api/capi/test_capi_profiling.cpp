@@ -16,7 +16,8 @@ string BuildProfilingSettingsString(const duckdb::vector<string> &settings) {
 }
 
 void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const duckdb::vector<string> &settings,
-                        duckdb::map<string, double> &cumulative_counter, duckdb::map<string, double> &cumulative_result) {
+                        duckdb::map<string, double> &cumulative_counter,
+                        duckdb::map<string, double> &cumulative_result) {
 	for (idx_t i = 0; i < settings.size(); i++) {
 		auto value = duckdb_profiling_info_get_value(profiling_info, settings[i].c_str());
 		if (value != nullptr) {
@@ -78,7 +79,7 @@ void TraverseTree(duckdb_profiling_info profiling_info, const duckdb::vector<str
 }
 
 int ConvertToInt(double value) {
-    return static_cast<int>(value * 1000);
+	return static_cast<int>(value * 1000);
 }
 
 TEST_CASE("Test Profiling with Single Metric", "[capi]") {
@@ -122,7 +123,7 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 
 	// test all profiling metrics
 	duckdb::vector<string> settings = {"CPU_TIME", "CUMULATIVE_CARDINALITY", "EXTRA_INFO", "OPERATOR_CARDINALITY",
-	                                "OPERATOR_TIMING"};
+	                                   "OPERATOR_TIMING"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildProfilingSettingsString(settings)));
 
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
@@ -140,7 +141,8 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 	TraverseTree(profiling_info, settings, cumulative_counter, cumulative_result);
 
 	REQUIRE(ConvertToInt(cumulative_result["CPU_TIME"]) == ConvertToInt(cumulative_counter["OPERATOR_TIMING"]));
-	REQUIRE(ConvertToInt(cumulative_result["CUMULATIVE_CARDINALITY"]) == ConvertToInt(cumulative_counter["OPERATOR_CARDINALITY"]));
+	REQUIRE(ConvertToInt(cumulative_result["CUMULATIVE_CARDINALITY"]) ==
+	        ConvertToInt(cumulative_counter["OPERATOR_CARDINALITY"]));
 
 	// Cleanup
 	tester.Cleanup();

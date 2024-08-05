@@ -270,12 +270,12 @@ OperatorProfiler::OperatorProfiler(ClientContext &context) {
 
 bool OperatorProfiler::SettingIsEnabled(MetricsType metric) const {
 	if (metric == MetricsType::OPERATOR_TIMING && SettingIsEnabled(MetricsType::CPU_TIME)) {
-        return true;
-    }
+		return true;
+	}
 
 	if (metric == MetricsType::OPERATOR_CARDINALITY && SettingIsEnabled(MetricsType::CUMULATIVE_CARDINALITY)) {
-        return true;
-    }
+		return true;
+	}
 
 	return settings.find(metric) != settings.end();
 }

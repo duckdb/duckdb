@@ -124,12 +124,12 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 	auto node_name = op.GetName();
 	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
 	if (op.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-        result->extra_text["Cardinality"] = op.GetProfilingInfo().GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
-    }
+		result->extra_text["Cardinality"] = op.GetProfilingInfo().GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
+	}
 	if (op.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-        string timing =
-            StringUtil::Format("%.2f", op.GetProfilingInfo().metrics.at(MetricsType::OPERATOR_TIMING).GetValue<double>());
-        result->extra_text["Timing"] = timing + "s";
+		string timing = StringUtil::Format(
+		    "%.2f", op.GetProfilingInfo().metrics.at(MetricsType::OPERATOR_TIMING).GetValue<double>());
+		result->extra_text["Timing"] = timing + "s";
 	}
 	return result;
 }
