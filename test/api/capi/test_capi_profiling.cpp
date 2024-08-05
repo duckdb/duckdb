@@ -135,14 +135,8 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 
 	TraverseTree(profiling_info, settings, cumulative_counter, cumulative_result);
 
-	if (std::find(settings.begin(), settings.end(), "CPU_TIME") != settings.end() &&
-	    std::find(settings.begin(), settings.end(), "OPERATOR_TIMING") != settings.end()) {
-		REQUIRE(cumulative_result["CPU_TIME"] == cumulative_counter["OPERATOR_TIMING"]);
-	}
-	if (std::find(settings.begin(), settings.end(), "OPERATOR_CARDINALITY") != settings.end() &&
-	    std::find(settings.begin(), settings.end(), "CUMULATIVE_CARDINALITY") != settings.end()) {
-		REQUIRE(cumulative_result["CUMULATIVE_CARDINALITY"] == cumulative_counter["OPERATOR_CARDINALITY"]);
-	}
+	REQUIRE(cumulative_result["CPU_TIME"] == cumulative_counter["OPERATOR_TIMING"]);
+	REQUIRE(cumulative_result["CUMULATIVE_CARDINALITY"] == cumulative_counter["OPERATOR_CARDINALITY"]);
 
 	// Cleanup
 	tester.Cleanup();
