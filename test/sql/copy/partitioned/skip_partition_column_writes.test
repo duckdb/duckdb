@@ -89,7 +89,7 @@ SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, valu
 statement error
 COPY test TO '__TEST_DIR__/no-part-cols8' (FORMAT PARQUET, PARTITION_BY (part_col, value_col, value2_col));
 ----
-Not implemented Error: There's no column to write. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
 
 # With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
 statement ok
@@ -108,7 +108,7 @@ SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols8/part_col
 statement error
 COPY test TO '__TEST_DIR__/no-part-cols9' (FORMAT PARQUET, PARTITION_BY '*');
 ----
-Not implemented Error: There's no column to write. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
 
 # With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
 statement ok
@@ -205,7 +205,7 @@ SELECT part_col, value_col, value2_col, value3_col, value4_col, value5_col, valu
 statement error
 COPY test TO '__TEST_DIR__/csv-no-part-cols8' (FORMAT CSV, PARTITION_BY (part_col, value_col, value2_col));
 ----
-Not implemented Error: There's no column to write. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
 
 # With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
 statement ok
@@ -224,7 +224,7 @@ SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols8/part
 statement error
 COPY test TO '__TEST_DIR__/csv-no-part-cols9' (FORMAT CSV, PARTITION_BY '*');
 ----
-Not implemented Error: There's no column to write. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
 
 # With explicit WRITE_PARTITION_COLUMNS option, all columns would still be written and still readable.
 statement ok
