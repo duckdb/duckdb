@@ -102,10 +102,14 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 }
 
 idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+	if (op.children.empty()) {
+		return 0;
+	} else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	           op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN ||
+	           op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return 1 + ChildHasJoins(*op.children[0]) + ChildHasJoins(*op.children[1]);
 	}
-	return 0;
+	return ChildHasJoins(*op.children[0]);
 }
 
 void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
@@ -116,12 +120,29 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
 	                                                              : right_child->EstimateCardinality(context);
 
+	bool prefer_swap = false;
+	// if one of the child already has joins, try to avoid making it a probe.
+	idx_t left_child_joins = ChildHasJoins(*op.children[0]);
+	idx_t right_child_joins = ChildHasJoins(*op.children[1]);
+	// if possible, right child should be probe side
+	if (right_child_joins == 0 && left_child_joins > 0) {
+		prefer_swap = true;
+	}
+
 	auto build_sizes = GetBuildSizes(op);
 	// special math.
 	auto left_side_build_cost = double(lhs_cardinality) * build_sizes.left_side;
 	auto right_side_build_cost = double(rhs_cardinality) * build_sizes.right_side;
 
 	bool swap = false;
+
+	// if the right child is a table scan, and the left child has joins, we should prefer the left child
+	// to be the build side. Since the tuples of the left side will already have been built on/be in flight,
+	// it will be faster to build on them again.
+	if (prefer_swap) {
+		right_side_build_cost *= 1.7;
+	}
+
 	// RHS is build side.
 	// if right_side metric is larger than left_side metric, then right_side is more costly to build on
 	// than the lhs. So we swap
@@ -130,7 +151,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	}
 
 	// swap for preferred on probe side
-	if (rhs_cardinality == lhs_cardinality  && !preferred_on_probe_side.empty()) {
+	if (rhs_cardinality == lhs_cardinality && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
 		auto bindings_left = left_child->GetColumnBindings();
 		auto bindings_right = right_child->GetColumnBindings();
