@@ -669,7 +669,7 @@ bool InsertIntoPrefix(ART &art, Node &node, reference<ARTKey> key, idx_t depth, 
                       bool in_gate) {
 	// If this is a prefix node, we traverse the prefix.
 	reference<Node> next_node(node);
-	auto pos = Prefix::Traverse<Node>(art, next_node, key, depth, true);
+	auto pos = Prefix::TraverseMutable(art, next_node, key, depth);
 
 	// We recurse into the next node, if
 	// (1) the prefix matches the key, or
@@ -850,7 +850,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	// Traverse the prefix.
 	reference<Node> next_node(node);
 	if (next_node.get().GetType() == NType::PREFIX) {
-		Prefix::Traverse<Node>(*this, next_node, key, depth, true);
+		Prefix::TraverseMutable(*this, next_node, key, depth);
 		if (next_node.get().GetType() == NType::PREFIX && !next_node.get().IsGate()) {
 			return;
 		}
@@ -922,7 +922,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	}
 
 	if (child_node.get().GetType() == NType::PREFIX) {
-		Prefix::Traverse<Node>(*this, child_node, key, temp_depth, true);
+		Prefix::TraverseMutable(*this, child_node, key, temp_depth);
 		if (child_node.get().GetType() == NType::PREFIX && !child_node.get().IsGate()) {
 			return;
 		}
@@ -971,7 +971,7 @@ const Node *ART::Lookup(const Node &node, const ARTKey &key, idx_t depth) {
 
 		// Traverse the prefix.
 		if (node_ref.get().GetType() == NType::PREFIX) {
-			Prefix::Traverse<const Node>(*this, node_ref, key, depth, false);
+			Prefix::Traverse(*this, node_ref, key, depth);
 			if (node_ref.get().GetType() == NType::PREFIX && !node_ref.get().IsGate()) {
 				// Prefix mismatch, return nullptr.
 				return nullptr;

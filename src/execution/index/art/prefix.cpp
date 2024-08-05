@@ -19,13 +19,13 @@ Prefix::Prefix(const ART &art, const Node ptr_p, const bool is_mutable, const bo
 			return;
 		}
 	}
-	ptr = type == INLINED ? nullptr : (Node *)(data + Size(art));
+	ptr = type == INLINED ? nullptr : reinterpret_cast<Node *>(data + Size(art));
 	in_memory = true;
 }
 
 Prefix::Prefix(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node ptr_p, const idx_t count) {
 	data = allocator->Get(ptr_p, true);
-	ptr = (Node *)(data + count + 1);
+	ptr = reinterpret_cast<Node *>(data + count + 1);
 	in_memory = true;
 }
 
@@ -152,14 +152,15 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, bool is_gate, const No
 }
 
 template <class NODE>
-idx_t Prefix::Traverse(ART &art, reference<NODE> &node, const ARTKey &key, idx_t &depth, const bool is_mutable) {
+idx_t TraverseInternal(ART &art, reference<NODE> &node, const ARTKey &key, idx_t &depth,
+                       const bool is_mutable = false) {
 
 	D_ASSERT(node.get().HasMetadata());
-	D_ASSERT(node.get().GetType() == PREFIX);
+	D_ASSERT(node.get().GetType() == NType::PREFIX);
 
-	while (node.get().GetType() == PREFIX) {
+	while (node.get().GetType() == NType::PREFIX) {
 		Prefix prefix(art, node, is_mutable);
-		for (idx_t i = 0; i < prefix.data[Count(art)]; i++) {
+		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 			if (prefix.data[i] != key[depth]) {
 				return i;
 			}
@@ -173,6 +174,14 @@ idx_t Prefix::Traverse(ART &art, reference<NODE> &node, const ARTKey &key, idx_t
 	}
 
 	return DConstants::INVALID_INDEX;
+}
+
+idx_t Prefix::Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth) {
+	return TraverseInternal<const Node>(art, node, key, depth);
+}
+
+idx_t Prefix::TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth) {
+	return TraverseInternal<Node>(art, node, key, depth, true);
 }
 
 bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &pos, const bool in_gate) {

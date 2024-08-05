@@ -1,3 +1,19 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/shared_ptr_ipp.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/common/likely.hpp"
+#include "duckdb/common/memory_safety.hpp"
+
+#include <memory>
+#include <type_traits>
+
 namespace duckdb {
 
 template <typename T, bool SAFE = true>

@@ -64,8 +64,8 @@ public:
 	//! 1. a non-prefix node.
 	//! 2. a mismatching byte.
 	//! Early-out, if the next prefix is a gate node.
-	template <class NODE>
-	static idx_t Traverse(ART &art, reference<NODE> &node, const ARTKey &key, idx_t &depth, const bool is_mutable);
+	static idx_t Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth);
+	static idx_t TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth);
 
 	//! Traverse two prefixes to find (1) that they match (so far), or (2) that they have a mismatching position,
 	//! or (3) that one prefix contains the other prefix. This function aids in merging Nodes, and, therefore,
