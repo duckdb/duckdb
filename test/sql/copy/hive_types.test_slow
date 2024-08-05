@@ -114,7 +114,7 @@ Binder Error: Referenced column "aired" not found in FROM clause!
 query II
 explain (FORMAT JSON) from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1';
 ----
-physical_plan	<REGEX>:.*(PARQUET_SCAN.*File Filters: \(aired \<).*
+physical_plan	<REGEX>:.*(PARQUET_SCAN.*File Filters": "\(aired \<).*
 
 # When partition columns are written, partition columns can be read even with HIVE_PARTITIONING=0 
 statement ok
@@ -128,4 +128,4 @@ BIGINT	VARCHAR	DATE
 query II
 explain from parquet_scan('__TEST_DIR__/partition-written/**/*.parquet', HIVE_PARTITIONING=0, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1';
 ----
-physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters.*aired.*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*aired.*
