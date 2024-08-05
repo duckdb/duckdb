@@ -1346,7 +1346,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
 		               "'test_column_depth' order by unnest_a asc");
-		string expected[3];
 		expected[0] = "{'db_schema_name': information_schema, 'db_schema_tables': NULL}";
 		expected[1] = "{'db_schema_name': main, "
 		              "'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
