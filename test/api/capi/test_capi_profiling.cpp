@@ -15,7 +15,8 @@ string BuildProfilingSettingsString(const std::vector<string> &settings) {
 	return result;
 }
 
-void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<string> &settings) {
+void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<string> &settings,
+                        std::map<string, double> &cumulative_counter, std::map<string, double> &cumulative_result) {
 	for (idx_t i = 0; i < settings.size(); i++) {
 		auto value = duckdb_profiling_info_get_value(profiling_info, settings[i].c_str());
 		if (value != nullptr) {
@@ -32,6 +33,15 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 				REQUIRE(false);
 			}
 
+			if (cumulative_counter.find(settings[i]) != cumulative_counter.end()) {
+				cumulative_counter[settings[i]] += result;
+			}
+
+			// only take the root node's result
+			if (cumulative_result.find(settings[i]) != cumulative_result.end() && cumulative_result[settings[i]] == 0) {
+				cumulative_result[settings[i]] = result;
+			}
+
 			duckdb_destroy_value(&value);
 			REQUIRE(result >= 0);
 		}
@@ -39,7 +49,9 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 }
 
 // Traverse the tree and retrieve all metrics
-void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string> &settings, bool is_root = true) {
+void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string> &settings,
+                  std::map<string, double> &cumulative_counter, std::map<string, double> &cumulative_result,
+                  bool is_root = true) {
 	if (is_root) {
 		// At the root, only the query name is available
 		auto query = duckdb_profiling_info_get_query(profiling_info);
@@ -56,12 +68,12 @@ void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string
 		REQUIRE(duckdb_profiling_info_get_query(profiling_info) == nullptr);
 	}
 
-	RetrieveAllMetrics(profiling_info, settings);
+	RetrieveAllMetrics(profiling_info, settings, cumulative_counter, cumulative_result);
 
 	auto child_count = duckdb_profiling_info_get_child_count(profiling_info);
 	for (idx_t i = 0; i < child_count; i++) {
 		auto child = duckdb_profiling_info_get_child(profiling_info, i);
-		TraverseTree(child, settings, false);
+		TraverseTree(child, settings, cumulative_counter, cumulative_result, false);
 	}
 }
 
@@ -86,7 +98,10 @@ TEST_CASE("Test Profiling with Single Metric", "[capi]") {
 	// Retrieve metric that is not enabled
 	REQUIRE(duckdb_profiling_info_get_value(profiling_info, "EXTRA_INFO") == nullptr);
 
-	TraverseTree(profiling_info, settings);
+	std::map<string, double> cumulative_counter;
+	std::map<string, double> cumulative_result;
+
+	TraverseTree(profiling_info, settings, cumulative_counter, cumulative_result);
 
 	// Cleanup
 	tester.Cleanup();
@@ -102,7 +117,8 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
 	// test all profiling metrics
-	std::vector<string> settings = {"CPU_TIME", "EXTRA_INFO", "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
+	std::vector<string> settings = {"CPU_TIME", "CUMULATIVE_CARDINALITY", "EXTRA_INFO", "OPERATOR_CARDINALITY",
+	                                "OPERATOR_TIMING"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildProfilingSettingsString(settings)));
 
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
@@ -110,7 +126,17 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 	auto profiling_info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(profiling_info != nullptr);
 
-	TraverseTree(profiling_info, settings);
+	std::map<string, double> cumulative_counter = {{"OPERATOR_TIMING", 0}, {"OPERATOR_CARDINALITY", 0}};
+
+	std::map<string, double> cumulative_result {
+	    {"CPU_TIME", 0},
+	    {"CUMULATIVE_CARDINALITY", 0},
+	};
+
+	TraverseTree(profiling_info, settings, cumulative_counter, cumulative_result);
+
+	REQUIRE(cumulative_result["CPU_TIME"] == cumulative_counter["OPERATOR_TIMING"]);
+	REQUIRE(cumulative_result["CUMULATIVE_CARDINALITY"] == cumulative_counter["OPERATOR_CARDINALITY"]);
 
 	// Cleanup
 	tester.Cleanup();
