@@ -72,28 +72,6 @@ bool ProfilingInfo::Enabled(const MetricsType setting) const {
 	return false;
 }
 
-string ProfilingInfo::GetMetricAsString(MetricsType setting) {
-	if (!Enabled(setting)) {
-		throw InternalException("Metric %s not enabled", EnumUtil::ToString(setting));
-	}
-
-	if (setting == MetricsType::EXTRA_INFO) {
-		string result;
-		for (auto &it : extra_info) {
-			if (!result.empty()) {
-				result += ", ";
-			}
-			result += StringUtil::Format("%s: %s", it.first, it.second);
-		}
-		return "\"" + result + "\"";
-	}
-
-	if (metrics[setting].IsNull()) {
-		return "0";
-	}
-	return metrics[setting].ToString();
-}
-
 string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 	if (!Enabled(setting)) {
 		throw InternalException("Metric %s not enabled", EnumUtil::ToString(setting));
@@ -110,9 +88,9 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 		return "\"" + result + "\"";
 	}
 
-	if (metrics.at(setting).IsNull()) {
-		return "0";
-	}
+	// The metric cannot be NULL, and should have been 0 initialized.
+	D_ASSERT(!metrics.at(setting).IsNull());
+
 	return metrics.at(setting).ToString();
 }
 
@@ -143,10 +121,8 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			continue;
 		}
 
-		if (metrics[metric].IsNull()) {
-			yyjson_mut_obj_add_str(doc, dest, key_ptr, "0");
-			continue;
-		}
+		// The metric cannot be NULL, and should have been 0 initialized.
+		D_ASSERT(!metrics[metric].IsNull());
 
 		switch (metric) {
 		case MetricsType::CPU_TIME:

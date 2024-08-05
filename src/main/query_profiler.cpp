@@ -136,6 +136,9 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		Finalize(*child);
 		if (op_node.type == PhysicalOperatorType::UNION &&
 		    op_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
+			op_node.GetProfilingInfo().AddToMetric(
+			    MetricsType::OPERATOR_CARDINALITY,
+			    child->GetProfilingInfo().metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>());
 		}
 	}
 }

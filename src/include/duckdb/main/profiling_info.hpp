@@ -84,26 +84,13 @@ public:
 	bool Enabled(const MetricsType setting) const;
 
 public:
-	string GetMetricAsString(MetricsType setting);
 	string GetMetricAsString(MetricsType setting) const;
 	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination);
 
 public:
 	template <class METRIC_TYPE>
 	METRIC_TYPE &GetMetricValue(const MetricsType setting) {
-		switch (setting) {
-		case MetricsType::CPU_TIME:
-			return metrics[MetricsType::CPU_TIME].GetValue<METRIC_TYPE>();
-		case MetricsType::EXTRA_INFO:
-			return metrics[MetricsType::EXTRA_INFO].GetValue<METRIC_TYPE>();
-		case MetricsType::CUMULATIVE_CARDINALITY:
-			return metrics[MetricsType::CUMULATIVE_CARDINALITY].GetValue<METRIC_TYPE>();
-		case MetricsType::OPERATOR_CARDINALITY:
-			return metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<METRIC_TYPE>();
-		case MetricsType::OPERATOR_TIMING:
-			return metrics[MetricsType::OPERATOR_TIMING].GetValue<METRIC_TYPE>();
-		}
-		throw InternalException("Unknown MetricsType");
+		return metrics[setting].GetValue<METRIC_TYPE>();
 	}
 
 	template <class METRIC_TYPE>
@@ -118,12 +105,8 @@ public:
 
 	template <class METRIC_TYPE>
 	void AddToMetric(const MetricsType setting, const METRIC_TYPE &value) {
-		if (metrics.find(setting) == metrics.end() || metrics[setting].IsNull()) {
-			metrics[setting] = Value::CreateValue(value);
-			return;
-		}
-		auto new_value = metrics[setting].GetValue<METRIC_TYPE>() + value;
-		metrics[setting] = Value::CreateValue(new_value);
+		auto new_value = Value::CreateValue(value);
+		return AddToMetric<METRIC_TYPE>(setting, new_value);
 	}
 };
 } // namespace duckdb
