@@ -35,7 +35,7 @@ public:
 	//! Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
 	//! Prefix size for nested leaves containing row IDs.
-	static constexpr uint8_t ROW_ID_PREFIX_COUNT = 7;
+	static constexpr uint8_t ROW_ID_PREFIX_COUNT = sizeof(row_t) - 1;
 	static constexpr uint8_t DEPRECATED_PREFIX_COUNT = 15;
 	//! FixedSizeAllocator count of the ART.
 	static constexpr uint8_t ALLOCATOR_COUNT = 10;

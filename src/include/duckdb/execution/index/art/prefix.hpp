@@ -53,6 +53,8 @@ public:
 	//! Initializes a merge by incrementing the buffer ID of the prefix and its child node(s)
 	static void InitializeMerge(ART &art, Node &node, const ARTFlags &flags);
 
+	//! Returns the row ID, if we can inline it, else -1.
+	static row_t CanInline(ART &art, Node &parent, Node &node, uint8_t byte, const Node &child = Node());
 	//! Concatenates parent_node -> byte -> child_node. Special-handling, if
 	//! 1. the byte was in a gate node.
 	//! 2. the byte was in PREFIX_INLINED.

@@ -80,6 +80,14 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 
 	// Compress one-way nodes.
 	if (n7.count == 1) {
+		// Inline the leaf.
+		auto row_id = Prefix::CanInline(art, prefix, node, byte);
+		if (row_id != -1) {
+			Node::Free(art, prefix);
+			Leaf::New(prefix, row_id);
+			return;
+		}
+
 		// We track the old node pointer because Concatenate() might overwrite it.
 		auto old_n7_node = node;
 

@@ -41,33 +41,63 @@ void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
 void Leaf::InsertIntoInlined(ART &art, Node &node, reference<ARTKey> row_id) {
 	D_ASSERT(node.GetType() == NType::LEAF_INLINED);
 
+	// Instead of recursively calling Insert twice, we need to directly create
+	// the Node4/Node7Leaf. Otherwise, the length of PREFIX_INLINED exceeds 7 bytes.
+
 	auto inlined_row_id = node.GetRowId();
 	node.Clear();
 
 	ArenaAllocator allocator(Allocator::Get(art.db));
 	auto inlined_row_id_key = ARTKey::CreateARTKey<row_t>(allocator, inlined_row_id);
 
-	// Insert both row IDs into the nested ART.
-	// Row IDs are always unique.
-	art.Insert(node, inlined_row_id_key, 0, inlined_row_id_key, true);
-	art.Insert(node, row_id, 0, row_id, true);
+	// Get the mismatching byte.
+	idx_t pos = DConstants::INVALID_INDEX;
+	D_ASSERT(row_id.get().len = inlined_row_id_key.len);
+	for (idx_t i = 0; i < inlined_row_id_key.len; i++) {
+		if (row_id.get().data[i] != inlined_row_id_key.data[i]) {
+			pos = i;
+			break;
+		}
+	}
+	D_ASSERT(pos != DConstants::INVALID_INDEX);
+
+	auto split_byte = row_id.get().data[pos];
+	Node remaining_prefix;
+	if (pos != ART::ROW_ID_PREFIX_COUNT) {
+		auto count = row_id.get().len - pos - 1;
+		Prefix::NewInlined(art, remaining_prefix, row_id, pos + 1, UnsafeNumericCast<uint8_t>(count));
+	}
+
+	reference<Node> next_node(node);
+	if (pos != 0) {
+		// Create a prefix.
+		Prefix::New(art, next_node, row_id, 0, pos);
+	}
+	if (pos == ART::ROW_ID_PREFIX_COUNT) {
+		Node7Leaf::New(art, next_node);
+	} else {
+		Node4::New(art, next_node);
+	}
+
+	// Insert the remaining prefix into the new node.
+	Node::InsertChild(art, next_node, split_byte, remaining_prefix);
+
+	// Insert the new key into the new node.
+	if (pos == ART::ROW_ID_PREFIX_COUNT) {
+		Node::InsertChild(art, next_node, inlined_row_id_key[pos]);
+	} else {
+		Node new_prefix;
+		auto count = inlined_row_id_key.len - pos - 1;
+		Prefix::NewInlined(art, new_prefix, inlined_row_id_key, pos + 1, UnsafeNumericCast<uint8_t>(count));
+		Node::InsertChild(art, next_node, inlined_row_id_key[pos], new_prefix);
+	}
+
 	node.SetGate();
 }
 
 void Leaf::EraseFromNested(ART &art, Node &node, const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
-
 	art.Erase(node, row_id, 0, row_id, true);
-	if (node.GetType() != NType::PREFIX_INLINED) {
-		return;
-	}
-
-	// Inline the row ID.
-	Prefix prefix(art, node, true);
-	auto data_ptr = &prefix.data[0];
-	auto remaining_row_id = ARTKey(data_ptr, sizeof(row_t)).GetRowID();
-	Node::Free(art, node);
-	Leaf::New(node, remaining_row_id);
 }
 
 void Leaf::TransformToNested(ART &art, Node &node) {

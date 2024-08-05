@@ -30,6 +30,7 @@ Prefix::Prefix(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node ptr_
 };
 
 void Prefix::NewInlined(ART &art, Node &node, const ARTKey &key, idx_t depth, uint8_t count) {
+	D_ASSERT(count <= art.prefix_count);
 	NewInternal(art, node, key.data, count, depth, INLINED);
 }
 
@@ -78,6 +79,41 @@ void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
 	node.IncreaseBufferId(buffer_count);
 	prefix.ptr->InitializeMerge(art, flags);
+}
+
+row_t Prefix::CanInline(ART &art, Node &parent, Node &node, uint8_t byte, const Node &child) {
+	if (art.IsUnique()) {
+		return -1;
+	}
+	if (node.GetType() != NType::NODE_7_LEAF && child.GetType() != INLINED) {
+		return -1;
+	}
+
+	idx_t concat_size = 0;
+	uint8_t data[sizeof(row_t)];
+	if (parent.GetType() == PREFIX) {
+		Prefix prefix(art, parent);
+		concat_size += prefix.data[art.prefix_count];
+		memcpy(data, prefix.data, prefix.data[art.prefix_count]);
+	}
+	data[concat_size] = byte;
+	concat_size++;
+
+	if (node.GetType() == NType::NODE_7_LEAF) {
+		if (concat_size < sizeof(row_t)) {
+			return -1;
+		} else {
+			return ARTKey(&data[0], sizeof(row_t)).GetRowID();
+		}
+	}
+
+	Prefix child_prefix(art, child);
+	memcpy(data + concat_size, child_prefix.data, child_prefix.data[art.prefix_count]);
+	concat_size += child_prefix.data[art.prefix_count];
+	if (concat_size < sizeof(row_t)) {
+		return -1;
+	}
+	return ARTKey(&data[0], sizeof(row_t)).GetRowID();
 }
 
 void Prefix::Concat(ART &art, Node &parent, uint8_t byte, bool is_gate, const Node &child) {

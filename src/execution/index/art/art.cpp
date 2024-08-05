@@ -76,11 +76,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	if (info.IsValid() && info.root_block_ptr.IsValid()) {
 		prefix_count = DEPRECATED_PREFIX_COUNT;
 	} else if (info.IsValid()) {
-		if (info.allocator_infos[0].segment_size > NumericCast<idx_t>(max_prefix_count)) {
-			prefix_count = max_prefix_count;
-		} else {
-			prefix_count = NumericCast<uint8_t>(info.allocator_infos[0].segment_size - sizeof(Node) - 1);
-		}
+		prefix_count = NumericCast<uint8_t>(info.allocator_infos[0].segment_size - sizeof(Node) - 1);
 	} else if (!IsUnique()) {
 		prefix_count = ROW_ID_PREFIX_COUNT;
 	} else {
@@ -94,6 +90,9 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		} else {
 			prefix_count = NumericCast<uint8_t>(aligned_value);
 		}
+	}
+	if (!IsUnique()) {
+		D_ASSERT(prefix_count >= ROW_ID_PREFIX_COUNT);
 	}
 
 	// Initialize the allocators.
@@ -766,7 +765,7 @@ bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKe
 		Node remaining_prefix;
 		auto prefix_byte = Prefix::GetByte(*this, next_node, UnsafeNumericCast<uint8_t>(pos));
 		auto freed_gate = Prefix::Split(*this, next_node, remaining_prefix, UnsafeNumericCast<uint8_t>(pos));
-		if (depth == sizeof(row_t) - 1) {
+		if (depth == ROW_ID_PREFIX_COUNT) {
 			Node7Leaf::New(*this, next_node);
 		} else {
 			Node4::New(*this, next_node);

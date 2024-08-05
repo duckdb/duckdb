@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 
 namespace duckdb {
 
@@ -109,6 +110,14 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) 
 		// Get the child and concatenate the prefixes.
 		auto child = *n4.GetChildMutable(n4.key[0]);
 		D_ASSERT(child.HasMetadata());
+
+		// Inline the leaf.
+		auto row_id = Prefix::CanInline(art, prefix, node, byte, child);
+		if (row_id != -1) {
+			Node::Free(art, prefix);
+			Leaf::New(prefix, row_id);
+			return;
+		}
 		Prefix::Concat(art, prefix, n4.key[0], node.IsGate(), child);
 
 		n4.count--;
