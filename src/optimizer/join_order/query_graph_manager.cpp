@@ -86,7 +86,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 	for (auto &filter_info : filters_and_bindings) {
 		auto &filter = filter_info->filter;
 		// now check if it can be used as a join predicate
-		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON || filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<idx_t> left_bindings, right_bindings;
@@ -110,10 +110,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 						// they are disjoint, we only need to create one set of edges in the join graph
 						query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set, filter_info);
 						query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set, filter_info);
-					} else {
-						continue;
 					}
-					continue;
 				}
 			}
 		}
