@@ -118,7 +118,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 
 	auto build_sizes = GetBuildSizes(op);
 	// special math.
-	auto left_side_build_cost = double(lhs_cardinality) * double(cardinality_ratio) * build_sizes.left_side;
+	auto left_side_build_cost = double(lhs_cardinality) * build_sizes.left_side;
 	auto right_side_build_cost = double(rhs_cardinality) * build_sizes.right_side;
 
 	bool swap = false;
@@ -130,7 +130,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	}
 
 	// swap for preferred on probe side
-	if (rhs_cardinality == lhs_cardinality * cardinality_ratio && !preferred_on_probe_side.empty()) {
+	if (rhs_cardinality == lhs_cardinality  && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
 		auto bindings_left = left_child->GetColumnBindings();
 		auto bindings_right = right_child->GetColumnBindings();
@@ -166,7 +166,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		case JoinType::LEFT:
 		case JoinType::RIGHT:
 			if (join.right_projection_map.empty()) {
-				TryFlipJoinChildren(join, 2);
+				TryFlipJoinChildren(join);
 			}
 			break;
 		case JoinType::SEMI:
@@ -177,7 +177,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 				// There is no physical join operator (yet) that can do a right_semi/anti join.
 				break;
 			}
-			TryFlipJoinChildren(join, 2);
+			TryFlipJoinChildren(join);
 			break;
 		}
 		default:
@@ -186,15 +186,15 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		TryFlipJoinChildren(op, 1);
+		TryFlipJoinChildren(op);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &join = op.Cast<LogicalAnyJoin>();
 		if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-			TryFlipJoinChildren(join, 2);
+			TryFlipJoinChildren(join);
 		} else if (join.join_type == JoinType::INNER) {
-			TryFlipJoinChildren(join, 1);
+			TryFlipJoinChildren(join);
 		}
 		break;
 	}

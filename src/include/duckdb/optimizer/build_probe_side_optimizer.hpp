@@ -34,7 +34,8 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override {};
 
-	void TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
+	void TryFlipJoinChildren(LogicalOperator &op);
+	static idx_t ChildHasJoins(LogicalOperator &op);
 
 	BuildSize GetBuildSizes(LogicalOperator &op);
 
