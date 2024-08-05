@@ -35,14 +35,26 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
+	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
+	                                        OperatorState &state) const final;
+
+	bool RequiresFinalExecute() const final {
+		return true;
+	}
+
 	OrderPreservationType OperatorOrder() const override {
 		return OrderPreservationType::FIXED_ORDER;
 	}
 
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 private:
-	void ExecuteAggregate();
+	void ExecuteFunctions(ExecutionContext &context, DataChunk &chunk, DataChunk &delayed,
+	                      GlobalOperatorState &gstate_p, OperatorState &state_p) const;
+	void ExecuteInput(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
+	                  GlobalOperatorState &gstate, OperatorState &state) const;
+	void ExecuteDelayed(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
+	                    GlobalOperatorState &gstate, OperatorState &state) const;
 };
 
 } // namespace duckdb

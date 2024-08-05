@@ -11,7 +11,7 @@ BindResult AggregateBinder::BindExpression(unique_ptr<ParsedExpression> &expr_pt
 	auto &expr = *expr_ptr;
 	switch (expr.expression_class) {
 	case ExpressionClass::WINDOW:
-		throw ParserException("aggregate function calls cannot contain window function calls");
+		throw BinderException::Unsupported(expr, "aggregate function calls cannot contain window function calls");
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}

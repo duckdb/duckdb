@@ -233,6 +233,11 @@ jobs:
           key: ${{ github.job }}-${{ matrix.label }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
+      - name: Install Rust cross compile dependency
+        if: ${{ matrix.osx_arch == 'x86_64'}}
+        run: |
+          rustup target add x86_64-apple-darwin
+
       - uses: ./.github/actions/build_extensions
         with:
           treat_warn_as_error: 0

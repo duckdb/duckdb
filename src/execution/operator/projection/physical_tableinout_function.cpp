@@ -108,15 +108,14 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-string PhysicalTableInOutFunction::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> PhysicalTableInOutFunction::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
-		result = function.to_string(bind_data.get());
+		result["Stringified"] = function.to_string(bind_data.get());
 	} else {
-		result += function.name;
+		result["Name"] = function.name;
 	}
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu", estimated_cardinality);
+	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
 

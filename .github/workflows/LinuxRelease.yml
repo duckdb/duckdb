@@ -61,20 +61,19 @@ jobs:
       ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja
       BUILD_BENCHMARK: 1
-      DEBUG_STACKTRACE: 1
       FORCE_WARN_UNUSED: 1
       DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
       with:
-        fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
         ninja-build: 1
-        ccache: 1
+        ccache: 0
         python_alias: 1
         aws-cli: 1
 
@@ -147,6 +146,7 @@ jobs:
      TREAT_WARNINGS_AS_ERRORS: 1
      FORCE_WARN_UNUSED: 1
      DUCKDB_PLATFORM: linux_arm64
+     ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
    steps:
      - uses: actions/checkout@v3
@@ -190,6 +190,8 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:18.04
     needs: linux-release-64
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
@@ -203,6 +205,16 @@ jobs:
         openssl: 1
         ccache: 1
         git_ref: ${{ inputs.git_ref }}
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Configure OpenSSL for Rust
+      run: |
+        echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+        echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=`pwd`/build/release/vcpkg_installed/x64-linux/include" >> $GITHUB_ENV
+        echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -230,6 +242,8 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:18.04
     needs: linux-release-64
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - uses: actions/checkout@v3
@@ -244,6 +258,18 @@ jobs:
           aarch64_cross_compile: 1
           ccache: 1
           git_ref: ${{ inputs.git_ref }}
+
+      - name: Setup Rust for cross compilation
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Configure OpenSSL for Rust
+        run: |
+          echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux/include" >> $GITHUB_ENV
+          echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
 
       - uses: ./.github/actions/build_extensions
         with:

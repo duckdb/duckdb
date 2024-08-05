@@ -103,7 +103,7 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 			}
 		}
 		if (nanos) {
-			*nanos = micros % Interval::NANOS_PER_MICRO;
+			*nanos = UnsafeNumericCast<int32_t>(micros % Interval::NANOS_PER_MICRO);
 			micros /= Interval::NANOS_PER_MICRO;
 		}
 	}
@@ -249,7 +249,7 @@ string Time::ToString(dtime_t time) {
 
 	char micro_buffer[6];
 	auto length = TimeToStringCast::Length(time_units, micro_buffer);
-	auto buffer = make_unsafe_uniq_array<char>(length);
+	auto buffer = make_unsafe_uniq_array_uninitialized<char>(length);
 	TimeToStringCast::Format(buffer.get(), length, time_units, micro_buffer);
 	return string(buffer.get(), length);
 }

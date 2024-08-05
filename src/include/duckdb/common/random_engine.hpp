@@ -29,6 +29,7 @@ public:
 	//! Generate a random number between 0 and 1
 	double NextRandom();
 	uint32_t NextRandomInteger();
+	uint32_t NextRandomInteger(uint32_t min, uint32_t max);
 
 	void SetSeed(uint32_t seed);
 

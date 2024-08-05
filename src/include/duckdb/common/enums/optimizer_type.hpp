@@ -18,6 +18,7 @@ enum class OptimizerType : uint32_t {
 	EXPRESSION_REWRITER,
 	FILTER_PULLUP,
 	FILTER_PUSHDOWN,
+	CTE_FILTER_PUSHER,
 	REGEX_RANGE,
 	IN_CLAUSE,
 	JOIN_ORDER,
@@ -36,6 +37,9 @@ enum class OptimizerType : uint32_t {
 	REORDER_FILTER,
 	SAMPLING_PUSHDOWN,
 	EXTENSION
+	JOIN_FILTER_PUSHDOWN,
+	EXTENSION,
+	MATERIALIZED_CTE,
 };
 
 string OptimizerTypeToString(OptimizerType type);

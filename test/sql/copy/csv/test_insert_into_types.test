@@ -5,6 +5,36 @@
 statement ok
 PRAGMA enable_verification
 
+# Run without enable_verifications set
+
+statement ok
+CREATE TABLE users (
+        id INTEGER NOT NULL,  /*primary key*/
+        name VARCHAR(10) NOT NULL,
+        email VARCHAR
+);
+
+statement ok
+INSERT INTO users
+SELECT *
+FROM read_csv('data/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
+
+query III
+select * from users;
+----
+1	alice	alice@email.com
+2	eve	eve@email.com
+1	alice	alice@email.com
+3	bob	bob@email.com
+1	alice	alice@email.com
+3	bob	bob@email.com
+
+statement ok
+DROP TABLE users;
+
+statement ok
+PRAGMA enable_verification
+
 statement ok
 CREATE TABLE users (
         id INTEGER NOT NULL,  /*primary key*/

@@ -8,27 +8,62 @@
 
 namespace duckdb {
 
+unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery::PGFunctionDefinition &def) {
+	unique_ptr<MacroFunction> macro_func;
+	if (def.function) {
+		auto expression = TransformExpression(def.function);
+		macro_func = make_uniq<ScalarMacroFunction>(std::move(expression));
+	} else if (def.query) {
+		auto query_node =
+		    TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(def.query), true)->node->Copy();
+		macro_func = make_uniq<TableMacroFunction>(std::move(query_node));
+	}
+
+	if (!def.params) {
+		return macro_func;
+	}
+	vector<unique_ptr<ParsedExpression>> parameters;
+	TransformExpressionList(*def.params, parameters);
+	for (auto &param : parameters) {
+		if (param->type == ExpressionType::VALUE_CONSTANT) {
+			// parameters with default value (must have an alias)
+			if (param->alias.empty()) {
+				throw ParserException("Invalid parameter: '%s'", param->ToString());
+			}
+			if (macro_func->default_parameters.find(param->alias) != macro_func->default_parameters.end()) {
+				throw ParserException("Duplicate default parameter: '%s'", param->alias);
+			}
+			macro_func->default_parameters[param->alias] = std::move(param);
+		} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			// positional parameters
+			if (!macro_func->default_parameters.empty()) {
+				throw ParserException("Positional parameters cannot come after parameters with a default value!");
+			}
+			macro_func->parameters.push_back(std::move(param));
+		} else {
+			throw ParserException("Invalid parameter: '%s'", param->ToString());
+		}
+	}
+	return macro_func;
+}
+
 unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgquery::PGCreateFunctionStmt &stmt) {
 	D_ASSERT(stmt.type == duckdb_libpgquery::T_PGCreateFunctionStmt);
-	D_ASSERT(stmt.function || stmt.query);
+	D_ASSERT(stmt.functions);
 
 	auto result = make_uniq<CreateStatement>();
 	auto qname = TransformQualifiedName(*stmt.name);
 
-	unique_ptr<MacroFunction> macro_func;
-
-	// function can be null here
-	if (stmt.function) {
-		auto expression = TransformExpression(stmt.function);
-		macro_func = make_uniq<ScalarMacroFunction>(std::move(expression));
-	} else if (stmt.query) {
-		auto query_node =
-		    TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.query), true)->node->Copy();
-		macro_func = make_uniq<TableMacroFunction>(std::move(query_node));
+	vector<unique_ptr<MacroFunction>> macros;
+	for (auto c = stmt.functions->head; c != nullptr; c = lnext(c)) {
+		auto &function_def = *PGPointerCast<duckdb_libpgquery::PGFunctionDefinition>(c->data.ptr_value);
+		macros.push_back(TransformMacroFunction(function_def));
 	}
 	PivotEntryCheck("macro");
 
-	auto info = make_uniq<CreateMacroInfo>(stmt.function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY);
+	auto catalog_type =
+	    macros[0]->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY;
+	auto info = make_uniq<CreateMacroInfo>(catalog_type);
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->name = qname.name;
@@ -49,33 +84,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 
 	// what to do on conflict
 	info->on_conflict = TransformOnConflict(stmt.onconflict);
+	info->macros = std::move(macros);
 
-	if (stmt.params) {
-		vector<unique_ptr<ParsedExpression>> parameters;
-		TransformExpressionList(*stmt.params, parameters);
-		for (auto &param : parameters) {
-			if (param->type == ExpressionType::VALUE_CONSTANT) {
-				// parameters with default value (must have an alias)
-				if (param->alias.empty()) {
-					throw ParserException("Invalid parameter: '%s'", param->ToString());
-				}
-				if (macro_func->default_parameters.find(param->alias) != macro_func->default_parameters.end()) {
-					throw ParserException("Duplicate default parameter: '%s'", param->alias);
-				}
-				macro_func->default_parameters[param->alias] = std::move(param);
-			} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-				// positional parameters
-				if (!macro_func->default_parameters.empty()) {
-					throw ParserException("Positional parameters cannot come after parameters with a default value!");
-				}
-				macro_func->parameters.push_back(std::move(param));
-			} else {
-				throw ParserException("Invalid parameter: '%s'", param->ToString());
-			}
-		}
-	}
-
-	info->function = std::move(macro_func);
 	result->info = std::move(info);
 
 	return result;

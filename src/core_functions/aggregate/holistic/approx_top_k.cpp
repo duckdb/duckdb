@@ -68,7 +68,7 @@ struct ApproxTopKState {
 		D_ASSERT(lookup_map.empty());
 		k = kval;
 		capacity = kval * MONITORED_VALUES_RATIO;
-		stored_values = make_unsafe_uniq_array<ApproxTopKValue>(capacity);
+		stored_values = make_unsafe_uniq_array_uninitialized<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
 
 		// we scale the filter based on the amount of values we are monitoring
@@ -297,7 +297,7 @@ static void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 
 	auto &top_k_vector = inputs[1];
 
-	auto extra_state = OP::CreateExtraState();
+	auto extra_state = OP::CreateExtraState(count);
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 

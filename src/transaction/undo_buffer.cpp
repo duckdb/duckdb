@@ -12,6 +12,7 @@
 #include "duckdb/transaction/rollback_state.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/transaction/wal_write_state.hpp"
+#include "duckdb/transaction/delete_info.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
@@ -123,9 +124,14 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 		case UndoFlags::UPDATE_TUPLE:
 			properties.has_updates = true;
 			break;
-		case UndoFlags::DELETE_TUPLE:
+		case UndoFlags::DELETE_TUPLE: {
+			auto info = reinterpret_cast<DeleteInfo *>(data);
+			if (info->is_consecutive) {
+				properties.estimated_size += sizeof(row_t) * info->count;
+			}
 			properties.has_deletes = true;
 			break;
+		}
 		case UndoFlags::CATALOG_ENTRY: {
 			properties.has_catalog_changes = true;
 
@@ -152,7 +158,7 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 	return properties;
 }
 
-void UndoBuffer::Cleanup() {
+void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	// garbage collect everything in the Undo Chunk
 	// this should only happen if
 	//  (1) the transaction this UndoBuffer belongs to has successfully
@@ -161,7 +167,7 @@ void UndoBuffer::Cleanup() {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-	CleanupState state;
+	CleanupState state(lowest_active_transaction);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 

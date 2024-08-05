@@ -1,0 +1,21 @@
+# name: test/sql/storage/compact_block_size/block_size_with_rollback.test
+# description: Tests rolling back after an attach and then attaching the same file with a different block size.
+# group: [compact_block_size]
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+ATTACH '__TEST_DIR__/rollback.db' (BLOCK_SIZE 16384);
+
+statement ok
+CREATE TABLE rollback.tbl AS SELECT range AS i FROM range(100);
+
+statement ok
+ROLLBACK;
+
+statement error
+ATTACH '__TEST_DIR__/rollback.db' (BLOCK_SIZE 262144);
+----
+block size parameter does not match
+

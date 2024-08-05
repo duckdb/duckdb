@@ -47,14 +47,16 @@ string LogicalOperator::GetName() const {
 	return LogicalOperatorToString(type);
 }
 
-string LogicalOperator::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string expressions_info;
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			expressions_info += "\n";
 		}
-		result += expressions[i]->GetName();
+		expressions_info += expressions[i]->GetName();
 	}
+	result["Expressions"] = expressions_info;
 	return result;
 }
 
@@ -107,9 +109,12 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 	}
 }
 
-string LogicalOperator::ToString() const {
-	TreeRenderer renderer;
-	return renderer.ToString(*this);
+string LogicalOperator::ToString(ExplainFormat format) const {
+	auto renderer = TreeRenderer::CreateRenderer(format);
+	stringstream ss;
+	auto tree = RenderTree::CreateRenderTree(*this);
+	renderer->ToStream(*tree, ss);
+	return ss.str();
 }
 
 void LogicalOperator::Verify(ClientContext &context) {

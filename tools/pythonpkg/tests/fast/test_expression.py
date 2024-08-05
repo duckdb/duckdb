@@ -58,6 +58,7 @@ class TestExpression(object):
         res = rel.fetchall()
         assert res == [(5,)]
 
+    @pytest.mark.skipif(platform.system() == 'Windows', reason="There is some weird interaction in Windows CI")
     def test_column_expression(self):
         con = duckdb.connect()
 
@@ -834,3 +835,38 @@ class TestExpression(object):
         rel2 = rel.sort(b.desc().nulls_last())
         res = rel2.b.fetchall()
         assert res == [('c',), ('b',), ('a',), ('a',), (None,)]
+
+    def test_aggregate(self):
+        con = duckdb.connect()
+        rel = con.sql("select * from range(1000000) t(a)")
+        count = FunctionExpression("count", "a").cast("int")
+        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+
+    def test_aggregate_error(self):
+        con = duckdb.connect()
+
+        # Not necessarily an error, but even non-aggregates are accepted
+        rel = con.sql("select * from values (5) t(a)")
+        res = rel.aggregate(["a"]).execute().fetchone()[0]
+        assert res == 5
+
+        res = rel.aggregate([5]).execute().fetchone()[0]
+        assert res == 5
+
+        # Providing something that can not be converted into an expression is an error:
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Invalid Input Error: Please provide arguments of type Expression!'
+        ):
+
+            class MyClass:
+                def __init__(self):
+                    pass
+
+            res = rel.aggregate([MyClass()]).fetchone()[0]
+
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Please provide either a string or list of Expression objects, not <class 'int'>",
+        ):
+            res = rel.aggregate(5).execute().fetchone()

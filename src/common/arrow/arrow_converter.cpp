@@ -180,14 +180,15 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT: {
+	case LogicalTypeId::BIT:
+
 		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
 		}
 		break;
-	}
+
 	case LogicalTypeId::LIST: {
 		if (options.arrow_use_list_view) {
 			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {

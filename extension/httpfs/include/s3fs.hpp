@@ -165,7 +165,7 @@ protected:
 	atomic<bool> uploader_has_error {false};
 	std::exception_ptr upload_exception;
 
-	void InitializeClient(optional_ptr<ClientContext> client_context) override;
+	unique_ptr<duckdb_httplib_openssl::Client> CreateClient(optional_ptr<ClientContext> client_context) override;
 
 	//! Rethrow IO Exception originating from an upload thread
 	void RethrowIOError() {

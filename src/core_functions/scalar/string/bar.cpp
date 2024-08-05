@@ -40,7 +40,7 @@ static string_t BarScalarFunction(double x, double min, double max, double max_w
 
 	result.clear();
 
-	auto width_as_int = NumericCast<uint32_t>(width * PARTIAL_BLOCKS_COUNT);
+	auto width_as_int = LossyNumericCast<uint32_t>(width * PARTIAL_BLOCKS_COUNT);
 	idx_t full_blocks_count = (width_as_int / PARTIAL_BLOCKS_COUNT);
 	for (idx_t i = 0; i < full_blocks_count; i++) {
 		result += FULL_BLOCK;

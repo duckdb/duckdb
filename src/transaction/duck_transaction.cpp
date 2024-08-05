@@ -28,9 +28,9 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 }
 
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
-                                 transaction_t transaction_id)
+                                 transaction_t transaction_id, idx_t catalog_version_p)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), transaction_manager(manager), undo_buffer(context_p),
+      highest_active_query(0), catalog_version(catalog_version_p), transaction_manager(manager), undo_buffer(context_p),
       storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
@@ -142,6 +142,16 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	}
 }
 
+void DuckTransaction::UpdateCollection(shared_ptr<RowGroupCollection> &collection) {
+	auto collection_ref = reference<RowGroupCollection>(*collection);
+	auto entry = updated_collections.find(collection_ref);
+	if (entry != updated_collections.end()) {
+		// already exists
+		return;
+	}
+	updated_collections.insert(make_pair(collection_ref, collection));
+}
+
 bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
@@ -235,8 +245,8 @@ void DuckTransaction::Rollback() noexcept {
 	undo_buffer.Rollback();
 }
 
-void DuckTransaction::Cleanup() {
-	undo_buffer.Cleanup();
+void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
+	undo_buffer.Cleanup(lowest_active_transaction);
 }
 
 void DuckTransaction::SetReadWrite() {

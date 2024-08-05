@@ -326,6 +326,10 @@ void DataTable::VacuumIndexes() {
 	});
 }
 
+void DataTable::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+	row_groups->CleanupAppend(lowest_transaction, start, count);
+}
+
 bool DataTable::IndexNameIsUnique(const string &name) {
 	return info->indexes.NameIsUnique(name);
 }
@@ -515,7 +519,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	}
 
 	auto &table_entry_ptr =
-	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, bfk.info.schema, bfk.info.table);
+	    Catalog::GetEntry<TableCatalogEntry>(context, db.GetName(), bfk.info.schema, bfk.info.table);
 	// make the data chunk to check
 	vector<LogicalType> types;
 	for (auto &col : table_entry_ptr.GetColumns().Physical()) {
@@ -1331,13 +1335,14 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 
 	// otherwise global storage
 	if (n_global_update > 0) {
+		auto &transaction = DuckTransaction::Get(context, db);
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten(n_global_update);
 
-		row_groups->Update(DuckTransaction::Get(context, db), FlatVector::GetData<row_t>(row_ids_slice), column_ids,
-		                   updates_slice);
+		transaction.UpdateCollection(row_groups);
+		row_groups->Update(transaction, FlatVector::GetData<row_t>(row_ids_slice), column_ids, updates_slice);
 	}
 }
 

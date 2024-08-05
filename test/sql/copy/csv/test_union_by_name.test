@@ -3,6 +3,9 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 SET default_null_order='nulls_first';
 
 # Setup
@@ -195,7 +198,7 @@ NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
 ----
-Mismatch between the number of columns (2) in the CSV file and what is expected in the scanner (3).
+If you are trying to read files with different schemas, try setting union_by_name=True
 
 query IIII
 SELECT id, value, a, part

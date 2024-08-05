@@ -44,4 +44,9 @@ BinderException BinderException::NoMatchingFunction(const string &name, const ve
 	    extra_info);
 }
 
+BinderException BinderException::Unsupported(ParsedExpression &expr, const string &message) {
+	auto extra_info = Exception::InitializeExtraInfo("UNSUPPORTED", expr.query_location);
+	return BinderException(message, extra_info);
+}
+
 } // namespace duckdb

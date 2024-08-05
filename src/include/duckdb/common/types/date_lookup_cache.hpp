@@ -50,7 +50,7 @@ private:
 
 	void BuildCache() {
 		D_ASSERT(CACHE_MAX_DATE > CACHE_MIN_DATE);
-		cache = make_unsafe_uniq_array<CACHE_TYPE>(CACHE_MAX_DATE - CACHE_MIN_DATE);
+		cache = make_unsafe_uniq_array_uninitialized<CACHE_TYPE>(CACHE_MAX_DATE - CACHE_MIN_DATE);
 		for (int32_t d = CACHE_MIN_DATE; d < CACHE_MAX_DATE; d++) {
 			date_t date(d);
 			auto cache_entry = OP::template Operation<date_t, int64_t>(date);

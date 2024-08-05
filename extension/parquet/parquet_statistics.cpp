@@ -26,17 +26,17 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	// `max_value`. All are optional. such elegance.
 	Value min;
 	Value max;
-	if (parquet_stats.__isset.min) {
-		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min).DefaultCastAs(type);
-	} else if (parquet_stats.__isset.min_value) {
+	if (parquet_stats.__isset.min_value) {
 		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value).DefaultCastAs(type);
+	} else if (parquet_stats.__isset.min) {
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min).DefaultCastAs(type);
 	} else {
 		min = Value(type);
 	}
-	if (parquet_stats.__isset.max) {
-		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).DefaultCastAs(type);
-	} else if (parquet_stats.__isset.max_value) {
+	if (parquet_stats.__isset.max_value) {
 		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value).DefaultCastAs(type);
+	} else if (parquet_stats.__isset.max) {
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).DefaultCastAs(type);
 	} else {
 		max = Value(type);
 	}
@@ -188,7 +188,9 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 	}
 	case LogicalTypeId::TIME_TZ: {
 		int64_t val;
-		if (stats.size() == sizeof(int64_t)) {
+		if (stats.size() == sizeof(int32_t)) {
+			val = Load<int32_t>(stats_data);
+		} else if (stats.size() == sizeof(int64_t)) {
 			val = Load<int64_t>(stats_data);
 		} else {
 			throw InternalException("Incorrect stats size for type TIMETZ");
@@ -196,7 +198,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
 			// logical type
 			if (schema_ele.logicalType.TIME.unit.__isset.MILLIS) {
-				return Value::TIMETZ(ParquetIntToTimeMsTZ(val));
+				return Value::TIMETZ(ParquetIntToTimeMsTZ(NumericCast<int32_t>(val)));
 			} else if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
 				return Value::TIMETZ(ParquetIntToTimeTZ(val));
 			} else if (schema_ele.logicalType.TIME.unit.__isset.NANOS) {
@@ -347,21 +349,21 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		break;
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateEmpty(type);
-		if (parquet_stats.__isset.min) {
-			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
-			StringStats::Update(string_stats, parquet_stats.min);
-		} else if (parquet_stats.__isset.min_value) {
+		if (parquet_stats.__isset.min_value) {
 			StringColumnReader::VerifyString(parquet_stats.min_value.c_str(), parquet_stats.min_value.size(), true);
 			StringStats::Update(string_stats, parquet_stats.min_value);
+		} else if (parquet_stats.__isset.min) {
+			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
+			StringStats::Update(string_stats, parquet_stats.min);
 		} else {
 			return nullptr;
 		}
-		if (parquet_stats.__isset.max) {
-			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
-			StringStats::Update(string_stats, parquet_stats.max);
-		} else if (parquet_stats.__isset.max_value) {
+		if (parquet_stats.__isset.max_value) {
 			StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
 			StringStats::Update(string_stats, parquet_stats.max_value);
+		} else if (parquet_stats.__isset.max) {
+			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
+			StringStats::Update(string_stats, parquet_stats.max);
 		} else {
 			return nullptr;
 		}

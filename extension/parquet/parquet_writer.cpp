@@ -285,7 +285,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 
 uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
 	if (encryption_config) {
-		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey());
+		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey(), *encryption_util);
 	} else {
 		return object.write(protocol.get());
 	}
@@ -293,7 +293,8 @@ uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
 
 uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size) {
 	if (encryption_config) {
-		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey());
+		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey(),
+		                                *encryption_util);
 	} else {
 		protocol->getTransport()->write(buffer, buffer_size);
 		return buffer_size;
@@ -317,14 +318,23 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p,
-                             double dictionary_compression_ratio_threshold_p, optional_idx compression_level_p)
+                             double dictionary_compression_ratio_threshold_p, optional_idx compression_level_p,
+                             bool debug_use_openssl_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
       field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)),
-      dictionary_compression_ratio_threshold(dictionary_compression_ratio_threshold_p) {
+      dictionary_compression_ratio_threshold(dictionary_compression_ratio_threshold_p),
+      debug_use_openssl(debug_use_openssl_p) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	if (encryption_config) {
+		auto &config = DBConfig::GetConfig(context);
+		if (config.encryption_util && debug_use_openssl) {
+			// Use OpenSSL
+			encryption_util = config.encryption_util;
+		} else {
+			encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
+		}
 		// encrypted parquet files start with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);
 		// we only support this one for now, not "AES_GCM_CTR_V1"
@@ -367,7 +377,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 
 	// populate root schema object
 	file_meta_data.schema[0].name = "duckdb_schema";
-	file_meta_data.schema[0].num_children = sql_types.size();
+	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
 	file_meta_data.schema[0].__isset.num_children = true;
 	file_meta_data.schema[0].repetition_type = duckdb_parquet::format::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
@@ -392,8 +402,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
-	row_group.num_rows = buffer.Count();
-	row_group.total_byte_size = buffer.SizeInBytes();
+	row_group.num_rows = NumericCast<int64_t>(buffer.Count());
+	row_group.total_byte_size = NumericCast<int64_t>(buffer.SizeInBytes());
 	row_group.__isset.file_offset = true;
 
 	auto &states = result.states;
@@ -495,7 +505,7 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	if (states.empty()) {
 		throw InternalException("Attempting to flush a row group with no rows");
 	}
-	row_group.file_offset = writer->GetTotalWritten();
+	row_group.file_offset = NumericCast<int64_t>(writer->GetTotalWritten());
 	for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
 		auto write_state = std::move(states[col_idx]);
