@@ -34,6 +34,7 @@ SELECT unnest(res) from (
 "CUMULATIVE_CARDINALITY": "true"
 "EXTRA_INFO": "true"
 "OPERATOR_CARDINALITY": "true"
+"OPERATOR_ROWS_SCANNED": "true"
 "OPERATOR_TIMING": "true"
 
 # Turn off all settings

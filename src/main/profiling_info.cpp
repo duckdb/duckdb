@@ -23,6 +23,7 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	    MetricsType::EXTRA_INFO,
 	    MetricsType::CUMULATIVE_CARDINALITY,
 	    MetricsType::OPERATOR_CARDINALITY,
+	    MetricsType::OPERATOR_ROWS_SCANNED,
 	    MetricsType::OPERATOR_TIMING,
 	};
 }
@@ -49,7 +50,8 @@ void ProfilingInfo::ResetMetrics() {
 			break;
 		}
 		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY: {
+		case MetricsType::OPERATOR_CARDINALITY:
+		case MetricsType::OPERATOR_ROWS_SCANNED: {
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
 			break;
 		}
@@ -131,7 +133,8 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			break;
 		}
 		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY: {
+		case MetricsType::OPERATOR_CARDINALITY:
+		case MetricsType::OPERATOR_ROWS_SCANNED: {
 			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
 			break;
 		}
