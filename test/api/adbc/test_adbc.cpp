@@ -1220,7 +1220,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
-					   "'test_table_depth' order by unnest_a asc");
+		               "'test_table_depth' order by unnest_a asc");
 		REQUIRE(res->ColumnCount() == 1);
 		REQUIRE(res->RowCount() == 3);
 		string expected[3];
