@@ -10,6 +10,7 @@
 
 #include "duckdb.h"
 #include "fast_float/fast_float.h"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 template <class T>
