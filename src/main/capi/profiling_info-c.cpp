@@ -80,5 +80,5 @@ const char *duckdb_profiling_info_get_query(duckdb_profiling_info info) {
 		return nullptr;
 	}
 	auto &query_node = node.Cast<duckdb::QueryProfilingNode>();
-	return strdup(query_node.query.c_str());
+	return strdup(query_node.query_info.query_name.c_str());
 }

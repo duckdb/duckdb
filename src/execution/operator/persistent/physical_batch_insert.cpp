@@ -518,7 +518,7 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 	auto &memory_manager = gstate.memory_manager;
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
 	memory_manager.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());

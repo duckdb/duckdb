@@ -42,11 +42,11 @@ struct OperatorInformation {
 	string name;
 
 	void AddTime(double n_time) {
-		this->time += n_time;
+		time += n_time;
 	}
 
 	void AddElements(idx_t n_elements) {
-		this->elements += n_elements;
+		elements += n_elements;
 	}
 };
 
@@ -61,9 +61,8 @@ public:
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
 
-	//! Adds the timings gathered in the OperatorProfiler (tree) to the QueryProfiler (tree)
-	DUCKDB_API void Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor, const string &name,
-	                      int id);
+	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
+	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 
 	static bool SettingEnabled(const MetricsType setting) {
@@ -116,6 +115,8 @@ public:
 
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
+	//! Adds the top level query information to the global profiler.
+	DUCKDB_API void SetInfo(const QueryInfo &info_p);
 
 	DUCKDB_API void StartPhase(string phase);
 	DUCKDB_API void EndPhase();
@@ -161,8 +162,8 @@ private:
 	//! The root of the query tree
 	unique_ptr<ProfilingNode> root;
 
-	//! The query string
-	string query;
+	//! Top level query information.
+	QueryInfo query_info;
 	//! The timer used to time the execution time of the entire query
 	Profiler main_query;
 	//! A map of a Physical Operator pointer to a tree node

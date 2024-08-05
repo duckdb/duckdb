@@ -28,6 +28,12 @@ enum class ProfilingNodeType : uint8_t { QUERY_ROOT, OPERATOR };
 
 class QueryProfilingNode;
 
+struct QueryInfo {
+	QueryInfo() : idle_thread_time(0) {};
+	string query_name;
+	double idle_thread_time;
+};
+
 // Recursive tree that mirrors the operator tree
 class ProfilingNode {
 public:
@@ -90,7 +96,7 @@ public:
 	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::QUERY_ROOT;
 
 public:
-	explicit QueryProfilingNode(const string &query) : ProfilingNode(TYPE), query(query) {
+	explicit QueryProfilingNode(const QueryInfo &query_info) : ProfilingNode(TYPE), query_info(query_info) {
 	}
 	~QueryProfilingNode() override {};
 
@@ -98,7 +104,7 @@ public:
 	string GetName() const override {
 		return EnumUtil::ToString(node_type);
 	}
-	string query;
+	QueryInfo query_info;
 };
 
 class OperatorProfilingNode : public ProfilingNode {
