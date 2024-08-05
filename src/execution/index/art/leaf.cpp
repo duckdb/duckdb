@@ -5,6 +5,8 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node7_leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
@@ -52,7 +54,7 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, reference<ARTKey> row_id) {
 
 	// Get the mismatching byte.
 	idx_t pos = DConstants::INVALID_INDEX;
-	D_ASSERT(row_id.get().len = inlined_row_id_key.len);
+	D_ASSERT(row_id.get().len == inlined_row_id_key.len);
 	for (idx_t i = 0; i < inlined_row_id_key.len; i++) {
 		if (row_id.get().data[i] != inlined_row_id_key.data[i]) {
 			pos = i;

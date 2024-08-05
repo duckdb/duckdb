@@ -94,6 +94,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	if (!IsUnique()) {
 		D_ASSERT(prefix_count >= ROW_ID_PREFIX_COUNT);
 	}
+	D_ASSERT(prefix_count < NumericLimits<uint8_t>().Maximum());
 
 	// Initialize the allocators.
 	if (!allocators) {

@@ -21,13 +21,13 @@ Prefix::Prefix(const ART &art, const Node ptr_p, const bool is_mutable, const bo
 	}
 	ptr = type == INLINED ? nullptr : (Node *)(data + Size(art));
 	in_memory = true;
-};
+}
 
 Prefix::Prefix(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node ptr_p, const idx_t count) {
 	data = allocator->Get(ptr_p, true);
 	ptr = (Node *)(data + count + 1);
 	in_memory = true;
-};
+}
 
 void Prefix::NewInlined(ART &art, Node &node, const ARTKey &key, idx_t depth, uint8_t count) {
 	D_ASSERT(count <= art.prefix_count);
@@ -38,7 +38,7 @@ void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, idx_t depth
 	idx_t offset = 0;
 
 	while (count) {
-		auto min = MinValue(Count(art), count);
+		auto min = MinValue(UnsafeNumericCast<idx_t>(Count(art)), count);
 		auto this_count = UnsafeNumericCast<uint8_t>(min);
 		auto prefix = NewInternal(art, node, key.data, this_count, offset + depth, PREFIX);
 

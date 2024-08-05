@@ -34,10 +34,10 @@ public:
 	bool in_memory;
 
 public:
-	static inline idx_t Count(const ART &art) {
+	static inline uint8_t Count(const ART &art) {
 		return art.prefix_count;
 	}
-	static inline idx_t Size(const ART &art) {
+	static inline uint8_t Size(const ART &art) {
 		return Count(art) + 1;
 	}
 
