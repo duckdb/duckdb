@@ -37,11 +37,14 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 }
 
 bool CardinalityEstimator::SingleColumnFilter(duckdb::FilterInfo &filter_info) {
-	if (filter_info.left_set && filter_info.right_set && filter_info.set.count > 1) {
+	if (filter_info.left_set && filter_info.right_set && filter_info.set->count > 1) {
 		// Both set and are from different relations
 		return false;
 	}
 	if (EmptyFilter(filter_info)) {
+		return false;
+	}
+	if (filter_info.join_type == JoinType::SEMI || filter_info.join_type == JoinType::ANTI) {
 		return false;
 	}
 	return true;
@@ -107,6 +110,11 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 			continue;
 		} else if (EmptyFilter(*filter)) {
 			continue;
+		} else if ((filter->join_type == JoinType::SEMI || filter->join_type == JoinType::ANTI) && !filter->left_set) {
+			// the right side is from some dummy scan and the comparison is
+			// VALUE comparison_type (BINDING)
+			// TODO: Fix this
+			continue;
 		}
 		D_ASSERT(filter->left_set->count >= 1);
 		D_ASSERT(filter->right_set->count >= 1);
@@ -153,7 +161,7 @@ vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsToTDom> &relations_t
 	vector<FilterInfoWithTotalDomains> res;
 	for (auto &relation_2_tdom : relations_to_tdom) {
 		for (auto &filter : relation_2_tdom.filters) {
-			if (JoinRelationSet::IsSubset(requested_set, filter->set)) {
+			if (JoinRelationSet::IsSubset(requested_set, *filter->set)) {
 				FilterInfoWithTotalDomains new_edge(filter, relation_2_tdom);
 				res.push_back(new_edge);
 			}
@@ -301,9 +309,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			left_subgraph.numerator_relations = edge.filter_info->left_set;
 			right_subgraph.relations = edge.filter_info->right_set;
 			right_subgraph.numerator_relations = edge.filter_info->right_set;
-
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
-			left_subgraph.relations = &edge.filter_info->set;
+			left_subgraph.relations = edge.filter_info->set;
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
 			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {

@@ -57,6 +57,14 @@ const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() con
 	return filters_and_bindings;
 }
 
+void FilterInfo::SetLeftSet(optional_ptr<JoinRelationSet> left_set_new) {
+	left_set = left_set_new;
+}
+
+void FilterInfo::SetRightSet(optional_ptr<JoinRelationSet> right_set_new) {
+	right_set = right_set_new;
+}
+
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
 	// push an expression into a filter
 	// first check if we have any filter to push it into

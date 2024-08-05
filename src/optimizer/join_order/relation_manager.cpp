@@ -236,11 +236,40 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		// Adding relations to the current join order optimizer
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op->Cast<LogicalComparisonJoin>();
+		// Adding relations of the left side to the current join order optimizer
 		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
+		bool can_reorder_right = true;
+		// semi & anti joins, you can only reorder relations in the left side of the join.
+		// why?
+		// We cannot push a relation A into the right side because then all column bindings A.x will be
+		// lost after the semi or anti join
+		// We cannot pull a relation B out of the right side because any filter/join in the right side
+		// that references column binding B.y will no longer be resolved, since the semi join will remove
+		// all right column bindings.
+
+		// So we treat the right side of left join as its own relation so no relations
+		// are pushed into the right side, or taken out of the right side.
+
+		if (join.join_type == JoinType::SEMI) {
+			RelationStats child_stats;
+			// optimize the child and copy the stats
+			auto child_optimizer = optimizer.CreateChildOptimizer();
+			op->children[1] = child_optimizer.Optimize(std::move(op->children[1]), &child_stats);
+			AddRelation(*op->children[1], op, child_stats);
+			auto right_child_bindings = op->children[1]->GetColumnBindings();
+			for (auto &bindings : right_child_bindings) {
+				relation_mapping[bindings.table_index] = relations.size() - 1;
+			}
+		} else {
+			can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
+		}
+		return can_reorder_left && can_reorder_right;
+	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
+		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
@@ -397,17 +426,87 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 		    f_op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
 			D_ASSERT(join.expressions.empty());
-			for (auto &cond : join.conditions) {
-				auto comparison =
-				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
-				if (filter_set.find(*comparison) == filter_set.end()) {
-					filter_set.insert(*comparison);
-					unordered_set<idx_t> bindings;
-					ExtractBindings(*comparison, bindings);
-					auto &set = set_manager.GetJoinRelation(bindings);
-					auto filter_info =
-					    make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size(), join.join_type);
-					filters_and_bindings.push_back(std::move(filter_info));
+			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+				vector<unique_ptr<BoundComparisonExpression>> comparisons;
+				// go through the comparisons and populate the relation_requirements with relations
+				// required to make the join.
+				unordered_map<idx_t, unordered_set<idx_t>> relation_requirements;
+				for (auto &cond : join.conditions) {
+					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
+					                                                       std::move(cond.right));
+					// for every condition in the semi or anti join, all relations on the left side will be needed to
+					// execute the join, so our filter_info needs a complete set for the left side.
+					unordered_set<idx_t> left_bindings;
+					unordered_set<idx_t> right_bindings;
+					ExtractBindings(*comparison->left, left_bindings);
+					ExtractBindings(*comparison->right, right_bindings);
+					// right bindings size is one, because it is isolated during relation
+					// extraction
+					D_ASSERT(right_bindings.size() == 1);
+					for (auto &r_binding : right_bindings) {
+						auto entry_it = relation_requirements.find(r_binding);
+						if (entry_it == relation_requirements.end()) {
+							D_ASSERT(relation_requirements.empty());
+							relation_requirements[r_binding] = unordered_set<idx_t>();
+							entry_it = relation_requirements.find(r_binding);
+						}
+						for (auto &l_binding : left_bindings) {
+							entry_it->second.emplace(l_binding);
+						}
+					}
+					comparisons.push_back(std::move(comparison));
+				}
+
+				// create the edges in a way that require all relations involved in the left join
+				// to first be joined
+				for (auto &comp : comparisons) {
+					if (filter_set.find(*comp) == filter_set.end()) {
+						filter_set.insert(*comp);
+						unordered_set<idx_t> right_bindings;
+						unordered_set<idx_t> bindings;
+						ExtractBindings(*comp->right, right_bindings);
+						ExtractBindings(*comp, bindings);
+						auto &set = set_manager.GetJoinRelation(bindings);
+
+						optional_ptr<JoinRelationSet> left_set;
+						optional_ptr<JoinRelationSet> right_set;
+						D_ASSERT(right_bindings.size() == 1);
+						for (auto &r_binding : right_bindings) {
+							left_set = set_manager.GetJoinRelation(relation_requirements.at(r_binding));
+							if (right_set) {
+								right_set = set_manager.Union(set_manager.GetJoinRelation(r_binding), *right_set);
+							} else {
+								right_set = set_manager.GetJoinRelation(r_binding);
+							}
+						}
+
+						auto filter_info =
+						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
+						if (left_set->count == 0) {
+							left_set = nullptr;
+						}
+						if (right_set->count == 0) {
+							right_set = nullptr;
+						}
+						filter_info->SetLeftSet(left_set);
+						filter_info->SetRightSet(right_set);
+
+						filters_and_bindings.push_back(std::move(filter_info));
+					}
+				}
+			} else {
+				for (auto &cond : join.conditions) {
+					auto comparison =
+						make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+					if (filter_set.find(*comparison) == filter_set.end()) {
+						filter_set.insert(*comparison);
+						unordered_set<idx_t> bindings;
+						ExtractBindings(*comparison, bindings);
+						auto &set = set_manager.GetJoinRelation(bindings);
+						auto filter_info =
+							make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size(), join.join_type);
+						filters_and_bindings.push_back(std::move(filter_info));
+					}
 				}
 			}
 			join.conditions.clear();
