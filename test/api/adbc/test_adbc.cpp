@@ -1220,7 +1220,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
-					   "'test_column_depth' order by unnest_a asc");
+					   "'test_table_depth' order by unnest_a asc");
 		REQUIRE(res->ColumnCount() == 1);
 		REQUIRE(res->RowCount() == 3);
 		string expected[3];
@@ -1305,8 +1305,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_2, "\n", ""), "\t", ""), " ", "");
 		expected[2] =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_3, "\n", ""), "\t", ""), " ", "");
-		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected[0]) >= 0);
-		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected[1]) >= 0);
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "").find(expected[0]) >= 0);
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "").find(expected[1]) >= 0);
 		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected[2]) >= 0);
 		db.Query("Drop table result;");
 
