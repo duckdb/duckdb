@@ -112,8 +112,8 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node15Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256Leaf), block_manager),
 		};
-		allocators = make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(
-		    std::move(allocator_array));
+		allocators =
+		    make_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
 	if (!info.IsValid()) {
