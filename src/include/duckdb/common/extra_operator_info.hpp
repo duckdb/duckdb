@@ -17,10 +17,10 @@ namespace duckdb {
 
 class ExtraOperatorInfo {
 public:
-	ExtraOperatorInfo() : file_filters(""), sample_rate(1) {
+	ExtraOperatorInfo() : file_filters(""), is_sampling_pushed_down(false) {
 	}
 	ExtraOperatorInfo(ExtraOperatorInfo &extra_info)
-	    : file_filters(extra_info.file_filters), sample_rate(extra_info.sample_rate) {
+	    : file_filters(extra_info.file_filters), is_sampling_pushed_down(false) {
 		if (extra_info.total_files.IsValid()) {
 			total_files = extra_info.total_files.GetIndex();
 		}
@@ -35,6 +35,8 @@ public:
 	optional_idx total_files;
 	//! Size of file list after applying filters
 	optional_idx filtered_files;
+	//! Whether sampling is pushed down into the table scan
+	bool is_sampling_pushed_down;
 	//! Sample rate that have been pushed down into the table scan
 	double sample_rate;
 };

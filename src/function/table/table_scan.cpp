@@ -416,7 +416,7 @@ TableFunction TableScanFunction::GetIndexScanFunction() {
 	scan_function.get_batch_index = nullptr;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = false;
-	scan_function.sample_pushdown = false;
+	scan_function.sampling_pushdown = false;
 	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
@@ -438,7 +438,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
-	scan_function.sample_pushdown = true;
+	scan_function.sampling_pushdown = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;

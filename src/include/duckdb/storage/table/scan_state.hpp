@@ -14,7 +14,6 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/random_engine.hpp"
-#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 
