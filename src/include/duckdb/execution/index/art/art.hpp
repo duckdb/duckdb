@@ -46,14 +46,14 @@ public:
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
-	    const unsafe_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr =
+	    const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr =
 	        nullptr,
 	    const IndexStorageInfo &info = IndexStorageInfo());
 
 	//! Root of the tree
 	Node tree = Node();
 	//! Fixed-size allocators holding the ART nodes
-	unsafe_shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
+	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.
 	bool owns_data;
 	//! The prefix size, which is the minimum of ROW_ID_PREFIX_SIZE and the key type's size.

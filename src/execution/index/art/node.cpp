@@ -429,6 +429,7 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
 	case NType::NODE_256_LEAF:
+	case NType::PREFIX_INLINED:
 		return;
 	default:
 		throw InternalException("Invalid node type for Vacuum.");
