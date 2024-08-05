@@ -187,7 +187,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		result["Filters"] = filters_info;
 	}
 	if (extra_info.is_sampling_pushed_down) {
-		result["Sample Size"] = StringUtil::Format("%.2f%%", extra_info.sample_rate * 100);
+		result["Sample Method"] = "System: " + to_string(100 * extra_info.sample_rate) + "%";
 	}
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;

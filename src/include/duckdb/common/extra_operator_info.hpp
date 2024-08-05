@@ -20,7 +20,8 @@ public:
 	ExtraOperatorInfo() : file_filters(""), is_sampling_pushed_down(false) {
 	}
 	ExtraOperatorInfo(ExtraOperatorInfo &extra_info)
-	    : file_filters(extra_info.file_filters), is_sampling_pushed_down(false) {
+	    : file_filters(extra_info.file_filters), is_sampling_pushed_down(extra_info.is_sampling_pushed_down),
+	      sample_rate(extra_info.sample_rate) {
 		if (extra_info.total_files.IsValid()) {
 			total_files = extra_info.total_files.GetIndex();
 		}

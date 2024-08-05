@@ -443,7 +443,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	arrow.projection_pushdown = true;
 	arrow.filter_pushdown = true;
 	arrow.filter_prune = true;
-	arrow.sampling_pushdown = true;
+	arrow.sampling_pushdown = false;
 	set.AddFunction(arrow);
 
 	TableFunction arrow_dumb("arrow_scan_dumb", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
