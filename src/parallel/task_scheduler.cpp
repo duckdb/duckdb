@@ -278,9 +278,6 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	}
 #endif
 	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
@@ -382,6 +379,9 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		}
 	}
 	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 #endif
 }
 
