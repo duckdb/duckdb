@@ -62,9 +62,10 @@ void Prefix::Free(ART &art, Node &node) {
 	node.Clear();
 }
 
-void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
+void Prefix::InitializeMerge(ART &art, Node &node, const unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(node.GetType() != INLINED);
-	auto buffer_count = flags.merge_buffer_counts[static_cast<uint8_t>(PREFIX) - 1];
+	auto allocator_idx = Node::GetAllocatorIdx(PREFIX);
+	auto buffer_count = upper_bounds[allocator_idx];
 
 	Node next_node = node;
 	Prefix prefix(art, next_node, true);
@@ -78,7 +79,7 @@ void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 	}
 
 	node.IncreaseBufferId(buffer_count);
-	prefix.ptr->InitializeMerge(art, flags);
+	prefix.ptr->InitializeMerge(art, upper_bounds);
 }
 
 row_t Prefix::CanInline(ART &art, Node &parent, Node &node, uint8_t byte, const Node &child) {
@@ -325,13 +326,14 @@ string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_ver
 	return only_verify ? "" : str + subtree;
 }
 
-void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
-	bool flag_set = flags.vacuum_flags[static_cast<uint8_t>(PREFIX) - 1];
+void Prefix::Vacuum(ART &art, Node &node, const unordered_set<uint8_t> &indexes) {
+	auto prefix_allocator_idx = Node::GetAllocatorIdx(PREFIX);
+	bool idx_set = indexes.find(prefix_allocator_idx) != indexes.end();
 	auto &allocator = Node::GetAllocator(art, PREFIX);
 
 	reference<Node> node_ref(node);
 	while (node_ref.get().GetType() == PREFIX) {
-		if (flag_set && allocator.NeedsVacuum(node_ref)) {
+		if (idx_set && allocator.NeedsVacuum(node_ref)) {
 			node_ref.get() = allocator.VacuumPointer(node_ref);
 			node_ref.get().SetMetadata(static_cast<uint8_t>(PREFIX));
 		}
@@ -339,7 +341,7 @@ void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 		node_ref = *prefix.ptr;
 	}
 
-	node_ref.get().Vacuum(art, flags);
+	node_ref.get().Vacuum(art, indexes);
 }
 
 void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {

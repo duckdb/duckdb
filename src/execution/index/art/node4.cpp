@@ -43,9 +43,9 @@ Node4 &Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 	return n4;
 }
 
-void Node4::InitializeMerge(ART &art, const ARTFlags &flags) {
+void Node4::InitializeMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 	for (idx_t i = 0; i < count; i++) {
-		children[i].InitializeMerge(art, flags);
+		children[i].InitializeMerge(art, upper_bounds);
 	}
 }
 
@@ -181,9 +181,9 @@ Node *Node4::GetNextChildMutable(uint8_t &byte) {
 	return nullptr;
 }
 
-void Node4::Vacuum(ART &art, const ARTFlags &flags) {
+void Node4::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	for (idx_t i = 0; i < count; i++) {
-		children[i].Vacuum(art, flags);
+		children[i].Vacuum(art, indexes);
 	}
 }
 

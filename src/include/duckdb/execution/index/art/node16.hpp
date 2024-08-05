@@ -40,7 +40,7 @@ public:
 	static Node16 &ShrinkNode48(ART &art, Node &node16, Node &node48);
 
 	//! Initializes a merge by incrementing the buffer IDs of the node
-	void InitializeMerge(ART &art, const ARTFlags &flags);
+	void InitializeMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
 
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
@@ -60,7 +60,7 @@ public:
 	Node *GetNextChildMutable(uint8_t &byte);
 
 	//! Vacuum the children of the node
-	void Vacuum(ART &art, const ARTFlags &flags);
+	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
 
 	//! Transform the children of the node.
 	void TransformToDeprecated(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator);

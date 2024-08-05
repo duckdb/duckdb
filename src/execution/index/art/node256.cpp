@@ -54,10 +54,10 @@ Node256 &Node256::GrowNode48(ART &art, Node &node256, Node &node48) {
 	return n256;
 }
 
-void Node256::InitializeMerge(ART &art, const ARTFlags &flags) {
+void Node256::InitializeMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (children[i].HasMetadata()) {
-			children[i].InitializeMerge(art, flags);
+			children[i].InitializeMerge(art, upper_bounds);
 		}
 	}
 }
@@ -120,10 +120,10 @@ Node *Node256::GetNextChildMutable(uint8_t &byte) {
 	return nullptr;
 }
 
-void Node256::Vacuum(ART &art, const ARTFlags &flags) {
+void Node256::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (children[i].HasMetadata()) {
-			children[i].Vacuum(art, flags);
+			children[i].Vacuum(art, indexes);
 		}
 	}
 }

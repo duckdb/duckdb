@@ -10,26 +10,26 @@
 
 namespace duckdb {
 
-void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
+void Node::InitializeMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(HasMetadata());
 
 	auto type = GetType();
 	switch (type) {
 	case NType::PREFIX:
-		return Prefix::InitializeMerge(art, *this, flags);
+		return Prefix::InitializeMerge(art, *this, upper_bounds);
 	case NType::LEAF:
 		throw InternalException("Failed to initialize merge due to deprecated ART storage.");
 	case NType::NODE_4:
-		RefMutable<Node4>(art, *this, NType::NODE_4).InitializeMerge(art, flags);
+		RefMutable<Node4>(art, *this, NType::NODE_4).InitializeMerge(art, upper_bounds);
 		break;
 	case NType::NODE_16:
-		RefMutable<Node16>(art, *this, NType::NODE_16).InitializeMerge(art, flags);
+		RefMutable<Node16>(art, *this, NType::NODE_16).InitializeMerge(art, upper_bounds);
 		break;
 	case NType::NODE_48:
-		RefMutable<Node48>(art, *this, NType::NODE_48).InitializeMerge(art, flags);
+		RefMutable<Node48>(art, *this, NType::NODE_48).InitializeMerge(art, upper_bounds);
 		break;
 	case NType::NODE_256:
-		RefMutable<Node256>(art, *this, NType::NODE_256).InitializeMerge(art, flags);
+		RefMutable<Node256>(art, *this, NType::NODE_256).InitializeMerge(art, upper_bounds);
 		break;
 	case NType::LEAF_INLINED:
 		return;
@@ -40,7 +40,8 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		break;
 	}
 
-	IncreaseBufferId(flags.merge_buffer_counts[static_cast<uint8_t>(type) - 1]);
+	auto allocator_idx = GetAllocatorIdx(type);
+	IncreaseBufferId(upper_bounds[allocator_idx]);
 }
 
 bool Node::Merge(ART &art, Node &other, bool in_gate) {

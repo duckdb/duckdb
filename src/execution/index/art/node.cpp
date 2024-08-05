@@ -389,43 +389,43 @@ NType Node::GetNodeType(idx_t count) {
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-void Node::Vacuum(ART &art, const ARTFlags &flags) {
+void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	D_ASSERT(HasMetadata());
 
 	auto node_type = GetType();
-	auto node_type_idx = static_cast<uint8_t>(node_type);
-
-	// Leaf types.
 	switch (node_type) {
 	case NType::LEAF_INLINED:
 		return;
 	case NType::PREFIX:
-		return Prefix::Vacuum(art, *this, flags);
-	case NType::LEAF:
-		if (!flags.vacuum_flags[node_type_idx - 1]) {
+		return Prefix::Vacuum(art, *this, indexes);
+	case NType::LEAF: {
+		auto idx = GetAllocatorIdx(node_type);
+		if (indexes.find(idx) == indexes.end()) {
 			return;
 		}
 		return Leaf::DeprecatedVacuum(art, *this);
+	}
 	default:
 		break;
 	}
 
+	auto idx = GetAllocatorIdx(node_type);
 	auto &allocator = GetAllocator(art, node_type);
-	auto needs_vacuum = flags.vacuum_flags[node_type_idx - 1] && allocator.NeedsVacuum(*this);
+	auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(*this);
 	if (needs_vacuum) {
 		*this = allocator.VacuumPointer(*this);
-		SetMetadata(node_type_idx);
+		SetMetadata(static_cast<uint8_t>(node_type));
 	}
 
 	switch (node_type) {
 	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, node_type).Vacuum(art, flags);
+		return RefMutable<Node4>(art, *this, node_type).Vacuum(art, indexes);
 	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, node_type).Vacuum(art, flags);
+		return RefMutable<Node16>(art, *this, node_type).Vacuum(art, indexes);
 	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, node_type).Vacuum(art, flags);
+		return RefMutable<Node48>(art, *this, node_type).Vacuum(art, indexes);
 	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, node_type).Vacuum(art, flags);
+		return RefMutable<Node256>(art, *this, node_type).Vacuum(art, indexes);
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
 	case NType::NODE_256_LEAF:

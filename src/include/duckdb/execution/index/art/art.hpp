@@ -25,10 +25,6 @@ class ARTKeySection;
 class FixedSizeAllocator;
 
 struct ARTIndexScanState;
-struct ARTFlags {
-	unsafe_vector<bool> vacuum_flags;
-	unsafe_vector<idx_t> merge_buffer_counts;
-};
 
 class ART : public BoundIndex {
 public:
@@ -143,15 +139,15 @@ private:
 	                      unsafe_vector<row_t> &row_ids);
 
 	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
-	void InitializeMerge(ARTFlags &flags);
+	void InitializeMerge(unsafe_vector<idx_t> &upper_bounds);
 
 	//! Initializes a vacuum operation by calling the initialize operation of the respective
 	//! node allocator, and returns a vector containing either true, if the allocator at
 	//! the respective position qualifies, or false, if not
-	void InitializeVacuum(ARTFlags &flags);
+	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	//! Finalizes a vacuum operation by calling the finalize operation of all qualifying
 	//! fixed size allocators
-	void FinalizeVacuum(const ARTFlags &flags);
+	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);
 
 	//! Internal function to return the string representation of the ART,
 	//! or only traverses and verifies the index

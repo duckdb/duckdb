@@ -94,10 +94,10 @@ Node48 &Node48::ShrinkNode256(ART &art, Node &node48, Node &node256) {
 	return n48;
 }
 
-void Node48::InitializeMerge(ART &art, const ARTFlags &flags) {
+void Node48::InitializeMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != Node::EMPTY_MARKER) {
-			children[child_index[i]].InitializeMerge(art, flags);
+			children[child_index[i]].InitializeMerge(art, upper_bounds);
 		}
 	}
 }
@@ -183,10 +183,10 @@ Node *Node48::GetNextChildMutable(uint8_t &byte) {
 	return nullptr;
 }
 
-void Node48::Vacuum(ART &art, const ARTFlags &flags) {
+void Node48::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != Node::EMPTY_MARKER) {
-			children[child_index[i]].Vacuum(art, flags);
+			children[child_index[i]].Vacuum(art, indexes);
 		}
 	}
 }

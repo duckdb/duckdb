@@ -32,7 +32,6 @@ enum class NType : uint8_t {
 
 class ART;
 class Prefix;
-struct ARTFlags;
 
 //! The Node is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
@@ -112,13 +111,13 @@ public:
 	static NType GetNodeType(const idx_t count);
 
 	//! Initialize a merge by incrementing the buffer IDs of a node.
-	void InitializeMerge(ART &art, const ARTFlags &flags);
+	void InitializeMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
 	//! Merge a node into this node.
 	bool Merge(ART &art, Node &other, const bool in_gate);
 	bool MergeInternal(ART &art, Node &other, const bool in_gate);
 
 	//! Vacuum all nodes exceeding their vacuum threshold.
-	void Vacuum(ART &art, const ARTFlags &flags);
+	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
 
 	//! Transform the node storage to deprecated storage.
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);

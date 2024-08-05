@@ -51,7 +51,7 @@ public:
 	static void Free(ART &art, Node &node);
 
 	//! Initializes a merge by incrementing the buffer ID of the prefix and its child node(s)
-	static void InitializeMerge(ART &art, Node &node, const ARTFlags &flags);
+	static void InitializeMerge(ART &art, Node &node, const unsafe_vector<idx_t> &upper_bounds);
 
 	//! Returns the row ID, if we can inline it, else -1.
 	static row_t CanInline(ART &art, Node &parent, Node &node, uint8_t byte, const Node &child = Node());
@@ -87,8 +87,8 @@ public:
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
 
-	//! Vacuum the child of the node
-	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
+	//! Vacuum the child of the node.
+	static void Vacuum(ART &art, Node &node, const unordered_set<uint8_t> &indexes);
 
 	//! Transform the child of the node.
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);

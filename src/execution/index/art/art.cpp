@@ -1289,18 +1289,17 @@ void ART::Deserialize(const BlockPointer &pointer) {
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-void ART::InitializeVacuum(ARTFlags &flags) {
-	flags.vacuum_flags.reserve(flags.vacuum_flags.size() + allocators->size());
-	for (auto &allocator : *allocators) {
-		flags.vacuum_flags.push_back(allocator->InitializeVacuum());
+void ART::InitializeVacuum(unordered_set<uint8_t> &indexes) {
+	for (idx_t i = 0; i < allocators->size(); i++) {
+		if ((*allocators)[i]->InitializeVacuum()) {
+			indexes.insert(NumericCast<uint8_t>(i));
+		}
 	}
 }
 
-void ART::FinalizeVacuum(const ARTFlags &flags) {
-	for (idx_t i = 0; i < allocators->size(); i++) {
-		if (flags.vacuum_flags[i]) {
-			(*allocators)[i]->FinalizeVacuum();
-		}
+void ART::FinalizeVacuum(const unordered_set<uint8_t> &indexes) {
+	for (const auto &idx : indexes) {
+		(*allocators)[idx]->FinalizeVacuum();
 	}
 }
 
@@ -1315,26 +1314,19 @@ void ART::Vacuum(IndexLock &state) {
 	}
 
 	// True, if an allocator needs a vacuum, false otherwise.
-	ARTFlags flags;
-	InitializeVacuum(flags);
+	unordered_set<uint8_t> indexes;
+	InitializeVacuum(indexes);
 
 	// Skip vacuum, if no allocators require it.
-	auto perform_vacuum = false;
-	for (const auto &vacuum_flag : flags.vacuum_flags) {
-		if (vacuum_flag) {
-			perform_vacuum = true;
-			break;
-		}
-	}
-	if (!perform_vacuum) {
+	if (indexes.empty()) {
 		return;
 	}
 
 	// Traverse the allocated memory of the tree to perform a vacuum.
-	tree.Vacuum(*this, flags);
+	tree.Vacuum(*this, indexes);
 
 	// Finalize the vacuum operation.
-	FinalizeVacuum(flags);
+	FinalizeVacuum(indexes);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1355,12 +1347,10 @@ idx_t ART::GetInMemorySize(IndexLock &index_lock) {
 // Merging
 //===--------------------------------------------------------------------===//
 
-void ART::InitializeMerge(ARTFlags &flags) {
+void ART::InitializeMerge(unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(owns_data);
-
-	flags.merge_buffer_counts.reserve(allocators->size());
 	for (auto &allocator : *allocators) {
-		flags.merge_buffer_counts.emplace_back(allocator->GetUpperBoundBufferId());
+		upper_bounds.emplace_back(allocator->GetUpperBoundBufferId());
 	}
 }
 
@@ -1373,9 +1363,9 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 	if (other_art.owns_data) {
 		if (tree.HasMetadata()) {
 			// Fully deserialize other_index, and traverse it to increment its buffer IDs.
-			ARTFlags flags;
-			InitializeMerge(flags);
-			other_art.tree.InitializeMerge(other_art, flags);
+			unsafe_vector<idx_t> upper_bounds;
+			InitializeMerge(upper_bounds);
+			other_art.tree.InitializeMerge(other_art, upper_bounds);
 		}
 
 		// Merge the node storage.
