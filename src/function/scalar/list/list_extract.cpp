@@ -70,6 +70,7 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 		const auto offsets_index = offsets_data.sel->get_index(i);
 
 		if (!list_data.validity.RowIsValid(list_index) || !offsets_data.validity.RowIsValid(offsets_index)) {
+			invalid_offsets.push_back(i);
 			sel.set_index(i, 0);
 			continue;
 		}
