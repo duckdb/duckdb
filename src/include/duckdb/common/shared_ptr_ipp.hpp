@@ -10,6 +10,7 @@
 
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/memory_safety.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 #include <memory>
 #include <type_traits>
