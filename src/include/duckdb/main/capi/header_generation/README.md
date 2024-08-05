@@ -22,6 +22,7 @@ added to this struct.
 
 # How to add a function to the C API
 The only way to add function to the C api is to add them to the `JSON` definition files in `src/include/duckdb/main/capi/header_generation/functions`. To add a C API function to the headers, there are two options.
+Note that the one you are probably looking for is adding the function to both C API and the `dev` version of the Extension C API. 
 
 ## Adding the function to the C API only
 To add a function to the C API, but not the struct-of-function-pointers, simply create an entry in one of the `src/include/duckdb/main/capi/header_generation/functions/*.json` file for it.
@@ -33,9 +34,16 @@ run the generation script `scripts/generate_c_api.py` or use the makefile `make 
 To add a function to the C API and to the struct-of-function-pointers, again create an entry in one of the `src/include/duckdb/main/capi/header_generation/functions/*.json` files.
 Then, the function should be added to `src/include/duckdb/main/capi/header_generation/apis/v0/*/*.json`. Again, run the script `scripts/generate_c_api.py` or the makefile target `make generate-files` to generate.
 
+### Adding a function to the `dev` version
+The first way a function will be added to the Extension C API is likely in the `dev` version. This will allow testing the function from extensions, for example in CI, while not yet promising eternal stability of the function.
+Most functions that are added will fall in this category.
+
+### Adding a function to a stable version
+When a function is deemed stable, the function can be added to a versioned part of the Extension C API struct.
+
 To not break backwards compatibility, functions can only be added to struct-of-function-pointers by adding a new `JSON` file to the `src/include/duckdb/main/capi/header_generation/apis/v0` directory.
 Note that the version tag is important here since these determine the order of the struct.
 
 Another thing to consider is not needlessly bumping this version for every individual C API function that is added. It is preferred to group
-additions to the struct as this struct is effectively immutable and if we make a mess out of it we will suffer for eternity. A sensible choice would
-be to only merge new functions into the struct periodically, e.g. as a new DuckDB release approaches. 
+additions to the struct in the `dev` version first, as this struct is effectively immutable and if we make a mess out of it we will suffer for eternity. A sensible choice would
+be to only merge new functions into a stable version of the struct periodically, e.g. as a new DuckDB release approaches. 
