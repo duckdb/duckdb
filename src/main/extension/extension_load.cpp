@@ -27,7 +27,7 @@ namespace duckdb {
 
 //! State that is kept during the load phase of a C API extension
 struct DuckDBExtensionLoadState {
-	DuckDBExtensionLoadState(DatabaseInstance &db_p) : db(db_p), database_data(nullptr) {
+	explicit DuckDBExtensionLoadState(DatabaseInstance &db_p) : db(db_p), database_data(nullptr) {
 	}
 
 	//! Create a DuckDBExtensionLoadState reference from a C API opaque pointer
