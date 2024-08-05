@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 
 #include "duckdb/common/enums/join_type.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
@@ -427,73 +426,35 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
 			D_ASSERT(join.expressions.empty());
 			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-				vector<unique_ptr<BoundComparisonExpression>> comparisons;
+				auto conjunction_comparison = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 				// go through the comparisons and populate the relation_requirements with relations
 				// required to make the join.
-				unordered_map<idx_t, unordered_set<idx_t>> relation_requirements;
+				const unordered_set<idx_t> tmp;
+				optional_ptr<JoinRelationSet> left_relations = set_manager.GetJoinRelation(tmp);
+				optional_ptr<JoinRelationSet> right_relations = set_manager.GetJoinRelation(tmp);
 				for (auto &cond : join.conditions) {
-					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
+					auto child_condition = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
 					                                                       std::move(cond.right));
 					// for every condition in the semi or anti join, all relations on the left side will be needed to
 					// execute the join, so our filter_info needs a complete set for the left side.
+
 					unordered_set<idx_t> left_bindings;
 					unordered_set<idx_t> right_bindings;
-					ExtractBindings(*comparison->left, left_bindings);
-					ExtractBindings(*comparison->right, right_bindings);
+					ExtractBindings(*child_condition->left, left_bindings);
+					ExtractBindings(*child_condition->right, right_bindings);
 					// right bindings size is one, because it is isolated during relation
 					// extraction
-					D_ASSERT(right_bindings.size() == 1);
-					for (auto &r_binding : right_bindings) {
-						auto entry_it = relation_requirements.find(r_binding);
-						if (entry_it == relation_requirements.end()) {
-							D_ASSERT(relation_requirements.empty());
-							relation_requirements[r_binding] = unordered_set<idx_t>();
-							entry_it = relation_requirements.find(r_binding);
-						}
-						for (auto &l_binding : left_bindings) {
-							entry_it->second.emplace(l_binding);
-						}
-					}
-					comparisons.push_back(std::move(comparison));
+					D_ASSERT(right_bindings.size() == 1 && right_relations->count <= 1);
+					right_relations = set_manager.GetJoinRelation(right_bindings);
+					left_relations = set_manager.Union(*left_relations, set_manager.GetJoinRelation(left_bindings));
+					conjunction_comparison->children.push_back(std::move(child_condition));
 				}
-
-				// create the edges in a way that require all relations involved in the left join
-				// to first be joined
-				for (auto &comp : comparisons) {
-					if (filter_set.find(*comp) == filter_set.end()) {
-						filter_set.insert(*comp);
-						unordered_set<idx_t> right_bindings;
-						unordered_set<idx_t> bindings;
-						ExtractBindings(*comp->right, right_bindings);
-						ExtractBindings(*comp, bindings);
-						auto &set = set_manager.GetJoinRelation(bindings);
-
-						optional_ptr<JoinRelationSet> left_set;
-						optional_ptr<JoinRelationSet> right_set;
-						D_ASSERT(right_bindings.size() == 1);
-						for (auto &r_binding : right_bindings) {
-							left_set = set_manager.GetJoinRelation(relation_requirements.at(r_binding));
-							if (right_set) {
-								right_set = set_manager.Union(set_manager.GetJoinRelation(r_binding), *right_set);
-							} else {
-								right_set = set_manager.GetJoinRelation(r_binding);
-							}
-						}
-
-						auto filter_info =
-						    make_uniq<FilterInfo>(std::move(comp), set, filters_and_bindings.size(), join.join_type);
-						if (left_set->count == 0) {
-							left_set = nullptr;
-						}
-						if (right_set->count == 0) {
-							right_set = nullptr;
-						}
-						filter_info->SetLeftSet(left_set);
-						filter_info->SetRightSet(right_set);
-
-						filters_and_bindings.push_back(std::move(filter_info));
-					}
-				}
+				auto &filter_set = set_manager.Union(*left_relations, *right_relations);
+				auto filter_info =
+				    make_uniq<FilterInfo>(std::move(conjunction_comparison), filter_set, filters_and_bindings.size(), join.join_type);
+				filter_info->SetLeftSet(left_relations);
+				filter_info->SetRightSet(right_relations);
+				filters_and_bindings.push_back(std::move(filter_info));
 			} else {
 				for (auto &cond : join.conditions) {
 					auto comparison =

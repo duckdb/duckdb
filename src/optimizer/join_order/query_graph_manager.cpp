@@ -86,7 +86,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 	for (auto &filter_info : filters_and_bindings) {
 		auto &filter = filter_info->filter;
 		// now check if it can be used as a join predicate
-		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON || filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<idx_t> left_bindings, right_bindings;
@@ -97,8 +97,12 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
-				filter_info->left_set = &set_manager.GetJoinRelation(left_bindings);
-				filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
+				if (!filter_info->left_set) {
+					filter_info->left_set = &set_manager.GetJoinRelation(left_bindings);
+				}
+				if (!filter_info->right_set) {
+					filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
+				}
 				// we can only create a meaningful edge if the sets are not exactly the same
 				if (filter_info->left_set != filter_info->right_set) {
 					// check if the sets are disjoint
@@ -286,7 +290,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		if (filters_and_bindings[info.filter_index]->filter) {
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
-			if (info.set.count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
+			if (info.set->count > 0 && JoinRelationSet::IsSubset(*result_relation, *info.set)) {
 				auto &filter_and_binding = filters_and_bindings[info.filter_index];
 				auto filter = std::move(filter_and_binding->filter);
 				// if it is, we can push the filter
