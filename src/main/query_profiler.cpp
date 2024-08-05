@@ -360,7 +360,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			tree_node.GetProfilingInfo().AddToMetric<double>(MetricsType::OPERATOR_TIMING, node.second.time);
 		}
 		if (tree_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements);
+			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_TIMING, node.second.elements);
 		}
 	}
 	profiler.timings.clear();
