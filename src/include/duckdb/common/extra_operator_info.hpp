@@ -19,8 +19,8 @@ class ExtraOperatorInfo {
 public:
 	ExtraOperatorInfo() : file_filters(""), sample_rate(1) {
 	}
-	ExtraOperatorInfo(ExtraOperatorInfo &extra_info) : file_filters(extra_info.file_filters),
-	sample_rate(extra_info.sample_rate) {
+	ExtraOperatorInfo(ExtraOperatorInfo &extra_info)
+	    : file_filters(extra_info.file_filters), sample_rate(extra_info.sample_rate) {
 		if (extra_info.total_files.IsValid()) {
 			total_files = extra_info.total_files.GetIndex();
 		}

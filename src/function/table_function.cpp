@@ -19,7 +19,7 @@ TableFunction::TableFunction(string name, vector<LogicalType> arguments, table_f
       in_out_function_final(nullptr), statistics(nullptr), dependency(nullptr), cardinality(nullptr),
       pushdown_complex_filter(nullptr), to_string(nullptr), table_scan_progress(nullptr), get_batch_index(nullptr),
       get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr), serialize(nullptr),
-      deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false), 
+      deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
       sample_pushdown(false) {
 }
 
@@ -33,8 +33,8 @@ TableFunction::TableFunction()
       init_local(nullptr), function(nullptr), in_out_function(nullptr), statistics(nullptr), dependency(nullptr),
       cardinality(nullptr), pushdown_complex_filter(nullptr), to_string(nullptr), table_scan_progress(nullptr),
       get_batch_index(nullptr), get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr),
-      serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false),
-      filter_prune(false), sample_pushdown(false) {
+      serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
+      sample_pushdown(false) {
 }
 
 bool TableFunction::Equal(const TableFunction &rhs) const {
