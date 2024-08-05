@@ -268,6 +268,18 @@ OperatorProfiler::OperatorProfiler(ClientContext &context) {
 	settings = ClientConfig::GetConfig(context).profiler_settings;
 }
 
+bool OperatorProfiler::SettingIsEnabled(MetricsType metric) const {
+	if (metric == MetricsType::OPERATOR_TIMING && SettingIsEnabled(MetricsType::CPU_TIME)) {
+        return true;
+    }
+
+	if (metric == MetricsType::OPERATOR_CARDINALITY && SettingIsEnabled(MetricsType::CUMULATIVE_CARDINALITY)) {
+        return true;
+    }
+
+	return settings.find(metric) != settings.end();
+}
+
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
 	if (!enabled) {
 		return;
@@ -280,7 +292,7 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	// start timing for current element
-	if (SettingEnabled(MetricsType::OPERATOR_TIMING)) {
+	if (SettingIsEnabled(MetricsType::OPERATOR_TIMING)) {
 		op.Start();
 	}
 }
@@ -294,8 +306,8 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
 	}
 
-	bool timing_enabled = SettingEnabled(MetricsType::OPERATOR_TIMING);
-	bool cardinality_enabled = SettingEnabled(MetricsType::OPERATOR_CARDINALITY);
+	bool timing_enabled = SettingIsEnabled(MetricsType::OPERATOR_TIMING);
+	bool cardinality_enabled = SettingIsEnabled(MetricsType::OPERATOR_CARDINALITY);
 	if (timing_enabled || cardinality_enabled) {
 		// get the operator info for the current element
 		auto &curr_operator_info = GetOperatorInfo(*active_operator);
@@ -344,10 +356,10 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		D_ASSERT(entry != tree_map.end());
 		auto &tree_node = entry->second.get();
 
-		if (profiler.SettingEnabled(MetricsType::OPERATOR_TIMING)) {
+		if (tree_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
 			tree_node.GetProfilingInfo().AddToMetric<double>(MetricsType::OPERATOR_TIMING, node.second.time);
 		}
-		if (profiler.SettingEnabled(MetricsType::OPERATOR_CARDINALITY)) {
+		if (tree_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
 			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements);
 		}
 	}
