@@ -1219,12 +1219,18 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result order by catalog_name asc");
-		REQUIRE(res->ColumnCount() == 2);
+		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
+					   "'test_column_depth' order by unnest_a asc");
+		REQUIRE(res->ColumnCount() == 1);
 		REQUIRE(res->RowCount() == 3);
-		REQUIRE(res->GetValue(1, 2).ToString() ==
-		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
-		        "'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
+		string expected[3];
+		expected[0] = "{'db_schema_name': information_schema, 'db_schema_tables': NULL}";
+		expected[1] = "{'db_schema_name': main, 'db_schema_tables': NULL}";
+		expected[2] = "{'db_schema_name': pg_catalog, 'db_schema_tables': NULL}";
+
+		for (idx_t i = 0; i < res->RowCount(); i++) {
+			REQUIRE(res->GetValue(0, i).ToString() == expected[i]);
+		}
 		db.Query("Drop table result;");
 	}
 	// 4.Test ADBC_OBJECT_DEPTH_COLUMNS
@@ -1292,16 +1298,16 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                 'db_schema_tables': NULL
             }
         )";
-		string expected_1_clean =
+		string expected[3];
+		expected[0] =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_1, "\n", ""), "\t", ""), " ", "");
-		string expected_2_clean =
+		expected[1] =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_2, "\n", ""), "\t", ""), " ", "");
-		string expected_3_clean =
+		expected[2] =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_3, "\n", ""), "\t", ""), " ", "");
-		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_1_clean) >= 0);
-		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_2_clean) >= 0);
-		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_2_clean) >= 0);
-		db.Query("Drop table result;");
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected[0]) >= 0);
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected[1]) >= 0);
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected[2]) >= 0);
 		db.Query("Drop table result;");
 
 		// Test Filters
