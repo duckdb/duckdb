@@ -1,8 +1,6 @@
 #include "duckdb.h"
 #include "duckdb/common/dl.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
@@ -81,7 +79,7 @@ struct ExtensionAccess {
 			// Create the duckdb_database
 			load_state.database_data = make_uniq<DatabaseData>();
 			load_state.database_data->database = make_uniq<DuckDB>(load_state.db);
-			return (duckdb_database *)load_state.database_data.get();
+			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
 		} catch (std::exception &ex) {
 			load_state.error_data = ErrorData(ex);
 			return nullptr;

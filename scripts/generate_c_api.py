@@ -76,7 +76,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
 ]
 
 # The file that forms the base for the header generation
-BASE_HEADER_TEMPLATE = 'src/include/duckdb/main/capi/header_generation/header_base.hpp'
+BASE_HEADER_TEMPLATE = 'src/include/duckdb/main/capi/header_generation/header_base.hpp.template'
 # The comment marking where this script will inject its contents
 BASE_HEADER_CONTENT_MARK = '// DUCKDB_FUNCTIONS_ARE_GENERATED_HERE\n'
 
