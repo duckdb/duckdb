@@ -164,6 +164,9 @@ public:
 
 	//! Add the given data to the HT
 	void Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &input);
+	//! Prepares keys by filtering NULLs, etc.
+	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
+	                  SelectionVector &sel, bool build_side);
 	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
 	//! Combines the partitions in sink_collection into data_collection, as if it were not partitioned
@@ -288,9 +291,6 @@ private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
 	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, InsertState &insert_statebool,
 	                  bool parallel);
-
-	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
-	                  SelectionVector &sel, bool build_side);
 
 	//! Lock for combining data_collection when merging HTs
 	mutex data_lock;
