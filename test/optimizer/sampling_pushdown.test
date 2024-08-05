@@ -19,19 +19,19 @@ INSERT INTO integers2 VALUES (1,1), (2,2), (3, 3), (4,4)
 query II
 EXPLAIN SELECT i FROM integers1 tablesample system(0.1%)
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*System Sample: 0.10%.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 0.100000%*
 
 # using sample system + seq scan becomes sample scan
 query II
 EXPLAIN SELECT i FROM integers1 using sample system(0.1%)
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*System Sample: 0.10%.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 0.100000%*
 
 # tablesample system + seq scan with join becomes sample scan with join
 query II
 EXPLAIN SELECT * FROM integers1 tablesample system(0.1%), integers2 tablesample system(0.1%)
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*System Sample: 0.10%.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 0.100000%*
 
 # tablesample bernoulli: no pushdown
 query II
