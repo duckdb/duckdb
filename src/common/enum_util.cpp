@@ -4650,6 +4650,7 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SAMPLING_PUSHDOWN")) {
 		return OptimizerType::SAMPLING_PUSHDOWN;
+	}
 	if (StringUtil::Equals(value, "JOIN_FILTER_PUSHDOWN")) {
 		return OptimizerType::JOIN_FILTER_PUSHDOWN;
 	}
