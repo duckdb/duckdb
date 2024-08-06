@@ -123,14 +123,18 @@ struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
 private:
 	class Cursors {
 	public:
-		Cursors() {}
+		Cursors() {
+		}
+
 	public:
 		void AddCursor(shared_ptr<DuckDBPyConnection> conn);
 		void ClearCursors();
+
 	private:
 		mutex lock;
 		vector<weak_ptr<DuckDBPyConnection>> cursors;
 	};
+
 public:
 	ConnectionGuard con;
 	Cursors cursors;
