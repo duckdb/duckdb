@@ -1502,6 +1502,8 @@ public:
 	LocalSortState local_sort;
 	//! Finalize stage
 	PartitionSortStage stage = PartitionSortStage::INIT;
+	//! Finalize scan block index
+	idx_t scan_idx;
 
 protected:
 	//! Flush the accumulated intermediate states into the result states
@@ -1613,7 +1615,16 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 		global_sort->PrepareMergePhase();
 		total_tasks = global_sort->sorted_blocks.size() / 2;
 		if (!total_tasks) {
-			break;
+			if (global_sort->sorted_blocks.empty()) {
+				lstate.stage = stage = PartitionSortStage::FINISHED;
+				return true;
+			}
+			total_tasks = global_sort->sorted_blocks[0]->payload_data->data_blocks.size();
+			tasks_completed = 0;
+			tasks_assigned = 0;
+			lstate.stage = stage = PartitionSortStage::SORTED;
+			lstate.scan_idx = tasks_assigned++;
+			return true;
 		}
 		global_sort->InitializeMergeRound();
 		lstate.stage = stage = PartitionSortStage::MERGE;
@@ -1631,18 +1642,34 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 		global_sort->CompleteMergeRound(true);
 		total_tasks = global_sort->sorted_blocks.size() / 2;
 		if (!total_tasks) {
-			break;
+			total_tasks = global_sort->sorted_blocks[0]->payload_data->data_blocks.size();
+			tasks_completed = 0;
+			tasks_assigned = 0;
+			lstate.stage = stage = PartitionSortStage::SORTED;
+			lstate.scan_idx = tasks_assigned++;
+			return true;
 		}
 		global_sort->InitializeMergeRound();
 		lstate.stage = PartitionSortStage::MERGE;
 		tasks_assigned = 1;
 		tasks_completed = 0;
 		return true;
+	case PartitionSortStage::SORTED:
+		if (tasks_assigned < total_tasks) {
+			lstate.stage = PartitionSortStage::SORTED;
+			lstate.scan_idx = tasks_assigned++;
+			return true;
+		} else if (tasks_completed < tasks_assigned) {
+			lstate.stage = PartitionSortStage::FINISHED;
+			// Sleep while other tasks finish
+			return false;
+		}
+		break;
 	default:
 		break;
 	}
 
-	lstate.stage = stage = PartitionSortStage::SORTED;
+	lstate.stage = stage = PartitionSortStage::FINISHED;
 
 	return true;
 }
@@ -1656,7 +1683,7 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 	ldstate.ExecuteTask();
 
 	// Merge in parallel
-	while (gdsink.stage != PartitionSortStage::SORTED) {
+	while (gdsink.stage != PartitionSortStage::FINISHED) {
 		if (gdsink.TryPrepareNextStage(ldstate)) {
 			ldstate.ExecuteTask();
 		} else {
