@@ -97,6 +97,7 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/profiling_info.hpp"
@@ -2722,6 +2723,34 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BOUND_EXPANDED")) {
 		return ExpressionType::BOUND_EXPANDED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value) {
+	switch(value) {
+	case ExtensionABIType::UNKNOWN:
+		return "UNKNOWN";
+	case ExtensionABIType::CPP:
+		return "CPP";
+	case ExtensionABIType::C_STRUCT:
+		return "C_STRUCT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionABIType::UNKNOWN;
+	}
+	if (StringUtil::Equals(value, "CPP")) {
+		return ExtensionABIType::CPP;
+	}
+	if (StringUtil::Equals(value, "C_STRUCT")) {
+		return ExtensionABIType::C_STRUCT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
