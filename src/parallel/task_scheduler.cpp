@@ -69,7 +69,7 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task>
 
 #else
 struct ConcurrentQueue {
-	std::queue<shared_ptr<Task>> q;
+	std::unordered_map<QueueProducerToken *, std::queue<shared_ptr<Task>>> q;
 	mutex qlock;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
@@ -78,7 +78,8 @@ struct ConcurrentQueue {
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
-	q.push(std::move(task));
+	QueueProducerToken *token_addr = token.token.get();
+	q[token_addr].push(std::move(task));
 }
 
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
@@ -86,13 +87,27 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task>
 	if (q.empty()) {
 		return false;
 	}
-	task = std::move(q.front());
-	q.pop();
+
+	QueueProducerToken *token_addr = token.token.get();
+
+	const auto it = q.find(token_addr);
+	if (it == q.end()) {
+		return false;
+	}
+
+	task = std::move(it->second.front());
+	it->second.pop();
+
+	// If the queue is empty, remove the entry
+	if (it->second.empty()) {
+		q.erase(it);
+	}
+
 	return true;
 }
 
 struct QueueProducerToken {
-	QueueProducerToken(ConcurrentQueue &queue) {
+	explicit QueueProducerToken(ConcurrentQueue &queue) {
 	}
 };
 #endif
