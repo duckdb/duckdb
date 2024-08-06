@@ -105,7 +105,9 @@ def op_inspect(op) -> PlanCost:
     cost = PlanCost()
     if 'Query' in op:
         cost.time = op['operator_timing']
-    if 'name' in op and op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
+    import pdb
+    pdb.set_trace()
+    if 'name' in op and op['name'] == 'HASH_JOIN' and 'extra_info' in op and not op['extra_info'].startswith('MARK'):
         if 'operator_cardinality' in op.keys():
             cost.total = op['operator_cardinality']
             if 'operator_cardinality' in op['children'][0]:
