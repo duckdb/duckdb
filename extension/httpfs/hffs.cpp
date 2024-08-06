@@ -19,14 +19,6 @@
 
 namespace duckdb {
 
-static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
-	auto headers = make_uniq<duckdb_httplib_openssl::Headers>();
-	for (auto &entry : header_map) {
-		headers->insert(entry);
-	}
-	return headers;
-}
-
 HuggingFaceFileSystem::~HuggingFaceFileSystem() {
 }
 
@@ -62,7 +54,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HFFileHandle::CreateClient(optional_p
 string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url,
                                             optional_ptr<HTTPState> state) {
 	HeaderMap header_map;
-	auto headers = initialize_http_headers(header_map);
+	auto headers = HTTPFileSystem::InitializeHeaders(header_map, http_params);
 	string link_header_result;
 
 	auto client = HTTPFileSystem::GetClient(http_params, url.endpoint.c_str(), nullptr);

@@ -112,18 +112,6 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
 }
 
 void CreateBearerTokenFunctions::Register(DatabaseInstance &instance) {
-	// Generic Bearer secret
-	SecretType secret_type;
-	secret_type.name = GENERIC_BEARER_TYPE;
-	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
-	secret_type.default_provider = "config";
-	ExtensionUtil::RegisterSecretType(instance, secret_type);
-
-	// Generic Bearer config provider
-	CreateSecretFunction config_fun = {GENERIC_BEARER_TYPE, "config", CreateBearerSecretFromConfig};
-	config_fun.named_parameters["token"] = LogicalType::VARCHAR;
-	ExtensionUtil::RegisterFunction(instance, config_fun);
-
 	// HuggingFace secret
 	SecretType secret_type_hf;
 	secret_type_hf.name = HUGGINGFACE_TYPE;
@@ -148,9 +136,7 @@ unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(
 	// Set scope to user provided scope or the default
 	auto scope = input.scope;
 	if (scope.empty()) {
-		if (input.type == GENERIC_BEARER_TYPE) {
-			scope.push_back("");
-		} else if (input.type == HUGGINGFACE_TYPE) {
+		if (input.type == HUGGINGFACE_TYPE) {
 			scope.push_back("hf://");
 		} else {
 			throw InternalException("Unknown secret type found in httpfs extension: '%s'", input.type);
@@ -223,5 +209,41 @@ CreateBearerTokenFunctions::CreateHuggingFaceSecretFromCredentialChain(ClientCon
 	// Step 4: Check the default path
 	auto token = TryReadTokenFile("~/.cache/huggingface/token", "", false);
 	return CreateSecretFunctionInternal(context, input, token);
+}
+
+void CreateHTTPSecretFunctions::Register(DatabaseInstance &instance) {
+	// Generic Bearer secret
+	SecretType secret_type;
+	secret_type.name = "http";
+	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+	secret_type.default_provider = "config";
+	ExtensionUtil::RegisterSecretType(instance, secret_type);
+
+	CreateSecretFunction config_fun = {"http", "config", CreateHTTPSecretFromConfig};
+	config_fun.named_parameters["http_proxy"] = LogicalType::VARCHAR;
+	config_fun.named_parameters["http_proxy_password"] = LogicalType::VARCHAR;
+	config_fun.named_parameters["http_proxy_username"] = LogicalType::VARCHAR;
+
+	config_fun.named_parameters["extra_http_headers"] = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	config_fun.named_parameters["bearer_token"] = LogicalType::VARCHAR;
+
+	ExtensionUtil::RegisterFunction(instance, config_fun);
+}
+
+unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromConfig(ClientContext &context,
+                                                                                CreateSecretInput &input) {
+	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
+
+	secret->TrySetValue("http_proxy", input);
+	secret->TrySetValue("http_proxy_password", input);
+	secret->TrySetValue("http_proxy_username", input);
+
+	secret->TrySetValue("extra_http_headers", input);
+	secret->TrySetValue("bearer_token", input);
+
+	//! Set redact keys
+	secret->redact_keys = {"http_proxy_password"};
+
+	return std::move(secret);
 }
 } // namespace duckdb

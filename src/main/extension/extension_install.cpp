@@ -377,7 +377,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		string proxy_user;
 		string proxy_pass;
 
-		if (setting_reader.TryGetSecretKeyOrSetting("http_proxy_host", "http_proxy_host", proxy_setting)) {
+		if (setting_reader.TryGetSecretKeyOrSetting("http_proxy", "http_proxy", proxy_setting) && !proxy_setting.empty()) {
 			idx_t port;
 			string host;
 			HTTPUtil::ParseHTTPProxyHost(proxy_setting, host, port);

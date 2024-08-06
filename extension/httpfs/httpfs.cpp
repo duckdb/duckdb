@@ -25,11 +25,16 @@
 
 namespace duckdb {
 
-static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
+duckdb::unique_ptr<duckdb_httplib_openssl::Headers> HTTPFileSystem::InitializeHeaders(HeaderMap &header_map, const HTTPParams &http_params) {
 	auto headers = make_uniq<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
 	}
+
+	for (auto &entry : http_params.extra_headers) {
+		headers->insert(entry);
+	}
+
 	return headers;
 }
 
@@ -58,15 +63,26 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<Fi
 	KeyValueSecretReader settings_reader(*opener, info, "http");
 
 	string proxy_setting;
-	if (settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy", "http_proxy", proxy_setting)) {
+	if (settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy", "http_proxy", proxy_setting) && !proxy_setting.empty()) {
 		idx_t port;
 		string host;
 		HTTPUtil::ParseHTTPProxyHost(proxy_setting, host, port);
-		result.http_proxy_host = host;
+		result.http_proxy = host;
 		result.http_proxy_port = port;
 	}
 	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_username", "http_proxy_username", result.http_proxy_username);
 	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_password", "http_proxy_password", result.http_proxy_password);
+	settings_reader.TryGetSecretKey<string>("bearer_token", result.bearer_token);
+
+	Value extra_headers;
+	if (settings_reader.TryGetSecretKey("extra_http_headers", extra_headers)) {
+		auto children = MapValue::GetChildren(extra_headers);
+		for (const auto& child : children) {
+			auto kv = StructValue::GetChildren(child);
+			D_ASSERT(kv.size() == 2 );
+			result.extra_headers[kv[0].GetValue<string>()] = kv[1].GetValue<string>();
+		}
+	}
 
 	return result;
 }
@@ -168,18 +184,18 @@ HTTPFileSystem::RunRequestWithRetry(const std::function<duckdb_httplib_openssl::
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                         duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
                                                         char *buffer_in, idx_t buffer_in_len, string params) {
-	auto &hfs = handle.Cast<HTTPFileHandle>();
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
 	idx_t out_offset = 0;
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		auto client = GetClient(hfs.http_params, proto_host_port.c_str(), &hfs);
+		auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh);
 
-		if (hfs.state) {
-			hfs.state->post_count++;
-			hfs.state->total_bytes_sent += buffer_in_len;
+		if (hfh.state) {
+			hfh.state->post_count++;
+			hfh.state->total_bytes_sent += buffer_in_len;
 		}
 
 		// We use a custom Request method here, because there is no Post call with a contentreceiver in httplib
@@ -190,8 +206,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		req.headers.emplace("Content-Type", "application/octet-stream");
 		req.content_receiver = [&](const char *data, size_t data_length, uint64_t /*offset*/,
 		                           uint64_t /*total_length*/) {
-			if (hfs.state) {
-				hfs.state->total_bytes_received += data_length;
+			if (hfh.state) {
+				hfh.state->total_bytes_received += data_length;
 			}
 			if (out_offset + data_length > buffer_out_len) {
 				// Buffer too small, increase its size by at least 2x to fit the new value
@@ -209,12 +225,12 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		return client->send(req);
 	});
 
-	return RunRequestWithRetry(request, url, "POST", hfs.http_params);
+	return RunRequestWithRetry(request, url, "POST", hfh.http_params);
 }
 
 unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPParams &http_params,
                                                                      const char *proto_host_port,
-                                                                     optional_ptr<HTTPFileHandle> hfs) {
+                                                                     optional_ptr<HTTPFileHandle> hfh) {
 	auto client = make_uniq<duckdb_httplib_openssl::Client>(proto_host_port);
 	client->set_follow_location(true);
 	client->set_keep_alive(http_params.keep_alive);
@@ -226,16 +242,16 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	client->set_read_timeout(http_params.timeout);
 	client->set_connection_timeout(http_params.timeout);
 	client->set_decompress(false);
-	if (hfs && hfs->http_logger) {
+	if (hfh && hfh->http_logger) {
 		client->set_logger(
-		    hfs->http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+		    hfh->http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
 	}
 	if (!http_params.bearer_token.empty()) {
 		client->set_bearer_token_auth(http_params.bearer_token.c_str());
 	}
 
-	if (!http_params.http_proxy_host.empty()) {
-		client->set_proxy(http_params.http_proxy_host, http_params.http_proxy_port);
+	if (!http_params.http_proxy.empty()) {
+		client->set_proxy(http_params.http_proxy, http_params.http_proxy_port);
 
 		if (!http_params.http_proxy_username.empty()) {
 			client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
@@ -247,28 +263,28 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                        char *buffer_in, idx_t buffer_in_len, string params) {
-	auto &hfs = handle.Cast<HTTPFileHandle>();
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		auto client = GetClient(hfs.http_params, proto_host_port.c_str(), &hfs);
-		if (hfs.state) {
-			hfs.state->put_count++;
-			hfs.state->total_bytes_sent += buffer_in_len;
+		auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh);
+		if (hfh.state) {
+			hfh.state->put_count++;
+			hfh.state->total_bytes_sent += buffer_in_len;
 		}
 		return client->Put(path.c_str(), *headers, buffer_in, buffer_in_len, "application/octet-stream");
 	});
 
-	return RunRequestWithRetry(request, url, "PUT", hfs.http_params);
+	return RunRequestWithRetry(request, url, "PUT", hfh.http_params);
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
 	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
 	auto http_client = hfh.GetClient(nullptr);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
@@ -291,7 +307,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
 
 	D_ASSERT(hfh.cached_file_handle);
 
@@ -352,7 +368,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	auto headers = initialize_http_headers(header_map);
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
 
 	// send the Range header to read only subset of file
 	string range_expr = "bytes=" + to_string(file_offset) + "-" + to_string(file_offset + buffer_out_len - 1);

@@ -67,6 +67,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 	CreateS3SecretFunctions::Register(instance);
 	CreateBearerTokenFunctions::Register(instance);
+	CreateHTTPSecretFunctions::Register(instance);
 	// set pointer to OpenSSL encryption state
 	config.encryption_util = make_shared_ptr<AESGCMStateSSLFactory>();
 }

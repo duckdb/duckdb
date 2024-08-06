@@ -213,6 +213,15 @@ public:
 		return true;
 	}
 
+	bool TrySetValue(const string &key, const CreateSecretInput &input) {
+		auto lookup = input.options.find(key);
+		if (lookup != input.options.end()) {
+			secret_map[key] = lookup->second;
+			return true;
+		}
+		return false;
+	}
+
 	//! the map of key -> values that make up the secret
 	case_insensitive_tree_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
