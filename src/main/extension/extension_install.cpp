@@ -22,7 +22,6 @@
 #endif
 #include "duckdb/common/windows_undefs.hpp"
 
-
 #include <fstream>
 
 namespace duckdb {
