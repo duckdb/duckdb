@@ -365,6 +365,40 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 	return only_verify ? "" : "\n" + str + "]";
 }
 
+void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
+	D_ASSERT(HasMetadata());
+
+	auto type = GetType();
+	switch (type) {
+	case NType::PREFIX:
+		return Prefix::VerifyAllocations(art, *this, node_counts);
+	case NType::LEAF:
+		return RefMutable<Leaf>(art, *this, type).DeprecatedVerifyAllocations(art, node_counts);
+	case NType::LEAF_INLINED:
+		return;
+	case NType::NODE_4:
+		RefMutable<Node4>(art, *this, type).VerifyAllocations(art, node_counts);
+		break;
+	case NType::NODE_16:
+		RefMutable<Node16>(art, *this, type).VerifyAllocations(art, node_counts);
+		break;
+	case NType::NODE_48:
+		RefMutable<Node48>(art, *this, type).VerifyAllocations(art, node_counts);
+		break;
+	case NType::NODE_256:
+		RefMutable<Node256>(art, *this, type).VerifyAllocations(art, node_counts);
+		break;
+	case NType::PREFIX_INLINED:
+	case NType::NODE_7_LEAF:
+	case NType::NODE_15_LEAF:
+	case NType::NODE_256_LEAF:
+		break;
+	}
+
+	auto idx = GetAllocatorIdx(type);
+	node_counts[idx]++;
+}
+
 NType Node::GetNodeLeafType(idx_t count) {
 	if (count <= NODE_7_LEAF_CAPACITY) {
 		return NType::NODE_7_LEAF;

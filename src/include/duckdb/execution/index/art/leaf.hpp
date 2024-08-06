@@ -63,6 +63,8 @@ public:
 	//! Returns the string representation of the linked list of leaves, if only_verify is true.
 	//! Else, it traverses and verifies the linked list of leaves.
 	static string DeprecatedVerifyAndToString(ART &art, const Node &node, const bool only_verify);
+	//! Count the number of leaves.
+	void DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 };
 
 } // namespace duckdb

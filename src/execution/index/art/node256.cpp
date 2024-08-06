@@ -136,4 +136,12 @@ void Node256::TransformToDeprecated(ART &art, unsafe_unique_ptr<FixedSizeAllocat
 	}
 }
 
+void Node256::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
+	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+		if (children[i].HasMetadata()) {
+			children[i].VerifyAllocations(art, node_counts);
+		}
+	}
+}
+
 } // namespace duckdb

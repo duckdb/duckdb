@@ -209,7 +209,10 @@ bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node
 
 	// Match.
 	if (l_prefix.data[Count(art)] == r_prefix.data[Count(art)]) {
-		return l_prefix.ptr->MergeInternal(art, *r_prefix.ptr, in_gate);
+		auto r_child = *r_prefix.ptr;
+		r_prefix.ptr->Clear();
+		Node::Free(art, r_node);
+		return l_prefix.ptr->MergeInternal(art, r_child, in_gate);
 	}
 
 	pos = max_count;
@@ -324,6 +327,19 @@ string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_ver
 
 	auto subtree = node_ref.get().VerifyAndToString(art, only_verify);
 	return only_verify ? "" : str + subtree;
+}
+
+void Prefix::VerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t, idx_t> &node_counts) {
+	auto idx = Node::GetAllocatorIdx(PREFIX);
+
+	reference<const Node> node_ref(node);
+	while (node_ref.get().GetType() == PREFIX) {
+		Prefix prefix(art, node_ref);
+		node_ref = *prefix.ptr;
+		node_counts[idx]++;
+	}
+
+	return node_ref.get().VerifyAllocations(art, node_counts);
 }
 
 void Prefix::Vacuum(ART &art, Node &node, const unordered_set<uint8_t> &indexes) {

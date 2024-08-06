@@ -105,6 +105,8 @@ public:
 	//! Returns the string representation of the node, if only_verify is false.
 	//! Else, it traverses and verifies the node and its subtree.
 	string VerifyAndToString(ART &art, const bool only_verify) const;
+	//! Counts each node type.
+	void VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 	//! Returns the node leaf type for a count.
 	static NType GetNodeLeafType(const idx_t count);
 	//! Returns the node type for a count.

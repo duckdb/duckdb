@@ -62,6 +62,12 @@ string BoundIndex::VerifyAndToString(const bool only_verify) {
 	return VerifyAndToString(state, only_verify);
 }
 
+void BoundIndex::VerifyAllocations() {
+	IndexLock state;
+	InitializeLock(state);
+	return VerifyAllocations(state);
+}
+
 void BoundIndex::Vacuum() {
 	IndexLock state;
 	InitializeLock(state);

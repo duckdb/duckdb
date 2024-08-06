@@ -1,6 +1,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
@@ -566,6 +567,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	// Insert the entries into the index.
 	idx_t failed_index = DConstants::INVALID_INDEX;
+	auto tree_was_empty = tree.HasMetadata();
 	for (idx_t i = 0; i < row_count; i++) {
 		if (keys[i].Empty()) {
 			continue;
@@ -585,6 +587,11 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			}
 			Erase(tree, keys[i], 0, row_id_keys[i], tree.IsGate());
 		}
+	}
+
+	if (tree_was_empty) {
+		// All nodes are in-memory.
+		VerifyAllocationsInternal();
 	}
 
 	if (failed_index != DConstants::INVALID_INDEX) {
@@ -829,6 +836,11 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		Erase(tree, keys[i], 0, row_id_keys[i], tree.IsGate());
+	}
+
+	if (!tree.HasMetadata()) {
+		// No more allocations.
+		VerifyAllocationsInternal();
 	}
 
 #ifdef DEBUG
@@ -1395,6 +1407,28 @@ string ART::VerifyAndToStringInternal(const bool only_verify) {
 		return "ART: " + tree.VerifyAndToString(*this, only_verify);
 	}
 	return "[empty]";
+}
+
+void ART::VerifyAllocations(IndexLock &state) {
+	return VerifyAllocationsInternal();
+}
+
+void ART::VerifyAllocationsInternal() {
+#ifdef DEBUG
+	unordered_map<uint8_t, idx_t> node_counts;
+	for (idx_t i = 0; i < allocators->size(); i++) {
+		node_counts[NumericCast<uint8_t>(i)] = 0;
+	}
+
+	if (tree.HasMetadata()) {
+		tree.VerifyAllocations(*this, node_counts);
+	}
+
+	for (idx_t i = 0; i < allocators->size(); i++) {
+		auto segment_count = (*allocators)[i]->GetSegmentCount();
+		D_ASSERT(segment_count == node_counts[NumericCast<uint8_t>(i)]);
+	}
+#endif
 }
 
 constexpr const char *ART::TYPE_NAME;

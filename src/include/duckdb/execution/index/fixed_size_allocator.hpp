@@ -89,6 +89,10 @@ public:
 	inline idx_t GetSegmentSize() const {
 		return segment_size;
 	}
+	//! Returns the total segment count.
+	inline idx_t GetSegmentCount() const {
+		return total_segment_count;
+	}
 
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;

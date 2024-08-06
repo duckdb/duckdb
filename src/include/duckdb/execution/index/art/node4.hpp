@@ -59,8 +59,9 @@ public:
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
-
 	//! Transform the children of the node.
 	void TransformToDeprecated(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
+	//! Recurse into the children to count each node type.
+	void VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 };
 } // namespace duckdb

@@ -254,4 +254,16 @@ string Leaf::DeprecatedVerifyAndToString(ART &art, const Node &node, const bool 
 	return only_verify ? "" : str;
 }
 
+void Leaf::DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
+	auto idx = Node::GetAllocatorIdx(NType::LEAF);
+	node_counts[idx]++;
+
+	reference<const Node> node_ref(ptr);
+	while (node_ref.get().HasMetadata()) {
+		auto &leaf = Node::Ref<const Leaf>(art, node_ref, NType::LEAF);
+		node_counts[idx]++;
+		node_ref = leaf.ptr;
+	}
+}
+
 } // namespace duckdb

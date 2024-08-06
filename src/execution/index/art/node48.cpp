@@ -199,4 +199,12 @@ void Node48::TransformToDeprecated(ART &art, unsafe_unique_ptr<FixedSizeAllocato
 	}
 }
 
+void Node48::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
+	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+		if (child_index[i] != Node::EMPTY_MARKER) {
+			children[child_index[i]].VerifyAllocations(art, node_counts);
+		}
+	}
+}
+
 } // namespace duckdb

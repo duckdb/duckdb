@@ -116,8 +116,10 @@ public:
 	//! Performs constraint checking for a chunk of input data
 	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) override;
 
-	//! Returns the string representation of the ART, or only traverses and verifies the index
+	//! Returns the string representation of an index, or only traverses and verifies the index.
 	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
+	//! Ensures that the node allocation counts match the node counts.
+	void VerifyAllocations(IndexLock &state) override;
 
 	//! Find the node with a matching key, or return nullptr if not found
 	const Node *Lookup(const Node &node, const ARTKey &key, idx_t depth);
@@ -149,9 +151,8 @@ private:
 	//! fixed size allocators
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);
 
-	//! Internal function to return the string representation of the ART,
-	//! or only traverses and verifies the index
 	string VerifyAndToStringInternal(const bool only_verify);
+	void VerifyAllocationsInternal();
 
 	//! Initialize the allocators of the ART
 	void InitAllocators(const IndexStorageInfo &info);

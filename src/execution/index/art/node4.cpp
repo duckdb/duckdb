@@ -193,4 +193,10 @@ void Node4::TransformToDeprecated(ART &art, unsafe_unique_ptr<FixedSizeAllocator
 	}
 }
 
+void Node4::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
+	for (idx_t i = 0; i < count; i++) {
+		children[i].VerifyAllocations(art, node_counts);
+	}
+}
+
 } // namespace duckdb
