@@ -1913,6 +1913,8 @@ const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value) {
 		return "AUTOLOAD";
 	case ExceptionType::SEQUENCE:
 		return "SEQUENCE";
+	case ExceptionType::INVALID_CONFIGURATION:
+		return "INVALID_CONFIGURATION";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2045,6 +2047,9 @@ ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SEQUENCE")) {
 		return ExceptionType::SEQUENCE;
+	}
+	if (StringUtil::Equals(value, "INVALID_CONFIGURATION")) {
+		return ExceptionType::INVALID_CONFIGURATION;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6348,6 +6353,8 @@ const char* EnumUtil::ToChars<SettingScope>(SettingScope value) {
 		return "GLOBAL";
 	case SettingScope::LOCAL:
 		return "LOCAL";
+	case SettingScope::SECRET:
+		return "SECRET";
 	case SettingScope::INVALID:
 		return "INVALID";
 	default:
@@ -6362,6 +6369,9 @@ SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LOCAL")) {
 		return SettingScope::LOCAL;
+	}
+	if (StringUtil::Equals(value, "SECRET")) {
+		return SettingScope::SECRET;
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return SettingScope::INVALID;
