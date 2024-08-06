@@ -120,14 +120,6 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
 	                                                              : right_child->EstimateCardinality(context);
 
-	bool prefer_swap = false;
-	// if one of the child already has joins, try to avoid making it a probe.
-	idx_t left_child_joins = ChildHasJoins(*op.children[0]);
-	idx_t right_child_joins = ChildHasJoins(*op.children[1]);
-	// if possible, right child should be probe side
-	if (right_child_joins == 0 && left_child_joins > 0) {
-		prefer_swap = true;
-	}
 
 	auto build_sizes = GetBuildSizes(op);
 	// special math.
@@ -135,12 +127,14 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	auto right_side_build_cost = double(rhs_cardinality) * build_sizes.right_side;
 
 	bool swap = false;
-
+	
+	idx_t left_child_joins = ChildHasJoins(*op.children[0]);
+	idx_t right_child_joins = ChildHasJoins(*op.children[1]);
 	// if the right child is a table scan, and the left child has joins, we should prefer the left child
 	// to be the build side. Since the tuples of the left side will already have been built on/be in flight,
 	// it will be faster to build on them again.
-	if (prefer_swap) {
-		right_side_build_cost *= 1.15;
+	if (right_child_joins == 0 && left_child_joins > 0) {
+		right_side_build_cost *= (1 + PREFER_RIGHT_DEEP_PENALTY);
 	}
 
 	// RHS is build side.
