@@ -543,9 +543,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						continue;
 					}
 					auto &set = set_manager.GetJoinRelation(bindings);
-					if (expression->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
-						auto break_here = 0;
-					}
 					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size());
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
