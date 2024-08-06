@@ -30,6 +30,9 @@ require-env DUCKDB_S3_USE_SSL
 set ignore_error_messages
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 COPY (SELECT 'value-1' as value) TO 's3://test-bucket/proxy-test/test.parquet';
 
 query I
