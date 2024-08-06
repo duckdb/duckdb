@@ -240,7 +240,7 @@ class Column:
             Tuple,
             [_get_expr(c) for c in cols],
         )
-        return self.expr.isin(*cols)
+        return Column(self.expr.isin(*cols))
 
     # logistic operators
     def __eq__(  # type: ignore[override]
