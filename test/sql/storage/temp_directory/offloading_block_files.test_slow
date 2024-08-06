@@ -1,0 +1,27 @@
+# name: test/sql/storage/temp_directory/offloading_block_files.test_slow
+# group: [temp_directory]
+
+load __TEST_DIR__/offloading_block_files.db
+
+statement ok
+create table counting2 as
+  from range(100) t1(i)
+      cross join range(100) t2(j)
+      cross join range(100) t3(k)
+      cross join range(100) t4(l)
+      cross join range(5) t5(m)
+      select
+          row_number() over () as i,
+          random() as random_value
+  ;
+
+statement ok
+SET max_temp_directory_size = '1GB';
+
+statement ok
+SET memory_limit = '1GB';
+
+statement error
+select * from counting2 order by random_value;
+----
+Out of Memory Error: failed to offload data block of size

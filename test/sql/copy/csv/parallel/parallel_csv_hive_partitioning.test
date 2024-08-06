@@ -2,6 +2,9 @@
 # description: Test parallel CSV reader with hive partitioning
 # group: [parallel]
 
+statement ok
+PRAGMA enable_verification
+
 # force parallelism of the queries
 statement ok
 PRAGMA verify_parallelism

@@ -22,8 +22,8 @@ enum class CheckpointWALAction {
 enum class CheckpointAction {
 	//! Checkpoint only if a checkpoint is required (i.e. the WAL has data in it that can be flushed)
 	CHECKPOINT_IF_REQUIRED,
-	//! Force a checkpoint regardless of whether or not there is data in the WAL to flush
-	FORCE_CHECKPOINT
+	//! Always checkpoint regardless of whether or not there is data in the WAL to flush
+	ALWAYS_CHECKPOINT
 };
 
 enum class CheckpointType {

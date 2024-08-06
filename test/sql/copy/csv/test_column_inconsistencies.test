@@ -2,8 +2,6 @@
 # description: Test bug from issue 10273
 # group: [csv]
 
-require vector_size 2048
-
 statement ok
 PRAGMA enable_verification
 

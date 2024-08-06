@@ -34,9 +34,9 @@ public:
 			auto &aggregate = *wexpr.aggregate;
 			bind_data = wexpr.bind_info.get();
 			dtor = aggregate.destructor;
-			state.resize(aggregate.state_size());
+			state.resize(aggregate.state_size(aggregate));
 			state_ptr = state.data();
-			aggregate.initialize(state.data());
+			aggregate.initialize(aggregate, state.data());
 			for (auto &child : wexpr.children) {
 				arg_types.push_back(child->return_type);
 				executor.AddExpression(*child);

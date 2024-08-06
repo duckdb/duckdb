@@ -19,6 +19,14 @@ void SkipResult::QuotedNewLine(SkipResult &result) {
 	// nop
 }
 
+bool SkipResult::UnsetComment(SkipResult &result, idx_t buffer_pos) {
+	// If we are unsetting a comment, it means this row started with a comment char.
+	// We add the row but tag it as a comment
+	bool done = result.AddRow(result, buffer_pos);
+	result.comment = false;
+	return done;
+}
+
 bool SkipResult::AddRow(SkipResult &result, const idx_t buffer_pos) {
 	result.InternalAddRow();
 	if (result.row_count >= result.rows_to_skip) {

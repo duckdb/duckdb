@@ -370,3 +370,8 @@ query I
 SELECT (SELECT '1.0'::DECIMAL(2,1));
 ----
 1.0
+
+query I
+SELECT ROUND(CAST(CAST('-100.3' AS DECIMAL(18, 1)) AS REAL), 1);
+----
+-100.3
