@@ -269,15 +269,16 @@ OperatorProfiler::OperatorProfiler(ClientContext &context) {
 }
 
 bool OperatorProfiler::SettingIsEnabled(MetricsType metric) const {
+	if (settings.find(metric) != settings.end()) {
+		return true;
+	}
 	if (metric == MetricsType::OPERATOR_TIMING && SettingIsEnabled(MetricsType::CPU_TIME)) {
 		return true;
 	}
-
 	if (metric == MetricsType::OPERATOR_CARDINALITY && SettingIsEnabled(MetricsType::CUMULATIVE_CARDINALITY)) {
 		return true;
 	}
-
-	return settings.find(metric) != settings.end();
+	return false;
 }
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
@@ -359,8 +360,8 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		if (tree_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
 			tree_node.GetProfilingInfo().AddToMetric<double>(MetricsType::OPERATOR_TIMING, node.second.time);
 		}
-		if (tree_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_TIMING, node.second.elements);
+		if (tree_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
+			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements);
 		}
 	}
 	profiler.timings.clear();
