@@ -24,10 +24,10 @@ JoinHashTable::ProbeState::ProbeState()
       ht_offsets_dense_v(LogicalType::UBIGINT), non_empty_sel(STANDARD_VECTOR_SIZE) {
 }
 
-JoinHashTable::InsertState::InsertState(const unique_ptr<TupleDataCollection> &data_collection,
-                                        const vector<column_t> &equality_predicate_columns)
+JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
     : SharedState(), remaining_sel(STANDARD_VECTOR_SIZE), key_match_sel(STANDARD_VECTOR_SIZE) {
-	data_collection->InitializeChunkState(chunk_state, equality_predicate_columns);
+	ht.data_collection->InitializeChunk(lhs_data, ht.equality_predicate_columns);
+	ht.data_collection->InitializeChunkState(chunk_state, ht.equality_predicate_columns);
 }
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinCondition> &conditions_p,
@@ -416,15 +416,16 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 	}
 
 	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
-		if (!null_values_are_equal[col_idx]) {
-			auto &col_key_data = vector_data[col_idx].unified;
-			if (col_key_data.validity.AllValid()) {
-				continue;
-			}
-			added_count = FilterNullValues(col_key_data, *current_sel, added_count, sel);
-			// null values are NOT equal for this column, filter them out
-			current_sel = &sel;
+		if (null_values_are_equal[col_idx]) {
+			continue;
 		}
+		auto &col_key_data = vector_data[col_idx].unified;
+		if (col_key_data.validity.AllValid()) {
+			continue;
+		}
+		added_count = FilterNullValues(col_key_data, *current_sel, added_count, sel);
+		// null values are NOT equal for this column, filter them out
+		current_sel = &sel;
 	}
 	return added_count;
 }
@@ -478,24 +479,24 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 	}
 }
 static inline void PerformKeyComparison(JoinHashTable::InsertState &state, JoinHashTable &ht,
-                                        const TupleDataCollection &data_collection, Vector &row_locations, idx_t count,
-                                        idx_t &key_match_count, idx_t &key_no_match_count) {
+                                        const TupleDataCollection &data_collection, Vector &row_locations,
+                                        const idx_t count, idx_t &key_match_count, idx_t &key_no_match_count) {
 	// Get the data for the rows that need to be compared
-	DataChunk lhs_data;
-	data_collection.InitializeChunk(lhs_data, ht.equality_predicate_columns);
+	state.lhs_data.SetCardinality(count); // the right size
 
 	// The target selection vector says where to write the results into the lhs_data, we just want to write
 	// sequentially as otherwise we trigger a bug in the Gather function
-	data_collection.Gather(row_locations, state.salt_match_sel, count, ht.equality_predicate_columns, lhs_data,
+	data_collection.Gather(row_locations, state.salt_match_sel, count, ht.equality_predicate_columns, state.lhs_data,
 	                       *FlatVector::IncrementalSelectionVector(), state.chunk_state.cached_cast_vectors);
-	TupleDataCollection::ToUnifiedFormat(state.chunk_state, lhs_data);
+	TupleDataCollection::ToUnifiedFormat(state.chunk_state, state.lhs_data);
 
-	const SelectionVector *current_sel;
-	count = ht.PrepareKeys(lhs_data, state.chunk_state.vector_data, current_sel, state.key_match_sel, false);
+	for (idx_t i = 0; i < count; i++) {
+		state.key_match_sel.set_index(i, i);
+	}
 
 	// Perform row comparisons
 	key_match_count =
-	    ht.row_matcher_build.Match(lhs_data, state.chunk_state.vector_data, state.key_match_sel, count, ht.layout,
+	    ht.row_matcher_build.Match(state.lhs_data, state.chunk_state.vector_data, state.key_match_sel, count, ht.layout,
 	                               state.rhs_row_locations, &state.key_no_match_sel, key_no_match_count);
 
 	D_ASSERT(key_match_count + key_no_match_count == count);
@@ -549,8 +550,34 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 	// the row locations of the rows that are to be inserted
 	const auto lhs_row_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
-	const auto *remaining_sel = FlatVector::IncrementalSelectionVector();
+	// we start off with the entire chunk
 	idx_t remaining_count = count;
+	const auto *remaining_sel = FlatVector::IncrementalSelectionVector();
+
+	if (PropagatesBuildSide(ht.join_type)) {
+		// if we propagate the build side, we may have added rows with NULL keys to the HT
+		// these may need to be filtered out depending on the comparison type (exactly like PrepareKeys does)
+		for (idx_t col_idx = 0; col_idx < ht.conditions.size(); col_idx++) {
+			// if null values are NOT equal for this column we filter them out
+			if (ht.NullValuesAreEqual(col_idx)) {
+				continue;
+			}
+
+			idx_t entry_idx;
+			idx_t idx_in_entry;
+			ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
+			idx_t new_remaining_count = 0;
+			for (idx_t i = 0; i < remaining_count; i++) {
+				const auto idx = remaining_sel->get_index(i);
+				if (ValidityBytes(lhs_row_locations[idx]).RowIsValidUnsafe(col_idx)) {
+					state.remaining_sel.set_index(new_remaining_count++, idx);
+				}
+			}
+			remaining_count = new_remaining_count;
+			remaining_sel = &state.remaining_sel;
+		}
+	}
 
 	// use the ht bitmask to make the modulo operation faster but keep the salt bits intact
 	idx_t capacity_mask = ht.bitmask | ht_entry_t::SALT_MASK;
@@ -608,7 +635,6 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 
 		// at this step, for all the rows to insert we stepped either until we found an empty entry or an entry with
 		// a matching salt, we now need to compare the keys for the ones that have a matching salt
-
 		idx_t key_no_match_count = 0;
 		if (salt_match_count != 0) {
 			idx_t key_match_count = 0;
@@ -675,7 +701,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	                                chunk_idx_to, false);
 	const auto row_locations = iterator.GetRowLocations();
 
-	InsertState insert_state(this->data_collection, this->equality_predicate_columns);
+	InsertState insert_state(*this);
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = 0; i < count; i++) {

@@ -150,11 +150,12 @@ public:
 	};
 
 	struct InsertState : SharedState {
-		InsertState(const unique_ptr<TupleDataCollection> &data_collection,
-		            const vector<column_t> &equality_predicate_columns);
+		InsertState(const JoinHashTable &ht);
 		/// Because of the index hick up
 		SelectionVector remaining_sel;
 		SelectionVector key_match_sel;
+
+		DataChunk lhs_data;
 		TupleDataChunkState chunk_state;
 	};
 
@@ -164,9 +165,6 @@ public:
 
 	//! Add the given data to the HT
 	void Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &input);
-	//! Prepares keys by filtering NULLs, etc.
-	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
-	                  SelectionVector &sel, bool build_side);
 	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
 	//! Combines the partitions in sink_collection into data_collection, as if it were not partitioned
@@ -199,6 +197,9 @@ public:
 
 	TupleDataCollection &GetDataCollection() {
 		return *data_collection;
+	}
+	bool NullValuesAreEqual(idx_t col_idx) const {
+		return null_values_are_equal[col_idx];
 	}
 
 	//! BufferManager
@@ -291,6 +292,9 @@ private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
 	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, InsertState &insert_statebool,
 	                  bool parallel);
+	//! Prepares keys by filtering NULLs
+	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
+	                  SelectionVector &sel, bool build_side);
 
 	//! Lock for combining data_collection when merging HTs
 	mutex data_lock;
