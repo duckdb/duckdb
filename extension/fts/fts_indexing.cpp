@@ -149,7 +149,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
             FROM %fts_schema%.docs AS docs
         );
 
-        CREATE MACRO %fts_schema%.match_bm25(docname, query_string, fields := NULL, k := 1.2, b := 0.75, conjunctive := 0) AS (
+        CREATE MACRO %fts_schema%.match_bm25(docname, query_string, fields := NULL, k := 1.2, b := 0.75, conjunctive := false) AS (
             WITH tokens AS (
                 SELECT DISTINCT stem(unnest(%fts_schema%.tokenize(query_string)), '%stemmer%') AS t
             ),
