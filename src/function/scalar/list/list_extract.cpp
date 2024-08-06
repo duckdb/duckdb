@@ -20,30 +20,24 @@ static optional_idx TryGetChildOffset(const list_entry_t &list_entry, const int6
 
 	const auto index_offset = (offset > 0) ? offset - 1 : offset;
 
-	idx_t wrapped_offset;
-
 	if (index_offset < 0) {
 		const auto signed_list_offset = UnsafeNumericCast<int64_t>(list_entry.offset);
 		const auto signed_list_length = UnsafeNumericCast<int64_t>(list_entry.length);
 		if (signed_list_offset + signed_list_length + index_offset < 0) {
 			return optional_idx::Invalid();
 		}
-		wrapped_offset = UnsafeNumericCast<idx_t>(signed_list_offset + signed_list_length + index_offset);
-	} else {
-		wrapped_offset = UnsafeNumericCast<idx_t>(index_offset);
+		const auto wrapped_offset = UnsafeNumericCast<idx_t>(signed_list_offset + signed_list_length + index_offset);
+		return optional_idx(wrapped_offset);
 	}
 
-	// Larger than the list?
-	if (wrapped_offset >= list_entry.length) {
+	const auto unsigned_offset = UnsafeNumericCast<idx_t>(index_offset);
+
+	// Check that the offset is within the list
+	if (unsigned_offset >= list_entry.length) {
 		return optional_idx::Invalid();
 	}
 
-	// Larger than the maximum index?
-	if (wrapped_offset > NumericLimits<idx_t>::Maximum() - list_entry.offset) {
-		return optional_idx::Invalid();
-	}
-
-	return optional_idx(list_entry.offset + wrapped_offset);
+	return optional_idx(list_entry.offset + unsigned_offset);
 }
 
 static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
