@@ -43,12 +43,12 @@ def parse_args():
 
 def init_db(cli, dbname, benchmark_dir):
     pass
-    # print(f"INITIALIZING {dbname} ...")
-    # subprocess.run(
-    #     f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
-    # )
-    # subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
-    # print("INITIALIZATION DONE")
+    print(f"INITIALIZING {dbname} ...")
+    subprocess.run(
+        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
+    )
+    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    print("INITIALIZATION DONE")
 
 
 class PlanCost:
@@ -105,24 +105,12 @@ def op_inspect(op) -> PlanCost:
     cost = PlanCost()
     if 'Query' in op:
         cost.time = op['operator_timing']
-    import pdb
-    pdb.set_trace()
-    if 'name' in op and op['name'] == 'HASH_JOIN' and 'extra_info' in op and not op['extra_info'].startswith('MARK'):
-        if 'operator_cardinality' in op.keys():
-            cost.total = op['operator_cardinality']
-            if 'operator_cardinality' in op['children'][0]:
-                cost.probe_side += op['children'][0]['operator_cardinality']
-            if 'operator_cardinality' in op['children'][1]:
-                cost.build_side += op['children'][1]['operator_cardinality']
-        elif 'cardinality' in op.keys():
-            cost.total = op['cardinality']
-            if 'cardinality' in op['children'][0]:
-                cost.probe_side += op['children'][0]['cardinality']
-            if 'cardinality' in op['children'][1]:
-                cost.build_side += op['children'][1]['cardinality']
-        else:
-            print("cardinlaity and operator cardinality are both not in the op")
-            exit(1)
+    if is_measured_join(op):
+        cost.total = op['operator_cardinality']
+        if 'operator_cardinality' in op['children'][0]:
+            cost.probe_side += op['children'][0]['operator_cardinality']
+        if 'operator_cardinality' in op['children'][1]:
+            cost.build_side += op['children'][1]['operator_cardinality']
 
         left_cost = op_inspect(op['children'][0])
         right_cost = op_inspect(op['children'][1])

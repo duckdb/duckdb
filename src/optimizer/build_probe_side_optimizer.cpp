@@ -140,7 +140,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	// to be the build side. Since the tuples of the left side will already have been built on/be in flight,
 	// it will be faster to build on them again.
 	if (prefer_swap) {
-		right_side_build_cost *= 1.2;
+		right_side_build_cost *= 1.15;
 	}
 
 	// RHS is build side.
