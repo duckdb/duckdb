@@ -69,6 +69,11 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task>
 
 #else
 struct ConcurrentQueue {
+	// We use a pointer to QueueProducerToken, because
+	// 1. We need to be able to erase the producer token from the queue in the QueueProducerToken destructor
+	// 2. Hashing a pointer is faster than hashing a unique_ptr<foo>
+	// 3. The QueueProducerToken will not move in memory or change (as it is unique per query), so the pointer will
+	// remain the same
 	std::unordered_map<QueueProducerToken *, std::queue<shared_ptr<Task>>> q;
 	mutex qlock;
 
@@ -98,17 +103,19 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task>
 	task = std::move(it->second.front());
 	it->second.pop();
 
-	// If the queue is empty, remove the entry
-	if (it->second.empty()) {
-		q.erase(it);
-	}
-
 	return true;
 }
 
 struct QueueProducerToken {
-	explicit QueueProducerToken(ConcurrentQueue &queue) {
+	explicit QueueProducerToken(ConcurrentQueue &queue) : queue(&queue) {
 	}
+
+	~QueueProducerToken() {
+		queue->q.erase(this);
+	}
+
+private:
+	ConcurrentQueue *queue;
 };
 #endif
 
