@@ -1682,9 +1682,10 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 				i += width;
 				row_idx += width;
 			} else if (wexpr.default_expr) {
-				llstate.leadlag_default.CopyCell(result, i, delta);
-				i += delta;
-				row_idx += delta;
+				const auto width = MinValue(delta, count - i);
+				llstate.leadlag_default.CopyCell(result, i, width);
+				i += width;
+				row_idx += width;
 			} else {
 				for (idx_t nulls = MinValue(delta, count - i); nulls--; ++i, ++row_idx) {
 					FlatVector::SetNull(result, i, true);
