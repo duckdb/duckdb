@@ -482,6 +482,7 @@ static inline void PerformKeyComparison(JoinHashTable::InsertState &state, JoinH
                                         const TupleDataCollection &data_collection, Vector &row_locations,
                                         const idx_t count, idx_t &key_match_count, idx_t &key_no_match_count) {
 	// Get the data for the rows that need to be compared
+	state.lhs_data.Reset();
 	state.lhs_data.SetCardinality(count); // the right size
 
 	// The target selection vector says where to write the results into the lhs_data, we just want to write
