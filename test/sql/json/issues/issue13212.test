@@ -11,13 +11,13 @@ statement ok
 copy (select id, name from values (1, 'bob'), (2, 'tom') tbl(id, name)) to '__TEST_DIR__/t2.json.gz' (format json, compression gzip)
 
 query II
-SELECT * FROM read_ndjson_auto(['t1.json.gz', 't2.json.gz']);
+SELECT * FROM read_ndjson_auto(['__TEST_DIR__/t1.json.gz', '__TEST_DIR__/t2.json.gz']);
 ----
 1	bob
 2	tom
 
 query II
-SELECT * FROM read_ndjson(['t1.json.gz', 't2.json.gz'], columns={id: 'int64', name: 'varchar'});
+SELECT * FROM read_ndjson(['__TEST_DIR__/t1.json.gz', '__TEST_DIR__/t2.json.gz'], columns={id: 'int64', name: 'varchar'});
 ----
 1	bob
 2	tom
