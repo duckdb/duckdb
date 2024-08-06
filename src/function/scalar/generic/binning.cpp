@@ -129,15 +129,15 @@ struct EquiWidthBinsInteger {
 		hugeint_t step = span / Hugeint::Convert(bin_count);
 		if (nice_rounding) {
 			// when doing nice rounding we try to make the max/step values nicer
-			step = MakeNumberNice(step, step, NiceRounding::ROUND);
-			max = RoundToNumber(max, step, NiceRounding::CEILING);
+			hugeint_t new_step = MakeNumberNice(step, step, NiceRounding::ROUND);
+			hugeint_t new_max = RoundToNumber(max, new_step, NiceRounding::CEILING);
+			if (new_max != min && new_step != 0) {
+				max = new_max;
+				step = new_step;
+			}
 			// we allow for more bins when doing nice rounding since the bin count is approximate
 			bin_count *= 2;
 		}
-		if (step == 0) {
-			throw InternalException("step is 0!?");
-		}
-
 		for (hugeint_t bin_boundary = max; bin_boundary > min; bin_boundary -= step) {
 			const hugeint_t target_boundary = bin_boundary / FACTOR;
 			int64_t real_boundary = Hugeint::Cast<int64_t>(target_boundary);
@@ -171,7 +171,7 @@ struct EquiWidthBinsDouble {
 		double step;
 		if (!Value::IsFinite(span)) {
 			// max - min does not fit
-			step = max / bin_count - min / bin_count;
+			step = max / static_cast<double>(bin_count) - min / static_cast<double>(bin_count);
 		} else {
 			step = span / static_cast<double>(bin_count);
 		}
@@ -296,7 +296,8 @@ int64_t RoundNumberToDivisor(int64_t number, int64_t divisor) {
 interval_t MakeIntervalNice(interval_t interval) {
 	if (interval.months >= 6) {
 		// if we have more than 6 months, we don't care about days
-		interval.days = interval.micros = 0;
+		interval.days = 0;
+		interval.micros = 0;
 	} else if (interval.months > 0 || interval.days >= 5) {
 		// if we have any months or more than 5 days, we don't care about micros
 		interval.micros = 0;

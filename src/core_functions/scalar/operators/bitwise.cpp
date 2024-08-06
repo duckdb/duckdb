@@ -206,11 +206,10 @@ ScalarFunctionSet BitwiseNotFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
-
 struct BitwiseShiftLeftOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB shift) {
-		TA max_shift = TA(sizeof(TA) * 8);
+		TA max_shift = TA(sizeof(TA) * 8) + (NumericLimits<TA>::IsSigned() ? 0 : 1);
 		if (input < 0) {
 			throw OutOfRangeException("Cannot left-shift negative number %s", NumericHelper::ToString(input));
 		}

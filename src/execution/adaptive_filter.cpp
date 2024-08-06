@@ -54,7 +54,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 		// the last swap was observed
 		if (observe && iteration_count == observe_interval) {
 			// keep swap if runtime decreased, else reverse swap
-			if (prev_mean - (runtime_sum / iteration_count) <= 0) {
+			if (prev_mean - (runtime_sum / static_cast<double>(iteration_count)) <= 0) {
 				// reverse swap because runtime didn't decrease
 				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
 
@@ -73,7 +73,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			runtime_sum = 0.0;
 		} else if (!observe && iteration_count == execute_interval) {
 			// save old mean to evaluate swap
-			prev_mean = runtime_sum / iteration_count;
+			prev_mean = runtime_sum / static_cast<double>(iteration_count);
 
 			// get swap index and swap likeliness
 			// a <= i <= b

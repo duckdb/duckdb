@@ -142,6 +142,16 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	}
 }
 
+void DuckTransaction::UpdateCollection(shared_ptr<RowGroupCollection> &collection) {
+	auto collection_ref = reference<RowGroupCollection>(*collection);
+	auto entry = updated_collections.find(collection_ref);
+	if (entry != updated_collections.end()) {
+		// already exists
+		return;
+	}
+	updated_collections.insert(make_pair(collection_ref, collection));
+}
+
 bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
@@ -235,8 +245,8 @@ void DuckTransaction::Rollback() noexcept {
 	undo_buffer.Rollback();
 }
 
-void DuckTransaction::Cleanup() {
-	undo_buffer.Cleanup();
+void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
+	undo_buffer.Cleanup(lowest_active_transaction);
 }
 
 void DuckTransaction::SetReadWrite() {

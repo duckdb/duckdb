@@ -635,11 +635,11 @@ public:
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (gstate.file_index + 1)) / total_count;
+			return (100.0 * (static_cast<double>(gstate.file_index) + 1.0)) / static_cast<double>(total_count);
 		}
-		auto percentage = MinValue<double>(
-		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
-		return (percentage + 100.0 * gstate.file_index) / total_count;
+		auto percentage = MinValue<double>(100.0, (static_cast<double>(bind_data.chunk_count) * STANDARD_VECTOR_SIZE *
+		                                           100.0 / static_cast<double>(bind_data.initial_file_cardinality)));
+		return (percentage + 100.0 * static_cast<double>(gstate.file_index)) / static_cast<double>(total_count);
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -1076,7 +1076,7 @@ static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const ve
 	D_ASSERT(names.size() == sql_types.size());
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		const auto &col_name = names[col_idx];
-		auto inserted = field_ids.ids->insert(make_pair(col_name, FieldID(field_id++)));
+		auto inserted = field_ids.ids->insert(make_pair(col_name, FieldID(UnsafeNumericCast<int32_t>(field_id++))));
 		D_ASSERT(inserted.second);
 
 		const auto &col_type = sql_types[col_idx];
@@ -1152,7 +1152,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 			if (!unique_field_ids.insert(field_id_int).second) {
 				throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_integer_value.ToString());
 			}
-			field_id = FieldID(field_id_int);
+			field_id = FieldID(UnsafeNumericCast<int32_t>(field_id_int));
 		}
 		auto inserted = field_ids.ids->insert(make_pair(col_name, std::move(field_id)));
 		D_ASSERT(inserted.second);

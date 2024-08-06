@@ -1358,7 +1358,7 @@ void JoinHashTable::SetRepartitionRadixBits(vector<unique_ptr<JoinHashTable>> &l
 	const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - radix_bits;
 	idx_t added_bits = 1;
 	for (; added_bits < max_added_bits; added_bits++) {
-		double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
+		double partition_multiplier = static_cast<double>(RadixPartitioning::NumberOfPartitions(added_bits));
 
 		auto new_estimated_size = double(max_partition_size) / partition_multiplier;
 		auto new_estimated_count = double(max_partition_count) / partition_multiplier;

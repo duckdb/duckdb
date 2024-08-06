@@ -79,6 +79,22 @@ Value AllowPersistentSecrets::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Access Mode
+//===--------------------------------------------------------------------===//
+void CatalogErrorMaxSchema::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.catalog_error_max_schemas = UBigIntValue::Get(input);
+}
+
+void CatalogErrorMaxSchema::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.catalog_error_max_schemas = DBConfig().options.catalog_error_max_schemas;
+}
+
+Value CatalogErrorMaxSchema::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.catalog_error_max_schemas);
+}
+
+//===--------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===--------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -859,7 +875,7 @@ void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value ErrorsAsJsonSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json ? 1 : 0);
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json);
 }
 
 //===--------------------------------------------------------------------===//

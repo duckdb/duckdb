@@ -61,6 +61,7 @@ void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sn
 	                error);
 	MatchAndReplace(original.state_machine_options.quote, sniffed.state_machine_options.quote, "Quote", error);
 	MatchAndReplace(original.state_machine_options.escape, sniffed.state_machine_options.escape, "Escape", error);
+	MatchAndReplace(original.state_machine_options.comment, sniffed.state_machine_options.comment, "Comment", error);
 	if (found_date) {
 		MatchAndReplace(original.date_format[LogicalTypeId::DATE], sniffed.date_format[LogicalTypeId::DATE],
 		                "Date Format", error);
@@ -84,6 +85,7 @@ void CSVSniffer::SetResultOptions() {
 	MatchAndRepaceUserSetVariables(options.dialect_options, best_candidate->GetStateMachine().dialect_options,
 	                               options.sniffer_user_mismatch_error, found_date, found_timestamp);
 	options.dialect_options.num_cols = best_candidate->GetStateMachine().dialect_options.num_cols;
+	options.dialect_options.rows_until_header = best_candidate->GetStateMachine().dialect_options.rows_until_header;
 }
 
 SnifferResult CSVSniffer::MinimalSniff() {
@@ -107,8 +109,8 @@ SnifferResult CSVSniffer::MinimalSniff() {
 		return {{}, {}};
 	}
 
-	state_machine->dialect_options.num_cols = sniffed_column_counts[0];
-	options.dialect_options.num_cols = sniffed_column_counts[0];
+	state_machine->dialect_options.num_cols = sniffed_column_counts[0].number_of_columns;
+	options.dialect_options.num_cols = sniffed_column_counts[0].number_of_columns;
 
 	// First figure out the number of columns on this configuration
 	auto scanner = count_scanner.UpgradeToStringValueScanner();
@@ -199,7 +201,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors.GetValue()) {
 		for (auto &error_vector : best_candidate->error_handler->errors) {
 			for (auto &error : error_vector.second) {
-				if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
+				if (error.type == MAXIMUM_LINE_SIZE) {
 					// If it's a maximum line size error, we can do it now.
 					error_handler->Error(error);
 				}

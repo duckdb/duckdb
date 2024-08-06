@@ -81,7 +81,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<FinalizeState>();
 	local_state.allocator.Reset();
 
-	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size());
+	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size(bind_data.aggr));
 	D_ASSERT(input.data.size() == 1);
 	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 	auto aligned_state_size = AlignValue(bind_data.state_size);
@@ -101,7 +101,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 		} else {
 			// create a dummy state because finalize does not understand NULLs in its input
 			// we put the NULL back in explicitly below
-			bind_data.aggr.initialize(data_ptr_cast(target_ptr));
+			bind_data.aggr.initialize(bind_data.aggr, data_ptr_cast(target_ptr));
 		}
 		state_vec_ptr[i] = data_ptr_cast(target_ptr);
 	}
@@ -122,7 +122,7 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<CombineState>();
 	local_state.allocator.Reset();
 
-	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size());
+	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size(bind_data.aggr));
 
 	D_ASSERT(input.data.size() == 2);
 	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
@@ -248,14 +248,14 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 		bound_function.return_type = arg_return_type;
 	}
 
-	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.state_size());
+	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.state_size(bound_aggr));
 }
 
 static void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                                     idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
-	auto state_size = bind_data.aggregate->function.state_size();
+	auto state_size = bind_data.aggregate->function.state_size(bind_data.aggregate->function);
 	auto blob_ptr = FlatVector::GetData<string_t>(result);
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(state);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {

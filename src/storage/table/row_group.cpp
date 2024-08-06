@@ -802,6 +802,11 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 	state.offset_in_row_group += append_count;
 }
 
+void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+	auto &vinfo = GetOrCreateVersionInfo();
+	vinfo.CleanupAppend(lowest_transaction, start, count);
+}
+
 void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_t *ids, idx_t offset, idx_t count,
                       const vector<PhysicalIndex> &column_ids) {
 #ifdef DEBUG

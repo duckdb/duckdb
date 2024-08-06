@@ -12,6 +12,10 @@ statement ok
 pragma threads=4
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE hits_og
 (
     WatchID BIGINT NOT NULL,

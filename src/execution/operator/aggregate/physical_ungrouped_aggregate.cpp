@@ -44,8 +44,8 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 		auto &aggregate = aggregate_expressions[i];
 		D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.state_size());
-		aggr.function.initialize(state.get());
+		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.state_size(aggr.function));
+		aggr.function.initialize(aggr.function, state.get());
 		aggregate_data.push_back(std::move(state));
 		bind_data.push_back(aggr.bind_info.get());
 		destructors.push_back(aggr.function.destructor);
@@ -647,18 +647,20 @@ SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, 
 	return SourceResultType::FINISHED;
 }
 
-string PhysicalUngroupedAggregate::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> PhysicalUngroupedAggregate::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string aggregate_info;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
 		if (i > 0) {
-			result += "\n";
+			aggregate_info += "\n";
 		}
-		result += aggregates[i]->GetName();
+		aggregate_info += aggregates[i]->GetName();
 		if (aggregate.filter) {
-			result += " Filter: " + aggregate.filter->GetName();
+			aggregate_info += " Filter: " + aggregate.filter->GetName();
 		}
 	}
+	result["Aggregates"] = aggregate_info;
 	return result;
 }
 

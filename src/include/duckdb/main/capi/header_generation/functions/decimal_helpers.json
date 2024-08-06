@@ -1,0 +1,48 @@
+{
+    "group": "decimal_helpers",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_double_to_decimal",
+            "return_type": "duckdb_decimal",
+            "params": [
+                {
+                    "type": "double",
+                    "name": "val"
+                },
+                {
+                    "type": "uint8_t",
+                    "name": "width"
+                },
+                {
+                    "type": "uint8_t",
+                    "name": "scale"
+                }
+            ],
+            "comment": {
+                "description": "Converts a double value to a duckdb_decimal object.\n\nIf the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.\n\n",
+                "param_comments": {
+                    "val": "The double value."
+                },
+                "return_value": "The converted `duckdb_decimal` element."
+            }
+        },
+        {
+            "name": "duckdb_decimal_to_double",
+            "return_type": "double",
+            "params": [
+                {
+                    "type": "duckdb_decimal",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Converts a duckdb_decimal object (as obtained from a `DUCKDB_TYPE_DECIMAL` column) into a double.\n\n",
+                "param_comments": {
+                    "val": "The decimal value."
+                },
+                "return_value": "The converted `double` element."
+            }
+        }
+    ]
+}

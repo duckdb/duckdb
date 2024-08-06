@@ -16,6 +16,11 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
 
+namespace duckdb_yyjson {
+struct yyjson_mut_doc;
+struct yyjson_mut_val;
+} // namespace duckdb_yyjson
+
 namespace duckdb {
 
 enum class MetricsType : uint8_t { CPU_TIME, EXTRA_INFO, OPERATOR_CARDINALITY, OPERATOR_TIMING };
@@ -42,7 +47,7 @@ struct SettingSetFunctions {
 
 struct Metrics {
 	double cpu_time;
-	string extra_info;
+	InsertionOrderPreservingMap<string> extra_info;
 	idx_t operator_cardinality;
 	double operator_timing;
 
@@ -78,6 +83,6 @@ public:
 
 public:
 	string GetMetricAsString(MetricsType setting) const;
-	void PrintAllMetricsToSS(std::stringstream &ss, const string &depth);
+	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination);
 };
 } // namespace duckdb

@@ -65,7 +65,8 @@ static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &resul
 		    result_list.length = result_length;
 		    for (idx_t i = 0; i < copy_count; i++) {
 			    // repeat the list contents "cnt" times
-			    VectorOperations::Copy(source_child, result_child, list_input.length, list_input.offset, current_size);
+			    VectorOperations::Copy(source_child, result_child, list_input.offset + list_input.length,
+			                           list_input.offset, current_size);
 			    current_size += list_input.length;
 		    }
 		    return result_list;

@@ -189,7 +189,7 @@ analyzed_plan	<REGEX>:.*contains\(s, 'green'\).*
 query II
 explain analyze select regexp_matches(s, '.*special.*requests.*', 's'), s from test;
 ----
-analyzed_plan	<REGEX>:.*"~~".s, '%special%requests%.*
+analyzed_plan	<REGEX>:.*"~~".s, '%special%requests.*%.*
 
 statement ok
 DELETE from test;

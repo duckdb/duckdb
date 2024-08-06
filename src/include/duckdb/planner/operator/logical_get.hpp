@@ -56,7 +56,7 @@ public:
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 
 	string GetName() const override;
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	//! Returns the underlying table that is being scanned, or nullptr if there is none
 	optional_ptr<TableCatalogEntry> GetTable() const;
 
