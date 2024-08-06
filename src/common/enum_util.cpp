@@ -97,6 +97,7 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/profiling_info.hpp"
@@ -1912,6 +1913,8 @@ const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value) {
 		return "AUTOLOAD";
 	case ExceptionType::SEQUENCE:
 		return "SEQUENCE";
+	case ExceptionType::INVALID_CONFIGURATION:
+		return "INVALID_CONFIGURATION";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2044,6 +2047,9 @@ ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SEQUENCE")) {
 		return ExceptionType::SEQUENCE;
+	}
+	if (StringUtil::Equals(value, "INVALID_CONFIGURATION")) {
+		return ExceptionType::INVALID_CONFIGURATION;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -2722,6 +2728,34 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BOUND_EXPANDED")) {
 		return ExpressionType::BOUND_EXPANDED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value) {
+	switch(value) {
+	case ExtensionABIType::UNKNOWN:
+		return "UNKNOWN";
+	case ExtensionABIType::CPP:
+		return "CPP";
+	case ExtensionABIType::C_STRUCT:
+		return "C_STRUCT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionABIType::UNKNOWN;
+	}
+	if (StringUtil::Equals(value, "CPP")) {
+		return ExtensionABIType::CPP;
+	}
+	if (StringUtil::Equals(value, "C_STRUCT")) {
+		return ExtensionABIType::C_STRUCT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6319,6 +6353,8 @@ const char* EnumUtil::ToChars<SettingScope>(SettingScope value) {
 		return "GLOBAL";
 	case SettingScope::LOCAL:
 		return "LOCAL";
+	case SettingScope::SECRET:
+		return "SECRET";
 	case SettingScope::INVALID:
 		return "INVALID";
 	default:
@@ -6333,6 +6369,9 @@ SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LOCAL")) {
 		return SettingScope::LOCAL;
+	}
+	if (StringUtil::Equals(value, "SECRET")) {
+		return SettingScope::SECRET;
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return SettingScope::INVALID;

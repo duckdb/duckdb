@@ -1,0 +1,155 @@
+{
+    "group": "open_connect",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_open",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "path"
+                },
+                {
+                    "type": "duckdb_database *",
+                    "name": "out_database"
+                }
+            ],
+            "comment": {
+                "description": "Creates a new database or opens an existing database file stored at the given path.\nIf no path is given a new in-memory database is created instead.\nThe instantiated database should be closed with 'duckdb_close'.\n\n",
+                "param_comments": {
+                    "path": "Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.",
+                    "out_database": "The result database object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_open_ext",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "path"
+                },
+                {
+                    "type": "duckdb_database *",
+                    "name": "out_database"
+                },
+                {
+                    "type": "duckdb_config",
+                    "name": "config"
+                },
+                {
+                    "type": "char **",
+                    "name": "out_error"
+                }
+            ],
+            "comment": {
+                "description": "Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.\nThe instantiated database should be closed with 'duckdb_close'.\n\n",
+                "param_comments": {
+                    "path": "Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.",
+                    "out_database": "The result database object.",
+                    "config": "(Optional) configuration used to start up the database system.",
+                    "out_error": "If set and the function returns DuckDBError, this will contain the reason why the start-up failed.\nNote that the error must be freed using `duckdb_free`."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_close",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_database *",
+                    "name": "database"
+                }
+            ],
+            "comment": {
+                "description": "Closes the specified database and de-allocates all memory allocated for that database.\nThis should be called after you are done with any database allocated through `duckdb_open` or `duckdb_open_ext`.\nNote that failing to call `duckdb_close` (in case of e.g. a program crash) will not cause data corruption.\nStill, it is recommended to always correctly close a database object after you are done with it.\n\n",
+                "param_comments": {
+                    "database": "The database object to shut down."
+                }
+            }
+        },
+        {
+            "name": "duckdb_connect",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_database",
+                    "name": "database"
+                },
+                {
+                    "type": "duckdb_connection *",
+                    "name": "out_connection"
+                }
+            ],
+            "comment": {
+                "description": "Opens a connection to a database. Connections are required to query the database, and store transactional state\nassociated with the connection.\nThe instantiated connection should be closed using 'duckdb_disconnect'.\n\n",
+                "param_comments": {
+                    "database": "The database file to connect to.",
+                    "out_connection": "The result connection object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_interrupt",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                }
+            ],
+            "comment": {
+                "description": "Interrupt running query\n\n",
+                "param_comments": {
+                    "connection": "The connection to interrupt"
+                }
+            }
+        },
+        {
+            "name": "duckdb_query_progress",
+            "return_type": "duckdb_query_progress_type",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                }
+            ],
+            "comment": {
+                "description": "Get progress of the running query\n\n",
+                "param_comments": {
+                    "connection": "The working connection"
+                },
+                "return_value": "-1 if no progress or a percentage of the progress"
+            }
+        },
+        {
+            "name": "duckdb_disconnect",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_connection *",
+                    "name": "connection"
+                }
+            ],
+            "comment": {
+                "description": "Closes the specified connection and de-allocates all memory allocated for that connection.\n\n",
+                "param_comments": {
+                    "connection": "The connection to close."
+                }
+            }
+        },
+        {
+            "name": "duckdb_library_version",
+            "return_type": "const char *",
+            "params": [],
+            "comment": {
+                "description": "Returns the version of the linked DuckDB, with a version postfix for dev versions\n\nUsually used for developing C extensions that must return this for a compatibility check.\n"
+            }
+        }
+    ]
+}
