@@ -114,9 +114,12 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			}
 		} else if (filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conjunction = filter->Cast<BoundConjunctionExpression>();
-			if (conjunction.type == ExpressionType::CONJUNCTION_OR) {
-				// Currently we do not interpret OR conjunctions for hyper graph edges
-				// The or conditions should be pushed down into the joins during reconstruction
+			if (conjunction.type == ExpressionType::CONJUNCTION_OR ||
+				filter_info->join_type == JoinType::INNER ||
+				filter_info->join_type == JoinType::INVALID) {
+				// Currently we do not interpret INNER join conjunctions
+				// for hyper graph edges. Conjunction filters are mostly to help
+				// plan semi and anti joins at the moment.
 				continue;
 			}
 			unordered_set<idx_t> left_bindings, right_bindings;
