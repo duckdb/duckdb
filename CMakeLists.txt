@@ -874,10 +874,15 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     # Compile the library into the actual wasm file
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
     string(REPLACE ";" " " TO_BE_LINKED "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS}")
+    if (${ABI_TYPE} STREQUAL "CPP")
+      set(EXPORTED_FUNCTIONS "_${NAME}_init,_${NAME}_version")
+    elseif (${ABI_TYPE} STREQUAL "C_STRUCT")
+      set(EXPORTED_FUNCTIONS "_${NAME}_init_c_api")
+    endif()
     add_custom_command(
       TARGET ${TARGET_NAME}
       POST_BUILD
-      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}> -o $<TARGET_FILE:${TARGET_NAME}>.wasm -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="_${NAME}_init,_${NAME}_version" ${WASM_THREAD_FLAGS} ${TO_BE_LINKED}
+      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}> -o $<TARGET_FILE:${TARGET_NAME}>.wasm -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS}" ${WASM_THREAD_FLAGS} ${TO_BE_LINKED}
       )
   endif()
 
