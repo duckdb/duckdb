@@ -787,18 +787,20 @@ if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TID
   endif()
 endif()
 
-function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERSION PARAMETERS)
+function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTENSION_VERSION CAPI_VERSION PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
   if (LOCAL_EXTENSION_REPO)
     add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
   endif()
   # all parameters after output_directory
   set(FILES "${ARGV}")
-  # remove name, output_directory, extension_version, parameters
-  list(REMOVE_AT FILES 0 1 2 3)
+  # remove name, abi_type, output_directory, extension_version, capi_version, parameters
+  list(REMOVE_AT FILES 0 1 2 3 4 5)
 
   # parse parameters
   string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
+
+  string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
   if(EMSCRIPTEN)
      add_library(${TARGET_NAME} STATIC ${FILES})
@@ -823,6 +825,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
   #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
   if(WASM_LOADABLE_EXTENSIONS)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sSIDE_MODULE=1 -DWASM_LOADABLE_EXTENSIONS")
+  elseif(${ABI_TYPE} STREQUAL "C_STRUCT")
+    # TODO strip all symbols except the capi init
   elseif (EXTENSION_STATIC_BUILD)
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
       if (APPLE)
@@ -876,11 +880,18 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
       COMMAND emcc $<TARGET_FILE:${TARGET_NAME}> -o $<TARGET_FILE:${TARGET_NAME}>.wasm -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="_${NAME}_init,_${NAME}_version" ${WASM_THREAD_FLAGS} ${TO_BE_LINKED}
       )
   endif()
+
+  if (${ABI_TYPE} STREQUAL "CPP")
+    set(FOOTER_VERSION_VALUE ${DUCKDB_NORMALIZED_VERSION})
+  elseif (${ABI_TYPE} STREQUAL "C_STRUCT")
+    set(FOOTER_VERSION_VALUE ${CAPI_VERSION})
+  endif()
+
   add_custom_command(
     TARGET ${TARGET_NAME}
     POST_BUILD
     COMMAND
-    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}>${EXTENSION_POSTFIX} -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${DUCKDB_MODULE_BASE_DIR}/scripts/null.txt -P ${DUCKDB_MODULE_BASE_DIR}/scripts/append_metadata.cmake
+    ${CMAKE_COMMAND} -DABI_TYPE=${ABI_TYPE} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}>${EXTENSION_POSTFIX} -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DVERSION_FIELD="${FOOTER_VERSION_VALUE}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${DUCKDB_MODULE_BASE_DIR}/scripts/null.txt -P ${DUCKDB_MODULE_BASE_DIR}/scripts/append_metadata.cmake
     )
   add_dependencies(${TARGET_NAME} duckdb_platform)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
@@ -894,7 +905,16 @@ function(build_loadable_extension NAME PARAMETERS)
   list(REMOVE_AT FILES 0 1)
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
-  build_loadable_extension_directory(${NAME} "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "${PARAMETERS}" ${FILES})
+  build_loadable_extension_directory(${NAME} "CPP" "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "" "${PARAMETERS}" ${FILES})
+endfunction()
+
+function(build_loadable_extension_capi NAME CAPI_VERSION PARAMETERS)
+  # all parameters after name
+  set(FILES "${ARGV}")
+  list(REMOVE_AT FILES 0 1)
+  string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+
+  build_loadable_extension_directory(${NAME} "C_STRUCT" "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "${CAPI_VERSION}" "${PARAMETERS}" ${FILES})
 endfunction()
 
 function(build_static_extension NAME PARAMETERS)
