@@ -9,6 +9,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/secret/secret.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -21,7 +22,7 @@
 #endif
 #include "duckdb/common/windows_undefs.hpp"
 
-#include <duckdb/main/secret/secret.hpp>
+
 #include <fstream>
 
 namespace duckdb {
