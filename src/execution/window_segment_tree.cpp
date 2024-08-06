@@ -1404,6 +1404,10 @@ class WindowDistinctAggregatorLocalState;
 class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
 public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+	// prev_idx, input_idx
+	using ZippedTuple = std::tuple<idx_t, idx_t>;
+	using ZippedElements = vector<ZippedTuple>;
+
 	class DistinctSortTree;
 
 	WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator, idx_t group_count);
@@ -1435,6 +1439,8 @@ public:
 	//! Sorting operations
 	GlobalSortStatePtr global_sort;
 
+	//! The tree indices
+	ZippedElements prev_idcs;
 	//! The merge sort tree for the aggregate.
 	unique_ptr<DistinctSortTree> merge_sort_tree;
 
@@ -1471,6 +1477,16 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const W
 	global_sort = make_uniq<GlobalSortState>(BufferManager::GetBufferManager(context), orders, payload_layout);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
+
+	//	6:	prevIdcs ← []
+	//	7:	prevIdcs[0] ← “-”
+	prev_idcs.resize(group_count);
+
+	//	To handle FILTER clauses we make the missing elements
+	//	point to themselves so they won't be counted.
+	for (idx_t i = 0; i < group_count; ++i) {
+		prev_idcs[i] = ZippedTuple(i + 1, i);
+	}
 }
 
 class WindowDistinctAggregatorLocalState : public WindowAggregatorState {
@@ -1656,10 +1672,6 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 
 class WindowDistinctAggregatorGlobalState::DistinctSortTree : public MergeSortTree<idx_t, idx_t> {
 public:
-	// prev_idx, input_idx
-	using ZippedTuple = std::tuple<idx_t, idx_t>;
-	using ZippedElements = vector<ZippedTuple>;
-
 	DistinctSortTree(ZippedElements &&prev_idcs, WindowDistinctAggregatorGlobalState &gdsink);
 };
 
@@ -1671,21 +1683,6 @@ void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
 	const auto in_size = scanner->Remaining();
 	scanner->Scan(scan_chunk);
 	idx_t scan_idx = 0;
-
-	//	6:	prevIdcs ← []
-	//	7:	prevIdcs[0] ← “-”
-	const auto count = inputs.size();
-	using ZippedTuple = DistinctSortTree::ZippedTuple;
-	DistinctSortTree::ZippedElements prev_idcs;
-	prev_idcs.resize(count);
-
-	//	To handle FILTER clauses we make the missing elements
-	//	point to themselves so they won't be counted.
-	if (in_size < count) {
-		for (idx_t i = 0; i < count; ++i) {
-			prev_idcs[i] = ZippedTuple(i + 1, i);
-		}
-	}
 
 	auto *input_idx = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
 	auto i = input_idx[scan_idx++];
