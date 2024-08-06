@@ -6,23 +6,18 @@
 namespace duckdb {
 
 Node15Leaf &Node15Leaf::New(ART &art, Node &node) {
-	node = Node::GetAllocator(art, NType::NODE_15_LEAF).New();
-	node.SetMetadata(static_cast<uint8_t>(NType::NODE_15_LEAF));
-	auto &n15 = Node::RefMutable<Node15Leaf>(art, node, NType::NODE_15_LEAF);
-
-	n15.count = 0;
-	return n15;
+	return Node4::New<Node15Leaf>(art, node, NODE_15_LEAF);
 }
 
 Node15Leaf &Node15Leaf::GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf) {
-	auto &n7 = Node::RefMutable<Node7Leaf>(art, node7_leaf, NType::NODE_7_LEAF);
+	auto &n7 = Node::Ref<Node7Leaf>(art, node7_leaf, NType::NODE_7_LEAF);
 	auto &n15 = New(art, node15_leaf);
 	if (node7_leaf.IsGate()) {
 		node15_leaf.SetGate();
 	}
 
 	n15.count = n7.count;
-	for (idx_t i = 0; i < n7.count; i++) {
+	for (uint8_t i = 0; i < n7.count; i++) {
 		n15.key[i] = n7.key[i];
 	}
 
@@ -33,14 +28,13 @@ Node15Leaf &Node15Leaf::GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_l
 
 Node15Leaf &Node15Leaf::ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &node256_leaf) {
 	auto &n15 = New(art, node15_leaf);
+	auto &n256 = Node::Ref<Node256Leaf>(art, node256_leaf, NType::NODE_256_LEAF);
 	if (node256_leaf.IsGate()) {
 		node15_leaf.SetGate();
 	}
-	auto &n256 = Node::RefMutable<Node256Leaf>(art, node256_leaf, NType::NODE_256_LEAF);
-	ValidityMask mask(&n256.mask[0]);
-	D_ASSERT(mask.CountValid(Node::NODE_256_CAPACITY) == Node::NODE_48_SHRINK_THRESHOLD);
 
-	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+	ValidityMask mask(&n256.mask[0]);
+	for (uint16_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (mask.RowIsValid(i)) {
 			n15.key[n15.count] = UnsafeNumericCast<uint8_t>(i);
 			n15.count++;
@@ -52,66 +46,30 @@ Node15Leaf &Node15Leaf::ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &nod
 }
 
 void Node15Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
-	D_ASSERT(node.HasMetadata());
-	auto &n15 = Node::RefMutable<Node15Leaf>(art, node, NType::NODE_15_LEAF);
-
 	// The node is full. Grow to Node256Leaf.
-	if (n15.count == Node::NODE_15_LEAF_CAPACITY) {
+	auto &n15 = Node::Ref<Node15Leaf>(art, node, NODE_15_LEAF);
+	if (n15.count == CAPACITY) {
 		auto node15 = node;
 		Node256Leaf::GrowNode15Leaf(art, node, node15);
 		Node256Leaf::InsertByte(art, node, byte);
 		return;
 	}
 
-	// Still space. Insert the child.
-	idx_t child_pos = 0;
-	while (child_pos < n15.count && n15.key[child_pos] < byte) {
-		child_pos++;
-	}
-
-	// Move children backwards to make space.
-	for (idx_t i = n15.count; i > child_pos; i--) {
-		n15.key[i] = n15.key[i - 1];
-	}
-
-	n15.key[child_pos] = byte;
-	n15.count++;
+	Node7Leaf::InsertByteInternal(art, n15, byte);
 }
 
 void Node15Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
-	D_ASSERT(node.HasMetadata());
-	auto &n15 = Node::RefMutable<Node15Leaf>(art, node, NType::NODE_15_LEAF);
-
-	idx_t child_pos = 0;
-	for (; child_pos < n15.count; child_pos++) {
-		if (n15.key[child_pos] == byte) {
-			break;
-		}
-	}
-
-	D_ASSERT(child_pos < n15.count);
-	n15.count--;
-
-	// Possibly move children backwards.
-	for (idx_t i = child_pos; i < n15.count; i++) {
-		n15.key[i] = n15.key[i + 1];
-	}
+	auto &n15 = Node7Leaf::DeleteByteInternal<Node7Leaf>(art, node, byte);
 
 	// Shrink node to Node7.
-	if (n15.count < Node::NODE_4_CAPACITY) {
+	if (n15.count < Node::NODE_7_LEAF_CAPACITY) {
 		auto node15 = node;
 		Node7Leaf::ShrinkNode15Leaf(art, node, node15);
 	}
 }
 
 bool Node15Leaf::GetNextByte(uint8_t &byte) const {
-	for (idx_t i = 0; i < count; i++) {
-		if (key[i] >= byte) {
-			byte = key[i];
-			return true;
-		}
-	}
-	return false;
+	return Node7Leaf::GetNextByte<const Node15Leaf>(*this, byte);
 }
 
 } // namespace duckdb

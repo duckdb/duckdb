@@ -36,6 +36,8 @@ public:
 	//! FixedSizeAllocator count of the ART.
 	static constexpr uint8_t ALLOCATOR_COUNT = 10;
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 4;
+	//! Invalid row IDs.
+	static constexpr row_t INVALID_ROW_ID = -1;
 
 public:
 	//! Constructs an ART.

@@ -5,18 +5,18 @@
 namespace duckdb {
 
 Node256Leaf &Node256Leaf::New(ART &art, Node &node) {
-	node = Node::GetAllocator(art, NType::NODE_256_LEAF).New();
-	node.SetMetadata(static_cast<uint8_t>(NType::NODE_256_LEAF));
-	auto &n256 = Node::RefMutable<Node256Leaf>(art, node, NType::NODE_256_LEAF);
+	node = Node::GetAllocator(art, NODE_256_LEAF).New();
+	node.SetMetadata(static_cast<uint8_t>(NODE_256_LEAF));
+	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
 
 	n256.count = 0;
 	ValidityMask mask(&n256.mask[0]);
-	mask.SetAllInvalid(Node::NODE_256_CAPACITY);
+	mask.SetAllInvalid(CAPACITY);
 	return n256;
 }
 
 Node256Leaf &Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf) {
-	auto &n15 = Node::RefMutable<Node15Leaf>(art, node15_leaf, NType::NODE_15_LEAF);
+	auto &n15 = Node::Ref<Node15Leaf>(art, node15_leaf, NType::NODE_15_LEAF);
 	auto &n256 = New(art, node256_leaf);
 	if (node15_leaf.IsGate()) {
 		node256_leaf.SetGate();
@@ -24,7 +24,7 @@ Node256Leaf &Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &nod
 
 	n256.count = n15.count;
 	ValidityMask mask(&n256.mask[0]);
-	for (idx_t i = 0; i < n15.count; i++) {
+	for (uint8_t i = 0; i < n15.count; i++) {
 		mask.SetValid(n15.key[i]);
 	}
 
@@ -34,17 +34,14 @@ Node256Leaf &Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &nod
 }
 
 void Node256Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
-	D_ASSERT(node.HasMetadata());
-	auto &n256 = Node::RefMutable<Node256Leaf>(art, node, NType::NODE_256_LEAF);
-
+	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
 	n256.count++;
 	ValidityMask mask(&n256.mask[0]);
 	mask.SetValid(byte);
 }
 
 void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
-	D_ASSERT(node.HasMetadata());
-	auto &n256 = Node::RefMutable<Node256Leaf>(art, node, NType::NODE_256_LEAF);
+	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
 	n256.count--;
 	ValidityMask mask(&n256.mask[0]);
 	mask.SetInvalid(byte);
@@ -57,9 +54,8 @@ void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 }
 
 bool Node256Leaf::GetNextByte(uint8_t &byte) {
-	// FIXME: Implement const validity masks.
 	ValidityMask v_mask(&mask[0]);
-	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
+	for (uint16_t i = byte; i < CAPACITY; i++) {
 		if (v_mask.RowIsValid(i)) {
 			byte = UnsafeNumericCast<uint8_t>(i);
 			return true;

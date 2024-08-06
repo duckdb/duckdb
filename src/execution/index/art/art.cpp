@@ -567,7 +567,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	// Insert the entries into the index.
 	idx_t failed_index = DConstants::INVALID_INDEX;
-	auto tree_was_empty = tree.HasMetadata();
+	auto had_metadata = tree.HasMetadata();
 	for (idx_t i = 0; i < row_count; i++) {
 		if (keys[i].Empty()) {
 			continue;
@@ -589,7 +589,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		}
 	}
 
-	if (tree_was_empty) {
+	if (!had_metadata) {
 		// All nodes are in-memory.
 		VerifyAllocationsInternal();
 	}
@@ -692,7 +692,7 @@ bool InsertIntoPrefix(ART &art, Node &node, reference<ARTKey> key, idx_t depth, 
 	Node remaining_prefix;
 	auto prefix_byte = Prefix::GetByte(art, next_node, UnsafeNumericCast<uint8_t>(pos));
 	auto freed_gate = Prefix::Split(art, next_node, remaining_prefix, UnsafeNumericCast<uint8_t>(pos));
-	Node4::New(art, next_node);
+	Node4::New<Node4>(art, next_node, NType::NODE_4);
 	if (freed_gate) {
 		next_node.get().SetGate();
 	}
@@ -776,7 +776,7 @@ bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKe
 		if (depth == ROW_ID_PREFIX_COUNT) {
 			Node7Leaf::New(*this, next_node);
 		} else {
-			Node4::New(*this, next_node);
+			Node4::New<Node4>(*this, next_node, NType::NODE_4);
 		}
 		if (freed_gate) {
 			next_node.get().SetGate();
@@ -1377,7 +1377,7 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 			// Fully deserialize other_index, and traverse it to increment its buffer IDs.
 			unsafe_vector<idx_t> upper_bounds;
 			InitializeMerge(upper_bounds);
-			other_art.tree.InitializeMerge(other_art, upper_bounds);
+			other_art.tree.InitMerge(other_art, upper_bounds);
 		}
 
 		// Merge the node storage.

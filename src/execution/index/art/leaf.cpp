@@ -78,7 +78,7 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, reference<ARTKey> row_id) {
 	if (pos == ART::ROW_ID_PREFIX_COUNT) {
 		Node7Leaf::New(art, next_node);
 	} else {
-		Node4::New(art, next_node);
+		Node4::New<Node4>(art, next_node, NType::NODE_4);
 	}
 
 	// Insert the remaining prefix into the new node.
@@ -149,7 +149,7 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 		ref_node.get() = Node::GetAllocator(art, NType::LEAF).New();
 		ref_node.get().SetMetadata(static_cast<uint8_t>(NType::LEAF));
 
-		auto &leaf = Node::RefMutable<Leaf>(art, ref_node, NType::LEAF);
+		auto &leaf = Node::Ref<Leaf>(art, ref_node, NType::LEAF);
 		leaf.count = UnsafeNumericCast<uint8_t>(MinValue((idx_t)Node::LEAF_SIZE, remaining_count));
 
 		for (idx_t i = 0; i < leaf.count; i++) {
@@ -190,7 +190,7 @@ void Leaf::DeprecatedFree(ART &art, Node &node) {
 
 	Node next_node;
 	while (node.HasMetadata()) {
-		next_node = Node::RefMutable<Leaf>(art, node, NType::LEAF).ptr;
+		next_node = Node::Ref<Leaf>(art, node, NType::LEAF).ptr;
 		Node::GetAllocator(art, NType::LEAF).Free(node);
 		node = next_node;
 	}
@@ -228,7 +228,7 @@ void Leaf::DeprecatedVacuum(ART &art, Node &node) {
 			node_ref.get() = allocator.VacuumPointer(node_ref);
 			node_ref.get().SetMetadata(static_cast<uint8_t>(NType::LEAF));
 		}
-		auto &leaf = Node::RefMutable<Leaf>(art, node_ref, NType::LEAF);
+		auto &leaf = Node::Ref<Leaf>(art, node_ref, NType::LEAF);
 		node_ref = leaf.ptr;
 	}
 }

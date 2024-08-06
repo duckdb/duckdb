@@ -31,7 +31,7 @@ void Node::New(ART &art, Node &node, NType type) {
 		Node256Leaf::New(art, node);
 		break;
 	case NType::NODE_4:
-		Node4::New(art, node);
+		Node4::New<Node4>(art, node, NType::NODE_4);
 		break;
 	case NType::NODE_16:
 		Node16::New(art, node);
@@ -61,7 +61,7 @@ void Node::Free(ART &art, Node &node) {
 	case NType::LEAF:
 		return Leaf::DeprecatedFree(art, node);
 	case NType::NODE_4:
-		Node4::Free(art, node);
+		Node4::Free<Node4>(art, node);
 		break;
 	case NType::NODE_16:
 		Node16::Free(art, node);
@@ -126,16 +126,18 @@ uint8_t Node::GetAllocatorIdx(const NType type) {
 
 void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) const {
 	D_ASSERT(HasMetadata());
-
+	auto type = GetType();
 	switch (GetType()) {
-	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, NType::NODE_4).ReplaceChild(byte, child);
+	case NType::NODE_4: {
+		auto &n4 = Ref<Node4>(art, *this, type);
+		return Node4::ReplaceChild(n4, byte, child);
+	}
 	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, NType::NODE_16).ReplaceChild(byte, child);
+		return Ref<Node16>(art, *this, type).ReplaceChild(byte, child);
 	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, NType::NODE_48).ReplaceChild(byte, child);
+		return Ref<Node48>(art, *this, type).ReplaceChild(byte, child);
 	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, NType::NODE_256).ReplaceChild(byte, child);
+		return Ref<Node256>(art, *this, type).ReplaceChild(byte, child);
 	default:
 		throw InternalException("Invalid node type for ReplaceChild.");
 	}
@@ -197,16 +199,17 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 
 const Node *Node::GetChild(ART &art, const uint8_t byte) const {
 	D_ASSERT(HasMetadata());
+	auto type = GetType();
 
 	switch (GetType()) {
 	case NType::NODE_4:
-		return Ref<const Node4>(art, *this, NType::NODE_4).GetChild(byte);
+		return GetChildInternal<const Node4, const Node>(art, *this, byte, type);
 	case NType::NODE_16:
-		return Ref<const Node16>(art, *this, NType::NODE_16).GetChild(byte);
+		return GetChildInternal<const Node16, const Node>(art, *this, byte, type);
 	case NType::NODE_48:
-		return Ref<const Node48>(art, *this, NType::NODE_48).GetChild(byte);
+		return GetChildInternal<const Node48, const Node>(art, *this, byte, type);
 	case NType::NODE_256:
-		return Ref<const Node256>(art, *this, NType::NODE_256).GetChild(byte);
+		return GetChildInternal<const Node256, const Node>(art, *this, byte, type);
 	default:
 		throw InternalException("Invalid node type for GetChild.");
 	}
@@ -214,16 +217,17 @@ const Node *Node::GetChild(ART &art, const uint8_t byte) const {
 
 Node *Node::GetChildMutable(ART &art, const uint8_t byte) const {
 	D_ASSERT(HasMetadata());
+	auto type = GetType();
 
 	switch (GetType()) {
 	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, NType::NODE_4).GetChildMutable(byte);
+		return GetChildInternal<Node4, Node>(art, *this, byte, type);
 	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, NType::NODE_16).GetChildMutable(byte);
+		return GetChildInternal<Node16, Node>(art, *this, byte, type);
 	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, NType::NODE_48).GetChildMutable(byte);
+		return GetChildInternal<Node48, Node>(art, *this, byte, type);
 	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, NType::NODE_256).GetChildMutable(byte);
+		return GetChildInternal<Node256, Node>(art, *this, byte, type);
 	default:
 		throw InternalException("Invalid node type for GetChildMutable.");
 	}
@@ -231,16 +235,17 @@ Node *Node::GetChildMutable(ART &art, const uint8_t byte) const {
 
 const Node *Node::GetNextChild(ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
+	auto type = GetType();
 
-	switch (GetType()) {
+	switch (type) {
 	case NType::NODE_4:
-		return Ref<const Node4>(art, *this, NType::NODE_4).GetNextChild(byte);
+		return GetNextChildInternal<const Node4, const Node>(art, *this, byte, type);
 	case NType::NODE_16:
-		return Ref<const Node16>(art, *this, NType::NODE_16).GetNextChild(byte);
+		return GetNextChildInternal<const Node16, const Node>(art, *this, byte, type);
 	case NType::NODE_48:
-		return Ref<const Node48>(art, *this, NType::NODE_48).GetNextChild(byte);
+		return GetNextChildInternal<const Node48, const Node>(art, *this, byte, type);
 	case NType::NODE_256:
-		return Ref<const Node256>(art, *this, NType::NODE_256).GetNextChild(byte);
+		return GetNextChildInternal<const Node256, const Node>(art, *this, byte, type);
 	default:
 		throw InternalException("Invalid node type for GetNextChild.");
 	}
@@ -248,16 +253,17 @@ const Node *Node::GetNextChild(ART &art, uint8_t &byte) const {
 
 Node *Node::GetNextChildMutable(ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
+	auto type = GetType();
 
 	switch (GetType()) {
 	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, NType::NODE_4).GetNextChildMutable(byte);
+		return GetNextChildInternal<Node4, Node>(art, *this, byte, type);
 	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, NType::NODE_16).GetNextChildMutable(byte);
+		return GetNextChildInternal<Node16, Node>(art, *this, byte, type);
 	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, NType::NODE_48).GetNextChildMutable(byte);
+		return GetNextChildInternal<Node48, Node>(art, *this, byte, type);
 	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, NType::NODE_256).GetNextChildMutable(byte);
+		return GetNextChildInternal<Node256, Node>(art, *this, byte, type);
 	default:
 		throw InternalException("Invalid node type for GetNextChildMutable.");
 	}
@@ -267,12 +273,14 @@ bool Node::GetNextByte(ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 
 	switch (GetType()) {
-	case NType::NODE_7_LEAF:
-		return Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF).GetNextByte(byte);
+	case NType::NODE_7_LEAF: {
+		auto &n7_leaf = Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF);
+		return Node7Leaf::GetNextByte(n7_leaf, byte);
+	}
 	case NType::NODE_15_LEAF:
 		return Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF).GetNextByte(byte);
 	case NType::NODE_256_LEAF:
-		return RefMutable<Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
+		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
 	default:
 		throw InternalException("Invalid node type for GetNextByte.");
 	}
@@ -373,20 +381,20 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 	case NType::PREFIX:
 		return Prefix::VerifyAllocations(art, *this, node_counts);
 	case NType::LEAF:
-		return RefMutable<Leaf>(art, *this, type).DeprecatedVerifyAllocations(art, node_counts);
+		return Ref<Leaf>(art, *this, type).DeprecatedVerifyAllocations(art, node_counts);
 	case NType::LEAF_INLINED:
 		return;
 	case NType::NODE_4:
-		RefMutable<Node4>(art, *this, type).VerifyAllocations(art, node_counts);
+		VerifyAllocationsInternal(art, Ref<Node4>(art, *this, type), node_counts);
 		break;
 	case NType::NODE_16:
-		RefMutable<Node16>(art, *this, type).VerifyAllocations(art, node_counts);
+		VerifyAllocationsInternal(art, Ref<Node16>(art, *this, type), node_counts);
 		break;
 	case NType::NODE_48:
-		RefMutable<Node48>(art, *this, type).VerifyAllocations(art, node_counts);
+		VerifyAllocationsInternal(art, Ref<Node48>(art, *this, type), node_counts);
 		break;
 	case NType::NODE_256:
-		RefMutable<Node256>(art, *this, type).VerifyAllocations(art, node_counts);
+		VerifyAllocationsInternal(art, Ref<Node256>(art, *this, type), node_counts);
 		break;
 	case NType::PREFIX_INLINED:
 	case NType::NODE_7_LEAF:
@@ -453,13 +461,13 @@ void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 
 	switch (node_type) {
 	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, node_type).Vacuum(art, indexes);
+		return VacuumInternal(art, Ref<Node4>(art, *this, node_type), indexes);
 	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, node_type).Vacuum(art, indexes);
+		return VacuumInternal(art, Ref<Node16>(art, *this, node_type), indexes);
 	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, node_type).Vacuum(art, indexes);
+		return VacuumInternal(art, Ref<Node48>(art, *this, node_type), indexes);
 	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, node_type).Vacuum(art, indexes);
+		return VacuumInternal(art, Ref<Node256>(art, *this, node_type), indexes);
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
 	case NType::NODE_256_LEAF:
@@ -490,32 +498,20 @@ void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSi
 	case NType::LEAF:
 		return;
 	case NType::NODE_4: {
-		auto n4_ptr = GetInMemoryPtr<Node4>(art, node, node_type);
-		if (n4_ptr) {
-			n4_ptr->TransformToDeprecated(art, allocator);
-		}
-		return;
+		auto ptr = InMemoryRef<Node4>(art, node, node_type);
+		return TransformToDeprecatedInternal(art, ptr, allocator);
 	}
 	case NType::NODE_16: {
-		auto n16_ptr = GetInMemoryPtr<Node16>(art, node, node_type);
-		if (n16_ptr) {
-			n16_ptr->TransformToDeprecated(art, allocator);
-		}
-		return;
+		auto ptr = InMemoryRef<Node16>(art, node, node_type);
+		return TransformToDeprecatedInternal(art, ptr, allocator);
 	}
 	case NType::NODE_48: {
-		auto n48_ptr = GetInMemoryPtr<Node48>(art, node, node_type);
-		if (n48_ptr) {
-			n48_ptr->TransformToDeprecated(art, allocator);
-		}
-		return;
+		auto ptr = InMemoryRef<Node48>(art, node, node_type);
+		return TransformToDeprecatedInternal(art, ptr, allocator);
 	}
 	case NType::NODE_256: {
-		auto n256_ptr = GetInMemoryPtr<Node256>(art, node, node_type);
-		if (n256_ptr) {
-			n256_ptr->TransformToDeprecated(art, allocator);
-		}
-		return;
+		auto ptr = InMemoryRef<Node256>(art, node, node_type);
+		return TransformToDeprecatedInternal(art, ptr, allocator);
 	}
 	default:
 		throw InternalException("Invalid node type for TransformToDeprecated.");

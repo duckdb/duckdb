@@ -79,7 +79,7 @@ void Prefix::InitializeMerge(ART &art, Node &node, const unsafe_vector<idx_t> &u
 	}
 
 	node.IncreaseBufferId(buffer_count);
-	prefix.ptr->InitializeMerge(art, upper_bounds);
+	prefix.ptr->InitMerge(art, upper_bounds);
 }
 
 row_t Prefix::CanInline(ART &art, Node &parent, Node &node, uint8_t byte, const Node &child) {

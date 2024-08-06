@@ -65,21 +65,15 @@ public:
 	//! Get the index of the matching allocator.
 	static uint8_t GetAllocatorIdx(const NType type);
 
-	//! Get an immutable reference to the node.
+	//! Get a reference to a node.
 	template <class NODE>
-	static inline const NODE &Ref(const ART &art, const Node ptr, const NType type) {
+	static inline NODE &Ref(const ART &art, const Node ptr, const NType type) {
 		D_ASSERT(!ptr.IsPrefix());
-		return *(GetAllocator(art, type).Get<const NODE>(ptr, false));
-	}
-	//! Get a mutable reference to the node.
-	template <class NODE>
-	static inline NODE &RefMutable(const ART &art, const Node ptr, const NType type) {
-		D_ASSERT(!ptr.IsPrefix());
-		return *(GetAllocator(art, type).Get<NODE>(ptr));
+		return *(GetAllocator(art, type).Get<NODE>(ptr, !std::is_const<NODE>::value));
 	}
 	//! Get a node pointer, if the node is in memory, else nullptr.
 	template <class NODE>
-	static inline NODE *GetInMemoryPtr(const ART &art, const Node ptr, const NType type) {
+	static inline NODE *InMemoryRef(const ART &art, const Node ptr, const NType type) {
 		D_ASSERT(!ptr.IsPrefix());
 		return GetAllocator(art, type).GetInMemoryPtr<NODE>(ptr);
 	}
@@ -113,7 +107,7 @@ public:
 	static NType GetNodeType(const idx_t count);
 
 	//! Initialize a merge by incrementing the buffer IDs of a node.
-	void InitializeMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
+	void InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
 	//! Merge a node into this node.
 	bool Merge(ART &art, Node &other, const bool in_gate);
 	bool MergeInternal(ART &art, Node &other, const bool in_gate);
@@ -206,5 +200,40 @@ private:
 	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t pos);
 	//! Merges two prefixes.
 	bool MergePrefixes(ART &art, Node &other, const bool in_gate);
+
+private:
+	template <class NODE, class OUT, class IN>
+	static OUT *GetChildInternal(ART &art, IN &node, const uint8_t byte, NType type) {
+		auto &n = Node::Ref<NODE>(art, node, type);
+		return NODE::template GetChild<OUT>(n, byte);
+	}
+
+	template <class NODE, class OUT, class IN>
+	static OUT *GetNextChildInternal(ART &art, IN &node, uint8_t &byte, NType type) {
+		auto &n = Node::Ref<NODE>(art, node, type);
+		return NODE::template GetNextChild<OUT>(n, byte);
+	}
+
+	template <class NODE>
+	static void InitMergeInternal(ART &art, NODE &n, const unsafe_vector<idx_t> &upper_bounds) {
+		NODE::Iterator(n, [&](Node &child) { child.InitMerge(art, upper_bounds); });
+	}
+
+	template <class NODE>
+	static void VacuumInternal(ART &art, NODE &n, const unordered_set<uint8_t> &indexes) {
+		NODE::Iterator(n, [&](Node &child) { child.Vacuum(art, indexes); });
+	}
+
+	template <class NODE>
+	static void TransformToDeprecatedInternal(ART &art, NODE *ptr, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
+		if (ptr) {
+			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, allocator); });
+		}
+	}
+
+	template <class NODE>
+	static void VerifyAllocationsInternal(ART &art, NODE &n, unordered_map<uint8_t, idx_t> &node_counts) {
+		NODE::Iterator(n, [&](const Node &child) { child.VerifyAllocations(art, node_counts); });
+	}
 };
 } // namespace duckdb
