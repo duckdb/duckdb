@@ -198,8 +198,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		filename = address;
 #else
 
-		string local_path = !db.config.options.extension_directory.empty() ? db.config.options.extension_directory
-		                                                                : ExtensionHelper::DefaultExtensionFolder(fs);
+		string local_path = !db.config.options.extension_directory.empty()
+		                        ? db.config.options.extension_directory
+		                        : ExtensionHelper::DefaultExtensionFolder(fs);
 
 		// convert random separators to platform-canonic
 		local_path = fs.ConvertSeparators(local_path);

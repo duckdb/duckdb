@@ -111,24 +111,29 @@ Value KeyValueSecret::TryGetValue(const string &key, bool error_on_missing) cons
 	return lookup->second;
 }
 
-KeyValueSecretReader::KeyValueSecretReader(DatabaseInstance &db_p, const char **secret_types, idx_t secret_types_len,string path_p) {
+KeyValueSecretReader::KeyValueSecretReader(DatabaseInstance &db_p, const char **secret_types, idx_t secret_types_len,
+                                           string path_p) {
 	db = db_p;
 	path = std::move(path_p);
 	Initialize(secret_types, secret_types_len);
 }
 
-KeyValueSecretReader::KeyValueSecretReader(DatabaseInstance &db_p, const char *secret_type, string path) : KeyValueSecretReader(db_p, &secret_type, 1, std::move(path)) {
+KeyValueSecretReader::KeyValueSecretReader(DatabaseInstance &db_p, const char *secret_type, string path)
+    : KeyValueSecretReader(db_p, &secret_type, 1, std::move(path)) {
 }
 
-KeyValueSecretReader::KeyValueSecretReader(ClientContext &context_p, const char **secret_types, idx_t secret_types_len, string path_p) {
+KeyValueSecretReader::KeyValueSecretReader(ClientContext &context_p, const char **secret_types, idx_t secret_types_len,
+                                           string path_p) {
 	context = context_p;
 	path = std::move(path_p);
 	Initialize(secret_types, secret_types_len);
 }
-KeyValueSecretReader::KeyValueSecretReader(ClientContext &context_p, const char *secret_type, string path) : KeyValueSecretReader(context_p, &secret_type, 1, std::move(path)) {
+KeyValueSecretReader::KeyValueSecretReader(ClientContext &context_p, const char *secret_type, string path)
+    : KeyValueSecretReader(context_p, &secret_type, 1, std::move(path)) {
 }
 
-KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char* secret_type)
+KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info,
+                                           const char *secret_type)
     : KeyValueSecretReader(opener_p, info, &secret_type, 1) {
 }
 
@@ -140,7 +145,7 @@ void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_ty
 
 	auto &secret_manager = db->GetSecretManager();
 	auto transaction = context ? CatalogTransaction::GetSystemCatalogTransaction(*context)
-							   : CatalogTransaction::GetSystemTransaction(*db);
+	                           : CatalogTransaction::GetSystemTransaction(*db);
 
 	SecretMatch secret_match;
 	for (idx_t i = 0; i < secret_types_len; i++) {
@@ -157,13 +162,13 @@ void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_ty
 	}
 }
 
-KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,
-                                           idx_t secret_types_len) {
+KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info,
+                                           const char **secret_types, idx_t secret_types_len) {
 	db = opener_p.TryGetDatabase();
 	context = opener_p.TryGetClientContext();
 
 	if (info) {
-		path = 	info->file_path;
+		path = info->file_path;
 	}
 
 	Initialize(secret_types, secret_types_len);
@@ -216,7 +221,7 @@ void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key) {
 	string base_message = "Failed to fetch required secret key '%s' from secret";
 
 	if (!secret) {
-		string secret_scope = path ;
+		string secret_scope = path;
 		string secret_scope_hint_message = secret_scope.empty() ? "." : " for '" + secret_scope + "'.";
 		throw InvalidConfigurationException(base_message + ", because no secret was found%s", secret_key,
 		                                    secret_scope_hint_message);

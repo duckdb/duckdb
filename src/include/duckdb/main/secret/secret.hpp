@@ -240,7 +240,8 @@ public:
 	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {};
 
 	//! Initializes the KeyValueSecretReader by fetching the secret automatically
-	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types, idx_t secret_types_len);
+	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,
+	                     idx_t secret_types_len);
 	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char *secret_type);
 
 	//! Initialize KeyValueSecretReader from a db instance
@@ -306,7 +307,8 @@ protected:
 	//! Optionally an owning pointer to the secret entry
 	shared_ptr<SecretEntry> secret_entry;
 
-	//! Secrets/settings will be fetched either through a context (local + global settings) or a databaseinstance (global only)
+	//! Secrets/settings will be fetched either through a context (local + global settings) or a databaseinstance
+	//! (global only)
 	optional_ptr<DatabaseInstance> db;
 	optional_ptr<ClientContext> context;
 

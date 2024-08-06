@@ -59,5 +59,4 @@ protected:
 	static unique_ptr<BaseSecret> CreateHTTPSecretFromConfig(ClientContext &context, CreateSecretInput &input);
 };
 
-
 } // namespace duckdb

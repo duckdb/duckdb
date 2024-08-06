@@ -90,8 +90,8 @@ public:
 	                                                         optional_ptr<ExtensionRepository> repository = nullptr,
 	                                                         bool throw_on_origin_mismatch = false,
 	                                                         const string &version = "");
-	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                                         bool force_install,
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
+	                                                         const string &extension, bool force_install,
 	                                                         optional_ptr<ExtensionRepository> repository = nullptr,
 	                                                         bool throw_on_origin_mismatch = false,
 	                                                         const string &version = "");
@@ -221,8 +221,8 @@ private:
 	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
-	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension, ExtensionInitResult &result,
-	                           string &error);
+	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	                           ExtensionInitResult &result, string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 

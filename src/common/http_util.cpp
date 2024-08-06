@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-void HTTPUtil::ParseHTTPProxyHost(string& proxy_value, string& hostname_out, idx_t& port_out, idx_t default_port) {
+void HTTPUtil::ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port) {
 	auto proxy_split = StringUtil::Split(proxy_value, ":");
 	if (proxy_split.size() == 1) {
 		hostname_out = proxy_split[0];

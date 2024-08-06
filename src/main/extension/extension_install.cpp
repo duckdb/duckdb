@@ -168,8 +168,8 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	string local_path = ExtensionDirectory(context);
 	optional_ptr<HTTPLogger> http_logger =
 	    ClientConfig::GetConfig(context).enable_http_logging ? context.client_data->http_logger.get() : nullptr;
-	return InstallExtensionInternal(db, fs, local_path, extension, force_install, throw_on_origin_mismatch,
-	                                version, repository, http_logger, context);
+	return InstallExtensionInternal(db, fs, local_path, extension, force_install, throw_on_origin_mismatch, version,
+	                                repository, http_logger, context);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -378,7 +378,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		string proxy_user;
 		string proxy_pass;
 
-		if (setting_reader.TryGetSecretKeyOrSetting("http_proxy", "http_proxy", proxy_setting) && !proxy_setting.empty()) {
+		if (setting_reader.TryGetSecretKeyOrSetting("http_proxy", "http_proxy", proxy_setting) &&
+		    !proxy_setting.empty()) {
 			idx_t port;
 			string host;
 			HTTPUtil::ParseHTTPProxyHost(proxy_setting, host, port);
@@ -387,7 +388,6 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 		if (setting_reader.TryGetSecretKeyOrSetting("http_proxy_username", "http_proxy_username", proxy_user)) {
 			if (setting_reader.TryGetSecretKeyOrSetting("http_proxy_password", "http_proxy_password", proxy_pass)) {
-
 			}
 			cli.set_proxy_basic_auth(proxy_user, proxy_pass);
 		}
@@ -497,8 +497,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 	}
 
 	// Default case, let the FileSystem figure it out
-	return DirectInstallExtension(db, fs, generated_url, temp_path, extension_name, local_extension_path,
-	                              force_install, repository, context);
+	return DirectInstallExtension(db, fs, generated_url, temp_path, extension_name, local_extension_path, force_install,
+	                              repository, context);
 }
 
 static bool IsHTTP(const string &path) {
@@ -584,8 +584,8 @@ ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs, 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
 	if (repository && !IsHTTP(repository->path)) {
 		LocalFileSystem local_fs;
-		return InstallFromRepository(db, fs, extension, extension_name, *repository, temp_path,
-		                             local_extension_path, version, force_install, http_logger, context);
+		return InstallFromRepository(db, fs, extension, extension_name, *repository, temp_path, local_extension_path,
+		                             version, force_install, http_logger, context);
 	}
 
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL

@@ -144,7 +144,8 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 			vector<Value> keys_unpacked = ListValue::GetChildren(keys);
 			vector<Value> values_unpacked = ListValue::GetChildren(values);
 
-			value = Value::MAP(ListType::GetChildType(keys.type()), ListType::GetChildType(values.type()), keys_unpacked, values_unpacked);
+			value = Value::MAP(ListType::GetChildType(keys.type()), ListType::GetChildType(values.type()),
+			                   keys_unpacked, values_unpacked);
 			return true;
 		} else {
 			return false;

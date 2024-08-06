@@ -231,7 +231,7 @@ void CreateHTTPSecretFunctions::Register(DatabaseInstance &instance) {
 }
 
 unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromConfig(ClientContext &context,
-                                                                                CreateSecretInput &input) {
+                                                                             CreateSecretInput &input) {
 	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
 
 	secret->TrySetValue("http_proxy", input);

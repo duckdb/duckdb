@@ -138,7 +138,8 @@ public:
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
 	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                        optional_ptr<FileOpener> opener = nullptr) final;
-	static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> InitializeHeaders(HeaderMap &header_map, const HTTPParams &http_params);
+	static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> InitializeHeaders(HeaderMap &header_map,
+	                                                                             const HTTPParams &http_params);
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
 		return {path}; // FIXME

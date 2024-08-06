@@ -25,7 +25,8 @@
 
 namespace duckdb {
 
-duckdb::unique_ptr<duckdb_httplib_openssl::Headers> HTTPFileSystem::InitializeHeaders(HeaderMap &header_map, const HTTPParams &http_params) {
+duckdb::unique_ptr<duckdb_httplib_openssl::Headers> HTTPFileSystem::InitializeHeaders(HeaderMap &header_map,
+                                                                                      const HTTPParams &http_params) {
 	auto headers = make_uniq<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
@@ -55,7 +56,8 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<Fi
 	FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", result.retry_wait_ms, info);
 	FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", result.retry_backoff, info);
 	FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", result.keep_alive, info);
-	FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", result.enable_server_cert_verification, info);
+	FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", result.enable_server_cert_verification,
+	                                 info);
 	FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result.ca_cert_file, info);
 	FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", result.hf_max_per_page, info);
 
@@ -63,23 +65,26 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<Fi
 	KeyValueSecretReader settings_reader(*opener, info, "http");
 
 	string proxy_setting;
-	if (settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy", "http_proxy", proxy_setting) && !proxy_setting.empty()) {
+	if (settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy", "http_proxy", proxy_setting) &&
+	    !proxy_setting.empty()) {
 		idx_t port;
 		string host;
 		HTTPUtil::ParseHTTPProxyHost(proxy_setting, host, port);
 		result.http_proxy = host;
 		result.http_proxy_port = port;
 	}
-	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_username", "http_proxy_username", result.http_proxy_username);
-	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_password", "http_proxy_password", result.http_proxy_password);
+	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_username", "http_proxy_username",
+	                                                 result.http_proxy_username);
+	settings_reader.TryGetSecretKeyOrSetting<string>("http_proxy_password", "http_proxy_password",
+	                                                 result.http_proxy_password);
 	settings_reader.TryGetSecretKey<string>("bearer_token", result.bearer_token);
 
 	Value extra_headers;
 	if (settings_reader.TryGetSecretKey("extra_http_headers", extra_headers)) {
 		auto children = MapValue::GetChildren(extra_headers);
-		for (const auto& child : children) {
+		for (const auto &child : children) {
 			auto kv = StructValue::GetChildren(child);
-			D_ASSERT(kv.size() == 2 );
+			D_ASSERT(kv.size() == 2);
 			result.extra_headers[kv[0].GetValue<string>()] = kv[1].GetValue<string>();
 		}
 	}
