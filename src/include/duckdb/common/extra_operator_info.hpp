@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstring>
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
