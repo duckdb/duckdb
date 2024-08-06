@@ -1075,7 +1075,7 @@ function(duckdb_extension_load NAME)
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Version detection
     if ("${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
-      duckdb_extension_generate_version(EXT_VERSION ${CMAKE_CURRENT_LIST_DIR})
+      duckdb_extension_generate_version(EXT_VERSION ${duckdb_extension_load_SOURCE_DIR})
     else()
       set(EXT_VERSION ${duckdb_extension_load_EXTENSION_VERSION})
     endif()
