@@ -216,8 +216,7 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_HTTP = 38,
 	DUCKDB_ERROR_MISSING_EXTENSION = 39,
 	DUCKDB_ERROR_AUTOLOAD = 40,
-	DUCKDB_ERROR_SEQUENCE = 41,
-	DUCKDB_INVALID_CONFIGURATION = 42
+	DUCKDB_ERROR_SEQUENCE = 41
 } duckdb_error_type;
 
 //===--------------------------------------------------------------------===//
