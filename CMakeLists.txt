@@ -1002,6 +1002,14 @@ function(duckdb_extension_generate_version OUTPUT_VAR WORKING_DIR)
   find_package(Git)
   if(Git_FOUND)
     execute_process(
+            COMMAND ${GIT_EXECUTABLE} rev-parse --is-inside-work-tree
+            WORKING_DIRECTORY ${WORKING_DIR}
+            OUTPUT_VARIABLE IS_IN_GIT_DIR
+            ERROR_QUIET
+    )
+  endif()
+  if (IS_IN_GIT_DIR)
+    execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
             WORKING_DIRECTORY ${WORKING_DIR}
             RESULT_VARIABLE GIT_RESULT
