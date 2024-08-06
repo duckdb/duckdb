@@ -114,6 +114,41 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				}
 			}
 		}
+		if (filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+			auto &conjunction = filter->Cast<BoundConjunctionExpression>();
+			unordered_set<idx_t> left_bindings, right_bindings;
+			D_ASSERT(filter_info->left_set);
+			D_ASSERT(filter_info->right_set);
+			D_ASSERT(filter_info->join_type == JoinType::SEMI || filter_info->join_type == JoinType::ANTI);
+			for (auto &child_comp : conjunction.children) {
+				if (child_comp->expression_class != ExpressionClass::BOUND_COMPARISON) {
+					continue;
+				}
+				auto &comparison = child_comp->Cast<BoundComparisonExpression>();
+				// extract the bindings that are required for the left and right side of the comparison
+				relation_manager.ExtractBindings(*comparison.left, left_bindings);
+				relation_manager.ExtractBindings(*comparison.right, right_bindings);
+				if (filter_info->left_binding.table_index == DConstants::INVALID_INDEX &&
+				    filter_info->left_binding.column_index == DConstants::INVALID_INDEX) {
+					GetColumnBinding(*comparison.left, filter_info->left_binding);
+				}
+				if (filter_info->right_binding.table_index == DConstants::INVALID_INDEX &&
+				    filter_info->right_binding.column_index == DConstants::INVALID_INDEX) {
+					GetColumnBinding(*comparison.right, filter_info->right_binding);
+				}
+			}
+			if (!left_bindings.empty() && !right_bindings.empty()) {
+				// we can only create a meaningful edge if the sets are not exactly the same
+				if (filter_info->left_set != filter_info->right_set) {
+					// check if the sets are disjoint
+					if (Disjoint(left_bindings, right_bindings)) {
+						// they are disjoint, we only need to create one set of edges in the join graph
+						query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set, filter_info);
+						query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set, filter_info);
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -228,12 +263,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				          JoinRelationSet::IsSubset(*right.set, *f->right_set)) ||
 				         (JoinRelationSet::IsSubset(*left.set, *f->right_set) &&
 				          JoinRelationSet::IsSubset(*right.set, *f->left_set)));
-				JoinCondition cond;
-				D_ASSERT(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-				auto &comparison = condition->Cast<BoundComparisonExpression>();
 
-				// we need to figure out which side is which by looking at the relations available to us
-				// left/right (build side/probe side) optimizations happen later.
 				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
 				// If the left and right set are inverted AND it is a semi or anti join
 				// swap left and right children back.
@@ -241,15 +271,38 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					std::swap(left, right);
 					invert = false;
 				}
-				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
-				cond.comparison = condition->type;
 
-				if (invert) {
-					// reverse comparison expression if we reverse the order of the children
-					cond.comparison = FlipComparisonExpression(cond.comparison);
+				if (condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+					JoinCondition cond;
+					auto &comparison = condition->Cast<BoundComparisonExpression>();
+					// we need to figure out which side is which by looking at the relations available to us
+					// left/right (build side/probe side) optimizations happen later.
+
+					cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
+					cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+					cond.comparison = condition->type;
+					if (invert) {
+						// reverse comparison expression if we reverse the order of the children
+						cond.comparison = FlipComparisonExpression(cond.comparison);
+					}
+					join->conditions.push_back(std::move(cond));
+				} else if (condition->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+					auto &conjunction = condition->Cast<BoundConjunctionExpression>();
+					for (auto &child : conjunction.children) {
+						JoinCondition cond;
+						D_ASSERT(child->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+						auto &comparison = child->Cast<BoundComparisonExpression>();
+
+						cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
+						cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+						cond.comparison = child->type;
+						if (invert) {
+							// reverse comparison expression if we reverse the order of the children
+							cond.comparison = FlipComparisonExpression(cond.comparison);
+						}
+						join->conditions.push_back(std::move(cond));
+					}
 				}
-				join->conditions.push_back(std::move(cond));
 			}
 			D_ASSERT(!join->conditions.empty());
 			result_operator = std::move(join);
