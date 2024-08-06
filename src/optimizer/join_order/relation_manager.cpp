@@ -457,15 +457,15 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
 
 				auto conjunction_expression = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-				// go through the comparisons and populate the relation_requirements with relations
-				// required to make the join. It's possible multiple LHS relations have a condition in
-				// this semi join. Suppose we have ((A ⨝ B) ⋉ C).
+				// create a conjunction expression for the semi join.
+				// It's possible multiple LHS relations have a condition in
+				// this semi join. Suppose we have ((A ⨝ B) ⋉ C). (example in test_4950.test)
 				// If the semi join condition has A.x = C.y AND B.x = C.z then we need to prevent a reordering
-				// that looks like ((A ⋉ C) ⨝ B)), since all columns from C will be lost in the semi join
+				// that looks like ((A ⋉ C) ⨝ B)), since all columns from C will be lost after it joins with A,
 				// and the condition B.x = C.z will no longer be possible.
-				// so for every condition that requires columns frmo the right side of the join, we add it
-				// to a relation requirements map, then when creating hyper edges, we require that all
-				// LHS relations are already joined before the semi join can be planned.
+				// if we make a conjunction expressions and populate the left set and right set with all
+				// the relations from the conditions in the conjunction expression, we can prevent invalid
+				// reordering.
 				for (auto &cond : join.conditions) {
 					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
 					                                                       std::move(cond.right));
@@ -477,6 +477,9 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				optional_ptr<JoinRelationSet> left_set;
 				optional_ptr<JoinRelationSet> right_set;
 				optional_ptr<JoinRelationSet> full_set;
+				// here we create a left_set that unions all relations from the left side of
+				// every expression and a right_set that unions all relations frmo the right side of a
+				// every expression (although this should always be 1).
 				for (auto &bound_expr : conjunction_expression->children) {
 					D_ASSERT(bound_expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 					auto &comp = bound_expr->Cast<BoundComparisonExpression>();
@@ -497,10 +500,12 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				}
 				full_set = set_manager.Union(*left_set, *right_set);
 				D_ASSERT(left_set && left_set->count > 0);
-				D_ASSERT(right_set && right_set->count > 0);
+				D_ASSERT(right_set && right_set->count == 1);
 				D_ASSERT(full_set && full_set->count > 0);
 
 				// now we push the conjunction expressions
+				// In QueryGraphManager::GenerateJoins we extract each condition again and
+				// create a standalone join condition.
 				auto filter_info = make_uniq<FilterInfo>(std::move(conjunction_expression), *full_set,
 				                                         filters_and_bindings.size(), join.join_type);
 				filter_info->SetLeftSet(left_set);
@@ -538,6 +543,9 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						continue;
 					}
 					auto &set = set_manager.GetJoinRelation(bindings);
+					if (expression->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+						auto break_here = 0;
+					}
 					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size());
 					filters_and_bindings.push_back(std::move(filter_info));
 				}

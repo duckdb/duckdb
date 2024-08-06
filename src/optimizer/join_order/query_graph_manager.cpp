@@ -113,9 +113,13 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 					}
 				}
 			}
-		}
-		if (filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		} else if (filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conjunction = filter->Cast<BoundConjunctionExpression>();
+			if (conjunction.type == ExpressionType::CONJUNCTION_OR) {
+				// Currently we do not interpret OR conjunctions for hyper graph edges
+				// The or conditions should be pushed down into the joins during reconstruction
+				continue;
+			}
 			unordered_set<idx_t> left_bindings, right_bindings;
 			D_ASSERT(filter_info->left_set);
 			D_ASSERT(filter_info->right_set);
