@@ -42,12 +42,13 @@ def parse_args():
 
 
 def init_db(cli, dbname, benchmark_dir):
-    print(f"INITIALIZING {dbname} ...")
-    subprocess.run(
-        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
-    )
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
-    print("INITIALIZATION DONE")
+    pass
+    # print(f"INITIALIZING {dbname} ...")
+    # subprocess.run(
+    #     f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
+    # )
+    # subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    # print("INITIALIZATION DONE")
 
 
 class PlanCost:
@@ -71,12 +72,13 @@ class PlanCost:
         # was not greatly affected
         total_card_increased = self.total > other.total
         build_card_increased = self.build_side > other.build_side
-        if total_card_increased and build_card_increased:
+        if total_card_increased or build_card_increased:
             return True
         # we know the total cardinality is either the same or higher and the build side has not increased
         # in this case fall back to the timing. It's possible that even if the probe side is higher
         # since the tuples are in flight, the plan executes faster
-        return self.time > other.time * 1.03
+        return False
+        # return self.time > other.time * 1.03
 
     def __lt__(self, other):
         if self == other:
@@ -103,12 +105,23 @@ def op_inspect(op) -> PlanCost:
     cost = PlanCost()
     if 'Query' in op:
         cost.time = op['operator_timing']
-    if is_measured_join(op):
-        cost.total = op['operator_cardinality']
-        if 'operator_cardinality' in op['children'][0]:
-            cost.probe_side += op['children'][0]['operator_cardinality']
-        if 'operator_cardinality' in op['children'][1]:
-            cost.build_side += op['children'][1]['operator_cardinality']
+    if 'name' in op and op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
+        if 'operator_cardinality' in op.keys():
+            cost.total = op['operator_cardinality']
+            if 'operator_cardinality' in op['children'][0]:
+                cost.probe_side += op['children'][0]['operator_cardinality']
+            if 'operator_cardinality' in op['children'][1]:
+                cost.build_side += op['children'][1]['operator_cardinality']
+        elif 'cardinality' in op.keys():
+            cost.total = op['cardinality']
+            if 'cardinality' in op['children'][0]:
+                cost.probe_side += op['children'][0]['cardinality']
+            if 'cardinality' in op['children'][1]:
+                cost.build_side += op['children'][1]['cardinality']
+        else:
+            print("cardinlaity and operator cardinality are both not in the op")
+            exit(1)
+
         left_cost = op_inspect(op['children'][0])
         right_cost = op_inspect(op['children'][1])
         cost.probe_side += left_cost.probe_side + right_cost.probe_side
@@ -208,8 +221,8 @@ def main():
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
 
-    os.remove(OLD_DB_NAME)
-    os.remove(NEW_DB_NAME)
+    # os.remove(OLD_DB_NAME)
+    # os.remove(NEW_DB_NAME)
     os.remove(PROFILE_FILENAME)
 
     exit(exit_code)

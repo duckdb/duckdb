@@ -1,0 +1,10 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [clickbench]
+
+name Q${QUERY_NUMBER_PADDED}
+group appian
+
+cache ads.5M.duck
+
+run benchmark/appian_benchmarks/queries/q${QUERY_NUMBER_PADDED}.sql
