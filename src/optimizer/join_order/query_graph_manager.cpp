@@ -2,9 +2,8 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
