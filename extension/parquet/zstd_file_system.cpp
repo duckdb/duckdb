@@ -100,7 +100,7 @@ void ZstdStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t u
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		uncompressed_data += input_consumed;
-		remaining -= input_consumed;
+		remaining -= UnsafeNumericCast<int64_t>(input_consumed);
 	}
 }
 

@@ -73,7 +73,8 @@ struct AlpRDCompression {
 	                                      uint64_t sample_count) {
 		double exceptions_size =
 		    exceptions_count * ((AlpRDConstants::EXCEPTION_POSITION_SIZE + AlpRDConstants::EXCEPTION_SIZE) * 8);
-		double estimated_size = right_bit_width + left_bit_width + (exceptions_size / sample_count);
+		double estimated_size =
+		    right_bit_width + left_bit_width + (exceptions_size / static_cast<double>(sample_count));
 		return estimated_size;
 	}
 

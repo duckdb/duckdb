@@ -137,7 +137,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		if (error.HasError()) {
 			return false;
 		}
-		start_row += chunk.size();
+		start_row += UnsafeNumericCast<row_t>(chunk.size());
 		return true;
 	});
 	return error;
@@ -180,7 +180,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 				return false;
 			} // LCOV_EXCL_STOP
 
-			current_row += chunk.size();
+			current_row += UnsafeNumericCast<row_t>(chunk.size());
 			if (current_row >= append_state.current_row) {
 				// finished deleting all rows from the index: abort now
 				return false;
@@ -317,7 +317,7 @@ LocalStorage &LocalStorage::Get(ClientContext &context, Catalog &catalog) {
 void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state,
                                   optional_ptr<TableFilterSet> table_filters) {
 	auto storage = table_manager.GetStorage(table);
-	if (storage == nullptr) {
+	if (storage == nullptr || storage->row_groups->GetTotalRows() == 0) {
 		return;
 	}
 	storage->InitializeScan(state, table_filters);
@@ -440,6 +440,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		return;
 	}
 	if (storage.row_groups->GetTotalRows() <= storage.deleted_rows) {
+		// all rows that we added were deleted
+		// rollback any partial blocks that are still outstanding
+		storage.Rollback();
 		return;
 	}
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;

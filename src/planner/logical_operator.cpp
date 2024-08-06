@@ -47,14 +47,16 @@ string LogicalOperator::GetName() const {
 	return LogicalOperatorToString(type);
 }
 
-string LogicalOperator::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string expressions_info;
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			expressions_info += "\n";
 		}
-		result += expressions[i]->GetName();
+		expressions_info += expressions[i]->GetName();
 	}
+	result["Expressions"] = expressions_info;
 	return result;
 }
 

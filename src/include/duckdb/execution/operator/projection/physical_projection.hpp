@@ -32,7 +32,7 @@ public:
 		return true;
 	}
 
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	static unique_ptr<PhysicalOperator>
 	CreateJoinProjection(vector<LogicalType> proj_types, const vector<LogicalType> &lhs_types,

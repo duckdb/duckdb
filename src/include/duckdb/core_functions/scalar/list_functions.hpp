@@ -321,4 +321,25 @@ struct UnpivotListFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ListHasAnyFun {
+	static constexpr const char *Name = "list_has_any";
+	static constexpr const char *Parameters = "l1, l2";
+	static constexpr const char *Description = "Returns true if the lists have any element in common. NULLs are ignored.";
+	static constexpr const char *Example = "list_has_any([1, 2, 3], [2, 3, 4])";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayHasAnyFun {
+	using ALIAS = ListHasAnyFun;
+
+	static constexpr const char *Name = "array_has_any";
+};
+
+struct ListHasAnyFunAlias {
+	using ALIAS = ListHasAnyFun;
+
+	static constexpr const char *Name = "&&";
+};
+
 } // namespace duckdb

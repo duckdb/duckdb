@@ -13,7 +13,7 @@ class TestReadFromStdin(object):
     def test_read_stdin_csv(self, shell):
         test = (
             ShellTest(shell)
-            .input_file('test/sql/copy/csv/data/test/test.csv')
+            .input_file('data/csv/test/test.csv')
             .statement("""
                 create table mytable as select * from
                 read_csv('/dev/stdin',
@@ -34,7 +34,7 @@ class TestReadFromStdin(object):
     def test_read_stdin_csv_where_filename(self, shell):
         test = (
             ShellTest(shell)
-            .input_file('test/sql/copy/csv/data/test/test.csv')
+            .input_file('data/csv/test/test.csv')
             .statement("""
                 SELECT * FROM read_csv_auto(
                     'data/csv/bug_9005/teste*.csv',
@@ -58,7 +58,7 @@ class TestReadFromStdin(object):
     def test_read_stdin_csv_auto(self, shell):
         test = (
             ShellTest(shell)
-            .input_file('test/sql/copy/csv/data/test/test.csv')
+            .input_file('data/csv/test/test.csv')
             .statement("""
                 create table mytable as select * from
                 read_csv_auto('/dev/stdin')

@@ -280,7 +280,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		tlock.unlock();
 		// checkpoint the database to disk
 		CheckpointOptions options;
-		options.action = CheckpointAction::FORCE_CHECKPOINT;
+		options.action = CheckpointAction::ALWAYS_CHECKPOINT;
 		options.type = checkpoint_decision.type;
 		auto &storage_manager = db.GetStorageManager();
 		storage_manager.CreateCheckpoint(options);
