@@ -285,7 +285,8 @@ date_t Timestamp::GetDate(timestamp_t timestamp) {
 	} else if (DUCKDB_UNLIKELY(timestamp == timestamp_t::ninfinity())) {
 		return date_t::ninfinity();
 	}
-	return date_t((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY - (timestamp.value < 0));
+	return date_t(UnsafeNumericCast<int32_t>((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY -
+	                                         (timestamp.value < 0)));
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
@@ -347,7 +348,7 @@ void Timestamp::Convert(timestamp_ns_t input, date_t &out_date, dtime_t &out_tim
 	}
 
 	out_time = dtime_t((input.value - days_nanos) / Interval::NANOS_PER_MICRO);
-	out_nanos = (input.value - days_nanos) % Interval::NANOS_PER_MICRO;
+	out_nanos = UnsafeNumericCast<int32_t>((input.value - days_nanos) % Interval::NANOS_PER_MICRO);
 }
 
 timestamp_t Timestamp::GetCurrentTimestamp() {

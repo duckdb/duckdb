@@ -2,6 +2,9 @@
 # description: Test NullPadding in parallel
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # These will work, because we will only fail if the quoted new value happens between buffers or thread boundaries
 query I
 select count(*) from read_csv('data/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0)

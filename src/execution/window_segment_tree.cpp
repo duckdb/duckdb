@@ -56,7 +56,7 @@ public:
 WindowAggregator::WindowAggregator(AggregateObject aggr_p, const vector<LogicalType> &arg_types_p,
                                    const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p)
     : aggr(std::move(aggr_p)), arg_types(arg_types_p), result_type(result_type_p),
-      state_size(aggr.function.state_size()), exclude_mode(exclude_mode_p) {
+      state_size(aggr.function.state_size(aggr.function)), exclude_mode(exclude_mode_p) {
 }
 
 WindowAggregator::~WindowAggregator() {
@@ -129,7 +129,7 @@ struct WindowAggregateStates {
 };
 
 WindowAggregateStates::WindowAggregateStates(const AggregateObject &aggr)
-    : aggr(aggr), state_size(aggr.function.state_size()), allocator(Allocator::DefaultAllocator()) {
+    : aggr(aggr), state_size(aggr.function.state_size(aggr.function)), allocator(Allocator::DefaultAllocator()) {
 }
 
 void WindowAggregateStates::Initialize(idx_t count) {
@@ -141,7 +141,7 @@ void WindowAggregateStates::Initialize(idx_t count) {
 
 	for (idx_t i = 0; i < count; ++i, state_ptr += state_size) {
 		state_f_data[i] = state_ptr;
-		aggr.function.initialize(state_ptr);
+		aggr.function.initialize(aggr.function, state_ptr);
 	}
 
 	// Prevent conversion of results to constants
@@ -487,10 +487,10 @@ public:
 
 WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr,
                                                          const WindowExcludeMode exclude_mode)
-    : aggr(aggr), state(aggr.function.state_size()), statef(Value::POINTER(CastPointerToValue(state.data()))),
-      frames(3, {0, 0}) {
+    : aggr(aggr), state(aggr.function.state_size(aggr.function)),
+      statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
-	aggr.function.initialize(state.data());
+	aggr.function.initialize(aggr.function, state.data());
 
 	InitSubFrames(frames, exclude_mode);
 }
@@ -771,7 +771,7 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 
 	EvaluateSubFrames(bounds, aggregator.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
 		auto agg_state = fdata[rid];
-		aggr.function.initialize(agg_state);
+		aggr.function.initialize(aggr.function, agg_state);
 
 		//	Just update the aggregate with the unfiltered input rows
 		row_set.clear();
@@ -962,8 +962,9 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
                                              const DataChunk &inputs, const ValidityArray &filter_mask)
     : allocator(allocator), aggr(aggr),
       order_insensitive(aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT), inputs(inputs),
-      filter_mask(filter_mask), state_size(aggr.function.state_size()), state(state_size * STANDARD_VECTOR_SIZE),
-      statep(LogicalType::POINTER), statel(LogicalType::POINTER), statef(LogicalType::POINTER), flush_count(0) {
+      filter_mask(filter_mask), state_size(aggr.function.state_size(aggr.function)),
+      state(state_size * STANDARD_VECTOR_SIZE), statep(LogicalType::POINTER), statel(LogicalType::POINTER),
+      statef(LogicalType::POINTER), flush_count(0) {
 	if (inputs.ColumnCount() > 0) {
 		leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
 		filter_sel.Initialize();
@@ -1239,7 +1240,7 @@ void WindowSegmentTreePart::Initialize(idx_t count) {
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 	for (idx_t rid = 0; rid < count; ++rid) {
 		auto state_ptr = fdata[rid];
-		aggr.function.initialize(state_ptr);
+		aggr.function.initialize(aggr.function, state_ptr);
 	}
 }
 
@@ -1403,7 +1404,6 @@ public:
 	class DistinctSortTree;
 
 	WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator, idx_t group_count);
-	~WindowDistinctAggregatorGlobalState() override;
 
 	void Finalize(const FrameStats &stats);
 
@@ -1421,24 +1421,22 @@ public:
 	unique_ptr<DistinctSortTree> merge_sort_tree;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
-	unsafe_unique_array<data_t> levels_flat_native;
+	WindowAggregateStates levels_flat_native;
 	//! For each level, the starting location in the levels_flat_native array
 	vector<idx_t> levels_flat_start;
-
-	//! The total number of internal nodes of the tree, stored in levels_flat_native
-	idx_t internal_nodes;
 };
 
-WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator_p,
+WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator,
                                                                          idx_t group_count)
-    : WindowAggregatorGlobalState(aggregator_p, group_count), context(aggregator_p.context) {
+    : WindowAggregatorGlobalState(aggregator, group_count), context(aggregator.context),
+      levels_flat_native(aggregator.aggr) {
 	payload_types.emplace_back(LogicalType::UBIGINT);
 
 	//	1:	functionComputePrevIdcs(𝑖𝑛)
 	//	2:		sorted ← []
 	//	We sort the aggregate arguments and use the partition index as a tie-breaker.
 	//	TODO: Use a hash table?
-	sort_types = aggregator_p.arg_types;
+	sort_types = aggregator.arg_types;
 	for (const auto &type : payload_types) {
 		sort_types.emplace_back(type);
 	}
@@ -1455,29 +1453,6 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const W
 	global_sort = make_uniq<GlobalSortState>(BufferManager::GetBufferManager(context), orders, payload_layout);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
-}
-
-WindowDistinctAggregatorGlobalState::~WindowDistinctAggregatorGlobalState() {
-	const auto &aggr = aggregator.aggr;
-	if (!aggr.function.destructor) {
-		// nothing to destroy
-		return;
-	}
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	// call the destructor for all the intermediate states
-	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
-	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
-	idx_t count = 0;
-	for (idx_t i = 0; i < internal_nodes; i++) {
-		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * aggregator.state_size);
-		if (count == STANDARD_VECTOR_SIZE) {
-			aggr.function.destructor(addresses, aggr_input_data, count);
-			count = 0;
-		}
-	}
-	if (count > 0) {
-		aggr.function.destructor(addresses, aggr_input_data, count);
-	}
 }
 
 class WindowDistinctAggregatorLocalState : public WindowAggregatorState {
@@ -1574,8 +1549,7 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 	auto &gdsink = gsink.Cast<WindowDistinctAggregatorGlobalState>();
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
 
-	//	Single threaded Combine for now
-	lock_guard<mutex> gestate_guard(gdsink.lock);
+	//	AddLocalState is thread-safe
 	gdsink.global_sort->AddLocalState(ldstate.local_sort);
 
 	//	Last one out turns off the lights!
@@ -1675,8 +1649,6 @@ WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedEl
 	auto &aggr = gdsink.aggregator.aggr;
 	auto &allocator = gdsink.allocator;
 	auto &inputs = gdsink.inputs;
-	const auto state_size = gdsink.aggregator.state_size;
-	auto &internal_nodes = gdsink.internal_nodes;
 	auto &levels_flat_native = gdsink.levels_flat_native;
 	auto &levels_flat_start = gdsink.levels_flat_start;
 
@@ -1702,11 +1674,11 @@ WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedEl
 	// compute space required to store aggregation states of merge sort tree
 	// this is one aggregate state per entry per level
 	MergeSortTree<ZippedTuple> zipped_tree(std::move(prev_idcs));
-	internal_nodes = 0;
+	idx_t internal_nodes = 0;
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		internal_nodes += zipped_tree.tree[level_nr].first.size();
 	}
-	levels_flat_native = make_unsafe_uniq_array_uninitialized<data_t>(internal_nodes * state_size);
+	levels_flat_native.Initialize(internal_nodes);
 	levels_flat_start.push_back(0);
 	idx_t levels_flat_offset = 0;
 
@@ -1724,8 +1696,7 @@ WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedEl
 			auto next_limit = MinValue<idx_t>(zipped_level.size(), i + level_width);
 			for (auto j = i; j < next_limit; ++j) {
 				//	Initialise the next aggregate
-				auto curr_state = levels_flat_native.get() + (levels_flat_offset++ * state_size);
-				aggr.function.initialize(curr_state);
+				auto curr_state = levels_flat_native.GetStatePtr(levels_flat_offset++);
 
 				//	Update this state (if it matches)
 				const auto prev_idx = std::get<0>(zipped_level[j]);
@@ -1795,13 +1766,12 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 
 void WindowDistinctAggregatorLocalState::Evaluate(const WindowDistinctAggregatorGlobalState &gdstate,
                                                   const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
-	auto ldata = FlatVector::GetData<data_ptr_t>(statel);
+	auto ldata = FlatVector::GetData<const_data_ptr_t>(statel);
 	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
 
 	const auto &merge_sort_tree = *gdstate.merge_sort_tree;
-	const auto running_aggs = gdstate.levels_flat_native.get();
+	const auto &levels_flat_native = gdstate.levels_flat_native;
 	const auto exclude_mode = gdstate.aggregator.exclude_mode;
-	const auto state_size = statef.state_size;
 
 	//	Build the finalise vector that just points to the result states
 	statef.Initialize(count);
@@ -1818,7 +1788,7 @@ void WindowDistinctAggregatorLocalState::Evaluate(const WindowDistinctAggregator
 				                                    //	Find the source aggregate
 				                                    // Buffer a merge of the indicated state into the current state
 				                                    const auto agg_idx = gdstate.levels_flat_start[level] + run_pos - 1;
-				                                    const auto running_agg = running_aggs + agg_idx * state_size;
+				                                    const auto running_agg = levels_flat_native.GetStatePtr(agg_idx);
 				                                    pdata[flush_count] = agg_state;
 				                                    ldata[flush_count++] = running_agg;
 				                                    if (flush_count >= STANDARD_VECTOR_SIZE) {

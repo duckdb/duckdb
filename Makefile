@@ -390,6 +390,13 @@ tidy-check:
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
 
+tidy-check-diff:
+	mkdir -p ./build/tidy && \
+	cd build/tidy && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
+	cd ../../ && \
+	git diff origin/main . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | python3 scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
+
 tidy-fix:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \

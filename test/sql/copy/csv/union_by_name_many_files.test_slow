@@ -5,6 +5,9 @@
 require parquet
 
 statement ok
+pragma enable_verification;
+
+statement ok
 create or replace table orders(m int,v int,j int);
 
 statement ok

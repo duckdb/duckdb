@@ -50,7 +50,8 @@ public:
 
 	class GlobalSortedTable {
 	public:
-		GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout);
+		GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout,
+		                  const PhysicalOperator &op);
 
 		inline idx_t Count() const {
 			return count;
@@ -77,6 +78,8 @@ public:
 		//! Schedules tasks to merge sort the current child's data during a Finalize phase
 		void ScheduleMergeTasks(Pipeline &pipeline, Event &event);
 
+		//! The hosting operator
+		const PhysicalOperator &op;
 		GlobalSortState global_sort_state;
 		//! Whether or not the RHS has NULL values
 		atomic<idx_t> has_null;

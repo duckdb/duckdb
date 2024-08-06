@@ -76,7 +76,7 @@ public:
 		rhs_layout.Initialize(op.children[1]->types);
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
-		table = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout);
+		table = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
 	}
 
 	inline idx_t Count() const {

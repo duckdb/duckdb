@@ -1,4 +1,5 @@
 deadlock:InitializeIndexes
+race:InsertMatchesAndIncrementMisses
 race:NextInnerJoin
 race:NextRightSemiOrAntiJoin
 race:duckdb_moodycamel

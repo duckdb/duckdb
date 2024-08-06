@@ -31,9 +31,8 @@ public:
 		idx_t x;
 		idx_t y;
 	};
-
-public:
-	RenderTreeNode(const string &name, const string &extra_text) : name(name), extra_text(extra_text) {
+	RenderTreeNode(const string &name, InsertionOrderPreservingMap<string> extra_text)
+	    : name(name), extra_text(std::move(extra_text)) {
 	}
 
 public:
@@ -43,7 +42,7 @@ public:
 
 public:
 	string name;
-	string extra_text;
+	InsertionOrderPreservingMap<string> extra_text;
 	vector<Coordinate> child_positions;
 };
 

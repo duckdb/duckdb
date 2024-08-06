@@ -113,7 +113,7 @@ public:
 
 	//! Get the row ID (8th to 63rd bit)
 	inline row_t GetRowId() const {
-		return Get() & AND_ROW_ID;
+		return UnsafeNumericCast<row_t>(Get() & AND_ROW_ID);
 	}
 	//! Set the row ID (8th to 63rd bit)
 	inline void SetRowId(const row_t row_id) {
