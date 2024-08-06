@@ -107,6 +107,23 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 	}
 }
 
+bool ExpressionContainsColumnRef(Expression &expression) {
+	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		// Here you have a filter on a single column in a table. Return a binding for the column
+		// being filtered on so the filter estimator knows what HLL count to pull
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
+		D_ASSERT(colref.depth == 0);
+		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		// map the base table index to the relation index used by the JoinOrderOptimizer
+		return true;
+	}
+	// TODO: handle inequality filters with functions.
+	auto children_ret = false;
+	ExpressionIterator::EnumerateChildren(expression,
+	                                      [&](Expression &expr) { children_ret = ExpressionContainsColumnRef(expr); });
+	return children_ret;
+}
+
 static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
@@ -116,7 +133,12 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 		case JoinType::INNER:
 		case JoinType::SEMI:
 		case JoinType::ANTI:
-			return true;
+			for (auto &cond : join.conditions) {
+				if (ExpressionContainsColumnRef(*cond.left) && ExpressionContainsColumnRef(*cond.right)) {
+					return true;
+				}
+			}
+			return false;
 		default:
 			return false;
 		}
