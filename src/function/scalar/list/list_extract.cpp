@@ -19,15 +19,12 @@ static optional_idx TryGetChildOffset(const list_entry_t &list_entry, const int6
 	}
 
 	const auto index_offset = (offset > 0) ? offset - 1 : offset;
-
 	if (index_offset < 0) {
-		const auto signed_list_offset = UnsafeNumericCast<int64_t>(list_entry.offset);
 		const auto signed_list_length = UnsafeNumericCast<int64_t>(list_entry.length);
-		if (signed_list_offset + signed_list_length + index_offset < 0) {
+		if (signed_list_length + index_offset < 0) {
 			return optional_idx::Invalid();
 		}
-		const auto wrapped_offset = UnsafeNumericCast<idx_t>(signed_list_offset + signed_list_length + index_offset);
-		return optional_idx(wrapped_offset);
+		return optional_idx(list_entry.offset + UnsafeNumericCast<idx_t>(signed_list_length + index_offset));
 	}
 
 	const auto unsigned_offset = UnsafeNumericCast<idx_t>(index_offset);
