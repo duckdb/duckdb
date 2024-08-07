@@ -352,9 +352,37 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 void PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData> bind_data,
                               const unordered_map<idx_t, LogicalType> &new_column_types) {
 	auto &csv_bind = bind_data->Cast<ReadCSVData>();
-	for (auto &type : new_column_types) {
-		csv_bind.csv_types[type.first] = type.second;
-		csv_bind.return_types[type.first] = type.second;
+	if (!csv_bind.options.file_options.hive_partitioning) {
+		for (auto &type : new_column_types) {
+			csv_bind.return_types[type.first] = type.second;
+			csv_bind.csv_types[type.first] = type.second;
+		}
+	} else {
+		auto &schema = csv_bind.options.file_options.hive_types_schema;
+		unordered_map<idx_t, string> partition_name_map;
+
+		for (auto i : csv_bind.reader_bind.hive_partitioning_indexes) {
+			partition_name_map.insert({i.index, i.value});
+		}
+		// columns in CSV do not include partitions in Hive
+		if (new_column_types.size() > csv_bind.return_types.size()) {
+			// extend return types to include all table column types
+			csv_bind.return_types.resize(new_column_types.size());
+		}
+		for (auto &type : new_column_types) {
+			csv_bind.return_types[type.first] = type.second;
+			if (type.first < csv_bind.csv_types.size()) {
+				// only update types of columns in CSV file
+				csv_bind.csv_types[type.first] = type.second;
+			}
+			// also update Hive-partition schema with expected types
+			auto part_col_name = partition_name_map.find(type.first);
+			if (part_col_name != partition_name_map.end()) {
+				auto schema_entry = schema.find(part_col_name->second);
+				D_ASSERT(schema_entry != schema.end());
+				schema_entry->second = type.second;
+			}
+		}
 	}
 }
 

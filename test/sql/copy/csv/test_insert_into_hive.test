@@ -1,0 +1,75 @@
+# name: test/sql/copy/csv/test_insert_into_hive.test
+# description: Test insert of real-Hive-partitioned CSV data 
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table test_insert_hive (id int, value varchar, date date, part varchar);
+
+# successful insert when partition data and csv data match destination table columns
+statement ok
+insert into test_insert_hive by name select * from read_csv('data/csv/hive-partitioning/simple/*/*/test.csv');
+
+# query IIII
+# select * from test_insert_hive;
+# ----
+# 1	value1	2012-01-01	a
+# 2	value2	2013-01-01	b
+
+# statement ok
+# delete from test_insert_hive;
+
+# # successful insert with partition keys in different order
+# statement ok
+# insert into test_insert_hive by name select * from read_csv('data/csv/hive-partitioning/simple/*/*/test.csv');
+
+# query IIII
+# select * from test_insert_hive;
+# ----
+# 1	value1	2012-01-01	a
+# 2	value2	2013-01-01	b
+
+# statement ok
+# delete from test_insert_hive;
+
+# # successful partition data casting (INT partition data into VARCHAR in table)
+# statement ok
+# insert into test_insert_hive by name from csv_read('data/csv/hive-partitioning/types/**/test.csv');
+
+# query IIII
+# select * from test_insert_hive;
+# ----
+# 1	value1	2012-01-01	1000
+# 2	value2	2013-01-01	9000
+
+# # impossible partition data cast (VARCHAR in partition to INT in table)
+# statement ok
+# create table test_insert_hive_int_part (id int, value varchar, date date, part int);
+
+# statement error
+# insert into test_insert_hive_int_part by name from 'data/csv/hive-partitioning/simple/*/*/test.csv';
+# ----
+# Invalid Input Error: Unable to cast 'a' (from hive partition column 'PART') to: 'INTEGER'
+
+# # binder error on column inputs not matching with table 
+# statement error
+# insert into test_insert_hive by name from 'data/csv/hive-partitioning/mismatching_contents/*/test.csv';
+# ----
+# Binder Error: Table "test_insert_hive" does not have a column with name "a"
+
+# # invalid input error on mismatching partition keys  
+# statement error
+# insert into test_insert_hive by name from 'data/csv/hive-partitioning/mismatching_names/**/test.csv';
+# ----
+# Invalid Input Error: Schema mismatch between globbed files.
+
+# # conversion error on mismatching types in csv data
+# statement ok
+# create table test_insert_hive2 (a int, b varchar, part varchar);
+
+# statement error
+# insert into test_insert_hive2 by name from 'data/csv/hive-partitioning/mismatching_types/**/test.csv';
+# ----
+# Error when converting column "a". Could not convert string "xxx" to 'INTEGER'
