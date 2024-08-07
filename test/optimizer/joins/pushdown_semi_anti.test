@@ -27,24 +27,3 @@ query II
 EXPLAIN select * from tbl1, tbl2 where b in (select * from tbl3) and tbl1.a = tbl2.b;
 ----
 physical_plan	<REGEX>:.*SEMI.*INNER.*
-
-mode skip
-
-statement ok
-create or replace table tbl4 as select range d from range(1000000);
-
-statement ok
-create or replace table tbl5 as select range e from range(100000);
-
-statement ok
-create or replace table tbl6 as select range f from range(10000);
-
-
-statement ok
-select * from tbl1 where a in (select * from tbl4, tbl5, tbl6 where e=f and d=e);
-
-
-statement ok
-select * from (select * from tbl1, tbl2, tbl3 where a = b and b = c) left_side
-SEMI JOIN
-(select * from tbl4, tbl5, tbl6 where d=e and e=f) right_side ON (left_side.a = right_side.d and left_side.b=right_side.e and left_side.c=right_side.e);

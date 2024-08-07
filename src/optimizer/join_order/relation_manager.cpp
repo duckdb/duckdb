@@ -266,17 +266,16 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// Adding relations of the left side to the current join order optimizer
 		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
 		bool can_reorder_right = true;
-		// semi & anti joins, you can only reorder relations in the left side of the join.
-		// why?
-		// We cannot push a relation A into the right side because then all column bindings A.x will be
+		// For semi & anti joins, you only reorder relations in the left side of the join.
+		// We do not want to reorder a relation A into the right side because then all column bindings A from A will be
 		// lost after the semi or anti join
-		// We cannot pull a relation B out of the right side because any filter/join in the right side
-		// that references column binding B.y will no longer be resolved, since the semi join will remove
-		// all right column bindings.
+
+		// We cannot reorder a relation B out of the right side because any filter/join in the right side
+		// between a relation B and another RHS relation will be invalid. The semi join will remove
+		// all right column bindings,
 
 		// So we treat the right side of left join as its own relation so no relations
 		// are pushed into the right side, or taken out of the right side.
-
 		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
 			RelationStats child_stats;
 			// optimize the child and copy the stats
@@ -504,8 +503,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				D_ASSERT(full_set && full_set->count > 0);
 
 				// now we push the conjunction expressions
-				// In QueryGraphManager::GenerateJoins we extract each condition again and
-				// create a standalone join condition.
+				// In QueryGraphManager::GenerateJoins we extract each condition again and create a standalone join
+				// condition.
 				auto filter_info = make_uniq<FilterInfo>(std::move(conjunction_expression), *full_set,
 				                                         filters_and_bindings.size(), join.join_type);
 				filter_info->SetLeftSet(left_set);

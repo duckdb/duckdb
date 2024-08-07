@@ -110,11 +110,6 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 			continue;
 		} else if (EmptyFilter(*filter)) {
 			continue;
-		} else if ((filter->join_type == JoinType::SEMI || filter->join_type == JoinType::ANTI) && !filter->left_set) {
-			// the right side is from some dummy scan and the comparison is
-			// VALUE comparison_type (BINDING)
-			// TODO: Fix this
-			continue;
 		}
 		D_ASSERT(filter->left_set->count >= 1);
 		D_ASSERT(filter->right_set->count >= 1);

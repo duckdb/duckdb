@@ -116,9 +116,10 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			auto &conjunction = filter->Cast<BoundConjunctionExpression>();
 			if (conjunction.type == ExpressionType::CONJUNCTION_OR || filter_info->join_type == JoinType::INNER ||
 			    filter_info->join_type == JoinType::INVALID) {
-				// Currently we do not interpret INNER join conjunctions
-				// for hyper graph edges. Conjunction filters are mostly to help
-				// plan semi and anti joins at the moment.
+				// Currently we do not interpret Conjunction expressions as INNER joins
+				// for hyper graph edges. These are most likely OR conjunctions, and
+				// will be pushed down into a join later in the optimizer.
+				// Conjunction filters are mostly to help plan semi and anti joins at the moment.
 				continue;
 			}
 			unordered_set<idx_t> left_bindings, right_bindings;
@@ -220,6 +221,19 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 	return plan;
 }
 
+static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, bool invert) {
+	auto &comparison = condition->Cast<BoundComparisonExpression>();
+	JoinCondition cond;
+	cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
+	cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+	cond.comparison = condition->type;
+	if (invert) {
+		// reverse comparison expression if we reverse the order of the children
+		cond.comparison = FlipComparisonExpression(cond.comparison);
+	}
+	return cond;
+}
+
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
                                                       JoinRelationSet &set) {
 	optional_ptr<JoinRelationSet> left_node;
@@ -278,33 +292,13 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				}
 
 				if (condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-					JoinCondition cond;
-					auto &comparison = condition->Cast<BoundComparisonExpression>();
-					// we need to figure out which side is which by looking at the relations available to us
-					// left/right (build side/probe side) optimizations happen later.
-
-					cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-					cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
-					cond.comparison = condition->type;
-					if (invert) {
-						// reverse comparison expression if we reverse the order of the children
-						cond.comparison = FlipComparisonExpression(cond.comparison);
-					}
+					auto cond = MaybeInvertConditions(std::move(condition), invert);
 					join->conditions.push_back(std::move(cond));
 				} else if (condition->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 					auto &conjunction = condition->Cast<BoundConjunctionExpression>();
 					for (auto &child : conjunction.children) {
-						JoinCondition cond;
 						D_ASSERT(child->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-						auto &comparison = child->Cast<BoundComparisonExpression>();
-
-						cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-						cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
-						cond.comparison = child->type;
-						if (invert) {
-							// reverse comparison expression if we reverse the order of the children
-							cond.comparison = FlipComparisonExpression(cond.comparison);
-						}
+						auto cond = MaybeInvertConditions(std::move(child), invert);
 						join->conditions.push_back(std::move(cond));
 					}
 				}
