@@ -1,0 +1,38 @@
+# name: benchmark/micro/json/3_create_table_combined_all_json_fields.benchmark
+# description: Create a table combining all the fields from a JSON file, unnesting all structures
+# group: [real_nest]
+
+name create_table_combined_all_json_fields
+group real_nest
+
+require json
+
+load
+CREATE TABLE Run2012B_SingleMu AS SELECT * FROM read_json('duckdb_benchmark_data/hep-adl-ethz-Run2012B_SingleMu/data.jsonl');
+CREATE TABLE unnested_hlt AS (SELECT rowid, UNNEST(HLT) AS hlt FROM Run2012B_SingleMu);
+CREATE TABLE unnested_pv AS (SELECT rowid, UNNEST(PV) AS pv FROM Run2012B_SingleMu);
+CREATE TABLE unnested_met AS (SELECT rowid, UNNEST(MET) AS met FROM Run2012B_SingleMu);
+CREATE TABLE unnested_muon AS (SELECT rowid, UNNEST(Muon, recursive:=true) AS muon FROM Run2012B_SingleMu);
+CREATE TABLE unnested_electron AS (SELECT rowid, UNNEST(Electron, recursive:=true) AS electron FROM Run2012B_SingleMu);
+CREATE TABLE unnested_tau AS (SELECT rowid, UNNEST(Tau, recursive:=true) AS tau FROM Run2012B_SingleMu);
+CREATE TABLE unnested_photon AS (SELECT rowid, UNNEST(Photon, recursive:=true) AS photon FROM Run2012B_SingleMu);
+CREATE TABLE unnested_jet AS (SELECT rowid, UNNEST(Jet, recursive:=true) AS jet FROM Run2012B_SingleMu);
+
+run
+CREATE OR REPLACE TABLE combined AS (SELECT unnested_hlt.*,
+    unnested_pv.*,
+    unnested_met.*,
+    unnested_muon.*,
+    unnested_electron.*,
+    unnested_tau.*,
+    unnested_photon.*,
+    unnested_jet.*
+    FROM unnested_hlt
+    LEFT JOIN unnested_pv ON unnested_hlt.rowid = unnested_pv.rowid
+    LEFT JOIN unnested_met ON unnested_hlt.rowid = unnested_met.rowid
+    LEFT JOIN unnested_muon ON unnested_hlt.rowid = unnested_muon.rowid
+    LEFT JOIN unnested_electron ON unnested_hlt.rowid = unnested_electron.rowid
+    LEFT JOIN unnested_tau ON unnested_hlt.rowid = unnested_tau.rowid
+    LEFT JOIN unnested_photon ON unnested_hlt.rowid = unnested_photon.rowid
+    LEFT JOIN unnested_jet ON unnested_hlt.rowid = unnested_jet.rowid
+);
