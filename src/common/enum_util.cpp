@@ -4307,6 +4307,8 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "CPU_TIME";
 	case MetricsType::EXTRA_INFO:
 		return "EXTRA_INFO";
+	case MetricsType::CUMULATIVE_CARDINALITY:
+		return "CUMULATIVE_CARDINALITY";
 	case MetricsType::OPERATOR_CARDINALITY:
 		return "OPERATOR_CARDINALITY";
 	case MetricsType::OPERATOR_TIMING:
@@ -4323,6 +4325,9 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTRA_INFO")) {
 		return MetricsType::EXTRA_INFO;
+	}
+	if (StringUtil::Equals(value, "CUMULATIVE_CARDINALITY")) {
+		return MetricsType::CUMULATIVE_CARDINALITY;
 	}
 	if (StringUtil::Equals(value, "OPERATOR_CARDINALITY")) {
 		return MetricsType::OPERATOR_CARDINALITY;

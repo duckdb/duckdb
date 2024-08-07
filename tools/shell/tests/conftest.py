@@ -36,6 +36,12 @@ class TestResult:
         assert self.status_code == 0
         assert expected in self.stdout
 
+    def check_not_exist(self, not_exist: Union[str, List[str], bytes]):
+        if isinstance(not_exist, list):
+            not_exist = '\n'.join(not_exist)
+        assert self.status_code == 0
+        assert not_exist not in self.stdout
+
     def check_stderr(self, expected: str):
         assert expected in self.stderr
 
