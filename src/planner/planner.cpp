@@ -31,7 +31,7 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
-	auto parameter_count = statement.n_param;
+	auto parameter_count = statement.named_param_map.size();
 
 	BoundParameterMap bound_parameters(parameter_data);
 
