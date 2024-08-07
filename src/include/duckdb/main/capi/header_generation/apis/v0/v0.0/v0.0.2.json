@@ -5,8 +5,6 @@
         "duckdb_profiling_info_get_value",
         "duckdb_profiling_info_get_child_count",
         "duckdb_profiling_info_get_child",
-        "duckdb_profiling_info_get_name",
-        "duckdb_profiling_info_get_query",
         "duckdb_scalar_function_set_varargs",
         "duckdb_scalar_function_set_special_handling",
         "duckdb_scalar_function_set_volatile",

@@ -19,11 +19,9 @@ const profiler_settings_t &ProfilingInfo::GetSettings() {
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {
-	    MetricsType::CPU_TIME,
-	    MetricsType::EXTRA_INFO,
-	    MetricsType::CUMULATIVE_CARDINALITY,
-	    MetricsType::OPERATOR_CARDINALITY,
-	    MetricsType::OPERATOR_TIMING,
+	    MetricsType::QUERY_NAME,           MetricsType::IDLE_THREAD_TIME,       MetricsType::CPU_TIME,
+	    MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY, MetricsType::OPERATOR_NAME,
+	    MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_TIMING,
 	};
 }
 
@@ -43,6 +41,11 @@ void ProfilingInfo::ResetMetrics() {
 		}
 
 		switch (metric) {
+		case MetricsType::QUERY_NAME:
+		case MetricsType::OPERATOR_NAME:
+			metrics[metric] = Value::CreateValue("");
+			break;
+		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
 			metrics[metric] = Value::CreateValue(0.0);
@@ -88,9 +91,8 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 		return "\"" + result + "\"";
 	}
 
-	// The metric cannot be NULL, and should have been 0 initialized.
+	// The metric cannot be NULL and must be initialized.
 	D_ASSERT(!metrics.at(setting).IsNull());
-
 	return metrics.at(setting).ToString();
 }
 
@@ -125,6 +127,11 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		D_ASSERT(!metrics[metric].IsNull());
 
 		switch (metric) {
+		case MetricsType::QUERY_NAME:
+		case MetricsType::OPERATOR_NAME:
+			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
+			break;
+		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());

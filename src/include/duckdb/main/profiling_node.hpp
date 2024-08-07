@@ -100,11 +100,12 @@ public:
 	}
 	~QueryProfilingNode() override {};
 
+	QueryInfo query_info;
+
 public:
 	string GetName() const override {
 		return EnumUtil::ToString(node_type);
 	}
-	QueryInfo query_info;
 };
 
 class OperatorProfilingNode : public ProfilingNode {

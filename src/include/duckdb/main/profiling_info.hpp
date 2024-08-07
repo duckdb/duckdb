@@ -24,9 +24,12 @@ struct yyjson_mut_val;
 namespace duckdb {
 
 enum class MetricsType : uint8_t {
+	QUERY_NAME,
+	IDLE_THREAD_TIME,
 	CPU_TIME,
 	EXTRA_INFO,
 	CUMULATIVE_CARDINALITY,
+	OPERATOR_NAME,
 	OPERATOR_CARDINALITY,
 	OPERATOR_TIMING
 };

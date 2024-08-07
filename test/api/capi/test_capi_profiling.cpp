@@ -51,30 +51,14 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const duckdb::vect
 
 // Traverse the tree and retrieve all metrics
 void TraverseTree(duckdb_profiling_info profiling_info, const duckdb::vector<string> &settings,
-                  duckdb::map<string, double> &cumulative_counter, duckdb::map<string, double> &cumulative_result,
-                  bool is_root = true) {
-	if (is_root) {
-		// At the root, only the query name is available
-		auto query = duckdb_profiling_info_get_query(profiling_info);
-		REQUIRE(query != nullptr);
-		duckdb_free((void *)query);
-
-		REQUIRE(duckdb_profiling_info_get_name(profiling_info) == nullptr);
-	} else {
-		// At the child level, only the operator name is available
-		auto name = duckdb_profiling_info_get_name(profiling_info);
-		REQUIRE(name != nullptr);
-		duckdb_free((void *)name);
-
-		REQUIRE(duckdb_profiling_info_get_query(profiling_info) == nullptr);
-	}
-
+                  duckdb::map<string, double> &cumulative_counter, duckdb::map<string, double> &cumulative_result) {
 	RetrieveAllMetrics(profiling_info, settings, cumulative_counter, cumulative_result);
 
+	// Recurse.
 	auto child_count = duckdb_profiling_info_get_child_count(profiling_info);
 	for (idx_t i = 0; i < child_count; i++) {
 		auto child = duckdb_profiling_info_get_child(profiling_info, i);
-		TraverseTree(child, settings, cumulative_counter, cumulative_result, false);
+		TraverseTree(child, settings, cumulative_counter, cumulative_result);
 	}
 }
 
@@ -122,8 +106,9 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
 	// test all profiling metrics
-	duckdb::vector<string> settings = {"CPU_TIME", "CUMULATIVE_CARDINALITY", "EXTRA_INFO", "OPERATOR_CARDINALITY",
-	                                   "OPERATOR_TIMING"};
+	duckdb::vector<string> settings = {
+	    "QUERY_NAME", "IDLE_THREAD_TIME",     "CPU_TIME",        "CUMULATIVE_CARDINALITY",
+	    "EXTRA_INFO", "OPERATOR_CARDINALITY", "OPERATOR_TIMING", "OPERATOR_NAME"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildProfilingSettingsString(settings)));
 
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
@@ -132,7 +117,6 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 	REQUIRE(profiling_info != nullptr);
 
 	duckdb::map<string, double> cumulative_counter = {{"OPERATOR_TIMING", 0}, {"OPERATOR_CARDINALITY", 0}};
-
 	duckdb::map<string, double> cumulative_result {
 	    {"CPU_TIME", 0},
 	    {"CUMULATIVE_CARDINALITY", 0},
