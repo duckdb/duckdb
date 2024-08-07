@@ -874,10 +874,15 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     # Compile the library into the actual wasm file
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
     string(REPLACE ";" " " TO_BE_LINKED "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS}")
+    if (${ABI_TYPE} STREQUAL "CPP")
+      set(EXPORTED_FUNCTIONS "_${NAME}_init,_${NAME}_version")
+    elseif (${ABI_TYPE} STREQUAL "C_STRUCT")
+      set(EXPORTED_FUNCTIONS "_${NAME}_init_c_api")
+    endif()
     add_custom_command(
       TARGET ${TARGET_NAME}
       POST_BUILD
-      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}> -o $<TARGET_FILE:${TARGET_NAME}>.wasm -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="_${NAME}_init,_${NAME}_version" ${WASM_THREAD_FLAGS} ${TO_BE_LINKED}
+      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}> -o $<TARGET_FILE:${TARGET_NAME}>.wasm -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS}" ${WASM_THREAD_FLAGS} ${TO_BE_LINKED}
       )
   endif()
 
@@ -1022,6 +1027,14 @@ function(duckdb_extension_generate_version OUTPUT_VAR WORKING_DIR)
   find_package(Git)
   if(Git_FOUND)
     execute_process(
+            COMMAND ${GIT_EXECUTABLE} rev-parse --is-inside-work-tree
+            WORKING_DIRECTORY ${WORKING_DIR}
+            OUTPUT_VARIABLE IS_IN_GIT_DIR
+            ERROR_QUIET
+    )
+  endif()
+  if (IS_IN_GIT_DIR)
+    execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
             WORKING_DIRECTORY ${WORKING_DIR}
             RESULT_VARIABLE GIT_RESULT
@@ -1095,7 +1108,7 @@ function(duckdb_extension_load NAME)
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Version detection
     if ("${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
-      duckdb_extension_generate_version(EXT_VERSION ${CMAKE_CURRENT_LIST_DIR})
+      duckdb_extension_generate_version(EXT_VERSION ${duckdb_extension_load_SOURCE_DIR})
     else()
       set(EXT_VERSION ${duckdb_extension_load_EXTENSION_VERSION})
     endif()
