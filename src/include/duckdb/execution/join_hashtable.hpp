@@ -150,7 +150,7 @@ public:
 	};
 
 	struct InsertState : SharedState {
-		InsertState(const JoinHashTable &ht);
+		explicit InsertState(const JoinHashTable &ht);
 		/// Because of the index hick up
 		SelectionVector remaining_sel;
 		SelectionVector key_match_sel;
