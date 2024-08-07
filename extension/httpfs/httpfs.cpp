@@ -12,16 +12,16 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/common/http_util.hpp"
 
 #include <chrono>
 #include <string>
 #include <thread>
+#include <map>
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
-#include <duckdb/common/http_util.hpp>
-#include <map>
 
 namespace duckdb {
 

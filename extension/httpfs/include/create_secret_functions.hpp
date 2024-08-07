@@ -52,9 +52,6 @@ public:
 	static void Register(DatabaseInstance &instance);
 
 protected:
-	//! Internal function to create bearer token
-	static unique_ptr<BaseSecret> CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input,
-	                                                           const string &token);
 	//! Function for the "config" provider: creates secret from parameters passed by user
 	static unique_ptr<BaseSecret> CreateHTTPSecretFromConfig(ClientContext &context, CreateSecretInput &input);
 };
