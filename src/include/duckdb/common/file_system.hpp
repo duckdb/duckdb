@@ -21,6 +21,11 @@
 #include "duckdb/common/file_open_flags.hpp"
 #include <functional>
 
+#ifndef DUCKDB_NO_THREADS
+#include <chrono>
+#include <thread>
+#endif
+
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
@@ -256,6 +261,50 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+};
+
+class FileBasedLock {
+public:
+	explicit FileBasedLock(FileSystem &fs, const string &path, idx_t max_milliseconds)
+	    : fs(fs), path(path), handle(nullptr) {
+
+		idx_t sleep_for = 10;
+		idx_t total_sleep = 0;
+		while (!handle) {
+			try {
+				handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
+				                               FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileLockType::WRITE_LOCK);
+				break;
+			} catch (...) {
+				if (total_sleep >= max_milliseconds) {
+					throw;
+				}
+			}
+#ifndef DUCKDB_NO_THREADS
+			std::this_thread::sleep_for(std::chrono::milliseconds(sleep_for));
+#endif
+			total_sleep += sleep_for;
+			sleep_for *= 2;
+		}
+	}
+	~FileBasedLock() {
+		try {
+			Release();
+		} catch (...) {
+			// Errors are shallowed, given we are in a destructor
+		}
+	}
+	void Release() {
+		if (handle) {
+			fs.RemoveFile(path);
+			handle.reset();
+		}
+	}
+
+private:
+	FileSystem &fs;
+	string path;
+	unique_ptr<FileHandle> handle;
 };
 
 } // namespace duckdb
