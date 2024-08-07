@@ -113,9 +113,13 @@ public:
 	DUCKDB_API void Destroy();
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name, const optional_ptr<const vector<string>> column_names = nullptr);
 	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
+	//! Merges a DataChunk to the specified table.  This works much like upsert.  Primary key is assumed to be the conflict target
+	DUCKDB_API void Merge(TableDescription &description, DataChunk &chunk);
+	//! Merges a ColumnDataCollection to the specified table.  This works much like upsert.  Primary key is assumed to be the conflict target
+	DUCKDB_API void Merge(TableDescription &description, ColumnDataCollection &collection);
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns
 	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);

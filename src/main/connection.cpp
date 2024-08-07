@@ -153,8 +153,8 @@ unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
 	return TableInfo(INVALID_SCHEMA, table_name);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name) {
-	return context->TableInfo(schema_name, table_name);
+unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name, const optional_ptr<const vector<string>> column_names) {
+	return context->TableInfo(schema_name, table_name, column_names);
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
@@ -176,6 +176,10 @@ void Connection::Append(TableDescription &description, DataChunk &chunk) {
 
 void Connection::Append(TableDescription &description, ColumnDataCollection &collection) {
 	context->Append(description, collection);
+}
+
+void Connection::Merge(TableDescription &description, DataChunk &chunk) {
+	context->Merge(description, chunk);
 }
 
 shared_ptr<Relation> Connection::Table(const string &table_name) {

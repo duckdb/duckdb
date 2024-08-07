@@ -2632,6 +2632,21 @@ DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, con
                                                duckdb_appender *out_appender);
 
 /*!
+Creates an merger object that allows upsert style merges with existing data while appending new data.
+
+Note that the object must be destroyed with `duckdb_appender_destroy`.
+
+* connection: The connection context to create the appender in.
+* schema: The schema of the table to append to, or `nullptr` for the default schema.
+* table: The table name to append to.
+* column_names: A comma seperated string of column names to merge or `nullptr` for all columns
+* out_appender: The resulting appender object.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_merger_create(duckdb_connection connection, const char *schema, const char *table, const char *column_names,
+                                               duckdb_appender *out_appender);
+
+/*!
 Returns the number of columns in the table that belongs to the appender.
 
 * appender The appender to get the column count from.
@@ -3130,6 +3145,7 @@ It is not known beforehand how many chunks will be returned by this result.
 * returns: The resulting data chunk. Returns `NULL` if the result has an error.
 */
 DUCKDB_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
+
 
 DUCKDB_API uint64_t duckdb_get_hlc_timestamp();
 DUCKDB_API void duckdb_set_hlc_timestamp(uint64_t ts);

@@ -137,6 +137,9 @@ public:
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 
+	//! Bind the default values of the columns of a table
+	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
+
 	//! Check usage, and cast named parameters to their types
 	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
 	                                QueryErrorContext &error_context, string &func_name);
@@ -243,8 +246,6 @@ private:
 	idx_t GetBinderDepth() const;
 	//! Bind the expressions of generated columns to check for errors
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
-	//! Bind the default values of the columns of a table
-	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
 	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val, bool is_percentage,
 	                              bool is_offset);

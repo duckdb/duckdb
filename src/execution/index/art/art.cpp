@@ -544,14 +544,14 @@ ErrorData ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_ide
 	return Insert(lock, expression_result, row_identifiers);
 }
 
-void ART::VerifyAppend(DataChunk &chunk) {
+void ART::VerifyAppend(DataChunk &chunk, bool allow_non_standard_vector_size) {
 	ConflictManager conflict_manager(VerifyExistenceType::APPEND, chunk.size());
-	CheckConstraintsForChunk(chunk, conflict_manager);
+	CheckConstraintsForChunk(chunk, conflict_manager, allow_non_standard_vector_size);
 }
 
-void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
+void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager, bool allow_non_standard_vector_size) {
 	D_ASSERT(conflict_manager.LookupType() == VerifyExistenceType::APPEND);
-	CheckConstraintsForChunk(chunk, conflict_manager);
+	CheckConstraintsForChunk(chunk, conflict_manager, allow_non_standard_vector_size);
 }
 
 bool ART::InsertToLeaf(Node &leaf, const row_t &row_id) {
@@ -1030,14 +1030,15 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 }
 
-void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) {
+void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager, bool allow_non_standard_vector_size) {
 
 	// don't alter the index during constraint checking
 	lock_guard<mutex> l(lock);
 
 	// first resolve the expressions for the index
+	idx_t capacity = allow_non_standard_vector_size && input.size() > STANDARD_VECTOR_SIZE ? input.size() : STANDARD_VECTOR_SIZE;
 	DataChunk expression_chunk;
-	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
+	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types, capacity);
 	ExecuteExpressions(input, expression_chunk);
 
 	// generate the keys for the given input

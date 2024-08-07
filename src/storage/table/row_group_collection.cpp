@@ -105,6 +105,10 @@ RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
 	return (RowGroup *)row_groups->GetSegmentByIndex(index);
 }
 
+RowGroup *RowGroupCollection::GetRowGroupByRowNumber(idx_t row_id) {
+	return (RowGroup *)row_groups->GetSegment(row_id);
+}
+
 void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;

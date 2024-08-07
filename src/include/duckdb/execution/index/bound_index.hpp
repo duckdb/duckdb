@@ -72,11 +72,11 @@ public: // Index interface
 	//! Obtains a lock and calls Append while holding that lock
 	ErrorData Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index without a constraint violation
-	virtual void VerifyAppend(DataChunk &chunk) = 0;
+	virtual void VerifyAppend(DataChunk &chunk, bool allow_non_standard_vector_size = false) = 0;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
-	virtual void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) = 0;
+	virtual void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager, bool allow_non_standard_vector_size = false) = 0;
 	//! Performs constraint checking for a chunk of input data
-	virtual void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) = 0;
+	virtual void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager, bool allow_non_standard_vector_size = false) = 0;
 
 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
 	virtual void CommitDrop(IndexLock &index_lock) = 0;

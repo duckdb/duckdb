@@ -49,6 +49,8 @@ public:
 	void AppendRowGroup(SegmentLock &l, idx_t start_row);
 	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
 	RowGroup *GetRowGroup(int64_t index);
+	//! Get the row-group by the row id
+	RowGroup *GetRowGroupByRowNumber(idx_t row_id);
 	void Verify();
 
 	void InitializeScan(CollectionScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters);

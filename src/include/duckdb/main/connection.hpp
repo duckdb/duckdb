@@ -102,7 +102,8 @@ public:
 	//! Get the table info of a specific table (in the default schema), or nullptr if it cannot be found
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name, const optional_ptr<const vector<string>> column_names = nullptr);
+	//! Get the table info of a specific table with only the columns specified, or nullptr if it cannot be found
 
 	//! Extract a set of SQL statements from a specific query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ExtractStatements(const string &query);
@@ -113,7 +114,7 @@ public:
 	DUCKDB_API void Append(TableDescription &description, DataChunk &chunk);
 	//! Appends a ColumnDataCollection to the specified table
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
-
+	DUCKDB_API void Merge(TableDescription &description, DataChunk &chunk);
 	//! Returns a relation that produces a table from this connection
 	DUCKDB_API shared_ptr<Relation> Table(const string &tname);
 	DUCKDB_API shared_ptr<Relation> Table(const string &schema_name, const string &table_name);

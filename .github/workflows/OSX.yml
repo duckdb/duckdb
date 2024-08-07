@@ -161,9 +161,11 @@ jobs:
           VCPKG_OSX_ARCHITECTURES: "x86_64;arm64"
           VCPKG_TARGET_TRIPLET: uni-osx
           VCPKG_CMAKE_SYSTEM_NAME: Darwin
+          CMAKE_BUILD_TYPE: Release
         run: |
           echo "vcp: ${VCPKG_OSX_ARCHITECTURES}"
           echo "cm: ${CMAKE_OSX_ARCHITECTURES}"
+          echo "cm: ${CMAKE_BUILD_TYPE}"
           make
 
       - name: Print platform

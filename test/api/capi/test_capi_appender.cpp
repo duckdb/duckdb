@@ -1,5 +1,7 @@
 #include "capi_tester.hpp"
 #include "duckdb.h"
+#include <random>
+#include <algorithm>
 
 using namespace duckdb;
 using namespace std;
@@ -616,4 +618,85 @@ TEST_CASE("Test append timestamp in C API", "[capi]") {
 	result = tester.Query("SELECT * FROM test");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<string>(0, 0) == "2022-04-09 15:56:37.544");
+}
+
+TEST_CASE("Test merger statements in C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	duckdb_state status;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE test (i INTEGER PRIMARY KEY, d double, s string)");
+	duckdb_appender merger;
+	status = duckdb_merger_create(tester.connection, nullptr, "test", "i, d, s", &merger);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(merger) == nullptr);
+
+	status = duckdb_appender_begin_row(merger);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_int32(merger, 42);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_double(merger, 4.2);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_varchar(merger, "Hello, World");
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_end_row(merger);
+	REQUIRE(status == DuckDBSuccess);
+
+	// we can flush again why not
+	status = duckdb_appender_flush(merger);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_close(merger);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_destroy(&merger);
+	REQUIRE(status == DuckDBSuccess);
+	
+	result = tester.Query("SELECT * FROM test");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int32_t>(0, 0) == 42);
+	REQUIRE(result->Fetch<double>(1, 0) == 4.2);
+	REQUIRE(result->Fetch<string>(2, 0) == "Hello, World");
+
+	duckdb_appender merger1;
+	status = duckdb_merger_create(tester.connection, nullptr, "test", nullptr, &merger1);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(merger1) == nullptr);
+
+	status = duckdb_appender_begin_row(merger1);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_int32(merger1, 42);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_double(merger1, 8.2);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_varchar(merger1, "Hello, World Again");
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_end_row(merger1);
+	REQUIRE(status == DuckDBSuccess);
+
+	// we can flush again why not
+	status = duckdb_appender_flush(merger1);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_close(merger1);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_destroy(&merger1);
+	REQUIRE(status == DuckDBSuccess);
+	result = tester.Query("SELECT * FROM test");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int32_t>(0, 0) == 42);
+	REQUIRE(result->Fetch<double>(1, 0) == 8.2);
+	REQUIRE(result->Fetch<string>(2, 0) == "Hello, World Again");
 }

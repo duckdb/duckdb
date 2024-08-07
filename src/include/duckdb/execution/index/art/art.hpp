@@ -73,9 +73,9 @@ public:
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
 	ErrorData Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index without a constraint violation
-	void VerifyAppend(DataChunk &chunk) override;
+	void VerifyAppend(DataChunk &chunk, bool allow_non_standard_vector_size = false) override;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
-	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) override;
+	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager, bool allow_non_standard_vector_size = false) override;
 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
 	void CommitDrop(IndexLock &index_lock) override;
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
@@ -112,7 +112,7 @@ public:
 	//! Generate the matching error message for a constraint violation
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
 	//! Performs constraint checking for a chunk of input data
-	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) override;
+	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager, bool allow_non_standard_vector_size = false) override;
 
 	//! Returns the string representation of the ART, or only traverses and verifies the index
 	string VerifyAndToString(IndexLock &state, const bool only_verify) override;

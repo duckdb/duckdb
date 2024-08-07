@@ -102,8 +102,25 @@ public:
 	//! Append a DataChunk to the transaction-local storage of the table.
 	void LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                 bool unsafe = false);
+  
 	//! Finalizes a transaction-local append
 	void FinalizeLocalAppend(LocalAppendState &state);
+
+    void Merge(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk, const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+	                const unordered_set<column_t> &conflict_target, const vector<PhysicalIndex> &set_columns);
+	void Merge(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk, const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+	                const unordered_set<column_t> &conflict_target, const vector<PhysicalIndex> &set_columns,
+	                LocalAppendState &append_state, bool initialize, bool do_appends,
+	                idx_t &update_count, idx_t &insert_count);
+	void Merge(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk, const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+	                const unordered_set<column_t> &conflict_target, const vector<PhysicalIndex> &set_columns,
+	                LocalAppendState &append_state, bool initialize, bool finalize_on_conflict, bool do_appends,
+	                idx_t &update_count, idx_t &insert_count, const vector<LogicalType> &types_to_fetch,
+	                const vector<LogicalType> &insert_types, const unique_ptr<Expression> &conflict_condition,
+	                const vector<column_t> &columns_to_fetch, const vector<unique_ptr<Expression>> &set_expressions,
+	                const vector<LogicalType> &set_types, const unique_ptr<Expression> &do_update_condition);
+    void Merge(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection, const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+	                const unordered_set<column_t> &conflict_target, const vector<PhysicalIndex> &set_columns);
 	//! Append a chunk to the transaction-local storage of this table
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -112,6 +129,7 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
+
 	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends
 	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
 	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);
@@ -209,7 +227,7 @@ public:
 	                                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
-	                             optional_ptr<ConflictManager> conflict_manager = nullptr);
+	                             optional_ptr<ConflictManager> conflict_manager = nullptr, bool allow_non_standard_vector_sizes = false);
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
 
@@ -227,7 +245,7 @@ public:
 
 public:
 	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
-	                                optional_ptr<ConflictManager> conflict_manager);
+	                                optional_ptr<ConflictManager> conflict_manager, bool allow_non_standard_vector_sizes = false);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

@@ -110,20 +110,38 @@ protected:
 };
 
 class Appender : public BaseAppender {
-	//! A reference to a database connection that created this appender
-	shared_ptr<ClientContext> context;
-	//! The table description (including column names)
-	unique_ptr<TableDescription> description;
-
 public:
+	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name, const vector<LogicalType> &logical_types);
 	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
+	DUCKDB_API Appender(Connection &con, const string &table_name, const vector<LogicalType> &logical_types);
 	DUCKDB_API Appender(Connection &con, const string &table_name);
 	DUCKDB_API ~Appender() override;
 
 protected:
+	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name, const vector<LogicalType> &logical_types, const optional_ptr<const vector<string>> &column_names);
+  	//! A reference to a database connection that created this appender
+	shared_ptr<ClientContext> context;
+	//! The table description (including column names)
+	unique_ptr<TableDescription> description;
 	void FlushInternal(ColumnDataCollection &collection) override;
 };
 
+//! Used to merge and insert content into a table.  This object mirrors the way upsert works for the query engine.
+//! Primary key is assumed to be the conflict target
+class Merger : public Appender {
+public:
+	// Mergers and inserts columns for the given column names.  This function is
+	DUCKDB_API Merger(Connection &con, const string &schema_name, const string &table_name, const vector<string> &column_names);
+	DUCKDB_API Merger(Connection &con, const string &schema_name, const string &table_name, const vector<LogicalType> &types);
+	DUCKDB_API Merger(Connection &con, const string &schema_name, const string &table_name);
+	DUCKDB_API Merger(Connection &con, const string &table_name, const vector<LogicalType> &types);
+	DUCKDB_API Merger(Connection &con, const string &table_name, const vector<string> &column_names);
+	DUCKDB_API Merger(Connection &con, const string &table_name);
+	DUCKDB_API ~Merger() override;
+protected:
+	void FlushInternal(ColumnDataCollection &collection) override;
+};
+  
 class InternalAppender : public BaseAppender {
 	//! The client context
 	ClientContext &context;

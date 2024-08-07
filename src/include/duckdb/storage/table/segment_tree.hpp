@@ -185,6 +185,11 @@ public:
 		nodes.erase(nodes.begin() + UnsafeNumericCast<int64_t>(segment_start) + 1, nodes.end());
 	}
 
+	idx_t GetSegmentIndex(idx_t row_number) {
+		auto l = Lock();
+		return GetSegmentIndex(l, row_number);
+	}
+
 	//! Get the segment index of the column segment for the given row
 	idx_t GetSegmentIndex(SegmentLock &l, idx_t row_number) {
 		idx_t segment_index;
