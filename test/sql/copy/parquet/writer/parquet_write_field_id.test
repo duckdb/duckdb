@@ -173,7 +173,7 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'ele
 statement error
 copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,elem:43}})
 ----
-Binder Error: Column name "elem" specified in FIELD_IDS not found. Available column names: [element]
+Binder Error: Column name "elem" specified in FIELD_IDS not found. Consider using WRITE_PARTITION_COLUMNS if this column is a partition column. Available column names: [element]
 
 # struct
 statement ok
@@ -193,7 +193,7 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'f'
 statement error
 copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,g:43}})
 ----
-Binder Error: Column name "g" specified in FIELD_IDS not found. Available column names: [f]
+Binder Error: Column name "g" specified in FIELD_IDS not found. Consider using WRITE_PARTITION_COLUMNS if this column is a partition column. Available column names: [f]
 
 # map
 statement ok

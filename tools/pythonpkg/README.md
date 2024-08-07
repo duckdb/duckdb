@@ -49,23 +49,28 @@ storage from a notebook.
 
 First, get the repository based version number and extract the source distribution.
 
-    python3 -m pip install build # required for pep517 compliant source dists
-    cd tools/pythonpkg
-    export SETUPTOOLS_SCM_PRETEND_VERSION=$(python3 -m setuptools_scm)
-    pyproject-build . --sdist
-    cd ../..
+```bash
+python3 -m pip install build # required for PEP 517 compliant source dists
+cd tools/pythonpkg
+export SETUPTOOLS_SCM_PRETEND_VERSION=$(python3 -m setuptools_scm)
+pyproject-build . --sdist
+cd ../..
+```
 
 Next, copy over the python package related files, and install the package.
 
-    mkdir -p $DUCKDB_PREFIX/src/duckdb-pythonpkg
-    tar --directory=$DUCKDB_PREFIX/src/duckdb-pythonpkg -xzpf tools/pythonpkg/dist/duckdb-${SETUPTOOLS_SCM_PRETEND_VERSION}.tar.gz
-    pip3 install --prefix $DUCKDB_PREFIX -e $DUCKDB_PREFIX/src/duckdb-pythonpkg/duckdb-${SETUPTOOLS_SCM_PRETEND_VERSION}
+```bash
+mkdir -p $DUCKDB_PREFIX/src/duckdb-pythonpkg
+tar --directory=$DUCKDB_PREFIX/src/duckdb-pythonpkg -xzpf tools/pythonpkg/dist/duckdb-${SETUPTOOLS_SCM_PRETEND_VERSION}.tar.gz
+pip3 install --prefix $DUCKDB_PREFIX -e $DUCKDB_PREFIX/src/duckdb-pythonpkg/duckdb-${SETUPTOOLS_SCM_PRETEND_VERSION}
+```
 
 ## Development and Stubs
 
 `*.pyi` stubs are generated with [Mypy's `stubgen`](https://mypy.readthedocs.io/en/stable/stubgen.html) and tweaked. These are important for autocomplete in many IDEs, as static-analysis based language servers can't introspect `duckdb`'s binary module.
 
-The stubs from stubgen are pretty good, but not perfect. In some cases, you can help stubgen out: for example, function annotation types that it can't figure out should be specified in the cpp where necessary, as in the example
+The stubs from stubgen are pretty good, but not perfect. In some cases, you can help stubgen out: for example, function annotation types that it can't figure out should be specified in the cpp where necessary, as in the example.
+
 ```cpp
 // without this change, the generated stub is
 // def query_df(self, df: object, virtual_table_name: str, sql_query: str) -> DuckDBPyRelation: ...
@@ -87,7 +92,7 @@ There is a test that you can run to check the stubs match the real duckdb packag
 
 The workflow for getting the stubs right will look something like
 
-```sh
+```bash
 # Edit python package...
 vim tools/pythonpkg/duckdb_python.cpp # or whatever
 
@@ -107,10 +112,11 @@ pytest tests/stubs
 
 All the above should be done in a virtualenv.
 
-## Frequently encountered issue with extensions:
+## Frequently encountered issue with extensions
 
 If you are faced with an error on `import duckdb`:
-```
+
+```console
 Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
   File "/usr/bin/python3/site-packages/duckdb/__init__.py", line 4, in <module>
@@ -144,6 +150,7 @@ Helpful information:
 `clang-tidy` is not a standard binary on MacOS, and can not be installed with brew directly (doing so will try to install clang-format, and they are not the same thing)
 Instead clang-tidy is part of `llvm`, so you'll need to install that (`brew install llvm`), after installing llvm you'll likely have to add the llvm binaries folder to your PATH variable to use clang-tidy
 For example:
+
 ```bash
 export PATH="$PATH:/opt/homebrew/Cellar/llvm/15.0.2/bin"
 ```

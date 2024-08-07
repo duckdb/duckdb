@@ -1120,8 +1120,10 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 				}
 				names += name.first;
 			}
-			throw BinderException("Column name \"%s\" specified in FIELD_IDS not found. Available column names: [%s]",
-			                      col_name, names);
+			throw BinderException(
+			    "Column name \"%s\" specified in FIELD_IDS not found. Consider using WRITE_PARTITION_COLUMNS if this "
+			    "column is a partition column. Available column names: [%s]",
+			    col_name, names);
 		}
 		D_ASSERT(field_ids.ids->find(col_name) == field_ids.ids->end()); // Caught by STRUCT - deduplicates keys
 
