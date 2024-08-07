@@ -69,12 +69,7 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task>
 
 #else
 struct ConcurrentQueue {
-	// We use a pointer to QueueProducerToken, because
-	// 1. We need to be able to erase the producer token from the queue in the QueueProducerToken destructor
-	// 2. Hashing a pointer is faster than hashing a unique_ptr<foo>
-	// 3. The QueueProducerToken will not move in memory or change (as it is unique per query), so the pointer will
-	// remain the same
-	std::unordered_map<QueueProducerToken *, std::queue<shared_ptr<Task>>> q;
+	reference_map_t<QueueProducerToken, std::queue<shared_ptr<Task>>> q;
 	mutex qlock;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
@@ -83,20 +78,15 @@ struct ConcurrentQueue {
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
-	QueueProducerToken *token_addr = token.token.get();
-	q[token_addr].push(std::move(task));
+	q[std::ref(*token.token)].push(std::move(task));
 }
 
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> lock(qlock);
-	if (q.empty()) {
-		return false;
-	}
+	D_ASSERT(!q.empty());
 
-	QueueProducerToken *token_addr = token.token.get();
-
-	const auto it = q.find(token_addr);
-	if (it == q.end()) {
+	const auto it = q.find(std::ref(*token.token));
+	if (it == q.end() || it->second.empty()) {
 		return false;
 	}
 
@@ -111,7 +101,8 @@ struct QueueProducerToken {
 	}
 
 	~QueueProducerToken() {
-		queue->q.erase(this);
+		lock_guard<mutex> lock(queue->qlock);
+		queue->q.erase(*this);
 	}
 
 private:
