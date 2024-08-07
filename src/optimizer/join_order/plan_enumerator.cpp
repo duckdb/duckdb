@@ -82,7 +82,7 @@ void PlanEnumerator::GenerateCrossProducts() {
 		for (idx_t j = 0; j < query_graph_manager.relation_manager.NumRelations(); j++) {
 			auto cross_product_allowed = query_graph_manager.relation_manager.CrossProductWithRelationAllowed(i) &&
 			                             query_graph_manager.relation_manager.CrossProductWithRelationAllowed(j);
-			if (i != j && cross_product_allowed) {
+			if (i != j) {
 				auto &right = query_graph_manager.set_manager.GetJoinRelation(j);
 				query_graph_manager.CreateQueryGraphCrossProduct(left, right);
 			}

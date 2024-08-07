@@ -14,11 +14,24 @@ create table lineitem (l_orderkey int, l_suppkey int, l_partkey int);
 statement ok
 insert into lineitem values (1,1,42),(1,2,43),(3,3,44),(4,5,45),(5,5,46),(6,5,47);
 
+statement ok
+create table lineitem_copy (l_orderkey int, l_suppkey int, l_partkey int);
+
+statement ok
+insert into lineitem_copy values (1,1,42),(1,2,43),(3,3,44),(4,5,45),(5,5,46),(6,5,47);
+
+statement ok
+create table orders (o_orderkey int);
+
+statement ok
+insert into orders VALUES (1), (3), (4), (5);
+
 query III
 select * from lineitem l1 where exists (
-    select * from lineitem l2
+    select * from lineitem_2 l2, orders o
     where
-        l2.l_orderkey = l1.l_orderkey
+    	o.o_orderkey = l2.l_orderkey
+        and l2.l_orderkey = l1.l_orderkey
         and l2.l_suppkey <> l1.l_suppkey
 );
 ----
@@ -28,9 +41,10 @@ select * from lineitem l1 where exists (
 # deliminator should remove INNER
 query II
 explain select * from lineitem l1 where exists (
-    select * from lineitem l2
+    select * from lineitem_copy l2, orders_o
     where
         l2.l_orderkey = l1.l_orderkey
+        and
         and l2.l_suppkey <> l1.l_suppkey
 );
 ----

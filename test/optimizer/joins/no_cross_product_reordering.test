@@ -1,0 +1,16 @@
+# name: test/optimizer/joins/no_cross_product_reordering.test
+# description: cannot create cross product between LHS and RHS of semi/anti joins
+# group: [joins]
+
+
+statement ok
+create table t1 as select range a, range b from range(1000);
+
+statement ok
+create table t2 as select range c, range*5 d from range(20);
+
+statement ok
+create table t3 as select range e, range*10 f from range(100);
+
+statement ok
+explain select * from t1, t2 where a in (select * from t3);
