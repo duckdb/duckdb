@@ -10,7 +10,7 @@ using namespace duckdb_yyjson; // NOLINT
 namespace duckdb {
 
 void ProfilingInfo::SetSettings(profiler_settings_t const &n_settings) {
-	this->settings = n_settings;
+	settings = n_settings;
 }
 
 const profiler_settings_t &ProfilingInfo::GetSettings() {
@@ -20,7 +20,7 @@ const profiler_settings_t &ProfilingInfo::GetSettings() {
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {
 	    MetricsType::QUERY_NAME,           MetricsType::IDLE_THREAD_TIME,       MetricsType::CPU_TIME,
-	    MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY, MetricsType::OPERATOR_NAME,
+	    MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY, MetricsType::OPERATOR_TYPE,
 	    MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_TIMING,
 	};
 }
@@ -34,7 +34,6 @@ void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
 
 	auto default_settings = DefaultSettings();
-
 	for (auto &metric : default_settings) {
 		if (!Enabled(metric)) {
 			continue;
@@ -42,15 +41,15 @@ void ProfilingInfo::ResetMetrics() {
 
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
-		case MetricsType::OPERATOR_NAME:
-			metrics[metric] = Value::CreateValue("");
-			break;
 		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
 			metrics[metric] = Value::CreateValue(0.0);
 			break;
 		}
+		case MetricsType::OPERATOR_TYPE:
+			metrics[metric] = Value::CreateValue<uint8_t>(0);
+			break;
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY: {
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
@@ -128,13 +127,17 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
-		case MetricsType::OPERATOR_NAME:
-			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
-			break;
 		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
+			break;
+		}
+		case MetricsType::OPERATOR_TYPE: {
+			auto val = metrics[metric].GetValue<uint8_t>();
+			auto type = PhysicalOperatorType(val);
+			auto str = PhysicalOperatorToString(type);
+			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, str.c_str());
 			break;
 		}
 		case MetricsType::CUMULATIVE_CARDINALITY:

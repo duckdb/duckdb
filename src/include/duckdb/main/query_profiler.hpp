@@ -82,6 +82,12 @@ private:
 	reference_map_t<const PhysicalOperator, OperatorInformation> timings;
 };
 
+struct QueryInfo {
+	QueryInfo() : idle_thread_time(0) {};
+	string query_name;
+	double idle_thread_time;
+};
+
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
 public:

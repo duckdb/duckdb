@@ -54,7 +54,7 @@ public:
 
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
-	void WaitForTask(); // idle thread time
+	void WaitForTask();
 	void SignalTaskRescheduled(lock_guard<mutex> &);
 
 	void Reset();

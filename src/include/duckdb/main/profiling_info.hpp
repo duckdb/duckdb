@@ -29,7 +29,7 @@ enum class MetricsType : uint8_t {
 	CPU_TIME,
 	EXTRA_INFO,
 	CUMULATIVE_CARDINALITY,
-	OPERATOR_NAME,
+	OPERATOR_TYPE,
 	OPERATOR_CARDINALITY,
 	OPERATOR_TIMING
 };
@@ -45,9 +45,12 @@ typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metr
 
 class ProfilingInfo {
 public:
-	// set of metrics with their values; only enabled metrics are present in the set
+	// Enabling a metric adds it to this set.
 	profiler_settings_t settings;
+	// Contains all enabled metrics.
 	profiler_metrics_t metrics;
+	// Additional metrics.
+	// FIXME: move to metrics.
 	InsertionOrderPreservingMap<string> extra_info;
 
 public:
@@ -59,14 +62,11 @@ public:
 	ProfilingInfo &operator=(ProfilingInfo const &) = default;
 
 public:
-	// set the metrics set
 	void SetSettings(profiler_settings_t const &n_settings);
-	// get the metrics set
 	const profiler_settings_t &GetSettings();
 	static profiler_settings_t DefaultSettings();
 
 public:
-	// reset the metrics to default
 	void ResetSettings();
 	void ResetMetrics();
 	bool Enabled(const MetricsType setting) const;
@@ -77,8 +77,9 @@ public:
 
 public:
 	template <class METRIC_TYPE>
-	METRIC_TYPE &GetMetricValue(const MetricsType setting) {
-		return metrics[setting].GetValue<METRIC_TYPE>();
+	METRIC_TYPE GetMetricValue(const MetricsType setting) const {
+		auto val = metrics.at(setting);
+		return val.GetValue<METRIC_TYPE>();
 	}
 
 	template <class METRIC_TYPE>
