@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/typedefs.hpp"
+
 namespace duckdb {
 
 //! The ht_entry_t struct represents an individual entry within a hash table.
