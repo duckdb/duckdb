@@ -1210,9 +1210,12 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 	auto v1_0_0_option = options.find("v1_0_0_storage");
 	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
 	if (v1_0_0_storage) {
+		auto prefix_idx = Node::GetAllocatorIdx(NType::PREFIX);
+		auto prefix_inlined_idx = Node::GetAllocatorIdx(NType::PREFIX_INLINED);
+		auto &block_manager = (*allocators)[prefix_idx]->block_manager;
 		unsafe_unique_ptr<FixedSizeAllocator> deprecated_allocator;
+
 		if (prefix_count != DEPRECATED_PREFIX_COUNT) {
-			auto &block_manager = (*allocators)[0]->block_manager;
 			deprecated_allocator =
 			    make_unsafe_uniq<FixedSizeAllocator>(DEPRECATED_PREFIX_COUNT + 1 + sizeof(Node), block_manager);
 		}
@@ -1224,10 +1227,17 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 
 		// Replace the prefix allocator with the deprecated allocator.
 		if (deprecated_allocator) {
-			D_ASSERT((*allocators)[0]->IsEmpty());
-			(*allocators)[0]->Reset();
-			(*allocators)[0] = std::move(deprecated_allocator);
 			prefix_count = DEPRECATED_PREFIX_COUNT;
+
+			D_ASSERT((*allocators)[prefix_idx]->IsEmpty());
+			(*allocators)[prefix_idx]->Reset();
+			(*allocators)[prefix_idx] = std::move(deprecated_allocator);
+
+			// Update the segment size in the empty PREFIX_INLINED allocator.
+			D_ASSERT((*allocators)[prefix_inlined_idx]->IsEmpty());
+			(*allocators)[prefix_inlined_idx]->Reset();
+			(*allocators)[prefix_inlined_idx] =
+			    make_unsafe_uniq<FixedSizeAllocator>(Prefix::Size(*this), block_manager);
 		}
 	}
 

@@ -197,6 +197,18 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 // Get functions
 //===--------------------------------------------------------------------===//
 
+template <class NODE, class OUT, class IN>
+static OUT *GetChildInternal(ART &art, IN &node, const uint8_t byte, NType type) {
+	auto &n = Node::Ref<NODE>(art, node, type);
+	return NODE::template GetChild<OUT>(n, byte);
+}
+
+template <class NODE, class OUT, class IN>
+static OUT *GetNextChildInternal(ART &art, IN &node, uint8_t &byte, NType type) {
+	auto &n = Node::Ref<NODE>(art, node, type);
+	return NODE::template GetNextChild<OUT>(n, byte);
+}
+
 const Node *Node::GetChild(ART &art, const uint8_t byte) const {
 	D_ASSERT(HasMetadata());
 	auto type = GetType();

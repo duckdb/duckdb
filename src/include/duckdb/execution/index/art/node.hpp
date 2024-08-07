@@ -202,18 +202,6 @@ private:
 	bool MergePrefixes(ART &art, Node &other, const bool in_gate);
 
 private:
-	template <class NODE, class OUT, class IN>
-	static OUT *GetChildInternal(ART &art, IN &node, const uint8_t byte, NType type) {
-		auto &n = Node::Ref<NODE>(art, node, type);
-		return NODE::template GetChild<OUT>(n, byte);
-	}
-
-	template <class NODE, class OUT, class IN>
-	static OUT *GetNextChildInternal(ART &art, IN &node, uint8_t &byte, NType type) {
-		auto &n = Node::Ref<NODE>(art, node, type);
-		return NODE::template GetNextChild<OUT>(n, byte);
-	}
-
 	template <class NODE>
 	static void InitMergeInternal(ART &art, NODE &n, const unsafe_vector<idx_t> &upper_bounds) {
 		NODE::Iterator(n, [&](Node &child) { child.InitMerge(art, upper_bounds); });

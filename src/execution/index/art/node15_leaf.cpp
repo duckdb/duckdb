@@ -1,7 +1,8 @@
 #include "duckdb/execution/index/art/node15_leaf.hpp"
 
-#include "duckdb/execution/index/art/node7_leaf.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node7_leaf.hpp"
 
 namespace duckdb {
 
@@ -59,7 +60,7 @@ void Node15Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 }
 
 void Node15Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
-	auto &n15 = Node7Leaf::DeleteByteInternal<Node7Leaf>(art, node, byte);
+	auto &n15 = Node7Leaf::DeleteByteInternal<Node15Leaf>(art, node, byte);
 
 	// Shrink node to Node7.
 	if (n15.count < Node::NODE_7_LEAF_CAPACITY) {
