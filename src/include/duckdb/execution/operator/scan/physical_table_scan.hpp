@@ -8,13 +8,11 @@
 
 #pragma once
 
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 
