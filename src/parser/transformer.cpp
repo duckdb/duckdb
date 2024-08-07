@@ -61,7 +61,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNo
 	result->n_param = ParamCount();
 	if (!named_param_map.empty()) {
 		// Avoid overriding a previous move with nothing
-		result->named_param_map = std::move(named_param_map);
+		result->named_param_map = named_param_map;
 	}
 	return result;
 }
