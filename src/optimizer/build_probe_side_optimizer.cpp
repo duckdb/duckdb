@@ -120,14 +120,13 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
 	                                                              : right_child->EstimateCardinality(context);
 
-
 	auto build_sizes = GetBuildSizes(op);
 	// special math.
 	auto left_side_build_cost = double(lhs_cardinality) * build_sizes.left_side;
 	auto right_side_build_cost = double(rhs_cardinality) * build_sizes.right_side;
 
 	bool swap = false;
-	
+
 	idx_t left_child_joins = ChildHasJoins(*op.children[0]);
 	idx_t right_child_joins = ChildHasJoins(*op.children[1]);
 	// if the right child is a table scan, and the left child has joins, we should prefer the left child
