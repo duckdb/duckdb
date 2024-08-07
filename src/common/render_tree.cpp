@@ -116,20 +116,19 @@ static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
+	auto &info = op.GetProfilingInfo();
 	InsertionOrderPreservingMap<string> extra_info;
-	if (op.GetProfilingInfo().Enabled(MetricsType::EXTRA_INFO)) {
+	if (info.Enabled(MetricsType::EXTRA_INFO)) {
 		extra_info = op.GetProfilingInfo().extra_info;
 	}
+	auto node_name = info.GetMetricAsString(MetricsType::OPERATOR_NAME);
 
-	auto val = op.GetProfilingInfo().GetMetricValue<uint8_t>(MetricsType::OPERATOR_TYPE);
-	auto node_name = PhysicalOperatorToString(PhysicalOperatorType(val));
 	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
-	if (op.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-		result->extra_text["Cardinality"] = op.GetProfilingInfo().GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
+	if (info.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
+		result->extra_text["Cardinality"] = info.GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
 	}
-	if (op.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-		string timing = StringUtil::Format(
-		    "%.2f", op.GetProfilingInfo().metrics.at(MetricsType::OPERATOR_TIMING).GetValue<double>());
+	if (info.Enabled(MetricsType::OPERATOR_TIMING)) {
+		string timing = StringUtil::Format("%.2f", info.metrics.at(MetricsType::OPERATOR_TIMING).GetValue<double>());
 		result->extra_text["Timing"] = timing + "s";
 	}
 	return result;

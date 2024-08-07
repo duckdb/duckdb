@@ -19,7 +19,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <iostream>
 
 namespace duckdb {
 

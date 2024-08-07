@@ -171,19 +171,20 @@ void QueryProfiler::EndQuery() {
 	if (IsEnabled() && !is_explain_analyze) {
 		// Expand the query info.
 		if (root) {
-			root->GetProfilingInfo() = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
-			root->GetProfilingInfo().metrics[MetricsType::QUERY_NAME] = query_info.query_name;
+			auto &info = root->GetProfilingInfo();
+			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
+			info.metrics[MetricsType::QUERY_NAME] = query_info.query_name;
 
-			if (root->GetProfilingInfo().Enabled(MetricsType::IDLE_THREAD_TIME)) {
-				root->GetProfilingInfo().metrics[MetricsType::IDLE_THREAD_TIME] = query_info.idle_thread_time;
+			if (info.Enabled(MetricsType::IDLE_THREAD_TIME)) {
+				info.metrics[MetricsType::IDLE_THREAD_TIME] = query_info.idle_thread_time;
 			}
-			if (root->GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-				root->GetProfilingInfo().metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();
+			if (info.Enabled(MetricsType::OPERATOR_TIMING)) {
+				info.metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();
 			}
-			if (root->GetProfilingInfo().Enabled(MetricsType::CPU_TIME)) {
+			if (info.Enabled(MetricsType::CPU_TIME)) {
 				GetCumulativeMetric<double>(*root, MetricsType::CPU_TIME, MetricsType::OPERATOR_TIMING);
 			}
-			if (root->GetProfilingInfo().Enabled(MetricsType::CUMULATIVE_CARDINALITY)) {
+			if (info.Enabled(MetricsType::CUMULATIVE_CARDINALITY)) {
 				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_CARDINALITY,
 				                           MetricsType::OPERATOR_CARDINALITY);
 			}
@@ -528,8 +529,8 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 
 static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node) {
 	auto result_obj = yyjson_mut_obj(doc);
-	auto val = node.GetProfilingInfo().GetMetricValue<uint8_t>(MetricsType::OPERATOR_TYPE);
-	auto node_name = PhysicalOperatorToString(PhysicalOperatorType(val));
+
+	auto node_name = node.GetProfilingInfo().GetMetricAsString(MetricsType::OPERATOR_NAME);
 	node_name = QueryProfiler::JSONSanitize(node_name);
 	yyjson_mut_obj_add_strcpy(doc, result_obj, "name", node_name.c_str());
 	node.GetProfilingInfo().WriteMetricsToJSON(doc, result_obj);
@@ -575,7 +576,8 @@ string QueryProfiler::ToJSON() const {
 	}
 
 	auto &settings = root->GetProfilingInfo();
-	auto query = JSONSanitize(root->GetProfilingInfo().GetMetricAsString(MetricsType::QUERY_NAME));
+	auto query_name = root->GetProfilingInfo().GetMetricAsString(MetricsType::QUERY_NAME);
+	auto query = JSONSanitize(query_name);
 	yyjson_mut_obj_add_strcpy(doc, result_obj, "query", query.c_str());
 
 	settings.WriteMetricsToJSON(doc, result_obj);
@@ -616,11 +618,18 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	}
 
 	unique_ptr<ProfilingNode> node = make_uniq<ProfilingNode>();
+	auto &info = node->GetProfilingInfo();
+	info = ProfilingInfo(settings);
 	node->depth = depth;
-	node->GetProfilingInfo() = ProfilingInfo(settings);
-	if (node->GetProfilingInfo().Enabled(MetricsType::EXTRA_INFO)) {
-		node->GetProfilingInfo().extra_info = root_p.ParamsToString();
+
+	if (depth != 0) {
+		info.AddToMetric<string>(MetricsType::OPERATOR_NAME, root_p.GetName());
+		info.AddToMetric<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
 	}
+	if (info.Enabled(MetricsType::EXTRA_INFO)) {
+		info.extra_info = root_p.ParamsToString();
+	}
+
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root_p), reference<ProfilingNode>(*node)));
 	auto children = root_p.GetChildren();
 	for (auto &child : children) {

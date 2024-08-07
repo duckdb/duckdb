@@ -19,9 +19,9 @@ const profiler_settings_t &ProfilingInfo::GetSettings() {
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {
-	    MetricsType::QUERY_NAME,           MetricsType::IDLE_THREAD_TIME,       MetricsType::CPU_TIME,
-	    MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY, MetricsType::OPERATOR_TYPE,
-	    MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_TIMING,
+	    MetricsType::QUERY_NAME,    MetricsType::IDLE_THREAD_TIME,       MetricsType::CPU_TIME,
+	    MetricsType::EXTRA_INFO,    MetricsType::CUMULATIVE_CARDINALITY, MetricsType::OPERATOR_NAME,
+	    MetricsType::OPERATOR_TYPE, MetricsType::OPERATOR_CARDINALITY,   MetricsType::OPERATOR_TIMING,
 	};
 }
 
@@ -41,6 +41,9 @@ void ProfilingInfo::ResetMetrics() {
 
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
+		case MetricsType::OPERATOR_NAME:
+			metrics[metric] = Value::CreateValue("");
+			break;
 		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
@@ -127,6 +130,9 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
+		case MetricsType::OPERATOR_NAME:
+			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
+			break;
 		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
@@ -134,10 +140,8 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			break;
 		}
 		case MetricsType::OPERATOR_TYPE: {
-			auto val = metrics[metric].GetValue<uint8_t>();
-			auto type = PhysicalOperatorType(val);
-			auto str = PhysicalOperatorToString(type);
-			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, str.c_str());
+			auto type = PhysicalOperatorType(metrics[metric].GetValue<uint8_t>());
+			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, EnumUtil::ToString(type).c_str());
 			break;
 		}
 		case MetricsType::CUMULATIVE_CARDINALITY:
