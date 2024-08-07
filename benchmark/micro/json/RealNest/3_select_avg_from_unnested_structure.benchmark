@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/7_select_avg_from_unnested_structure.benchmark
+# name: benchmark/micro/json/RealNest/3_select_avg_from_unnested_structure.benchmark
 # description: select average from unnested structure Jet and group by, having
-# group: [real_nest]
+# group: [RealNest]
 
 name select_avg_from_unnested_structure
 group real_nest

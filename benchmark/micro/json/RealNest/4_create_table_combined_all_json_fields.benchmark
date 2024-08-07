@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/3_filter_unnested_struct.benchmark
+# name: benchmark/micro/json/RealNest/4_create_table_combined_all_json_fields_copy.benchmark
 # description: Filter unnested struct Tau
-# group: [real_nest]
+# group: [RealNest]
 
 name filter_unnested_struct
 group real_nest

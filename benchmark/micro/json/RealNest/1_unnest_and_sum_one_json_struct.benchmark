@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/2_unnest_and_sum_one_json_struct.benchmark
+# name: benchmark/micro/json/RealNest/1_unnest_and_sum_one_json_struct.benchmark
 # description: Create a view reading a JSON file, unnesting one of structures and summing its fields values
-# group: [real_nest]
+# group: [RealNest]
 
 name unnest_and_sum_one_json_struct
 group real_nest
