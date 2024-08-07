@@ -514,7 +514,8 @@ case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedS
 	if (py::is_list_like(params)) {
 		if (prep.named_param_map.size() != py::len(params)) {
 			if (py::len(params) == 0) {
-				throw InvalidInputException("Expected %d parameters, but none were supplied", prep.named_param_map.size());
+				throw InvalidInputException("Expected %d parameters, but none were supplied",
+				                            prep.named_param_map.size());
 			}
 			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.named_param_map.size(),
 			                            py::len(params));
