@@ -220,6 +220,17 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_grou
 	return std::move(checkpoint_state);
 }
 
+bool ArrayColumnData::IsPersistent() {
+	return validity.IsPersistent() && child_column->IsPersistent();
+}
+
+PersistentColumnData ArrayColumnData::Serialize() {
+	PersistentColumnData persistent_data(PhysicalType::ARRAY);
+	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(child_column->Serialize());
+	return persistent_data;
+}
+
 void ArrayColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
 	deserializer.ReadObject(101, "validity",
 	                        [&](Deserializer &source) { validity.DeserializeColumn(source, target_stats); });

@@ -35,6 +35,8 @@ class TableStatistics;
 struct ColumnSegmentInfo;
 class Vector;
 struct ColumnCheckpointState;
+struct PersistentColumnData;
+struct PersistentRowGroupData;
 struct RowGroupPointer;
 struct TransactionData;
 class CollectionScanState;
@@ -44,6 +46,7 @@ struct RowGroupAppendState;
 class MetadataManager;
 class RowVersionManager;
 class ScanFilterInfo;
+class StorageCommitState;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -139,6 +142,8 @@ public:
 	idx_t GetCommittedRowCount();
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats);
+	bool IsPersistent() const;
+	PersistentRowGroupData SerializeRowGroupInfo() const;
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);

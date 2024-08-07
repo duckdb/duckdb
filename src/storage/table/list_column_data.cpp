@@ -366,6 +366,17 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	return base_state;
 }
 
+bool ListColumnData::IsPersistent() {
+	return ColumnData::IsPersistent() && validity.IsPersistent() && child_column->IsPersistent();
+}
+
+PersistentColumnData ListColumnData::Serialize() {
+	auto persistent_data = ColumnData::Serialize();
+	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(child_column->Serialize());
+	return persistent_data;
+}
+
 void ListColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
 	ColumnData::DeserializeColumn(deserializer, target_stats);
 

@@ -278,6 +278,27 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 	return std::move(checkpoint_state);
 }
 
+bool StructColumnData::IsPersistent() {
+	if (!validity.IsPersistent()) {
+		return false;
+	}
+	for(auto &child_col : sub_columns) {
+		if (!child_col->IsPersistent()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+PersistentColumnData StructColumnData::Serialize() {
+	PersistentColumnData persistent_data(PhysicalType::ARRAY);
+	persistent_data.child_columns.push_back(validity.Serialize());
+	for(auto &sub_column : sub_columns) {
+		persistent_data.child_columns.push_back(sub_column->Serialize());
+	}
+	return persistent_data;
+}
+
 void StructColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
 	deserializer.ReadObject(
 	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });

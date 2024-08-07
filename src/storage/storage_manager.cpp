@@ -13,7 +13,7 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
@@ -227,6 +227,15 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 
 enum class WALCommitState { IN_PROGRESS, FLUSHED, TRUNCATED };
 
+struct OptimisticallyWrittenRowGroupData {
+	OptimisticallyWrittenRowGroupData(idx_t start, idx_t count, vector<PersistentRowGroupData> row_group_data_p) :
+		start(start), count(count), row_group_data(std::move(row_group_data_p)) {}
+
+	idx_t start;
+	idx_t count;
+	vector<PersistentRowGroupData> row_group_data;
+};
+
 class SingleFileStorageCommitState : public StorageCommitState {
 public:
 	SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &log);
@@ -237,11 +246,14 @@ public:
 	// Make the commit persistent
 	void FlushCommit() override;
 
+	void AddOptimisticallyWrittenRowGroup(DataTable &table, idx_t start_index, idx_t count, vector<PersistentRowGroupData> row_group_data) override;
+
 private:
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
 	WriteAheadLog &wal;
 	WALCommitState state;
+	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
 };
 
 SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
@@ -279,6 +291,16 @@ void SingleFileStorageCommitState::FlushCommit() {
 	}
 	wal.Flush();
 	state = WALCommitState::FLUSHED;
+}
+
+
+void SingleFileStorageCommitState::AddOptimisticallyWrittenRowGroup(DataTable &table, idx_t start_index, idx_t count, vector<PersistentRowGroupData> row_group_data) {
+	auto &entries = optimistically_written_data[table];
+	auto entry = entries.find(start_index);
+	if (entry != entries.end()) {
+		throw InternalException("FIXME: AddOptimisticallyWrittenRowGroup is writing a duplicate row group");
+	}
+	entries.insert(make_pair(start_index, OptimisticallyWrittenRowGroupData(start_index, count, std::move(row_group_data))));
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {

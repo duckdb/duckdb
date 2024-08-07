@@ -939,12 +939,14 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	}
 }
 
-void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &indexes) {
-	row_groups->MergeStorage(data);
+void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &, optional_ptr<StorageCommitState> commit_state) {
+	Printer::PrintF("Merge storage (start: %llu, count: %llu)", row_groups->GetTotalRows(), data.GetTotalRows());
+	row_groups->MergeStorage(data, this, commit_state);
 	row_groups->Verify();
 }
 
-void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
+void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count, optional_ptr<StorageCommitState> commit_state) {
+	Printer::PrintF("Write To Log (start: %llu, count: %llu)", row_start, count);
 	log.WriteSetTable(info->schema, info->table);
 	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }

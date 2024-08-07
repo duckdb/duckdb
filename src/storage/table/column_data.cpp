@@ -610,6 +610,61 @@ void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &t
 	}
 }
 
+bool ColumnData::IsPersistent() {
+	for(auto &segment : data.Segments()) {
+		if (segment.segment_type != ColumnSegmentType::PERSISTENT) {
+			return false;
+		}
+	}
+	return true;
+}
+
+vector<DataPointer> ColumnData::GetDataPointers() {
+	vector<DataPointer> pointers;
+	for(auto &segment : data.Segments()) {
+		pointers.push_back(segment.GetDataPointer());
+	}
+	return pointers;
+}
+
+PersistentColumnData::PersistentColumnData(PhysicalType physical_type_p) : physical_type(physical_type_p) {
+	D_ASSERT(physical_type == PhysicalType::ARRAY || physical_type == PhysicalType::STRUCT);
+}
+
+PersistentColumnData::PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers_p) :
+	physical_type(physical_type), pointers(std::move(pointers_p)) {
+	D_ASSERT(!pointers.empty());
+}
+
+PersistentColumnData::~PersistentColumnData() {}
+
+void PersistentColumnData::Serialize(Serializer &serializer) const {
+	if (!pointers.empty()) {
+		serializer.WriteProperty(100, "data_pointers", pointers);
+	}
+	if (child_columns.empty()) {
+		// validity column
+		D_ASSERT(physical_type == PhysicalType::BIT);
+		return;
+	}
+	serializer.WriteProperty(101, "validity", child_columns[0]);
+	if (physical_type == PhysicalType::ARRAY || physical_type == PhysicalType::LIST) {
+		serializer.WriteProperty(102, "child_column", child_columns[1]);
+	} else if (physical_type == PhysicalType::STRUCT) {
+		serializer.WriteList(102, "sub_columns", child_columns.size() - 1, [&](Serializer::List &list, idx_t i) {
+			list.WriteElement(child_columns[i + 1]);
+		});
+	}
+}
+
+PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserializer) {
+	throw InternalException("FIXME: deserialize ColumnDataSerialization");
+}
+
+PersistentColumnData ColumnData::Serialize() {
+	return PersistentColumnData(type.InternalType(), GetDataPointers());
+}
+
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                idx_t start_row, ReadStream &source, const LogicalType &type) {
 	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, nullptr);

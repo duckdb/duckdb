@@ -27,6 +27,7 @@ struct TableAppendState;
 class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
+class StorageCommitState;
 struct ColumnSegmentInfo;
 class MetadataManager;
 struct VacuumState;
@@ -80,7 +81,7 @@ public:
 	void RevertAppendInternal(idx_t start_row);
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 
-	void MergeStorage(RowGroupCollection &data);
+	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table, optional_ptr<StorageCommitState> commit_state);
 
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 

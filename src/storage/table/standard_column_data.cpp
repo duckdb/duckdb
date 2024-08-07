@@ -203,6 +203,16 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
+bool StandardColumnData::IsPersistent() {
+	return ColumnData::IsPersistent() && validity.IsPersistent();
+}
+
+PersistentColumnData StandardColumnData::Serialize() {
+	auto persistent_data = ColumnData::Serialize();
+	persistent_data.child_columns.push_back(validity.Serialize());
+	return persistent_data;
+}
+
 void StandardColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
 	ColumnData::DeserializeColumn(deserializer, target_stats);
 	deserializer.ReadObject(

@@ -258,7 +258,7 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		if (!info->table->IsTemporary()) {
-			info->table->WriteToLog(log, info->start_row, info->count);
+			info->table->WriteToLog(log, info->start_row, info->count, nullptr);
 		}
 		break;
 	}

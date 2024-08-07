@@ -960,6 +960,29 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	return row_group_pointer;
 }
 
+bool RowGroup::IsPersistent() const {
+	for(auto &column : columns) {
+		if (!column->IsPersistent()) {
+			// column is not persistent
+			return false;
+		}
+	}
+	return true;
+}
+
+PersistentRowGroupData::PersistentRowGroupData() {}
+
+PersistentRowGroupData::~PersistentRowGroupData() {}
+
+PersistentRowGroupData RowGroup::SerializeRowGroupInfo() const {
+	// all columns are persistent - serialize
+	PersistentRowGroupData result;
+	for(auto &col : columns) {
+		result.column_data.push_back(col->Serialize());
+	}
+	return result;
+}
+
 vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded so they cannot be changed

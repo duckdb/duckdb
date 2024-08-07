@@ -31,6 +31,7 @@ struct PrefetchState;
 struct RowGroupWriteInfo;
 struct TableScanOptions;
 struct TransactionData;
+struct PersistentColumnData;
 
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
@@ -147,6 +148,11 @@ public:
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
+
+	virtual bool IsPersistent();
+	vector<DataPointer> GetDataPointers();
+
+	virtual PersistentColumnData Serialize();
 	virtual void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats);
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                          idx_t start_row, ReadStream &source, const LogicalType &type);
@@ -201,6 +207,38 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
+};
+
+struct PersistentColumnData {
+	explicit PersistentColumnData(PhysicalType physical_type);
+	PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers);
+	// disable copy constructors
+	PersistentColumnData(const PersistentColumnData &other) = delete;
+	PersistentColumnData &operator=(const PersistentColumnData &) = delete;
+	//! enable move constructors
+	PersistentColumnData(PersistentColumnData &&other) noexcept = default;
+	PersistentColumnData &operator=(PersistentColumnData &&) noexcept = default;
+	~PersistentColumnData();
+
+	PhysicalType physical_type;
+	vector<DataPointer> pointers;
+	vector<PersistentColumnData> child_columns;
+
+	void Serialize(Serializer &serializer) const;
+	static PersistentColumnData Deserialize(Deserializer &deserializer);
+};
+
+struct PersistentRowGroupData {
+	PersistentRowGroupData();
+	// disable copy constructors
+	PersistentRowGroupData(const PersistentRowGroupData &other) = delete;
+	PersistentRowGroupData &operator=(const PersistentRowGroupData &) = delete;
+	//! enable move constructors
+	PersistentRowGroupData(PersistentRowGroupData &&other) noexcept = default;
+	PersistentRowGroupData &operator=(PersistentRowGroupData &&) noexcept = default;
+	~PersistentRowGroupData();
+
+	vector<PersistentColumnData> column_data;
 };
 
 } // namespace duckdb
