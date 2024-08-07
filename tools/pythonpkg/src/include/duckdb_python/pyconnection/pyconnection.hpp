@@ -120,9 +120,24 @@ private:
 };
 
 struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
+private:
+	class Cursors {
+	public:
+		Cursors() {
+		}
+
+	public:
+		void AddCursor(shared_ptr<DuckDBPyConnection> conn);
+		void ClearCursors();
+
+	private:
+		mutex lock;
+		vector<weak_ptr<DuckDBPyConnection>> cursors;
+	};
+
 public:
 	ConnectionGuard con;
-	vector<weak_ptr<DuckDBPyConnection>> cursors;
+	Cursors cursors;
 	std::mutex py_connection_lock;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
 	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;

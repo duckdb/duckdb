@@ -1,0 +1,155 @@
+{
+    "group": "prepared_statements",
+    "description": "// A prepared statement is a parameterized query that allows you to bind parameters to it.\n// * This is useful to easily supply parameters to functions and avoid SQL injection attacks.\n// * This is useful to speed up queries that you will execute several times with different parameters.\n// Because the query will only be parsed, bound, optimized and planned once during the prepare stage,\n// rather than once per execution.\n// For example:\n//   SELECT * FROM tbl WHERE id=?\n// Or a query with multiple parameters:\n//   SELECT * FROM tbl WHERE id=$1 OR name=$2",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_prepare",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "query"
+                },
+                {
+                    "type": "duckdb_prepared_statement *",
+                    "name": "out_prepared_statement"
+                }
+            ],
+            "comment": {
+                "description": "Create a prepared statement object from a query.\n\nNote that after calling `duckdb_prepare`, the prepared statement should always be destroyed using\n`duckdb_destroy_prepare`, even if the prepare fails.\n\nIf the prepare fails, `duckdb_prepare_error` can be called to obtain the reason why the prepare failed.\n\n",
+                "param_comments": {
+                    "connection": "The connection object",
+                    "query": "The SQL query to prepare",
+                    "out_prepared_statement": "The resulting prepared statement object"
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_destroy_prepare",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement *",
+                    "name": "prepared_statement"
+                }
+            ],
+            "comment": {
+                "description": "Closes the prepared statement and de-allocates all memory allocated for the statement.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_prepare_error",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                }
+            ],
+            "comment": {
+                "description": "Returns the error message associated with the given prepared statement.\nIf the prepared statement has no error message, this returns `nullptr` instead.\n\nThe error message should not be freed. It will be de-allocated when `duckdb_destroy_prepare` is called.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement to obtain the error from."
+                },
+                "return_value": "The error message, or `nullptr` if there is none."
+            }
+        },
+        {
+            "name": "duckdb_nparams",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of parameters that can be provided to the given prepared statement.\n\nReturns 0 if the query was not successfully prepared.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement to obtain the number of parameters for."
+                }
+            }
+        },
+        {
+            "name": "duckdb_parameter_name",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the name used to identify the parameter\nThe returned string should be freed using `duckdb_free`.\n\nReturns NULL if the index is out of range for the provided prepared statement.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement for which to get the parameter name from."
+                }
+            }
+        },
+        {
+            "name": "duckdb_param_type",
+            "return_type": "duckdb_type",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                }
+            ],
+            "comment": {
+                "description": "Returns the parameter type for the parameter at the given index.\n\nReturns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the statement was not successfully prepared.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement.",
+                    "param_idx": "The parameter index."
+                },
+                "return_value": "The parameter type"
+            }
+        },
+        {
+            "name": "duckdb_clear_bindings",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                }
+            ],
+            "comment": {
+                "description": "Clear the params bind to the prepared statement.\n"
+            }
+        },
+        {
+            "name": "duckdb_prepared_statement_type",
+            "return_type": "duckdb_statement_type",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "statement"
+                }
+            ],
+            "comment": {
+                "description": "Returns the statement type of the statement to be executed\n\n",
+                "param_comments": {
+                    "statement": "The prepared statement."
+                },
+                "return_value": "duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID"
+            }
+        }
+    ]
+}

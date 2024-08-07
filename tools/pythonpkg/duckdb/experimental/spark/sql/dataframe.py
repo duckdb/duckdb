@@ -360,7 +360,15 @@ class DataFrame:
         |  2|Alice|
         +---+-----+
         """
-        cond = condition.expr if isinstance(condition, Column) else condition
+        if isinstance(condition, Column):
+            cond = condition.expr
+        elif isinstance(condition, str):
+            cond = condition
+        else:
+            raise PySparkTypeError(
+                error_class="NOT_COLUMN_OR_STR",
+                message_parameters={"arg_name": "condition", "arg_type": type(condition).__name__},
+            )
         rel = self.relation.filter(cond)
         return DataFrame(rel, self.session)
 

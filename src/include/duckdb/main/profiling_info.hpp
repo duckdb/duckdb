@@ -41,21 +41,6 @@ struct MetricsTypeHashFunction {
 typedef unordered_set<MetricsType, MetricsTypeHashFunction> profiler_settings_t;
 typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metrics_t;
 
-struct SettingSetFunctions {
-	static bool Enabled(const profiler_settings_t &settings, const MetricsType setting) {
-		if (settings.find(setting) != settings.end()) {
-			return true;
-		}
-		if (setting == MetricsType::OPERATOR_TIMING && Enabled(settings, MetricsType::CPU_TIME)) {
-			return true;
-		}
-		if (setting == MetricsType::OPERATOR_CARDINALITY && Enabled(settings, MetricsType::CUMULATIVE_CARDINALITY)) {
-			return true;
-		}
-		return false;
-	}
-};
-
 class ProfilingInfo {
 public:
 	// set of metrics with their values; only enabled metrics are present in the set
@@ -96,7 +81,8 @@ public:
 
 	template <class METRIC_TYPE>
 	void AddToMetric(const MetricsType setting, const Value &value) {
-		if (metrics.find(setting) == metrics.end() || metrics[setting].IsNull()) {
+		D_ASSERT(!metrics[setting].IsNull());
+		if (metrics.find(setting) == metrics.end()) {
 			metrics[setting] = value;
 			return;
 		}
