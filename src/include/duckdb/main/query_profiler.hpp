@@ -34,19 +34,25 @@ class PhysicalOperator;
 class SQLStatement;
 
 struct OperatorInformation {
-	explicit OperatorInformation(double time_p = 0, idx_t elements_p = 0) : time(time_p), elements(elements_p) {
+	explicit OperatorInformation(double time_p = 0, idx_t elements_returned_p = 0, idx_t elements_scanned_p = 0)
+	    : time(time_p), elements_returned(elements_returned_p), elements_scanned(elements_scanned_p) {
 	}
 
 	double time;
-	idx_t elements;
+	idx_t elements_returned;
+	idx_t elements_scanned;
 	string name;
 
 	void AddTime(double n_time) {
 		this->time += n_time;
 	}
 
-	void AddElements(idx_t n_elements) {
-		this->elements += n_elements;
+	void AddReturnedElements(idx_t n_elements) {
+		this->elements_returned += n_elements;
+	}
+
+	void AddScannedElements(idx_t n_elements) {
+		this->elements_scanned += n_elements;
 	}
 };
 
@@ -68,13 +74,20 @@ public:
 
 	bool SettingIsEnabled(MetricsType metric) const;
 
+	bool IsScanOperator(const PhysicalOperator &phys_op) const;
+
 	~OperatorProfiler() {
 	}
+
+	ClientContext &context;
 
 private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
 	profiler_settings_t settings;
+
+	map<MetricsType, bool> operator_settings;
+
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
