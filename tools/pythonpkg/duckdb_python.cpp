@@ -852,13 +852,14 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	       const py::object &quoting = py::none(), const py::object &encoding = py::none(),
 	       const py::object &compression = py::none(), const py::object &overwrite = py::none(),
 	       const py::object &per_thread_output = py::none(), const py::object &use_tmp_file = py::none(),
-	       const py::object &partition_by = py::none(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	       const py::object &partition_by = py::none(), const py::object &write_partition_columns = py::none(),
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    conn->FromDF(df)->ToCSV(filename, sep, na_rep, header, quotechar, escapechar, date_format, timestamp_format,
 		                            quoting, encoding, compression, overwrite, per_thread_output, use_tmp_file,
-		                            partition_by);
+		                            partition_by, write_partition_columns);
 	    },
 	    "Write the relation object to a CSV file in 'file_name'", py::arg("df"), py::arg("filename"), py::kw_only(),
 	    py::arg("sep") = py::none(), py::arg("na_rep") = py::none(), py::arg("header") = py::none(),
@@ -866,7 +867,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("timestamp_format") = py::none(), py::arg("quoting") = py::none(), py::arg("encoding") = py::none(),
 	    py::arg("compression") = py::none(), py::arg("overwrite") = py::none(),
 	    py::arg("per_thread_output") = py::none(), py::arg("use_tmp_file") = py::none(),
-	    py::arg("partition_by") = py::none(), py::arg("connection") = py::none());
+	    py::arg("partition_by") = py::none(), py::arg("write_partition_columns") = py::none(),
+	    py::arg("connection") = py::none());
 	m.def(
 	    "aggregate",
 	    [](const PandasDataFrame &df, const py::object &expr, const string &groups = "",
