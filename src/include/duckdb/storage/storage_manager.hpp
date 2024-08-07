@@ -23,7 +23,7 @@ class CheckpointWriter;
 class DatabaseInstance;
 class TransactionManager;
 class TableCatalogEntry;
-class MemoryStream;
+struct PersistentCollectionData;
 
 class StorageCommitState {
 public:
@@ -37,7 +37,8 @@ public:
 	// Make the commit persistent
 	virtual void FlushCommit() = 0;
 
-	virtual void AddOptimisticallyWrittenRowGroup(DataTable &table, idx_t start_index, idx_t count, vector<PersistentRowGroupData> row_group_data) = 0;
+	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count, unique_ptr<PersistentCollectionData> row_group_data) = 0;
+	virtual optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t count) = 0;
 };
 
 struct CheckpointOptions {

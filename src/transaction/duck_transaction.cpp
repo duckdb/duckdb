@@ -197,7 +197,7 @@ ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCo
 		auto log = storage_manager.GetWAL();
 		commit_state = storage_manager.GenStorageCommitState(*log);
 		storage->Commit(commit_state.get());
-		undo_buffer.WriteToWAL(*log);
+		undo_buffer.WriteToWAL(*log, commit_state.get());
 	} catch (std::exception &ex) {
 		if (commit_state) {
 			commit_state->RevertCommit();

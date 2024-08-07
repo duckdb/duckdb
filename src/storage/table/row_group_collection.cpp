@@ -471,14 +471,18 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 
 	// check if the row groups we are merging are optimistically written
 	// if all row groups are optimistically written we keep around the block pointers
-	vector<PersistentRowGroupData> row_group_data;
+	unique_ptr<PersistentCollectionData> row_group_data;
 	bool row_groups_optimistically_written = true;
 	if (commit_state) {
 		for (auto &entry : segments) {
 			auto &row_group = *entry.node;
 			if (!row_group.IsPersistent()) {
 				row_groups_optimistically_written = false;
+				break;
 			}
+		}
+		if (row_groups_optimistically_written) {
+			row_group_data = make_uniq<PersistentCollectionData>();
 		}
 	}
 	for (auto &entry : segments) {
@@ -487,14 +491,16 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 
 		if (commit_state && row_groups_optimistically_written) {
 			// serialize the block pointers of this row group
-			// row_group_data.push_back(row_group->SerializeRowGroupInfo());
+			auto persistent_data = row_group->SerializeRowGroupInfo();
+			persistent_data.types = types;
+			row_group_data->row_group_data.push_back(std::move(persistent_data));
 		}
 		index += row_group->count;
 		row_groups->AppendSegment(std::move(row_group));
 	}
 	if (commit_state && row_groups_optimistically_written) {
 		// if we have serialized the row groups - push the serialized block pointers into the commit state
-		commit_state->AddOptimisticallyWrittenRowGroup(*table, start_index, index - start_index, std::move(row_group_data));
+		commit_state->AddRowGroupData(*table, start_index, index - start_index, std::move(row_group_data));
 	}
 	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();

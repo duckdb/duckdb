@@ -143,6 +143,7 @@ protected:
 
 	void ReplayUseTable();
 	void ReplayInsert();
+	void ReplayRowGroupData();
 	void ReplayDelete();
 	void ReplayUpdate();
 	void ReplayCheckpoint();
@@ -309,6 +310,9 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 		break;
 	case WALType::INSERT_TUPLE:
 		ReplayInsert();
+		break;
+	case WALType::ROW_GROUP_DATA:
+		ReplayRowGroupData();
 		break;
 	case WALType::DELETE_TUPLE:
 		ReplayDelete();
@@ -652,6 +656,21 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 	// we don't do any constraint verification here
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk, bound_constraints);
+}
+
+void WriteAheadLogDeserializer::ReplayRowGroupData() {
+	PersistentCollectionData data;
+	deserializer.ReadProperty(101, "row_group_data", data);
+	if (DeserializeOnly()) {
+		// FIXME: label blocks in data as not-free
+		return;
+	}
+	if (!state.current_table) {
+		throw InternalException("Corrupt WAL: insert without table");
+	}
+	auto &storage = state.current_table->GetStorage();
+	storage.LocalMerge(data, nullptr);
+	throw InternalException("FIXME: merge row group collection into table");
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {

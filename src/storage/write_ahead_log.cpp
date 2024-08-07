@@ -359,6 +359,14 @@ void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 	serializer.End();
 }
 
+void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
+	D_ASSERT(!data.row_group_data.empty());
+
+	WriteAheadLogSerializer serializer(*this, WALType::ROW_GROUP_DATA);
+	serializer.WriteProperty(101, "row_group_data", data);
+	serializer.End();
+}
+
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 	D_ASSERT(chunk.size() > 0);
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);

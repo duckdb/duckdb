@@ -970,10 +970,6 @@ bool RowGroup::IsPersistent() const {
 	return true;
 }
 
-PersistentRowGroupData::PersistentRowGroupData() {}
-
-PersistentRowGroupData::~PersistentRowGroupData() {}
-
 PersistentRowGroupData RowGroup::SerializeRowGroupInfo() const {
 	// all columns are persistent - serialize
 	PersistentRowGroupData result;

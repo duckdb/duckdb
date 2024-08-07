@@ -228,12 +228,12 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 enum class WALCommitState { IN_PROGRESS, FLUSHED, TRUNCATED };
 
 struct OptimisticallyWrittenRowGroupData {
-	OptimisticallyWrittenRowGroupData(idx_t start, idx_t count, vector<PersistentRowGroupData> row_group_data_p) :
+	OptimisticallyWrittenRowGroupData(idx_t start, idx_t count, unique_ptr<PersistentCollectionData> row_group_data_p) :
 		start(start), count(count), row_group_data(std::move(row_group_data_p)) {}
 
 	idx_t start;
 	idx_t count;
-	vector<PersistentRowGroupData> row_group_data;
+	unique_ptr<PersistentCollectionData> row_group_data;
 };
 
 class SingleFileStorageCommitState : public StorageCommitState {
@@ -246,7 +246,8 @@ public:
 	// Make the commit persistent
 	void FlushCommit() override;
 
-	void AddOptimisticallyWrittenRowGroup(DataTable &table, idx_t start_index, idx_t count, vector<PersistentRowGroupData> row_group_data) override;
+	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count, unique_ptr<PersistentCollectionData> row_group_data) override;
+	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t count) override;
 
 private:
 	idx_t initial_wal_size = 0;
@@ -294,13 +295,31 @@ void SingleFileStorageCommitState::FlushCommit() {
 }
 
 
-void SingleFileStorageCommitState::AddOptimisticallyWrittenRowGroup(DataTable &table, idx_t start_index, idx_t count, vector<PersistentRowGroupData> row_group_data) {
+void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count, unique_ptr<PersistentCollectionData> row_group_data) {
 	auto &entries = optimistically_written_data[table];
 	auto entry = entries.find(start_index);
 	if (entry != entries.end()) {
 		throw InternalException("FIXME: AddOptimisticallyWrittenRowGroup is writing a duplicate row group");
 	}
 	entries.insert(make_pair(start_index, OptimisticallyWrittenRowGroupData(start_index, count, std::move(row_group_data))));
+}
+
+optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroupData(DataTable &table, idx_t start_index, idx_t count) {
+	auto entry = optimistically_written_data.find(table);
+	if (entry == optimistically_written_data.end()) {
+		// no data for this table
+		return nullptr;
+	}
+	auto &row_groups = entry->second;
+	auto start_entry = row_groups.find(start_index);
+	if (start_entry == row_groups.end()) {
+		// this row group was not optimistically written
+		return nullptr;
+	}
+	if (start_entry->second.count != count) {
+		throw InternalException("Count mismatch in GetOptimisticallyWrittenRowGroup for start position %llu (%llu vs %llu)", start_index, count, start_entry->second.count);
+	}
+	return start_entry->second.row_group_data.get();
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {

@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/column_segment_tree.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/scan_vector_type.hpp"
+#include "duckdb/common/serializer/serialization_traits.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -226,19 +227,41 @@ struct PersistentColumnData {
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentColumnData Deserialize(Deserializer &deserializer);
+	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name, const LogicalType &type);
 };
 
 struct PersistentRowGroupData {
-	PersistentRowGroupData();
+	explicit PersistentRowGroupData(vector<LogicalType> types);
+	PersistentRowGroupData() = default;
 	// disable copy constructors
 	PersistentRowGroupData(const PersistentRowGroupData &other) = delete;
 	PersistentRowGroupData &operator=(const PersistentRowGroupData &) = delete;
 	//! enable move constructors
 	PersistentRowGroupData(PersistentRowGroupData &&other) noexcept = default;
 	PersistentRowGroupData &operator=(PersistentRowGroupData &&) noexcept = default;
-	~PersistentRowGroupData();
+	~PersistentRowGroupData() = default;
 
+	vector<LogicalType> types;
 	vector<PersistentColumnData> column_data;
+
+	void Serialize(Serializer &serializer) const;
+	static PersistentRowGroupData Deserialize(Deserializer &deserializer);
+};
+
+struct PersistentCollectionData {
+	PersistentCollectionData() = default;
+	// disable copy constructors
+	PersistentCollectionData(const PersistentCollectionData &other) = delete;
+	PersistentCollectionData &operator=(const PersistentCollectionData &) = delete;
+	//! enable move constructors
+	PersistentCollectionData(PersistentCollectionData &&other) noexcept = default;
+	PersistentCollectionData &operator=(PersistentCollectionData &&) noexcept = default;
+	~PersistentCollectionData() = default;
+
+	vector<PersistentRowGroupData> row_group_data;
+
+	void Serialize(Serializer &serializer) const;
+	static PersistentCollectionData Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

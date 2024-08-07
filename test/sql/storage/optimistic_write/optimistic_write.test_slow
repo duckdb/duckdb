@@ -5,6 +5,9 @@
 load __TEST_DIR__/optimistic_write.db
 
 statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
 CREATE TABLE test (a INTEGER);
 
 statement ok
@@ -16,6 +19,11 @@ SELECT SUM(a) FROM test
 499999500000
 
 restart
+
+query I
+SELECT SUM(a) FROM test
+----
+499999500000
 
 statement ok
 INSERT INTO test SELECT * FROM range(1000000)

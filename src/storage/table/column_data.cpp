@@ -628,7 +628,6 @@ vector<DataPointer> ColumnData::GetDataPointers() {
 }
 
 PersistentColumnData::PersistentColumnData(PhysicalType physical_type_p) : physical_type(physical_type_p) {
-	D_ASSERT(physical_type == PhysicalType::ARRAY || physical_type == PhysicalType::STRUCT);
 }
 
 PersistentColumnData::PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers_p) :
@@ -639,9 +638,7 @@ PersistentColumnData::PersistentColumnData(PhysicalType physical_type, vector<Da
 PersistentColumnData::~PersistentColumnData() {}
 
 void PersistentColumnData::Serialize(Serializer &serializer) const {
-	if (!pointers.empty()) {
-		serializer.WriteProperty(100, "data_pointers", pointers);
-	}
+	serializer.WritePropertyWithDefault(100, "data_pointers", pointers);
 	if (child_columns.empty()) {
 		// validity column
 		D_ASSERT(physical_type == PhysicalType::BIT);
@@ -657,8 +654,71 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 	}
 }
 
+void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name, const LogicalType &type) {
+	deserializer.Set<const LogicalType &>(type);
+	child_columns.push_back(deserializer.ReadProperty<PersistentColumnData>(field_idx, field_name));
+	deserializer.Unset<LogicalType>();
+
+}
 PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserializer) {
-	throw InternalException("FIXME: deserialize ColumnDataSerialization");
+	auto &type = deserializer.Get<const LogicalType &>();
+	auto physical_type = type.InternalType();
+	PersistentColumnData result(physical_type);
+	deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
+	if (result.physical_type == PhysicalType::BIT) {
+		// validity: return
+		return result;
+	}
+	result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
+	switch(physical_type) {
+	case PhysicalType::ARRAY:
+		result.DeserializeField(deserializer, 102, "child_column", ArrayType::GetChildType(type));
+		break;
+	case PhysicalType::LIST:
+		result.DeserializeField(deserializer, 102, "child_column", ListType::GetChildType(type));
+		break;
+	case PhysicalType::STRUCT: {
+		auto &child_types = StructType::GetChildTypes(type);
+		deserializer.ReadList(102, "sub_columns", [&](Deserializer::List &list, idx_t i) {
+			deserializer.Set<const LogicalType &>(child_types[i].second);
+			result.child_columns.push_back(list.ReadElement<PersistentColumnData>());
+			deserializer.Unset<LogicalType>();
+		});
+		break;
+	}
+	default:
+		break;
+	}
+	return result;
+}
+
+PersistentRowGroupData::PersistentRowGroupData(vector<LogicalType> types_p) :
+	types(std::move(types_p)) {}
+
+void PersistentRowGroupData::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(100, "types", types);
+	serializer.WriteProperty(101, "columns", column_data);
+}
+
+PersistentRowGroupData PersistentRowGroupData::Deserialize(Deserializer &deserializer) {
+	PersistentRowGroupData data;
+	deserializer.ReadProperty(100, "types", data.types);
+	deserializer.ReadList(101, "columns", [&](Deserializer::List &list, idx_t i) {
+		deserializer.Set<const LogicalType&>(data.types[i]);
+		data.column_data.push_back(list.ReadElement<PersistentColumnData>());
+		deserializer.Unset<LogicalType>();
+	});
+	return data;
+}
+
+void PersistentCollectionData::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(100, "row_groups", row_group_data);
+}
+
+PersistentCollectionData PersistentCollectionData::Deserialize(Deserializer &deserializer) {
+	PersistentCollectionData data;
+	deserializer.ReadProperty(100, "row_groups", data.row_group_data);
+	return data;
 }
 
 PersistentColumnData ColumnData::Serialize() {

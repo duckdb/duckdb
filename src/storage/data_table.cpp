@@ -948,6 +948,13 @@ void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &, optiona
 void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count, optional_ptr<StorageCommitState> commit_state) {
 	Printer::PrintF("Write To Log (start: %llu, count: %llu)", row_start, count);
 	log.WriteSetTable(info->schema, info->table);
+	if (commit_state) {
+		auto entry = commit_state->GetRowGroupData(*this, row_start, count);
+		if (entry) {
+			log.WriteRowGroupData(*entry);
+			return;
+		}
+	}
 	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }
 
