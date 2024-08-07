@@ -35,12 +35,11 @@ class SQLStatement;
 
 struct OperatorInformation {
 	explicit OperatorInformation(double time_p = 0, idx_t elements_returned_p = 0, idx_t elements_scanned_p = 0)
-	    : time(time_p), elements_returned(elements_returned_p), elements_scanned(elements_scanned_p) {
+	    : time(time_p), elements_returned(elements_returned_p) {
 	}
 
 	double time;
 	idx_t elements_returned;
-	idx_t elements_scanned;
 	string name;
 
 	void AddTime(double n_time) {
@@ -49,10 +48,6 @@ struct OperatorInformation {
 
 	void AddReturnedElements(idx_t n_elements) {
 		this->elements_returned += n_elements;
-	}
-
-	void AddScannedElements(idx_t n_elements) {
-		this->elements_scanned += n_elements;
 	}
 };
 
