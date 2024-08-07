@@ -932,7 +932,7 @@ jobs:
     - name: Install and run http proxy squid
       shell: bash
       run: |
-        sudo apt install squid
+        sudo apt-get install squid
         ./scripts/run_squid.sh --port 3128 --log_dir squid_logs &
         ./scripts/run_squid.sh --port 3129 --log_dir squid_auth_logs --auth &
 
