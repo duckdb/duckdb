@@ -54,14 +54,14 @@ public:
 		Node4::Iterator(n, lambda);
 	}
 
-	template <class OUT, class NODE>
-	static OUT *GetChild(NODE &n, const uint8_t byte) {
-		return Node4::GetChild<OUT>(n, byte);
+	template <class NODE>
+	static Node *GetChild(NODE &n, const uint8_t byte) {
+		return Node4::GetChild(n, byte);
 	}
 
-	template <class OUT, class NODE>
-	static OUT *GetNextChild(NODE &n, uint8_t &byte) {
-		return Node4::GetNextChild<OUT>(n, byte);
+	template <class NODE>
+	static Node *GetNextChild(NODE &n, uint8_t &byte) {
+		return Node4::GetNextChild(n, byte);
 	}
 };
 } // namespace duckdb

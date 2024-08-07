@@ -470,8 +470,7 @@ bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &
 		D_ASSERT(section.depth > prefix_start);
 
 		// Create a nested leaf node.
-		auto num_row_ids = section.end - section.start + 1;
-		D_ASSERT(num_row_ids != 1);
+		D_ASSERT((section.end - section.start + 1) != 1);
 
 		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_start - 1);
 		reference<Node> ref_node(node);

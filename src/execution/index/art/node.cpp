@@ -197,88 +197,59 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 // Get functions
 //===--------------------------------------------------------------------===//
 
-template <class NODE, class OUT, class IN>
-static OUT *GetChildInternal(ART &art, IN &node, const uint8_t byte, NType type) {
-	auto &n = Node::Ref<NODE>(art, node, type);
-	return NODE::template GetChild<OUT>(n, byte);
-}
+template <class NODE>
+Node *GetChildInternal(ART &art, NODE &node, const uint8_t byte) {
+	D_ASSERT(node.HasMetadata());
+	auto type = node.GetType();
 
-template <class NODE, class OUT, class IN>
-static OUT *GetNextChildInternal(ART &art, IN &node, uint8_t &byte, NType type) {
-	auto &n = Node::Ref<NODE>(art, node, type);
-	return NODE::template GetNextChild<OUT>(n, byte);
-}
-
-const Node *Node::GetChild(ART &art, const uint8_t byte) const {
-	D_ASSERT(HasMetadata());
-	auto type = GetType();
-
-	switch (GetType()) {
+	switch (type) {
 	case NType::NODE_4:
-		return GetChildInternal<const Node4, const Node>(art, *this, byte, type);
+		return Node4::GetChild(Node::Ref<Node4>(art, node, type), byte);
 	case NType::NODE_16:
-		return GetChildInternal<const Node16, const Node>(art, *this, byte, type);
+		return Node16::GetChild(Node::Ref<Node16>(art, node, type), byte);
 	case NType::NODE_48:
-		return GetChildInternal<const Node48, const Node>(art, *this, byte, type);
-	case NType::NODE_256:
-		return GetChildInternal<const Node256, const Node>(art, *this, byte, type);
+		return Node48::GetChild(Node::Ref<Node48>(art, node, type), byte);
+	case NType::NODE_256: {
+		return Node256::GetChild(Node::Ref<Node256>(art, node, type), byte);
+	}
 	default:
 		throw InternalException("Invalid node type for GetChild.");
 	}
 }
 
-Node *Node::GetChildMutable(ART &art, const uint8_t byte) const {
-	D_ASSERT(HasMetadata());
-	auto type = GetType();
-
-	switch (GetType()) {
-	case NType::NODE_4:
-		return GetChildInternal<Node4, Node>(art, *this, byte, type);
-	case NType::NODE_16:
-		return GetChildInternal<Node16, Node>(art, *this, byte, type);
-	case NType::NODE_48:
-		return GetChildInternal<Node48, Node>(art, *this, byte, type);
-	case NType::NODE_256:
-		return GetChildInternal<Node256, Node>(art, *this, byte, type);
-	default:
-		throw InternalException("Invalid node type for GetChildMutable.");
-	}
+const Node *Node::GetChild(ART &art, const uint8_t byte) const {
+	return GetChildInternal(art, *this, byte);
 }
 
-const Node *Node::GetNextChild(ART &art, uint8_t &byte) const {
-	D_ASSERT(HasMetadata());
-	auto type = GetType();
+Node *Node::GetChildMutable(ART &art, const uint8_t byte) const {
+	return GetChildInternal(art, *this, byte);
+}
+
+template <class NODE>
+Node *GetNextChildInternal(ART &art, NODE &node, uint8_t &byte) {
+	D_ASSERT(node.HasMetadata());
+	auto type = node.GetType();
 
 	switch (type) {
 	case NType::NODE_4:
-		return GetNextChildInternal<const Node4, const Node>(art, *this, byte, type);
+		return Node4::GetNextChild(Node::Ref<Node4>(art, node, type), byte);
 	case NType::NODE_16:
-		return GetNextChildInternal<const Node16, const Node>(art, *this, byte, type);
+		return Node16::GetNextChild(Node::Ref<Node16>(art, node, type), byte);
 	case NType::NODE_48:
-		return GetNextChildInternal<const Node48, const Node>(art, *this, byte, type);
+		return Node48::GetNextChild(Node::Ref<Node48>(art, node, type), byte);
 	case NType::NODE_256:
-		return GetNextChildInternal<const Node256, const Node>(art, *this, byte, type);
+		return Node256::GetNextChild(Node::Ref<Node256>(art, node, type), byte);
 	default:
 		throw InternalException("Invalid node type for GetNextChild.");
 	}
 }
 
-Node *Node::GetNextChildMutable(ART &art, uint8_t &byte) const {
-	D_ASSERT(HasMetadata());
-	auto type = GetType();
+const Node *Node::GetNextChild(ART &art, uint8_t &byte) const {
+	return GetNextChildInternal(art, *this, byte);
+}
 
-	switch (GetType()) {
-	case NType::NODE_4:
-		return GetNextChildInternal<Node4, Node>(art, *this, byte, type);
-	case NType::NODE_16:
-		return GetNextChildInternal<Node16, Node>(art, *this, byte, type);
-	case NType::NODE_48:
-		return GetNextChildInternal<Node48, Node>(art, *this, byte, type);
-	case NType::NODE_256:
-		return GetNextChildInternal<Node256, Node>(art, *this, byte, type);
-	default:
-		throw InternalException("Invalid node type for GetNextChildMutable.");
-	}
+Node *Node::GetNextChildMutable(ART &art, uint8_t &byte) const {
+	return GetNextChildInternal(art, *this, byte);
 }
 
 bool Node::GetNextByte(ART &art, uint8_t &byte) const {

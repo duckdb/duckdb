@@ -59,16 +59,16 @@ public:
 		}
 	}
 
-	template <class OUT, class NODE>
-	static OUT *GetChild(NODE &n, const uint8_t byte) {
+	template <class NODE>
+	static Node *GetChild(NODE &n, const uint8_t byte) {
 		if (n.child_index[byte] != Node48::EMPTY_MARKER) {
 			return &n.children[n.child_index[byte]];
 		}
 		return nullptr;
 	}
 
-	template <class OUT, class NODE>
-	static OUT *GetNextChild(NODE &n, uint8_t &byte) {
+	template <class NODE>
+	static Node *GetNextChild(NODE &n, uint8_t &byte) {
 		for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
 			if (n.child_index[i] != Node::EMPTY_MARKER) {
 				byte = UnsafeNumericCast<uint8_t>(i);
