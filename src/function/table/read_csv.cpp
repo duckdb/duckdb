@@ -361,7 +361,7 @@ void PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData>
 		auto &schema = csv_bind.options.file_options.hive_types_schema;
 		unordered_map<idx_t, string> partition_name_map;
 
-		for (auto i : csv_bind.reader_bind.hive_partitioning_indexes) {
+		for (const auto &i : csv_bind.reader_bind.hive_partitioning_indexes) {
 			partition_name_map.insert({i.index, i.value});
 		}
 		// columns in CSV do not include partitions in Hive
