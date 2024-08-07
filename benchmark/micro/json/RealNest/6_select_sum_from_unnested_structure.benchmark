@@ -1,4 +1,4 @@
-# name: benchmark/micro/json/RealNest/6_select_sum_from_unnested_structure copy.benchmark
+# name: benchmark/micro/json/RealNest/6_select_sum_from_unnested_structure.benchmark
 # description: select sum from unnested structure Muon
 # group: [RealNest]
 
