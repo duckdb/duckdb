@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/test_insert_into_hive.test
-# description: Test insert of real-Hive-partitioned CSV data 
+# description: Test insert of real-Hive-partitioned CSV data
 # group: [csv]
 
 statement ok
