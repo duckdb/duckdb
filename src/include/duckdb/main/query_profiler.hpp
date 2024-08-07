@@ -72,10 +72,6 @@ public:
 	                      int id);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 
-	bool SettingIsEnabled(MetricsType metric) const;
-
-	bool IsScanOperator(const PhysicalOperator &phys_op) const;
-
 	~OperatorProfiler() {
 	}
 
@@ -84,8 +80,6 @@ public:
 private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
-	profiler_settings_t settings;
-
 	map<MetricsType, bool> operator_settings;
 
 	//! The timer used to time the execution time of the individual Physical Operators

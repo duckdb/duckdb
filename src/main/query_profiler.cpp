@@ -188,6 +188,10 @@ void QueryProfiler::EndQuery() {
 				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_CARDINALITY,
 				                           MetricsType::OPERATOR_CARDINALITY);
 			}
+			if (query_info.GetProfilingInfo().Enabled(MetricsType::CUMULATIVE_ROWS_SCANNED)) {
+				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_ROWS_SCANNED,
+				                           MetricsType::OPERATOR_ROWS_SCANNED);
+			}
 		}
 
 		string tree = ToString();
@@ -264,28 +268,34 @@ void QueryProfiler::EndPhase() {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
-	enabled = QueryProfiler::Get(context).IsEnabled();
-	settings = ClientConfig::GetConfig(context).profiler_settings;
-
-	vector<MetricsType> op_metrics = {MetricsType::OPERATOR_TIMING, MetricsType::OPERATOR_CARDINALITY,
-	                                  MetricsType::OPERATOR_ROWS_SCANNED};
-	for (auto &setting : op_metrics) {
-		operator_settings[setting] = SettingIsEnabled(setting);
-	}
-}
-
-bool OperatorProfiler::SettingIsEnabled(MetricsType metric) const {
+bool SettingIsEnabled(profiler_settings_t settings, MetricsType metric) {
 	if (settings.find(metric) != settings.end()) {
 		return true;
 	}
-	if (metric == MetricsType::OPERATOR_TIMING && SettingIsEnabled(MetricsType::CPU_TIME)) {
-		return true;
+
+	switch (metric) {
+	case MetricsType::OPERATOR_TIMING:
+		return SettingIsEnabled(settings, MetricsType::CPU_TIME);
+	case MetricsType::OPERATOR_CARDINALITY:
+		return SettingIsEnabled(settings, MetricsType::CUMULATIVE_CARDINALITY);
+	case MetricsType::OPERATOR_ROWS_SCANNED:
+		return SettingIsEnabled(settings, MetricsType::CUMULATIVE_ROWS_SCANNED);
+	default:
+		break;
 	}
-	if (metric == MetricsType::OPERATOR_CARDINALITY && SettingIsEnabled(MetricsType::CUMULATIVE_CARDINALITY)) {
-		return true;
-	}
+
 	return false;
+}
+
+OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
+	enabled = QueryProfiler::Get(context).IsEnabled();
+	auto settings = ClientConfig::GetConfig(context).profiler_settings;
+
+	vector<MetricsType> op_metrics = {MetricsType::OPERATOR_TIMING, MetricsType::OPERATOR_CARDINALITY,
+	                                  MetricsType::OPERATOR_ROWS_SCANNED};
+	for (auto &metric : op_metrics) {
+		operator_settings[metric] = SettingIsEnabled(settings, metric);
+	}
 }
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
@@ -300,11 +310,12 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	// start timing for current element
-	if (SettingIsEnabled(MetricsType::OPERATOR_TIMING)) {
+	if (operator_settings[MetricsType::OPERATOR_TIMING]) {
 		op.Start();
 	}
 }
 
+// checks if any of the settings are enabled
 bool OperatorSettingsCheck(const map<MetricsType, bool> &settings) {
 	for (auto &setting : settings) {
 		if (setting.second) {
@@ -348,11 +359,6 @@ OperatorInformation &OperatorProfiler::GetOperatorInfo(const PhysicalOperator &p
 		timings[phys_op] = OperatorInformation();
 		return timings[phys_op];
 	}
-}
-
-bool OperatorProfiler::IsScanOperator(const PhysicalOperator &phys_op) const {
-	return phys_op.type == PhysicalOperatorType::TABLE_SCAN || phys_op.type == PhysicalOperatorType::DUMMY_SCAN ||
-	       phys_op.type == PhysicalOperatorType::DELIM_SCAN || phys_op.type == PhysicalOperatorType::EXPRESSION_SCAN;
 }
 
 void OperatorProfiler::Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor,
