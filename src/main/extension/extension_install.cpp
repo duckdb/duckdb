@@ -243,6 +243,8 @@ static void CheckExtensionMetadataOnInstall(DBConfig &config, void *in_buffer, i
 //   3. Crash after extension move: extension is now uninstalled, new metadata file present
 static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const string &local_extension_path,
                                 void *in_buffer, idx_t file_size, ExtensionInstallInfo &info) {
+	FileBasedLock lock(fs, local_extension_path + ".lock", 1000);
+
 	// Write extension to tmp file
 	WriteExtensionFileToDisk(fs, temp_path, in_buffer, file_size);
 
@@ -263,6 +265,8 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 
 	fs.MoveFile(metadata_tmp_path, metadata_file_path);
 	fs.MoveFile(temp_path, local_extension_path);
+
+	lock.Release();
 }
 
 // Install an extension using a filesystem
