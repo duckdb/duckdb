@@ -39,6 +39,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 		copy->return_type = op.return_type;
 		return std::move(copy);
 	}
+
 	// COPY from select statement to file
 	auto copy = make_uniq<PhysicalCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
 	copy->file_path = op.file_path;
@@ -54,6 +55,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	copy->return_type = op.return_type;
 	copy->partition_output = op.partition_output;
 	copy->partition_columns = op.partition_columns;
+	copy->write_partition_columns = op.write_partition_columns;
 	copy->names = op.names;
 	copy->expected_types = op.expected_types;
 	copy->parallel = mode == CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;

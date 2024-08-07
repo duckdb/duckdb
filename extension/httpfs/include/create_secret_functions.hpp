@@ -15,8 +15,7 @@ public:
 
 protected:
 	//! Internal function to create BaseSecret from S3AuthParams
-	static unique_ptr<BaseSecret> CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input,
-	                                                           S3AuthParams params);
+	static unique_ptr<BaseSecret> CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input);
 
 	//! Function for the "settings" provider: creates secret from current duckdb settings
 	static unique_ptr<BaseSecret> CreateS3SecretFromSettings(ClientContext &context, CreateSecretInput &input);

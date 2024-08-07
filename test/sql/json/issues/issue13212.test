@@ -1,0 +1,23 @@
+# name: test/sql/json/issues/issue13212.test
+# description: Test issue 13212 - Trying to read an empty compressed JSON file deadlocks
+# group: [issues]
+
+require json
+
+statement ok
+copy (select range::int64 as id, range::varchar as name from range(0)) to '__TEST_DIR__/t1.json.gz' (format json, compression gzip)
+
+statement ok
+copy (select id, name from values (1, 'bob'), (2, 'tom') tbl(id, name)) to '__TEST_DIR__/t2.json.gz' (format json, compression gzip)
+
+query II
+SELECT * FROM read_ndjson_auto(['__TEST_DIR__/t1.json.gz', '__TEST_DIR__/t2.json.gz']);
+----
+1	bob
+2	tom
+
+query II
+SELECT * FROM read_ndjson(['__TEST_DIR__/t1.json.gz', '__TEST_DIR__/t2.json.gz'], columns={id: 'int64', name: 'varchar'});
+----
+1	bob
+2	tom

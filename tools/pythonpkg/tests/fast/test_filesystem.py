@@ -191,13 +191,52 @@ class TestPythonFilesystem:
     def test_copy_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute("copy (select 1 as a) to 'memory://root' (partition_by (a), HEADER 0)")
+        duckdb_cursor.execute("copy (select 1 as a, 2 as b) to 'memory://root' (partition_by (a), HEADER 0)")
+
+        assert memory.open('/root/a=1/data_0.csv').read() == b'2\n'
+
+    def test_copy_partition_with_columns_written(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        duckdb_cursor.register_filesystem(memory)
+
+        duckdb_cursor.execute(
+            "copy (select 1 as a) to 'memory://root' (partition_by (a), HEADER 0, WRITE_PARTITION_COLUMNS)"
+        )
 
         assert memory.open('/root/a=1/data_0.csv').read() == b'1\n'
 
     def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
-        duckdb_cursor.execute("copy (select 2 as a) to 'memory://partition' (partition_by (a), HEADER 0)")
+        duckdb_cursor.execute(
+            "copy (select 2 as a, 3 as b, 4 as c) to 'memory://partition' (partition_by (a), HEADER 0)"
+        )
+
+        path = 'memory:///partition/*/*.csv'
+
+        query = "SELECT * FROM read_csv_auto('" + path + "'"
+
+        # hive partitioning
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ');')
+        assert duckdb_cursor.fetchall() == [(3, 4, 2)]
+
+        # hive partitioning: auto detection
+        duckdb_cursor.execute(query + ');')
+        assert duckdb_cursor.fetchall() == [(3, 4, 2)]
+
+        # hive partitioning: cast to int
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=1' + ');')
+        assert duckdb_cursor.fetchall() == [(3, 4, 2)]
+
+        # hive partitioning: no cast to int
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=0' + ');')
+        assert duckdb_cursor.fetchall() == [(3, 4, '2')]
+
+    def test_read_hive_partition_with_columns_written(
+        self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem
+    ):
+        duckdb_cursor.register_filesystem(memory)
+        duckdb_cursor.execute(
+            "copy (select 2 as a) to 'memory://partition' (partition_by (a), HEADER 0, WRITE_PARTITION_COLUMNS)"
+        )
 
         path = 'memory:///partition/*/*.csv'
 
