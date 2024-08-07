@@ -1595,12 +1595,12 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 			return false;
 		}
 		global_sort->PrepareMergePhase();
-		total_tasks = global_sort->sorted_blocks.size() / 2;
-		if (!total_tasks) {
+		if (!(global_sort->sorted_blocks.size() / 2)) {
 			break;
 		}
 		global_sort->InitializeMergeRound();
 		lstate.stage = stage = PartitionSortStage::MERGE;
+		total_tasks = locals;
 		tasks_assigned = 1;
 		tasks_completed = 0;
 		return true;
@@ -1614,11 +1614,12 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 		}
 		global_sort->CompleteMergeRound(true);
 		total_tasks = global_sort->sorted_blocks.size() / 2;
-		if (!total_tasks) {
+		if (!(global_sort->sorted_blocks.size() / 2)) {
 			break;
 		}
 		global_sort->InitializeMergeRound();
 		lstate.stage = PartitionSortStage::MERGE;
+		total_tasks = locals;
 		tasks_assigned = 1;
 		tasks_completed = 0;
 		return true;
