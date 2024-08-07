@@ -99,5 +99,8 @@ public:
 		auto new_value = Value::CreateValue(value);
 		return AddToMetric<METRIC_TYPE>(setting, new_value);
 	}
+
+private:
+	void SetMandatorySettings();
 };
 } // namespace duckdb

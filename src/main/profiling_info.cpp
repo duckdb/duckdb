@@ -11,6 +11,7 @@ namespace duckdb {
 
 void ProfilingInfo::SetSettings(profiler_settings_t const &n_settings) {
 	settings = n_settings;
+	SetMandatorySettings();
 }
 
 const profiler_settings_t &ProfilingInfo::GetSettings() {
@@ -28,6 +29,7 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 void ProfilingInfo::ResetSettings() {
 	settings.clear();
 	settings = DefaultSettings();
+	SetMandatorySettings();
 }
 
 void ProfilingInfo::ResetMetrics() {
@@ -151,6 +153,16 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		}
 		default:
 			throw NotImplementedException("MetricsType %s not implemented", EnumUtil::ToString(metric));
+		}
+	}
+}
+
+void ProfilingInfo::SetMandatorySettings() {
+	profiler_settings_t mandatory_settings = {MetricsType::QUERY_NAME, MetricsType::OPERATOR_NAME,
+	                                          MetricsType::OPERATOR_TYPE};
+	for (const auto &setting : mandatory_settings) {
+		if (settings.find(setting) == settings.end()) {
+			settings.insert(setting);
 		}
 	}
 }

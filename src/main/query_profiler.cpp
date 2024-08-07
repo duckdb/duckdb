@@ -174,6 +174,7 @@ void QueryProfiler::EndQuery() {
 			auto &info = root->GetProfilingInfo();
 			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			info.metrics[MetricsType::QUERY_NAME] = query_info.query_name;
+			info.metrics[MetricsType::OPERATOR_NAME] = "QUERY_ROOT";
 
 			if (info.Enabled(MetricsType::IDLE_THREAD_TIME)) {
 				info.metrics[MetricsType::IDLE_THREAD_TIME] = query_info.idle_thread_time;
@@ -625,6 +626,8 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	if (depth != 0) {
 		info.AddToMetric<string>(MetricsType::OPERATOR_NAME, root_p.GetName());
 		info.AddToMetric<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
+	} else {
+		info.AddToMetric<string>(MetricsType::OPERATOR_NAME, "QUERY_ROOT");
 	}
 	if (info.Enabled(MetricsType::EXTRA_INFO)) {
 		info.extra_info = root_p.ParamsToString();
