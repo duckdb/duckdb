@@ -8,7 +8,7 @@ statement ok
 create table t (t timestamptz);
 
 statement ok
-SET TimeZone='ECT'
+SET TimeZone='ECT';
 
 statement ok
 insert into t values('2028-02-28 01:00:00');
@@ -20,7 +20,6 @@ select t::timestamp = timestamp '2028-02-28 01:00:00' from t;
 ----
 true
 
-
 query II
 select timestamp '2028-02-28 01:00:00' = timestamp '2028-02-28 01:00:00', t = timestamp '2028-02-28 01:00:00' from t;
 ----
@@ -31,7 +30,6 @@ query I
 select count(*) from t where t::timestamp = timestamp '2028-02-28 01:00:00';
 ----
 1
-
 
 ## Same problem if the constant is a string (no match)
 query I
@@ -52,7 +50,6 @@ query I
 select * from t where t::timestamp in (timestamp '2028-02-28 01:00:00',timestamp '2028-02-28 11:00:00');
 ----
 2028-02-28 01:00:00+01
-
 
 # Same problem with the casting in the other direction
 statement ok
@@ -76,3 +73,34 @@ query II
 select '1993-03-28 02:00:00'::timestamp, '1993-03-28 02:00:00'::timestamp::timestamptz::timestamp;
 ----
 1993-03-28 02:00:00	1993-03-28 03:00:00
+
+
+statement ok
+create table t1 (ts_s TIMESTAMP_S, ts_ms TIMESTAMP_MS, ts_ns TIMESTAMP_NS, ts TIMESTAMP);
+
+statement ok
+insert into t1 values ('2028-02-28 01:00:00.123456', '2028-02-28 01:00:00.123456', '2028-02-28 01:00:00.123456', '2028-02-28 01:00:00.123456');
+
+query IIII
+select * from t1;
+----
+2028-02-28 01:00:00	2028-02-28 01:00:00.123	2028-02-28 01:00:00.123456	2028-02-28 01:00:00.123456
+
+# ts is more precise than timestamp_s and timestamp_ms, so casting ts_s, ts_ms to ts is not valid.
+query III
+select ts = ts_s::TIMESTAMP, ts = ts_ms::TIMESTAMP, ts = ts_ns::TIMESTAMP from t1;
+----
+false	false	true
+
+# ts is more precise than timestamp_s and timestamp_ms, so conversions can happen
+query III
+select ts::TIMESTAMP_S = ts_s, ts::TIMESTAMP_MS = ts_ms, ts::TIMESTAMP_NS = ts_ns from t1;
+----
+true	true	true
+
+# ts_s only has second precision, so the value of ts_s is 2028-02-28 01:00:00 and not equal to 2028-02-28 01:00:00.123456
+query III
+select ts_s::timestamp = timestamp '2028-02-28 01:00:00.123456', ts_ms::timestamp = timestamp '2028-02-28 01:00:00.123456', ts_ns::timestamp = timestamp '2028-02-28 01:00:00.123456'  from t1;
+----
+false	false	true
+
