@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "uri.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -147,6 +148,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(IndexScanMaxCount),
     DUCKDB_LOCAL(EnableHTTPLoggingSetting),
     DUCKDB_LOCAL(HTTPLoggingOutputSetting),
+    DUCKDB_GLOBAL(HTTPProxySetting),
     FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -563,6 +565,33 @@ SerializationCompatibility SerializationCompatibility::Latest() {
 
 bool SerializationCompatibility::Compare(idx_t property_version) const {
 	return property_version <= serialization_version;
+}
+
+ProxyURI::ProxyURI(const string &host, uint32_t port, const string &username, const string &password)
+    : host(host), port(port), username(username), password(password) {
+}
+
+shared_ptr<ProxyURI> ProxyURI::FromString(const string &url) {
+	if (url.empty()) {
+		return nullptr;
+	}
+
+	auto proxy = make_shared_ptr<uri>(url);
+
+	if (proxy->get_scheme() != "http") {
+		throw InvalidInputException("Invalid proxy URL (only HTTP proxies supported): %s", url);
+	}
+
+	return make_shared_ptr<ProxyURI>(proxy->get_host(), proxy->get_port(), proxy->get_username(),
+	                                 proxy->get_password());
+}
+
+string ProxyURI::ToString() const {
+	map<uri::component, string> components = {
+	    {uri::component::Scheme, "http"}, {uri::component::Username, username},    {uri::component::Password, password},
+	    {uri::component::Host, host},     {uri::component::Port, to_string(port)}, {uri::component::Path, ""}};
+
+	return uri(components, uri::scheme_category::Hierarchical, false).to_string();
 }
 
 } // namespace duckdb

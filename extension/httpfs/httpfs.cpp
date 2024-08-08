@@ -41,6 +41,7 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
 	std::string ca_cert_file;
+	shared_ptr<ProxyURI> proxy;
 	uint64_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
 
 	Value value;
@@ -68,6 +69,9 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	if (FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", value)) {
 		ca_cert_file = value.ToString();
 	}
+	if (FileOpener::TryGetCurrentSetting(opener, "http_proxy", value)) {
+		proxy = ProxyURI::FromString(value.ToString());
+	}
 	if (FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", value)) {
 		hf_max_per_page = value.GetValue<uint64_t>();
 	}
@@ -80,6 +84,7 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	        keep_alive,
 	        enable_server_cert_verification,
 	        ca_cert_file,
+	        proxy,
 	        "",
 	        hf_max_per_page};
 }
@@ -246,6 +251,11 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	if (!http_params.bearer_token.empty()) {
 		client->set_bearer_token_auth(http_params.bearer_token.c_str());
 	}
+	if (http_params.proxy != nullptr) {
+		client->set_proxy(http_params.proxy->host.c_str(), static_cast<int>(http_params.proxy->port));
+		client->set_proxy_basic_auth(http_params.proxy->username.c_str(), http_params.proxy->password.c_str());
+	}
+
 	return client;
 }
 

@@ -54,6 +54,18 @@ class EncryptionUtil;
 struct CompressionFunctionSet;
 struct DBConfig;
 
+struct ProxyURI {
+	ProxyURI(const string &host, uint32_t port, const string &username, const string &password);
+	string host;
+	uint32_t port;
+	string username;
+	string password;
+
+public:
+	static shared_ptr<ProxyURI> FromString(const string &url);
+	string ToString() const;
+};
+
 enum class CheckpointAbort : uint8_t {
 	NO_ABORT = 0,
 	DEBUG_ABORT_BEFORE_TRUNCATE = 1,
@@ -176,6 +188,8 @@ struct DBConfigOptions {
 	bool object_cache_enable = false;
 	//! Whether or not the global http metadata cache is used
 	bool http_metadata_cache_enable = false;
+	//! A reference to the (shared) HTTP Proxy URI
+	shared_ptr<ProxyURI> http_proxy;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind

@@ -1825,4 +1825,32 @@ Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
 	return Value(ClientConfig::GetConfig(context).http_logging_output);
 }
 
+//===--------------------------------------------------------------------===//
+// HTTP Proxy
+//===--------------------------------------------------------------------===//
+void HTTPProxySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy = DBConfig().options.http_proxy;
+}
+
+void HTTPProxySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.http_proxy = ProxyURI::FromString(input.ToString());
+}
+
+Value HTTPProxySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	shared_ptr<ProxyURI> http_proxy = config.options.http_proxy;
+
+	if (http_proxy == nullptr) {
+		auto lowercase_proxy_env_var = getenv("http_proxy");
+		auto uppercase_proxy_env_var = getenv("HTTP_PROXY");
+		if (lowercase_proxy_env_var != nullptr) {
+			http_proxy = ProxyURI::FromString(lowercase_proxy_env_var);
+		} else if (uppercase_proxy_env_var != nullptr) {
+			http_proxy = ProxyURI::FromString(uppercase_proxy_env_var);
+		}
+	}
+
+	return http_proxy != nullptr ? Value(http_proxy->ToString()) : nullptr;
+}
+
 } // namespace duckdb

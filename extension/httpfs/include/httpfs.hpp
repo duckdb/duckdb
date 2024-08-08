@@ -50,6 +50,7 @@ struct HTTPParams {
 	bool keep_alive;
 	bool enable_server_cert_verification;
 	std::string ca_cert_file;
+	shared_ptr<ProxyURI> proxy;
 
 	string bearer_token;
 

@@ -12,6 +12,7 @@
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
+#include "uri.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include <chrono>
 #include <thread>
@@ -371,6 +372,12 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 		duckdb_httplib::Client cli(url_base.c_str());
 		if (http_logger) {
 			cli.set_logger(http_logger->GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
+		}
+
+		auto proxy = config.options.http_proxy;
+		if (proxy != nullptr) {
+			cli.set_proxy(proxy->host.c_str(), static_cast<int>(proxy->port));
+			cli.set_proxy_basic_auth(proxy->username.c_str(), proxy->password.c_str());
 		}
 
 		duckdb_httplib::Headers headers = {
