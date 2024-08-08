@@ -31,6 +31,7 @@ SELECT unnest(res) from (
 )
 ----
 "CPU_TIME": "true"
+"CUMULATIVE_CARDINALITY": "true"
 "EXTRA_INFO": "true"
 "OPERATOR_CARDINALITY": "true"
 "OPERATOR_TIMING": "true"
@@ -80,6 +81,12 @@ SELECT operator_timing FROM metrics_output;
 ----
 Referenced column "operator_timing" not found in FROM clause!
 
+statement error
+SELECT cumulative_cardinality FROM metrics_output;
+----
+Referenced column "cumulative_cardinality" not found in FROM clause!
+
+
 # change the cpu time to false and the rest to true and re-run the query
 statement ok
 PRAGMA custom_profiling_settings='{"CPU_TIME": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true"}'
@@ -115,9 +122,9 @@ Referenced column "cpu_time" not found in FROM clause!
 statement ok
 SELECT extra_info, operator_cardinality, operator_timing FROM metrics_output;
 
-# Remove time from the settings file but add back the cpu time
+# Remove time and operator cardinality from the settings file but add back the cpu time and cumulative cardinality
 statement ok
-PRAGMA custom_profiling_settings='{"CPU_TIME": "true", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true"}'
+PRAGMA custom_profiling_settings='{"CPU_TIME": "true", "EXTRA_INFO": "true", "CUMULATIVE_CARDINALITY": "true"}'
 
 query I rowsort
 SELECT unnest(res) from (
@@ -127,8 +134,8 @@ SELECT unnest(res) from (
 )
 ----
 "CPU_TIME": "true"
+"CUMULATIVE_CARDINALITY": "true"
 "EXTRA_INFO": "true"
-"OPERATOR_CARDINALITY": "true"
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -152,6 +159,18 @@ END
 FROM metrics_output;
 ----
 true
+
+# Even though operator cardinality is set to false, it still should have been collected so that cumulative cardinality can be calculated
+query I
+SELECT
+CASE
+	WHEN cumulative_cardinality > 0 THEN 'true'
+	ELSE 'false'
+END
+FROM metrics_output;
+----
+true
+
 
 statement error
 SELECT operator_timing FROM metrics_output;
