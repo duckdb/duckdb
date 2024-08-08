@@ -100,6 +100,7 @@ OptionValueSet GetValueForOption(const string &name, LogicalTypeId type) {
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},
 	    {"http_logging_output", {"my_cool_outputfile"}},
+	    {"http_proxy", {"http://localhost:8080"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
