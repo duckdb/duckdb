@@ -1,4 +1,4 @@
-# name: benchmark/micro/json/RealNest/10_list_operations_on_strings.benchmark
+# name: benchmark/micro/json/RealNest/10_select_text.benchmark
 # description: Creates a list of unnested texts, counts texts string's length and returns a number of unique values
 # group: [RealNest]
 
