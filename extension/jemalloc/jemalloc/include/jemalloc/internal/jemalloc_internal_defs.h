@@ -111,14 +111,10 @@
 #endif
 
 /* Defined if pthread_setname_np(3) is available. */
-#ifdef __GLIBC__
-#define JEMALLOC_HAVE_PTHREAD_SETNAME_NP
-#endif
+// #define JEMALLOC_HAVE_PTHREAD_SETNAME_NP
 
 /* Defined if pthread_getname_np(3) is available. */
-#ifdef __GLIBC__
-#define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
-#endif
+// #define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
 
 /* Defined if pthread_set_name_np(3) is available. */
 /* #undef JEMALLOC_HAVE_PTHREAD_SET_NAME_NP */
@@ -508,14 +504,10 @@
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
 
 /* GNU specific sched_getcpu support */
-#ifdef __GLIBC__
-#define JEMALLOC_HAVE_SCHED_GETCPU
-#endif
+// #define JEMALLOC_HAVE_SCHED_GETCPU
 
 /* GNU specific sched_setaffinity support */
-#ifdef __GLIBC__
-#define JEMALLOC_HAVE_SCHED_SETAFFINITY
-#endif
+// #define JEMALLOC_HAVE_SCHED_SETAFFINITY
 
 /* pthread_setaffinity_np support */
 /* #undef JEMALLOC_HAVE_PTHREAD_SETAFFINITY_NP */
