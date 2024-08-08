@@ -19,6 +19,11 @@ SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') wher
 499
 
 query I
+SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where id <> 500
+----
+999
+
+query I
 SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where id > 100 and id < 900
 ----
 799
