@@ -150,15 +150,52 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 					FlatVector::GetData<string_t>(file_name_vector)[out_idx] = file_name_string;
 				} break;
 				case ReadFileBindData::FILE_CONTENT_COLUMN: {
-					auto file_size = file_handle->GetFileSize();
-					AssertMaxFileSize(file_name, file_size);
+
 					auto &file_content_vector = output.data[col_idx];
-					auto content_string = StringVector::EmptyString(file_content_vector, file_size);
-					file_handle->Read(content_string.GetDataWriteable(), file_size);
+
+					string_t content_string;
+
+					if (file_handle->IsPipe()) {
+						// You can't know the size of the pipe beforehand, so stream the content.
+						size_t total_bytes_read = 0;
+						size_t read_bytes = 0;
+						const size_t initial_buffer_size = 4096;
+						size_t buffer_size = initial_buffer_size;
+
+						std::vector<char> read_buffer(buffer_size);
+
+						const auto max_file_size = NumericLimits<uint32_t>::Maximum();
+
+						do {
+							if (buffer_size - total_bytes_read < initial_buffer_size) {
+								// Double the size of the buffer each time it is reallocated.
+								buffer_size *= 2;
+								read_buffer.resize(buffer_size);
+							}
+							read_bytes = (size_t)file_handle->Read(read_buffer.data() + total_bytes_read,
+							                                       buffer_size - total_bytes_read);
+							total_bytes_read += read_bytes;
+							if (total_bytes_read > max_file_size) {
+								auto max_byte_size_format = StringUtil::BytesToHumanReadableString(max_file_size);
+								auto total_bytes_read_format = StringUtil::BytesToHumanReadableString(total_bytes_read);
+								auto error_msg = StringUtil::Format(
+								    "Pipe input '%s' size (%s) exceeds maximum allowed size (%s)", file_name.c_str(),
+								    total_bytes_read_format, max_byte_size_format);
+								throw InvalidInputException(error_msg);
+							}
+						} while (read_bytes > 0);
+						content_string =
+						    StringVector::AddStringOrBlob(file_content_vector, read_buffer.data(), total_bytes_read);
+					} else {
+						auto file_size = file_handle->GetFileSize();
+
+						AssertMaxFileSize(file_name, file_size);
+						content_string = StringVector::EmptyString(file_content_vector, file_size);
+						file_handle->Read(content_string.GetDataWriteable(), file_size);
+					}
 					content_string.Finalize();
 
 					OP::VERIFY(file_name, content_string);
-
 					FlatVector::GetData<string_t>(file_content_vector)[out_idx] = content_string;
 				} break;
 				case ReadFileBindData::FILE_SIZE_COLUMN: {
