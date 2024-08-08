@@ -305,6 +305,7 @@ void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseS
 		auto &child_stats = StructStats::GetChildStats(target_stats, c_idx);
 		sub_columns[c_idx]->InitializeColumn(column_data.child_columns[c_idx + 1], child_stats);
 	}
+	this->count = validity.count.load();
 }
 
 void StructColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
