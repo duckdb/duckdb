@@ -81,7 +81,7 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 
 void PreparedStatementData::Bind(case_insensitive_map_t<BoundParameterData> values) {
 	// set parameters
-	D_ASSERT(!unbound_statement || unbound_statement->n_param == properties.parameter_count);
+	D_ASSERT(!unbound_statement || unbound_statement->named_param_map.size() == properties.parameter_count);
 	CheckParameterCount(values.size());
 
 	// bind the required values
