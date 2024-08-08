@@ -471,6 +471,15 @@ void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t s
 	}
 }
 
+bool RowGroupCollection::IsPersistent() const {
+	for(auto &row_group : row_groups->Segments()) {
+		if (!row_group.IsPersistent()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
                                       optional_ptr<StorageCommitState> commit_state) {
 	D_ASSERT(data.types == types);
