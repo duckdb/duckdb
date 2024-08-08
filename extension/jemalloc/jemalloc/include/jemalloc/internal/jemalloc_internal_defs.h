@@ -103,10 +103,12 @@
 /*
  * Defined if issetugid(2) is available.
  */
-// #define JEMALLOC_HAVE_ISSETUGID
+#ifdef __APPLE__
+#define JEMALLOC_HAVE_ISSETUGID
+#endif
 
 /* Defined if pthread_atfork(3) is available. */
-#ifdef __GLIBC__
+#ifndef _MSC_VER
 #define JEMALLOC_HAVE_PTHREAD_ATFORK
 #endif
 
@@ -114,7 +116,9 @@
 // #define JEMALLOC_HAVE_PTHREAD_SETNAME_NP
 
 /* Defined if pthread_getname_np(3) is available. */
-// #define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
+#ifdef __APPLE__
+#define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
+#endif
 
 /* Defined if pthread_set_name_np(3) is available. */
 /* #undef JEMALLOC_HAVE_PTHREAD_SET_NAME_NP */
@@ -139,7 +143,9 @@
 /*
  * Defined if mach_absolute_time() is available.
  */
-// #define JEMALLOC_HAVE_MACH_ABSOLUTE_TIME
+#ifdef __APPLE__
+#define JEMALLOC_HAVE_MACH_ABSOLUTE_TIME
+#endif
 
 /*
  * Defined if clock_gettime(CLOCK_REALTIME, ...) is available.
@@ -339,7 +345,7 @@
  * If defined, explicitly attempt to more uniformly distribute large allocation
  * pointer alignments across all cache indices.
  */
-// #define JEMALLOC_CACHE_OBLIVIOUS
+#define JEMALLOC_CACHE_OBLIVIOUS
 
 /*
  * If defined, enable logging facilities.  We make this a configure option to
@@ -362,9 +368,9 @@
 /*
  * Darwin (OS X) uses zones to work around Mach-O symbol override shortcomings.
  */
-// #if defined(__APPLE__)
-// #define JEMALLOC_ZONE
-// #endif
+#if defined(__APPLE__)
+#define JEMALLOC_ZONE
+#endif
 
 /*
  * Methods for determining whether the OS overcommits.
@@ -372,10 +378,10 @@
  *                                         /proc/sys/vm.overcommit_memory file.
  * JEMALLOC_SYSCTL_VM_OVERCOMMIT: FreeBSD's vm.overcommit sysctl.
  */
-#if defined(__FreeBSD__)
-#define JEMALLOC_SYSCTL_VM_OVERCOMMIT
-#else
+#if defined(__linux__)
 #define JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY
+#elif defined(__FreeBSD__)
+#define JEMALLOC_SYSCTL_VM_OVERCOMMIT
 #endif
 
 /* Defined if madvise(2) is available. */
@@ -498,7 +504,9 @@
 #define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
-// #define JEMALLOC_HAVE_DLSYM
+#ifndef _MSC_VER
+#define JEMALLOC_HAVE_DLSYM
+#endif
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
@@ -549,9 +557,9 @@
 /* #undef JEMALLOC_UAF_DETECTION */
 
 /* Darwin VM_MAKE_TAG support */
-// #if defined(__APPLE__)
-// #define JEMALLOC_HAVE_VM_MAKE_TAG
-// #endif
+#if defined(__APPLE__)
+#define JEMALLOC_HAVE_VM_MAKE_TAG
+#endif
 
 /* If defined, realloc(ptr, 0) defaults to "free" instead of "alloc". */
 #ifdef __GLIBC__

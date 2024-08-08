@@ -64,7 +64,8 @@ set(JEMALLOC_C_FILES
   src/ticker.c
   src/tsd.c
   src/util.c
-  src/witness.c)
+  src/witness.c
+  src/zone.c)
 
 # if we add this jemalloc overrides new/delete
 # would be great but causes trouble in our Python client
