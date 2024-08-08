@@ -31,9 +31,6 @@ WHERE d1.d_week_seq = d2.d_week_seq
 GROUP BY i_item_desc,
          w_warehouse_name,
          d1.d_week_seq
-ORDER BY total_cnt DESC NULLS FIRST,
-         i_item_desc NULLS FIRST,
-         w_warehouse_name NULLS FIRST,
-         d1.d_week_seq NULLS FIRST
+ORDER BY ALL
 LIMIT 100;
 

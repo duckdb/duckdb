@@ -1,0 +1,7 @@
+# name: benchmark/large/tpcds-sf100/q50.benchmark
+# description: Run query 50 from the TPC-DS benchmark
+# group: [tpcds-sf100]
+
+template benchmark/large/tpcds-sf100/tpcds_sf100.benchmark.in
+QUERY_NUMBER=50
+QUERY_NUMBER_PADDED=50
