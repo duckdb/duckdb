@@ -133,7 +133,7 @@
  * Defined if clock_gettime(CLOCK_MONOTONIC, ...) is available.
  */
 #ifdef __GLIBC__
-#undef JEMALLOC_HAVE_CLOCK_MONOTONIC */
+#define JEMALLOC_HAVE_CLOCK_MONOTONIC
 #endif
 
 /*
@@ -242,8 +242,7 @@
 // The page size for jemalloc can always be bigger than the actual system page size
 #if INTPTR_MAX != INT64_MAX
 #define LG_PAGE 12 // 32-bit systems typically have a 4KB page size
-#elif defined(__i386__) || defined(__x86_64__) || defined(__amd64__) ||                                                \
-    defined(COMPILER_MSVC) && (defined(_M_IX86) || defined(_M_X64))
+#elif defined(__i386__) || defined(__x86_64__) || defined(__amd64__) || &&(defined(_M_IX86) || defined(_M_X64))
 #define LG_PAGE 12 // x86 and x86_64 typically have a 4KB page size
 #elif defined(__powerpc__) || defined(__ppc__)
 #define LG_PAGE 16 // PowerPC architectures often use 64KB page size
@@ -305,7 +304,7 @@
  */
 #ifdef _MSC_VER
 [[noreturn]] __forceinline void msvc_unreachable() {
-       __assume(false);
+	__assume(false);
 }
 #define JEMALLOC_INTERNAL_UNREACHABLE msvc_unreachable
 #else
@@ -405,11 +404,11 @@
 #define JEMALLOC_PURGE_MADVISE_FREE
 #define JEMALLOC_PURGE_MADVISE_DONTNEED
 #ifdef __GLIBC__
-#define JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
+#define JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS
 #endif
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */
-#if defined(__linux__) && INTPTR_MAX != INT64_MAX
+#ifdef __GLIBC__
 #define JEMALLOC_DEFINE_MADVISE_FREE
 #endif
 
