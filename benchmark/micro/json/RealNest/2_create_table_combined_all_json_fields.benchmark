@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/RealNest/2_create_table_combined_all_json_fields.benchmark
+# name: benchmark/micro/json/3_create_table_combined_all_json_fields.benchmark
 # description: Create a table combining all the fields from a JSON file, unnesting all structures
-# group: [RealNest]
+# group: [real_nest]
 
 name create_table_combined_all_json_fields
 group real_nest
@@ -9,14 +9,14 @@ require json
 
 load
 CREATE TABLE Run2012B_SingleMu AS SELECT * FROM read_json('duckdb_benchmark_data/hep-adl-ethz-Run2012B_SingleMu/data.jsonl');
-CREATE TABLE unnested_hlt AS (SELECT rowid, UNNEST(HLT) AS hlt FROM Run2012B_SingleMu);
-CREATE TABLE unnested_pv AS (SELECT rowid, UNNEST(PV) AS pv FROM Run2012B_SingleMu);
-CREATE TABLE unnested_met AS (SELECT rowid, UNNEST(MET) AS met FROM Run2012B_SingleMu);
-CREATE TABLE unnested_muon AS (SELECT rowid, UNNEST(Muon, recursive:=true) AS muon FROM Run2012B_SingleMu);
-CREATE TABLE unnested_electron AS (SELECT rowid, UNNEST(Electron, recursive:=true) AS electron FROM Run2012B_SingleMu);
-CREATE TABLE unnested_tau AS (SELECT rowid, UNNEST(Tau, recursive:=true) AS tau FROM Run2012B_SingleMu);
-CREATE TABLE unnested_photon AS (SELECT rowid, UNNEST(Photon, recursive:=true) AS photon FROM Run2012B_SingleMu);
-CREATE TABLE unnested_jet AS (SELECT rowid, UNNEST(Jet, recursive:=true) AS jet FROM Run2012B_SingleMu);
+CREATE VIEW unnested_hlt AS (SELECT rowid, UNNEST(HLT) AS hlt FROM Run2012B_SingleMu);
+CREATE VIEW unnested_pv AS (SELECT rowid, UNNEST(PV) AS pv FROM Run2012B_SingleMu);
+CREATE VIEW unnested_met AS (SELECT rowid, UNNEST(MET) AS met FROM Run2012B_SingleMu);
+CREATE VIEW unnested_muon AS (SELECT rowid, UNNEST(Muon, recursive:=true) AS muon FROM Run2012B_SingleMu);
+CREATE VIEW unnested_electron AS (SELECT rowid, UNNEST(Electron, recursive:=true) AS electron FROM Run2012B_SingleMu);
+CREATE VIEW unnested_tau AS (SELECT rowid, UNNEST(Tau, recursive:=true) AS tau FROM Run2012B_SingleMu);
+CREATE VIEW unnested_photon AS (SELECT rowid, UNNEST(Photon, recursive:=true) AS photon FROM Run2012B_SingleMu);
+CREATE VIEW unnested_jet AS (SELECT rowid, UNNEST(Jet, recursive:=true) AS jet FROM Run2012B_SingleMu);
 
 run
 CREATE OR REPLACE TABLE combined AS (SELECT unnested_hlt.*,
