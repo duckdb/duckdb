@@ -393,7 +393,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			if (op.type == PhysicalOperatorType::TABLE_SCAN) {
 				auto &scan_op = op.Cast<PhysicalTableScan>();
 				auto &bind_data = scan_op.bind_data;
-				if (bind_data) {
+				if (bind_data && scan_op.function.cardinality) {
 					auto cardinality = scan_op.function.cardinality(context, &(*bind_data));
 					if (cardinality && cardinality->has_estimated_cardinality) {
 						tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_ROWS_SCANNED,
