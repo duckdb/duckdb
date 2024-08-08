@@ -263,7 +263,7 @@ CREATE TABLE empty_table (a INTEGER, b INTEGER, c VARCHAR(10));
 statement error
 COPY empty_table FROM 'data/csv/test/empty.csv' (HEADER 0);
 ----
-CSV options could not be auto-detected. Consider setting parser options manually.
+It was not possible to automatically detect the CSV Parsing dialect
 
 
 # unterminated quotes

@@ -47,6 +47,8 @@ struct DialectCandidates {
 
 	static vector<char> GetDefaultComment();
 
+	string Print();
+
 	//! Candidates for the delimiter
 	vector<char> delim_candidates;
 	//! Candidates for the comment

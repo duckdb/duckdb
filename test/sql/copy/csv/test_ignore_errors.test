@@ -71,7 +71,7 @@ COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER, IGNORE_ERRORS, SA
 statement error
 COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER)
 ----
-CSV options could not be auto-detected. Consider setting parser options manually.
+It was not possible to automatically detect the CSV Parsing dialect
 
 # too many columns provided
 query II

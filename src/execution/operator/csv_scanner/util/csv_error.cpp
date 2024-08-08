@@ -179,7 +179,64 @@ CSVError CSVError::SniffingError(const string &file_path) {
 	// Which column
 	error << "Error when sniffing file \"" << file_path << "\"." << '\n';
 	error << "CSV options could not be auto-detected. Consider setting parser options manually." << '\n';
-	return CSVError(error.str(), CSVErrorType::SNIFFING, {});
+	return CSVError(error.str(), SNIFFING, {});
+}
+
+CSVError CSVError::DialectSniffingError(const CSVReaderOptions &options, const string &search_space) {
+	std::ostringstream error;
+	// 1. Which file
+	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
+	// 2. What's the error
+	error << "It was not possible to automatically detect the CSV Parsing dialect" << '\n';
+
+	// 2. What was the search space?
+	error << "The search space used was:" << '\n';
+	error << search_space;
+	// 3. Suggest how to fix it!
+	error << "Possible fixes:" << '\n';
+
+	// 3.1 Inform the reader of the dialect
+	// delimiter
+	if (!options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
+		error << "* Set delimiter (e.g., delim=\',\')" << '\n';
+	} else {
+		error << "* Delimiter is set to \'" << options.dialect_options.state_machine_options.delimiter.GetValue()
+		      << "\'. Consider unsetting it." << '\n';
+	}
+	// quote
+	if (!options.dialect_options.state_machine_options.quote.IsSetByUser()) {
+		error << "* Set quote (e.g., quote=\'\"\')" << '\n';
+	} else {
+		error << "* Quote is set to \'" << options.dialect_options.state_machine_options.quote.GetValue()
+		      << "\'. Consider unsetting it." << '\n';
+	}
+	// escape
+	if (!options.dialect_options.state_machine_options.escape.IsSetByUser()) {
+		error << "* Set escape (e.g., escape=\'\"\')" << '\n';
+	} else {
+		error << "* Escape is set to \'" << options.dialect_options.state_machine_options.escape.GetValue()
+		      << "\'. Consider unsetting it." << '\n';
+	}
+	// comment
+	if (!options.dialect_options.state_machine_options.comment.IsSetByUser()) {
+		error << "* Set comment (e.g., comment=\'#\')" << '\n';
+	} else {
+		error << "* Comment is set to \'" << options.dialect_options.state_machine_options.comment.GetValue()
+		      << "\'. Consider unsetting it." << '\n';
+	}
+	// 3.2 skip_rows
+	if (!options.dialect_options.skip_rows.IsSetByUser()) {
+		error << "* Set skip (skip=${n}) to skip ${n} lines at the top of the file" << '\n';
+	}
+	// 3.3 ignore_errors
+	if (!options.ignore_errors.GetValue()) {
+		error << "* Enable ignore errors (ignore_errors=true) to ignore potential errors" << '\n';
+	}
+	// 3.4 null_padding
+	if (!options.null_padding) {
+		error << "* Enable null padding (null_padding=true) to pad missing columns with NULL values" << '\n';
+	}
+	return CSVError(error.str(), SNIFFING, {});
 }
 
 CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info,
@@ -220,11 +277,11 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns + 1;
 	if (actual_columns >= options.dialect_options.num_cols) {
-		return CSVError(error.str(), CSVErrorType::TOO_MANY_COLUMNS, actual_columns, csv_row, error_info,
-		                row_byte_position, byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
+		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
 	} else {
-		return CSVError(error.str(), CSVErrorType::TOO_FEW_COLUMNS, actual_columns, csv_row, error_info,
-		                row_byte_position, byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
+		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
 	}
 }
 
@@ -236,8 +293,8 @@ CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, idx_t current_co
 	error << "Invalid unicode (byte sequence mismatch) detected." << '\n';
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible Solution: Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
-	return CSVError(error.str(), CSVErrorType::INVALID_UNICODE, current_column, csv_row, error_info, row_byte_position,
-	                byte_position, options, how_to_fix_it.str(), current_path);
+	return CSVError(error.str(), INVALID_UNICODE, current_column, csv_row, error_info, row_byte_position, byte_position,
+	                options, how_to_fix_it.str(), current_path);
 }
 
 bool CSVErrorHandler::PrintLineNumber(const CSVError &error) const {
