@@ -157,7 +157,7 @@
  * _malloc_thread_cleanup() exists, use it as the basis for thread cleanup in
  * malloc_tsd.
  */
-#if defined(__FreeBSD__) || defined(__APPLE__)
+#if defined(__FreeBSD__)
 #define JEMALLOC_MALLOC_THREAD_CLEANUP
 #endif
 
@@ -516,6 +516,9 @@
 #ifdef __GLIBC__
 #define JEMALLOC_HAVE_SCHED_SETAFFINITY
 #endif
+
+/* pthread_setaffinity_np support */
+/* #undef JEMALLOC_HAVE_PTHREAD_SETAFFINITY_NP */
 
 /*
  * If defined, all the features necessary for background threads are present.
