@@ -462,6 +462,8 @@ duckdb_error_type CAPIErrorType(ExceptionType type) {
 		return DUCKDB_ERROR_AUTOLOAD;
 	case ExceptionType::SEQUENCE:
 		return DUCKDB_ERROR_SEQUENCE;
+	case ExceptionType::INVALID_CONFIGURATION:
+		return DUCKDB_INVALID_CONFIGURATION;
 	}
 	return DUCKDB_ERROR_INVALID;
 }

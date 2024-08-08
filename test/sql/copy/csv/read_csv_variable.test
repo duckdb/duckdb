@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE globbed_files AS FROM glob('test/sql/copy/csv/data/glob/a?/*.csv');
+CREATE TABLE globbed_files AS FROM glob('data/csv/glob/a?/*.csv');
 
 statement ok
 SET VARIABLE csv_files=(SELECT LIST(file ORDER BY file) FROM globbed_files)
@@ -14,7 +14,7 @@ SET VARIABLE csv_files=(SELECT LIST(file ORDER BY file) FROM globbed_files)
 query I
 SELECT [x.replace('\', '/') for x in getvariable('csv_files')]
 ----
-[test/sql/copy/csv/data/glob/a1/a1.csv, test/sql/copy/csv/data/glob/a2/a2.csv, test/sql/copy/csv/data/glob/a3/b1.csv]
+[data/csv/glob/a1/a1.csv, data/csv/glob/a2/a2.csv, data/csv/glob/a3/b1.csv]
 
 # simple globbing
 query I

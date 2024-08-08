@@ -31,35 +31,43 @@ SELECT 1.0::DECIMAL(38,37)::DECIMAL(2,1), 1.0::DECIMAL(38,37)::DECIMAL(9,1), 1.0
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(4,3);
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(9,8);
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(18,17);
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(38,37);
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 # overflow on casting DOWN on scale
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(2,1);
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 statement error
 SELECT 10.00::DECIMAL(9,7)::DECIMAL(7,6);
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 statement error
 SELECT 10.00::DECIMAL(18,16)::DECIMAL(16,15);
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 statement error
 SELECT 10.00::DECIMAL(38,36)::DECIMAL(36,35);
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 # casting up in a manner that will always fit
 query II
@@ -92,15 +100,19 @@ SELECT 1.0::DECIMAL(38,1)::DECIMAL(2,1), 1.0::DECIMAL(38,1)::DECIMAL(8,1), 1.0::
 statement error
 SELECT 1.0::DECIMAL(3,1)::DECIMAL(1,1)
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 statement error
 SELECT 1.0::DECIMAL(9,1)::DECIMAL(1,1)
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 statement error
 SELECT 1.0::DECIMAL(18,1)::DECIMAL(1,1)
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*
 
 statement error
 SELECT 1.0::DECIMAL(38,1)::DECIMAL(1,1)
 ----
+<REGEX>:Conversion Error.*Casting value.*is out of range.*

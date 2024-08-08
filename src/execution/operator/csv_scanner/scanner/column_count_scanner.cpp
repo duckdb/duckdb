@@ -4,6 +4,7 @@ namespace duckdb {
 
 ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size)
     : ScannerResult(states, state_machine, result_size) {
+	column_counts.resize(result_size);
 }
 
 void ColumnCountResult::AddValue(ColumnCountResult &result, idx_t buffer_pos) {
@@ -83,7 +84,9 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 	    std::max(state_machine->dialect_options.skip_rows.GetValue(), state_machine->dialect_options.rows_until_header);
 	auto iterator = SkipCSVRows(buffer_manager, state_machine, rows_to_skip);
 	if (iterator.done) {
-		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
+		CSVIterator it {};
+		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, it,
+		                                     result_size);
 	}
 	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator,
 	                                     result_size);

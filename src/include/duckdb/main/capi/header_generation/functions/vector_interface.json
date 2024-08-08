@@ -1,0 +1,247 @@
+{
+    "group": "vector_interface",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_vector_get_column_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the column type of the specified vector.\n\nThe result must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "vector": "The vector get the data from"
+                },
+                "return_value": "The type of the vector"
+            }
+        },
+        {
+            "name": "duckdb_vector_get_data",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the data pointer of the vector.\n\nThe data pointer can be used to read or write values from the vector.\nHow to read or write values depends on the type of the vector.\n\n",
+                "param_comments": {
+                    "vector": "The vector to get the data from"
+                },
+                "return_value": "The data pointer"
+            }
+        },
+        {
+            "name": "duckdb_vector_get_validity",
+            "return_type": "uint64_t *",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the validity mask pointer of the specified vector.\n\nIf all values are valid, this function MIGHT return NULL!\n\nThe validity mask is a bitset that signifies null-ness within the data chunk.\nIt is a series of uint64_t values, where each uint64_t value contains validity for 64 tuples.\nThe bit is set to 1 if the value is valid (i.e. not NULL) or 0 if the value is invalid (i.e. NULL).\n\nValidity of a specific value can be obtained like this:\n\nidx_t entry_idx = row_idx / 64;\nidx_t idx_in_entry = row_idx % 64;\nbool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);\n\nAlternatively, the (slower) duckdb_validity_row_is_valid function can be used.\n\n",
+                "param_comments": {
+                    "vector": "The vector to get the data from"
+                },
+                "return_value": "The pointer to the validity mask, or NULL if no validity mask is present"
+            }
+        },
+        {
+            "name": "duckdb_vector_ensure_validity_writable",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Ensures the validity mask is writable by allocating it.\n\nAfter this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.\nThis allows null values to be written to the vector, regardless of whether a validity mask was present before.\n\n",
+                "param_comments": {
+                    "vector": "The vector to alter"
+                }
+            }
+        },
+        {
+            "name": "duckdb_vector_assign_string_element",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                },
+                {
+                    "type": "const char *",
+                    "name": "str"
+                }
+            ],
+            "comment": {
+                "description": "Assigns a string element in the vector at the specified location.\n\n",
+                "param_comments": {
+                    "vector": "The vector to alter",
+                    "index": "The row position in the vector to assign the string to",
+                    "str": "The null-terminated string"
+                }
+            }
+        },
+        {
+            "name": "duckdb_vector_assign_string_element_len",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                },
+                {
+                    "type": "const char *",
+                    "name": "str"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "str_len"
+                }
+            ],
+            "comment": {
+                "description": "Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.\n\n",
+                "param_comments": {
+                    "vector": "The vector to alter",
+                    "index": "The row position in the vector to assign the string to",
+                    "str": "The string",
+                    "str_len": "The length of the string (in bytes)"
+                }
+            }
+        },
+        {
+            "name": "duckdb_list_vector_get_child",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the child vector of a list vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
+                "param_comments": {
+                    "vector": "The vector"
+                },
+                "return_value": "The child vector"
+            }
+        },
+        {
+            "name": "duckdb_list_vector_get_size",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Returns the size of the child vector of the list.\n\n",
+                "param_comments": {
+                    "vector": "The vector"
+                },
+                "return_value": "The size of the child list"
+            }
+        },
+        {
+            "name": "duckdb_list_vector_set_size",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "size"
+                }
+            ],
+            "comment": {
+                "description": "Sets the total size of the underlying child-vector of a list vector.\n\n",
+                "param_comments": {
+                    "vector": "The list vector.",
+                    "size": "The size of the child list."
+                },
+                "return_value": "The duckdb state. Returns DuckDBError if the vector is nullptr."
+            }
+        },
+        {
+            "name": "duckdb_list_vector_reserve",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "required_capacity"
+                }
+            ],
+            "comment": {
+                "description": "Sets the total capacity of the underlying child-vector of a list.\n\nAfter calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current\ndata and validity pointers\n\n",
+                "param_comments": {
+                    "vector": "The list vector.",
+                    "required_capacity": "the total capacity to reserve."
+                },
+                "return_value": "The duckdb state. Returns DuckDBError if the vector is nullptr."
+            }
+        },
+        {
+            "name": "duckdb_struct_vector_get_child",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the child vector of a struct vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\n\n",
+                "param_comments": {
+                    "vector": "The vector",
+                    "index": "The child index"
+                },
+                "return_value": "The child vector"
+            }
+        },
+        {
+            "name": "duckdb_array_vector_get_child",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the child vector of a array vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\nThe resulting vector has the size of the parent vector multiplied by the array size.\n\n",
+                "param_comments": {
+                    "vector": "The vector"
+                },
+                "return_value": "The child vector"
+            }
+        }
+    ]
+}
