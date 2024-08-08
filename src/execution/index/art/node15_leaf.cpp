@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/node15_leaf.hpp"
 
+#include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node7_leaf.hpp"

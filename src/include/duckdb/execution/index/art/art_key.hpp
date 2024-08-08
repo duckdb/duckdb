@@ -63,14 +63,14 @@ public:
 	bool operator>=(const ARTKey &key) const;
 	bool operator==(const ARTKey &key) const;
 
-	inline bool ByteMatches(ARTKey &other, idx_t depth) const {
+	inline bool ByteMatches(const ARTKey &other, idx_t depth) const {
 		return data[depth] == other[depth];
 	}
 	inline bool Empty() const {
 		return len == 0;
 	}
 
-	void Concat(ArenaAllocator &allocator, ARTKey &other);
+	void Concat(ArenaAllocator &allocator, const ARTKey &other);
 	row_t GetRowID() const;
 
 private:

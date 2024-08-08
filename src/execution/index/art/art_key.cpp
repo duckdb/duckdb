@@ -132,7 +132,7 @@ bool ARTKey::operator==(const ARTKey &key) const {
 	return true;
 }
 
-void ARTKey::Concat(ArenaAllocator &allocator, ARTKey &other) {
+void ARTKey::Concat(ArenaAllocator &allocator, const ARTKey &other) {
 	auto compound_data = allocator.Allocate(len + other.len);
 	memcpy(compound_data, data, len);
 	memcpy(compound_data + len, other.data, other.len);
