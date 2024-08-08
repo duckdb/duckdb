@@ -924,7 +924,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		auto &result_vector = insert_chunk.data[result_idx];
 		auto &type = result_vector.GetType();
 		auto &parse_type = parse_vector.GetType();
-		if (!type.IsJSONType() && (type == LogicalType::VARCHAR || (type != LogicalType::VARCHAR && parse_type != LogicalType::VARCHAR))) {
+		if (!type.IsJSONType() &&
+		    (type == LogicalType::VARCHAR || (type != LogicalType::VARCHAR && parse_type != LogicalType::VARCHAR))) {
 			// reinterpret rather than reference
 			result_vector.Reinterpret(parse_vector);
 		} else {
@@ -963,10 +964,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					std::ostringstream error;
 					if (type.IsJSONType()) {
 						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
-					      << "JSON" << "\'";
-					} else{
+						      << "JSON"
+						      << "\'";
+					} else {
 						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
-					      << LogicalTypeIdToString(type.id()) << "\'";
+						      << LogicalTypeIdToString(type.id()) << "\'";
 					}
 					string error_msg = error.str();
 					auto csv_error = CSVError::CastError(
