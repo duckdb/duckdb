@@ -104,3 +104,13 @@ select ts_s::timestamp = timestamp '2028-02-28 01:00:00.123456', ts_ms::timestam
 ----
 false	false	true
 
+# ts_ms only has micro second precision, so the value of ts_ms is 2028-02-28 01:00:00.123 and not equal to 2028-02-28 01:00:00.123456
+query II
+select ts_s::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456', ts_ms = timestamp_ms '2028-02-28 01:00:00.123456'  from t1;
+----
+false	true
+
+statement error
+select ts_ns::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456' from t1;
+----
+<REGEX>:.*Conversion Error.*
