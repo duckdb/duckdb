@@ -11,23 +11,6 @@ Node7Leaf &Node7Leaf::New(ART &art, Node &node) {
 	return Node4::New<Node7Leaf>(art, node, NODE_7_LEAF);
 }
 
-Node7Leaf &Node7Leaf::ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf) {
-	auto &n7 = New(art, node7_leaf);
-	auto &n15 = Node::Ref<Node15Leaf>(art, node15_leaf, NType::NODE_15_LEAF);
-	if (node15_leaf.IsGate()) {
-		node7_leaf.SetGate();
-	}
-
-	n7.count = n15.count;
-	for (uint8_t i = 0; i < n15.count; i++) {
-		n7.key[i] = n15.key[i];
-	}
-
-	n15.count = 0;
-	Node::Free(art, node15_leaf);
-	return n7;
-}
-
 void Node7Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 	// The node is full. Grow to Node15.
 	auto &n7 = Node::Ref<Node7Leaf>(art, node, NODE_7_LEAF);
@@ -66,6 +49,23 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 		n7.count--;
 		Node::Free(art, old_n7_node);
 	}
+}
+
+Node7Leaf &Node7Leaf::ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf) {
+	auto &n7 = New(art, node7_leaf);
+	auto &n15 = Node::Ref<Node15Leaf>(art, node15_leaf, NType::NODE_15_LEAF);
+	if (node15_leaf.IsGate()) {
+		node7_leaf.SetGate();
+	}
+
+	n7.count = n15.count;
+	for (uint8_t i = 0; i < n15.count; i++) {
+		n7.key[i] = n15.key[i];
+	}
+
+	n15.count = 0;
+	Node::Free(art, node15_leaf);
+	return n7;
 }
 
 } // namespace duckdb

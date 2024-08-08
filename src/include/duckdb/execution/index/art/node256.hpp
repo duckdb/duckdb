@@ -16,26 +16,27 @@ namespace duckdb {
 
 //! Node256 holds up to 256 children. They are indexed by their key byte.
 class Node256 {
+	friend class Node48;
+
 public:
 	static constexpr NType NODE_256 = NType::NODE_256;
-	static constexpr uint16_t CAPACITY = Node::NODE_256_CAPACITY;
+	static constexpr uint16_t CAPACITY = 256;
+	static constexpr uint8_t SHRINK_THRESHOLD = 36;
 
 public:
 	Node256() = delete;
 	Node256(const Node256 &) = delete;
 	Node256 &operator=(const Node256 &) = delete;
 
+private:
 	uint16_t count;
-	Node children[Node::NODE_256_CAPACITY];
+	Node children[CAPACITY];
 
 public:
 	//! Get a new Node256 and initialize it.
 	static Node256 &New(ART &art, Node &node);
 	//! Free the node and its children.
 	static void Free(ART &art, Node &node);
-
-	//! Initializes all fields of the node while growing a Node48 to a Node256.
-	static Node256 &GrowNode48(ART &art, Node &node256, Node &node48);
 
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
@@ -72,5 +73,8 @@ public:
 		}
 		return nullptr;
 	}
+
+private:
+	static Node256 &GrowNode48(ART &art, Node &node256, Node &node48);
 };
 } // namespace duckdb

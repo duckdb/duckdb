@@ -1,6 +1,7 @@
 #include "duckdb/execution/index/art/node256_leaf.hpp"
 
 #include "duckdb/execution/index/art/node15_leaf.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
 
 namespace duckdb {
 
@@ -13,6 +14,37 @@ Node256Leaf &Node256Leaf::New(ART &art, Node &node) {
 	ValidityMask mask(&n256.mask[0]);
 	mask.SetAllInvalid(CAPACITY);
 	return n256;
+}
+
+void Node256Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
+	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
+	n256.count++;
+	ValidityMask mask(&n256.mask[0]);
+	mask.SetValid(byte);
+}
+
+void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
+	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
+	n256.count--;
+	ValidityMask mask(&n256.mask[0]);
+	mask.SetInvalid(byte);
+
+	// Shrink node to Node15
+	if (n256.count <= Node48::SHRINK_THRESHOLD) {
+		auto node256 = node;
+		Node15Leaf::ShrinkNode256Leaf(art, node, node256);
+	}
+}
+
+bool Node256Leaf::GetNextByte(uint8_t &byte) {
+	ValidityMask v_mask(&mask[0]);
+	for (uint16_t i = byte; i < CAPACITY; i++) {
+		if (v_mask.RowIsValid(i)) {
+			byte = UnsafeNumericCast<uint8_t>(i);
+			return true;
+		}
+	}
+	return false;
 }
 
 Node256Leaf &Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf) {
@@ -31,37 +63,6 @@ Node256Leaf &Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &nod
 	n15.count = 0;
 	Node::Free(art, node15_leaf);
 	return n256;
-}
-
-void Node256Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
-	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
-	n256.count++;
-	ValidityMask mask(&n256.mask[0]);
-	mask.SetValid(byte);
-}
-
-void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
-	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
-	n256.count--;
-	ValidityMask mask(&n256.mask[0]);
-	mask.SetInvalid(byte);
-
-	// Shrink node to Node15
-	if (n256.count <= Node::NODE_48_SHRINK_THRESHOLD) {
-		auto node256 = node;
-		Node15Leaf::ShrinkNode256Leaf(art, node, node256);
-	}
-}
-
-bool Node256Leaf::GetNextByte(uint8_t &byte) {
-	ValidityMask v_mask(&mask[0]);
-	for (uint16_t i = byte; i < CAPACITY; i++) {
-		if (v_mask.RowIsValid(i)) {
-			byte = UnsafeNumericCast<uint8_t>(i);
-			return true;
-		}
-	}
-	return false;
 }
 
 } // namespace duckdb

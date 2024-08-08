@@ -16,15 +16,18 @@ namespace duckdb {
 
 //! Node4 holds up to four children sorted by their key byte.
 class Node4 {
+	friend class Node16;
+
 public:
 	static constexpr NType NODE_4 = NType::NODE_4;
-	static constexpr uint8_t CAPACITY = Node::NODE_4_CAPACITY;
+	static constexpr uint8_t CAPACITY = 4;
 
 public:
 	Node4() = delete;
 	Node4(const Node4 &) = delete;
 	Node4 &operator=(const Node4 &) = delete;
 
+private:
 	uint8_t count;
 	uint8_t key[CAPACITY];
 	Node children[CAPACITY];
@@ -40,7 +43,6 @@ public:
 		n.count = 0;
 		return n;
 	}
-
 	//! Free the node and its children.
 	template <class NODE>
 	static void Free(ART &art, Node &node) {
@@ -50,55 +52,10 @@ public:
 		}
 	}
 
-	//! Initializes all fields of the node while shrinking a Node16 to a Node4.
-	static Node4 &ShrinkNode16(ART &art, Node &node4, Node &node16);
-
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
-	template <class NODE>
-	static void InsertChildInternal(ART &art, NODE &n, const uint8_t byte, const Node child) {
-		// Still space. Insert the child.
-		uint8_t child_pos = 0;
-		while (child_pos < n.count && n.key[child_pos] < byte) {
-			child_pos++;
-		}
-
-		// Move children backwards to make space.
-		for (uint8_t i = n.count; i > child_pos; i--) {
-			n.key[i] = n.key[i - 1];
-			n.children[i] = n.children[i - 1];
-		}
-
-		n.key[child_pos] = byte;
-		n.children[child_pos] = child;
-		n.count++;
-	}
-
 	//! Delete the child at byte.
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
-	template <class NODE>
-	static NODE &DeleteChildInternal(ART &art, Node &node, const uint8_t byte) {
-		auto &n = Node::Ref<NODE>(art, node, node.GetType());
-
-		uint8_t child_pos = 0;
-		for (; child_pos < n.count; child_pos++) {
-			if (n.key[child_pos] == byte) {
-				break;
-			}
-		}
-
-		// Free the child and decrease the count.
-		Node::Free(art, n.children[child_pos]);
-		n.count--;
-
-		// Possibly move children backwards.
-		for (uint8_t i = child_pos; i < n.count; i++) {
-			n.key[i] = n.key[i + 1];
-			n.children[i] = n.children[i + 1];
-		}
-		return n;
-	}
-
 	//! Replace the child at byte.
 	template <class NODE>
 	static void ReplaceChild(NODE &n, const uint8_t byte, const Node child) {
@@ -142,6 +99,51 @@ public:
 			}
 		}
 		return nullptr;
+	}
+
+private:
+	static Node4 &ShrinkNode16(ART &art, Node &node4, Node &node16);
+
+	template <class NODE>
+	static void InsertChildInternal(ART &art, NODE &n, const uint8_t byte, const Node child) {
+		// Still space. Insert the child.
+		uint8_t child_pos = 0;
+		while (child_pos < n.count && n.key[child_pos] < byte) {
+			child_pos++;
+		}
+
+		// Move children backwards to make space.
+		for (uint8_t i = n.count; i > child_pos; i--) {
+			n.key[i] = n.key[i - 1];
+			n.children[i] = n.children[i - 1];
+		}
+
+		n.key[child_pos] = byte;
+		n.children[child_pos] = child;
+		n.count++;
+	}
+
+	template <class NODE>
+	static NODE &DeleteChildInternal(ART &art, Node &node, const uint8_t byte) {
+		auto &n = Node::Ref<NODE>(art, node, node.GetType());
+
+		uint8_t child_pos = 0;
+		for (; child_pos < n.count; child_pos++) {
+			if (n.key[child_pos] == byte) {
+				break;
+			}
+		}
+
+		// Free the child and decrease the count.
+		Node::Free(art, n.children[child_pos]);
+		n.count--;
+
+		// Possibly move children backwards.
+		for (uint8_t i = child_pos; i < n.count; i++) {
+			n.key[i] = n.key[i + 1];
+			n.children[i] = n.children[i + 1];
+		}
+		return n;
 	}
 };
 } // namespace duckdb

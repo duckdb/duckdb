@@ -150,7 +150,7 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 		ref_node.get().SetMetadata(static_cast<uint8_t>(NType::LEAF));
 
 		auto &leaf = Node::Ref<Leaf>(art, ref_node, NType::LEAF);
-		leaf.count = UnsafeNumericCast<uint8_t>(MinValue((idx_t)Node::LEAF_SIZE, remaining_count));
+		leaf.count = UnsafeNumericCast<uint8_t>(MinValue((idx_t)LEAF_SIZE, remaining_count));
 
 		for (idx_t i = 0; i < leaf.count; i++) {
 			leaf.row_ids[i] = row_ids[copy_count + i];
@@ -241,7 +241,7 @@ string Leaf::DeprecatedVerifyAndToString(ART &art, const Node &node, const bool 
 
 	while (node_ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, node_ref, NType::LEAF);
-		D_ASSERT(leaf.count <= Node::LEAF_SIZE);
+		D_ASSERT(leaf.count <= LEAF_SIZE);
 
 		str += "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
 		for (idx_t i = 0; i < leaf.count; i++) {

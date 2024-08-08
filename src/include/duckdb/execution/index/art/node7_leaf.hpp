@@ -16,15 +16,19 @@ namespace duckdb {
 
 //! Node7Leaf holds up to seven sorted bytes.
 class Node7Leaf {
+	friend class Node4;
+	friend class Node15Leaf;
+
 public:
 	static constexpr NType NODE_7_LEAF = NType::NODE_7_LEAF;
-	static constexpr uint8_t CAPACITY = Node::NODE_7_LEAF_CAPACITY;
+	static constexpr uint8_t CAPACITY = 7;
 
 public:
 	Node7Leaf() = delete;
 	Node7Leaf(const Node7Leaf &) = delete;
 	Node7Leaf &operator=(const Node7Leaf &) = delete;
 
+private:
 	uint8_t count;
 	uint8_t key[CAPACITY];
 
@@ -32,11 +36,26 @@ public:
 	//! Get a new Node7Leaf and initialize it.
 	static Node7Leaf &New(ART &art, Node &node);
 
-	//! Initializes all fields of the node while shrinking a Node15Leaf to a Node7Leaf.
-	static Node7Leaf &ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf);
-
 	//! Insert a byte.
 	static void InsertByte(ART &art, Node &node, const uint8_t byte);
+	//! Delete a byte.
+	static void DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte);
+
+	//! Get the first byte greater than or equal to the byte.
+	template <class NODE>
+	static bool GetNextByte(NODE &n, uint8_t &byte) {
+		for (uint8_t i = 0; i < n.count; i++) {
+			if (n.key[i] >= byte) {
+				byte = n.key[i];
+				return true;
+			}
+		}
+		return false;
+	}
+
+private:
+	static Node7Leaf &ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf);
+
 	template <class NODE>
 	static void InsertByteInternal(ART &art, NODE &n, const uint8_t byte) {
 		// Still space. Insert the child.
@@ -54,8 +73,6 @@ public:
 		n.count++;
 	}
 
-	//! Delete a byte.
-	static void DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte);
 	template <class NODE>
 	static NODE &DeleteByteInternal(ART &art, Node &node, const uint8_t byte) {
 		auto &n = Node::Ref<NODE>(art, node, node.GetType());
@@ -73,18 +90,6 @@ public:
 			n.key[i] = n.key[i + 1];
 		}
 		return n;
-	}
-
-	//! Get the first byte that is greater than or equal to the byte parameter.
-	template <class NODE>
-	static bool GetNextByte(NODE &n, uint8_t &byte) {
-		for (uint8_t i = 0; i < n.count; i++) {
-			if (n.key[i] >= byte) {
-				byte = n.key[i];
-				return true;
-			}
-		}
-		return false;
 	}
 };
 

@@ -37,32 +37,19 @@ class Prefix;
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
 class Node : public IndexPointer {
 public:
-	static constexpr uint8_t NODE_48_SHRINK_THRESHOLD = 12;
-	static constexpr uint8_t NODE_256_SHRINK_THRESHOLD = 36;
-
-	static constexpr uint8_t NODE_4_CAPACITY = 4;
-	static constexpr uint8_t NODE_7_LEAF_CAPACITY = 7;
-	static constexpr uint8_t NODE_15_LEAF_CAPACITY = 15;
-	static constexpr uint8_t NODE_16_CAPACITY = 16;
-	static constexpr uint8_t NODE_48_CAPACITY = 48;
-	static constexpr uint16_t NODE_256_CAPACITY = 256;
-
-	static constexpr uint8_t EMPTY_MARKER = 48;
-	static constexpr uint8_t LEAF_SIZE = 4; // Deprecated.
-	static constexpr idx_t AND_ROW_ID = 0x00FFFFFFFFFFFFFF;
-
 	//! A gate sets the leftmost bit of the metadata, binary: 1000-0000.
 	static constexpr uint8_t AND_GATE = 0x80;
+	static constexpr idx_t AND_ROW_ID = 0x00FFFFFFFFFFFFFF;
 
 public:
-	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it.
+	//! Get a new pointer to a node and initialize it.
 	static void New(ART &art, Node &node, const NType type);
-	//! Free the node (and its subtree).
+	//! Free the node and its children.
 	static void Free(ART &art, Node &node);
 
 	//! Get a reference to the allocator.
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
-	//! Get the index of the matching allocator.
+	//! Get the index of a node type's allocator.
 	static uint8_t GetAllocatorIdx(const NType type);
 
 	//! Get a reference to a node.
@@ -89,28 +76,29 @@ public:
 	const Node *GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
 	Node *GetChildMutable(ART &art, const uint8_t byte) const;
-	//! Get the first immutable child greater or equal to the byte.
+	//! Get the first immutable child greater than or equal to the byte.
 	const Node *GetNextChild(ART &art, uint8_t &byte) const;
-	//! Get the first child greater or equal to the byte.
+	//! Get the first child greater than or equal to the byte.
 	Node *GetNextChildMutable(ART &art, uint8_t &byte) const;
-	//! Get the next byte greater or equal to the byte.
+	//! Get the first byte greater than or equal to the byte.
 	bool GetNextByte(ART &art, uint8_t &byte) const;
 
 	//! Returns the string representation of the node, if only_verify is false.
-	//! Else, it traverses and verifies the node and its subtree.
+	//! Else, it traverses and verifies the node.
 	string VerifyAndToString(ART &art, const bool only_verify) const;
 	//! Counts each node type.
 	void VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
+
 	//! Returns the node leaf type for a count.
 	static NType GetNodeLeafType(const idx_t count);
 	//! Returns the node type for a count.
 	static NType GetNodeType(const idx_t count);
 
-	//! Initialize a merge by incrementing the buffer IDs of a node.
+	//! Initialize a merge by incrementing the buffer IDs of a node and its children.
 	void InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
 	//! Merge a node into this node.
 	bool Merge(ART &art, Node &other, const bool in_gate);
-	bool MergeInternal(ART &art, Node &other, const bool in_gate);
+	bool MergeInternal(ART &art, Node &other, const bool in_gate); // TODO: private
 
 	//! Vacuum all nodes exceeding their vacuum threshold.
 	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
@@ -122,53 +110,23 @@ public:
 	inline NType GetType() const {
 		return NType(GetMetadata() & ~AND_GATE);
 	}
-	//! True, if the node is a Node4, Node16, Node48, or Node256.
-	inline bool IsNode() const {
-		switch (GetType()) {
-		case NType::NODE_4:
-		case NType::NODE_16:
-		case NType::NODE_48:
-		case NType::NODE_256:
-			return true;
-		default:
-			return false;
-		}
-	}
-	//! True, if the node is a Node7Leaf, Node15Leaf, or Node256Leaf.
-	inline bool IsLeafNode() const {
-		switch (GetType()) {
-		case NType::NODE_7_LEAF:
-		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF:
-			return true;
-		default:
-			return false;
-		}
-	}
-	//! True, if the node is any leaf.
-	inline bool IsAnyLeaf() const {
-		if (IsLeafNode()) {
-			return true;
-		}
-		switch (GetType()) {
-		case NType::LEAF_INLINED:
-		case NType::LEAF:
-		case NType::PREFIX_INLINED:
-			return true;
-		default:
-			return false;
-		}
-	}
 	//! True, if the node is a Prefix or PrefixInlined.
 	inline bool IsPrefix() const {
 		return GetType() == NType::PREFIX || GetType() == NType::PREFIX_INLINED;
 	}
 
-	//! Get the row ID (8th to 63rd bit)
+	//! True, if the node is a Node4, Node16, Node48, or Node256.
+	bool IsNode() const;
+	//! True, if the node is a Node7Leaf, Node15Leaf, or Node256Leaf.
+	bool IsLeafNode() const;
+	//! True, if the node is any leaf.
+	bool IsAnyLeaf() const;
+
+	//! Get the row ID (8th to 63rd bit).
 	inline row_t GetRowId() const {
 		return UnsafeNumericCast<row_t>(Get() & AND_ROW_ID);
 	}
-	//! Set the row ID (8th to 63rd bit)
+	//! Set the row ID (8th to 63rd bit).
 	inline void SetRowId(const row_t row_id) {
 		Set((Get() & AND_METADATA) | UnsafeNumericCast<idx_t>(row_id));
 	}
@@ -186,19 +144,15 @@ public:
 		SetMetadata(GetMetadata() & ~AND_GATE);
 	}
 
-	//! Assign operator
+	//! Assign operator.
 	inline void operator=(const IndexPointer &ptr) {
 		Set(ptr.Get());
 	}
 
 private:
-	//! Merge two nodes.
 	bool MergeNodes(ART &art, Node &other, const bool in_gate);
-	//! Reduce r_node's prefix and insert it into l_node, or recurse.
 	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t pos, const bool in_gate);
-	//! Split l_node and reduce r_node, and insert them into a new Node4.
 	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t pos);
-	//! Merges two prefixes.
 	bool MergePrefixes(ART &art, Node &other, const bool in_gate);
 
 private:

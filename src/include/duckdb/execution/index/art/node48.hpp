@@ -14,21 +14,26 @@
 
 namespace duckdb {
 
-//! Node48 holds up to 48 children. It contains a child_index array, which is indexed by the key
-//! byte. It contains the position of the child node in the children array.
+//! Node48 holds up to 48 children. The child_index array is indexed by the key byte.
+//! It contains the position of the child node in the children array.
 class Node48 {
+	friend class Node16;
+	friend class Node256;
+
 public:
 	static constexpr NType NODE_48 = NType::NODE_48;
-	static constexpr uint8_t EMPTY_MARKER = Node::EMPTY_MARKER;
-	static constexpr uint8_t CAPACITY = Node::NODE_48_CAPACITY;
+	static constexpr uint8_t CAPACITY = 48;
+	static constexpr uint8_t EMPTY_MARKER = 48;
+	static constexpr uint8_t SHRINK_THRESHOLD = 12;
 
 public:
 	Node48() = delete;
 	Node48(const Node48 &) = delete;
 	Node48 &operator=(const Node48 &) = delete;
 
+private:
 	uint8_t count;
-	uint8_t child_index[Node::NODE_256_CAPACITY];
+	uint8_t child_index[Node256::CAPACITY];
 	Node children[CAPACITY];
 
 public:
@@ -36,11 +41,6 @@ public:
 	static Node48 &New(ART &art, Node &node);
 	//! Free the node and its children.
 	static void Free(ART &art, Node &node);
-
-	//! Initializes all fields of the node while growing a Node16 to a Node48.
-	static Node48 &GrowNode16(ART &art, Node &node48, Node &node16);
-	//! Initializes all fields of the node while shrinking a Node256 to a Node48.
-	static Node48 &ShrinkNode256(ART &art, Node &node48, Node &node256);
 
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
@@ -52,7 +52,7 @@ public:
 public:
 	template <class F, class NODE>
 	static void Iterator(NODE &n, F &&lambda) {
-		for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+		for (idx_t i = 0; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
 				lambda(n.children[n.child_index[i]]);
 			}
@@ -69,13 +69,17 @@ public:
 
 	template <class NODE>
 	static Node *GetNextChild(NODE &n, uint8_t &byte) {
-		for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
-			if (n.child_index[i] != Node::EMPTY_MARKER) {
+		for (idx_t i = byte; i < Node256::CAPACITY; i++) {
+			if (n.child_index[i] != EMPTY_MARKER) {
 				byte = UnsafeNumericCast<uint8_t>(i);
 				return &n.children[n.child_index[i]];
 			}
 		}
 		return nullptr;
 	}
+
+private:
+	static Node48 &GrowNode16(ART &art, Node &node48, Node &node16);
+	static Node48 &ShrinkNode256(ART &art, Node &node48, Node &node256);
 };
 } // namespace duckdb

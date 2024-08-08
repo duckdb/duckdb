@@ -22,13 +22,16 @@ namespace duckdb {
 //! duplicates themselves.
 class Leaf {
 public:
+	static constexpr uint8_t LEAF_SIZE = 4; // Deprecated.
+
+public:
 	Leaf() = delete;
 	Leaf(const Leaf &) = delete;
 	Leaf &operator=(const Leaf &) = delete;
 
-	uint8_t count;                  // Deprecated.
-	row_t row_ids[Node::LEAF_SIZE]; // Deprecated.
-	Node ptr;                       // Deprecated.
+	uint8_t count;            // Deprecated.
+	row_t row_ids[LEAF_SIZE]; // Deprecated.
+	Node ptr;                 // Deprecated.
 
 public:
 	//! Inline a row ID into a node pointer.
