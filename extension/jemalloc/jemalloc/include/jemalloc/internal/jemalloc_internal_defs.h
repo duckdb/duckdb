@@ -309,7 +309,7 @@
  */
 #ifdef _MSC_VER
 [[noreturn]] __forceinline void msvc_unreachable() {
-	__assume(false);
+       __assume(false);
 }
 #define JEMALLOC_INTERNAL_UNREACHABLE msvc_unreachable
 #else
@@ -564,7 +564,9 @@
 #endif
 
 /* If defined, use volatile asm during benchmarks. */
-// #define JEMALLOC_HAVE_ASM_VOLATILE
+#ifdef __APPLE__
+#define JEMALLOC_HAVE_ASM_VOLATILE
+#endif
 
 /*
  * If defined, support the use of rdtscp to get the time stamp counter

@@ -65,7 +65,7 @@ Add this to `jemalloc.h`:
 We also supply our own config string in `jemalloc.c`.
 Define this just after the `#include`s.
 ```c++
-#define JE_MALLOC_CONF_BUFFER_SIZE 200;
+#define JE_MALLOC_CONF_BUFFER_SIZE 200
 char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
 ```
 This is what `jemalloc_constructor` in `jemalloc.c` should look like:
@@ -79,7 +79,7 @@ jemalloc_constructor(void) {
 		bgt_count = 1;
 	}
 	// decay is in ms
-	unsigned long long decay = DUCKDB_DECAY_DELAY * 1000;
+	unsigned long long decay = DUCKDB_JEMALLOC_DECAY * 1000;
 #ifdef DEBUG
 	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "junk:true,oversize_threshold:268435456,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count, bgt_count);
 #else

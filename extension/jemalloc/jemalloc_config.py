@@ -14,6 +14,7 @@ source_files = [
         'extension/jemalloc/jemalloc/src/arena.c',
         'extension/jemalloc/jemalloc/src/background_thread.c',
         'extension/jemalloc/jemalloc/src/base.c',
+        'extension/jemalloc/jemalloc/src/batcher.c',
         'extension/jemalloc/jemalloc/src/bin.c',
         'extension/jemalloc/jemalloc/src/bin_info.c',
         'extension/jemalloc/jemalloc/src/bitmap.c',
