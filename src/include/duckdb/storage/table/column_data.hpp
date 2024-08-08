@@ -154,7 +154,7 @@ public:
 	vector<DataPointer> GetDataPointers();
 
 	virtual PersistentColumnData Serialize();
-	virtual void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats);
+	virtual void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats);
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                          idx_t start_row, ReadStream &source, const LogicalType &type);
 

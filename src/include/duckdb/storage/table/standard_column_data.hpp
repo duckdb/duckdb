@@ -61,7 +61,7 @@ public:
 
 	bool IsPersistent() override;
 	PersistentColumnData Serialize() override;
-	void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) override;
+	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void Verify(RowGroup &parent) override;
 };

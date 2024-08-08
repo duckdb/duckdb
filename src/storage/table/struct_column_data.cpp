@@ -299,16 +299,12 @@ PersistentColumnData StructColumnData::Serialize() {
 	return persistent_data;
 }
 
-void StructColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	deserializer.ReadObject(
-	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
-
-	deserializer.ReadList(102, "sub_columns", [&](Deserializer::List &list, idx_t i) {
-		auto &child_stats = StructStats::GetChildStats(target_stats, i);
-		list.ReadObject([&](Deserializer &item) { sub_columns[i]->DeserializeColumn(item, child_stats); });
-	});
-
-	this->count = validity.count.load();
+void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
+	for(idx_t c_idx = 0; c_idx < sub_columns.size(); c_idx++) {
+		auto &child_stats = StructStats::GetChildStats(target_stats, c_idx);
+		sub_columns[c_idx]->InitializeColumn(column_data.child_columns[c_idx + 1], child_stats);
+	}
 }
 
 void StructColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

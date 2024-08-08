@@ -231,13 +231,11 @@ PersistentColumnData ArrayColumnData::Serialize() {
 	return persistent_data;
 }
 
-void ArrayColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	deserializer.ReadObject(101, "validity",
-	                        [&](Deserializer &source) { validity.DeserializeColumn(source, target_stats); });
-
+void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	D_ASSERT(column_data.pointers.empty());
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 	auto &child_stats = ArrayStats::GetChildStats(target_stats);
-	deserializer.ReadObject(102, "child_column",
-	                        [&](Deserializer &source) { child_column->DeserializeColumn(source, child_stats); });
+	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 	this->count = validity.count.load();
 }
 

@@ -575,23 +575,11 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	return checkpoint_state;
 }
 
-void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	// Set the stack of the deserializer to load the data pointers.
-	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
-	deserializer.Set<LogicalType &>(type);
-	CompressionInfo compression_info(block_manager.GetBlockSize());
-	deserializer.Set<const CompressionInfo &>(compression_info);
-
-	vector<DataPointer> data_pointers;
-	deserializer.ReadProperty(100, "data_pointers", data_pointers);
-
-	deserializer.Unset<DatabaseInstance>();
-	deserializer.Unset<LogicalType>();
-	deserializer.Unset<const CompressionInfo>();
-
+void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	D_ASSERT(type.InternalType() == column_data.physical_type);
 	// construct the segments based on the data pointers
 	this->count = 0;
-	for (auto &data_pointer : data_pointers) {
+	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
 		this->count += data_pointer.tuple_count;
 
@@ -732,10 +720,22 @@ PersistentColumnData ColumnData::Serialize() {
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                idx_t start_row, ReadStream &source, const LogicalType &type) {
 	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, nullptr);
+
+	// deserialize the persistent column data
 	BinaryDeserializer deserializer(source);
 	deserializer.Begin();
-	entry->DeserializeColumn(deserializer, entry->stats->statistics);
+	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
+	CompressionInfo compression_info(block_manager.GetBlockSize());
+	deserializer.Set<const CompressionInfo &>(compression_info);
+	deserializer.Set<const LogicalType &>(type);
+	auto persistent_column_data = PersistentColumnData::Deserialize(deserializer);
+	deserializer.Unset<LogicalType>();
+	deserializer.Unset<const CompressionInfo>();
+	deserializer.Unset<DatabaseInstance>();
 	deserializer.End();
+
+	// initialize the column
+	entry->InitializeColumn(persistent_column_data, entry->stats->statistics);
 	return entry;
 }
 

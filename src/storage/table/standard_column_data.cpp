@@ -213,10 +213,9 @@ PersistentColumnData StandardColumnData::Serialize() {
 	return persistent_data;
 }
 
-void StandardColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	ColumnData::DeserializeColumn(deserializer, target_stats);
-	deserializer.ReadObject(
-	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
+void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	ColumnData::InitializeColumn(column_data, target_stats);
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 }
 
 void StandardColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
