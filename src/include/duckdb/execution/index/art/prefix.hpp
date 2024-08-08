@@ -84,6 +84,10 @@ public:
 	//! Returns true, if a gate was freed.
 	static bool Split(ART &art, reference<Node> &node, Node &child, uint8_t pos);
 
+	//! Adds a new Node4 or Node7. Inserts the remainder and the new key.
+	static void Fork(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
+	                 const ARTKey &key, const bool freed_gate = false);
+
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
 	//! Count the number of prefixes.

@@ -22,6 +22,8 @@ namespace duckdb {
 //! duplicates themselves.
 class Leaf {
 public:
+	static constexpr NType LEAF = NType::LEAF;
+	static constexpr NType INLINED = NType::LEAF_INLINED;
 	static constexpr uint8_t LEAF_SIZE = 4; // Deprecated.
 
 public:
@@ -29,6 +31,7 @@ public:
 	Leaf(const Leaf &) = delete;
 	Leaf &operator=(const Leaf &) = delete;
 
+private:
 	uint8_t count;            // Deprecated.
 	row_t row_ids[LEAF_SIZE]; // Deprecated.
 	Node ptr;                 // Deprecated.
@@ -36,16 +39,15 @@ public:
 public:
 	//! Inline a row ID into a node pointer.
 	static void New(Node &node, const row_t row_id);
-	//! Get a new non-inlined nested leaf node. Might cause new buffer allocations.
-	static void New(ART &art, reference<Node> &node, unsafe_vector<ARTKey> &row_ids, idx_t start, idx_t count);
+	//! Get a new non-inlined nested leaf node.
+	static void New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
+	                const idx_t count);
 
-	//! Merges two leaves.
+	//! Merge two leaves. r_node must be INLINED.
 	static void MergeInlined(ART &art, Node &l_node, Node &r_node);
 
-	//! Inserts a row ID into an inlined leaf.
-	static void InsertIntoInlined(ART &art, Node &node, reference<ARTKey> row_id);
-	//! Erase a row ID from a nested leaf.
-	static void EraseFromNested(ART &art, Node &node, const ARTKey &row_id);
+	//! Insert a row ID into an inlined leaf.
+	static void InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id);
 
 	//! Transforms a deprecated leaf to a nested leaf.
 	static void TransformToNested(ART &art, Node &node);

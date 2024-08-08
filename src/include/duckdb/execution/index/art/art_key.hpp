@@ -72,6 +72,7 @@ public:
 
 	void Concat(ArenaAllocator &allocator, const ARTKey &other);
 	row_t GetRowID() const;
+	idx_t GetMismatchPos(const ARTKey &other) const;
 
 private:
 	template <class T>
@@ -92,7 +93,7 @@ void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, string_t value
 class ARTKeySection {
 public:
 	ARTKeySection(idx_t start, idx_t end, idx_t depth, data_t byte);
-	ARTKeySection(idx_t start, idx_t end, unsafe_vector<ARTKey> &keys, ARTKeySection &section);
+	ARTKeySection(idx_t start, idx_t end, const unsafe_vector<ARTKey> &keys, const ARTKeySection &section);
 
 	idx_t start;
 	idx_t end;
@@ -100,6 +101,6 @@ public:
 	data_t key_byte;
 
 public:
-	void GetChildSections(unsafe_vector<ARTKeySection> &sections, unsafe_vector<ARTKey> &keys);
+	void GetChildSections(unsafe_vector<ARTKeySection> &sections, const unsafe_vector<ARTKey> &keys);
 };
 } // namespace duckdb

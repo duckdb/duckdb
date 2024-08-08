@@ -27,7 +27,8 @@
 namespace duckdb {
 
 struct ARTIndexScanState : public IndexScanState {
-	//! The predicates to scan. A single predicate for point lookups, and two predicates for range scans.
+	//! The predicates to scan.
+	//! A single predicate for point lookups, and two predicates for range scans.
 	Value values[2];
 	//! The expressions over the scan predicates.
 	ExpressionType expressions[2];
@@ -425,7 +426,7 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector
 // Construct from sorted data (only during CREATE (UNIQUE) INDEX statements)
 //===--------------------------------------------------------------------===//
 
-void ConstructLeafNode(ART &art, unsafe_vector<ARTKey> &keys, Node &node, ARTKeySection &section) {
+void ConstructLeafNode(ART &art, const unsafe_vector<ARTKey> &keys, Node &node, ARTKeySection &section) {
 	unsafe_vector<ARTKeySection> children;
 	section.GetChildSections(children, keys);
 
@@ -439,8 +440,8 @@ void ConstructLeafNode(ART &art, unsafe_vector<ARTKey> &keys, Node &node, ARTKey
 	}
 }
 
-bool ART::ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, Node &node,
-                            ARTKeySection &section, bool in_gate) {
+bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
+                            ARTKeySection &section, const bool in_gate) {
 	D_ASSERT(section.start < keys.size());
 	D_ASSERT(section.end < keys.size());
 	D_ASSERT(section.start <= section.end);
@@ -772,27 +773,7 @@ bool ART::Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKe
 		Node remaining_prefix;
 		auto prefix_byte = Prefix::GetByte(*this, next_node, UnsafeNumericCast<uint8_t>(pos));
 		auto freed_gate = Prefix::Split(*this, next_node, remaining_prefix, UnsafeNumericCast<uint8_t>(pos));
-		if (depth == ROW_ID_PREFIX_COUNT) {
-			Node7Leaf::New(*this, next_node);
-		} else {
-			Node4::New<Node4>(*this, next_node, NType::NODE_4);
-		}
-		if (freed_gate) {
-			next_node.get().SetGate();
-		}
-
-		// Insert the remaining prefix into the new node.
-		Node::InsertChild(*this, next_node, prefix_byte, remaining_prefix);
-
-		// Insert the new key into the new node.
-		if (depth == sizeof(row_t) - 1) {
-			Node::InsertChild(*this, next_node, key.get()[depth]);
-		} else {
-			Node new_prefix;
-			auto count = key.get().len - depth - 1;
-			Prefix::NewInlined(*this, new_prefix, key.get(), depth + 1, UnsafeNumericCast<uint8_t>(count));
-			Node::InsertChild(*this, next_node, key.get()[depth], new_prefix);
-		}
+		Prefix::Fork(*this, next_node, depth, prefix_byte, remaining_prefix, key, freed_gate);
 		return true;
 	}
 	case NType::NODE_4:
@@ -884,7 +865,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 
 	// Enter a nested leaf.
 	if (!in_gate && next_node.get().IsGate()) {
-		return Leaf::EraseFromNested(*this, next_node, row_id);
+		return Erase(next_node, row_id, 0, row_id, true);
 	}
 
 	D_ASSERT(depth < key.get().len);
@@ -910,7 +891,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 
 	// Enter a nested leaf.
 	if (!in_gate && child->IsGate()) {
-		return Leaf::EraseFromNested(*this, *child, row_id);
+		return Erase(*child, row_id, 0, row_id, true);
 	}
 
 	auto temp_depth = depth + 1;

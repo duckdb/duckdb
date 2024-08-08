@@ -145,6 +145,15 @@ row_t ARTKey::GetRowID() const {
 	return Radix::DecodeData<row_t>(data);
 }
 
+idx_t ARTKey::GetMismatchPos(const ARTKey &other) const {
+	for (idx_t i = 0; i < other.len; i++) {
+		if (data[i] != other.data[i]) {
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
 //===--------------------------------------------------------------------===//
 // ARTKeySection
 //===--------------------------------------------------------------------===//
@@ -153,11 +162,11 @@ ARTKeySection::ARTKeySection(idx_t start, idx_t end, idx_t depth, data_t byte)
     : start(start), end(end), depth(depth), key_byte(byte) {
 }
 
-ARTKeySection::ARTKeySection(idx_t start, idx_t end, unsafe_vector<ARTKey> &keys, ARTKeySection &section)
+ARTKeySection::ARTKeySection(idx_t start, idx_t end, const unsafe_vector<ARTKey> &keys, const ARTKeySection &section)
     : start(start), end(end), depth(section.depth + 1), key_byte(keys[end].data[section.depth]) {
 }
 
-void ARTKeySection::GetChildSections(unsafe_vector<ARTKeySection> &sections, unsafe_vector<ARTKey> &keys) {
+void ARTKeySection::GetChildSections(unsafe_vector<ARTKeySection> &sections, const unsafe_vector<ARTKey> &keys) {
 	auto child_idx = start;
 	for (idx_t i = start + 1; i <= end; i++) {
 		if (keys[i - 1].data[depth] != keys[i].data[depth]) {

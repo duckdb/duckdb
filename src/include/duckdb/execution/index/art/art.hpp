@@ -15,9 +15,12 @@
 namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t {
-	APPEND = 0,    // appends to a table
-	APPEND_FK = 1, // appends to a table that has a foreign key
-	DELETE_FK = 2  // delete from a table that has a foreign key
+	// Appends to a table.
+	APPEND = 0,
+	// Appends to a table that has a foreign key.
+	APPEND_FK = 1,
+	// Delete from a table that has a foreign key.
+	DELETE_FK = 2
 };
 class ConflictManager;
 class ARTKey;
@@ -28,42 +31,29 @@ struct ARTIndexScanState;
 
 class ART : public BoundIndex {
 public:
+	friend class Leaf;
+
+public:
 	//! Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
 	//! Prefix size for nested leaves containing row IDs.
 	static constexpr uint8_t ROW_ID_PREFIX_COUNT = sizeof(row_t) - 1;
+	//! Prefix size of deprecated storage formats.
 	static constexpr uint8_t DEPRECATED_PREFIX_COUNT = 15;
 	//! FixedSizeAllocator count of the ART.
 	static constexpr uint8_t ALLOCATOR_COUNT = 10;
+	//! FixedSizeAllocator count of deprecated ARTs.
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 4;
-	//! Invalid row IDs.
+	//! Invalid row ID indicator.
 	static constexpr row_t INVALID_ROW_ID = -1;
 
 public:
-	//! Constructs an ART.
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
 	    const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
 	    const IndexStorageInfo &info = IndexStorageInfo());
 
-	//! Root of the tree
-	Node tree = Node();
-	//! Fixed-size allocators holding the ART nodes
-	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
-	//! True, if the ART owns its data.
-	bool owns_data;
-	//! The prefix size, which is the minimum of ROW_ID_PREFIX_SIZE and the key type's size.
-	uint8_t prefix_count;
-
-	//! Try to initialize a scan on the ART with the given expression and filter.
-	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
-
-	//! Performs a lookup on the index, fetching up to max_count row IDs.
-	//! Returns true, if all row IDs were fetched, and false otherwise.
-	bool Scan(IndexScanState &state, idx_t max_count, unsafe_vector<row_t> &row_ids);
-
-public:
 	//! Create a index instance of this type.
 	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
 		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
@@ -71,100 +61,94 @@ public:
 		return std::move(art);
 	}
 
-	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
+	//! Root of the tree.
+	Node tree = Node();
+	//! Fixed-size allocators holding the ART nodes.
+	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
+	//! True, if the ART owns its data.
+	bool owns_data;
+	//! The number of bytes fitting in the prefix.
+	uint8_t prefix_count;
+
+public:
+	//! Try to initialize a scan on the ART with the given expression and filter.
+	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
+	//! Perform a lookup on the ART, fetching up to max_count row IDs.
+	//! If all row IDs were fetched, it return true, else false.
+	bool Scan(IndexScanState &state, idx_t max_count, unsafe_vector<row_t> &row_ids);
+
+	//! Append a chunk by first executing the ART's expressions.
 	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids) override;
-	//! Verify that data can be appended to the index without a constraint violation
-	void VerifyAppend(DataChunk &chunk) override;
-	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
-	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) override;
-	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
-	void CommitDrop(IndexLock &index_lock) override;
-	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
-	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
-	//! Insert a chunk of entries into the index
+	//! Insert a chunk.
+	bool Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool in_gate);
 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
-	//! Construct an ART from a vector of sorted keys and the corresponding row IDs.
-	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
-	bool ConstructInternal(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, Node &node,
-	                       ARTKeySection &section, bool in_gate);
+	//! Constraint verification for a chunk.
+	void VerifyAppend(DataChunk &chunk) override;
+	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) override;
 
-	//! Search equal values and fetches the row IDs
-	bool SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids);
+	//! Delete a chunk from the ART.
+	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
+	//! Drop the ART.
+	void CommitDrop(IndexLock &index_lock) override;
+
+	//! Construct an ART from a vector of sorted keys and their row IDs.
+	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
+
+	//! Merge another ART into this ART. Both must be locked.
+	bool MergeIndexes(IndexLock &state, BoundIndex &other_index) override;
+
+	//! Vacuums the ART storage.
+	void Vacuum(IndexLock &state) override;
 
 	//! Returns ART storage serialization information.
 	IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) override;
-
-	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
-	//! index must also be locked during the merge
-	bool MergeIndexes(IndexLock &state, BoundIndex &other_index) override;
-
-	//! Traverses an ART and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
-	void Vacuum(IndexLock &state) override;
-
-	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
+	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
 
-	//! Generate ART keys for an input chunk
+	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 	static void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids,
 	                               unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
 
-	//! Generate a string containing all the expressions and their respective values that violate a constraint
-	string GenerateErrorKeyName(DataChunk &input, idx_t row);
-	//! Generate the matching error message for a constraint violation
-	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	//! Performs constraint checking for a chunk of input data
-	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) override;
-
-	//! Returns the string representation of an index, or only traverses and verifies the index.
+	//! Verifies the nodes and optionally returns a string of the ART.
 	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
-	//! Ensures that the node allocation counts match the node counts.
+	//! Verifies that the node allocations match the node counts.
 	void VerifyAllocations(IndexLock &state) override;
 
-	//! Find the node with a matching key, or return nullptr if not found
-	const Node *Lookup(const Node &node, const ARTKey &key, idx_t depth);
-	//! Insert a key into the tree.
-	bool Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool in_gate);
-	//! Erase a key from the tree (non-inlined) or erase the leaf itself (inlined).
-	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, bool in_gate);
-
 private:
-	//! Insert a row ID into an empty node.
-	void InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_id, bool in_gate);
-
-	//! Returns all row IDs greater than or equal to the search key.
+	bool SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids);
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
-	//! Returns all row IDs less than or equal to the upper_bound.
 	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
-	//! Returns all row IDs within the range of lower_bound and upper_bound.
 	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
 	                      unsafe_vector<row_t> &row_ids);
+	const Node *Lookup(const Node &node, const ARTKey &key, idx_t depth);
 
-	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
+	void InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_id, bool in_gate);
+
+	string GenerateErrorKeyName(DataChunk &input, idx_t row);
+	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
+	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) override;
+	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+	                                     DataChunk &input) override;
+
+	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, bool in_gate);
+
+	bool ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
+	                       ARTKeySection &section, const bool in_gate);
+
 	void InitializeMerge(unsafe_vector<idx_t> &upper_bounds);
 
-	//! Initializes a vacuum operation by calling the initialize operation of the respective
-	//! node allocator, and returns a vector containing either true, if the allocator at
-	//! the respective position qualifies, or false, if not
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
-	//! Finalizes a vacuum operation by calling the finalize operation of all qualifying
-	//! fixed size allocators
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);
+
+	void InitAllocators(const IndexStorageInfo &info);
+	void Deserialize(const BlockPointer &pointer);
+	void WritePartialBlocks(const bool v1_0_0_storage);
 
 	string VerifyAndToStringInternal(const bool only_verify);
 	void VerifyAllocationsInternal();
-
-	//! Initialize the allocators of the ART
-	void InitAllocators(const IndexStorageInfo &info);
-	//! STABLE STORAGE NOTE: This is for old storage files, to deserialize the allocators of the ART
-	void Deserialize(const BlockPointer &pointer);
-	//! Initializes the serialization of the index by combining the allocator data onto partial blocks
-	void WritePartialBlocks(const bool v1_0_0_storage);
-
-	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
-	                                     DataChunk &input) override;
 };
 
 template <>

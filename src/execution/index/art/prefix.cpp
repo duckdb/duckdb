@@ -301,6 +301,32 @@ bool Prefix::Split(ART &art, reference<Node> &node, Node &child, uint8_t pos) {
 	return false;
 }
 
+void Prefix::Fork(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
+                  const ARTKey &key, const bool freed_gate) {
+	if (pos == ART::ROW_ID_PREFIX_COUNT) {
+		Node7Leaf::New(art, node);
+	} else {
+		Node4::New<Node4>(art, node, NType::NODE_4);
+	}
+	if (freed_gate) {
+		node.get().SetGate();
+	}
+
+	// Insert the remainder into the new node.
+	Node::InsertChild(art, node, byte, remainder);
+
+	// Insert the new key into the new node.
+	if (pos == ART::ROW_ID_PREFIX_COUNT) {
+		Node::InsertChild(art, node, key[pos]);
+		return;
+	}
+
+	Node new_prefix;
+	auto count = key.len - pos - 1;
+	Prefix::NewInlined(art, new_prefix, key, pos + 1, UnsafeNumericCast<uint8_t>(count));
+	Node::InsertChild(art, node, key[pos], new_prefix);
+}
+
 string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_verify) {
 
 	// NOTE: we could do this recursively, but the function-call overhead can become kinda crazy
