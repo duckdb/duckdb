@@ -182,6 +182,58 @@ CSVError CSVError::SniffingError(const string &file_path) {
 	return CSVError(error.str(), SNIFFING, {});
 }
 
+CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
+                                       idx_t column_count, char delimiter) {
+	std::ostringstream error;
+	// 1. Which file
+	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
+	// 2. What's the error
+	error << "It was not possible to detect the CSV Header, due to the header having less columns than expected"
+	      << '\n';
+	// 2.1 What's the expected number of columns
+	error << "Number of expected columns: " << column_count << ". Actual number of columns " << best_header_row.size()
+	      << '\n';
+	// 2.2 What was the detected row
+	error << "Detected row as Header:" << '\n';
+	for (idx_t i = 0; i < best_header_row.size(); i++) {
+		if (best_header_row[i].is_null) {
+			error << "NULL";
+		} else {
+			error << best_header_row[i].value;
+		}
+		if (i < best_header_row.size() - 1) {
+			error << delimiter << " ";
+		}
+	}
+	error << "\n";
+
+	// 3. Suggest how to fix it!
+	error << "Possible fixes:" << '\n';
+	// header
+	if (!options.dialect_options.header.IsSetByUser()) {
+		error << "* Set header (header = true) if your CSV has a header, or (header = false) if it doesn't" << '\n';
+	} else {
+		error << "* Header is set to \'" << options.dialect_options.header.GetValue() << "\'. Consider unsetting it."
+		      << '\n';
+	}
+	// skip_rows
+	if (!options.dialect_options.skip_rows.IsSetByUser()) {
+		error << "* Set skip (skip=${n}) to skip ${n} lines at the top of the file" << '\n';
+	} else {
+		error << "* Skip is set to \'" << options.dialect_options.skip_rows.GetValue() << "\'. Consider unsetting it."
+		      << '\n';
+	}
+	// ignore_errors
+	if (!options.ignore_errors.GetValue()) {
+		error << "* Enable ignore errors (ignore_errors=true) to ignore potential errors" << '\n';
+	}
+	// null_padding
+	if (!options.null_padding) {
+		error << "* Enable null padding (null_padding=true) to pad missing columns with NULL values" << '\n';
+	}
+	return CSVError(error.str(), SNIFFING, {});
+}
+
 CSVError CSVError::DialectSniffingError(const CSVReaderOptions &options, const string &search_space) {
 	std::ostringstream error;
 	// 1. Which file
@@ -194,7 +246,6 @@ CSVError CSVError::DialectSniffingError(const CSVReaderOptions &options, const s
 	error << search_space;
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
-
 	// 3.1 Inform the reader of the dialect
 	// delimiter
 	if (!options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {

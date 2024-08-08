@@ -13,6 +13,7 @@
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
+#include "duckdb/execution/operator/csv_scanner/header_value.hpp"
 
 namespace duckdb {
 struct DateTimestampSniffing {
@@ -104,19 +105,6 @@ struct SetColumns {
 		// Unacceptable
 		return true;
 	}
-};
-
-struct HeaderValue {
-	HeaderValue() : is_null(true) {
-	}
-	explicit HeaderValue(const string_t value_p) {
-		value = value_p.GetString();
-	}
-	bool IsNull() {
-		return is_null;
-	}
-	bool is_null = false;
-	string value;
 };
 
 //! Sniffer that detects Header, Dialect and Types of CSV Files
