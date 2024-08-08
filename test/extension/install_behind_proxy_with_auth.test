@@ -1,0 +1,16 @@
+# name: test/extension/install_behind_proxy_with_auth.test
+# description: test installing an extension from behind an HTTP proxy with basic authentication
+# group: [extension]
+
+require-env HTTP_PROXY_RUNNING;
+
+set s3_use_ssl TO false;
+
+statement ok
+SET http_proxy TO 'http://john:doe@localhost:8889';
+
+statement ok
+INSTALL loadable_extension_demo;
+
+statement ok
+LOAD loadable_extension_demo;

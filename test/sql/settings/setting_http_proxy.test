@@ -4,17 +4,16 @@
 
 statement error
 SET http_proxy TO 's3://hello'
+----
+Invalid proxy URL (only HTTP proxies supported)
 
 statement ok
-SET http_proxy TO 'http://localhost:8025'
+SET http_proxy TO 'http://localhost:8888'
 
 query I
 select value from duckdb_settings() where name = 'http_proxy';
 ----
-http://localhost:8025
-
-statement error
-select * from 's3://bucket/file.parquet';  # cant actually test the proxy, so just test for an error
+http://localhost:8080
 
 statement ok
 SET http_proxy = '';
