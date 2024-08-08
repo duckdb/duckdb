@@ -2,7 +2,6 @@
 # description: cannot create cross product between LHS and RHS of semi/anti joins
 # group: [joins]
 
-
 statement ok
 create table t1 as select range a from range(1000);
 
