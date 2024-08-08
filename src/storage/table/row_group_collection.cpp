@@ -90,6 +90,17 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	stats.Initialize(types, data);
 }
 
+void RowGroupCollection::Initialize(PersistentCollectionData &data) {
+	stats.InitializeEmpty(types);
+	auto l = row_groups->Lock();
+	for(auto &row_group_data : data.row_group_data) {
+		auto row_group = make_uniq<RowGroup>(*this, row_group_data);
+		row_group->MergeIntoStatistics(stats);
+		total_rows += row_group->count;
+		row_groups->AppendSegment(l, std::move(row_group));
+	}
+}
+
 void RowGroupCollection::InitializeEmpty() {
 	stats.InitializeEmpty(types);
 }
@@ -346,10 +357,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
 			allocation_size += current_row_group->GetAllocationSize() - previous_allocation_size;
 			// merge the stats
-			auto stats_lock = stats.GetLock();
-			for (idx_t i = 0; i < types.size(); i++) {
-				current_row_group->MergeIntoStatistics(i, stats.GetStats(*stats_lock, i).Statistics());
-			}
+			current_row_group->MergeIntoStatistics(stats);
 		}
 		remaining -= append_count;
 		if (remaining > 0) {

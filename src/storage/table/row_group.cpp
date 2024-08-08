@@ -49,6 +49,11 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 	Verify();
 }
 
+RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data) :
+	SegmentBase<RowGroup>(data.start, data.count), collection(collection_p), version_info(nullptr), allocation_size(0) {
+	throw InternalException("FIXME: initialize columns");
+}
+
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	this->collection = collection_p;
 	this->start = new_start;
@@ -858,6 +863,13 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	col_data.MergeIntoStatistics(other);
 }
 
+void RowGroup::MergeIntoStatistics(TableStatistics &other) {
+	auto stats_lock = other.GetLock();
+	for (idx_t i = 0; i < columns.size(); i++) {
+		MergeIntoStatistics(i, other.GetStats(*stats_lock, i).Statistics());
+	}
+}
+
 CompressionType ColumnCheckpointInfo::GetCompressionType() {
 	return info.compression_types[column_idx];
 }
@@ -976,6 +988,8 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo() const {
 	for(auto &col : columns) {
 		result.column_data.push_back(col->Serialize());
 	}
+	result.start = start;
+	result.count = count;
 	return result;
 }
 

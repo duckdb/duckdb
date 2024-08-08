@@ -71,6 +71,7 @@ public:
 public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
 	RowGroup(RowGroupCollection &collection, RowGroupPointer pointer);
+	RowGroup(RowGroupCollection &collection, PersistentRowGroupData &data);
 	~RowGroup();
 
 private:
@@ -157,6 +158,7 @@ public:
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
+	void MergeIntoStatistics(TableStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
 	void GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result);

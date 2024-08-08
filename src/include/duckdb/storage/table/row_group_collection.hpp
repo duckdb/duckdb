@@ -32,6 +32,7 @@ struct ColumnSegmentInfo;
 class MetadataManager;
 struct VacuumState;
 struct CollectionCheckpointState;
+struct PersistentCollectionData;
 
 class RowGroupCollection {
 public:
@@ -42,6 +43,7 @@ public:
 	idx_t GetTotalRows() const;
 	Allocator &GetAllocator() const;
 
+	void Initialize(PersistentCollectionData &data);
 	void Initialize(PersistentTableData &data);
 	void InitializeEmpty();
 

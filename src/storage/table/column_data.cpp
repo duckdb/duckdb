@@ -698,6 +698,8 @@ PersistentRowGroupData::PersistentRowGroupData(vector<LogicalType> types_p) :
 void PersistentRowGroupData::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "types", types);
 	serializer.WriteProperty(101, "columns", column_data);
+	serializer.WriteProperty(102, "start", start);
+	serializer.WriteProperty(103, "count", count);
 }
 
 PersistentRowGroupData PersistentRowGroupData::Deserialize(Deserializer &deserializer) {
@@ -708,6 +710,8 @@ PersistentRowGroupData PersistentRowGroupData::Deserialize(Deserializer &deseria
 		data.column_data.push_back(list.ReadElement<PersistentColumnData>());
 		deserializer.Unset<LogicalType>();
 	});
+	deserializer.ReadProperty(102, "start", data.start);
+	deserializer.ReadProperty(103, "count", data.count);
 	return data;
 }
 

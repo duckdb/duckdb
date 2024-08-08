@@ -243,6 +243,8 @@ struct PersistentRowGroupData {
 
 	vector<LogicalType> types;
 	vector<PersistentColumnData> column_data;
+	idx_t start;
+	idx_t count;
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentRowGroupData Deserialize(Deserializer &deserializer);

@@ -669,8 +669,13 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		throw InternalException("Corrupt WAL: insert without table");
 	}
 	auto &storage = state.current_table->GetStorage();
-	storage.LocalMerge(data, nullptr);
-	throw InternalException("FIXME: merge row group collection into table");
+
+	auto &table_info = storage.GetDataTableInfo();
+	auto &block_manager = table_info->GetIOManager().GetBlockManagerForRowData();
+	RowGroupCollection new_row_groups(table_info, block_manager, storage.GetTypes(), 0);
+	new_row_groups.Initialize(data);
+	TableIndexList index_list;
+	storage.MergeStorage(new_row_groups, index_list, nullptr);
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {
