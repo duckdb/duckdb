@@ -2,7 +2,9 @@
 # description: Test null_padding big/mixed
 # group: [csv]
 
-require vector_size 512
+statement ok
+PRAGMA enable_verification
+
 
 statement ok
 CREATE TABLE test (a VARCHAR, b INTEGER, c INTEGER);

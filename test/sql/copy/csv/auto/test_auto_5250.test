@@ -3,10 +3,10 @@
 # group: [auto]
 
 statement ok
-PRAGMA verify_parallelism
+PRAGMA enable_verification
 
-# We need to run this test with sample-size set to all, since the different option shows up ~ line 250, which is not
-# covered with vector_size = 2
+statement ok
+PRAGMA verify_parallelism
 
 query I
 select count(*) from read_csv_auto('data/csv/page_namespacepage_title_sample.csv', SAMPLE_SIZE = -1)

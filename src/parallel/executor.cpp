@@ -669,7 +669,10 @@ void Executor::ThrowException() {
 }
 
 void Executor::Flush(ThreadContext &tcontext) {
-	profiler->Flush(tcontext.profiler);
+	auto global_profiler = profiler;
+	if (global_profiler) {
+		global_profiler->Flush(tcontext.profiler);
+	}
 }
 
 bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality,

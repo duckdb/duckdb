@@ -2,6 +2,9 @@
 # description: Test type pushdown from insert into operator
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # Run without enable_verifications set
 
 statement ok
