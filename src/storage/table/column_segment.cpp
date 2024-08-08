@@ -237,7 +237,7 @@ void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t o
 }
 
 DataPointer ColumnSegment::GetDataPointer() {
-	if(segment_type != ColumnSegmentType::PERSISTENT) {
+	if (segment_type != ColumnSegmentType::PERSISTENT) {
 		throw InternalException("Attempting to call ColumnSegment::GetDataPointer on a transient segment");
 	}
 	// set up the data pointer directly using the data from the persistent segment

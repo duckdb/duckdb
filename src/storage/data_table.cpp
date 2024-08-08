@@ -939,14 +939,14 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	}
 }
 
-void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &, optional_ptr<StorageCommitState> commit_state) {
-	Printer::PrintF("Merge storage (start: %llu, count: %llu)", row_groups->GetTotalRows(), data.GetTotalRows());
+void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &,
+                             optional_ptr<StorageCommitState> commit_state) {
 	row_groups->MergeStorage(data, this, commit_state);
 	row_groups->Verify();
 }
 
-void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count, optional_ptr<StorageCommitState> commit_state) {
-	Printer::PrintF("Write To Log (start: %llu, count: %llu)", row_start, count);
+void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count,
+                           optional_ptr<StorageCommitState> commit_state) {
 	log.WriteSetTable(info->schema, info->table);
 	if (commit_state) {
 		auto entry = commit_state->GetRowGroupData(*this, row_start, count);

@@ -658,20 +658,38 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk, bound_constraints);
 }
 
+static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &col_data) {
+	for (auto &pointer : col_data.pointers) {
+		auto block_id = pointer.block_pointer.block_id;
+		if (block_id != INVALID_BLOCK) {
+			manager.MarkBlockAsUsed(block_id);
+		}
+	}
+	for (auto &child_column : col_data.child_columns) {
+		MarkBlocksAsUsed(manager, child_column);
+	}
+}
+
 void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	PersistentCollectionData data;
 	deserializer.ReadProperty(101, "row_group_data", data);
+	auto &block_manager = db.GetStorageManager().GetBlockManager();
 	if (DeserializeOnly()) {
-		// FIXME: label blocks in data as not-free
+		// label blocks in data as used - they will be used after the WAL replay is finished
+		// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
+		// by previous deserialization steps
+		for (auto &group : data.row_group_data) {
+			for (auto &col_data : group.column_data) {
+				MarkBlocksAsUsed(block_manager, col_data);
+			}
+		}
 		return;
 	}
 	if (!state.current_table) {
 		throw InternalException("Corrupt WAL: insert without table");
 	}
 	auto &storage = state.current_table->GetStorage();
-
 	auto &table_info = storage.GetDataTableInfo();
-	auto &block_manager = table_info->GetIOManager().GetBlockManagerForRowData();
 	RowGroupCollection new_row_groups(table_info, block_manager, storage.GetTypes(), 0);
 	new_row_groups.Initialize(data);
 	TableIndexList index_list;

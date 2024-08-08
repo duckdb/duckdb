@@ -575,6 +575,10 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	return checkpoint_state;
 }
 
+void ColumnData::InitializeColumn(PersistentColumnData &column_data) {
+	InitializeColumn(column_data, stats->statistics);
+}
+
 void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	D_ASSERT(type.InternalType() == column_data.physical_type);
 	// construct the segments based on the data pointers
@@ -599,7 +603,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 }
 
 bool ColumnData::IsPersistent() {
-	for(auto &segment : data.Segments()) {
+	for (auto &segment : data.Segments()) {
 		if (segment.segment_type != ColumnSegmentType::PERSISTENT) {
 			return false;
 		}
@@ -609,7 +613,7 @@ bool ColumnData::IsPersistent() {
 
 vector<DataPointer> ColumnData::GetDataPointers() {
 	vector<DataPointer> pointers;
-	for(auto &segment : data.Segments()) {
+	for (auto &segment : data.Segments()) {
 		pointers.push_back(segment.GetDataPointer());
 	}
 	return pointers;
@@ -618,12 +622,13 @@ vector<DataPointer> ColumnData::GetDataPointers() {
 PersistentColumnData::PersistentColumnData(PhysicalType physical_type_p) : physical_type(physical_type_p) {
 }
 
-PersistentColumnData::PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers_p) :
-	physical_type(physical_type), pointers(std::move(pointers_p)) {
+PersistentColumnData::PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers_p)
+    : physical_type(physical_type), pointers(std::move(pointers_p)) {
 	D_ASSERT(!pointers.empty());
 }
 
-PersistentColumnData::~PersistentColumnData() {}
+PersistentColumnData::~PersistentColumnData() {
+}
 
 void PersistentColumnData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(100, "data_pointers", pointers);
@@ -636,17 +641,16 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 	if (physical_type == PhysicalType::ARRAY || physical_type == PhysicalType::LIST) {
 		serializer.WriteProperty(102, "child_column", child_columns[1]);
 	} else if (physical_type == PhysicalType::STRUCT) {
-		serializer.WriteList(102, "sub_columns", child_columns.size() - 1, [&](Serializer::List &list, idx_t i) {
-			list.WriteElement(child_columns[i + 1]);
-		});
+		serializer.WriteList(102, "sub_columns", child_columns.size() - 1,
+		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(child_columns[i + 1]); });
 	}
 }
 
-void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name, const LogicalType &type) {
+void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
+                                            const LogicalType &type) {
 	deserializer.Set<const LogicalType &>(type);
 	child_columns.push_back(deserializer.ReadProperty<PersistentColumnData>(field_idx, field_name));
 	deserializer.Unset<LogicalType>();
-
 }
 PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserializer) {
 	auto &type = deserializer.Get<const LogicalType &>();
@@ -658,7 +662,7 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 		return result;
 	}
 	result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
-	switch(physical_type) {
+	switch (physical_type) {
 	case PhysicalType::ARRAY:
 		result.DeserializeField(deserializer, 102, "child_column", ArrayType::GetChildType(type));
 		break;
@@ -680,8 +684,8 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 	return result;
 }
 
-PersistentRowGroupData::PersistentRowGroupData(vector<LogicalType> types_p) :
-	types(std::move(types_p)) {}
+PersistentRowGroupData::PersistentRowGroupData(vector<LogicalType> types_p) : types(std::move(types_p)) {
+}
 
 void PersistentRowGroupData::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "types", types);
@@ -694,7 +698,7 @@ PersistentRowGroupData PersistentRowGroupData::Deserialize(Deserializer &deseria
 	PersistentRowGroupData data;
 	deserializer.ReadProperty(100, "types", data.types);
 	deserializer.ReadList(101, "columns", [&](Deserializer::List &list, idx_t i) {
-		deserializer.Set<const LogicalType&>(data.types[i]);
+		deserializer.Set<const LogicalType &>(data.types[i]);
 		data.column_data.push_back(list.ReadElement<PersistentColumnData>());
 		deserializer.Unset<LogicalType>();
 	});

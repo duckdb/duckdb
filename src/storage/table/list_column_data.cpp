@@ -377,7 +377,6 @@ PersistentColumnData ListColumnData::Serialize() {
 	return persistent_data;
 }
 
-
 void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	ColumnData::InitializeColumn(column_data, target_stats);
 	validity.InitializeColumn(column_data.child_columns[0], target_stats);

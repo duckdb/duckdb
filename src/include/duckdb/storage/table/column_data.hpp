@@ -149,11 +149,11 @@ public:
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
-
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
 
 	virtual PersistentColumnData Serialize();
+	void InitializeColumn(PersistentColumnData &column_data);
 	virtual void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats);
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                          idx_t start_row, ReadStream &source, const LogicalType &type);
@@ -227,7 +227,8 @@ struct PersistentColumnData {
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentColumnData Deserialize(Deserializer &deserializer);
-	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name, const LogicalType &type);
+	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
+	                      const LogicalType &type);
 };
 
 struct PersistentRowGroupData {

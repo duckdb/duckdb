@@ -93,7 +93,7 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 	stats.InitializeEmpty(types);
 	auto l = row_groups->Lock();
-	for(auto &row_group_data : data.row_group_data) {
+	for (auto &row_group_data : data.row_group_data) {
 		auto row_group = make_uniq<RowGroup>(*this, row_group_data);
 		row_group->MergeIntoStatistics(stats);
 		total_rows += row_group->count;
@@ -471,7 +471,8 @@ void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t s
 	}
 }
 
-void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table, optional_ptr<StorageCommitState> commit_state) {
+void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
+                                      optional_ptr<StorageCommitState> commit_state) {
 	D_ASSERT(data.types == types);
 	auto start_index = row_start + total_rows.load();
 	auto index = start_index;

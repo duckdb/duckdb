@@ -49,9 +49,20 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 	Verify();
 }
 
-RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data) :
-	SegmentBase<RowGroup>(data.start, data.count), collection(collection_p), version_info(nullptr), allocation_size(0) {
-	throw InternalException("FIXME: initialize columns");
+RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
+    : SegmentBase<RowGroup>(data.start, data.count), collection(collection_p), version_info(nullptr),
+      allocation_size(0) {
+	auto &block_manager = GetBlockManager();
+	auto &info = GetTableInfo();
+	auto &types = collection.get().GetTypes();
+	columns.reserve(types.size());
+	for (idx_t c = 0; c < types.size(); c++) {
+		auto entry = ColumnData::CreateColumn(block_manager, info, c, data.start, types[c], nullptr);
+		entry->InitializeColumn(data.column_data[c]);
+		columns.push_back(std::move(entry));
+	}
+
+	Verify();
 }
 
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
@@ -973,7 +984,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 }
 
 bool RowGroup::IsPersistent() const {
-	for(auto &column : columns) {
+	for (auto &column : columns) {
 		if (!column->IsPersistent()) {
 			// column is not persistent
 			return false;
@@ -985,7 +996,7 @@ bool RowGroup::IsPersistent() const {
 PersistentRowGroupData RowGroup::SerializeRowGroupInfo() const {
 	// all columns are persistent - serialize
 	PersistentRowGroupData result;
-	for(auto &col : columns) {
+	for (auto &col : columns) {
 		result.column_data.push_back(col->Serialize());
 	}
 	result.start = start;

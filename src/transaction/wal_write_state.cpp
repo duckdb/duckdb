@@ -22,7 +22,8 @@
 
 namespace duckdb {
 
-WALWriteState::WALWriteState(WriteAheadLog &log, optional_ptr<StorageCommitState> commit_state) : log(log), commit_state(commit_state), current_table_info(nullptr) {
+WALWriteState::WALWriteState(WriteAheadLog &log, optional_ptr<StorageCommitState> commit_state)
+    : log(log), commit_state(commit_state), current_table_info(nullptr) {
 }
 
 void WALWriteState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {

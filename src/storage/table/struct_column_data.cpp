@@ -282,7 +282,7 @@ bool StructColumnData::IsPersistent() {
 	if (!validity.IsPersistent()) {
 		return false;
 	}
-	for(auto &child_col : sub_columns) {
+	for (auto &child_col : sub_columns) {
 		if (!child_col->IsPersistent()) {
 			return false;
 		}
@@ -293,7 +293,7 @@ bool StructColumnData::IsPersistent() {
 PersistentColumnData StructColumnData::Serialize() {
 	PersistentColumnData persistent_data(PhysicalType::ARRAY);
 	persistent_data.child_columns.push_back(validity.Serialize());
-	for(auto &sub_column : sub_columns) {
+	for (auto &sub_column : sub_columns) {
 		persistent_data.child_columns.push_back(sub_column->Serialize());
 	}
 	return persistent_data;
@@ -301,7 +301,7 @@ PersistentColumnData StructColumnData::Serialize() {
 
 void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	validity.InitializeColumn(column_data.child_columns[0], target_stats);
-	for(idx_t c_idx = 0; c_idx < sub_columns.size(); c_idx++) {
+	for (idx_t c_idx = 0; c_idx < sub_columns.size(); c_idx++) {
 		auto &child_stats = StructStats::GetChildStats(target_stats, c_idx);
 		sub_columns[c_idx]->InitializeColumn(column_data.child_columns[c_idx + 1], child_stats);
 	}
