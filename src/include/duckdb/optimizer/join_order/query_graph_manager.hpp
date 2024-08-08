@@ -48,7 +48,7 @@ public:
 
 public:
 	unique_ptr<Expression> filter;
-	optional_ptr<JoinRelationSet> set;
+	reference<JoinRelationSet> set;
 	idx_t filter_index;
 	JoinType join_type;
 	optional_ptr<JoinRelationSet> left_set;

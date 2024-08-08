@@ -339,7 +339,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		if (filters_and_bindings[info.filter_index]->filter) {
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
-			if (info.set->count > 0 && JoinRelationSet::IsSubset(*result_relation, *info.set)) {
+			if (info.set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
 				auto &filter_and_binding = filters_and_bindings[info.filter_index];
 				auto filter = std::move(filter_and_binding->filter);
 				// if it is, we can push the filter
