@@ -201,7 +201,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			for (idx_t i = 0; i < input_size; i++) {
 				// Fill the gaps with the previous index
 				inverted.set_index(i, src_index);
-				if (src_index < count && selvec.get_index(src_index) == i) {
+				if (src_index + 1 < count && selvec.get_index(src_index) == i) {
 					src_index++;
 				}
 			}
