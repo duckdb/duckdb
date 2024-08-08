@@ -3,11 +3,11 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
 
@@ -89,11 +89,13 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownSetOperation(std::move(op));
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		return PushdownDistinct(std::move(op));
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		// we can just push directly through these operations without any rewriting
 		op->children[0] = Rewrite(std::move(op->children[0]));
 		return op;
-	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		op->children[1] = Rewrite(std::move(op->children[1]));
+		return op;
 	case LogicalOperatorType::LOGICAL_GET:
 		return PushdownGet(std::move(op));
 	case LogicalOperatorType::LOGICAL_LIMIT:

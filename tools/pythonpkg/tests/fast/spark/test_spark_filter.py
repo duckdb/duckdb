@@ -15,6 +15,7 @@ from duckdb.experimental.spark.sql.types import (
     MapType,
 )
 from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
+from duckdb.experimental.spark.errors import PySparkTypeError
 import duckdb
 import re
 
@@ -170,3 +171,9 @@ class TestDataFrameFilter(object):
                 gender='M',
             ),
         ]
+
+    def test_invalid_condition_type(self, spark):
+        df = spark.createDataFrame([(1, "A")], ["A", "B"])
+
+        with pytest.raises(PySparkTypeError):
+            df = df.filter(dict(a=1))

@@ -53,7 +53,7 @@ COPY (
 );
 
 query II
-SELECT * 
+SELECT bucket, total 
 FROM read_parquet('__TEST_DIR__/hive/*/*.parquet') 
 ORDER BY ALL
 LIMIT 5

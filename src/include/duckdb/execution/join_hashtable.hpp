@@ -150,11 +150,12 @@ public:
 	};
 
 	struct InsertState : SharedState {
-		InsertState(const unique_ptr<TupleDataCollection> &data_collection,
-		            const vector<column_t> &equality_predicate_columns);
+		explicit InsertState(const JoinHashTable &ht);
 		/// Because of the index hick up
 		SelectionVector remaining_sel;
 		SelectionVector key_match_sel;
+
+		DataChunk lhs_data;
 		TupleDataChunkState chunk_state;
 	};
 
@@ -196,6 +197,9 @@ public:
 
 	TupleDataCollection &GetDataCollection() {
 		return *data_collection;
+	}
+	bool NullValuesAreEqual(idx_t col_idx) const {
+		return null_values_are_equal[col_idx];
 	}
 
 	//! BufferManager
@@ -288,7 +292,7 @@ private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
 	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, InsertState &insert_statebool,
 	                  bool parallel);
-
+	//! Prepares keys by filtering NULLs
 	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
