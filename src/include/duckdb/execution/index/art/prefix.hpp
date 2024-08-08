@@ -24,6 +24,11 @@ public:
 	static constexpr NType PREFIX = NType::PREFIX;
 	static constexpr NType INLINED = NType::PREFIX_INLINED;
 
+	static constexpr uint8_t ROW_ID_COUNT = sizeof(row_t) - 1;
+	static constexpr uint8_t DEPRECATED_COUNT = 15;
+	static constexpr row_t INVALID_ROW_ID = -1;
+	static constexpr uint8_t METADATA_SIZE = sizeof(Node) + 1;
+
 public:
 	Prefix() = delete;
 	Prefix(const ART &art, const Node ptr_p, const bool is_mutable = false, const bool set_in_memory = false);
@@ -36,9 +41,6 @@ public:
 public:
 	static inline uint8_t Count(const ART &art) {
 		return art.prefix_count;
-	}
-	static inline uint8_t Size(const ART &art) {
-		return Count(art) + 1;
 	}
 
 public:
@@ -84,9 +86,12 @@ public:
 	//! Returns true, if a gate was freed.
 	static bool Split(ART &art, reference<Node> &node, Node &child, uint8_t pos);
 
-	//! Adds a new Node4 or Node7. Inserts the remainder and the new key.
-	static void Fork(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
-	                 const ARTKey &key, const bool freed_gate = false);
+	//! Insert a key into a prefix.
+	static bool Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const bool in_gate);
+
+	//! Fork an inlined prefix.
+	static void ForkInlined(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
+	                        const ARTKey &key, const bool freed_gate = false);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
@@ -104,6 +109,9 @@ public:
 	void Append(ART &art, Node other);
 	//! Appends the byte.
 	Prefix Append(ART &art, uint8_t byte);
+
+	//! Get the mismatch position of an inlined prefix and a key.
+	static idx_t GetMismatchPos(ART &art, Node &node, const ARTKey &key, idx_t &depth);
 
 private:
 	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, uint8_t count, idx_t offset, NType type);

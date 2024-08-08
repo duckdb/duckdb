@@ -37,7 +37,7 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 	if (n7.count == 1) {
 		// Inline the leaf.
 		auto row_id = Prefix::CanInline(art, prefix, node, n7.key[0]);
-		if (row_id != ART::INVALID_ROW_ID) {
+		if (row_id != Prefix::INVALID_ROW_ID) {
 			Node::Free(art, prefix);
 			Leaf::New(prefix, row_id);
 			return;

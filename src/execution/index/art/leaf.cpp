@@ -56,7 +56,7 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id) {
 
 	// Create the remainder.
 	Node remainder;
-	if (pos != ART::ROW_ID_PREFIX_COUNT) {
+	if (pos != Prefix::ROW_ID_COUNT) {
 		auto count = row_id.len - pos - 1;
 		Prefix::NewInlined(art, remainder, row_id, pos + 1, UnsafeNumericCast<uint8_t>(count));
 	}
@@ -65,7 +65,7 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id) {
 	if (pos != 0) {
 		Prefix::New(art, next, row_id, 0, pos);
 	}
-	Prefix::Fork(art, next, pos, byte, remainder, key);
+	Prefix::ForkInlined(art, next, pos, byte, remainder, key);
 	node.SetGate();
 }
 

@@ -1,9 +1,11 @@
 #include "duckdb/execution/index/art/prefix.hpp"
 
+#include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/common/swap.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node7_leaf.hpp"
 
 namespace duckdb {
 
@@ -19,7 +21,7 @@ Prefix::Prefix(const ART &art, const Node ptr_p, const bool is_mutable, const bo
 			return;
 		}
 	}
-	ptr = type == INLINED ? nullptr : reinterpret_cast<Node *>(data + Size(art));
+	ptr = type == INLINED ? nullptr : reinterpret_cast<Node *>(data + Count(art) + 1);
 	in_memory = true;
 }
 
@@ -301,9 +303,55 @@ bool Prefix::Split(ART &art, reference<Node> &node, Node &child, uint8_t pos) {
 	return false;
 }
 
-void Prefix::Fork(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
-                  const ARTKey &key, const bool freed_gate) {
-	if (pos == ART::ROW_ID_PREFIX_COUNT) {
+bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const bool in_gate) {
+	reference<Node> next(node);
+	auto pos = TraverseMutable(art, next, key, depth);
+
+	// We recurse into the next node, if
+	// (1) the prefix matches the key.
+	// (2) we reach a gate.
+	if (pos == DConstants::INVALID_INDEX) {
+		if (next.get().GetType() != NType::PREFIX || next.get().IsGate()) {
+			return art.Insert(next, key, depth, row_id, in_gate);
+		}
+	}
+
+	Node remaining_prefix;
+	auto prefix_byte = GetByte(art, next, UnsafeNumericCast<uint8_t>(pos));
+	auto freed_gate = Split(art, next, remaining_prefix, UnsafeNumericCast<uint8_t>(pos));
+	Node4::New<Node4>(art, next, NType::NODE_4);
+	if (freed_gate) {
+		next.get().SetGate();
+	}
+
+	// Insert the remaining prefix into the new Node4.
+	Node4::InsertChild(art, next, prefix_byte, remaining_prefix);
+
+	if (in_gate) {
+		D_ASSERT(pos != sizeof(row_t) - 1);
+		Node new_prefix;
+		auto count = key.len - depth - 1;
+		Prefix::NewInlined(art, new_prefix, key, depth + 1, UnsafeNumericCast<uint8_t>(count));
+		Node::InsertChild(art, next, key[depth], new_prefix);
+		return true;
+	}
+
+	Node leaf_node;
+	reference<Node> ref_node(leaf_node);
+	if (depth + 1 < key.len) {
+		// Create the prefix.
+		auto count = key.len - depth - 1;
+		Prefix::New(art, ref_node, key, depth + 1, count);
+	}
+	// Create the inlined leaf.
+	Leaf::New(ref_node, row_id.GetRowID());
+	Node4::InsertChild(art, next, key[depth], leaf_node);
+	return true;
+}
+
+void Prefix::ForkInlined(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
+                         const ARTKey &key, const bool freed_gate) {
+	if (pos == ROW_ID_COUNT) {
 		Node7Leaf::New(art, node);
 	} else {
 		Node4::New<Node4>(art, node, NType::NODE_4);
@@ -316,7 +364,7 @@ void Prefix::Fork(ART &art, reference<Node> &node, const idx_t pos, const uint8_
 	Node::InsertChild(art, node, byte, remainder);
 
 	// Insert the new key into the new node.
-	if (pos == ART::ROW_ID_PREFIX_COUNT) {
+	if (pos == ROW_ID_COUNT) {
 		Node::InsertChild(art, node, key[pos]);
 		return;
 	}
@@ -401,7 +449,7 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 	}
 
 	// Fast path with memcpy.
-	if (art.prefix_count <= ART::DEPRECATED_PREFIX_COUNT) {
+	if (art.prefix_count <= DEPRECATED_COUNT) {
 		reference<Node> node_ref(node);
 		while (node_ref.get().GetType() == PREFIX && !node_ref.get().IsGate()) {
 			Prefix prefix(art, node_ref, true, true);
@@ -413,9 +461,9 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 			new_node = allocator->New();
 			new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
 
-			Prefix new_prefix(allocator, new_node, ART::DEPRECATED_PREFIX_COUNT);
-			new_prefix.data[ART::DEPRECATED_PREFIX_COUNT] = prefix.data[Count(art)];
-			memcpy(new_prefix.data, prefix.data, new_prefix.data[ART::DEPRECATED_PREFIX_COUNT]);
+			Prefix new_prefix(allocator, new_node, DEPRECATED_COUNT);
+			new_prefix.data[DEPRECATED_COUNT] = prefix.data[Count(art)];
+			memcpy(new_prefix.data, prefix.data, new_prefix.data[DEPRECATED_COUNT]);
 			*new_prefix.ptr = *prefix.ptr;
 
 			prefix.ptr->Clear();
@@ -431,7 +479,7 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 	Node new_node;
 	new_node = allocator->New();
 	new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
-	Prefix new_prefix(allocator, new_node, ART::DEPRECATED_PREFIX_COUNT);
+	Prefix new_prefix(allocator, new_node, DEPRECATED_COUNT);
 
 	reference<Node> node_ref(node);
 	while (node_ref.get().GetType() == PREFIX && !node_ref.get().IsGate()) {
@@ -461,6 +509,17 @@ Prefix Prefix::Append(ART &art, uint8_t byte) {
 
 	auto prefix = NewInternal(art, *ptr, nullptr, 0, 0, PREFIX);
 	return prefix.Append(art, byte);
+}
+
+idx_t Prefix::GetMismatchPos(ART &art, Node &node, const ARTKey &key, idx_t &depth) {
+	Prefix prefix(art, node);
+	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+		if (prefix.data[i] != key[depth]) {
+			return i;
+		}
+		depth++;
+	}
+	return DConstants::INVALID_INDEX;
 }
 
 void Prefix::Append(ART &art, Node other) {
@@ -677,15 +736,15 @@ bool Prefix::SplitInlined(ART &art, reference<Node> &node, Node &child, uint8_t 
 }
 
 Prefix Prefix::TransformToDeprecatedAppend(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator, uint8_t byte) {
-	if (data[ART::DEPRECATED_PREFIX_COUNT] != ART::DEPRECATED_PREFIX_COUNT) {
-		data[data[ART::DEPRECATED_PREFIX_COUNT]] = byte;
-		data[ART::DEPRECATED_PREFIX_COUNT]++;
+	if (data[DEPRECATED_COUNT] != DEPRECATED_COUNT) {
+		data[data[DEPRECATED_COUNT]] = byte;
+		data[DEPRECATED_COUNT]++;
 		return *this;
 	}
 
 	*ptr = allocator->New();
 	ptr->SetMetadata(static_cast<uint8_t>(PREFIX));
-	Prefix prefix(allocator, *ptr, ART::DEPRECATED_PREFIX_COUNT);
+	Prefix prefix(allocator, *ptr, DEPRECATED_COUNT);
 	return prefix.TransformToDeprecatedAppend(art, allocator, byte);
 }
 

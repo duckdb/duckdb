@@ -36,16 +36,10 @@ public:
 public:
 	//! Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
-	//! Prefix size for nested leaves containing row IDs.
-	static constexpr uint8_t ROW_ID_PREFIX_COUNT = sizeof(row_t) - 1;
-	//! Prefix size of deprecated storage formats.
-	static constexpr uint8_t DEPRECATED_PREFIX_COUNT = 15;
 	//! FixedSizeAllocator count of the ART.
 	static constexpr uint8_t ALLOCATOR_COUNT = 10;
 	//! FixedSizeAllocator count of deprecated ARTs.
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 4;
-	//! Invalid row ID indicator.
-	static constexpr row_t INVALID_ROW_ID = -1;
 
 public:
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
@@ -80,7 +74,7 @@ public:
 	//! Append a chunk by first executing the ART's expressions.
 	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids) override;
 	//! Insert a chunk.
-	bool Insert(Node &node, reference<ARTKey> key, idx_t depth, reference<ARTKey> row_id, bool in_gate);
+	bool Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const bool in_gate);
 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Constraint verification for a chunk.
@@ -125,7 +119,8 @@ private:
 	                      unsafe_vector<row_t> &row_ids);
 	const Node *Lookup(const Node &node, const ARTKey &key, idx_t depth);
 
-	void InsertIntoEmptyNode(Node &node, ARTKey &key, idx_t depth, ARTKey &row_id, bool in_gate);
+	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const bool in_gate);
+	bool InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const bool in_gate);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
@@ -144,8 +139,10 @@ private:
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);
 
 	void InitAllocators(const IndexStorageInfo &info);
+	void TransformToDeprecated();
 	void Deserialize(const BlockPointer &pointer);
 	void WritePartialBlocks(const bool v1_0_0_storage);
+	void SetPrefixCount(const IndexStorageInfo &info);
 
 	string VerifyAndToStringInternal(const bool only_verify);
 	void VerifyAllocationsInternal();
