@@ -1,0 +1,182 @@
+{
+    "group": "table_function_bind",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_bind_get_extra_info",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The extra info"
+            }
+        },
+        {
+            "name": "duckdb_bind_add_result_column",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Adds a result column to the output of the table function.\n\n",
+                "param_comments": {
+                    "info": "The table function's bind info.",
+                    "name": "The column name.",
+                    "type": "The logical column type."
+                }
+            }
+        },
+        {
+            "name": "duckdb_bind_get_parameter_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the number of regular (non-named) parameters to the function.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The number of parameters"
+            }
+        },
+        {
+            "name": "duckdb_bind_get_parameter",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the parameter at the given index.\n\nThe result must be destroyed with `duckdb_destroy_value`.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "index": "The index of the parameter to get"
+                },
+                "return_value": "The value of the parameter. Must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_bind_get_named_parameter",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves a named parameter with the given name.\n\nThe result must be destroyed with `duckdb_destroy_value`.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "name": "The name of the parameter"
+                },
+                "return_value": "The value of the parameter. Must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_bind_set_bind_data",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "void *",
+                    "name": "bind_data"
+                },
+                {
+                    "type": "duckdb_delete_callback_t",
+                    "name": "destroy"
+                }
+            ],
+            "comment": {
+                "description": "Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "bind_data": "The bind data object.",
+                    "destroy": "The callback that will be called to destroy the bind data (if any)"
+                }
+            }
+        },
+        {
+            "name": "duckdb_bind_set_cardinality",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "cardinality"
+                },
+                {
+                    "type": "bool",
+                    "name": "is_exact"
+                }
+            ],
+            "comment": {
+                "description": "Sets the cardinality estimate for the table function, used for optimization.\n\n",
+                "param_comments": {
+                    "info": "The bind data object.",
+                    "is_exact": "Whether or not the cardinality estimate is exact, or an approximation"
+                }
+            }
+        },
+        {
+            "name": "duckdb_bind_set_error",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "error"
+                }
+            ],
+            "comment": {
+                "description": "Report that an error has occurred while calling bind.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "error": "The error message"
+                }
+            }
+        }
+    ]
+}

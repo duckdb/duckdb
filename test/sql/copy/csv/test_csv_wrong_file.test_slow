@@ -2,6 +2,9 @@
 # description: Test CSV read from wrong file format
 # group: [csv]
 
+statement ok
+pragma enable_verification;
+
 require tpch
 
 # load the DB from disk

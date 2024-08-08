@@ -44,8 +44,8 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 		auto &aggregate = aggregate_expressions[i];
 		D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.state_size());
-		aggr.function.initialize(state.get());
+		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.state_size(aggr.function));
+		aggr.function.initialize(aggr.function, state.get());
 		aggregate_data.push_back(std::move(state));
 		bind_data.push_back(aggr.bind_info.get());
 		destructors.push_back(aggr.function.destructor);

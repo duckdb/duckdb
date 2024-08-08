@@ -2,11 +2,13 @@
 # description: Test csv header detection
 # group: [auto]
 
-require vector_size 512
+statement ok
+PRAGMA enable_verification
+
 
 # CSV file with two lines, none header
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/no_header.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/no_header.csv');
 
 query RTT
 SELECT column0, column1, column2 FROM test ORDER BY column0;
@@ -19,7 +21,7 @@ DROP TABLE test;
 
 # CSV file with two lines, one header
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/single_header.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/single_header.csv');
 
 query RTT
 SELECT number, text, date FROM test ORDER BY number;
@@ -31,7 +33,7 @@ DROP TABLE test;
 
 # CSV file with three lines, one header, one skip row
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/skip_row.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/skip_row.csv');
 
 query RTT
 SELECT number, text, date FROM test ORDER BY number;
@@ -43,7 +45,7 @@ DROP TABLE test;
 
 # CSV file with three lines, one header, two skip rows
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/multiple_skip_row.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/multiple_skip_row.csv');
 
 query RTT
 SELECT number, text, date FROM test ORDER BY number;
@@ -55,7 +57,7 @@ DROP TABLE test;
 
 # CSV file with two lines both only strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_multi_line.csv', header = 0);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/varchar_multi_line.csv', header = 0);
 
 query TTT
 SELECT * FROM test ORDER BY column0;
@@ -68,7 +70,7 @@ DROP TABLE test;
 
 # CSV file with one line, two columns, only strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_single_line.csv', header = 0);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/varchar_single_line.csv', header = 0);
 
 query TT
 SELECT column0, column1 FROM test ORDER BY column0;
@@ -80,7 +82,7 @@ DROP TABLE test;
 
 # CSV file with one line, two columns - one numeric, one string
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/mixed_single_line.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/mixed_single_line.csv');
 
 query IT
 SELECT column0, column1 FROM test ORDER BY column0;
@@ -92,7 +94,7 @@ DROP TABLE test;
 
 # CSV file with one line, one string column
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/single_value.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/single_value.csv');
 
 query T
 SELECT * FROM test;
@@ -103,7 +105,7 @@ DROP TABLE test;
 
 # CSV file with one line, one numeric column
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/single_numeric.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/single_numeric.csv');
 
 query I
 SELECT * FROM test;
@@ -115,7 +117,7 @@ DROP TABLE test;
 
 # CSV with UTF-8 BOM marker that could mess up the header line parsing
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/auto/utf8bom.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto('data/csv/auto/utf8bom.csv');
 
 query II
 SELECT * FROM test;

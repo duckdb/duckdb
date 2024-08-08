@@ -1171,7 +1171,8 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
                              const py::object &date_format, const py::object &timestamp_format,
                              const py::object &quoting, const py::object &encoding, const py::object &compression,
                              const py::object &overwrite, const py::object &per_thread_output,
-                             const py::object &use_tmp_file, const py::object &partition_by) {
+                             const py::object &use_tmp_file, const py::object &partition_by,
+                             const py::object &write_partition_columns) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(sep)) {
@@ -1296,6 +1297,13 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 			partition_by_values.emplace_back(Value(py::str(field)));
 		}
 		options["partition_by"] = {partition_by_values};
+	}
+
+	if (!py::none().is(write_partition_columns)) {
+		if (!py::isinstance<py::bool_>(write_partition_columns)) {
+			throw InvalidInputException("to_csv only accepts 'write_partition_columns' as a boolean");
+		}
+		options["write_partition_columns"] = {Value::BOOLEAN(py::bool_(write_partition_columns))};
 	}
 
 	auto write_csv = rel->WriteCSVRel(filename, std::move(options));

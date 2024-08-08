@@ -27,6 +27,10 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 	current_transaction_id = TRANSACTION_ID_START;
 	lowest_active_id = TRANSACTION_ID_START;
 	lowest_active_start = MAX_TRANSACTION_ID;
+	if (!db.GetCatalog().IsDuckCatalog()) {
+		// Specifically the StorageManager of the DuckCatalog is relied on, with `db.GetStorageManager`
+		throw InternalException("DuckTransactionManager should only be created together with a DuckCatalog");
+	}
 }
 
 DuckTransactionManager::~DuckTransactionManager() {
@@ -280,7 +284,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		tlock.unlock();
 		// checkpoint the database to disk
 		CheckpointOptions options;
-		options.action = CheckpointAction::FORCE_CHECKPOINT;
+		options.action = CheckpointAction::ALWAYS_CHECKPOINT;
 		options.type = checkpoint_decision.type;
 		auto &storage_manager = db.GetStorageManager();
 		storage_manager.CreateCheckpoint(options);

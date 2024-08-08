@@ -66,16 +66,9 @@ jobs:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
-    - name: Handrolled checkout
-      shell: bash
-      env:
-        REPO_NAME: ${{ github.repository }}
-        REPO_REF: ${{ inputs.git_ref }}
-      run: |
-        git config --global --add safe.directory $(pwd)
-        git clone https://github.com/$REPO_NAME .
-        git fetch
-        git checkout $REPO_REF
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.git_ref }}
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
@@ -213,6 +206,16 @@ jobs:
         ccache: 1
         git_ref: ${{ inputs.git_ref }}
 
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Configure OpenSSL for Rust
+      run: |
+        echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+        echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=`pwd`/build/release/vcpkg_installed/x64-linux/include" >> $GITHUB_ENV
+        echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
+
     - uses: ./.github/actions/build_extensions
       with:
         vcpkg_target_triplet: x64-linux
@@ -255,6 +258,18 @@ jobs:
           aarch64_cross_compile: 1
           ccache: 1
           git_ref: ${{ inputs.git_ref }}
+
+      - name: Setup Rust for cross compilation
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Configure OpenSSL for Rust
+        run: |
+          echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux/include" >> $GITHUB_ENV
+          echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
 
       - uses: ./.github/actions/build_extensions
         with:
