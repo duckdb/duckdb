@@ -1414,6 +1414,8 @@ public:
 
 	//! Compute the block starts
 	void MeasurePayloadBlocks();
+	//! Patch up the previous index block boundaries
+	void PatchPrevIdcs();
 	bool TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate);
 
 	void Finalize(const FrameStats &stats);
@@ -1688,6 +1690,8 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 			// Sleep while other tasks finish
 			return false;
 		}
+		// Last task patches the boundaries
+		PatchPrevIdcs();
 		break;
 	default:
 		break;
@@ -1796,7 +1800,7 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 	std::get<1>(gastate.seconds[block_idx]) = i;
 }
 
-void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
+void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 	//	13:	return prevIdcs
 
 	// Patch up the indices at block boundaries
@@ -1810,7 +1814,9 @@ void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
 			prev_idcs[i] = ZippedTuple(second + 1, i);
 		}
 	}
+}
 
+void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
 	merge_sort_tree = make_uniq<DistinctSortTree>(std::move(prev_idcs), *this);
 }
 
