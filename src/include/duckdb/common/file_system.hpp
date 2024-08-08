@@ -296,8 +296,12 @@ public:
 	}
 	void Release() {
 		if (handle) {
-			fs.RemoveFile(path);
 			handle.reset();
+			try {
+				fs.RemoveFile(path);
+			} catch (...) {
+				// Failure to remove file are mostly OK
+			}
 		}
 	}
 
