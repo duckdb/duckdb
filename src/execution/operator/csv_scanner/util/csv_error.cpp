@@ -174,20 +174,6 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_s
 	                how_to_fix_it.str(), current_path);
 }
 
-CSVError CSVError::SniffingError(const string &file_path) {
-	std::ostringstream error;
-	// Which column
-	error << "aeouhuae";
-	return CSVError(error.str(), SNIFFING, {});
-}
-
-CSVError CSVError::SniffingErrorFoundErrors(const string &file_path) {
-	std::ostringstream error;
-	// Which column
-	error << "aeouhuae";
-	return CSVError(error.str(), SNIFFING, {});
-}
-
 CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
                                        idx_t column_count, char delimiter) {
 	std::ostringstream error;
@@ -293,7 +279,8 @@ CSVError CSVError::DialectSniffingError(const CSVReaderOptions &options, const s
 	if (!options.null_padding) {
 		error << "* Enable null padding (null_padding=true) to pad missing columns with NULL values" << '\n';
 	}
-	error << "* Check you are using the correct file compression, otherwise set it (e.g., compression = \'zstd\')" << '\n';
+	error << "* Check you are using the correct file compression, otherwise set it (e.g., compression = \'zstd\')"
+	      << '\n';
 
 	return CSVError(error.str(), SNIFFING, {});
 }
