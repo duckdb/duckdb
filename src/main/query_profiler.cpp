@@ -393,10 +393,12 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			if (op.type == PhysicalOperatorType::TABLE_SCAN) {
 				auto &scan_op = op.Cast<PhysicalTableScan>();
 				auto &bind_data = scan_op.bind_data;
-				auto cardinality = scan_op.function.cardinality(context, &(*bind_data));
-				if (cardinality->has_estimated_cardinality) {
-					tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_ROWS_SCANNED,
-					                                                cardinality->estimated_cardinality);
+				if (bind_data) {
+					auto cardinality = scan_op.function.cardinality(context, &(*bind_data));
+					if (cardinality->has_estimated_cardinality) {
+						tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_ROWS_SCANNED,
+						                                                cardinality->estimated_cardinality);
+					}
 				}
 			}
 		}
