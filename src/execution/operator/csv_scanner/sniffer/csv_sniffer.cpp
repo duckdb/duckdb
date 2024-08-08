@@ -207,7 +207,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 				}
 			}
 		}
-		auto error = CSVError::SniffingError(options.file_path);
+		auto error = CSVError::SniffingErrorFoundErrors(options.file_path);
 		error_handler->Error(error);
 	}
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());

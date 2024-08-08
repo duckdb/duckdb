@@ -177,8 +177,14 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_s
 CSVError CSVError::SniffingError(const string &file_path) {
 	std::ostringstream error;
 	// Which column
-	error << "Error when sniffing file \"" << file_path << "\"." << '\n';
-	error << "CSV options could not be auto-detected. Consider setting parser options manually." << '\n';
+	error << "aeouhuae";
+	return CSVError(error.str(), SNIFFING, {});
+}
+
+CSVError CSVError::SniffingErrorFoundErrors(const string &file_path) {
+	std::ostringstream error;
+	// Which column
+	error << "aeouhuae";
 	return CSVError(error.str(), SNIFFING, {});
 }
 
@@ -287,6 +293,8 @@ CSVError CSVError::DialectSniffingError(const CSVReaderOptions &options, const s
 	if (!options.null_padding) {
 		error << "* Enable null padding (null_padding=true) to pad missing columns with NULL values" << '\n';
 	}
+	error << "* Check you are using the correct file compression, otherwise set it (e.g., compression = \'zstd\')" << '\n';
+
 	return CSVError(error.str(), SNIFFING, {});
 }
 

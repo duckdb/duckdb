@@ -66,6 +66,8 @@ public:
 	                              string &csv_row, idx_t byte_position, const string &current_path);
 	//! Produces error for when the sniffer couldn't find viable options
 	static CSVError SniffingError(const string &file_path);
+	static CSVError SniffingErrorFoundErrors(const string &file_path);
+
 	//! Produces an error message for a dialect sniffing error.
 	static CSVError DialectSniffingError(const CSVReaderOptions &options, const string &search_space);
 	//! Produces an error message for a header sniffing error.
