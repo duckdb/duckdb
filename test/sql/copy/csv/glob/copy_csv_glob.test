@@ -29,4 +29,5 @@ SELECT * FROM dates ORDER BY 1
 statement error
 COPY dates FROM read_csv('data/csv/glob/*/a*a.csv', auto_detect=1)
 ----
+syntax error at or near "'data/csv/glob/*/a*a.csv'"
 
