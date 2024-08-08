@@ -96,6 +96,31 @@ SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e//2), 'xx')*2 as s FROM struct_data 
 5	4
 6	6
 
+query III
+SELECT {field1: 1, field2: 2} as strct, strct.field1, strct.field2
+----
+{'field1': 1, 'field2': 2}	1	2
+
+query III
+SELECT {field1: 1, field2: 2} as strct, strct['field1'], strct['field2']
+----
+{'field1': 1, 'field2': 2}	1	2
+
+statement error
+SELECT {field1: 1, field2: 2} as strct, strct.field1, strct.field3
+----
+Binder Error: Could not find key "field3" in struct
+
+query IIIIII
+SELECT {field1: {a: 11, b: 12}, field2: 2} as strct, strct.field1, strct.field2, strct['field1'].a, strct.field1['a'], strct.field1.a
+----
+{'field1': {'a': 11, 'b': 12}, 'field2': 2}	{'a': 11, 'b': 12}	2	11	11	11
+
+query IIII
+SELECT STRUCT_PACK(field1:= STRUCT_PACK(a:= 11, b:= 12), field2:= 2) as strct, strct.field1, strct.field2, strct.field1.a
+----
+{'field1': {'a': 11, 'b': 12}, 'field2': 2}	{'a': 11, 'b': 12}	2	11
+
 query II
 SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as ee FROM struct_data ORDER BY e DESC
 ----
