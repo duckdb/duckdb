@@ -159,7 +159,7 @@
  * _malloc_thread_cleanup() exists, use it as the basis for thread cleanup in
  * malloc_tsd.
  */
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #define JEMALLOC_MALLOC_THREAD_CLEANUP
 #endif
 
