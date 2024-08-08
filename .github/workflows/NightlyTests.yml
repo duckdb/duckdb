@@ -119,6 +119,7 @@ jobs:
       EXTENSION_STATIC_BUILD: 1
       BUILD_JSON: 1
       TREAT_WARNINGS_AS_ERRORS: 1
+      HTTP_PROXY_RUNNING: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -140,6 +141,14 @@ jobs:
       with:
         key: ${{ github.job }}
         save: ${{ env.CCACHE_SAVE }}
+
+    - name: Launch proxy service
+      run: |
+        apt-get update
+        apt-get install --assume-yes --no-install-recommends squid
+        ./scripts/run_squid.sh --port 8888 --log_dir squid_logs &
+        ./scripts/run_squid.sh --port 8889 --log_dir squid_auth_logs --auth &
+        sleep 10
 
     - name: Build
       shell: bash
