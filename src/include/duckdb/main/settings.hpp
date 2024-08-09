@@ -18,7 +18,16 @@ struct DBConfig;
 
 const string GetDefaultUserAgent();
 
-enum class SettingScope : uint8_t { GLOBAL, LOCAL, INVALID };
+enum class SettingScope : uint8_t {
+	//! Setting is from the global Setting scope
+	GLOBAL,
+	//! Setting is from the local Setting scope
+	LOCAL,
+	//! Setting was not feteched from settings, but it was fetched from a secret instead
+	SECRET,
+	//! The setting was not found or invalid in some other way
+	INVALID
+};
 
 struct SettingLookupResult {
 public:

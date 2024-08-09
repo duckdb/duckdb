@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv')
+FROM read_csv_auto('data/csv/test/dateformat.csv')
 ----
 2019-06-05
 
@@ -16,7 +16,7 @@ CREATE TABLE dates (d DATE);
 
 # base date format does not work here
 statement ok
-INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0)
+INSERT INTO dates SELECT * FROM read_csv('data/csv/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0)
 
 query I
 SELECT * FROM dates
@@ -25,7 +25,7 @@ SELECT * FROM dates
 
 # dateformat should also work with auto format
 statement ok
-INSERT INTO dates SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', dateformat='%m/%d/%Y')
+INSERT INTO dates SELECT * FROM read_csv_auto('data/csv/test/dateformat.csv', dateformat='%m/%d/%Y')
 
 query I
 SELECT * FROM dates ORDER BY 1
@@ -36,7 +36,7 @@ SELECT * FROM dates ORDER BY 1
 # we can also do this for timestamps
 # as long as we make the date format fail
 statement ok
-CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', timestampformat='%m/%d/%Y', columns=STRUCT_PACK(d := 'TIMESTAMP'))
+CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('data/csv/test/dateformat.csv', timestampformat='%m/%d/%Y', columns=STRUCT_PACK(d := 'TIMESTAMP'))
 
 query I
 SELECT * FROM timestamps
@@ -45,7 +45,7 @@ SELECT * FROM timestamps
 
 # create a view using the read_csv function
 statement ok
-CREATE VIEW lineitem AS SELECT * FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', sep='|', columns=STRUCT_PACK(l_orderkey := 'INT', l_partkey := 'INT', l_suppkey := 'INT', l_linenumber := 'INT', l_quantity := 'INTEGER', l_extendedprice := 'DOUBLE', l_discount := 'DOUBLE', l_tax := 'DOUBLE', l_returnflag := 'VARCHAR', l_linestatus := 'VARCHAR', l_shipdate := 'DATE', l_commitdate := 'DATE', l_receiptdate := 'DATE', l_shipinstruct := 'VARCHAR', l_shipmode := 'VARCHAR', l_comment := 'VARCHAR'));
+CREATE VIEW lineitem AS SELECT * FROM read_csv('data/csv/real/lineitem_sample.csv', sep='|', columns=STRUCT_PACK(l_orderkey := 'INT', l_partkey := 'INT', l_suppkey := 'INT', l_linenumber := 'INT', l_quantity := 'INTEGER', l_extendedprice := 'DOUBLE', l_discount := 'DOUBLE', l_tax := 'DOUBLE', l_returnflag := 'VARCHAR', l_linestatus := 'VARCHAR', l_shipdate := 'DATE', l_commitdate := 'DATE', l_receiptdate := 'DATE', l_shipinstruct := 'VARCHAR', l_shipmode := 'VARCHAR', l_comment := 'VARCHAR'));
 
 # each of these will read the CSV again through the view
 query I
@@ -66,6 +66,7 @@ SELECT l_partkey, RTRIM(l_comment) FROM lineitem WHERE l_orderkey=1 ORDER BY l_l
 # test incorrect usage of read_csv function
 # wrong argument type
 statement error
-SELECT * FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', sep='|', columns=STRUCT_PACK(l_orderkey := 5))
+SELECT * FROM read_csv('data/csv/real/lineitem_sample.csv', sep='|', columns=STRUCT_PACK(l_orderkey := 5))
 ----
+read_csv requires a type specification as string
 

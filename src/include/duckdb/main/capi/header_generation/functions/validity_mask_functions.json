@@ -1,0 +1,96 @@
+{
+    "group": "validity_mask_functions",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_validity_row_is_valid",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "uint64_t *",
+                    "name": "validity"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "Returns whether or not a row is valid (i.e. not NULL) in the given validity mask.\n\n",
+                "param_comments": {
+                    "validity": "The validity mask, as obtained through `duckdb_vector_get_validity`",
+                    "row": "The row index"
+                },
+                "return_value": "true if the row is valid, false otherwise"
+            }
+        },
+        {
+            "name": "duckdb_validity_set_row_validity",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "uint64_t *",
+                    "name": "validity"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                },
+                {
+                    "type": "bool",
+                    "name": "valid"
+                }
+            ],
+            "comment": {
+                "description": "In a validity mask, sets a specific row to either valid or invalid.\n\nNote that `duckdb_vector_ensure_validity_writable` should be called before calling `duckdb_vector_get_validity`,\nto ensure that there is a validity mask to write to.\n\n",
+                "param_comments": {
+                    "validity": "The validity mask, as obtained through `duckdb_vector_get_validity`.",
+                    "row": "The row index",
+                    "valid": "Whether or not to set the row to valid, or invalid"
+                }
+            }
+        },
+        {
+            "name": "duckdb_validity_set_row_invalid",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "uint64_t *",
+                    "name": "validity"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "In a validity mask, sets a specific row to invalid.\n\nEquivalent to `duckdb_validity_set_row_validity` with valid set to false.\n\n",
+                "param_comments": {
+                    "validity": "The validity mask",
+                    "row": "The row index"
+                }
+            }
+        },
+        {
+            "name": "duckdb_validity_set_row_valid",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "uint64_t *",
+                    "name": "validity"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+            "comment": {
+                "description": "In a validity mask, sets a specific row to valid.\n\nEquivalent to `duckdb_validity_set_row_validity` with valid set to true.\n\n",
+                "param_comments": {
+                    "validity": "The validity mask",
+                    "row": "The row index"
+                }
+            }
+        }
+    ]
+}

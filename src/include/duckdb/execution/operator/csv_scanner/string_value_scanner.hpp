@@ -262,6 +262,9 @@ public:
 	//! If we should Print Error Lines
 	//! We only really care about error lines if we are going to error or store them in a rejects table
 	bool PrintErrorLine();
+	//! Removes last added line, usually because we figured out later on that it's an ill-formed line
+	//! or that it does not fit our schema
+	void RemoveLastLine();
 };
 
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t

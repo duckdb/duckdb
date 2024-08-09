@@ -2,20 +2,16 @@
 # description: IGNORE_ERRORS test
 # group: [csv]
 
-# IGNORE_ERRORS and NULL_PADDING happens on the first vector during dialect detection, so it is likely that
-# small vector sizes miss certain properties, resulting in different errors
-require vector_size 2048
-
 # Try without sniffing
 
 statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0, AUTO_DETECT 0)
+COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0, AUTO_DETECT 0)
 
 statement error
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0, AUTO_DETECT 0)
+COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0, AUTO_DETECT 0)
 ----
 Expected Number of Columns: 2 Found: 1
 
@@ -40,12 +36,12 @@ statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
+COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
 
 statement error
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0)
+COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0)
 ----
-CSV options could not be auto-detected. Consider setting parser options manually.
+It was not possible to automatically detect the CSV Parsing dialect
 
 # not enough columns provided
 query II
