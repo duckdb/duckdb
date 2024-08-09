@@ -1,0 +1,14 @@
+# name: benchmark/micro/json/RealNest/9_list_concat_ranges.benchmark
+# description: Concatinates two lists ranges
+# group: [RealNest]
+
+name list_concat_ranges
+group real_nest
+
+require json
+
+load
+CREATE TABLE cord AS SELECT * FROM read_json('duckdb_benchmark_data/cord-19-document_parses/data.jsonl');
+
+run
+SELECT len(list_concat(list(ref_entries)[90:99], list(ref_entries)[1000:1023])) FROM cord WHERE back_matter IS NOT NULL;

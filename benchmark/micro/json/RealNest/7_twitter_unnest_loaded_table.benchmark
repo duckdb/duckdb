@@ -1,0 +1,14 @@
+# name: benchmark/micro/json/RealNest/7_twitter_unnest_loaded_table.benchmark
+# description: Multi layer unnest from 6 layers deep fom the loaded table
+# group: [RealNest]
+
+name twitter_unnest_loaded_table
+group real_nest
+
+require json
+
+load
+CREATE TABLE twitter AS SELECT * FROM read_json('duckdb_benchmark_data/twitter-stream-2023-01/data.jsonl');
+
+run
+SELECT urls.url FROM (SELECT UNNEST(users.entities.url.urls) AS urls FROM (SELECT UNNEST(includes.users) AS users FROM twitter));
