@@ -4,42 +4,44 @@ This is the DuckDB Python package
 
 You would normally install the DuckDB released version using pip as follows:
 
-    pip3 install duckdb
+```bash
+pip install duckdb
+```
 
 ## Installing locally for development
 
 For development, you may need a DuckDB Python package that is installed from source. Make sure you have the dependencies installed:
 
-    pip3 install -r requirements-dev.txt
+```bash
+pip install -r requirements-dev.txt
+```
 
- In order to install from source, the simplest way is to install by cloning the git repo, and running the make command with `BUILD_PYTHON` set:
+### Installing with pip
 
-    BUILD_PYTHON=1 make debug
+In order to install from source, the simplest way is to install by cloning the Git repository and using pip:
+
+```bash
+cd tools/pythonpkg
+python3 -m pip install .
+```
+
+To install in debug mode, set the environment variable `$DUCKDEBUG=1` (or some other non-zero value).
 
 Note that this will override any existing DuckDB installation you might have. You might also run into conflicts depending on your Python environment. In order to remedy that, it is possible to use virtualenv for installation, e.g. by running the following commands:
 
-    virtualenv .venv --python=python3.8
-    source .venv/bin/activate
-    BUILD_PYTHON=1 make
+```bash
+virtualenv .venv --python=python3.12
+source .venv/bin/activate
+python3 -m pip install .
+```
 
-You can also directly invoke pip from the `tools/pythonpkg` environment.
+### Installing with make
 
-    cd tools/pythonpkg
-    python3 -m pip install .
+You can build using the make command with `BUILD_PYTHON` flag set. For example:
 
-Alternatively, using virtualenv and pip:
-
-    # Create and activate Python virtualenv.
-    virtualenv .venv
-    source .venv/bin/activate
-
-    # Compile and install DuckDB for Python.
-    pip install -e tools/pythonpkg --verbose
-
-This works fine for a single installation, but is not recommended for active development since incremental compilation does not always work correctly here.
-
-If you are installing via `pip`, you can set the environment variable
-`$DUCKDEBUG=1` (or some other non-zero value) to compile in debug mode.
+```bash
+BUILD_PYTHON=1 make debug
+```
 
 ### Setup for cloud storage
 
@@ -62,7 +64,7 @@ Next, copy over the python package related files, and install the package.
 ```bash
 mkdir -p $DUCKDB_PREFIX/src/duckdb-pythonpkg
 tar --directory=$DUCKDB_PREFIX/src/duckdb-pythonpkg -xzpf tools/pythonpkg/dist/duckdb-${SETUPTOOLS_SCM_PRETEND_VERSION}.tar.gz
-pip3 install --prefix $DUCKDB_PREFIX -e $DUCKDB_PREFIX/src/duckdb-pythonpkg/duckdb-${SETUPTOOLS_SCM_PRETEND_VERSION}
+pip install --prefix $DUCKDB_PREFIX -e $DUCKDB_PREFIX/src/duckdb-pythonpkg/duckdb-${SETUPTOOLS_SCM_PRETEND_VERSION}
 ```
 
 ## Development and Stubs
