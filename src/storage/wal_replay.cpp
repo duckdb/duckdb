@@ -672,9 +672,14 @@ static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &
 }
 
 void WriteAheadLogDeserializer::ReplayRowGroupData() {
-	PersistentCollectionData data;
-	deserializer.ReadProperty(101, "row_group_data", data);
 	auto &block_manager = db.GetStorageManager().GetBlockManager();
+	PersistentCollectionData data;
+	deserializer.Set<DatabaseInstance &>(db.GetDatabase());
+	CompressionInfo compression_info(block_manager.GetBlockSize());
+	deserializer.Set<const CompressionInfo &>(compression_info);
+	deserializer.ReadProperty(101, "row_group_data", data);
+	deserializer.Unset<const CompressionInfo>();
+	deserializer.Unset<DatabaseInstance>();
 	if (DeserializeOnly()) {
 		// label blocks in data as used - they will be used after the WAL replay is finished
 		// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
