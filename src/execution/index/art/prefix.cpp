@@ -3,6 +3,7 @@
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node7_leaf.hpp"
@@ -316,19 +317,19 @@ bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const 
 		}
 	}
 
-	Node remaining_prefix;
-	auto prefix_byte = GetByte(art, next, UnsafeNumericCast<uint8_t>(pos));
-	auto freed_gate = Split(art, next, remaining_prefix, UnsafeNumericCast<uint8_t>(pos));
+	Node remainder;
+	auto byte = GetByte(art, next, UnsafeNumericCast<uint8_t>(pos));
+	auto freed_gate = Split(art, next, remainder, UnsafeNumericCast<uint8_t>(pos));
 	Node4::New<Node4>(art, next, NType::NODE_4);
 	if (freed_gate) {
 		next.get().SetGate();
 	}
 
 	// Insert the remaining prefix into the new Node4.
-	Node4::InsertChild(art, next, prefix_byte, remaining_prefix);
+	Node4::InsertChild(art, next, byte, remainder);
 
 	if (in_gate) {
-		D_ASSERT(pos != sizeof(row_t) - 1);
+		D_ASSERT(pos != ROW_ID_COUNT);
 		Node new_prefix;
 		auto count = key.len - depth - 1;
 		Prefix::NewInlined(art, new_prefix, key, depth + 1, UnsafeNumericCast<uint8_t>(count));
@@ -349,8 +350,8 @@ bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const 
 	return true;
 }
 
-void Prefix::ForkInlined(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
-                         const ARTKey &key, const bool freed_gate) {
+void Prefix::Fork(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
+                  const ARTKey &key, const bool freed_gate) {
 	if (pos == ROW_ID_COUNT) {
 		Node7Leaf::New(art, node);
 	} else {

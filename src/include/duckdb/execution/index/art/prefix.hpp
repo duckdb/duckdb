@@ -89,9 +89,9 @@ public:
 	//! Insert a key into a prefix.
 	static bool Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const bool in_gate);
 
-	//! Fork an inlined prefix.
-	static void ForkInlined(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
-	                        const ARTKey &key, const bool freed_gate = false);
+	//! Fork a prefix.
+	static void Fork(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
+	                 const ARTKey &key, const bool freed_gate = false);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);

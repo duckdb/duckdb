@@ -65,7 +65,7 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id) {
 	if (pos != 0) {
 		Prefix::New(art, next, row_id, 0, pos);
 	}
-	Prefix::ForkInlined(art, next, pos, byte, remainder, key);
+	Prefix::Fork(art, next, pos, byte, remainder, key);
 	node.SetGate();
 }
 

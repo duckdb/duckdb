@@ -76,15 +76,18 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	SetPrefixCount(info);
 	if (!allocators) {
 		owns_data = true;
+		auto prefix_allocator_size = NumericCast<idx_t>(prefix_count) + NumericCast<idx_t>(Prefix::METADATA_SIZE);
+		auto inlined_prefix_allocator_size = NumericCast<idx_t>(prefix_count) + 1;
 		auto &block_manager = table_io_manager.GetIndexBlockManager();
+
 		array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
-		    make_unsafe_uniq<FixedSizeAllocator>(prefix_count + Prefix::METADATA_SIZE, block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(prefix_allocator_size, block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager),
-		    make_unsafe_uniq<FixedSizeAllocator>(prefix_count + 1, block_manager),
+		    make_unsafe_uniq<FixedSizeAllocator>(inlined_prefix_allocator_size, block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node7Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node15Leaf), block_manager),
 		    make_unsafe_uniq<FixedSizeAllocator>(sizeof(Node256Leaf), block_manager),
@@ -118,7 +121,7 @@ static unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Value &val
 	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
-	return result;
+	return std::move(result);
 }
 
 static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Value &low_value,
@@ -130,7 +133,7 @@ static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Value &low_v
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
 	result->expressions[1] = high_expression_type;
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const Expression &filter_expr) {
@@ -617,8 +620,16 @@ bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const
 		return success;
 	}
 
-	// Insert a new inlined leaf at key[depth].
-	D_ASSERT(!in_gate);
+	// Create an inlined prefix at key[depth].
+	if (in_gate) {
+		Node remainder;
+		auto byte = key[depth];
+		auto success = Insert(remainder, key, depth + 1, row_id, in_gate);
+		Node::InsertChild(*this, node, byte, remainder);
+		return success;
+	}
+
+	// Insert an inlined leaf at key[depth].
 	Node leaf;
 	reference<Node> ref(leaf);
 
@@ -674,7 +685,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 		Node remainder;
 		auto byte = Prefix::GetByte(*this, next, UnsafeNumericCast<uint8_t>(pos));
 		auto freed_gate = Prefix::Split(*this, next, remainder, UnsafeNumericCast<uint8_t>(pos));
-		Prefix::ForkInlined(*this, next, depth, byte, remainder, key, freed_gate);
+		Prefix::Fork(*this, next, depth, byte, remainder, key, freed_gate);
 		return true;
 	}
 	case NType::NODE_4:
@@ -1071,8 +1082,9 @@ void ART::TransformToDeprecated() {
 	unsafe_unique_ptr<FixedSizeAllocator> deprecated_allocator;
 
 	if (prefix_count != Prefix::DEPRECATED_COUNT) {
-		deprecated_allocator =
-		    make_unsafe_uniq<FixedSizeAllocator>(Prefix::DEPRECATED_COUNT + Prefix::METADATA_SIZE, block_manager);
+		auto prefix_allocator_size =
+		    NumericCast<idx_t>(Prefix::DEPRECATED_COUNT) + NumericCast<idx_t>(Prefix::METADATA_SIZE);
+		deprecated_allocator = make_unsafe_uniq<FixedSizeAllocator>(prefix_allocator_size, block_manager);
 	}
 
 	// Transform all leaves, and possibly the prefixes.
@@ -1091,7 +1103,8 @@ void ART::TransformToDeprecated() {
 		// Update the segment size in the empty PREFIX_INLINED allocator.
 		D_ASSERT((*allocators)[inlined_idx]->IsEmpty());
 		(*allocators)[inlined_idx]->Reset();
-		(*allocators)[inlined_idx] = make_unsafe_uniq<FixedSizeAllocator>(prefix_count + 1, block_manager);
+		auto inlined_prefix_allocator_size = NumericCast<idx_t>(prefix_count) + 1;
+		(*allocators)[inlined_idx] = make_unsafe_uniq<FixedSizeAllocator>(inlined_prefix_allocator_size, block_manager);
 	}
 }
 
