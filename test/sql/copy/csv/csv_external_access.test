@@ -17,23 +17,28 @@ SET enable_external_access=false;
 statement error
 SELECT * FROM read_csv('data/csv/test/date.csv', columns = {'d': 'DATE'});
 ----
+Scanning read_csv files is disabled through configuration
 
 statement error
 SELECT * FROM read_csv_auto('data/csv/test/date.csv');
 ----
+Scanning read_csv_auto files is disabled through configuration
 
 statement error
 COPY date_test FROM 'data/csv/test/date.csv';
 ----
+COPY FROM is disabled by configuration
 
 statement error
 COPY date_test TO '__TEST_DIR__/date.csv'
 ----
+COPY TO is disabled by configuration
 
 # we also can't just enable external access again
 statement error
 SET enable_external_access=true;
 ----
+Cannot change enable_external_access setting while database is running
 
 # sniffer also respects external access flag
 statement error

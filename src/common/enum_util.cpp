@@ -2065,6 +2065,8 @@ const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
 		return "JSON";
 	case ExplainFormat::HTML:
 		return "HTML";
+	case ExplainFormat::GRAPHVIZ:
+		return "GRAPHVIZ";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2083,6 +2085,9 @@ ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "HTML")) {
 		return ExplainFormat::HTML;
+	}
+	if (StringUtil::Equals(value, "GRAPHVIZ")) {
+		return ExplainFormat::GRAPHVIZ;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
