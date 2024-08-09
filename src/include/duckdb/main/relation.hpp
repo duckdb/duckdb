@@ -34,17 +34,26 @@ class LogicalOperator;
 class QueryNode;
 class TableRef;
 
+static string CreateRelationAlias(RelationType type, const string &alias) {
+	if (!alias.empty()) {
+		return alias;
+	}
+	return StringUtil::Format("%s_%s", EnumUtil::ToString(type), StringUtil::GenerateRandomName());
+}
+
 class Relation : public enable_shared_from_this<Relation> {
 public:
 	Relation(const shared_ptr<ClientContext> &context, RelationType type) : context(context), type(type) {
 	}
-	Relation(ClientContextWrapper &context, RelationType type) : context(context.GetContext()), type(type) {
+	Relation(ClientContextWrapper &context, RelationType type, const string &alias = "")
+	    : context(context.GetContext()), type(type), alias(CreateRelationAlias(type, alias)) {
 	}
 	virtual ~Relation() {
 	}
 
 	ClientContextWrapper context;
 	RelationType type;
+	const string alias;
 	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
 public:

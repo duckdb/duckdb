@@ -13,7 +13,7 @@ void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &expr) {
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 		auto &col_names = col_ref.column_names;
 		if (col_names.size() > 1) {
-			col_names = vector<string> {col_names.back()};
+			col_ref.ReplaceOrRemoveTableName();
 		}
 	} else {
 		ParsedExpressionIterator::EnumerateChildren(

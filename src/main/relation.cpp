@@ -212,7 +212,7 @@ shared_ptr<Relation> Relation::Aggregate(vector<unique_ptr<ParsedExpression>> ex
 }
 
 string Relation::GetAlias() {
-	return "relation";
+	return alias;
 }
 
 unique_ptr<TableRef> Relation::GetTableRef() {
