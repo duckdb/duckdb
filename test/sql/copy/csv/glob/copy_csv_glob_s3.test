@@ -69,5 +69,6 @@ SELECT * FROM dates ORDER BY 1
 statement error
 COPY dates FROM read_csv('s3://test-bucket/copy_csv_glob_s3/copy/*/a*a.csv', auto_detect=1)
 ----
+No files found that match the pattern
 
 endloop

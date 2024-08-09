@@ -27,6 +27,7 @@ loop i 1 100
 statement error
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/test_fallback.csv', SAMPLE_SIZE=1);
 ----
+Column TestDoubleError is being converted as type DOUBLE
 
 endloop
 # CSV file with irregularity in first column, small sample size and fallback activated

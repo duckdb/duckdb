@@ -42,25 +42,30 @@ SELECT * FROM test ORDER BY 1;
 statement error
 COPY test TO 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0);
 ----
+ Unrecognized option CSV writer "force_not_null"
 
 # FORCE_NOT_NULL must not be empty and must have the correct parameter type
 statement error
 COPY test FROM 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL, NULL 'test');
 ----
+"force_not_null" expects a column list or * as parameter
 
 statement error
 COPY test FROM 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL 42, NULL 'test');
 ----
+"force_not_null" expected to find 42, but it was not found in the table
 
 # test using a column in FORCE_NOT_NULL that is not set as output, but that is a column of the table
 statement error
 COPY test (col_b, col_a) FROM 'data/csv/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_b));
 ----
+"force_not_null" expected to find col_c, but it was not found in the table
 
 # test using a column in FORCE_NOT_NULL that is not a column of the table
 statement error
 COPY test FROM 'data/csv/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_d));
 ----
+"force_not_null" expected to find col_d, but it was not found in the table
 
 # FORCE_NOT_NULL fails on integer columns with NULL values, but only if there are null values
 query I
