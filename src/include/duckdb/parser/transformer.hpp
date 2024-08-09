@@ -90,6 +90,7 @@ private:
 	Transformer &RootTransformer();
 	const Transformer &RootTransformer() const;
 	void SetParamCount(idx_t new_count);
+	void ClearParameters();
 	void SetParam(const string &name, idx_t index, PreparedParamType type);
 	bool GetParam(const string &name, idx_t &index, PreparedParamType type);
 
