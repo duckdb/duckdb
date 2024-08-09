@@ -68,7 +68,7 @@ void FixedSizeBuffer::Destroy() {
 void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments,
                                 const idx_t segment_size, const idx_t bitmask_offset) {
 
-	// we do not serialize a block that is already on disk and not in memory
+	// Early-out, if the block is already on disk and not in memory.
 	if (!InMemory()) {
 		if (!OnDisk() || dirty) {
 			throw InternalException("invalid or missing buffer in FixedSizeAllocator");
@@ -76,12 +76,13 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		return;
 	}
 
-	// we do not serialize a block that is already on disk and not dirty
+	// Early-out, if the buffer is already on disk and not dirty.
 	if (!dirty && OnDisk()) {
 		return;
 	}
 
-	// the allocation possibly changed
+	// Adjust the allocation size.
+	D_ASSERT(segment_count != 0);
 	SetAllocationSize(available_segments, segment_size, bitmask_offset);
 
 	// the buffer is in memory, so we copied it onto a new buffer when pinning

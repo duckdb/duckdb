@@ -1,0 +1,31 @@
+# name: benchmark/micro/index/insert/insert_pk_fk.benchmark
+# description: Insert into multiple indexes
+# group: [insert]
+
+name Insert into PK and FK
+group index
+
+require tpcds
+
+load
+BEGIN TRANSACTION;
+CALL dsdgen(sf=0.1);
+pragma threads=8;
+EXPORT DATABASE '${BENCHMARK_DIR}/sf1data';
+ROLLBACK;
+CREATE TABLE date_dim (d_date_sk Integer Not Null PRIMARY KEY, d_date_id String Not Null, d_date Date Not Null, d_month_seq Integer, d_week_seq Integer, d_quarter_seq Integer, d_year Integer, d_dow Integer, d_moy Integer, d_dom Integer, d_qoy Integer, d_fy_year Integer, d_fy_quarter_seq Integer, d_fy_week_seq Integer, d_day_name String, d_quarter_name String, d_holiday String, d_weekend String, d_following_holiday String, d_first_dom Integer, d_last_dom Integer, d_same_day_ly Integer, d_same_day_lq Integer, d_current_day String, d_current_week String, d_current_month String, d_current_quarter String, d_current_year String);
+CREATE TABLE warehouse (w_warehouse_sk Integer Not Null PRIMARY KEY, w_warehouse_id String Not Null, w_warehouse_name String, w_warehouse_sq_ft Integer, w_street_number String, w_street_name String, w_street_type String, w_suite_number String, w_city String, w_county String, w_state String, w_zip String, w_country String, w_gmt_offset Decimal(5,2));
+CREATE TABLE item (i_item_sk Integer Not Null PRIMARY KEY, i_item_id String Not Null, i_rec_start_date Date, i_rec_end_date Date, i_item_desc String, i_current_price Decimal(7,2), i_wholesale_cost Decimal(7,2), i_brand_id Integer, i_brand String, i_class_id Integer, i_class String, i_category_id Integer, i_category String, i_manufact_id Integer, i_manufact String, i_size String, i_formulation String, i_color String, i_units String, i_container String, i_manager_id Integer, i_product_name String);
+CREATE TABLE inventory (inv_date_sk Integer Not Null REFERENCES date_dim (d_date_sk), inv_item_sk Integer Not Null REFERENCES item (i_item_sk), inv_warehouse_sk Integer Not Null REFERENCES warehouse (w_warehouse_sk), inv_quantity_on_hand Integer);
+
+run
+COPY date_dim FROM '${BENCHMARK_DIR}/sf1data/date_dim.csv' (FORMAT 'csv', header 1, delimiter ',', quote '"');
+COPY item FROM '${BENCHMARK_DIR}/sf1data/item.csv' (FORMAT 'csv', header 1, delimiter ',', quote '"');
+COPY warehouse FROM '${BENCHMARK_DIR}/sf1data/warehouse.csv' (FORMAT 'csv', header 1, delimiter ',', quote '"');
+COPY inventory FROM '${BENCHMARK_DIR}/sf1data/inventory.csv' (FORMAT 'csv', header 1, delimiter ',', quote '"');
+
+cleanup
+CREATE OR REPLACE TABLE date_dim (d_date_sk Integer Not Null PRIMARY KEY, d_date_id String Not Null, d_date Date Not Null, d_month_seq Integer, d_week_seq Integer, d_quarter_seq Integer, d_year Integer, d_dow Integer, d_moy Integer, d_dom Integer, d_qoy Integer, d_fy_year Integer, d_fy_quarter_seq Integer, d_fy_week_seq Integer, d_day_name String, d_quarter_name String, d_holiday String, d_weekend String, d_following_holiday String, d_first_dom Integer, d_last_dom Integer, d_same_day_ly Integer, d_same_day_lq Integer, d_current_day String, d_current_week String, d_current_month String, d_current_quarter String, d_current_year String);
+CREATE OR REPLACE TABLE warehouse (w_warehouse_sk Integer Not Null PRIMARY KEY, w_warehouse_id String Not Null, w_warehouse_name String, w_warehouse_sq_ft Integer, w_street_number String, w_street_name String, w_street_type String, w_suite_number String, w_city String, w_county String, w_state String, w_zip String, w_country String, w_gmt_offset Decimal(5,2));
+CREATE OR REPLACE TABLE item (i_item_sk Integer Not Null PRIMARY KEY, i_item_id String Not Null, i_rec_start_date Date, i_rec_end_date Date, i_item_desc String, i_current_price Decimal(7,2), i_wholesale_cost Decimal(7,2), i_brand_id Integer, i_brand String, i_class_id Integer, i_class String, i_category_id Integer, i_category String, i_manufact_id Integer, i_manufact String, i_size String, i_formulation String, i_color String, i_units String, i_container String, i_manager_id Integer, i_product_name String);
+CREATE OR REPLACE TABLE inventory (inv_date_sk Integer Not Null REFERENCES date_dim (d_date_sk), inv_item_sk Integer Not Null REFERENCES item (i_item_sk), inv_warehouse_sk Integer Not Null REFERENCES warehouse (w_warehouse_sk), inv_quantity_on_hand Integer);

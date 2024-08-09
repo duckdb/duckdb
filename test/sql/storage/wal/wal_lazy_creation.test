@@ -4,7 +4,7 @@
 
 # If we enable alternative verification, then we disable checkpointing on shutdown.
 # Thus, we'll keep the WAL alive when detaching the database.
-require noalternativeverify
+require no_alternative_verify
 
 require noforcestorage
 

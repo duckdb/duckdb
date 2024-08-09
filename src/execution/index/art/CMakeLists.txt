@@ -10,6 +10,9 @@ add_library_unity(
   node48.cpp
   node256.cpp
   prefix.cpp
+  node7_leaf.cpp
+  node15_leaf.cpp
+  node256_leaf.cpp
   art.cpp)
 
 set(ALL_OBJECT_FILES

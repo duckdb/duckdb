@@ -1,11 +1,11 @@
 # name: test/sql/index/art/nodes/test_art_leaf_coverage.test
-# description: ART coverage tests for leaf code coverage
+# description: ART coverage tests for leaves.
 # group: [nodes]
 
 statement ok
 PRAGMA enable_verification;
 
-# test deserialization of leaf segments
+# Test the deserialization of leaves.
 
 load __TEST_DIR__/art_vacuum.db
 

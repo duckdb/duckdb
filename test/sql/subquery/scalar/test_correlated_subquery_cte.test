@@ -14,7 +14,7 @@ CREATE TABLE integers(i INTEGER)
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
-require noalternativeverify
+require no_alternative_verify
 
 # scalar select with correlation
 query II

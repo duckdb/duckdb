@@ -1,5 +1,5 @@
 # name: test/sql/index/art/vacuum/test_art_vacuum.test_slow
-# description: Test vacuuming leaves
+# description: Test vacuuming leaves.
 # group: [vacuum]
 
 statement ok
@@ -26,7 +26,7 @@ CREATE INDEX idx ON delete_vacuum(id);
 statement ok
 DELETE FROM delete_vacuum WHERE id = 11 OR id = 10;
 
-# test coverage of reusing buffer IDs of vacuumed buffers
+# Reuse the buffer IDs of vacuumed buffers.
 
 statement ok
 CREATE TABLE reuse_buffer_tbl (i INTEGER);

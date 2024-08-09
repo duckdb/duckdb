@@ -1017,7 +1017,7 @@ class SQLLogicContext:
             "exact_vector_size",
             "block_size",
             "skip_reload",
-            "noalternativeverify",
+            "no_alternative_verify",
         ]
         param = statement.header.parameters[0].lower()
         if param in not_an_extension:

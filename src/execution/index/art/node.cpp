@@ -3,27 +3,36 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/node256.hpp"
-#include "duckdb/execution/index/art/node48.hpp"
-#include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node15_leaf.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/execution/index/art/node256_leaf.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/node7_leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// New / Free
+// New and free
 //===--------------------------------------------------------------------===//
 
-void Node::New(ART &art, Node &node, const NType type) {
-
-	// NOTE: leaves and prefixes should not pass through this function
-
+void Node::New(ART &art, Node &node, NType type) {
 	switch (type) {
+	case NType::NODE_7_LEAF:
+		Node7Leaf::New(art, node);
+		break;
+	case NType::NODE_15_LEAF:
+		Node15Leaf::New(art, node);
+		break;
+	case NType::NODE_256_LEAF:
+		Node256Leaf::New(art, node);
+		break;
 	case NType::NODE_4:
-		Node4::New(art, node);
+		Node4::New<Node4>(art, node, NType::NODE_4);
 		break;
 	case NType::NODE_16:
 		Node16::New(art, node);
@@ -40,22 +49,19 @@ void Node::New(ART &art, Node &node, const NType type) {
 }
 
 void Node::Free(ART &art, Node &node) {
-
 	if (!node.HasMetadata()) {
 		return node.Clear();
 	}
 
-	// free the children of the nodes
+	// Free the children.
 	auto type = node.GetType();
 	switch (type) {
 	case NType::PREFIX:
-		// iterative
 		return Prefix::Free(art, node);
 	case NType::LEAF:
-		// iterative
-		return Leaf::Free(art, node);
+		return Leaf::DeprecatedFree(art, node);
 	case NType::NODE_4:
-		Node4::Free(art, node);
+		Node4::Free<Node4>(art, node);
 		break;
 	case NType::NODE_16:
 		Node16::Free(art, node);
@@ -68,6 +74,11 @@ void Node::Free(ART &art, Node &node) {
 		break;
 	case NType::LEAF_INLINED:
 		return node.Clear();
+	case NType::PREFIX_INLINED:
+	case NType::NODE_7_LEAF:
+	case NType::NODE_15_LEAF:
+	case NType::NODE_256_LEAF:
+		break;
 	}
 
 	GetAllocator(art, type).Free(node);
@@ -75,11 +86,38 @@ void Node::Free(ART &art, Node &node) {
 }
 
 //===--------------------------------------------------------------------===//
-// Get Allocators
+// Allocators
 //===--------------------------------------------------------------------===//
 
 FixedSizeAllocator &Node::GetAllocator(const ART &art, const NType type) {
-	return *(*art.allocators)[static_cast<uint8_t>(type) - 1];
+	return *(*art.allocators)[GetAllocatorIdx(type)];
+}
+
+uint8_t Node::GetAllocatorIdx(const NType type) {
+	switch (type) {
+	case NType::PREFIX:
+		return 0;
+	case NType::LEAF:
+		return 1;
+	case NType::NODE_4:
+		return 2;
+	case NType::NODE_16:
+		return 3;
+	case NType::NODE_48:
+		return 4;
+	case NType::NODE_256:
+		return 5;
+	case NType::PREFIX_INLINED:
+		return 6;
+	case NType::NODE_7_LEAF:
+		return 7;
+	case NType::NODE_15_LEAF:
+		return 8;
+	case NType::NODE_256_LEAF:
+		return 9;
+	default:
+		throw InternalException("Invalid node type for GetAllocatorIdx.");
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -87,22 +125,25 @@ FixedSizeAllocator &Node::GetAllocator(const ART &art, const NType type) {
 //===--------------------------------------------------------------------===//
 
 void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) const {
+	D_ASSERT(HasMetadata());
 
-	switch (GetType()) {
+	auto type = GetType();
+	switch (type) {
 	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, NType::NODE_4).ReplaceChild(byte, child);
+		return Node4::ReplaceChild(Ref<Node4>(art, *this, type), byte, child);
 	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, NType::NODE_16).ReplaceChild(byte, child);
+		return Ref<Node16>(art, *this, type).ReplaceChild(byte, child);
 	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, NType::NODE_48).ReplaceChild(byte, child);
+		return Ref<Node48>(art, *this, type).ReplaceChild(byte, child);
 	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, NType::NODE_256).ReplaceChild(byte, child);
+		return Ref<Node256>(art, *this, type).ReplaceChild(byte, child);
 	default:
 		throw InternalException("Invalid node type for ReplaceChild.");
 	}
 }
 
 void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
+	D_ASSERT(node.HasMetadata());
 
 	switch (node.GetType()) {
 	case NType::NODE_4:
@@ -113,16 +154,23 @@ void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chil
 		return Node48::InsertChild(art, node, byte, child);
 	case NType::NODE_256:
 		return Node256::InsertChild(art, node, byte, child);
+	case NType::NODE_7_LEAF:
+		return Node7Leaf::InsertByte(art, node, byte);
+	case NType::NODE_15_LEAF:
+		return Node15Leaf::InsertByte(art, node, byte);
+	case NType::NODE_256_LEAF:
+		return Node256Leaf::InsertByte(art, node, byte);
 	default:
 		throw InternalException("Invalid node type for InsertChild.");
 	}
 }
 
 //===--------------------------------------------------------------------===//
-// Deletes
+// Delete
 //===--------------------------------------------------------------------===//
 
 void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
+	D_ASSERT(node.HasMetadata());
 
 	switch (node.GetType()) {
 	case NType::NODE_4:
@@ -133,84 +181,88 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 		return Node48::DeleteChild(art, node, byte);
 	case NType::NODE_256:
 		return Node256::DeleteChild(art, node, byte);
+	case NType::NODE_7_LEAF:
+		return Node7Leaf::DeleteByte(art, node, prefix, byte);
+	case NType::NODE_15_LEAF:
+		return Node15Leaf::DeleteByte(art, node, byte);
+	case NType::NODE_256_LEAF:
+		return Node256Leaf::DeleteByte(art, node, byte);
 	default:
 		throw InternalException("Invalid node type for DeleteChild.");
 	}
 }
 
 //===--------------------------------------------------------------------===//
-// Get functions
+// Get child and byte.
 //===--------------------------------------------------------------------===//
 
-optional_ptr<const Node> Node::GetChild(ART &art, const uint8_t byte) const {
+template <class NODE>
+Node *GetChildInternal(ART &art, NODE &node, const uint8_t byte) {
+	D_ASSERT(node.HasMetadata());
 
-	D_ASSERT(HasMetadata());
-
-	switch (GetType()) {
+	auto type = node.GetType();
+	switch (type) {
 	case NType::NODE_4:
-		return Ref<const Node4>(art, *this, NType::NODE_4).GetChild(byte);
+		return Node4::GetChild(Node::Ref<Node4>(art, node, type), byte);
 	case NType::NODE_16:
-		return Ref<const Node16>(art, *this, NType::NODE_16).GetChild(byte);
+		return Node16::GetChild(Node::Ref<Node16>(art, node, type), byte);
 	case NType::NODE_48:
-		return Ref<const Node48>(art, *this, NType::NODE_48).GetChild(byte);
-	case NType::NODE_256:
-		return Ref<const Node256>(art, *this, NType::NODE_256).GetChild(byte);
+		return Node48::GetChild(Node::Ref<Node48>(art, node, type), byte);
+	case NType::NODE_256: {
+		return Node256::GetChild(Node::Ref<Node256>(art, node, type), byte);
+	}
 	default:
-		throw InternalException("Invalid node type for GetChild.");
+		throw InternalException("Invalid node type for GetChildInternal.");
 	}
 }
 
-optional_ptr<Node> Node::GetChildMutable(ART &art, const uint8_t byte) const {
+const Node *Node::GetChild(ART &art, const uint8_t byte) const {
+	return GetChildInternal(art, *this, byte);
+}
 
-	D_ASSERT(HasMetadata());
+Node *Node::GetChildMutable(ART &art, const uint8_t byte) const {
+	return GetChildInternal(art, *this, byte);
+}
 
-	switch (GetType()) {
+template <class NODE>
+Node *GetNextChildInternal(ART &art, NODE &node, uint8_t &byte) {
+	D_ASSERT(node.HasMetadata());
+
+	auto type = node.GetType();
+	switch (type) {
 	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, NType::NODE_4).GetChildMutable(byte);
+		return Node4::GetNextChild(Node::Ref<Node4>(art, node, type), byte);
 	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, NType::NODE_16).GetChildMutable(byte);
+		return Node16::GetNextChild(Node::Ref<Node16>(art, node, type), byte);
 	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, NType::NODE_48).GetChildMutable(byte);
+		return Node48::GetNextChild(Node::Ref<Node48>(art, node, type), byte);
 	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, NType::NODE_256).GetChildMutable(byte);
+		return Node256::GetNextChild(Node::Ref<Node256>(art, node, type), byte);
 	default:
-		throw InternalException("Invalid node type for GetChildMutable.");
+		throw InternalException("Invalid node type for GetNextChildInternal.");
 	}
 }
 
-optional_ptr<const Node> Node::GetNextChild(ART &art, uint8_t &byte) const {
-
-	D_ASSERT(HasMetadata());
-
-	switch (GetType()) {
-	case NType::NODE_4:
-		return Ref<const Node4>(art, *this, NType::NODE_4).GetNextChild(byte);
-	case NType::NODE_16:
-		return Ref<const Node16>(art, *this, NType::NODE_16).GetNextChild(byte);
-	case NType::NODE_48:
-		return Ref<const Node48>(art, *this, NType::NODE_48).GetNextChild(byte);
-	case NType::NODE_256:
-		return Ref<const Node256>(art, *this, NType::NODE_256).GetNextChild(byte);
-	default:
-		throw InternalException("Invalid node type for GetNextChild.");
-	}
+const Node *Node::GetNextChild(ART &art, uint8_t &byte) const {
+	return GetNextChildInternal(art, *this, byte);
 }
 
-optional_ptr<Node> Node::GetNextChildMutable(ART &art, uint8_t &byte) const {
+Node *Node::GetNextChildMutable(ART &art, uint8_t &byte) const {
+	return GetNextChildInternal(art, *this, byte);
+}
 
+bool Node::GetNextByte(ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 
 	switch (GetType()) {
-	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, NType::NODE_4).GetNextChildMutable(byte);
-	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, NType::NODE_16).GetNextChildMutable(byte);
-	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, NType::NODE_48).GetNextChildMutable(byte);
-	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, NType::NODE_256).GetNextChildMutable(byte);
+	case NType::NODE_7_LEAF:
+		return Node7Leaf::GetNextByte(Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF), byte);
+	case NType::NODE_15_LEAF:
+		return Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF).GetNextByte(byte);
+	case NType::NODE_256_LEAF:
+		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
 	default:
-		throw InternalException("Invalid node type for GetNextChildMutable.");
+		throw InternalException("Invalid node type for GetNextByte.");
 	}
 }
 
@@ -218,241 +270,136 @@ optional_ptr<Node> Node::GetNextChildMutable(ART &art, uint8_t &byte) const {
 // Utility
 //===--------------------------------------------------------------------===//
 
-string Node::VerifyAndToString(ART &art, const bool only_verify) const {
-
-	D_ASSERT(HasMetadata());
-
-	if (GetType() == NType::LEAF || GetType() == NType::LEAF_INLINED) {
-		auto str = Leaf::VerifyAndToString(art, *this, only_verify);
-		return only_verify ? "" : "\n" + str;
-	}
-	if (GetType() == NType::PREFIX) {
-		auto str = Prefix::VerifyAndToString(art, *this, only_verify);
-		return only_verify ? "" : "\n" + str;
-	}
-
-	string str = "Node" + to_string(GetCapacity()) + ": [";
-	uint8_t byte = 0;
-	auto child = GetNextChild(art, byte);
-
-	while (child) {
-		str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
-		if (byte == NumericLimits<uint8_t>::Maximum()) {
-			break;
-		}
-
-		byte++;
-		child = GetNextChild(art, byte);
-	}
-
-	return only_verify ? "" : "\n" + str + "]";
-}
-
-idx_t Node::GetCapacity() const {
-
-	switch (GetType()) {
+idx_t GetCapacity(NType type) {
+	switch (type) {
 	case NType::NODE_4:
-		return NODE_4_CAPACITY;
+		return Node4::CAPACITY;
+	case NType::NODE_7_LEAF:
+		return Node7Leaf::CAPACITY;
+	case NType::NODE_15_LEAF:
+		return Node15Leaf::CAPACITY;
 	case NType::NODE_16:
-		return NODE_16_CAPACITY;
+		return Node16::CAPACITY;
 	case NType::NODE_48:
-		return NODE_48_CAPACITY;
+		return Node48::CAPACITY;
+	case NType::NODE_256_LEAF:
+		return Node256::CAPACITY;
 	case NType::NODE_256:
-		return NODE_256_CAPACITY;
+		return Node256::CAPACITY;
 	default:
 		throw InternalException("Invalid node type for GetCapacity.");
 	}
 }
 
-NType Node::GetARTNodeTypeByCount(const idx_t count) {
+NType Node::GetNodeLeafType(idx_t count) {
+	if (count <= Node7Leaf::CAPACITY) {
+		return NType::NODE_7_LEAF;
+	} else if (count <= Node15Leaf::CAPACITY) {
+		return NType::NODE_15_LEAF;
+	}
+	return NType::NODE_256_LEAF;
+}
 
-	if (count <= NODE_4_CAPACITY) {
+NType Node::GetNodeType(idx_t count) {
+	if (count <= Node4::CAPACITY) {
 		return NType::NODE_4;
-	} else if (count <= NODE_16_CAPACITY) {
+	} else if (count <= Node16::CAPACITY) {
 		return NType::NODE_16;
-	} else if (count <= NODE_48_CAPACITY) {
+	} else if (count <= Node48::CAPACITY) {
 		return NType::NODE_48;
 	}
 	return NType::NODE_256;
 }
 
-//===--------------------------------------------------------------------===//
-// Merging
-//===--------------------------------------------------------------------===//
+bool Node::IsNode() const {
+	switch (GetType()) {
+	case NType::NODE_4:
+	case NType::NODE_16:
+	case NType::NODE_48:
+	case NType::NODE_256:
+		return true;
+	default:
+		return false;
+	}
+}
 
-void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
+bool Node::IsLeafNode() const {
+	switch (GetType()) {
+	case NType::NODE_7_LEAF:
+	case NType::NODE_15_LEAF:
+	case NType::NODE_256_LEAF:
+		return true;
+	default:
+		return false;
+	}
+}
 
-	D_ASSERT(HasMetadata());
+bool Node::IsAnyLeaf() const {
+	if (IsLeafNode()) {
+		return true;
+	}
 
 	switch (GetType()) {
-	case NType::PREFIX:
-		// iterative
-		return Prefix::InitializeMerge(art, *this, flags);
+	case NType::LEAF_INLINED:
 	case NType::LEAF:
-		// iterative
-		return Leaf::InitializeMerge(art, *this, flags);
+	case NType::PREFIX_INLINED:
+		return true;
+	default:
+		return false;
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Merge
+//===--------------------------------------------------------------------===//
+
+void Node::InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
+	D_ASSERT(HasMetadata());
+	auto type = GetType();
+
+	switch (type) {
+	case NType::PREFIX:
+		return Prefix::InitializeMerge(art, *this, upper_bounds);
+	case NType::LEAF:
+		throw InternalException("Failed to initialize merge due to deprecated ART storage.");
 	case NType::NODE_4:
-		RefMutable<Node4>(art, *this, NType::NODE_4).InitializeMerge(art, flags);
+		InitMergeInternal(art, Ref<Node4>(art, *this, type), upper_bounds);
 		break;
 	case NType::NODE_16:
-		RefMutable<Node16>(art, *this, NType::NODE_16).InitializeMerge(art, flags);
+		InitMergeInternal(art, Ref<Node16>(art, *this, type), upper_bounds);
 		break;
 	case NType::NODE_48:
-		RefMutable<Node48>(art, *this, NType::NODE_48).InitializeMerge(art, flags);
+		InitMergeInternal(art, Ref<Node48>(art, *this, type), upper_bounds);
 		break;
 	case NType::NODE_256:
-		RefMutable<Node256>(art, *this, NType::NODE_256).InitializeMerge(art, flags);
+		InitMergeInternal(art, Ref<Node256>(art, *this, type), upper_bounds);
 		break;
 	case NType::LEAF_INLINED:
 		return;
+	case NType::PREFIX_INLINED:
+	case NType::NODE_7_LEAF:
+	case NType::NODE_15_LEAF:
+	case NType::NODE_256_LEAF:
+		break;
 	}
 
-	IncreaseBufferId(flags.merge_buffer_counts[static_cast<uint8_t>(GetType()) - 1]);
+	auto idx = GetAllocatorIdx(type);
+	IncreaseBufferId(upper_bounds[idx]);
 }
 
-bool Node::Merge(ART &art, Node &other) {
+bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const bool in_gate) {
+	// Merge N4, N16, N48, N256 nodes.
+	D_ASSERT(l_node.IsNode() && r_node.IsNode());
+	D_ASSERT((l_node.IsGate() && r_node.IsGate()) || (!l_node.IsGate() && !r_node.IsGate()));
 
-	if (!HasMetadata()) {
-		*this = other;
-		other = Node();
-		return true;
-	}
-
-	return ResolvePrefixes(art, other);
-}
-
-bool MergePrefixContainsOtherPrefix(ART &art, reference<Node> &l_node, reference<Node> &r_node,
-                                    idx_t &mismatch_position) {
-
-	// r_node's prefix contains l_node's prefix
-	// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
-	// which is not possible by our construction
-	D_ASSERT(l_node.get().GetType() != NType::LEAF && l_node.get().GetType() != NType::LEAF_INLINED);
-
-	// test if the next byte (mismatch_position) in r_node (prefix) exists in l_node
-	auto mismatch_byte = Prefix::GetByte(art, r_node, mismatch_position);
-	auto child_node = l_node.get().GetChildMutable(art, mismatch_byte);
-
-	// update the prefix of r_node to only consist of the bytes after mismatch_position
-	Prefix::Reduce(art, r_node, mismatch_position);
-
-	if (!child_node) {
-		// insert r_node as a child of l_node at the empty position
-		Node::InsertChild(art, l_node, mismatch_byte, r_node);
-		r_node.get().Clear();
-		return true;
-	}
-
-	// recurse
-	return child_node->ResolvePrefixes(art, r_node);
-}
-
-void MergePrefixesDiffer(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position) {
-
-	// create a new node and insert both nodes as children
-
-	Node l_child;
-	auto l_byte = Prefix::GetByte(art, l_node, mismatch_position);
-	Prefix::Split(art, l_node, l_child, mismatch_position);
-	Node4::New(art, l_node);
-
-	// insert children
-	Node4::InsertChild(art, l_node, l_byte, l_child);
-	auto r_byte = Prefix::GetByte(art, r_node, mismatch_position);
-	Prefix::Reduce(art, r_node, mismatch_position);
-	Node4::InsertChild(art, l_node, r_byte, r_node);
-
-	r_node.get().Clear();
-}
-
-bool Node::ResolvePrefixes(ART &art, Node &other) {
-
-	// NOTE: we always merge into the left ART
-
-	D_ASSERT(HasMetadata() && other.HasMetadata());
-
-	// case 1: both nodes have no prefix
-	if (GetType() != NType::PREFIX && other.GetType() != NType::PREFIX) {
-		return MergeInternal(art, other);
-	}
-
-	reference<Node> l_node(*this);
-	reference<Node> r_node(other);
-
-	idx_t mismatch_position = DConstants::INVALID_INDEX;
-
-	// traverse prefixes
-	if (l_node.get().GetType() == NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
-
-		if (!Prefix::Traverse(art, l_node, r_node, mismatch_position)) {
-			return false;
-		}
-		// we already recurse because the prefixes matched (so far)
-		if (mismatch_position == DConstants::INVALID_INDEX) {
-			return true;
-		}
-
-	} else {
-
-		// l_prefix contains r_prefix
-		if (l_node.get().GetType() == NType::PREFIX) {
-			swap(*this, other);
-		}
-		mismatch_position = 0;
-	}
-	D_ASSERT(mismatch_position != DConstants::INVALID_INDEX);
-
-	// case 2: one prefix contains the other prefix
-	if (l_node.get().GetType() != NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
-		return MergePrefixContainsOtherPrefix(art, l_node, r_node, mismatch_position);
-	}
-
-	// case 3: prefixes differ at a specific byte
-	MergePrefixesDiffer(art, l_node, r_node, mismatch_position);
-	return true;
-}
-
-bool Node::MergeInternal(ART &art, Node &other) {
-
-	D_ASSERT(HasMetadata() && other.HasMetadata());
-	D_ASSERT(GetType() != NType::PREFIX && other.GetType() != NType::PREFIX);
-
-	// always try to merge the smaller node into the bigger node
-	// because maybe there is enough free space in the bigger node to fit the smaller one
-	// without too much recursion
-	if (GetType() < other.GetType()) {
-		swap(*this, other);
-	}
-
-	Node empty_node;
-	auto &l_node = *this;
-	auto &r_node = other;
-
-	if (r_node.GetType() == NType::LEAF || r_node.GetType() == NType::LEAF_INLINED) {
-		D_ASSERT(l_node.GetType() == NType::LEAF || l_node.GetType() == NType::LEAF_INLINED);
-
-		if (art.IsUnique()) {
-			return false;
-		}
-
-		Leaf::Merge(art, l_node, r_node);
-		return true;
-	}
-
-	uint8_t byte = 0;
 	auto r_child = r_node.GetNextChildMutable(art, byte);
-
-	// while r_node still has children to merge
 	while (r_child) {
 		auto l_child = l_node.GetChildMutable(art, byte);
 		if (!l_child) {
-			// insert child at empty byte
-			InsertChild(art, l_node, byte, *r_child);
-			r_node.ReplaceChild(art, byte, empty_node);
-
+			Node::InsertChild(art, l_node, byte, *r_child);
+			r_node.ReplaceChild(art, byte);
 		} else {
-			// recurse
-			if (!l_child->ResolvePrefixes(art, *r_child)) {
+			if (!l_child->MergeInternal(art, *r_child, in_gate)) {
 				return false;
 			}
 		}
@@ -464,55 +411,337 @@ bool Node::MergeInternal(ART &art, Node &other) {
 		r_child = r_node.GetNextChildMutable(art, byte);
 	}
 
-	Free(art, r_node);
+	Node::Free(art, r_node);
 	return true;
+}
+
+void Node::MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte) {
+	// Merge N7, N15, N256 leaf nodes.
+	D_ASSERT(l_node.IsLeafNode() && r_node.IsLeafNode());
+	D_ASSERT(!l_node.IsGate() && !r_node.IsGate());
+
+	auto has_next = r_node.GetNextByte(art, byte);
+	while (has_next) {
+		// Row IDs are always unique.
+		Node::InsertChild(art, l_node, byte);
+		if (byte == NumericLimits<uint8_t>::Maximum()) {
+			break;
+		}
+		byte++;
+		has_next = r_node.GetNextByte(art, byte);
+	}
+
+	Node::Free(art, r_node);
+}
+
+bool Node::MergeNodes(ART &art, Node &other, bool in_gate) {
+	// Merge the smaller node into the bigger node.
+	if (GetType() < other.GetType()) {
+		swap(*this, other);
+	}
+
+	uint8_t byte = 0;
+	if (IsNode()) {
+		return MergeNormalNodes(art, *this, other, byte, in_gate);
+	}
+	MergeLeafNodes(art, *this, other, byte);
+	return true;
+}
+
+bool Node::Merge(ART &art, Node &other, const bool in_gate) {
+	if (HasMetadata()) {
+		return MergeInternal(art, other, in_gate);
+	}
+
+	*this = other;
+	other = Node();
+	return true;
+}
+
+bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const bool in_gate) {
+	// r_node's prefix contains l_node's prefix. l_node must be a node with child nodes.
+	D_ASSERT(l_node.IsNode());
+
+	// Check if the next byte (pos) in r_node exists in l_node.
+	auto byte = Prefix::GetByte(art, r_node, pos);
+	auto child = l_node.GetChildMutable(art, byte);
+
+	// Reduce r_node's prefix to the bytes after pos.
+	Prefix::Reduce(art, r_node, pos);
+	if (child) {
+		return child->MergeInternal(art, r_node, in_gate);
+	}
+
+	Node::InsertChild(art, l_node, byte, r_node);
+	r_node.Clear();
+	return true;
+}
+
+void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t pos) {
+	Node l_child;
+	auto l_byte = Prefix::GetByte(art, l_node, pos);
+
+	reference<Node> ref(l_node);
+	auto freed_gate = Prefix::Split(art, ref, l_child, pos);
+	Node4::New<Node4>(art, ref, NType::NODE_4);
+	if (freed_gate) {
+		ref.get().SetGate();
+	}
+
+	Node4::InsertChild(art, ref, l_byte, l_child);
+
+	auto r_byte = Prefix::GetByte(art, r_node, pos);
+	Prefix::Reduce(art, r_node, pos);
+	Node4::InsertChild(art, ref, r_byte, r_node);
+	r_node.Clear();
+}
+
+bool Node::MergePrefixes(ART &art, Node &other, const bool in_gate) {
+	reference<Node> l_node(*this);
+	reference<Node> r_node(other);
+	auto pos = DConstants::INVALID_INDEX;
+
+	if (l_node.get().IsPrefix() && r_node.get().IsPrefix()) {
+		// Traverse prefixes. Possibly change the referenced nodes.
+		if (!Prefix::Traverse(art, l_node, r_node, pos, in_gate)) {
+			return false;
+		}
+		if (pos == DConstants::INVALID_INDEX) {
+			return true;
+		}
+
+	} else {
+		// l_prefix contains r_prefix.
+		if (l_node.get().IsPrefix()) {
+			swap(*this, other);
+		}
+		pos = 0;
+	}
+
+	D_ASSERT(pos != DConstants::INVALID_INDEX);
+	if (!l_node.get().IsPrefix() && r_node.get().IsPrefix()) {
+		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(pos), in_gate);
+	}
+
+	// The prefixes differ.
+	MergeIntoNode4(art, l_node, r_node, UnsafeNumericCast<uint8_t>(pos));
+	return true;
+}
+
+bool Node::MergeInternal(ART &art, Node &other, const bool in_gate) {
+	D_ASSERT(HasMetadata());
+	D_ASSERT(other.HasMetadata());
+
+	// Merge inlined leaves.
+	if (GetType() == NType::LEAF_INLINED) {
+		swap(*this, other);
+	}
+	if (other.GetType() == NType::LEAF_INLINED) {
+		D_ASSERT(!in_gate);
+		D_ASSERT(other.IsGate() || other.GetType() == NType::LEAF_INLINED);
+		if (art.IsUnique()) {
+			return false;
+		}
+		Leaf::MergeInlined(art, *this, other);
+		return true;
+	}
+
+	// Enter a gate.
+	if (IsGate() && other.IsGate() && !in_gate) {
+		return Merge(art, other, true);
+	}
+
+	// Merge N4, N16, N48, N256 nodes.
+	if (IsNode() && other.IsNode()) {
+		return MergeNodes(art, other, in_gate);
+	}
+	// Merge N7, N15, N256 leaf nodes.
+	if (IsLeafNode() && other.IsLeafNode()) {
+		D_ASSERT(in_gate);
+		return MergeNodes(art, other, in_gate);
+	}
+
+	// Merge prefixes.
+	return MergePrefixes(art, other, in_gate);
 }
 
 //===--------------------------------------------------------------------===//
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-void Node::Vacuum(ART &art, const ARTFlags &flags) {
-
+void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	D_ASSERT(HasMetadata());
 
-	auto node_type = GetType();
-	auto node_type_idx = static_cast<uint8_t>(node_type);
-
-	// iterative functions
-	if (node_type == NType::PREFIX) {
-		return Prefix::Vacuum(art, *this, flags);
-	}
-	if (node_type == NType::LEAF_INLINED) {
+	auto type = GetType();
+	switch (type) {
+	case NType::LEAF_INLINED:
 		return;
-	}
-	if (node_type == NType::LEAF) {
-		if (flags.vacuum_flags[node_type_idx - 1]) {
-			Leaf::Vacuum(art, *this);
+	case NType::PREFIX:
+		return Prefix::Vacuum(art, *this, indexes);
+	case NType::LEAF:
+		if (indexes.find(GetAllocatorIdx(type)) == indexes.end()) {
+			return;
 		}
-		return;
+		return Leaf::DeprecatedVacuum(art, *this);
+	default:
+		break;
 	}
 
-	auto &allocator = GetAllocator(art, node_type);
-	auto needs_vacuum = flags.vacuum_flags[node_type_idx - 1] && allocator.NeedsVacuum(*this);
+	auto idx = GetAllocatorIdx(type);
+	auto &allocator = GetAllocator(art, type);
+	auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(*this);
 	if (needs_vacuum) {
 		*this = allocator.VacuumPointer(*this);
-		SetMetadata(node_type_idx);
+		SetMetadata(static_cast<uint8_t>(type));
 	}
 
-	// recursive functions
-	switch (node_type) {
+	switch (type) {
 	case NType::NODE_4:
-		return RefMutable<Node4>(art, *this, NType::NODE_4).Vacuum(art, flags);
+		return VacuumInternal(art, Ref<Node4>(art, *this, type), indexes);
 	case NType::NODE_16:
-		return RefMutable<Node16>(art, *this, NType::NODE_16).Vacuum(art, flags);
+		return VacuumInternal(art, Ref<Node16>(art, *this, type), indexes);
 	case NType::NODE_48:
-		return RefMutable<Node48>(art, *this, NType::NODE_48).Vacuum(art, flags);
+		return VacuumInternal(art, Ref<Node48>(art, *this, type), indexes);
 	case NType::NODE_256:
-		return RefMutable<Node256>(art, *this, NType::NODE_256).Vacuum(art, flags);
+		return VacuumInternal(art, Ref<Node256>(art, *this, type), indexes);
+	case NType::NODE_7_LEAF:
+	case NType::NODE_15_LEAF:
+	case NType::NODE_256_LEAF:
+	case NType::PREFIX_INLINED:
+		return;
 	default:
 		throw InternalException("Invalid node type for Vacuum.");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// TransformToDeprecated
+//===--------------------------------------------------------------------===//
+
+void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
+	D_ASSERT(node.HasMetadata());
+
+	if (node.IsGate()) {
+		return Leaf::TransformToDeprecated(art, node);
+	}
+
+	auto type = node.GetType();
+	switch (type) {
+	case NType::PREFIX:
+		return Prefix::TransformToDeprecated(art, node, allocator);
+	case NType::LEAF_INLINED:
+		return;
+	case NType::LEAF:
+		return;
+	case NType::NODE_4:
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node4>(art, node, type), allocator);
+	case NType::NODE_16:
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node16>(art, node, type), allocator);
+	case NType::NODE_48:
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node48>(art, node, type), allocator);
+	case NType::NODE_256:
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), allocator);
+	default:
+		throw InternalException("Invalid node type for TransformToDeprecated.");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Verification
+//===--------------------------------------------------------------------===//
+
+string Node::VerifyAndToString(ART &art, const bool only_verify) const {
+	D_ASSERT(HasMetadata());
+
+	auto type = GetType();
+	switch (type) {
+	case NType::LEAF_INLINED:
+		return only_verify ? "" : "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]";
+	case NType::LEAF:
+		return Leaf::DeprecatedVerifyAndToString(art, *this, only_verify);
+	case NType::PREFIX: {
+		auto str = Prefix::VerifyAndToString(art, *this, only_verify);
+		if (IsGate()) {
+			str = "Gate [ " + str + " ]";
+		}
+		return only_verify ? "" : "\n" + str;
+	}
+	case NType::PREFIX_INLINED: {
+		Prefix prefix(art, *this);
+		string str = " Inlined Prefix [ ";
+		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+			str += to_string(prefix.data[i]) + "-";
+		}
+		str += " ] ";
+		return only_verify ? "" : "\n" + str;
+	}
+	default:
+		break;
+	}
+
+	string str = "Node" + to_string(GetCapacity(type)) + ": [ ";
+	uint8_t byte = 0;
+
+	if (IsLeafNode()) {
+		str = "Leaf " + str;
+		auto has_byte = GetNextByte(art, byte);
+		while (has_byte) {
+			str += to_string(byte) + "-";
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+			byte++;
+			has_byte = GetNextByte(art, byte);
+		}
+	} else {
+		auto child = GetNextChild(art, byte);
+		while (child) {
+			str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+			byte++;
+			child = GetNextChild(art, byte);
+		}
+	}
+
+	if (IsGate()) {
+		str = "Gate [ " + str + " ]";
+	}
+	return only_verify ? "" : "\n" + str + "]";
+}
+
+void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
+	D_ASSERT(HasMetadata());
+
+	auto type = GetType();
+	switch (type) {
+	case NType::PREFIX:
+		return Prefix::VerifyAllocations(art, *this, node_counts);
+	case NType::LEAF:
+		return Ref<Leaf>(art, *this, type).DeprecatedVerifyAllocations(art, node_counts);
+	case NType::LEAF_INLINED:
+		return;
+	case NType::NODE_4:
+		VerifyAllocationsInternal(art, Ref<Node4>(art, *this, type), node_counts);
+		break;
+	case NType::NODE_16:
+		VerifyAllocationsInternal(art, Ref<Node16>(art, *this, type), node_counts);
+		break;
+	case NType::NODE_48:
+		VerifyAllocationsInternal(art, Ref<Node48>(art, *this, type), node_counts);
+		break;
+	case NType::NODE_256:
+		VerifyAllocationsInternal(art, Ref<Node256>(art, *this, type), node_counts);
+		break;
+	case NType::PREFIX_INLINED:
+	case NType::NODE_7_LEAF:
+	case NType::NODE_15_LEAF:
+	case NType::NODE_256_LEAF:
+		break;
+	}
+
+	node_counts[GetAllocatorIdx(type)]++;
 }
 
 } // namespace duckdb

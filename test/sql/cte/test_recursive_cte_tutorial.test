@@ -104,7 +104,7 @@ SELECT * FROM ctenames;
 7902	FORD	JONES -> FORD
 7369	SMITH	JONES -> FORD -> SMITH
 
-require noalternativeverify
+require no_alternative_verify
 
 query II
 WITH RECURSIVE fib AS (

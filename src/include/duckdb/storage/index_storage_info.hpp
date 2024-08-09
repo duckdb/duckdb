@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
-#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -38,26 +39,29 @@ struct IndexBufferInfo {
 	idx_t allocation_size;
 };
 
-//! Information to serialize an index
+//! Index (de)serialization information.
 struct IndexStorageInfo {
 	IndexStorageInfo() {};
-	explicit IndexStorageInfo(string name) : name(std::move(name)) {};
+	explicit IndexStorageInfo(const string &name) : name(name) {};
 
-	//! The name of the index
+	//! The name.
 	string name;
-	//! The root of the index
+	//! The storage root.
 	idx_t root;
-	//! Information to serialize the index memory held by the fixed-size allocators
+	//! Any index specialization can provide additional key-Value settings via this map.
+	case_insensitive_map_t<Value> options;
+	//! Serialization information for fixed-size allocator memory.
 	vector<FixedSizeAllocatorInfo> allocator_infos;
 
-	//! Contains all buffer pointers and their allocation size for serializing to the WAL
-	//! First dimension: all fixed-size allocators, second dimension: the buffers of each allocator
+	//! Contains all buffer pointers and their allocation size for serializing to the WAL.
+	//! First dimension: All fixed-size allocators.
+	//! Second dimension: The buffers of each fixed-size allocator.
 	vector<vector<IndexBufferInfo>> buffers;
 
-	//! The root block pointer of the index, which is necessary to support older storage files
+	//! The root block pointer of the index. Necessary to support older storage files.
 	BlockPointer root_block_ptr;
 
-	//! Returns true, if the struct contains index information
+	//! Returns true, if IndexStorageInfo holds information to deserialize an index.
 	bool IsValid() const {
 		return root_block_ptr.IsValid() || !allocator_infos.empty();
 	}
