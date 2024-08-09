@@ -288,7 +288,7 @@ unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(Deserial
 void StarExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "relation_name", relation_name);
-	serializer.WriteProperty<case_insensitive_set_t>(201, "exclude_list", exclude_list);
+	serializer.WriteProperty<columnref_set_t>(201, "exclude_list", exclude_list);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
 	serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
@@ -298,7 +298,7 @@ void StarExpression::Serialize(Serializer &serializer) const {
 unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression());
 	deserializer.ReadPropertyWithDefault<string>(200, "relation_name", result->relation_name);
-	deserializer.ReadProperty<case_insensitive_set_t>(201, "exclude_list", result->exclude_list);
+	deserializer.ReadProperty<columnref_set_t>(201, "exclude_list", result->exclude_list);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", result->replace_list);
 	deserializer.ReadPropertyWithDefault<bool>(203, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", result->expr);

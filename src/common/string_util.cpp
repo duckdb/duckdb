@@ -243,6 +243,19 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	return true;
 }
 
+bool StringUtil::CIEquals(const char &l1, const char &l2) {
+	const auto charmap = LowerFun::ASCII_TO_LOWER_MAP;
+	return charmap[(uint8_t)l1] == charmap[(uint8_t)l2];
+}
+
+bool StringUtil::CIEndsWith(const string &str, const string &suffix) {
+	if (suffix.size() > str.size()) {
+		return false;
+	}
+	return equal(suffix.rbegin(), suffix.rend(), str.rbegin(),
+	             [](char a, char b) { return StringUtil::CIEquals(a, b); });
+}
+
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
 	const auto charmap = UpperFun::ASCII_TO_UPPER_MAP;
 

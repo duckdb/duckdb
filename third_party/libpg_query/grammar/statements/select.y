@@ -3911,8 +3911,8 @@ target_el:	a_expr AS ColLabelOrString
 				}
 		;
 
-except_list: EXCLUDE '(' name_list_opt_comma ')'					{ $$ = $3; }
-			| EXCLUDE ColId								{ $$ = list_make1(makeString($2)); }
+except_list: EXCLUDE '(' qualified_name_list_opt_comma ')'	{ $$ = $3; }
+			| EXCLUDE qualified_name				{ $$ = list_make1($2); }
 		;
 
 opt_except_list: except_list						{ $$ = $1; }
@@ -3937,6 +3937,7 @@ opt_replace_list: REPLACE '(' replace_list_opt_comma ')'		{ $$ = $3; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
+
 /*****************************************************************************
  *
  *	Names and constants
@@ -3948,6 +3949,10 @@ qualified_name_list:
 			| qualified_name_list ',' qualified_name { $$ = lappend($1, $3); }
 		;
 
+qualified_name_list_opt_comma:
+			qualified_name_list						{ $$ = $1; }
+			| qualified_name_list ','				{ $$ = $1; }
+		;
 
 name_list:	name
 					{ $$ = list_make1(makeString($1)); }

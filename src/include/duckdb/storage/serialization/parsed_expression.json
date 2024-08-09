@@ -311,7 +311,7 @@
       {
         "id": 201,
         "name": "exclude_list",
-        "type": "case_insensitive_set_t"
+        "type": "columnref_set_t"
       },
       {
         "id": 202,

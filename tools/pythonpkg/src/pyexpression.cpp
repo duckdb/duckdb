@@ -1,4 +1,8 @@
 #include "duckdb_python/expression/pyexpression.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -248,10 +252,11 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
 
 // Static creation methods
 
-static void PopulateExcludeList(case_insensitive_set_t &exclude, const py::list &list) {
+static void PopulateExcludeList(columnref_set_t &exclude, const py::list &list) {
 	for (auto item : list) {
 		if (py::isinstance<py::str>(item)) {
-			exclude.insert(std::string(py::str(item)));
+			auto colref = make_uniq<ColumnRefExpression>(vector<string> {std::string(py::str(item))});
+			exclude.insert(std::move(colref));
 			continue;
 		}
 		shared_ptr<DuckDBPyExpression> expr;
@@ -262,12 +267,13 @@ static void PopulateExcludeList(case_insensitive_set_t &exclude, const py::list 
 			throw py::value_error("Only ColumnExpressions are accepted Expression types here");
 		}
 		auto &column = expr->GetExpression().Cast<ColumnRefExpression>();
-		exclude.insert(column.GetColumnName());
+		auto columnref = make_uniq<ColumnRefExpression>(column);
+		exclude.insert(std::move(columnref));
 	}
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression(const py::list &exclude_list) {
-	case_insensitive_set_t exclude;
+	columnref_set_t exclude;
 	auto star = make_uniq<duckdb::StarExpression>();
 	PopulateExcludeList(star->exclude_list, exclude_list);
 	return make_shared_ptr<DuckDBPyExpression>(std::move(star));

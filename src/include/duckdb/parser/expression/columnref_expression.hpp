@@ -8,8 +8,10 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -52,4 +54,19 @@ public:
 private:
 	ColumnRefExpression();
 };
+
+struct ColumnRefHashFunction {
+	uint64_t operator()(const unique_ptr<ParsedExpression> &ref) const {
+		return ref->Cast<ColumnRefExpression>().Hash();
+	}
+};
+
+struct ColumnRefEquality {
+	bool operator()(const unique_ptr<ParsedExpression> &a, const unique_ptr<ParsedExpression> &b) const {
+		return ColumnRefExpression::Equal(a->Cast<ColumnRefExpression>(), b->Cast<ColumnRefExpression>());
+	}
+};
+
+using columnref_set_t = unordered_set<unique_ptr<ParsedExpression>, ColumnRefHashFunction, ColumnRefEquality>;
+
 } // namespace duckdb
