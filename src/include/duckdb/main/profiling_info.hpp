@@ -59,6 +59,7 @@ public:
 public:
 	ProfilingInfo() = default;
 	explicit ProfilingInfo(profiler_settings_t &n_settings) : settings(n_settings) {
+		SetMandatorySettings();
 		ResetMetrics();
 	}
 	ProfilingInfo(ProfilingInfo &) = default;

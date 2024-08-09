@@ -25,10 +25,19 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const duckdb::vect
 				duckdb_destroy_value(&value);
 				continue;
 			}
+			if (settings[i] == "QUERY_NAME" || settings[i] == "OPERATOR_NAME") {
+                auto str_value = duckdb_get_varchar(value);
+                REQUIRE(str_value != nullptr);
+                duckdb_free(str_value);
+            }
 			double result = 0;
 			try {
 				auto str_value = duckdb_get_varchar(value);
-				result = std::stod(str_value);
+				if (settings[i] == "QUERY_NAME" || settings[i] == "OPERATOR_NAME") {
+					REQUIRE(str_value != nullptr);
+				} else {
+				    result = std::stod(str_value);
+				}
 				duckdb_free(str_value);
 			} catch (std::invalid_argument &e) {
 				REQUIRE(false);
