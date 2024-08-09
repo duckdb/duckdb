@@ -193,7 +193,9 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 	// If null-padding is not allowed and there is a mismatch between our header candidate and the number of columns
 	// We can't detect the dialect/type options properly
 	if (!options.null_padding && best_sql_types_candidates_per_column_idx.size() != best_header_row.size()) {
-		auto error = CSVError::SniffingError(options.file_path);
+		auto error =
+		    CSVError::HeaderSniffingError(options, best_header_row, best_sql_types_candidates_per_column_idx.size(),
+		                                  state_machine.dialect_options.state_machine_options.delimiter.GetValue());
 		error_handler.Error(error);
 	}
 	bool all_varchar = true;

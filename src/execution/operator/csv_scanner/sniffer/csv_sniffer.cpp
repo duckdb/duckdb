@@ -207,8 +207,6 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 				}
 			}
 		}
-		auto error = CSVError::SniffingError(options.file_path);
-		error_handler->Error(error);
 	}
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// We are done, Set the CSV Options in the reference. Construct and return the result.

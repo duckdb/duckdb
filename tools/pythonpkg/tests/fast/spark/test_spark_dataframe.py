@@ -361,3 +361,24 @@ class TestDataFrame(object):
         df = spark.createDataFrame(data, ["age", "name", "address"])
 
         assert df.age == col("age")
+
+    def test_head_first(self, spark):
+        data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
+        df = spark.createDataFrame(data, ["age", "name"])
+        expected = Row(age=1, name="Ben")
+
+        head = df.orderBy(df.age).head()
+        first = df.orderBy(df.age).first()
+        assert head == first == expected
+
+    def test_head_take_n(self, spark):
+        data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
+        df = spark.createDataFrame(data, ["age", "name"])
+        expected = [
+            Row(age=1, name="Ben"),
+            Row(age=3, name="Anna"),
+        ]
+        df = df.orderBy(df.age, df.name)
+        rows = df.head(2)
+        take = df.take(2)
+        assert rows == take == expected

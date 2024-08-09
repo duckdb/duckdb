@@ -309,6 +309,17 @@ class DataFrame:
 
     orderBy = sort
 
+    def head(self, n: Optional[int] = None) -> Union[Optional[Row], List[Row]]:
+        if n is None:
+            rs = self.head(1)
+            return rs[0] if rs else None
+        return self.take(n)
+
+    first = head
+
+    def take(self, num: int) -> List[Row]:
+        return self.limit(num).collect()
+
     def filter(self, condition: "ColumnOrName") -> "DataFrame":
         """Filters rows using the given condition.
 
