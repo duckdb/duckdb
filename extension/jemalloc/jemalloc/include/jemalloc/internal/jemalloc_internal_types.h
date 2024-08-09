@@ -135,10 +135,14 @@ typedef enum malloc_init_e malloc_init_t;
 #      include <stdlib.h>
 #    endif
 #  endif
-#  define VARIABLE_ARRAY(type, name, count) \
+#  define VARIABLE_ARRAY_UNSAFE(type, name, count) \
 	type *name = alloca(sizeof(type) * (count))
 #else
-#  define VARIABLE_ARRAY(type, name, count) type name[(count)]
+#  define VARIABLE_ARRAY_UNSAFE(type, name, count) type name[(count)]
 #endif
+#define VARIABLE_ARRAY_SIZE_MAX	2048
+#define VARIABLE_ARRAY(type, name, count)	\
+	assert(sizeof(type) * (count) <= VARIABLE_ARRAY_SIZE_MAX);	\
+	VARIABLE_ARRAY_UNSAFE(type, name, count)
 
 #endif /* JEMALLOC_INTERNAL_TYPES_H */

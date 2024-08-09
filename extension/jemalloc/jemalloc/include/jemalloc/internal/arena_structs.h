@@ -104,7 +104,7 @@ struct arena_s {
 	JEMALLOC_WARN_ON_USAGE("Do not use this field directly. "
 	                       "Use `arena_get_bin` instead.")
 	JEMALLOC_ALIGNED(CACHELINE)
-	bin_t			all_bins[0];
+	bin_with_batch_t			all_bins[0];
 };
 
 #endif /* JEMALLOC_INTERNAL_ARENA_STRUCTS_H */

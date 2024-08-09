@@ -20,8 +20,8 @@ typedef void (*prof_backtrace_hook_t)(void **, unsigned *, unsigned);
  */
 typedef void (*prof_dump_hook_t)(const char *filename);
 
-/* ptr, size, backtrace vector, backtrace vector length */
-typedef void (*prof_sample_hook_t)(const void *, size_t, void **, unsigned);
+/* ptr, size, backtrace vector, backtrace vector length, usize */
+typedef void (*prof_sample_hook_t)(const void *ptr, size_t size, void **backtrace, unsigned backtrace_length, size_t usize);
 
 /* ptr, size */
 typedef void (*prof_sample_free_hook_t)(const void *, size_t);

@@ -13,6 +13,8 @@
 #  define calloc je_calloc
 #  define dallocx je_dallocx
 #  define free je_free
+#  define free_sized je_free_sized
+#  define free_aligned_sized je_free_aligned_sized
 #  define mallctl je_mallctl
 #  define mallctlbymib je_mallctlbymib
 #  define mallctlnametomib je_mallctlnametomib
@@ -23,7 +25,7 @@
 #  define malloc_stats_print je_malloc_stats_print
 #  define malloc_usable_size je_malloc_usable_size
 #  define mallocx je_mallocx
-#  define smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9 je_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9
+#  define smallocx_a25b9b8ba91881964be3083db349991bbbbf1661 je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661
 #  define nallocx je_nallocx
 #  define posix_memalign je_posix_memalign
 #  define rallocx je_rallocx
@@ -47,6 +49,8 @@
 #  undef je_calloc
 #  undef je_dallocx
 #  undef je_free
+#  undef je_free_sized
+#  undef je_free_aligned_sized
 #  undef je_mallctl
 #  undef je_mallctlbymib
 #  undef je_mallctlnametomib
@@ -57,7 +61,7 @@
 #  undef je_malloc_stats_print
 #  undef je_malloc_usable_size
 #  undef je_mallocx
-#  undef je_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9
+#  undef je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661
 #  undef je_nallocx
 #  undef je_posix_memalign
 #  undef je_rallocx

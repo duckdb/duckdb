@@ -3,9 +3,7 @@
 
 #include "jemalloc/internal/assert.h"
 
-#ifndef JEMALLOC_ZONE
-#  error "This source file is for zones on Darwin (OS X)."
-#endif
+#ifdef JEMALLOC_ZONE
 
 /* Definitions of the following structs in malloc/malloc.h might be too old
  * for the built binary to run on newer versions of OSX. So use the newest
@@ -467,3 +465,5 @@ zone_register(void) {
 	/* Promote the custom zone to be default. */
 	zone_promote();
 }
+
+#endif

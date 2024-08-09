@@ -17,7 +17,7 @@
 #include <sys/bitops.h>	/* ilog2 */
 #endif
 #ifdef JEMALLOC_HAVE_VM_MAKE_TAG
-#define PAGES_FD_TAG VM_MAKE_TAG(101U)
+#define PAGES_FD_TAG VM_MAKE_TAG(254U)
 #else
 #define PAGES_FD_TAG -1
 #endif

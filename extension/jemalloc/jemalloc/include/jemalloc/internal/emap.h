@@ -186,13 +186,13 @@ emap_edata_is_acquired(tsdn_t *tsdn, emap_t *emap, edata_t *edata) {
 	 */
 	EMAP_DECLARE_RTREE_CTX;
 	rtree_leaf_elm_t *elm = rtree_leaf_elm_lookup(tsdn, &emap->rtree,
-	    rtree_ctx, (uintptr_t)edata_base_get(edata), /* dependent */ true,
+	    rtree_ctx, (uintptr_t)edata_base_get(edata), /* dependent */ false,
 	    /* init_missing */ false);
 	if (elm == NULL) {
 		return true;
 	}
 	rtree_contents_t contents = rtree_leaf_elm_read(tsdn, &emap->rtree, elm,
-	    /* dependent */ true);
+	    /* dependent */ false);
 	if (contents.edata == NULL ||
 	    contents.metadata.state == extent_state_active ||
 	    edata_state_in_transition(contents.metadata.state)) {
