@@ -2063,6 +2063,8 @@ const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
 		return "TEXT";
 	case ExplainFormat::JSON:
 		return "JSON";
+	case ExplainFormat::HTML:
+		return "HTML";
 	case ExplainFormat::GRAPHVIZ:
 		return "GRAPHVIZ";
 	default:
@@ -2080,6 +2082,9 @@ ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "JSON")) {
 		return ExplainFormat::JSON;
+	}
+	if (StringUtil::Equals(value, "HTML")) {
+		return ExplainFormat::HTML;
 	}
 	if (StringUtil::Equals(value, "GRAPHVIZ")) {
 		return ExplainFormat::GRAPHVIZ;

@@ -36,7 +36,7 @@ import IPython
 IPython.get_ipython
 IPython.display
 IPython.display.display
-
+IPython.display.HTML
 
 import ipywidgets
 
