@@ -37,6 +37,9 @@ struct ColumnSegmentState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+public:
+	vector<block_id_t> blocks;
 };
 
 struct DataPointer {

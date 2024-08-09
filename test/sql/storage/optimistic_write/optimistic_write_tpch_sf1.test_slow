@@ -50,3 +50,6 @@ PRAGMA tpch(${i})
 <FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
 
 endloop
+
+statement ok
+CHECKPOINT

@@ -665,6 +665,11 @@ static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &
 		if (block_id != INVALID_BLOCK) {
 			manager.MarkBlockAsUsed(block_id);
 		}
+		if (pointer.segment_state) {
+			for(auto &block : pointer.segment_state->blocks) {
+				manager.MarkBlockAsUsed(block);
+			}
+		}
 	}
 	for (auto &child_column : col_data.child_columns) {
 		MarkBlocksAsUsed(manager, child_column);
