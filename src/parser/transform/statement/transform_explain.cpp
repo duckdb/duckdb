@@ -13,6 +13,7 @@ ExplainFormat ParseFormat(const Value &val) {
 	    {"default", ExplainFormat::DEFAULT},
 	    {"text", ExplainFormat::TEXT},
 	    {"json", ExplainFormat::JSON},
+	    {"graphviz", ExplainFormat::GRAPHVIZ},
 	};
 	auto it = format_mapping.find(format_val);
 	if (it != format_mapping.end()) {

@@ -512,11 +512,12 @@ case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedS
                                                                        const py::object &params) {
 	case_insensitive_map_t<BoundParameterData> named_values;
 	if (py::is_list_like(params)) {
-		if (prep.n_param != py::len(params)) {
+		if (prep.named_param_map.size() != py::len(params)) {
 			if (py::len(params) == 0) {
-				throw InvalidInputException("Expected %d parameters, but none were supplied", prep.n_param);
+				throw InvalidInputException("Expected %d parameters, but none were supplied",
+				                            prep.named_param_map.size());
 			}
-			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.n_param,
+			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.named_param_map.size(),
 			                            py::len(params));
 		}
 		auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(params);
@@ -1276,7 +1277,7 @@ void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> sta
 		return;
 	}
 	for (auto &stmt : statements) {
-		if (stmt->n_param != 0) {
+		if (!stmt->named_param_map.empty()) {
 			throw NotImplementedException(
 			    "Prepared parameters are only supported for the last statement, please split your query up into "
 			    "separate 'execute' calls if you want to use prepared parameters");
