@@ -95,6 +95,10 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	auto &state = input.local_state.Cast<TableScanLocalSourceState>();
 
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	if (extra_info.is_sampling_pushed_down) {
+		chunk.sampling_pushdown_option.do_system_sample = true;
+		chunk.sampling_pushdown_option.sample_rate = extra_info.sample_rate;
+	}
 	if (function.function) {
 		function.function(context.client, data, chunk);
 	} else {
@@ -181,6 +185,9 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 			}
 		}
 		result["Filters"] = filters_info;
+	}
+	if (extra_info.is_sampling_pushed_down) {
+		result["Sample Method"] = "System: " + to_string(100 * extra_info.sample_rate) + "%";
 	}
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;

@@ -465,6 +465,14 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
 
+		// check if we have to sample this chunk
+		if (result.sampling_pushdown_option.do_system_sample) {
+			if (state.random.NextRandom() > result.sampling_pushdown_option.sample_rate) {
+				NextVector(state);
+				continue;
+			}
+		}
+
 		//! first check the zonemap if we have to scan this partition
 		if (!CheckZonemapSegments(state)) {
 			continue;

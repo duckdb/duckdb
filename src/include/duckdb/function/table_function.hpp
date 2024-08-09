@@ -294,6 +294,9 @@ public:
 	//! Whether or not the table function can immediately prune out filter columns that are unused in the remainder of
 	//! the query plan, e.g., "SELECT i FROM tbl WHERE j = 42;" - j does not need to leave the table function at all
 	bool filter_prune;
+	//! Whether or not the table function supports sampling pushdown. If not supported a sample will be taken after the
+	//! table function.
+	bool sampling_pushdown;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 
