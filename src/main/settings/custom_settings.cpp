@@ -61,6 +61,56 @@ Value AccessModeSetting::GetSetting(const ClientContext &context) {
 	}
 }
 
+
+
+
+
+
+
+
+//===--------------------------------------------------------------------===//
+// End of the auto-generated list of settings definitions
+//===--------------------------------------------------------------------===//
+
+//===--------------------------------------------------------------------===//
+// Access Mode
+//===--------------------------------------------------------------------===//
+void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db) {
+		throw InvalidInputException("Cannot change access_mode setting while database is running - it must be set when "
+		                            "opening or attaching the database");
+	}
+	auto parameter = StringUtil::Lower(input.ToString());
+	if (parameter == "automatic") {
+		config.options.access_mode = AccessMode::AUTOMATIC;
+	} else if (parameter == "read_only") {
+		config.options.access_mode = AccessMode::READ_ONLY;
+	} else if (parameter == "read_write") {
+		config.options.access_mode = AccessMode::READ_WRITE;
+	} else {
+		throw InvalidInputException(
+		    "Unrecognized parameter for option ACCESS_MODE \"%s\". Expected READ_ONLY or READ_WRITE.", parameter);
+	}
+}
+
+void AccessModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.access_mode = DBConfig().options.access_mode;
+}
+
+Value AccessModeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	switch (config.options.access_mode) {
+	case AccessMode::AUTOMATIC:
+		return "automatic";
+	case AccessMode::READ_ONLY:
+		return "read_only";
+	case AccessMode::READ_WRITE:
+		return "read_write";
+	default:
+		throw InternalException("Unknown access mode setting");
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Allow Persistent Secrets
 //===--------------------------------------------------------------------===//
@@ -79,7 +129,7 @@ Value AllowPersistentSecretsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Access Mode
+// Catalog Error Maximum Schema
 //===--------------------------------------------------------------------===//
 void CatalogErrorMaxSchemasSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.catalog_error_max_schemas = UBigIntValue::Get(input);
@@ -367,7 +417,7 @@ Value DefaultNullOrderSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Default Null Order
+// Default Secret Storage
 //===--------------------------------------------------------------------===//
 void DefaultSecretStorageSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.secret_manager->SetDefaultStorage(input.ToString());
@@ -1100,10 +1150,6 @@ void LogQueryPathSetting::ResetLocal(ClientContext &context) {
 
 void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	LogQueryPathSetting::Verify(context, input);
-	auto &client_data = ClientData::Get(context);
-	auto path = input.ToString();
-	client_data.log_query_writer =
-	    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path, BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 }
 
 Value LogQueryPathSetting::GetSetting(const ClientContext &context) {
@@ -1117,10 +1163,9 @@ void LogQueryPathSetting::Verify(ClientContext &context, const Value &input) {
 	if (path.empty()) {
 		// empty path: clean up query writer, disable logging
 		client_data.log_query_writer = nullptr;
-		return;
-	}
-	if (client_data.log_query_writer) {
-		client_data.log_query_writer->Close();
+	} else {
+		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
+		                                                             BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 	}
 }
 
@@ -1321,7 +1366,7 @@ Value PartitionedWriteFlushThresholdSetting::GetSetting(const ClientContext &con
 }
 
 //===--------------------------------------------------------------------===//
-// Partitioned Write Flush Threshold
+// Partitioned Write Maximum Open Files
 //===--------------------------------------------------------------------===//
 void PartitionedWriteMaxOpenFilesSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).partitioned_write_max_open_files = ClientConfig().partitioned_write_max_open_files;
@@ -1358,7 +1403,7 @@ void DefaultBlockSizeSetting::Verify(const Value &input) {
 }
 
 //===--------------------------------------------------------------------===//
-// Index scan percentage
+// Index Scan Percentage
 //===--------------------------------------------------------------------===//
 void IndexScanPercentageSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	IndexScanPercentageSetting::Verify(input);
@@ -1382,7 +1427,7 @@ void IndexScanPercentageSetting::Verify(const Value &input) {
 }
 
 //===--------------------------------------------------------------------===//
-// Index scan max count
+// Index Scan Maximum Count
 //===--------------------------------------------------------------------===//
 void IndexScanMaxCountSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto index_scan_max_count = input.GetValue<uint64_t>();
@@ -1468,7 +1513,7 @@ Value PivotLimitSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// PreserveIdentifierCase
+// Preserve Identifier Case
 //===--------------------------------------------------------------------===//
 void PreserveIdentifierCaseSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).preserve_identifier_case = ClientConfig().preserve_identifier_case;
@@ -1483,7 +1528,7 @@ Value PreserveIdentifierCaseSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// PreserveInsertionOrder
+// Preserve Insertion Order
 //===--------------------------------------------------------------------===//
 void PreserveInsertionOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.preserve_insertion_order = input.GetValue<bool>();
@@ -1499,7 +1544,7 @@ Value PreserveInsertionOrderSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// ExportLargeBufferArrow
+// Export Large Buffer Arrow
 //===--------------------------------------------------------------------===//
 void ArrowLargeBufferSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto export_large_buffers_arrow = input.GetValue<bool>();
@@ -1518,7 +1563,7 @@ Value ArrowLargeBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// ArrowOutputListView
+// Arrow Output List View
 //===--------------------------------------------------------------------===//
 void ArrowOutputListViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto arrow_output_list_view = input.GetValue<bool>();
@@ -1536,7 +1581,8 @@ Value ArrowOutputListViewSetting::GetSetting(const ClientContext &context) {
 	return Value::BOOLEAN(arrow_output_list_view);
 }
 
-// ProduceArrowStringView
+//===--------------------------------------------------------------------===//
+// Produce Arrow String View
 //===--------------------------------------------------------------------===//
 void ProduceArrowStringViewSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.produce_arrow_string_views = input.GetValue<bool>();

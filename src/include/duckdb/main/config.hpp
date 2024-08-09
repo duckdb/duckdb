@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <thread>
+
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/cgroups.hpp"
@@ -274,6 +276,12 @@ public:
 	explicit DUCKDB_API DBConfig(bool read_only);
 	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
+
+	template <class OP>
+	typename OP::SETTING_TYPE GetSetting(const ClientContext &context) {
+		std::lock_guard<mutex> lock(config_lock);
+		return OP::GetSetting(context);
+	}
 
 	mutex config_lock;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
