@@ -43,8 +43,7 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientP
 	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options), options);
 }
 
-static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
-
+static void ConvertArrowTableToVector(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
 	// Create the stream factory from the Table object
 	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), context.GetClientProperties());
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
@@ -68,7 +67,7 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 
 	TableFunctionRef empty;
 	TableFunction dummy_table_function;
-	dummy_table_function.name = "ConvertPyArrowToDataChunk";
+	dummy_table_function.name = "ConvertArrowTableToVector";
 	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
 	                                  dummy_table_function, empty);
 	vector<LogicalType> return_types;
@@ -81,9 +80,6 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 		    "The returned table from a pyarrow scalar udf should only contain one column, found %d",
 		    return_types.size());
 	}
-	// if (return_types[0] != out.GetType()) {
-	//	throw InvalidInputException("The type of the returned array (%s) does not match the expected type: '%s'", )
-	//}
 
 	DataChunk result;
 	// Reserve for STANDARD_VECTOR_SIZE instead of count, in case the returned table contains too many tuples
@@ -101,6 +97,26 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	}
 
 	VectorOperations::Cast(context, result.data[0], out, count);
+}
+
+static string NullHandlingError() {
+	return R"(
+		The returned result contained NULL values, but the 'null_handling' was set to DEFAULT.
+		If you want more control over NULL values then null_handling should be set to SPECIAL.
+
+		With DEFAULT all rows containing NULL have been filtered from the UDFs input and
+		are automatically converted to NULL in the final result, the UDF is not expected to return NULL values.
+	)";
+}
+
+static void VerifyVectorizedNullHandling(Vector &result, idx_t count) {
+	auto &validity = FlatVector::Validity(result);
+
+	if (validity.AllValid()) {
+		return;
+	}
+
+	throw InvalidInputException(NullHandlingError());
 }
 
 static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExceptionHandling exception_handling,
@@ -191,7 +207,8 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			// We filtered out some NULLs, now we need to reconstruct the final result by adding the nulls back
 			Vector temp(result.GetType(), count);
 			// Convert the table into a temporary Vector
-			ConvertPyArrowToDataChunk(python_object, temp, state.GetContext(), count);
+			ConvertArrowTableToVector(python_object, temp, state.GetContext(), count);
+			VerifyVectorizedNullHandling(temp, count);
 			SelectionVector inverted(input_size);
 			// Create a SelVec that inverts the filtering
 			// example: count: 6, null_indices: 1,3
@@ -211,7 +228,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			}
 			result.Verify(input_size);
 		} else {
-			ConvertPyArrowToDataChunk(python_object, result, state.GetContext(), count);
+			ConvertArrowTableToVector(python_object, result, state.GetContext(), count);
 		}
 
 		if (input_size == 1) {
@@ -269,6 +286,8 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 				} else {
 					throw NotImplementedException("Exception handling type not implemented");
 				}
+			} else if ((!ret || ret == Py_None) && default_null_handling) {
+				throw InvalidInputException(NullHandlingError());
 			}
 			python_objects.push_back(py::reinterpret_steal<py::object>(ret));
 			python_results[row] = ret;
