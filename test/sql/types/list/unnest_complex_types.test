@@ -97,3 +97,26 @@ SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, [{'a': [1, 2], 'b': NULL}, {'a'
 3	{'a': [NULL, 4, 5], 'b': test the best unnest fest}	NULL
 3	NULL	NULL
 3	{'a': [6, 7, NULL, 9], 'b': abcd}	NULL
+
+# arrays in lists
+query II
+SELECT id, UNNEST(i) FROM (VALUES (1, [[1,2], [3, 4]]::INT[2][]), (2, [[5, NULL], [7, 8]]::INT[2][]), (3, NULL::INT[2][]), (4, [[9, 10], NULL, [11, 12]]::INT[2][]), (5, []::INT[2][])) tbl(id, i)
+----
+1	[1, 2]
+1	[3, 4]
+2	[5, NULL]
+2	[7, 8]
+4	[9, 10]
+4	NULL
+4	[11, 12]
+
+
+# arrays in structs
+query III
+SELECT id, UNNEST(i) FROM (VALUES (1, {'a': [1,2]::INT[2], 'b': [3, 4]::INT[2]}), (2, {'a': [5, NULL]::INT[2], 'b': [7, 8]::INT[2]}), (3, {'a': NULL::INT[2], 'b': [9, 10]::INT[2]}), (4, {'a': [11, 12]::INT[2], 'b': NULL::INT[2]}), (5, {'a': NULL, 'b': [13, 14]::INT[2]})) tbl(id, i);
+----
+1	[1, 2]	[3, 4]
+2	[5, NULL]	[7, 8]
+3	NULL	[9, 10]
+4	[11, 12]	NULL
+5	NULL	[13, 14]

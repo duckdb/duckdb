@@ -32,6 +32,8 @@ enum class MetricsType : uint8_t {
 	OPERATOR_NAME,
 	OPERATOR_TYPE,
 	OPERATOR_CARDINALITY,
+	CUMULATIVE_ROWS_SCANNED,
+	OPERATOR_ROWS_SCANNED,
 	OPERATOR_TIMING
 };
 
@@ -66,6 +68,7 @@ public:
 	void SetSettings(profiler_settings_t const &n_settings);
 	const profiler_settings_t &GetSettings();
 	static profiler_settings_t DefaultSettings();
+	static profiler_settings_t DefaultOperatorSettings();
 
 public:
 	void ResetSettings();
