@@ -6,6 +6,9 @@ require parquet
 
 require 64bit
 
+statement ok
+PRAGMA enable_verification
+
 # 100M rows, 2 BIGINT columns = 1.6GB uncompressed
 statement ok
 COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '__TEST_DIR__/large_integers.parquet'

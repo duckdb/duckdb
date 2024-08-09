@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/typedefs.hpp"
+
 namespace duckdb {
 
 //! The ht_entry_t struct represents an individual entry within a hash table.
@@ -93,7 +96,7 @@ private:
 
 // uses an AND operation to apply the modulo operation instead of an if condition that could be branch mispredicted
 inline void IncrementAndWrap(idx_t &offset, const uint64_t &capacity_mask) {
-	++offset &= capacity_mask; // leave the salt bits unchanged
+	++offset &= capacity_mask;
 }
 
 } // namespace duckdb

@@ -173,6 +173,9 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 	case LogicalTypeId::INTEGER_LITERAL:
 		child_type = IntegerLiteral::GetType(child_type);
 		break;
+	case LogicalTypeId::STRING_LITERAL:
+		child_type = LogicalType::VARCHAR;
+		break;
 	default:
 		break;
 	}

@@ -35,7 +35,6 @@ bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<uni
 		if (HasPivotEntries()) {
 			stmt = CreatePivotStatement(std::move(stmt));
 		}
-		stmt->n_param = ParamCount();
 		statements.push_back(std::move(stmt));
 	}
 	return true;
@@ -58,7 +57,6 @@ StackChecker<Transformer> Transformer::StackCheck(idx_t extra_stack) {
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode &stmt) {
 	auto result = TransformStatementInternal(stmt);
-	result->n_param = ParamCount();
 	if (!named_param_map.empty()) {
 		// Avoid overriding a previous move with nothing
 		result->named_param_map = std::move(named_param_map);

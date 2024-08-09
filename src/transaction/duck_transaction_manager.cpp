@@ -23,10 +23,14 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 	// transaction ID starts very high:
 	// it should be much higher than the current start timestamp
 	// if transaction_id < start_timestamp for any set of active transactions
-	// uncommited data could be read by
+	// uncommitted data could be read by
 	current_transaction_id = TRANSACTION_ID_START;
 	lowest_active_id = TRANSACTION_ID_START;
 	lowest_active_start = MAX_TRANSACTION_ID;
+	if (!db.GetCatalog().IsDuckCatalog()) {
+		// Specifically the StorageManager of the DuckCatalog is relied on, with `db.GetStorageManager`
+		throw InternalException("DuckTransactionManager should only be created together with a DuckCatalog");
+	}
 }
 
 DuckTransactionManager::~DuckTransactionManager() {

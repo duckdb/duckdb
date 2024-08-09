@@ -34,7 +34,6 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	buffer_size = buffer_handle->actual_size;
 	last_position = {buffer_handle->buffer_idx, buffer_position, buffer_size};
 	requested_size = buffer_handle->requested_size;
-
 	// Current Result information
 	current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle->actual_size};
 	current_line_position.end = current_line_position.begin;
@@ -538,9 +537,7 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 
 bool LineError::HandleErrors(StringValueResult &result) {
 	if (ignore_errors && is_error_in_line && !result.figure_out_new_line) {
-		result.cur_col_id = 0;
-		result.chunk_col_id = 0;
-		result.number_of_rows--;
+		result.RemoveLastLine();
 		Reset();
 		return true;
 	}
@@ -764,7 +761,7 @@ bool StringValueResult::AddRowInternal() {
 				}
 			}
 			// If we are here we ignore_errors, so we delete this line
-			number_of_rows--;
+			RemoveLastLine();
 		}
 	}
 	line_positions_per_row[number_of_rows] = current_line_position;
@@ -1351,6 +1348,17 @@ void StringValueResult::SkipBOM() {
 	}
 }
 
+void StringValueResult::RemoveLastLine() {
+	// potentially de-nullify values
+	for (idx_t i = 0; i < chunk_col_id; i++) {
+		validity_mask[i]->SetValid(number_of_rows);
+	}
+	// reset column trackers
+	cur_col_id = 0;
+	chunk_col_id = 0;
+	// decrement row counter
+	number_of_rows--;
+}
 bool StringValueResult::PrintErrorLine() {
 	// To print a lint, result size must be different than one (i.e., this is a SetStart() trying to figure out new
 	// lines) And must either not be ignoring errors. OR must be storing them in a rejects table.

@@ -3,6 +3,10 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE lineitem(l_orderkey INT NOT NULL,
                       l_partkey INT NOT NULL,
                       l_suppkey INT NOT NULL,
@@ -21,7 +25,7 @@ CREATE TABLE lineitem(l_orderkey INT NOT NULL,
                       l_comment VARCHAR(44) NOT NULL);
 
 statement ok
-COPY lineitem FROM 'test/sql/copy/csv/data/lineitem1k.tbl.gz' DELIMITER '|';
+COPY lineitem FROM 'data/csv/lineitem1k.tbl.gz' DELIMITER '|';
 
 query I
 SELECT COUNT(*) FROM lineitem

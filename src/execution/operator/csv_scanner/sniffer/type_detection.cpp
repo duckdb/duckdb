@@ -272,7 +272,7 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 }
 
 void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type,
-                                               const string &separator, string_t &dummy_val) {
+                                               const string &separator, const string_t &dummy_val) {
 	// If it is the first time running date/timestamp detection we must initialize the format variables
 	InitializeDateAndTimeStampDetection(candidate, separator, sql_type);
 	// generate date format candidates the first time through
@@ -420,9 +420,10 @@ void CSVSniffer::DetectTypes() {
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
 		// best_num_cols.
-		if (varchar_cols<min_varchar_cols &&static_cast<double>(info_sql_types_candidates.size())>(
-		        static_cast<double>(max_columns_found) * 0.7) &&
-		    (!options.ignore_errors.GetValue() || candidate->error_handler->errors.size() < min_errors)) {
+		if (!best_candidate ||
+		    (varchar_cols<min_varchar_cols &&static_cast<double>(info_sql_types_candidates.size())>(
+		         static_cast<double>(max_columns_found) * 0.7) &&
+		     (!options.ignore_errors.GetValue() || candidate->error_handler->errors.size() < min_errors))) {
 			min_errors = candidate->error_handler->errors.size();
 			best_header_row.clear();
 			// we have a new best_options candidate
@@ -446,10 +447,6 @@ void CSVSniffer::DetectTypes() {
 				}
 			}
 		}
-	}
-	if (!best_candidate) {
-		auto error = CSVError::SniffingError(options.file_path);
-		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty());

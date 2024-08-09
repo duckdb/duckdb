@@ -5,6 +5,9 @@
 # Test read_csv with user defined variable
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 pragma threads=4
 
 statement ok

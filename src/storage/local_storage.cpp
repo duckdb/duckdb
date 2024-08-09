@@ -317,7 +317,7 @@ LocalStorage &LocalStorage::Get(ClientContext &context, Catalog &catalog) {
 void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state,
                                   optional_ptr<TableFilterSet> table_filters) {
 	auto storage = table_manager.GetStorage(table);
-	if (storage == nullptr) {
+	if (storage == nullptr || storage->row_groups->GetTotalRows() == 0) {
 		return;
 	}
 	storage->InitializeScan(state, table_filters);

@@ -22,6 +22,13 @@ struct CScalarFunctionInfo : public ScalarFunctionInfo {
 	duckdb_scalar_function_t function = nullptr;
 	duckdb_function_info extra_info = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
+};
+
+struct CScalarExecuteInfo {
+	explicit CScalarExecuteInfo(CScalarFunctionInfo &info) : info(info) {
+	}
+
+	CScalarFunctionInfo &info;
 	bool success = true;
 	string error;
 };
@@ -60,10 +67,12 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	input.Flatten();
 	auto c_input = reinterpret_cast<duckdb_data_chunk>(&input);
 	auto c_result = reinterpret_cast<duckdb_vector>(&result);
-	auto c_function_info = reinterpret_cast<duckdb_function_info>(&c_bind_info.info);
+
+	CScalarExecuteInfo exec_info(c_bind_info.info);
+	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
 	c_bind_info.info.function(c_function_info, c_input, c_result);
-	if (!c_bind_info.info.success) {
-		throw InvalidInputException(c_bind_info.info.error);
+	if (!exec_info.success) {
+		throw InvalidInputException(exec_info.error);
 	}
 	if (all_const && (input.size() == 1 || function.function.stability != FunctionStability::VOLATILE)) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -140,24 +149,24 @@ void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duc
 	scalar_function.return_type = *logical_type;
 }
 
-duckdb::CScalarFunctionInfo &GetCScalarFunctionInfo(duckdb_function_info info) {
+duckdb::CScalarExecuteInfo &GetCScalarExecInfo(duckdb_function_info info) {
 	D_ASSERT(info);
-	return *reinterpret_cast<duckdb::CScalarFunctionInfo *>(info);
+	return *reinterpret_cast<duckdb::CScalarExecuteInfo *>(info);
 }
 
 void *duckdb_scalar_function_get_extra_info(duckdb_function_info info) {
 	if (!info) {
 		return nullptr;
 	}
-	auto &scalar_function = GetCScalarFunctionInfo(info);
-	return scalar_function.extra_info;
+	auto &scalar_function = GetCScalarExecInfo(info);
+	return scalar_function.info.extra_info;
 }
 
 void duckdb_scalar_function_set_error(duckdb_function_info info, const char *error) {
 	if (!info || !error) {
 		return;
 	}
-	auto &scalar_function = GetCScalarFunctionInfo(info);
+	auto &scalar_function = GetCScalarExecInfo(info);
 	scalar_function.error = error;
 	scalar_function.success = false;
 }

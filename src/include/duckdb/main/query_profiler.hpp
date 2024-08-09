@@ -29,6 +29,7 @@
 namespace duckdb {
 class ClientContext;
 class ExpressionExecutor;
+class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
 
@@ -65,9 +66,7 @@ public:
 	                      int id);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 
-	static bool SettingEnabled(const MetricsType setting) {
-		return SettingSetFunctions::Enabled(ProfilingInfo::DefaultSettings(), setting);
-	}
+	bool SettingIsEnabled(MetricsType metric) const;
 
 	~OperatorProfiler() {
 	}

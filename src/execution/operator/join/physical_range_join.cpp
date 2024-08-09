@@ -59,9 +59,9 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 }
 
 PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders,
-                                                        RowLayout &payload_layout)
-    : global_sort_state(BufferManager::GetBufferManager(context), orders, payload_layout), has_null(0), count(0),
-      memory_per_thread(0) {
+                                                        RowLayout &payload_layout, const PhysicalOperator &op_p)
+    : op(op_p), global_sort_state(BufferManager::GetBufferManager(context), orders, payload_layout), has_null(0),
+      count(0), memory_per_thread(0) {
 	D_ASSERT(orders.size() == 1);
 
 	// Set external (can be forced with the PRAGMA)
@@ -91,7 +91,7 @@ public:
 
 public:
 	RangeJoinMergeTask(shared_ptr<Event> event_p, ClientContext &context, GlobalSortedTable &table)
-	    : ExecutorTask(context, std::move(event_p)), context(context), table(table) {
+	    : ExecutorTask(context, std::move(event_p), table.op), context(context), table(table) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {

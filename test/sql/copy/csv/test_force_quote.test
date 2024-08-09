@@ -2,12 +2,16 @@
 # description: Test force_quote
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
+
 # create a table
 statement ok
 CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/force_quote.csv' (HEADER 0);
+COPY test FROM 'data/csv/test/force_quote.csv' (HEADER 0);
 ----
 3
 
@@ -65,23 +69,28 @@ SELECT * FROM test2
 statement error
 COPY test (col_b, col_a) TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_b));
 ----
+"force_quote" expected to find col_c, but it was not found in the table
 
 # test using a column in FORCE_QUOTE that is not a column of the table
 statement error
 COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 ----
+"force_quote" expected to find col_d, but it was not found in the table
 
 # FORCE_QUOTE is only supported in COPY ... TO ...
 statement error
 COPY test FROM '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 ----
+Unrecognized option for CSV reader "force_quote"
 
 # FORCE_QUOTE must not be empty and must have the correct parameter type
 statement error
 COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE);
 ----
+"force_quote" expects a column list or * as parameter
 
 statement error
 COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE 42);
 ----
+"force_quote" expected to find 42, but it was not found in the table
 

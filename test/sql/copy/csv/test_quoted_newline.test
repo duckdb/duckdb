@@ -2,12 +2,15 @@
 # description: Test copy statement with quoted newline
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # CSV file with newlines enclosed by quotes
 statement ok
 CREATE TABLE test (a VARCHAR, b INTEGER);
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/quoted_newline.csv' (DELIMITER ',', AUTO_DETECT 0);
+COPY test FROM 'data/csv/test/quoted_newline.csv' (DELIMITER ',', AUTO_DETECT 0);
 ----
 2
 

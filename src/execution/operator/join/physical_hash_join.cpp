@@ -111,8 +111,9 @@ unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientC
 
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
-	HashJoinGlobalSinkState(const PhysicalHashJoin &op, ClientContext &context_p)
-	    : context(context_p), num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
+	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
+	    : context(context_p), op(op_p),
+	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
 	      active_local_states(0), total_size(0), max_partition_size(0), max_partition_count(0), scanned_data(false) {
 		hash_table = op.InitializeHashTable(context);
@@ -137,6 +138,7 @@ public:
 
 public:
 	ClientContext &context;
+	const PhysicalHashJoin &op;
 
 	const idx_t num_threads;
 	//! Temporary memory state for managing this operator's memory usage
@@ -387,8 +389,8 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
-	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p)
-	    : ExecutorTask(context, std::move(event_p)), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
+	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p, const PhysicalOperator &op_p)
+	    : ExecutorTask(context, std::move(event_p), op_p), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
 	      chunk_idx_to(chunk_idx_to_p), parallel(parallel_p) {
 	}
 
@@ -424,7 +426,7 @@ public:
 		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && !context.config.verify_parallelism)) {
 			// Single-threaded finalize
 			finalize_tasks.push_back(
-			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false));
+			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op));
 		} else {
 			// Parallel finalize
 			auto chunks_per_thread = MaxValue<idx_t>((chunk_count + num_threads - 1) / num_threads, 1);
@@ -434,7 +436,7 @@ public:
 				auto chunk_idx_from = chunk_idx;
 				auto chunk_idx_to = MinValue<idx_t>(chunk_idx_from + chunks_per_thread, chunk_count);
 				finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink,
-				                                                         chunk_idx_from, chunk_idx_to, true));
+				                                                         chunk_idx_from, chunk_idx_to, true, sink.op));
 				chunk_idx = chunk_idx_to;
 				if (chunk_idx == chunk_count) {
 					break;
@@ -472,8 +474,8 @@ void HashJoinGlobalSinkState::InitializeProbeSpill() {
 class HashJoinRepartitionTask : public ExecutorTask {
 public:
 	HashJoinRepartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
-	                        JoinHashTable &local_ht)
-	    : ExecutorTask(context, std::move(event_p)), global_ht(global_ht), local_ht(local_ht) {
+	                        JoinHashTable &local_ht, const PhysicalOperator &op_p)
+	    : ExecutorTask(context, std::move(event_p), op_p), global_ht(global_ht), local_ht(local_ht) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -534,7 +536,7 @@ public:
 		partition_tasks.reserve(local_hts.size());
 		for (auto &local_ht : local_hts) {
 			partition_tasks.push_back(
-			    make_uniq<HashJoinRepartitionTask>(shared_from_this(), context, *sink.hash_table, *local_ht));
+			    make_uniq<HashJoinRepartitionTask>(shared_from_this(), context, *sink.hash_table, *local_ht, op));
 		}
 		SetTasks(std::move(partition_tasks));
 	}

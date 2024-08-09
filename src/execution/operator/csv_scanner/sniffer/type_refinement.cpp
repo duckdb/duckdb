@@ -2,11 +2,10 @@
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 
 namespace duckdb {
-
 bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
 	auto &sniffing_state_machine = best_candidate->GetStateMachine();
 	// try vector-cast from string to sql_type
-	Vector dummy_result(sql_type);
+	Vector dummy_result(sql_type, size);
 	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
 	    sql_type.id() == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
@@ -91,6 +90,7 @@ void CSVSniffer::RefineTypes() {
 		}
 		// reset parse chunk for the next iteration
 		parse_chunk.Reset();
+		parse_chunk.SetCapacity(CSVReaderOptions::sniff_size);
 	}
 	detected_types.clear();
 	// set sql types
