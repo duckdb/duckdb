@@ -12,6 +12,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
@@ -191,6 +192,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
                                                               vector<string> input_table_names) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
+	auto &column_type_hint = ref.column_type_hint;
 
 	auto bind_index = GenerateTableIndex();
 	// perform the binding
@@ -199,7 +201,8 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	vector<string> return_names;
 	if (table_function.bind || table_function.bind_replace) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get(), this, table_function, ref);
+		                                  table_function.function_info.get(), this, table_function, ref,
+		                                  column_type_hint, column_name_alias);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan != nullptr) {
@@ -236,11 +239,25 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
+	get->user_provided_names = column_name_alias;
+	get->user_provided_types = column_type_hint;
+
 	if (table_function.in_out_function && !table_function.projection_pushdown) {
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->AddColumnId(i);
 		}
 	}
+
+	if (!column_type_hint.empty()) {
+		D_ASSERT(column_name_alias.size() == column_type_hint.size());
+		if (column_type_hint.size() > return_types.size()) {
+			throw BinderException("The provided schema contains %d columns, but the function only returns %d columns",
+			                      column_type_hint.size(), return_types.size());
+		}
+		return_types = column_type_hint;
+		return_names = column_name_alias;
+	}
+
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
 	                              get->GetTable().get());

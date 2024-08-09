@@ -193,12 +193,14 @@ void TableFunctionRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", function);
 	serializer.WritePropertyWithDefault<vector<string>>(201, "column_name_alias", column_name_alias);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "column_type_hint", column_type_hint);
 }
 
 unique_ptr<TableRef> TableFunctionRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TableFunctionRef>(new TableFunctionRef());
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", result->function);
 	deserializer.ReadPropertyWithDefault<vector<string>>(201, "column_name_alias", result->column_name_alias);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "column_type_hint", result->column_type_hint);
 	return std::move(result);
 }
 
