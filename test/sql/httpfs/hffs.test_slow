@@ -109,6 +109,66 @@ FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.par
 statement ok
 DROP SECRET hf1
 
+# Same can be achieved with an http secret setting the bearer token manually
+
+statement ok
+CREATE SECRET http1 (TYPE HTTP, BEARER_TOKEN '${HUGGING_FACE_TOKEN}');
+
+query III rowsort
+FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
+----
+1	value1	hf://datasets/samansmink/duckdb_ci_private/hive_data/part=a/date=2012-01-01/test.parquet
+2	value2	hf://datasets/samansmink/duckdb_ci_private/hive_data/part=b/date=2013-01-01/test.parquet
+
+statement ok
+DROP SECRET http1
+
+# Note that the huggingface secret takes precedence over the http secret
+
+statement ok
+CREATE SECRET hf2 (TYPE HUGGINGFACE, TOKEN '${HUGGING_FACE_TOKEN}');
+
+statement ok
+CREATE SECRET http2 (TYPE HTTP, BEARER_TOKEN 'hocus pocus this token is bogus');
+
+# Works because hf secret is selected
+query III rowsort
+FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
+----
+1	value1	hf://datasets/samansmink/duckdb_ci_private/hive_data/part=a/date=2012-01-01/test.parquet
+2	value2	hf://datasets/samansmink/duckdb_ci_private/hive_data/part=b/date=2013-01-01/test.parquet
+
+statement ok
+DROP SECRET hf2;
+
+# the http secret does not work
+statement error
+FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
+----
+401
+
+statement ok
+DROP SECRET http2
+
+# Finally we can also manually set the bearer token header
+statement ok
+CREATE SECRET http3 (
+    TYPE HTTP, 
+    EXTRA_HTTP_HEADERS MAP{
+		'Authorization': 'Bearer ${HUGGING_FACE_TOKEN}',
+	}
+);
+
+# Works because hf secret is selected
+query III rowsort
+FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
+----
+1	value1	hf://datasets/samansmink/duckdb_ci_private/hive_data/part=a/date=2012-01-01/test.parquet
+2	value2	hf://datasets/samansmink/duckdb_ci_private/hive_data/part=b/date=2013-01-01/test.parquet
+
+statement ok
+DROP SECRET http3
+
 # FIXME: test this from CI as well
 require-env HUGGING_FACE_TOKEN_IN_CACHE
 

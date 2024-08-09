@@ -30,7 +30,6 @@ protected:
 
 struct CreateBearerTokenFunctions {
 public:
-	static constexpr const char *GENERIC_BEARER_TYPE = "bearer";
 	static constexpr const char *HUGGINGFACE_TYPE = "huggingface";
 
 	//! Register all CreateSecretFunctions
@@ -45,6 +44,16 @@ protected:
 	//! Function for the "config" provider: creates secret from parameters passed by user
 	static unique_ptr<BaseSecret> CreateHuggingFaceSecretFromCredentialChain(ClientContext &context,
 	                                                                         CreateSecretInput &input);
+};
+
+struct CreateHTTPSecretFunctions {
+public:
+	//! Register all CreateSecretFunctions
+	static void Register(DatabaseInstance &instance);
+
+protected:
+	//! Function for the "config" provider: creates secret from parameters passed by user
+	static unique_ptr<BaseSecret> CreateHTTPSecretFromConfig(ClientContext &context, CreateSecretInput &input);
 };
 
 } // namespace duckdb
