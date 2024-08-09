@@ -23,7 +23,8 @@ public:
 	static constexpr NType PREFIX = NType::PREFIX;
 	static constexpr NType INLINED = NType::PREFIX_INLINED;
 
-	static constexpr uint8_t ROW_ID_COUNT = sizeof(row_t) - 1;
+	static constexpr uint8_t ROW_ID_SIZE = sizeof(row_t);
+	static constexpr uint8_t ROW_ID_COUNT = ROW_ID_SIZE - 1;
 	static constexpr uint8_t DEPRECATED_COUNT = 15;
 	static constexpr row_t INVALID_ROW_ID = -1;
 	static constexpr uint8_t METADATA_SIZE = sizeof(Node) + 1;
@@ -41,25 +42,29 @@ public:
 	static inline uint8_t Count(const ART &art) {
 		return art.prefix_count;
 	}
+	static idx_t GetMismatchWithOther(const Prefix &l_prefix, const Prefix &r_prefix, const idx_t max_count);
+	static idx_t GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth);
+	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
 public:
 	//! Get a new inlined prefix.
-	static void NewInlined(ART &art, Node &node, const ARTKey &key, idx_t depth, uint8_t count);
-	//! Get a new chain of prefix nodes. The node parameter holds the tail of the chain.
-	static void New(ART &art, reference<Node> &node, const ARTKey &key, idx_t depth, idx_t count);
+	static void NewInlined(ART &art, Node &node, const ARTKey &key, const idx_t depth, const uint8_t count);
+	//! Get a new list of prefix nodes. The node reference holds the last prefix of the list.
+	static void New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count);
 
-	//! Free the node and its subtree.
+	//! Free the prefix and its child.
 	static void Free(ART &art, Node &node);
 
-	//! Initializes a merge by incrementing the buffer ID of the prefix and its child node(s)
+	//! Initializes a merge by incrementing the buffer ID of the prefix and its child.
 	static void InitializeMerge(ART &art, Node &node, const unsafe_vector<idx_t> &upper_bounds);
 
-	//! Returns the row ID, if we can inline it, else -1.
-	static row_t CanInline(ART &art, Node &parent, Node &node, uint8_t byte, const Node &child = Node());
-	//! Concatenates parent_node -> byte -> child_node. Special-handling, if
+	//! Returns the row ID, if we can inline it, else INVALID_ROW_ID.
+	static row_t CanInline(ART &art, const Node &parent, const Node &node, const uint8_t byte,
+	                       const Node &child = Node());
+	//! Concatenates parent -> byte -> child. Special-handling, if
 	//! 1. the byte was in a gate node.
 	//! 2. the byte was in PREFIX_INLINED.
-	static void Concat(ART &art, Node &parent, const uint8_t byte, bool is_gate, const Node &child = Node());
+	static void Concat(ART &art, Node &parent, uint8_t byte, const bool is_gate, const Node &child = Node());
 
 	//! Traverse a prefix and a key until
 	//! 1. a non-prefix node.
@@ -68,22 +73,20 @@ public:
 	static idx_t Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth);
 	static idx_t TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth);
 
-	//! Traverse two prefixes to find (1) that they match (so far), or (2) that they have a mismatching position,
-	//! or (3) that one prefix contains the other prefix. This function aids in merging Nodes, and, therefore,
-	//! the nodes are not const.
+	//! Traverse two prefixes to find
+	//! 1. that they match.
+	//! 2. that they mismatch.
+	//! 3. that one prefix contains the other prefix.
 	static bool Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &pos, const bool in_gate);
 
-	//! Returns the byte at position.
-	static uint8_t GetByte(const ART &art, const Node &node, uint8_t pos);
-
-	//! Removes the first n bytes from the prefix.
-	//! Shifts all subsequent bytes by n. Frees empty prefix nodes.
-	static void Reduce(ART &art, Node &node, const idx_t n);
+	//! Removes up to pos bytes from the prefix.
+	//! Shifts all subsequent bytes by pos. Frees empty nodes.
+	static void Reduce(ART &art, Node &node, const idx_t pos);
 	//! Splits the prefix at pos.
 	//! prefix_node points to the node that replaces the split byte.
 	//! child_node points to the remaining node after the split.
 	//! Returns true, if a gate was freed.
-	static bool Split(ART &art, reference<Node> &node, Node &child, uint8_t pos);
+	static bool Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
 
 	//! Insert a key into a prefix.
 	static bool Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const bool in_gate);
@@ -103,26 +106,40 @@ public:
 	//! Transform the child of the node.
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
 
-	//! Appends the other_prefix and all its subsequent prefix nodes to this prefix node.
-	//! Also frees all copied/appended nodes
-	void Append(ART &art, Node other);
-	//! Appends the byte.
-	Prefix Append(ART &art, uint8_t byte);
-
-	//! Get the mismatch position of an inlined prefix and a key.
-	static idx_t GetMismatchPos(ART &art, Node &node, const ARTKey &key, idx_t &depth);
-
 private:
-	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, uint8_t count, idx_t offset, NType type);
-	static Prefix GetTail(ART &art, Node &node);
-	static void PrependByte(ART &art, Node &node, uint8_t byte);
+	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset,
+	                          const NType type);
+
+	static Prefix GetTail(ART &art, const Node &node);
+	static void PrependByte(ART &art, const Node &node, const uint8_t byte);
+
 	static void ConcatGate(ART &art, Node &parent, uint8_t byte, const Node &child);
 	static void ConcatChildIsGate(ART &art, Node &parent, uint8_t byte, const Node &child);
 	static void ConcatInlinedPrefix(ART &art, Node &parent, uint8_t byte, const Node &child);
-	static bool TraverseInlined(ART &art, Node &l_node, Node &r_node, idx_t &pos);
-	static void ReduceInlinedPrefix(ART &art, Node &node, const idx_t n);
-	static void ReducePrefix(ART &art, Node &node, const idx_t n);
-	static bool SplitInlined(ART &art, reference<Node> &node, Node &child, uint8_t pos);
+
+	static void TraverseInlined(ART &art, Node &l_node, Node &r_node, idx_t &pos);
+
+	static void ReduceInlinedPrefix(ART &art, Node &node, const idx_t pos);
+	static void ReducePrefix(ART &art, Node &node, const idx_t pos);
+
+	static bool SplitInlined(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
+
+	Prefix Append(ART &art, const uint8_t byte);
+	void Append(ART &art, Node other);
 	Prefix TransformToDeprecatedAppend(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator, uint8_t byte);
+
+private:
+	template <class F, class NODE>
+	static void Iterator(ART &art, reference<NODE> &ref, const bool exit_gate, const bool is_mutable, F &&lambda) {
+		while (ref.get().HasMetadata() && ref.get().GetType() == PREFIX) {
+			Prefix prefix(art, ref, is_mutable);
+			lambda(prefix);
+
+			ref = *prefix.ptr;
+			if (exit_gate && ref.get().IsGate()) {
+				break;
+			}
+		}
+	}
 };
 } // namespace duckdb

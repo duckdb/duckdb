@@ -678,7 +678,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 		return true;
 	}
 	case NType::PREFIX_INLINED: {
-		auto pos = Prefix::GetMismatchPos(*this, node, key, depth);
+		auto pos = Prefix::GetMismatchWithKey(*this, node, key, depth);
 		D_ASSERT(pos != DConstants::INVALID_INDEX);
 
 		reference<Node> next(node);
@@ -809,7 +809,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	reference<Node> ref(*child);
 
 	if (ref.get().GetType() == NType::PREFIX_INLINED) {
-		auto pos = Prefix::GetMismatchPos(*this, ref, key, temp_depth);
+		auto pos = Prefix::GetMismatchWithKey(*this, ref, key, temp_depth);
 		if (pos == DConstants::INVALID_INDEX) {
 			Node::DeleteChild(*this, next, node, key.get()[depth]);
 		}
