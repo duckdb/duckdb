@@ -20,9 +20,15 @@ const profiler_settings_t &ProfilingInfo::GetSettings() {
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {
-	    MetricsType::QUERY_NAME,    MetricsType::IDLE_THREAD_TIME,       MetricsType::CPU_TIME,
-	    MetricsType::EXTRA_INFO,    MetricsType::CUMULATIVE_CARDINALITY, MetricsType::OPERATOR_NAME,
-	    MetricsType::OPERATOR_TYPE, MetricsType::OPERATOR_CARDINALITY,MetricsType::CUMULATIVE_ROWS_SCANNED,
+	    MetricsType::QUERY_NAME,
+	    MetricsType::IDLE_THREAD_TIME,
+	    MetricsType::CPU_TIME,
+	    MetricsType::EXTRA_INFO,
+	    MetricsType::CUMULATIVE_CARDINALITY,
+	    MetricsType::OPERATOR_NAME,
+	    MetricsType::OPERATOR_TYPE,
+	    MetricsType::OPERATOR_CARDINALITY,
+	    MetricsType::CUMULATIVE_ROWS_SCANNED,
 	    MetricsType::OPERATOR_ROWS_SCANNED,
 	    MetricsType::OPERATOR_TIMING,
 	};
