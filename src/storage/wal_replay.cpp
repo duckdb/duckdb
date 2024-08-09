@@ -28,6 +28,7 @@
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 

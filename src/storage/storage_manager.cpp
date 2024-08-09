@@ -15,6 +15,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
