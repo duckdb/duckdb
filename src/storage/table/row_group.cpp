@@ -973,9 +973,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		//
 		// Just as above, the state can refer to many other states, so this
 		// can cascade recursively into more pointer writes.
+		auto persistent_data = state->ToPersistentData();
 		BinarySerializer serializer(data_writer);
 		serializer.Begin();
-		state->WriteDataPointers(writer, serializer);
+		persistent_data.Serialize(serializer);
 		serializer.End();
 	}
 	row_group_pointer.deletes_pointers = CheckpointDeletes(writer.GetPayloadWriter().GetManager());

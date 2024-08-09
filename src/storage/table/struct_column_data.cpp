@@ -253,13 +253,13 @@ public:
 		return std::move(global_stats);
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
-		serializer.WriteList(102, "sub_columns", child_states.size(), [&](Serializer::List &list, idx_t i) {
-			auto &state = child_states[i];
-			list.WriteObject([&](Serializer &serializer) { state->WriteDataPointers(writer, serializer); });
-		});
+	PersistentColumnData ToPersistentData() override {
+		PersistentColumnData data(PhysicalType::STRUCT);
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		for(auto &child_state : child_states) {
+			data.child_columns.push_back(child_state->ToPersistentData());
+		}
+		return data;
 	}
 };
 

@@ -340,12 +340,11 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		ColumnCheckpointState::WriteDataPointers(writer, serializer);
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
-		serializer.WriteObject(102, "child_column",
-		                       [&](Serializer &serializer) { child_state->WriteDataPointers(writer, serializer); });
+	PersistentColumnData ToPersistentData() override {
+		auto data = ColumnCheckpointState::ToPersistentData();
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		data.child_columns.push_back(child_state->ToPersistentData());
+		return data;
 	}
 };
 
