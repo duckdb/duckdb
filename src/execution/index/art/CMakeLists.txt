@@ -13,7 +13,6 @@ add_library_unity(
   node7_leaf.cpp
   node15_leaf.cpp
   node256_leaf.cpp
-  node_merge.cpp
   art.cpp)
 
 set(ALL_OBJECT_FILES

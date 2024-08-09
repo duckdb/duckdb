@@ -15,10 +15,9 @@ namespace duckdb {
 
 class ARTKey;
 
-//! Prefix is a wrapper class containing field to access a prefix.
-//! On a segment, the prefix contains up to the ART's prefix size bytes
-//! and an additional byte for the count.
-//! If not inlined, then it also contains a Node pointer to a child node.
+//! Prefix is a wrapper class to access a prefix.
+//! The prefix contains up to the ART's prefix size bytes and an additional byte for the count.
+//! Non-inlined prefixes also contain a Node pointer to a child node.
 class Prefix {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;

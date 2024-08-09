@@ -1,6 +1,7 @@
 #include "duckdb/execution/index/art/node.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node15_leaf.hpp"
@@ -349,6 +350,222 @@ bool Node::IsAnyLeaf() const {
 }
 
 //===--------------------------------------------------------------------===//
+// Merge
+//===--------------------------------------------------------------------===//
+
+void Node::InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
+	D_ASSERT(HasMetadata());
+	auto type = GetType();
+
+	switch (type) {
+	case NType::PREFIX:
+		return Prefix::InitializeMerge(art, *this, upper_bounds);
+	case NType::LEAF:
+		throw InternalException("Failed to initialize merge due to deprecated ART storage.");
+	case NType::NODE_4:
+		InitMergeInternal(art, Ref<Node4>(art, *this, type), upper_bounds);
+		break;
+	case NType::NODE_16:
+		InitMergeInternal(art, Ref<Node16>(art, *this, type), upper_bounds);
+		break;
+	case NType::NODE_48:
+		InitMergeInternal(art, Ref<Node48>(art, *this, type), upper_bounds);
+		break;
+	case NType::NODE_256:
+		InitMergeInternal(art, Ref<Node256>(art, *this, type), upper_bounds);
+		break;
+	case NType::LEAF_INLINED:
+		return;
+	case NType::PREFIX_INLINED:
+	case NType::NODE_7_LEAF:
+	case NType::NODE_15_LEAF:
+	case NType::NODE_256_LEAF:
+		break;
+	}
+
+	auto idx = GetAllocatorIdx(type);
+	IncreaseBufferId(upper_bounds[idx]);
+}
+
+bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const bool in_gate) {
+	// Merge N4, N16, N48, N256 nodes.
+	D_ASSERT(l_node.IsNode() && r_node.IsNode());
+	D_ASSERT((l_node.IsGate() && r_node.IsGate()) || (!l_node.IsGate() && !r_node.IsGate()));
+
+	auto r_child = r_node.GetNextChildMutable(art, byte);
+	while (r_child) {
+		auto l_child = l_node.GetChildMutable(art, byte);
+		if (!l_child) {
+			Node::InsertChild(art, l_node, byte, *r_child);
+			r_node.ReplaceChild(art, byte);
+		} else {
+			if (!l_child->MergeInternal(art, *r_child, in_gate)) {
+				return false;
+			}
+		}
+
+		if (byte == NumericLimits<uint8_t>::Maximum()) {
+			break;
+		}
+		byte++;
+		r_child = r_node.GetNextChildMutable(art, byte);
+	}
+
+	Node::Free(art, r_node);
+	return true;
+}
+
+void Node::MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte) {
+	// Merge N7, N15, N256 leaf nodes.
+	D_ASSERT(l_node.IsLeafNode() && r_node.IsLeafNode());
+	D_ASSERT(!l_node.IsGate() && !r_node.IsGate());
+
+	auto has_next = r_node.GetNextByte(art, byte);
+	while (has_next) {
+		// Row IDs are always unique.
+		Node::InsertChild(art, l_node, byte);
+		if (byte == NumericLimits<uint8_t>::Maximum()) {
+			break;
+		}
+		byte++;
+		has_next = r_node.GetNextByte(art, byte);
+	}
+
+	Node::Free(art, r_node);
+}
+
+bool Node::MergeNodes(ART &art, Node &other, bool in_gate) {
+	// Merge the smaller node into the bigger node.
+	if (GetType() < other.GetType()) {
+		swap(*this, other);
+	}
+
+	uint8_t byte = 0;
+	if (IsNode()) {
+		return MergeNormalNodes(art, *this, other, byte, in_gate);
+	}
+	MergeLeafNodes(art, *this, other, byte);
+	return true;
+}
+
+bool Node::Merge(ART &art, Node &other, const bool in_gate) {
+	if (HasMetadata()) {
+		return MergeInternal(art, other, in_gate);
+	}
+
+	*this = other;
+	other = Node();
+	return true;
+}
+
+bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const bool in_gate) {
+	// r_node's prefix contains l_node's prefix. l_node must be a node with child nodes.
+	D_ASSERT(l_node.IsNode());
+
+	// Check if the next byte (pos) in r_node exists in l_node.
+	auto byte = Prefix::GetByte(art, r_node, pos);
+	auto child = l_node.GetChildMutable(art, byte);
+
+	// Reduce r_node's prefix to the bytes after pos.
+	Prefix::Reduce(art, r_node, pos);
+	if (child) {
+		return child->MergeInternal(art, r_node, in_gate);
+	}
+
+	Node::InsertChild(art, l_node, byte, r_node);
+	r_node.Clear();
+	return true;
+}
+
+void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t pos) {
+	Node l_child;
+	auto l_byte = Prefix::GetByte(art, l_node, pos);
+
+	reference<Node> ref(l_node);
+	auto freed_gate = Prefix::Split(art, ref, l_child, pos);
+	Node4::New<Node4>(art, ref, NType::NODE_4);
+	if (freed_gate) {
+		ref.get().SetGate();
+	}
+
+	Node4::InsertChild(art, ref, l_byte, l_child);
+
+	auto r_byte = Prefix::GetByte(art, r_node, pos);
+	Prefix::Reduce(art, r_node, pos);
+	Node4::InsertChild(art, ref, r_byte, r_node);
+	r_node.Clear();
+}
+
+bool Node::MergePrefixes(ART &art, Node &other, const bool in_gate) {
+	reference<Node> l_node(*this);
+	reference<Node> r_node(other);
+	auto pos = DConstants::INVALID_INDEX;
+
+	if (l_node.get().IsPrefix() && r_node.get().IsPrefix()) {
+		// Traverse prefixes. Possibly change the referenced nodes.
+		if (!Prefix::Traverse(art, l_node, r_node, pos, in_gate)) {
+			return false;
+		}
+		if (pos == DConstants::INVALID_INDEX) {
+			return true;
+		}
+
+	} else {
+		// l_prefix contains r_prefix.
+		if (l_node.get().IsPrefix()) {
+			swap(*this, other);
+		}
+		pos = 0;
+	}
+
+	D_ASSERT(pos != DConstants::INVALID_INDEX);
+	if (!l_node.get().IsPrefix() && r_node.get().IsPrefix()) {
+		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(pos), in_gate);
+	}
+
+	// The prefixes differ.
+	MergeIntoNode4(art, l_node, r_node, UnsafeNumericCast<uint8_t>(pos));
+	return true;
+}
+
+bool Node::MergeInternal(ART &art, Node &other, const bool in_gate) {
+	D_ASSERT(HasMetadata());
+	D_ASSERT(other.HasMetadata());
+
+	// Merge inlined leaves.
+	if (GetType() == NType::LEAF_INLINED) {
+		swap(*this, other);
+	}
+	if (other.GetType() == NType::LEAF_INLINED) {
+		D_ASSERT(!in_gate);
+		D_ASSERT(other.IsGate() || other.GetType() == NType::LEAF_INLINED);
+		if (art.IsUnique()) {
+			return false;
+		}
+		Leaf::MergeInlined(art, *this, other);
+		return true;
+	}
+
+	// Enter a gate.
+	if (IsGate() && other.IsGate() && !in_gate) {
+		return Merge(art, other, true);
+	}
+
+	// Merge N4, N16, N48, N256 nodes.
+	if (IsNode() && other.IsNode()) {
+		return MergeNodes(art, other, in_gate);
+	}
+	// Merge N7, N15, N256 leaf nodes.
+	if (IsLeafNode() && other.IsLeafNode()) {
+		D_ASSERT(in_gate);
+		return MergeNodes(art, other, in_gate);
+	}
+
+	// Merge prefixes.
+	return MergePrefixes(art, other, in_gate);
+}
+
+//===--------------------------------------------------------------------===//
 // Vacuum
 //===--------------------------------------------------------------------===//
 
@@ -434,38 +651,35 @@ void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSi
 //===--------------------------------------------------------------------===//
 
 string Node::VerifyAndToString(ART &art, const bool only_verify) const {
-	// TODO: tidy up.
 	D_ASSERT(HasMetadata());
 
 	auto type = GetType();
 	switch (type) {
 	case NType::LEAF_INLINED:
-		return only_verify ? "" : "Inlined Leaf [count: 1, row ID: " + to_string(GetRowId()) + "]";
+		return only_verify ? "" : "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]";
 	case NType::LEAF:
 		return Leaf::DeprecatedVerifyAndToString(art, *this, only_verify);
 	case NType::PREFIX: {
 		auto str = Prefix::VerifyAndToString(art, *this, only_verify);
 		if (IsGate()) {
-			str = "Gate [" + str + "]";
+			str = "Gate [ " + str + " ]";
 		}
 		return only_verify ? "" : "\n" + str;
 	}
 	case NType::PREFIX_INLINED: {
-		D_ASSERT(!IsGate());
-
 		Prefix prefix(art, *this);
-		string str = " Inlined Prefix:[";
+		string str = " Inlined Prefix [ ";
 		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 			str += to_string(prefix.data[i]) + "-";
 		}
-		str += "] ";
+		str += " ] ";
 		return only_verify ? "" : "\n" + str;
 	}
 	default:
 		break;
 	}
 
-	string str = "Node" + to_string(GetCapacity(type)) + ": [";
+	string str = "Node" + to_string(GetCapacity(type)) + ": [ ";
 	uint8_t byte = 0;
 
 	if (IsLeafNode()) {
@@ -492,7 +706,7 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 	}
 
 	if (IsGate()) {
-		str = "Gate [" + str + "]";
+		str = "Gate [ " + str + " ]";
 	}
 	return only_verify ? "" : "\n" + str + "]";
 }

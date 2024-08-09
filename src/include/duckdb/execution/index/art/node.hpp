@@ -36,6 +36,8 @@ class Prefix;
 //! The Node is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
 class Node : public IndexPointer {
+	friend class Prefix;
+
 public:
 	//! A gate sets the leftmost bit of the metadata, binary: 1000-0000.
 	static constexpr uint8_t AND_GATE = 0x80;
@@ -66,7 +68,7 @@ public:
 	}
 
 	//! Replace the child at byte.
-	void ReplaceChild(const ART &art, const uint8_t byte, const Node child) const;
+	void ReplaceChild(const ART &art, const uint8_t byte, const Node child = Node()) const;
 	//! Insert the child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child = Node());
 	//! Delete the child at byte.
@@ -98,7 +100,6 @@ public:
 	void InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
 	//! Merge a node into this node.
 	bool Merge(ART &art, Node &other, const bool in_gate);
-	bool MergeInternal(ART &art, Node &other, const bool in_gate); // TODO: private
 
 	//! Vacuum all nodes exceeding their vacuum threshold.
 	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
@@ -150,10 +151,13 @@ public:
 	}
 
 private:
+	bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const bool in_gate);
+	void MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte);
 	bool MergeNodes(ART &art, Node &other, const bool in_gate);
-	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, uint8_t pos, const bool in_gate);
-	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, uint8_t pos);
+	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const bool in_gate);
+	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t pos);
 	bool MergePrefixes(ART &art, Node &other, const bool in_gate);
+	bool MergeInternal(ART &art, Node &other, const bool in_gate);
 
 private:
 	template <class NODE>
