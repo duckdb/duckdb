@@ -276,6 +276,7 @@ public:
 	DUCKDB_API ~DBConfig();
 
 	mutex config_lock;
+	mutex extensions_install_lock;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
 

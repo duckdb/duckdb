@@ -241,8 +241,12 @@ static void CheckExtensionMetadataOnInstall(DBConfig &config, void *in_buffer, i
 //   1. Crash after extension removal: extension is now uninstalled, metadata file still present
 //   2. Crash after metadata removal: extension is now uninstalled, extension dir is clean
 //   3. Crash after extension move: extension is now uninstalled, new metadata file present
-static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const string &local_extension_path,
-                                void *in_buffer, idx_t file_size, ExtensionInstallInfo &info) {
+static void WriteExtensionFiles(DBConfig &config, FileSystem &fs, const string &temp_path,
+                                const string &local_extension_path, void *in_buffer, idx_t file_size,
+                                ExtensionInstallInfo &info) {
+	lock_guard<mutex> l(config.extensions_install_lock);
+	FileBasedLock lock(fs, local_extension_path + ".lock", 1000);
+
 	// Write extension to tmp file
 	WriteExtensionFileToDisk(fs, temp_path, in_buffer, file_size);
 
@@ -263,6 +267,8 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 
 	fs.MoveFile(metadata_tmp_path, metadata_file_path);
 	fs.MoveFile(temp_path, local_extension_path);
+
+	lock.Release();
 }
 
 // Install an extension using a filesystem
@@ -330,7 +336,8 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 		info.repository_url = repository->path;
 	}
 
-	WriteExtensionFiles(fs, temp_path, local_extension_path, extension_decompressed, extension_decompressed_size, info);
+	WriteExtensionFiles(config, fs, temp_path, local_extension_path, extension_decompressed,
+	                    extension_decompressed_size, info);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -451,7 +458,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 	}
 
 	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(*fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
+	WriteExtensionFiles(config, *fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
 	                    decompressed_body.size(), info);
 
 	return make_uniq<ExtensionInstallInfo>(info);
