@@ -77,7 +77,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
@@ -466,7 +466,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
@@ -522,7 +522,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       VERIFY_VECTOR: ${{ matrix.vector_type }}
 
     steps:
@@ -562,7 +562,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
@@ -686,7 +686,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:

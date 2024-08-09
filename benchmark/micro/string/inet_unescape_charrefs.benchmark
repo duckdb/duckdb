@@ -1,5 +1,5 @@
 # name: benchmark/micro/string/inet_unescape_charrefs.benchmark
-# description: inet's extension unescape function benchmark
+# description: inet's extension unescape function benchmark with character references
 # group: [string]
 
 name html_unescape benchmark for character references
