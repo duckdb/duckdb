@@ -47,7 +47,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 	bool has_next;
 	do {
 		// An empty upper bound indicates that no upper bound exists.
-		if (!upper_bound.Empty() && !inside_gate) {
+		if (!upper_bound.Empty() && !in_gate) {
 			if (current_key.GreaterThan(upper_bound, equal)) {
 				return true;
 			}
@@ -61,7 +61,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 			row_ids.push_back(last_leaf.GetRowId());
 			break;
 		case NType::LEAF:
-			if (!Leaf::DeprecatedGetRowIds(*art, last_leaf, row_ids, max_count)) {
+			if (!Leaf::DeprecatedGetRowIds(art, last_leaf, row_ids, max_count)) {
 				return false;
 			}
 			break;
@@ -69,12 +69,12 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF: {
 			uint8_t byte = 0;
-			while (last_leaf.GetNextByte(*art, byte)) {
+			while (last_leaf.GetNextByte(art, byte)) {
 				if (row_ids.size() + 1 > max_count) {
 					return false;
 				}
-				row_id[sizeof(row_t) - 1] = byte;
-				ARTKey key(&row_id[0], sizeof(row_t));
+				row_id[ROW_ID_SIZE - 1] = byte;
+				ARTKey key(&row_id[0], ROW_ID_SIZE);
 				row_ids.push_back(key.GetRowID());
 				if (byte == NumericLimits<uint8_t>::Maximum()) {
 					break;
@@ -84,11 +84,11 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 			break;
 		}
 		case NType::PREFIX_INLINED: {
-			Prefix prefix(*art, last_leaf);
-			for (idx_t i = 0; i < prefix.data[Prefix::Count(*art)]; i++) {
+			Prefix prefix(art, last_leaf);
+			for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 				row_id[i + nested_depth] = prefix.data[i];
 			}
-			ARTKey key(&row_id[0], sizeof(row_t));
+			ARTKey key(&row_id[0], ROW_ID_SIZE);
 			row_ids.push_back(key.GetRowID());
 			break;
 		}
@@ -112,17 +112,17 @@ void Iterator::FindMinimum(const Node &node) {
 
 	// We are passing a gate node.
 	if (node.IsGate()) {
-		D_ASSERT(!inside_gate);
-		inside_gate = true;
+		D_ASSERT(!in_gate);
+		in_gate = true;
 		nested_depth = 0;
 	}
 
 	// Traverse the prefix.
 	if (node.GetType() == NType::PREFIX) {
-		Prefix prefix(*art, node);
-		for (idx_t i = 0; i < prefix.data[Prefix::Count(*art)]; i++) {
+		Prefix prefix(art, node);
+		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 			current_key.Push(prefix.data[i]);
-			if (inside_gate) {
+			if (in_gate) {
 				row_id[nested_depth] = prefix.data[i];
 				nested_depth++;
 			}
@@ -133,12 +133,12 @@ void Iterator::FindMinimum(const Node &node) {
 
 	// Go to the leftmost entry in the current node.
 	uint8_t byte = 0;
-	auto next = node.GetNextChild(*art, byte);
+	auto next = node.GetNextChild(art, byte);
 	D_ASSERT(next);
 
 	// Recurse on the leftmost node.
 	current_key.Push(byte);
-	if (inside_gate) {
+	if (in_gate) {
 		row_id[nested_depth] = byte;
 		nested_depth++;
 	}
@@ -153,7 +153,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 
 	// We found any leaf node, or a gate.
 	if (node.IsAnyLeaf() || node.IsGate()) {
-		D_ASSERT(!inside_gate);
+		D_ASSERT(!in_gate);
 		D_ASSERT(current_key.Size() == key.len);
 		if (!equal && current_key.Contains(key)) {
 			return Next();
@@ -170,7 +170,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 	D_ASSERT(!node.IsGate());
 	if (node.GetType() != NType::PREFIX) {
 		auto next_byte = key[depth];
-		auto child = node.GetNextChild(*art, next_byte);
+		auto child = node.GetNextChild(art, next_byte);
 
 		// The key is greater than any key in this subtree.
 		if (!child) {
@@ -191,14 +191,14 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 	}
 
 	// Push back all prefix bytes.
-	Prefix prefix(*art, node);
-	for (idx_t i = 0; i < prefix.data[Prefix::Count(*art)]; i++) {
+	Prefix prefix(art, node);
+	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 		current_key.Push(prefix.data[i]);
 	}
 	nodes.emplace(node, 0);
 
 	// We compare the prefix bytes with the key bytes.
-	for (idx_t i = 0; i < prefix.data[Prefix::Count(*art)]; i++) {
+	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 		// We found a prefix byte that is less than its corresponding key byte.
 		// I.e., the subsequent node is lesser than the key. Thus, the next node
 		// is the lower bound.
@@ -216,7 +216,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 	}
 
 	// The prefix matches the key. We recurse into the child.
-	depth += prefix.data[Prefix::Count(*art)];
+	depth += prefix.data[Prefix::Count(art)];
 	return LowerBound(*prefix.ptr, key, equal, depth);
 }
 
@@ -238,7 +238,7 @@ bool Iterator::Next() {
 		}
 
 		top.byte++;
-		auto next_node = top.node.GetNextChild(*art, top.byte);
+		auto next_node = top.node.GetNextChild(art, top.byte);
 		if (!next_node) {
 			// No more children of this node.
 			// Move up the tree by popping the key byte of the current node.
@@ -248,7 +248,7 @@ bool Iterator::Next() {
 
 		current_key.Pop(1);
 		current_key.Push(top.byte);
-		if (inside_gate) {
+		if (in_gate) {
 			row_id[nested_depth - 1] = top.byte;
 		}
 
@@ -261,14 +261,14 @@ bool Iterator::Next() {
 void Iterator::PopNode() {
 	// We are popping a gate node.
 	if (nodes.top().node.IsGate()) {
-		D_ASSERT(inside_gate);
-		inside_gate = false;
+		D_ASSERT(in_gate);
+		in_gate = false;
 	}
 
 	// Pop the byte and the node.
 	if (nodes.top().node.GetType() != NType::PREFIX) {
 		current_key.Pop(1);
-		if (inside_gate) {
+		if (in_gate) {
 			nested_depth--;
 		}
 		nodes.pop();
@@ -276,10 +276,10 @@ void Iterator::PopNode() {
 	}
 
 	// Pop all prefix bytes and the node.
-	Prefix prefix(*art, nodes.top().node);
-	auto prefix_byte_count = prefix.data[Prefix::Count(*art)];
+	Prefix prefix(art, nodes.top().node);
+	auto prefix_byte_count = prefix.data[Prefix::Count(art)];
 	current_key.Pop(prefix_byte_count);
-	if (inside_gate) {
+	if (in_gate) {
 		nested_depth -= prefix_byte_count;
 	}
 	nodes.pop();

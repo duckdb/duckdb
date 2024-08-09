@@ -55,7 +55,10 @@ private:
 
 class Iterator {
 public:
-	explicit Iterator(ART &art) : art(art), inside_gate(false) {};
+	static constexpr uint8_t ROW_ID_SIZE = sizeof(row_t);
+
+public:
+	explicit Iterator(ART &art) : art(art), in_gate(false) {};
 	//! Holds the current key leading down to the top node on the stack.
 	IteratorKey current_key;
 
@@ -70,16 +73,16 @@ public:
 	bool LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth);
 
 private:
-	//! Pointer to the ART.
-	optional_ptr<ART> art = nullptr;
+	//! The ART.
+	ART &art;
 	//! Stack of nodes from the root to the currently active node.
 	stack<IteratorEntry> nodes;
 	//! Last visited leaf node.
 	Node last_leaf = Node();
 	//! Holds the row ID of nested leaves.
-	uint8_t row_id[sizeof(row_t)];
+	uint8_t row_id[ROW_ID_SIZE];
 	//! True, if we passed a gate.
-	bool inside_gate = false;
+	bool in_gate = false;
 	//! Depth in a nested leaf.
 	uint8_t nested_depth = 0;
 
