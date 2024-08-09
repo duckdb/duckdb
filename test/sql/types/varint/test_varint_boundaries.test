@@ -20,7 +20,7 @@ ubigint::varchar::varint = ubigint::varint
 FROM test_all_types()
 where tinyint is not null;
 ----
-true	true	true	true	false	true	true	true	true	true
+true	true	true	true	true	true	true	true	true	true
 true	true	true	true	true	true	true	true	true	true
 
 
@@ -38,7 +38,7 @@ ubigint::varchar::varint = ubigint::varint::varchar
 FROM test_all_types()
 where tinyint is not null;
 ----
-true	true	true	true	false	true	true	true	true	true
+true	true	true	true	true	true	true	true	true	true
 true	true	true	true	true	true	true	true	true	true
 
 # Floats and doubles have more complicated string coversions, hence the tests are separated

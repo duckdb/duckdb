@@ -51,8 +51,7 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 	// Determine if the number is negative
 	bool is_negative = (int_value.upper >> 63) & 1;
 	if (is_negative) {
-		int_value.lower = ~int_value.lower + 1;
-		int_value.upper = ~int_value.upper;
+		int_value = -int_value;
 	}
 	// Determine the number of data bytes
 	uint64_t abs_value_upper = static_cast<uint64_t>(int_value.upper);
@@ -66,11 +65,17 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 	}
 
 	uint32_t upper_byte_size = data_byte_size;
-	if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
-		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
+	if (data_byte_size > 0) {
+		// If we have at least one byte on the upper side, the bottom side is complete
+		data_byte_size += 8;
 	} else {
-		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+		if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
+			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
+		} else {
+			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+		}
 	}
+
 	if (data_byte_size == 0) {
 		data_byte_size++;
 	}
@@ -109,10 +114,15 @@ string_t HugeintCastToVarInt::Operation(uhugeint_t int_value, Vector &result) {
 	}
 
 	uint32_t upper_byte_size = data_byte_size;
-	if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
-		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
+	if (data_byte_size > 0) {
+		// If we have at least one byte on the upper side, the bottom side is complete
+		data_byte_size += 8;
 	} else {
-		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+		if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
+			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
+		} else {
+			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+		}
 	}
 	if (data_byte_size == 0) {
 		data_byte_size++;
