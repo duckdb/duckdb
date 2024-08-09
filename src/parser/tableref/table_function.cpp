@@ -9,7 +9,7 @@ TableFunctionRef::TableFunctionRef() : TableRef(TableReferenceType::TABLE_FUNCTI
 }
 
 string TableFunctionRef::ToString() const {
-	return BaseToString(function->ToString());
+	return BaseToString(function->ToString(), column_name_alias, column_type_hint);
 }
 
 bool TableFunctionRef::Equals(const TableRef &other_p) const {
@@ -17,7 +17,24 @@ bool TableFunctionRef::Equals(const TableRef &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<TableFunctionRef>();
-	return function->Equals(*other.function);
+	if (!function->Equals(*other.function)) {
+		return false;
+	}
+	if (column_type_hint.size() != other.column_type_hint.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < column_name_alias.size(); i++) {
+		if (!StringUtil::CIEquals(column_name_alias[i], other.column_name_alias[i])) {
+			return false;
+		}
+
+		if (!column_type_hint.empty()) {
+			if (column_type_hint[i] != other.column_type_hint[i]) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 unique_ptr<TableRef> TableFunctionRef::Copy() {
@@ -25,6 +42,7 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 
 	copy->function = function->Copy();
 	copy->column_name_alias = column_name_alias;
+	copy->column_type_hint = column_type_hint;
 	CopyProperties(*copy);
 
 	return std::move(copy);

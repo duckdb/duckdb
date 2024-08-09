@@ -26,6 +26,8 @@ public:
 
 	// if the function takes a subquery as argument its in here
 	unique_ptr<SelectStatement> subquery;
+	//! (optional) User set types for the columns
+	vector<LogicalType> column_type_hint;
 
 public:
 	string ToString() const override;

@@ -8,7 +8,8 @@
 
 namespace duckdb {
 
-string TableRef::BaseToString(string result) const {
+string TableRef::BaseToString(string result, const vector<string> &column_name_alias,
+                              const vector<LogicalType> &column_type_hint) const {
 	if (!alias.empty() || !column_name_alias.empty()) {
 		result += " AS ";
 	}
@@ -44,6 +45,19 @@ string TableRef::BaseToString(string result) const {
 	return result;
 }
 
+string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
+	vector<LogicalType> empty_types;
+
+	return BaseToString(std::move(result), column_name_alias, empty_types);
+}
+
+string TableRef::BaseToString(string result) const {
+	vector<string> empty_names;
+	vector<LogicalType> empty_types;
+
+	return BaseToString(std::move(result), empty_names, empty_types);
+}
+
 bool TableRef::Equals(const TableRef &other) const {
 	if (type != other.type) {
 		return false;
@@ -58,20 +72,6 @@ bool TableRef::Equals(const TableRef &other) const {
 	if (column_name_alias.size() != other.column_name_alias.size()) {
 		return false;
 	}
-	if (column_type_hint.size() != other.column_type_hint.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < column_name_alias.size(); i++) {
-		if (!StringUtil::CIEquals(column_name_alias[i], other.column_name_alias[i])) {
-			return false;
-		}
-
-		if (!column_type_hint.empty()) {
-			if (column_type_hint[i] != other.column_type_hint[i]) {
-				return false;
-			}
-		}
-	}
 	return true;
 }
 
@@ -82,7 +82,6 @@ void TableRef::CopyProperties(TableRef &target) const {
 	target.sample = sample ? sample->Copy() : nullptr;
 	target.external_dependency = external_dependency;
 	target.column_name_alias = column_name_alias;
-	target.column_type_hint = column_type_hint;
 }
 
 void TableRef::Print() {

@@ -8,7 +8,7 @@ namespace duckdb {
 
 string SubqueryRef::ToString() const {
 	string result = "(" + subquery->ToString() + ")";
-	return BaseToString(result);
+	return BaseToString(result, column_name_alias);
 }
 
 SubqueryRef::SubqueryRef() : TableRef(TableReferenceType::SUBQUERY) {

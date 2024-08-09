@@ -547,8 +547,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// special case: check if we are inserting from a VALUES statement
 	if (values_list) {
 		auto &expr_list = values_list->Cast<ExpressionListRef>();
-		expr_list.column_type_hint.resize(expected_columns);
-		expr_list.column_name_alias.resize(expected_columns);
+		expr_list.expected_types.resize(expected_columns);
+		expr_list.expected_names.resize(expected_columns);
 
 		D_ASSERT(!expr_list.values.empty());
 		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
@@ -561,8 +561,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 			// set the expected types as the types for the INSERT statement
 			auto &column = table.GetColumn(table_col_idx);
-			expr_list.column_type_hint[col_idx] = column.Type();
-			expr_list.column_name_alias[col_idx] = column.Name();
+			expr_list.expected_types[col_idx] = column.Type();
+			expr_list.expected_names[col_idx] = column.Name();
 
 			// now replace any DEFAULT values with the corresponding default expression
 			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
