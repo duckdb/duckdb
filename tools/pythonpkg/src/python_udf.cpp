@@ -153,7 +153,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 				bool any_null = false;
 				for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 					auto &vec = vec_data[col_idx];
-					if (!vec.validity.RowIsValid(i)) {
+					if (!vec.validity.RowIsValid(vec.sel->get_index(i))) {
 						any_null = true;
 						break;
 					}
@@ -211,20 +211,22 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			// Convert the table into a temporary Vector
 			ConvertArrowTableToVector(python_object, temp, state.GetContext(), count);
 			VerifyVectorizedNullHandling(temp, count);
-			SelectionVector inverted(input_size);
-			// Create a SelVec that inverts the filtering
-			// example: count: 6, null_indices: 1,3
-			// input selvec: [0, 2, 4, 5]
-			// inverted selvec: [0, 0, 1, 1, 2, 3]
-			idx_t src_index = 0;
-			for (idx_t i = 0; i < input_size; i++) {
-				// Fill the gaps with the previous index
-				inverted.set_index(i, src_index);
-				if (src_index + 1 < count && selvec.get_index(src_index) == i) {
-					src_index++;
+			if (count) {
+				SelectionVector inverted(input_size);
+				// Create a SelVec that inverts the filtering
+				// example: count: 6, null_indices: 1,3
+				// input selvec: [0, 2, 4, 5]
+				// inverted selvec: [0, 0, 1, 1, 2, 3]
+				idx_t src_index = 0;
+				for (idx_t i = 0; i < input_size; i++) {
+					// Fill the gaps with the previous index
+					inverted.set_index(i, src_index);
+					if (src_index + 1 < count && selvec.get_index(src_index) == i) {
+						src_index++;
+					}
 				}
+				VectorOperations::Copy(temp, result, inverted, count, 0, 0, input_size);
 			}
-			VectorOperations::Copy(temp, result, inverted, count, 0, 0, input_size);
 			for (idx_t i = 0; i < input_size; i++) {
 				FlatVector::SetNull(result, i, !result_validity.RowIsValid(i));
 			}
