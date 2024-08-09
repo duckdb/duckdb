@@ -16,6 +16,7 @@ unique_ptr<PrepareStatement> Transformer::TransformPrepare(duckdb_libpgquery::PG
 	result->name = string(stmt.name);
 	result->statement = TransformStatement(*stmt.query);
 	SetParamCount(0);
+	named_param_map.clear();
 
 	return result;
 }
