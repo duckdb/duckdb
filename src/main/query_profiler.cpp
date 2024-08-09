@@ -268,7 +268,7 @@ void QueryProfiler::EndPhase() {
 	}
 }
 
-bool SettingIsEnabled(profiler_settings_t settings, MetricsType metric) {
+bool SettingIsEnabled(const profiler_settings_t &settings, MetricsType metric) {
 	if (settings.find(metric) != settings.end()) {
 		return true;
 	}
@@ -289,12 +289,13 @@ bool SettingIsEnabled(profiler_settings_t settings, MetricsType metric) {
 
 OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	enabled = QueryProfiler::Get(context).IsEnabled();
-	auto settings = ClientConfig::GetConfig(context).profiler_settings;
+	auto &settings = ClientConfig::GetConfig(context).profiler_settings;
 
-	vector<MetricsType> op_metrics = {MetricsType::OPERATOR_TIMING, MetricsType::OPERATOR_CARDINALITY,
-	                                  MetricsType::OPERATOR_ROWS_SCANNED};
+	profiler_settings_t op_metrics = ProfilingInfo::DefaultOperatorSettings();
 	for (auto &metric : op_metrics) {
-		operator_settings[metric] = SettingIsEnabled(settings, metric);
+		if (SettingIsEnabled(settings, metric)) {
+			operator_settings.insert(metric);
+		}
 	}
 }
 
@@ -310,19 +311,9 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	// start timing for current element
-	if (operator_settings[MetricsType::OPERATOR_TIMING]) {
+	if (HasOperatorSetting(MetricsType::OPERATOR_TIMING)) {
 		op.Start();
 	}
-}
-
-// checks if any of the settings are enabled
-bool OperatorSettingsCheck(const map<MetricsType, bool> &settings) {
-	for (auto &setting : settings) {
-		if (setting.second) {
-			return true;
-		}
-	}
-	return false;
 }
 
 void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
@@ -334,16 +325,16 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
 	}
 
-	if (OperatorSettingsCheck(operator_settings)) {
+	if (!operator_settings.empty()) {
 		// get the operator info for the current element
 		auto &curr_operator_info = GetOperatorInfo(*active_operator);
 
 		// finish timing for the current element
-		if (operator_settings[MetricsType::OPERATOR_TIMING]) {
+		if (HasOperatorSetting(MetricsType::OPERATOR_TIMING)) {
 			op.End();
 			curr_operator_info.AddTime(op.Elapsed());
 		}
-		if (operator_settings[MetricsType::OPERATOR_CARDINALITY] && chunk) {
+		if (HasOperatorSetting(MetricsType::OPERATOR_CARDINALITY) && chunk) {
 			curr_operator_info.AddReturnedElements(chunk->size());
 		}
 	}
@@ -382,14 +373,14 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		D_ASSERT(entry != tree_map.end());
 		auto &tree_node = entry->second.get();
 
-		if (profiler.operator_settings[MetricsType::OPERATOR_TIMING]) {
+		if (profiler.HasOperatorSetting(MetricsType::OPERATOR_TIMING)) {
 			tree_node.GetProfilingInfo().AddToMetric<double>(MetricsType::OPERATOR_TIMING, node.second.time);
 		}
-		if (profiler.operator_settings[MetricsType::OPERATOR_CARDINALITY]) {
+		if (profiler.HasOperatorSetting(MetricsType::OPERATOR_CARDINALITY)) {
 			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_CARDINALITY,
 			                                                node.second.elements_returned);
 		}
-		if (profiler.operator_settings[MetricsType::OPERATOR_ROWS_SCANNED]) {
+		if (profiler.HasOperatorSetting(MetricsType::OPERATOR_ROWS_SCANNED)) {
 			if (op.type == PhysicalOperatorType::TABLE_SCAN) {
 				auto &scan_op = op.Cast<PhysicalTableScan>();
 				auto &bind_data = scan_op.bind_data;

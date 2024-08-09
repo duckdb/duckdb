@@ -29,6 +29,14 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	};
 }
 
+profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
+	return {
+	    MetricsType::OPERATOR_CARDINALITY,
+	    MetricsType::OPERATOR_ROWS_SCANNED,
+	    MetricsType::OPERATOR_TIMING,
+	};
+}
+
 void ProfilingInfo::ResetSettings() {
 	settings.clear();
 	settings = DefaultSettings();

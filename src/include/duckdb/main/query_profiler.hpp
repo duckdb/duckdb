@@ -72,10 +72,15 @@ public:
 
 	ClientContext &context;
 
+	bool HasOperatorSetting(const MetricsType &metric) const {
+		return operator_settings.find(metric) != operator_settings.end();
+	}
+
 private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
-	map<MetricsType, bool> operator_settings;
+	//! Sub-settings for the operator profiler
+	profiler_settings_t operator_settings;
 
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;

@@ -63,6 +63,7 @@ public:
 	// get the metrics set
 	const profiler_settings_t &GetSettings();
 	static profiler_settings_t DefaultSettings();
+	static profiler_settings_t DefaultOperatorSettings();
 
 public:
 	// reset the metrics to default
