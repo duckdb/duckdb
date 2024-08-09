@@ -52,6 +52,9 @@ private:
 	SettingScope scope = SettingScope::INVALID;
 };
 
+//===--------------------------------------------------------------------===//
+// Start of the auto-generated list of settings
+//===--------------------------------------------------------------------===//
 struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
 	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
@@ -61,7 +64,45 @@ struct AccessModeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct AllowPersistentSecrets {
+struct AllocatorBackgroundThreadsSetting {
+	static constexpr const char *Name = "allocator_background_threads";
+	static constexpr const char *Description = "Whether to enable the allocator background thread.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllocatorFlushThresholdSetting {
+	static constexpr const char *Name = "allocator_flush_threshold";
+	static constexpr const char *Description =
+	    "Peak allocation threshold at which to flush the allocator after completing a task.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllowCommunityExtensionsSetting {
+	static constexpr const char *Name = "allow_community_extensions";
+	static constexpr const char *Description = "Allow to load community built extensions";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+	static void Verify(const Value &input);
+};
+
+struct AllowExtensionsMetadataMismatchSetting {
+	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
+	static constexpr const char *Description = "Allow to load extensions with not compatible metadata";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllowPersistentSecretsSetting {
 	static constexpr const char *Name = "allow_persistent_secrets";
 	static constexpr const char *Description =
 	    "Allow the creation of persistent secrets, that are stored and loaded on restarts";
@@ -71,7 +112,75 @@ struct AllowPersistentSecrets {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct CatalogErrorMaxSchema {
+struct AllowUnredactedSecretsSetting {
+	static constexpr const char *Name = "allow_unredacted_secrets";
+	static constexpr const char *Description = "Allow printing unredacted secrets";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllowUnsignedExtensionsSetting {
+	static constexpr const char *Name = "allow_unsigned_extensions";
+	static constexpr const char *Description = "Allow to load extensions with invalid or missing signatures";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ArrowLargeBufferSizeSetting {
+	static constexpr const char *Name = "arrow_large_buffer_size";
+	static constexpr const char *Description =
+	    "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ArrowOutputListViewSetting {
+	static constexpr const char *Name = "arrow_output_list_view";
+	static constexpr const char *Description =
+	    "If export to arrow format should use ListView as the physical layout for LIST columns";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AutoinstallExtensionRepositorySetting {
+	static constexpr const char *Name = "autoinstall_extension_repository";
+	static constexpr const char *Description =
+	    "Overrides the custom endpoint for extension installation on autoloading";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AutoinstallKnownExtensionsSetting {
+	static constexpr const char *Name = "autoinstall_known_extensions";
+	static constexpr const char *Description =
+	    "Whether known extensions are allowed to be automatically installed when a query depends on them";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AutoloadKnownExtensionsSetting {
+	static constexpr const char *Name = "autoload_known_extensions";
+	static constexpr const char *Description =
+	    "Whether known extensions are allowed to be automatically loaded when a query depends on them";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct CatalogErrorMaxSchemasSetting {
 	static constexpr const char *Name = "catalog_error_max_schemas";
 	static constexpr const char *Description =
 	    "The maximum number of schemas the system will scan for \"did you mean...\" style errors in the catalog";
@@ -91,7 +200,43 @@ struct CheckpointThresholdSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct DebugCheckpointAbort {
+struct CustomExtensionRepositorySetting {
+	static constexpr const char *Name = "custom_extension_repository";
+	static constexpr const char *Description = "Overrides the custom endpoint for remote extension installation";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct CustomProfilingSettingsSetting {
+	static constexpr const char *Name = "custom_profiling_settings";
+	static constexpr const char *Description = "Accepts a JSON enabling custom metrics";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct CustomUserAgentSetting {
+	static constexpr const char *Name = "custom_user_agent";
+	static constexpr const char *Description = "Metadata from DuckDB callers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct DebugAsofIejoinSetting {
+	static constexpr const char *Name = "debug_asof_iejoin";
+	static constexpr const char *Description = "DEBUG SETTING: force use of IEJoin to implement AsOf joins";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct DebugCheckpointAbortSetting {
 	static constexpr const char *Name = "debug_checkpoint_abort";
 	static constexpr const char *Description =
 	    "DEBUG SETTING: trigger an abort while checkpointing for testing purposes";
@@ -101,7 +246,7 @@ struct DebugCheckpointAbort {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct DebugForceExternal {
+struct DebugForceExternalSetting {
 	static constexpr const char *Name = "debug_force_external";
 	static constexpr const char *Description =
 	    "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing";
@@ -111,7 +256,7 @@ struct DebugForceExternal {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct DebugForceNoCrossProduct {
+struct DebugForceNoCrossProductSetting {
 	static constexpr const char *Name = "debug_force_no_cross_product";
 	static constexpr const char *Description =
 	    "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing";
@@ -121,41 +266,24 @@ struct DebugForceNoCrossProduct {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct OrderedAggregateThreshold {
-	static constexpr const char *Name = "ordered_aggregate_threshold"; // NOLINT
-	static constexpr const char *Description =                         // NOLINT
-	    "The number of rows to accumulate before sorting, used for tuning";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT; // NOLINT
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct DebugAsOfIEJoin {
-	static constexpr const char *Name = "debug_asof_iejoin";                                                 // NOLINT
-	static constexpr const char *Description = "DEBUG SETTING: force use of IEJoin to implement AsOf joins"; // NOLINT
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;                                 // NOLINT
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct PreferRangeJoins {
-	static constexpr const char *Name = "prefer_range_joins";                                    // NOLINT
-	static constexpr const char *Description = "Force use of range joins with mixed predicates"; // NOLINT
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;                     // NOLINT
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct DebugWindowMode {
+struct DebugWindowModeSetting {
 	static constexpr const char *Name = "debug_window_mode";
 	static constexpr const char *Description = "DEBUG SETTING: switch window mode to use";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct DefaultBlockSizeSetting {
+	static constexpr const char *Name = "default_block_size";
+	static constexpr const char *Description =
+	    "The default block size for new duckdb database files (new as-in, they do not yet exist).";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+	static void Verify(const Value &input);
 };
 
 struct DefaultCollationSetting {
@@ -166,6 +294,16 @@ struct DefaultCollationSetting {
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+	static void Verify(ClientContext &context, const Value &input);
+};
+
+struct DefaultNullOrderSetting {
+	static constexpr const char *Name = "default_null_order";
+	static constexpr const char *Description = "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -178,16 +316,7 @@ struct DefaultOrderSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct DefaultNullOrderSetting {
-	static constexpr const char *Name = "default_null_order";
-	static constexpr const char *Description = "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct DefaultSecretStorage {
+struct DefaultSecretStorageSetting {
 	static constexpr const char *Name = "default_secret_storage";
 	static constexpr const char *Description = "Allows switching the default storage for secrets";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
@@ -196,7 +325,7 @@ struct DefaultSecretStorage {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct DisabledFileSystemsSetting {
+struct DisabledFilesystemsSetting {
 	static constexpr const char *Name = "disabled_filesystems";
 	static constexpr const char *Description = "Disable specific file systems preventing access (e.g. LocalFileSystem)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
@@ -214,6 +343,15 @@ struct DisabledOptimizersSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DuckdbApiSetting {
+	static constexpr const char *Name = "duckdb_api";
+	static constexpr const char *Description = "DuckDB API surface";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableExternalAccessSetting {
 	static constexpr const char *Name = "enable_external_access";
 	static constexpr const char *Description =
@@ -225,27 +363,7 @@ struct EnableExternalAccessSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct EnableMacrosDependencies {
-	static constexpr const char *Name = "enable_macro_dependencies";
-	static constexpr const char *Description =
-	    "Enable created MACROs to create dependencies on the referenced objects (such as tables)";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct EnableViewDependencies {
-	static constexpr const char *Name = "enable_view_dependencies";
-	static constexpr const char *Description =
-	    "Enable created VIEWs to create dependencies on the referenced objects (such as tables)";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct EnableFSSTVectors {
+struct EnableFsstVectorsSetting {
 	static constexpr const char *Name = "enable_fsst_vectors";
 	static constexpr const char *Description =
 	    "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression";
@@ -255,75 +373,28 @@ struct EnableFSSTVectors {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct AllowUnsignedExtensionsSetting {
-	static constexpr const char *Name = "allow_unsigned_extensions";
-	static constexpr const char *Description = "Allow to load extensions with invalid or missing signatures";
+struct EnableHttpLoggingSetting {
+	static constexpr const char *Name = "enable_http_logging";
+	static constexpr const char *Description = "Enables HTTP logging";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct EnableHttpMetadataCacheSetting {
+	static constexpr const char *Name = "enable_http_metadata_cache";
+	static constexpr const char *Description = "Whether or not the global http metadata is used to cache HTTP metadata";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct AllowCommunityExtensionsSetting {
-	static constexpr const char *Name = "allow_community_extensions";
-	static constexpr const char *Description = "Allow to load community built extensions";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct AllowExtensionsMetadataMismatchSetting {
-	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
-	static constexpr const char *Description = "Allow to load extensions with not compatible metadata";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct AllowUnredactedSecretsSetting {
-	static constexpr const char *Name = "allow_unredacted_secrets";
-	static constexpr const char *Description = "Allow printing unredacted secrets";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct CustomExtensionRepository {
-	static constexpr const char *Name = "custom_extension_repository";
-	static constexpr const char *Description = "Overrides the custom endpoint for remote extension installation";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct AutoloadExtensionRepository {
-	static constexpr const char *Name = "autoinstall_extension_repository";
+struct EnableMacroDependenciesSetting {
+	static constexpr const char *Name = "enable_macro_dependencies";
 	static constexpr const char *Description =
-	    "Overrides the custom endpoint for extension installation on autoloading";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct AutoinstallKnownExtensions {
-	static constexpr const char *Name = "autoinstall_known_extensions";
-	static constexpr const char *Description =
-	    "Whether known extensions are allowed to be automatically installed when a query depends on them";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct AutoloadKnownExtensions {
-	static constexpr const char *Name = "autoload_known_extensions";
-	static constexpr const char *Description =
-	    "Whether known extensions are allowed to be automatically loaded when a query depends on them";
+	    "Enable created MACROs to create dependencies on the referenced objects (such as tables)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -339,37 +410,10 @@ struct EnableObjectCacheSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct StorageCompatibilityVersion {
-	static constexpr const char *Name = "storage_compatibility_version";
-	static constexpr const char *Description = "Serialize on checkpoint with compatibility for a given duckdb version";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct EnableHTTPMetadataCacheSetting {
-	static constexpr const char *Name = "enable_http_metadata_cache";
-	static constexpr const char *Description = "Whether or not the global http metadata is used to cache HTTP metadata";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct EnableProfilingSetting {
 	static constexpr const char *Name = "enable_profiling";
 	static constexpr const char *Description =
 	    "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct CustomProfilingSettings {
-	static constexpr const char *Name = "custom_profiling_settings";
-	static constexpr const char *Description = "Accepts a JSON enabling custom metrics";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -396,6 +440,16 @@ struct EnableProgressBarPrintSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct EnableViewDependenciesSetting {
+	static constexpr const char *Name = "enable_view_dependencies";
+	static constexpr const char *Description =
+	    "Enable created VIEWs to create dependencies on the referenced objects (such as tables)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ErrorsAsJsonSetting {
 	static constexpr const char *Name = "errors_as_json";
 	static constexpr const char *Description = "Output error messages as structured JSON instead of as a raw string";
@@ -411,16 +465,6 @@ struct ExplainOutputSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct ExportLargeBufferArrow {
-	static constexpr const char *Name = "arrow_large_buffer_size";
-	static constexpr const char *Description =
-	    "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -440,6 +484,7 @@ struct ExternalThreadsSetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+	static void Verify(const Value &input);
 };
 
 struct FileSearchPathSetting {
@@ -451,18 +496,19 @@ struct FileSearchPathSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct ForceCompressionSetting {
-	static constexpr const char *Name = "force_compression";
-	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
+struct ForceBitpackingModeSetting {
+	static constexpr const char *Name = "force_bitpacking_mode";
+	static constexpr const char *Description = "DEBUG SETTING: forces a specific bitpacking mode";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+	static void Verify(const Value &input);
 };
 
-struct ForceBitpackingModeSetting {
-	static constexpr const char *Name = "force_bitpacking_mode";
-	static constexpr const char *Description = "DEBUG SETTING: forces a specific bitpacking mode";
+struct ForceCompressionSetting {
+	static constexpr const char *Name = "force_compression";
+	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -476,6 +522,50 @@ struct HomeDirectorySetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+	static void Verify(ClientContext &context, const Value &input);
+};
+
+struct HttpLoggingOutputSetting {
+	static constexpr const char *Name = "http_logging_output";
+	static constexpr const char *Description =
+	    "The file to which HTTP logging output should be saved, or empty to print to the terminal";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ImmediateTransactionModeSetting {
+	static constexpr const char *Name = "immediate_transaction_mode";
+	static constexpr const char *Description =
+	    "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct IndexScanMaxCountSetting {
+	static constexpr const char *Name = "index_scan_max_count";
+	static constexpr const char *Description =
+	    "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
+	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct IndexScanPercentageSetting {
+	static constexpr const char *Name = "index_scan_percentage";
+	static constexpr const char *Description =
+	    "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
+	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::DOUBLE;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+	static void Verify(const Value &input);
 };
 
 struct IntegerDivisionSetting {
@@ -483,16 +573,6 @@ struct IntegerDivisionSetting {
 	static constexpr const char *Description =
 	    "Whether or not the / operator defaults to integer division, or to floating point division";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct LogQueryPathSetting {
-	static constexpr const char *Name = "log_query_path";
-	static constexpr const char *Description =
-	    "Specifies the path to which queries should be logged (default: NULL, queries are not logged)";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -507,17 +587,18 @@ struct LockConfigurationSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct ImmediateTransactionModeSetting {
-	static constexpr const char *Name = "immediate_transaction_mode";
+struct LogQueryPathSetting {
+	static constexpr const char *Name = "log_query_path";
 	static constexpr const char *Description =
-	    "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	    "Specifies the path to which queries should be logged (default: NULL, queries are not logged)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+	static void Verify(ClientContext &context, const Value &input);
 };
 
-struct MaximumExpressionDepthSetting {
+struct MaxExpressionDepthSetting {
 	static constexpr const char *Name = "max_expression_depth";
 	static constexpr const char *Description =
 	    "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep "
@@ -528,7 +609,7 @@ struct MaximumExpressionDepthSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct MaximumMemorySetting {
+struct MaxMemorySetting {
 	static constexpr const char *Name = "max_memory";
 	static constexpr const char *Description = "The maximum memory of the system (e.g. 1GB)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
@@ -537,17 +618,7 @@ struct MaximumMemorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct StreamingBufferSize {
-	static constexpr const char *Name = "streaming_buffer_size";
-	static constexpr const char *Description =
-	    "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct MaximumTempDirectorySize {
+struct MaxTempDirectorySizeSetting {
 	static constexpr const char *Name = "max_temp_directory_size";
 	static constexpr const char *Description =
 	    "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)";
@@ -557,7 +628,7 @@ struct MaximumTempDirectorySize {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct MergeJoinThreshold {
+struct MergeJoinThresholdSetting {
 	static constexpr const char *Name = "merge_join_threshold";
 	static constexpr const char *Description = "The number of rows we need on either table to choose a merge join";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
@@ -566,7 +637,7 @@ struct MergeJoinThreshold {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct NestedLoopJoinThreshold {
+struct NestedLoopJoinThresholdSetting {
 	static constexpr const char *Name = "nested_loop_join_threshold";
 	static constexpr const char *Description =
 	    "The number of rows we need on either table to choose a nested loop join";
@@ -576,7 +647,7 @@ struct NestedLoopJoinThreshold {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct OldImplicitCasting {
+struct OldImplicitCastingSetting {
 	static constexpr const char *Name = "old_implicit_casting";
 	static constexpr const char *Description = "Allow implicit casting to/from VARCHAR";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
@@ -585,7 +656,17 @@ struct OldImplicitCasting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct PartitionedWriteFlushThreshold {
+struct OrderedAggregateThresholdSetting {
+	static constexpr const char *Name = "ordered_aggregate_threshold";
+	static constexpr const char *Description = "None";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+	static void Verify(ClientContext &context, const Value &input);
+};
+
+struct PartitionedWriteFlushThresholdSetting {
 	static constexpr const char *Name = "partitioned_write_flush_threshold";
 	static constexpr const char *Description =
 	    "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY";
@@ -595,45 +676,13 @@ struct PartitionedWriteFlushThreshold {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct PartitionedWriteMaxOpenFiles {
+struct PartitionedWriteMaxOpenFilesSetting {
 	static constexpr const char *Name = "partitioned_write_max_open_files";
 	static constexpr const char *Description =
 	    "The maximum amount of files the system can keep open before flushing to disk when writing using PARTITION_BY";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct DefaultBlockAllocSize {
-	static constexpr const char *Name = "default_block_size";
-	static constexpr const char *Description =
-	    "The default block size for new duckdb database files (new as-in, they do not yet exist).";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct IndexScanPercentage {
-	static constexpr const char *Name = "index_scan_percentage";
-	static constexpr const char *Description =
-	    "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
-	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::DOUBLE;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct IndexScanMaxCount {
-	static constexpr const char *Name = "index_scan_max_count";
-	static constexpr const char *Description =
-	    "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, "
-	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -646,16 +695,17 @@ struct PasswordSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct PerfectHashThresholdSetting {
+struct PerfectHtThresholdSetting {
 	static constexpr const char *Name = "perfect_ht_threshold";
 	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+	static void Verify(ClientContext &context, const Value &input);
 };
 
-struct PivotFilterThreshold {
+struct PivotFilterThresholdSetting {
 	static constexpr const char *Name = "pivot_filter_threshold";
 	static constexpr const char *Description =
 	    "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator";
@@ -674,7 +724,16 @@ struct PivotLimitSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct PreserveIdentifierCase {
+struct PreferRangeJoinsSetting {
+	static constexpr const char *Name = "prefer_range_joins";
+	static constexpr const char *Description = "Force use of range joins with mixed predicates";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct PreserveIdentifierCaseSetting {
 	static constexpr const char *Name = "preserve_identifier_case";
 	static constexpr const char *Description =
 	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
@@ -684,7 +743,7 @@ struct PreserveIdentifierCase {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct PreserveInsertionOrder {
+struct PreserveInsertionOrderSetting {
 	static constexpr const char *Name = "preserve_insertion_order";
 	static constexpr const char *Description =
 	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
@@ -695,17 +754,7 @@ struct PreserveInsertionOrder {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct ArrowOutputListView {
-	static constexpr const char *Name = "arrow_output_list_view";
-	static constexpr const char *Description =
-	    "If export to arrow format should use ListView as the physical layout for LIST columns";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct ProduceArrowStringView {
+struct ProduceArrowStringViewSetting {
 	static constexpr const char *Name = "produce_arrow_string_view";
 	static constexpr const char *Description =
 	    "If strings should be produced by DuckDB in Utf8View format instead of Utf8";
@@ -732,6 +781,7 @@ struct ProfilingModeSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+	static void Verify(ClientContext &context, const Value &input);
 };
 
 struct ProgressBarTimeSetting {
@@ -773,6 +823,25 @@ struct SecretDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct StorageCompatibilityVersionSetting {
+	static constexpr const char *Name = "storage_compatibility_version";
+	static constexpr const char *Description = "Serialize on checkpoint with compatibility for a given duckdb version";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct StreamingBufferSizeSetting {
+	static constexpr const char *Name = "streaming_buffer_size";
+	static constexpr const char *Description =
+	    "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct TempDirectorySetting {
 	static constexpr const char *Name = "temp_directory";
 	static constexpr const char *Description = "Set the directory to which to write temp files";
@@ -789,6 +858,7 @@ struct ThreadsSetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+	static void Verify(const Value &input);
 };
 
 struct UsernameSetting {
@@ -800,60 +870,8 @@ struct UsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct FlushAllocatorSetting {
-	static constexpr const char *Name = "allocator_flush_threshold";
-	static constexpr const char *Description =
-	    "Peak allocation threshold at which to flush the allocator after completing a task.";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct AllocatorBackgroundThreadsSetting {
-	static constexpr const char *Name = "allocator_background_threads";
-	static constexpr const char *Description = "Whether to enable the allocator background thread.";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct DuckDBApiSetting {
-	static constexpr const char *Name = "duckdb_api";
-	static constexpr const char *Description = "DuckDB API surface";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct CustomUserAgentSetting {
-	static constexpr const char *Name = "custom_user_agent";
-	static constexpr const char *Description = "Metadata from DuckDB callers";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct EnableHTTPLoggingSetting {
-	static constexpr const char *Name = "enable_http_logging";
-	static constexpr const char *Description = "Enables HTTP logging";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
-struct HTTPLoggingOutputSetting {
-	static constexpr const char *Name = "http_logging_output";
-	static constexpr const char *Description =
-	    "The file to which HTTP logging output should be saved, or empty to print to the terminal";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
+//===--------------------------------------------------------------------===//
+// End of the auto-generated list of settings
+//===--------------------------------------------------------------------===//
 
 } // namespace duckdb
