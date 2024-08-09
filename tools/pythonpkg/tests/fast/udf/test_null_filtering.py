@@ -70,3 +70,39 @@ class TestUDFNullFiltering(object):
         assert len(result) == row_count
         # Only the non-null tuples should have been seen by the UDF
         assert my_vectorized_func.count == row_count - null_count
+
+    @pytest.mark.parametrize(
+        'table_data',
+        [
+            [1, 2, 3, 4],
+            [1, 2, None, 4],
+        ],
+    )
+    def test_nulls_from_default_null_handling_native(self, duckdb_cursor, table_data):
+        def returns_null(x):
+            return None
+
+        df = pd.DataFrame({'a': table_data})
+        duckdb_cursor.execute("create table tbl as select * from df")
+        duckdb_cursor.create_function('test', returns_null, [str], int, type='native')
+        with pytest.raises(duckdb.InvalidInputException, match='The UDF is not expected to return NULL values'):
+            result = duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()
+
+    @pytest.mark.parametrize(
+        'table_data',
+        [
+            [1, 2, 3, 4],
+            [1, 2, None, 4],
+        ],
+    )
+    def test_nulls_from_default_null_handling_arrow(self, duckdb_cursor, table_data):
+        def returns_null(x):
+            l = x.to_pylist()
+            return pa.array([None for _ in l], type=pa.int64())
+
+        df = pd.DataFrame({'a': table_data})
+        duckdb_cursor.execute("create table tbl as select * from df")
+        duckdb_cursor.create_function('test', returns_null, [str], int, type='arrow')
+        with pytest.raises(duckdb.InvalidInputException, match='The UDF is not expected to return NULL values'):
+            result = duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()
+            print(result)

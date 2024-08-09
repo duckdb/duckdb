@@ -101,11 +101,12 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 
 static string NullHandlingError() {
 	return R"(
-		The returned result contained NULL values, but the 'null_handling' was set to DEFAULT.
-		If you want more control over NULL values then null_handling should be set to SPECIAL.
+The returned result contained NULL values, but the 'null_handling' was set to DEFAULT.
+If you want more control over NULL values then 'null_handling' should be set to SPECIAL.
 
-		With DEFAULT all rows containing NULL have been filtered from the UDFs input and
-		are automatically converted to NULL in the final result, the UDF is not expected to return NULL values.
+With DEFAULT all rows containing NULL have been filtered from the UDFs input.
+Those rows are automatically set to NULL in the final result.
+The UDF is not expected to return NULL values.
 	)";
 }
 
@@ -204,6 +205,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		}
 		// Convert the pyarrow result back to a DuckDB datachunk
 		if (count != input_size) {
+			D_ASSERT(default_null_handling);
 			// We filtered out some NULLs, now we need to reconstruct the final result by adding the nulls back
 			Vector temp(result.GetType(), count);
 			// Convert the table into a temporary Vector
@@ -229,6 +231,9 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			result.Verify(input_size);
 		} else {
 			ConvertArrowTableToVector(python_object, result, state.GetContext(), count);
+			if (default_null_handling) {
+				VerifyVectorizedNullHandling(result, count);
+			}
 		}
 
 		if (input_size == 1) {
