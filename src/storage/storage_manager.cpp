@@ -249,7 +249,7 @@ public:
 
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
-	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t count) override;
+	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t &count) override;
 
 private:
 	idx_t initial_wal_size = 0;
@@ -308,7 +308,7 @@ void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start
 }
 
 optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroupData(DataTable &table,
-                                                                                     idx_t start_index, idx_t count) {
+                                                                                     idx_t start_index, idx_t &count) {
 	auto entry = optimistically_written_data.find(table);
 	if (entry == optimistically_written_data.end()) {
 		// no data for this table
@@ -320,11 +320,7 @@ optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroup
 		// this row group was not optimistically written
 		return nullptr;
 	}
-	if (start_entry->second.count != count) {
-		throw InternalException(
-		    "Count mismatch in GetOptimisticallyWrittenRowGroup for start position %llu (%llu vs %llu)", start_index,
-		    count, start_entry->second.count);
-	}
+	count = start_entry->second.count;
 	return start_entry->second.row_group_data.get();
 }
 

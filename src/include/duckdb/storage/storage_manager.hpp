@@ -40,7 +40,7 @@ public:
 	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                             unique_ptr<PersistentCollectionData> row_group_data) = 0;
 	virtual optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index,
-	                                                               idx_t count) = 0;
+	                                                               idx_t &count) = 0;
 };
 
 struct CheckpointOptions {

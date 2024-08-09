@@ -587,11 +587,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		final_collections.reserve(mergers.size());
 		auto &writer = storage.CreateOptimisticWriter(context);
 		for (auto &merger : mergers) {
-			auto collection = merger->Flush(writer);
-			if (!collection->IsPersistent() && collection->GetTotalRows() < Storage::ROW_GROUP_SIZE) {
-				writer.WriteLastRowGroup(*collection);
-			}
-			final_collections.push_back(std::move(collection));
+			final_collections.push_back(merger->Flush(writer));
 		}
 
 		// finally, merge the row groups into the local storage
