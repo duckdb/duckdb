@@ -190,7 +190,7 @@ void QueryProfiler::EndQuery() {
 				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_CARDINALITY,
 				                           MetricsType::OPERATOR_CARDINALITY);
 			}
-			if (query_info.GetProfilingInfo().Enabled(MetricsType::CUMULATIVE_ROWS_SCANNED)) {
+			if (info.Enabled(MetricsType::CUMULATIVE_ROWS_SCANNED)) {
 				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_ROWS_SCANNED,
 				                           MetricsType::OPERATOR_ROWS_SCANNED);
 			}
