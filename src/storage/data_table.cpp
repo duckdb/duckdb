@@ -955,7 +955,9 @@ void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count,
 			D_ASSERT(optimistic_count > 0);
 			log.WriteRowGroupData(*entry);
 			if (optimistic_count > count) {
-				throw InternalException("Optimistically written count cannot exceed actual count (got %llu, but expected count is %llu)", optimistic_count, count);
+				throw InternalException(
+				    "Optimistically written count cannot exceed actual count (got %llu, but expected count is %llu)",
+				    optimistic_count, count);
 			}
 			// write any remaining (non-optimistically written) rows to the WAL normally
 			row_start += optimistic_count;

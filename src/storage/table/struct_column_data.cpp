@@ -256,7 +256,7 @@ public:
 	PersistentColumnData ToPersistentData() override {
 		PersistentColumnData data(PhysicalType::STRUCT);
 		data.child_columns.push_back(validity_state->ToPersistentData());
-		for(auto &child_state : child_states) {
+		for (auto &child_state : child_states) {
 			data.child_columns.push_back(child_state->ToPersistentData());
 		}
 		return data;

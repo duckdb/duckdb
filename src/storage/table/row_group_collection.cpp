@@ -472,7 +472,7 @@ void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t s
 }
 
 bool RowGroupCollection::IsPersistent() const {
-	for(auto &row_group : row_groups->Segments()) {
+	for (auto &row_group : row_groups->Segments()) {
 		if (!row_group.IsPersistent()) {
 			return false;
 		}
