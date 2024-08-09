@@ -192,6 +192,7 @@ void QueryProfiler::EndQuery() {
 				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_ROWS_SCANNED,
 				                           MetricsType::OPERATOR_ROWS_SCANNED);
 			}
+			MoveOptimizerPhasesToRoot();
 		}
 
 		string tree = ToString();
@@ -236,7 +237,11 @@ void QueryProfiler::StartPhase(string new_phase) {
 		string prefix = "";
 		for (auto &phase : phase_stack) {
 			phase_timings[phase] += phase_profiler.Elapsed();
-			prefix += phase + " > ";
+			if (phase == "optimizer") {
+				prefix += phase + "_";
+			} else {
+			    prefix += phase + " > ";
+			}
 		}
 		// when there are previous phases, we prefix the current phase with those phases
 		new_phase = prefix + new_phase;
@@ -718,6 +723,20 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	}
 	return result;
 }
+
+//void QueryProfiler::MoveOptimizerPhasesToRoot(&QueryProfiler::query_info &root) {
+//    auto &root_info = root.GetProfilingInfo();
+//    auto &root_metrics = root_info.metrics;
+//    for (auto &entry : phase_timings) {
+//        auto &phase = entry.first;
+//        auto &timing = entry.second;
+//        if (StringUtil::StartsWith(phase, "optimizer")) {
+//            auto phase_name = StringUtil::Split(phase, " > ")[1];
+//            root_metrics[MetricsType::OPTIMIZER_TIMING] = timing;
+//        }
+//    }
+//}
+
 
 void QueryProfiler::Propagate(QueryProfiler &qp) {
 }

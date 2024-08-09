@@ -187,11 +187,11 @@ private:
 
 private:
 	vector<PhaseTimingItem> GetOrderedPhaseTimings() const;
+	void MoveOptimizerPhasesToRoot();
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
-	void ReadAndSetCustomProfilerSettings(const string &settings_path);
 };
 
 } // namespace duckdb

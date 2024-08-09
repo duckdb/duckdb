@@ -30,7 +30,7 @@ enum class MetricsType : uint8_t {
 	OPERATOR_CARDINALITY,
 	CUMULATIVE_ROWS_SCANNED,
 	OPERATOR_ROWS_SCANNED,
-	OPERATOR_TIMING
+	OPERATOR_TIMING,
 };
 
 struct MetricsTypeHashFunction {
