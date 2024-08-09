@@ -10,12 +10,6 @@ require-env S3_TEST_SERVER_AVAILABLE 1
 
 require-env HTTP_PROXY_PUBLIC
 
-require-env HTTP_PROXY_PRIVATE
-
-require-env HTTP_PROXY_PRIVATE_USERNAME
-
-require-env HTTP_PROXY_PRIVATE_PASSWORD
-
 require-env AWS_DEFAULT_REGION
 
 require-env AWS_ACCESS_KEY_ID
@@ -77,6 +71,12 @@ value-1
 
 statement ok
 DROP SECRET http1
+
+require-env HTTP_PROXY_PRIVATE
+
+require-env HTTP_PROXY_PRIVATE_USERNAME
+
+require-env HTTP_PROXY_PRIVATE_PASSWORD
 
 # Let's try the private proxy
 statement ok

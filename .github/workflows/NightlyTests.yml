@@ -910,9 +910,6 @@ jobs:
       DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
       DUCKDB_S3_USE_SSL: false
       HTTP_PROXY_PUBLIC: localhost:3128
-      HTTP_PROXY_PRIVATE: localhost:3129
-      HTTP_PROXY_PRIVATE_USERNAME: john
-      HTTP_PROXY_PRIVATE_PASSWORD: doe
 
       GEN: ninja
 
@@ -929,12 +926,13 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+
+    # TODO: fix the authenticated proxy here
     - name: Install and run http proxy squid
       shell: bash
       run: |
         sudo apt-get install squid
         ./scripts/run_squid.sh --port 3128 --log_dir squid_logs &
-        ./scripts/run_squid.sh --port 3129 --log_dir squid_auth_logs --auth &
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
