@@ -159,7 +159,7 @@
  * _malloc_thread_cleanup() exists, use it as the basis for thread cleanup in
  * malloc_tsd.
  */
-#if defined(__FreeBSD__) || defined(__APPLE__)
+#if defined(__FreeBSD__)
 #define JEMALLOC_MALLOC_THREAD_CLEANUP
 #endif
 
@@ -298,12 +298,14 @@
 // ----- DuckDB comment -----
 // This makes it feasible to run the larger page size (https://github.com/duckdb/duckdb/discussions/11455),
 // but it causes DuckDB to retain RSS even after closing the connection, so we have to disable it
-#if INTPTR_MAX == INT64_MAX
+#if INTPTR_MAX == INT64_MAX && !defined(__APPLE__)
 #define JEMALLOC_RETAIN
 #endif
 
 /* TLS is used to map arenas and magazine caches to threads. */
+#ifndef __APPLE__
 #define JEMALLOC_TLS
+#endif
 
 /*
  * Used to mark unreachable code to quiet "end of non-void" compiler warnings.
@@ -345,7 +347,7 @@
  * If defined, explicitly attempt to more uniformly distribute large allocation
  * pointer alignments across all cache indices.
  */
-#define JEMALLOC_CACHE_OBLIVIOUS
+// #define JEMALLOC_CACHE_OBLIVIOUS
 
 /*
  * If defined, enable logging facilities.  We make this a configure option to
@@ -504,9 +506,9 @@
 #define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
-// #if !defined(_MSC_VER) && !defined(ENABLE_THREAD_SANITIZER)
-// #define JEMALLOC_HAVE_DLSYM
-// #endif
+#if defined(__APPLE__) || defined(_GNU_SOURCE)
+#define JEMALLOC_HAVE_DLSYM
+#endif
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
