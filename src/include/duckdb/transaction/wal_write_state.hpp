@@ -23,7 +23,7 @@ struct UpdateInfo;
 
 class WALWriteState {
 public:
-	explicit WALWriteState(WriteAheadLog &log);
+	explicit WALWriteState(WriteAheadLog &log, optional_ptr<StorageCommitState> commit_state);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
@@ -37,6 +37,7 @@ private:
 
 private:
 	WriteAheadLog &log;
+	optional_ptr<StorageCommitState> commit_state;
 
 	optional_ptr<DataTableInfo> current_table_info;
 

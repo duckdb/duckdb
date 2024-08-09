@@ -194,8 +194,10 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	data_pointers.push_back(std::move(data_pointer));
 }
 
-void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) {
-	writer.WriteColumnDataPointers(*this, serializer);
+PersistentColumnData ColumnCheckpointState::ToPersistentData() {
+	PersistentColumnData data(column_data.type.InternalType());
+	data.pointers = std::move(data_pointers);
+	return data;
 }
 
 } // namespace duckdb

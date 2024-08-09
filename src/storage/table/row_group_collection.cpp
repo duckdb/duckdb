@@ -90,6 +90,17 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	stats.Initialize(types, data);
 }
 
+void RowGroupCollection::Initialize(PersistentCollectionData &data) {
+	stats.InitializeEmpty(types);
+	auto l = row_groups->Lock();
+	for (auto &row_group_data : data.row_group_data) {
+		auto row_group = make_uniq<RowGroup>(*this, row_group_data);
+		row_group->MergeIntoStatistics(stats);
+		total_rows += row_group->count;
+		row_groups->AppendSegment(l, std::move(row_group));
+	}
+}
+
 void RowGroupCollection::InitializeEmpty() {
 	stats.InitializeEmpty(types);
 }
@@ -346,10 +357,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
 			allocation_size += current_row_group->GetAllocationSize() - previous_allocation_size;
 			// merge the stats
-			auto stats_lock = stats.GetLock();
-			for (idx_t i = 0; i < types.size(); i++) {
-				current_row_group->MergeIntoStatistics(i, stats.GetStats(*stats_lock, i).Statistics());
-			}
+			current_row_group->MergeIntoStatistics(stats);
 		}
 		remaining -= append_count;
 		if (remaining > 0) {
@@ -463,15 +471,54 @@ void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t s
 	}
 }
 
-void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
+bool RowGroupCollection::IsPersistent() const {
+	for (auto &row_group : row_groups->Segments()) {
+		if (!row_group.IsPersistent()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
+                                      optional_ptr<StorageCommitState> commit_state) {
 	D_ASSERT(data.types == types);
-	auto index = row_start + total_rows.load();
+	auto start_index = row_start + total_rows.load();
+	auto index = start_index;
 	auto segments = data.row_groups->MoveSegments();
+
+	// check if the row groups we are merging are optimistically written
+	// if all row groups are optimistically written we keep around the block pointers
+	unique_ptr<PersistentCollectionData> row_group_data;
+	idx_t optimistically_written_count = 0;
+	if (commit_state) {
+		for (auto &entry : segments) {
+			auto &row_group = *entry.node;
+			if (!row_group.IsPersistent()) {
+				break;
+			}
+			optimistically_written_count += row_group.count;
+		}
+		if (optimistically_written_count > 0) {
+			row_group_data = make_uniq<PersistentCollectionData>();
+		}
+	}
 	for (auto &entry : segments) {
 		auto &row_group = entry.node;
 		row_group->MoveToCollection(*this, index);
+
+		if (commit_state && (index - start_index) < optimistically_written_count) {
+			// serialize the block pointers of this row group
+			auto persistent_data = row_group->SerializeRowGroupInfo();
+			persistent_data.types = types;
+			row_group_data->row_group_data.push_back(std::move(persistent_data));
+		}
 		index += row_group->count;
 		row_groups->AppendSegment(std::move(row_group));
+	}
+	if (commit_state && optimistically_written_count > 0) {
+		// if we have serialized the row groups - push the serialized block pointers into the commit state
+		commit_state->AddRowGroupData(*table, start_index, optimistically_written_count, std::move(row_group_data));
 	}
 	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();

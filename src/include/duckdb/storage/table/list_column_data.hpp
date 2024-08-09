@@ -58,7 +58,9 @@ public:
 	                                                        PartialBlockManager &partial_block_manager) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
 
-	void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) override;
+	bool IsPersistent() override;
+	PersistentColumnData Serialize() override;
+	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
 	                          vector<duckdb::ColumnSegmentInfo> &result) override;

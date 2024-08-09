@@ -228,18 +228,7 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 	// we only need to write the metadata
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto segment = nodes[segment_idx].node.get();
-		D_ASSERT(segment->segment_type == ColumnSegmentType::PERSISTENT);
-
-		// set up the data pointer directly using the data from the persistent segment
-		DataPointer pointer(segment->stats.statistics.Copy());
-		pointer.block_pointer.block_id = segment->GetBlockId();
-		pointer.block_pointer.offset = NumericCast<uint32_t>(segment->GetBlockOffset());
-		pointer.row_start = segment->start;
-		pointer.tuple_count = segment->count;
-		pointer.compression_type = segment->function.get().type;
-		if (segment->function.get().serialize_state) {
-			pointer.segment_state = segment->function.get().serialize_state(*segment);
-		}
+		auto pointer = segment->GetDataPointer();
 
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment->stats.statistics);

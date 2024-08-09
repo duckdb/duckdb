@@ -939,13 +939,34 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	}
 }
 
-void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &indexes) {
-	row_groups->MergeStorage(data);
+void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &,
+                             optional_ptr<StorageCommitState> commit_state) {
+	row_groups->MergeStorage(data, this, commit_state);
 	row_groups->Verify();
 }
 
-void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
+void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count,
+                           optional_ptr<StorageCommitState> commit_state) {
 	log.WriteSetTable(info->schema, info->table);
+	if (commit_state) {
+		idx_t optimistic_count = 0;
+		auto entry = commit_state->GetRowGroupData(*this, row_start, optimistic_count);
+		if (entry) {
+			D_ASSERT(optimistic_count > 0);
+			log.WriteRowGroupData(*entry);
+			if (optimistic_count > count) {
+				throw InternalException(
+				    "Optimistically written count cannot exceed actual count (got %llu, but expected count is %llu)",
+				    optimistic_count, count);
+			}
+			// write any remaining (non-optimistically written) rows to the WAL normally
+			row_start += optimistic_count;
+			count -= optimistic_count;
+			if (count == 0) {
+				return;
+			}
+		}
+	}
 	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }
 

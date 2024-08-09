@@ -13,8 +13,9 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -227,6 +228,16 @@ void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size)
 
 enum class WALCommitState { IN_PROGRESS, FLUSHED, TRUNCATED };
 
+struct OptimisticallyWrittenRowGroupData {
+	OptimisticallyWrittenRowGroupData(idx_t start, idx_t count, unique_ptr<PersistentCollectionData> row_group_data_p)
+	    : start(start), count(count), row_group_data(std::move(row_group_data_p)) {
+	}
+
+	idx_t start;
+	idx_t count;
+	unique_ptr<PersistentCollectionData> row_group_data;
+};
+
 class SingleFileStorageCommitState : public StorageCommitState {
 public:
 	SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &log);
@@ -237,11 +248,16 @@ public:
 	// Make the commit persistent
 	void FlushCommit() override;
 
+	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
+	                     unique_ptr<PersistentCollectionData> row_group_data) override;
+	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t &count) override;
+
 private:
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
 	WriteAheadLog &wal;
 	WALCommitState state;
+	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
 };
 
 SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
@@ -279,6 +295,34 @@ void SingleFileStorageCommitState::FlushCommit() {
 	}
 	wal.Flush();
 	state = WALCommitState::FLUSHED;
+}
+
+void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
+                                                   unique_ptr<PersistentCollectionData> row_group_data) {
+	auto &entries = optimistically_written_data[table];
+	auto entry = entries.find(start_index);
+	if (entry != entries.end()) {
+		throw InternalException("FIXME: AddOptimisticallyWrittenRowGroup is writing a duplicate row group");
+	}
+	entries.insert(
+	    make_pair(start_index, OptimisticallyWrittenRowGroupData(start_index, count, std::move(row_group_data))));
+}
+
+optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroupData(DataTable &table,
+                                                                                     idx_t start_index, idx_t &count) {
+	auto entry = optimistically_written_data.find(table);
+	if (entry == optimistically_written_data.end()) {
+		// no data for this table
+		return nullptr;
+	}
+	auto &row_groups = entry->second;
+	auto start_entry = row_groups.find(start_index);
+	if (start_entry == row_groups.end()) {
+		// this row group was not optimistically written
+		return nullptr;
+	}
+	count = start_entry->second.count;
+	return start_entry->second.row_group_data.get();
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {
@@ -345,6 +389,10 @@ shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCrea
 	// This is an unmanaged reference. No ref/deref overhead. Lifetime of the
 	// TableIoManager follows lifetime of the StorageManager (this).
 	return shared_ptr<TableIOManager>(shared_ptr<char>(nullptr), table_io_manager.get());
+}
+
+BlockManager &SingleFileStorageManager::GetBlockManager() {
+	return *block_manager;
 }
 
 } // namespace duckdb

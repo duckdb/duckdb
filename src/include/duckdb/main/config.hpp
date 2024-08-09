@@ -261,6 +261,8 @@ struct DBConfigOptions {
 	bool initialize_in_main_thread = false;
 	//! The maximum number of schemas we will look through for "did you mean..." style errors in the catalog
 	idx_t catalog_error_max_schemas = 100;
+	//!  Whether or not to always write to the WAL file, even if this is not required
+	bool debug_skip_checkpoint_on_commit = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

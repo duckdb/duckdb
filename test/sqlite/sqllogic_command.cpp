@@ -231,6 +231,10 @@ UnzipCommand::UnzipCommand(SQLLogicTestRunner &runner, string &input, string &ou
     : Command(runner), input_path(input), extraction_path(output) {
 }
 
+LoadCommand::LoadCommand(SQLLogicTestRunner &runner, string dbpath_p, bool readonly)
+    : Command(runner), dbpath(std::move(dbpath_p)), readonly(readonly) {
+}
+
 struct ParallelExecuteContext {
 	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<duckdb::unique_ptr<Command>> &loop_commands,
 	                       LoopDefinition definition)
@@ -364,6 +368,9 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	if (context.is_parallel) {
 		throw std::runtime_error("Cannot restart database in parallel");
+	}
+	if (runner.dbpath.empty()) {
+		throw std::runtime_error("cannot restart an in-memory database, did you forget to call \"load\"?");
 	}
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;
@@ -504,6 +511,26 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 	if (bytes_written < file_size) {
 		throw CatalogException("Cannot write the file \"%s\"", extraction_path);
 	}
+}
+
+void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
+	auto resolved_path = SQLLogicTestRunner::LoopReplacement(dbpath, context.running_loops);
+	if (!readonly) {
+		// delete the target database file, if it exists
+		DeleteDatabase(resolved_path);
+	}
+	runner.dbpath = resolved_path;
+
+	// set up the config file
+	if (readonly) {
+		runner.config->options.use_temporary_directory = false;
+		runner.config->options.access_mode = AccessMode::READ_ONLY;
+	} else {
+		runner.config->options.use_temporary_directory = true;
+		runner.config->options.access_mode = AccessMode::AUTOMATIC;
+	}
+	// now create the database file
+	runner.LoadDatabase(resolved_path, true);
 }
 
 } // namespace duckdb

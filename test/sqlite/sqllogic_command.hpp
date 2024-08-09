@@ -167,4 +167,15 @@ private:
 	string extraction_path;
 };
 
+class LoadCommand : public Command {
+public:
+	LoadCommand(SQLLogicTestRunner &runner, string dbpath, bool readonly);
+
+	string dbpath;
+	bool readonly;
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
+};
+
 } // namespace duckdb

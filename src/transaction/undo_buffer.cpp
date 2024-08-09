@@ -177,8 +177,8 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	}
 }
 
-void UndoBuffer::WriteToWAL(WriteAheadLog &wal) {
-	WALWriteState state(wal);
+void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state) {
+	WALWriteState state(wal, commit_state);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
