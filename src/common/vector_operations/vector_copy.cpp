@@ -35,10 +35,7 @@ static const ValidityMask &ExtractValidityMask(const Vector &v) {
 }
 
 void VectorOperations::Copy(const Vector &source_p, Vector &target, const SelectionVector &sel_p, idx_t source_count,
-                            idx_t source_offset, idx_t target_offset) {
-	D_ASSERT(source_offset <= source_count);
-	D_ASSERT(source_p.GetType() == target.GetType());
-	idx_t copy_count = source_count - source_offset;
+                            idx_t source_offset, idx_t target_offset, idx_t copy_count) {
 
 	SelectionVector owned_sel;
 	const SelectionVector *sel = &sel_p;
@@ -173,7 +170,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		D_ASSERT(source_children.size() == target_children.size());
 		for (idx_t i = 0; i < source_children.size(); i++) {
 			VectorOperations::Copy(*source_children[i], *target_children[i], sel_p, source_count, source_offset,
-			                       target_offset);
+			                       target_offset, copy_count);
 		}
 		break;
 	}
@@ -265,6 +262,14 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	if (target_vector_type != VectorType::FLAT_VECTOR) {
 		target.SetVectorType(target_vector_type);
 	}
+}
+
+void VectorOperations::Copy(const Vector &source_p, Vector &target, const SelectionVector &sel_p, idx_t source_count,
+                            idx_t source_offset, idx_t target_offset) {
+	D_ASSERT(source_offset <= source_count);
+	D_ASSERT(source_p.GetType() == target.GetType());
+	idx_t copy_count = source_count - source_offset;
+	VectorOperations::Copy(source_p, target, sel_p, source_count, source_offset, target_offset, copy_count);
 }
 
 void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
