@@ -962,14 +962,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
 					    first_nl, result.buffer_handles, result.PrintErrorLine());
 					std::ostringstream error;
-					if (type.IsJSONType()) {
-						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
-						      << "JSON"
-						      << "\'";
-					} else {
-						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
-						      << LogicalTypeIdToString(type.id()) << "\'";
-					}
+					error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
+					      << type.ToString() << "\'";
 					string error_msg = error.str();
 					auto csv_error = CSVError::CastError(
 					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
