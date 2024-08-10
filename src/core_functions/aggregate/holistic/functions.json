@@ -9,7 +9,7 @@
     {
         "name": "mad",
         "parameters": "x",
-        "description": "Returns the median absolute deviation for the values within x. NULL values are ignored. Temporal types return a positive INTERVAL.\t",
+        "description": "Returns the median absolute deviation for the values within x. NULL values are ignored. Temporal types return a positive INTERVAL.",
         "example": "mad(x)",
         "type": "aggregate_function_set"
     },
@@ -38,7 +38,7 @@
     {
         "name": "quantile_cont",
         "parameters": "x,pos",
-        "description": "Returns the interpolated quantile number between 0 and 1 . If pos is a LIST of FLOATs, then the result is a LIST of the corresponding interpolated quantiles.\t",
+        "description": "Returns the interpolated quantile number between 0 and 1 . If pos is a LIST of FLOATs, then the result is a LIST of the corresponding interpolated quantiles.",
         "example": "quantile_cont(x, 0.5)",
         "type": "aggregate_function_set"
     },
@@ -52,7 +52,7 @@
     {
         "name": "approx_top_k",
         "parameters": "val,k",
-        "description": "Finds the k approximately most occurring values in the data set",
+        "description": "Finds the k approximately most occurring values in the data set.",
         "example": "approx_top_k(x, 5)",
         "type": "aggregate_function"
     }

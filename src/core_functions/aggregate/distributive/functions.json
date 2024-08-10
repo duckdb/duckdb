@@ -96,14 +96,14 @@
     {
         "name": "kurtosis",
         "parameters": "x",
-        "description": "Returns the excess kurtosis (Fisher’s definition) of all input values, with a bias correction according to the sample size",
+        "description": "Returns the excess kurtosis (Fisher’s definition) of all input values, with a bias correction according to the sample size.",
         "example": "",
         "type": "aggregate_function"
     },
     {
         "name": "kurtosis_pop",
         "parameters": "x",
-        "description": "Returns the excess kurtosis (Fisher’s definition) of all input values, without bias correction",
+        "description": "Returns the excess kurtosis (Fisher’s definition) of all input values, without bias correction.",
         "example": "",
         "type": "aggregate_function"
     },

@@ -52,7 +52,7 @@
     {
         "name": "regr_sxy",
         "parameters": "y,x",
-        "description": "Returns the population covariance of input values",
+        "description": "Returns the population covariance of input values.",
         "example": "REGR_COUNT(y, x) * COVAR_POP(y, x)",
         "type": "aggregate_function",
         "struct": "RegrSXYFun"

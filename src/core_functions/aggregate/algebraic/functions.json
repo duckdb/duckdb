@@ -31,7 +31,7 @@
     {
         "name": "favg",
         "parameters": "x",
-        "description": "Calculates the average using a more accurate floating point summation (Kahan Sum)",
+        "description": "Calculates the average using a more accurate floating point summation (Kahan Sum).",
         "example": "favg(A)",
         "type": "aggregate_function",
         "struct": "FAvgFun"
@@ -39,7 +39,7 @@
     {
         "name": "sem",
         "parameters": "x",
-        "description": "Returns the standard error of the mean",
+        "description": "Returns the standard error of the mean.",
         "example": "",
         "type": "aggregate_function",
         "struct": "StandardErrorOfTheMeanFun"
@@ -55,7 +55,7 @@
     {
         "name": "stddev_samp",
         "parameters": "x",
-        "description": "Returns the sample standard deviation",
+        "description": "Returns the sample standard deviation.",
         "example": "sqrt(var_samp(x))",
         "type": "aggregate_function",
         "aliases": ["stddev"],

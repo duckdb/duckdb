@@ -16,7 +16,7 @@ Functions are defined according to the following format:
 {
     "name": "date_diff",
     "parameters": "part,startdate,enddate",
-    "description": "The number of partition boundaries between the timestamps",
+    "description": "The number of partition boundaries between the timestamps.",
     "example": "date_diff('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')",
     "type": "scalar_function_set",
     "struct": "DateDiffFun",
