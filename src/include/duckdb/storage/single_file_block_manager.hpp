@@ -55,6 +55,8 @@ public:
 	bool IsRootBlock(MetaBlockPointer root) override;
 	//! Mark a block as free (immediately re-writeable)
 	void MarkBlockAsFree(block_id_t block_id) override;
+	//! Mark a block as used (no longer re-writeable)
+	void MarkBlockAsUsed(block_id_t block_id) override;
 	//! Mark a block as modified (re-writeable after a checkpoint)
 	void MarkBlockAsModified(block_id_t block_id) override;
 	//! Increase the reference count of a block. The block should hold at least one reference
@@ -97,6 +99,8 @@ private:
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();
 	void TrimFreeBlocks();
+
+	void IncreaseBlockReferenceCountInternal(block_id_t block_id);
 
 private:
 	AttachedDatabase &db;
