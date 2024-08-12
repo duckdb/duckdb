@@ -416,6 +416,8 @@ ScalarFunctionSet BinFun::GetFunctions() {
 
 	to_binary.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
+	to_binary.AddFunction(
+	    ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
 	to_binary.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR,
 	                                     ToBinaryFunction<uint64_t, BinaryIntegralOperator>));
 	to_binary.AddFunction(
