@@ -18,6 +18,9 @@ statement ok
 select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
 
 statement ok
+PRAGMA disable_profiling;
+
+statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
 
 statement ok
@@ -36,7 +39,6 @@ SELECT unnest(res) from (
 "EXTRA_INFO": "true"
 "IDLE_THREAD_TIME": "true"
 "OPERATOR_CARDINALITY": "true"
-"OPERATOR_NAME": "true"
 "OPERATOR_ROWS_SCANNED": "true"
 "OPERATOR_TIMING": "true"
 "OPERATOR_TYPE": "true"
@@ -225,7 +227,7 @@ true
 
 # Rerun the same query but without the operator metrics to make sure the cumulative metrics are still collected
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}';
+PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "IDLE_THREAD_TIME": "true"}';
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -248,6 +250,37 @@ SELECT
 CASE
 	WHEN cumulative_rows_scanned > 0 THEN 'true'
 	ELSE 'false'
+END
+FROM metrics_output;
+----
+true
+
+## Create a large table to check that idle thread time is collected
+statement ok
+pragma threads=4;
+
+statement ok
+CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);
+
+statement ok
+PRAGMA custom_profiling_settings='{"IDLE_THREAD_TIME": "true"}';
+
+# Complicated query to make sure that idle thread time is collected
+statement ok
+SELECT (SELECT COUNT(*) FROM bigdata WHERE col_a = 1) + (SELECT COUNT(*) FROM bigdata WHERE col_b = 1);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
+
+# Check that idle thread time is collected
+query I
+SELECT 
+CASE 
+    WHEN idle_thread_time > 0 THEN 'true'
+    ELSE 'false'
 END
 FROM metrics_output;
 ----

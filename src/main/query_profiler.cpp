@@ -175,7 +175,6 @@ void QueryProfiler::EndQuery() {
 			auto &info = root->GetProfilingInfo();
 			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			info.metrics[MetricsType::QUERY_NAME] = query_info.query_name;
-			info.metrics[MetricsType::OPERATOR_NAME] = "QUERY_ROOT";
 
 			if (info.Enabled(MetricsType::IDLE_THREAD_TIME)) {
 				info.metrics[MetricsType::IDLE_THREAD_TIME] = query_info.idle_thread_time;
@@ -399,12 +398,13 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	profiler.timings.clear();
 }
 
-void QueryProfiler::SetInfo(const QueryInfo &query_info_p) {
+void QueryProfiler::SetInfo(const double &idle_thread_time) {
 	lock_guard<mutex> guard(flush_lock);
-	if (!IsEnabled() || !running) {
+	if (!IsEnabled() || !running || !root->GetProfilingInfo().Enabled(MetricsType::IDLE_THREAD_TIME)) {
 		return;
 	}
-	query_info = query_info_p;
+
+	query_info.idle_thread_time = idle_thread_time;
 }
 
 string QueryProfiler::DrawPadded(const string &str, idx_t width) {
@@ -561,9 +561,6 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node) {
 	auto result_obj = yyjson_mut_obj(doc);
 
-	auto node_name = node.GetProfilingInfo().GetMetricAsString(MetricsType::OPERATOR_NAME);
-	node_name = QueryProfiler::JSONSanitize(node_name);
-	yyjson_mut_obj_add_strcpy(doc, result_obj, "name", node_name.c_str());
 	node.GetProfilingInfo().WriteMetricsToJSON(doc, result_obj);
 
 	auto children_list = yyjson_mut_arr(doc);
@@ -607,9 +604,6 @@ string QueryProfiler::ToJSON() const {
 	}
 
 	auto &settings = root->GetProfilingInfo();
-	auto query_name = root->GetProfilingInfo().GetMetricAsString(MetricsType::QUERY_NAME);
-	auto query = JSONSanitize(query_name);
-	yyjson_mut_obj_add_strcpy(doc, result_obj, "query", query.c_str());
 
 	settings.WriteMetricsToJSON(doc, result_obj);
 	if (settings.Enabled(MetricsType::EXTRA_INFO)) {
@@ -650,14 +644,11 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 
 	unique_ptr<ProfilingNode> node = make_uniq<ProfilingNode>();
 	auto &info = node->GetProfilingInfo();
-	info = ProfilingInfo(settings);
+	info = ProfilingInfo(settings, depth);
 	node->depth = depth;
 
 	if (depth != 0) {
-		info.AddToMetric<string>(MetricsType::OPERATOR_NAME, root_p.GetName());
 		info.AddToMetric<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
-	} else {
-		info.AddToMetric<string>(MetricsType::OPERATOR_NAME, "QUERY_ROOT");
 	}
 	if (info.Enabled(MetricsType::EXTRA_INFO)) {
 		info.extra_info = root_p.ParamsToString();

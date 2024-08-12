@@ -127,7 +127,7 @@ public:
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.
-	DUCKDB_API void SetInfo(const QueryInfo &info_p);
+	DUCKDB_API void SetInfo(const double &idle_thread_time);
 
 	DUCKDB_API void StartPhase(string phase);
 	DUCKDB_API void EndPhase();

@@ -675,10 +675,8 @@ void Executor::Flush(ThreadContext &thread_context) {
 	if (global_profiler) {
 		global_profiler->Flush(thread_context.profiler);
 
-		QueryInfo query_info;
 		auto idle_time = idle_thread_time.load();
-		query_info.idle_thread_time = double(idle_time * WAIT_TIME_MS.count()) / 1000;
-		global_profiler->SetInfo(query_info);
+		global_profiler->SetInfo(double(idle_time * WAIT_TIME_MS.count()) / 1000);
 	}
 }
 

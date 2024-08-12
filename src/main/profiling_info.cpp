@@ -9,15 +9,6 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-void ProfilingInfo::SetSettings(profiler_settings_t const &n_settings) {
-	settings = n_settings;
-	SetMandatorySettings();
-}
-
-const profiler_settings_t &ProfilingInfo::GetSettings() {
-	return settings;
-}
-
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {
 	    MetricsType::QUERY_NAME,
@@ -25,7 +16,6 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	    MetricsType::CPU_TIME,
 	    MetricsType::EXTRA_INFO,
 	    MetricsType::CUMULATIVE_CARDINALITY,
-	    MetricsType::OPERATOR_NAME,
 	    MetricsType::OPERATOR_TYPE,
 	    MetricsType::OPERATOR_CARDINALITY,
 	    MetricsType::CUMULATIVE_ROWS_SCANNED,
@@ -42,12 +32,6 @@ profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
 	};
 }
 
-void ProfilingInfo::ResetSettings() {
-	settings.clear();
-	settings = DefaultSettings();
-	SetMandatorySettings();
-}
-
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
 
@@ -59,9 +43,6 @@ void ProfilingInfo::ResetMetrics() {
 
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
-		case MetricsType::OPERATOR_NAME:
-			metrics[metric] = Value::CreateValue("");
-			break;
 		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
@@ -156,7 +137,6 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
-		case MetricsType::OPERATOR_NAME:
 			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
 			break;
 		case MetricsType::IDLE_THREAD_TIME:
@@ -179,16 +159,6 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		}
 		default:
 			throw NotImplementedException("MetricsType %s not implemented", EnumUtil::ToString(metric));
-		}
-	}
-}
-
-void ProfilingInfo::SetMandatorySettings() {
-	profiler_settings_t mandatory_settings = {MetricsType::QUERY_NAME, MetricsType::OPERATOR_NAME,
-	                                          MetricsType::OPERATOR_TYPE};
-	for (const auto &setting : mandatory_settings) {
-		if (settings.find(setting) == settings.end()) {
-			settings.insert(setting);
 		}
 	}
 }

@@ -29,7 +29,6 @@ enum class MetricsType : uint8_t {
 	CPU_TIME,
 	EXTRA_INFO,
 	CUMULATIVE_CARDINALITY,
-	OPERATOR_NAME,
 	OPERATOR_TYPE,
 	OPERATOR_CARDINALITY,
 	CUMULATIVE_ROWS_SCANNED,
@@ -58,21 +57,23 @@ public:
 
 public:
 	ProfilingInfo() = default;
-	explicit ProfilingInfo(profiler_settings_t &n_settings) : settings(n_settings) {
-		SetMandatorySettings();
+	explicit ProfilingInfo(profiler_settings_t &n_settings, idx_t depth = 0) : settings(n_settings) {
+//		SetMandatorySettings();
+        if (depth == 0) {
+			settings.insert(MetricsType::QUERY_NAME);
+		} else {
+			settings.insert(MetricsType::OPERATOR_TYPE);
+		}
 		ResetMetrics();
 	}
 	ProfilingInfo(ProfilingInfo &) = default;
 	ProfilingInfo &operator=(ProfilingInfo const &) = default;
 
 public:
-	void SetSettings(profiler_settings_t const &n_settings);
-	const profiler_settings_t &GetSettings();
 	static profiler_settings_t DefaultSettings();
 	static profiler_settings_t DefaultOperatorSettings();
 
 public:
-	void ResetSettings();
 	void ResetMetrics();
 	bool Enabled(const MetricsType setting) const;
 
@@ -103,8 +104,5 @@ public:
 		auto new_value = Value::CreateValue(value);
 		return AddToMetric<METRIC_TYPE>(setting, new_value);
 	}
-
-private:
-	void SetMandatorySettings();
 };
 } // namespace duckdb

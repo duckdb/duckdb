@@ -121,7 +121,7 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 	if (info.Enabled(MetricsType::EXTRA_INFO)) {
 		extra_info = op.GetProfilingInfo().extra_info;
 	}
-	auto node_name = info.GetMetricAsString(MetricsType::OPERATOR_NAME);
+	auto node_name = info.GetMetricAsString(MetricsType::OPERATOR_TYPE);
 
 	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
 	if (info.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
