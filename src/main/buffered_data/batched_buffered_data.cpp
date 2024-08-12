@@ -11,14 +11,14 @@ namespace duckdb {
 void BatchedBufferedData::BlockSink(const InterruptState &blocked_sink, idx_t batch) {
 	lock_guard<mutex> lock(glock);
 	D_ASSERT(!blocked_sinks.count(batch));
-	blocked_sinks.emplace(std::make_pair(batch, blocked_sink));
+	blocked_sinks.emplace(batch, blocked_sink);
 }
 
 BatchedBufferedData::BatchedBufferedData(weak_ptr<ClientContext> context)
     : BufferedData(BufferedData::Type::BATCHED, std::move(context)), buffer_byte_count(0), read_queue_byte_count(0),
       min_batch(0) {
-	read_queue_capacity = (idx_t)(total_buffer_size * 0.6);
-	buffer_capacity = (idx_t)(total_buffer_size * 0.4);
+	read_queue_capacity = (idx_t)(static_cast<double>(total_buffer_size) * 0.6);
+	buffer_capacity = (idx_t)(static_cast<double>(total_buffer_size) * 0.4);
 }
 
 bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
@@ -125,37 +125,43 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 	MoveCompletedBatches(lock);
 }
 
-bool BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
-	if (Closed()) {
-		return false;
+StreamExecutionResult BatchedBufferedData::ExecuteTaskInternal(StreamQueryResult &result,
+                                                               ClientContextLock &context_lock) {
+	auto cc = context.lock();
+	if (!cc) {
+		return StreamExecutionResult::EXECUTION_CANCELLED;
+	}
+
+	if (!BufferIsEmpty()) {
+		// The buffer isn't empty yet, just return
+		return StreamExecutionResult::CHUNK_READY;
 	}
 	// Unblock any pending sinks if the buffer isnt full
 	UnblockSinks();
-	if (!BufferIsEmpty()) {
-		// The buffer isn't empty yet, just return
-		return true;
-	}
-	auto cc = context.lock();
-	if (!cc) {
-		return false;
-	}
 	// Let the executor run until the buffer is no longer empty
-	PendingExecutionResult execution_result;
-	while (!PendingQueryResult::IsExecutionFinished(execution_result = cc->ExecuteTaskInternal(context_lock, result))) {
-		if (!BufferIsEmpty()) {
-			break;
-		}
-		if (execution_result == PendingExecutionResult::BLOCKED ||
-		    execution_result == PendingExecutionResult::RESULT_READY) {
-			// Check if we need to unblock more sinks to reach the buffer size
-			UnblockSinks();
-			cc->WaitForTask(context_lock, result);
-		}
+	auto execution_result = cc->ExecuteTaskInternal(context_lock, result);
+	if (!BufferIsEmpty()) {
+		return StreamExecutionResult::CHUNK_READY;
+	}
+	if (execution_result == PendingExecutionResult::BLOCKED ||
+	    execution_result == PendingExecutionResult::RESULT_READY) {
+		return StreamExecutionResult::BLOCKED;
 	}
 	if (result.HasError()) {
 		Close();
 	}
-	return execution_result != PendingExecutionResult::EXECUTION_ERROR;
+	switch (execution_result) {
+	case PendingExecutionResult::NO_TASKS_AVAILABLE:
+	case PendingExecutionResult::RESULT_NOT_READY:
+		return StreamExecutionResult::CHUNK_NOT_READY;
+	case PendingExecutionResult::EXECUTION_FINISHED:
+		return StreamExecutionResult::EXECUTION_FINISHED;
+	case PendingExecutionResult::EXECUTION_ERROR:
+		return StreamExecutionResult::EXECUTION_ERROR;
+	default:
+		throw InternalException("No conversion from PendingExecutionResult (%s) -> StreamExecutionResult",
+		                        EnumUtil::ToString(execution_result));
+	}
 }
 
 void BatchedBufferedData::CompleteBatch(idx_t batch) {

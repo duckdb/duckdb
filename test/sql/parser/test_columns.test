@@ -84,6 +84,11 @@ statement error
 SELECT (SELECT COLUMNS(*)) FROM integers
 ----
 
+statement error
+SELECT columns([a, null]) FROM values (42) t(a);
+----
+does not support NULL input parameters
+
 # COLUMNS in order by clause
 query III
 SELECT * FROM grouped_table ORDER BY COLUMNS('index[0-9]');

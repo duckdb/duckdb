@@ -1,0 +1,21 @@
+# name: benchmark/tpch/partition/partition_pushdown.benchmark
+# description: Join filter pushdown into hive partitions
+# group: [partition]
+
+name Hive Filter Join Filter Pushdown (Parquet)
+group partition
+subgroup tpch
+
+require parquet
+
+require tpch
+
+load
+CALL dbgen(sf=1);
+COPY (FROM lineitem ORDER BY l_shipdate) TO '${BENCHMARK_DIR}/lineitem_partitioned_shipdate' (FORMAT PARQUET, PARTITION_BY l_shipdate);
+
+run
+SELECT COUNT(*) from '${BENCHMARK_DIR}/lineitem_partitioned_shipdate/**/*.parquet' WHERE l_shipdate=(SELECT MAX(l_shipdate) FROM lineitem)
+
+result I
+18

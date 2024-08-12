@@ -68,6 +68,14 @@ void BaseCSVData::Finalize() {
 		                options.dialect_options.state_machine_options.escape.GetValue(), "QUOTE", "ESCAPE");
 	}
 
+	// delimiter and quote must not be substrings of each other
+	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
+	                options.dialect_options.state_machine_options.quote.GetValue(), "COMMENT", "QUOTE");
+
+	// delimiter and quote must not be substrings of each other
+	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
+	                options.dialect_options.state_machine_options.delimiter.GetValue(), "COMMENT", "DELIMITER");
+
 	// null string and delimiter must not be substrings of each other
 	for (auto &null_str : options.null_str) {
 		if (!null_str.empty()) {
@@ -171,6 +179,21 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 		bind_data->options.force_quote.resize(names.size(), false);
 	}
 	bind_data->Finalize();
+
+	switch (bind_data->options.compression) {
+	case FileCompressionType::GZIP:
+		if (!StringUtil::EndsWith(input.file_extension, ".gz")) {
+			input.file_extension += ".gz";
+		}
+		break;
+	case FileCompressionType::ZSTD:
+		if (!StringUtil::EndsWith(input.file_extension, ".zst")) {
+			input.file_extension += ".zst";
+		}
+		break;
+	default:
+		break;
+	}
 
 	auto expressions = CreateCastExpressions(*bind_data, context, names, sql_types);
 	bind_data->cast_expressions = std::move(expressions);

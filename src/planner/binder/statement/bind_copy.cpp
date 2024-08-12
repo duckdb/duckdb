@@ -61,6 +61,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	vector<idx_t> partition_cols;
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
+	bool write_partition_columns = false;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
@@ -126,22 +127,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
+		} else if (loption == "write_partition_columns") {
+			write_partition_columns = true;
 		} else {
-			if (loption == "compression") {
-				if (option.second.empty()) {
-					// This can't be empty
-					throw BinderException("COMPRESSION option, in the file scanner, can't be empty. It should be set "
-					                      "to AUTO, UNCOMPRESSED, GZIP, SNAPPY or ZSTD. Depending on the file format.");
-				}
-				auto parameter = StringUtil::Lower(option.second[0].ToString());
-				if (parameter == "gzip" && !StringUtil::EndsWith(bind_input.file_extension, ".gz")) {
-					// We just add .gz
-					bind_input.file_extension += ".gz";
-				} else if (parameter == "zstd" && !StringUtil::EndsWith(bind_input.file_extension, ".zst")) {
-					// We just add .zst
-					bind_input.file_extension += ".zst";
-				}
-			}
 			stmt.info->options[option.first] = option.second;
 		}
 	}
@@ -162,6 +150,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	}
 	if (file_size_bytes.IsValid() && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine FILE_SIZE_BYTES and PARTITION_BY for COPY");
+	}
+	if (!write_partition_columns) {
+		if (partition_cols.size() == select_node.names.size()) {
+			throw NotImplementedException("No column to write as all columns are specified as partition columns. "
+			                              "WRITE_PARTITION_COLUMNS option can be used to write partition columns.");
+		}
 	}
 	bool is_remote_file = FileSystem::IsRemoteFile(stmt.info->file_path);
 	if (is_remote_file) {
@@ -213,8 +207,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
 
-	auto function_data =
-	    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
+	auto names_to_write =
+	    LogicalCopyToFile::GetNamesWithoutPartitions(unique_column_names, partition_cols, write_partition_columns);
+	auto types_to_write =
+	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, partition_cols, write_partition_columns);
+	auto function_data = copy_function.function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 
 	const auto rotate =
 	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);
@@ -245,6 +242,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	}
 	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
+	copy->write_partition_columns = write_partition_columns;
 	copy->partition_columns = std::move(partition_cols);
 	copy->return_type = return_type;
 
@@ -330,7 +328,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function.function.copy_from_function,
 	                                 std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
-		get->column_ids.push_back(i);
+		get->AddColumnId(i);
 	}
 	insert_statement.plan->children.push_back(std::move(get));
 	result.plan = std::move(insert_statement.plan);

@@ -106,6 +106,7 @@ jobs:
       run: |
         pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+
     - name: Build
       shell: bash
       working-directory: tools/pythonpkg
@@ -121,20 +122,13 @@ jobs:
     needs: linux-python3-9
     env:
       GEN: ninja
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
-
-    - name: Fix CentOS 7 EOL
-      run: |
-        # Workaround the fact that CentOS 7 is EOL
-        sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
-        sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
-        yum-config-manager --disable centos-sclo-rh
-        yum install epel-release -y
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:

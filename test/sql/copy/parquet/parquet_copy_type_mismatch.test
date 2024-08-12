@@ -1,0 +1,43 @@
+# name: test/sql/copy/parquet/parquet_copy_type_mismatch.test
+# description: Test error message when COPY FROM finds a type mismatch
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET storage_compatibility_version='latest'
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+COPY (SELECT DATE '1992-01-01' d) TO '__TEST_DIR__/single_date.parquet' (FORMAT parquet);
+
+statement error
+COPY integers FROM '__TEST_DIR__/single_date.parquet'
+----
+the column "d" has type DATE, but we are trying to load it into column "i" with type INTEGER
+
+statement ok
+COPY (SELECT DATE '1992-01-01' d, 42 k) TO '__TEST_DIR__/too_many_columns.parquet' (FORMAT parquet);
+
+statement error
+COPY integers FROM '__TEST_DIR__/too_many_columns.parquet'
+----
+Table schema: i INTEGER
+
+# multiple files with different schema
+statement ok
+COPY (SELECT 42 i) TO '__TEST_DIR__/f2.parquet' (FORMAT parquet);
+
+statement ok
+COPY (SELECT date '1992-01-01' d, 84 i) TO '__TEST_DIR__/f1.parquet' (FORMAT parquet);
+
+# result here depends on globbing order
+statement maybe
+COPY integers FROM '__TEST_DIR__/f*.parquet' (FORMAT parquet);
+----
+column count mismatch: expected 1 columns but found 2

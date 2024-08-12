@@ -9,12 +9,14 @@ set(TEST_API_OBJECTS
     test_config.cpp
     test_custom_allocator.cpp
     test_extension_setting_autoload.cpp
+    test_instance_cache.cpp
     test_results.cpp
     test_reset.cpp
     test_get_table_names.cpp
     test_prepared_api.cpp
     test_table_info.cpp
     test_appender_api.cpp
+    test_lifecycle_hooks.cpp
     test_pending_query.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp

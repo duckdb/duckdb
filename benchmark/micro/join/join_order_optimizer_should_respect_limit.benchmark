@@ -1,0 +1,13 @@
+# name: benchmark/micro/join/join_order_optimizer_should_respect_limit.benchmark
+# description: If a constant value limit operator exists, is should have influence on the estimated cardinality
+# group: [join]
+
+name join limit
+group join
+
+load
+create table t_left as select (random() * 1000000000)::INT a from range(400000);
+create table t_right as select range b from range(1000000000);
+
+run
+select * from t_left, (select * from t_right limit 10000) where a = b;

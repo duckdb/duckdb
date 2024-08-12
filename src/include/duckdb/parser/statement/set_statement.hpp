@@ -21,7 +21,7 @@ public:
 	static constexpr const StatementType TYPE = StatementType::SET_STATEMENT;
 
 protected:
-	SetStatement(std::string name_p, SetScope scope_p, SetType type_p);
+	SetStatement(string name_p, SetScope scope_p, SetType type_p);
 	SetStatement(const SetStatement &other) = default;
 
 public:
@@ -32,7 +32,7 @@ public:
 
 class SetVariableStatement : public SetStatement {
 public:
-	SetVariableStatement(std::string name_p, unique_ptr<ParsedExpression> value_p, SetScope scope_p);
+	SetVariableStatement(string name_p, unique_ptr<ParsedExpression> value_p, SetScope scope_p);
 
 protected:
 	SetVariableStatement(const SetVariableStatement &other);

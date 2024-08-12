@@ -121,6 +121,9 @@ struct MultiFileReader {
 	//! Create a default MultiFileReader, function_name is used for errors
 	DUCKDB_API static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
 
+	//! Create a LIST Value from a vector of strings (list of file paths)
+	static Value CreateValueFromFileList(const vector<string> &files);
+
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API static void AddParameters(TableFunction &table_function);
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
@@ -142,8 +145,12 @@ struct MultiFileReader {
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                                                   const MultiFileReaderOptions &options,
-	                                                                   LogicalGet &get,
+	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
+	DUCKDB_API virtual unique_ptr<MultiFileList>
+	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileReaderOptions &options,
+	                      const vector<string> &names, const vector<LogicalType> &types,
+	                      const vector<column_t> &column_ids, TableFilterSet &filters);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.

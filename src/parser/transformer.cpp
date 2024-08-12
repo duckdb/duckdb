@@ -21,7 +21,7 @@ Transformer::~Transformer() {
 }
 
 void Transformer::Clear() {
-	SetParamCount(0);
+	ClearParameters();
 	pivot_entries.clear();
 }
 
@@ -35,7 +35,6 @@ bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<uni
 		if (HasPivotEntries()) {
 			stmt = CreatePivotStatement(std::move(stmt));
 		}
-		stmt->n_param = ParamCount();
 		statements.push_back(std::move(stmt));
 	}
 	return true;
@@ -58,10 +57,9 @@ StackChecker<Transformer> Transformer::StackCheck(idx_t extra_stack) {
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode &stmt) {
 	auto result = TransformStatementInternal(stmt);
-	result->n_param = ParamCount();
 	if (!named_param_map.empty()) {
 		// Avoid overriding a previous move with nothing
-		result->named_param_map = std::move(named_param_map);
+		result->named_param_map = named_param_map;
 	}
 	return result;
 }
@@ -90,6 +88,12 @@ idx_t Transformer::ParamCount() const {
 void Transformer::SetParamCount(idx_t new_count) {
 	auto &root = RootTransformer();
 	root.prepared_statement_parameter_index = new_count;
+}
+
+void Transformer::ClearParameters() {
+	auto &root = RootTransformer();
+	root.prepared_statement_parameter_index = 0;
+	root.named_param_map.clear();
 }
 
 static void ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type) {

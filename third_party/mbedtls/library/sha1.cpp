@@ -251,6 +251,8 @@ int mbedtls_internal_sha1_process( mbedtls_sha1_context *ctx,
 
 #undef K
 #undef F
+#undef R
+#undef P
 
     ctx->state[0] += local.A;
     ctx->state[1] += local.B;

@@ -292,6 +292,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 
 	MultiFileReader::AddParameters(table_function);
 }
@@ -310,8 +311,9 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
                               vector<unique_ptr<Expression>> &filters) {
 	auto &data = bind_data_p->Cast<ReadCSVData>();
 	SimpleMultiFileList file_list(data.files);
+	MultiFilePushdownInfo info(get);
 	auto filtered_list =
-	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
+	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, info, filters);
 	if (filtered_list) {
 		data.files = filtered_list->GetAllFiles();
 		MultiFileReader::PruneReaders(data, file_list);
@@ -385,7 +387,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
 unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,
                                         optional_ptr<ReplacementScanData> data) {
-	auto &table_name = input.table_name;
+	auto table_name = ReplacementScan::GetFullPath(input);
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
 	if (StringUtil::EndsWith(lower_name, ".gz")) {

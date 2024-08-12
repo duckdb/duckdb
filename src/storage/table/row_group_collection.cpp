@@ -11,7 +11,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -88,6 +88,17 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	this->total_rows = data.total_rows;
 	row_groups->Initialize(data);
 	stats.Initialize(types, data);
+}
+
+void RowGroupCollection::Initialize(PersistentCollectionData &data) {
+	stats.InitializeEmpty(types);
+	auto l = row_groups->Lock();
+	for (auto &row_group_data : data.row_group_data) {
+		auto row_group = make_uniq<RowGroup>(*this, row_group_data);
+		row_group->MergeIntoStatistics(stats);
+		total_rows += row_group->count;
+		row_groups->AppendSegment(l, std::move(row_group));
+	}
 }
 
 void RowGroupCollection::InitializeEmpty() {
@@ -346,10 +357,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
 			allocation_size += current_row_group->GetAllocationSize() - previous_allocation_size;
 			// merge the stats
-			auto stats_lock = stats.GetLock();
-			for (idx_t i = 0; i < types.size(); i++) {
-				current_row_group->MergeIntoStatistics(i, stats.GetStats(*stats_lock, i).Statistics());
-			}
+			current_row_group->MergeIntoStatistics(stats);
 		}
 		remaining -= append_count;
 		if (remaining > 0) {
@@ -443,15 +451,74 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 	segment.RevertAppend(start_row);
 }
 
-void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
+void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
+	auto row_group = row_groups->GetSegment(start);
+	D_ASSERT(row_group);
+	idx_t current_row = start;
+	idx_t remaining = count;
+	while (true) {
+		idx_t start_in_row_group = current_row - row_group->start;
+		idx_t append_count = MinValue<idx_t>(row_group->count - start_in_row_group, remaining);
+
+		row_group->CleanupAppend(lowest_transaction, start_in_row_group, append_count);
+
+		current_row += append_count;
+		remaining -= append_count;
+		if (remaining == 0) {
+			break;
+		}
+		row_group = row_groups->GetNextSegment(row_group);
+	}
+}
+
+bool RowGroupCollection::IsPersistent() const {
+	for (auto &row_group : row_groups->Segments()) {
+		if (!row_group.IsPersistent()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
+                                      optional_ptr<StorageCommitState> commit_state) {
 	D_ASSERT(data.types == types);
-	auto index = row_start + total_rows.load();
+	auto start_index = row_start + total_rows.load();
+	auto index = start_index;
 	auto segments = data.row_groups->MoveSegments();
+
+	// check if the row groups we are merging are optimistically written
+	// if all row groups are optimistically written we keep around the block pointers
+	unique_ptr<PersistentCollectionData> row_group_data;
+	idx_t optimistically_written_count = 0;
+	if (commit_state) {
+		for (auto &entry : segments) {
+			auto &row_group = *entry.node;
+			if (!row_group.IsPersistent()) {
+				break;
+			}
+			optimistically_written_count += row_group.count;
+		}
+		if (optimistically_written_count > 0) {
+			row_group_data = make_uniq<PersistentCollectionData>();
+		}
+	}
 	for (auto &entry : segments) {
 		auto &row_group = entry.node;
 		row_group->MoveToCollection(*this, index);
+
+		if (commit_state && (index - start_index) < optimistically_written_count) {
+			// serialize the block pointers of this row group
+			auto persistent_data = row_group->SerializeRowGroupInfo();
+			persistent_data.types = types;
+			row_group_data->row_group_data.push_back(std::move(persistent_data));
+		}
 		index += row_group->count;
 		row_groups->AppendSegment(std::move(row_group));
+	}
+	if (commit_state && optimistically_written_count > 0) {
+		// if we have serialized the row groups - push the serialized block pointers into the commit state
+		commit_state->AddRowGroupData(*table, start_index, optimistically_written_count, std::move(row_group_data));
 	}
 	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();
@@ -609,104 +676,26 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 struct CollectionCheckpointState {
 	CollectionCheckpointState(RowGroupCollection &collection, TableDataWriter &writer,
 	                          vector<SegmentNode<RowGroup>> &segments, TableStatistics &global_stats)
-	    : collection(collection), writer(writer), scheduler(writer.GetScheduler()), segments(segments),
-	      global_stats(global_stats), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
+	    : collection(collection), writer(writer), executor(writer.GetScheduler()), segments(segments),
+	      global_stats(global_stats) {
 		writers.resize(segments.size());
 		write_data.resize(segments.size());
 	}
 
 	RowGroupCollection &collection;
 	TableDataWriter &writer;
-	TaskScheduler &scheduler;
+	TaskExecutor executor;
 	vector<SegmentNode<RowGroup>> &segments;
 	vector<unique_ptr<RowGroupWriter>> writers;
 	vector<RowGroupWriteData> write_data;
 	TableStatistics &global_stats;
 	mutex write_lock;
-
-public:
-	void PushError(ErrorData error) {
-		error_manager.PushError(std::move(error));
-	}
-	bool HasError() {
-		return error_manager.HasError();
-	}
-	void ThrowError() {
-		error_manager.ThrowException();
-	}
-
-	void ScheduleTask(unique_ptr<Task> task) {
-		++total_tasks;
-		scheduler.ScheduleTask(*token, std::move(task));
-	}
-	void FinishTask() {
-		++completed_tasks;
-	}
-	bool TasksFinished() {
-		if (completed_tasks == total_tasks) {
-			return true;
-		}
-		if (HasError()) {
-			return true;
-		}
-		return false;
-	}
-	void CancelTasks() {
-		// This should only be called after an error has occurred, no other mechanism to cancel checkpoint tasks exists
-		// currently
-		D_ASSERT(error_manager.HasError());
-		// Give every pending task the chance to cancel
-		WorkOnTasks();
-		// Wait for all active tasks to realize they have been canceled
-		while (completed_tasks != total_tasks) {
-		}
-	}
-
-	void WorkOnTasks() {
-		shared_ptr<Task> task_from_producer;
-		while (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
-			auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
-			(void)res;
-			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
-			task_from_producer.reset();
-		}
-	}
-
-	bool GetTask(shared_ptr<Task> &task) {
-		return scheduler.GetTaskFromProducer(*token, task);
-	}
-
-private:
-	TaskErrorManager error_manager;
-	unique_ptr<ProducerToken> token;
-	atomic<idx_t> completed_tasks;
-	atomic<idx_t> total_tasks;
 };
 
-class BaseCheckpointTask : public Task {
+class BaseCheckpointTask : public BaseExecutorTask {
 public:
-	explicit BaseCheckpointTask(CollectionCheckpointState &checkpoint_state) : checkpoint_state(checkpoint_state) {
-	}
-
-	virtual void ExecuteTask() = 0;
-	TaskExecutionResult Execute(TaskExecutionMode mode) override {
-		(void)mode;
-		D_ASSERT(mode == TaskExecutionMode::PROCESS_ALL);
-		if (checkpoint_state.HasError()) {
-			checkpoint_state.FinishTask();
-			return TaskExecutionResult::TASK_FINISHED;
-		}
-		try {
-			ExecuteTask();
-			checkpoint_state.FinishTask();
-			return TaskExecutionResult::TASK_FINISHED;
-		} catch (std::exception &ex) {
-			checkpoint_state.PushError(ErrorData(ex));
-		} catch (...) { // LCOV_EXCL_START
-			checkpoint_state.PushError(ErrorData("Unknown exception during Checkpoint!"));
-		} // LCOV_EXCL_STOP
-		checkpoint_state.FinishTask();
-		return TaskExecutionResult::TASK_ERROR;
+	explicit BaseCheckpointTask(CollectionCheckpointState &checkpoint_state)
+	    : BaseExecutorTask(checkpoint_state.executor), checkpoint_state(checkpoint_state) {
 	}
 
 protected:
@@ -894,7 +883,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		return false;
 	}
 	idx_t merge_rows;
-	idx_t next_idx;
+	idx_t next_idx = 0;
 	idx_t merge_count;
 	idx_t target_count;
 	bool perform_merge = false;
@@ -933,7 +922,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	// schedule the vacuum task
 	auto vacuum_task = make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count,
 	                                         merge_rows, state.row_start);
-	checkpoint_state.ScheduleTask(std::move(vacuum_task));
+	checkpoint_state.executor.ScheduleTask(std::move(vacuum_task));
 	// skip vacuuming by the row groups we have merged
 	state.next_vacuum_idx = next_idx;
 	state.row_start += merge_rows;
@@ -945,7 +934,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::ScheduleCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx) {
 	auto checkpoint_task = make_uniq<CheckpointTask>(checkpoint_state, segment_idx);
-	checkpoint_state.ScheduleTask(std::move(checkpoint_task));
+	checkpoint_state.executor.ScheduleTask(std::move(checkpoint_task));
 }
 
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
@@ -974,19 +963,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		vacuum_state.row_start += entry.node->count;
 	}
 	// all tasks have been scheduled - execute tasks until we are done
-	do {
-		shared_ptr<Task> task;
-		while (checkpoint_state.GetTask(task)) {
-			task->Execute(TaskExecutionMode::PROCESS_ALL);
-			task.reset();
-		}
-	} while (!checkpoint_state.TasksFinished());
-	// check if we ran into any errors while checkpointing
-	if (checkpoint_state.HasError()) {
-		// throw the error
-		checkpoint_state.CancelTasks();
-		checkpoint_state.ThrowError();
-	}
+	checkpoint_state.executor.WorkOnTasks();
 
 	// no errors - finalize the row groups
 	idx_t new_total_rows = 0;

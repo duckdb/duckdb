@@ -5,7 +5,7 @@ using namespace std;
 
 void AddVariadicNumbersTogether(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
 	// get the total number of rows in this chunk
-	idx_t input_size = duckdb_data_chunk_get_size(input);
+	auto input_size = duckdb_data_chunk_get_size(input);
 
 	// extract the input vectors
 	auto column_count = duckdb_data_chunk_get_column_count(input);
@@ -70,7 +70,7 @@ static void CAPIRegisterAddition(duckdb_connection connection, const char *name,
 	duckdb_scalar_function_set_name(function, name);
 
 	// add a two bigint parameters
-	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	auto type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	duckdb_scalar_function_add_parameter(nullptr, type);
 	duckdb_scalar_function_add_parameter(function, nullptr);
 	duckdb_scalar_function_add_parameter(function, type);
@@ -129,9 +129,9 @@ TEST_CASE("Test Scalar Functions C API", "[capi]") {
 void ReturnStringInfo(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
 	auto extra_info = string((const char *)duckdb_scalar_function_get_extra_info(info));
 	// get the total number of rows in this chunk
-	idx_t input_size = duckdb_data_chunk_get_size(input);
+	auto input_size = duckdb_data_chunk_get_size(input);
 	// extract the two input vectors
-	duckdb_vector input_vector = duckdb_data_chunk_get_vector(input, 0);
+	auto input_vector = duckdb_data_chunk_get_vector(input, 0);
 	// get the data pointers for the input vectors (both int64 as specified by the parameter types)
 	auto input_data = (duckdb_string_t *)duckdb_vector_get_data(input_vector);
 	// get the validity vectors
@@ -146,7 +146,7 @@ void ReturnStringInfo(duckdb_function_info info, duckdb_data_chunk input, duckdb
 			if (duckdb_string_is_inlined(input_string)) {
 				result += string(input_string.value.inlined.inlined, input_string.value.inlined.length);
 			} else {
-				result += input_string.value.pointer.ptr;
+				result += string(input_string.value.pointer.ptr, input_string.value.pointer.length);
 			}
 			duckdb_vector_assign_string_element_len(output, row, result.c_str(), result.size());
 		} else {
@@ -165,7 +165,7 @@ static void CAPIRegisterStringInfo(duckdb_connection connection, const char *nam
 	duckdb_scalar_function_set_name(function, name);
 
 	// add a single varchar parameter
-	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
 	duckdb_scalar_function_add_parameter(function, type);
 
 	// set the return type to varchar
@@ -212,7 +212,7 @@ static void CAPIRegisterVarargsFun(duckdb_connection connection, const char *nam
 	duckdb_scalar_function_set_name(function, name);
 
 	// set the variable arguments
-	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	auto type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
 	duckdb_scalar_function_set_varargs(function, type);
 
 	// set the return type to bigint
@@ -253,4 +253,87 @@ TEST_CASE("Test Scalar Functions - variadic number of input parameters", "[capi]
 
 	result = tester.Query("SELECT my_addition('hello', [1])");
 	REQUIRE_FAIL(result);
+}
+
+void CountNULLValues(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
+
+	// Get the total number of rows and columns in this chunk.
+	auto input_size = duckdb_data_chunk_get_size(input);
+	auto column_count = duckdb_data_chunk_get_column_count(input);
+
+	// Extract the validity masks.
+	std::vector<uint64_t *> validity_masks;
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		auto col = duckdb_data_chunk_get_vector(input, col_idx);
+		auto validity_mask = duckdb_vector_get_validity(col);
+		validity_masks.push_back(validity_mask);
+	}
+
+	// Execute the function.
+	auto result_data = (uint64_t *)duckdb_vector_get_data(output);
+	for (idx_t row_idx = 0; row_idx < input_size; row_idx++) {
+		idx_t null_count = 0;
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			if (!duckdb_validity_row_is_valid(validity_masks[col_idx], row_idx)) {
+				null_count++;
+			}
+		}
+		result_data[row_idx] = null_count;
+	}
+}
+
+static void CAPIRegisterANYFun(duckdb_connection connection, const char *name, duckdb_state expected_outcome) {
+	duckdb_state status;
+
+	// create a scalar function
+	auto function = duckdb_create_scalar_function();
+	duckdb_scalar_function_set_name(function, name);
+
+	// set the variable arguments
+	auto any_type = duckdb_create_logical_type(DUCKDB_TYPE_ANY);
+	duckdb_scalar_function_set_varargs(function, any_type);
+	duckdb_destroy_logical_type(&any_type);
+
+	// Set special null handling.
+	duckdb_scalar_function_set_special_handling(function);
+	duckdb_scalar_function_set_volatile(function);
+	duckdb_scalar_function_set_special_handling(nullptr);
+	duckdb_scalar_function_set_volatile(nullptr);
+
+	// set the return type uto bigint
+	auto return_type = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT);
+	duckdb_scalar_function_set_return_type(function, return_type);
+	duckdb_destroy_logical_type(&return_type);
+
+	// set up the function
+	duckdb_scalar_function_set_function(function, CountNULLValues);
+
+	// register and cleanup
+	status = duckdb_register_scalar_function(connection, function);
+	REQUIRE(status == expected_outcome);
+	duckdb_destroy_scalar_function(&function);
+}
+
+TEST_CASE("Test Scalar Functions - variadic number of ANY parameters", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	CAPIRegisterANYFun(tester.connection, "my_null_count", DuckDBSuccess);
+
+	result = tester.Query("SELECT my_null_count(40, [1], 'hello', 3)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
+
+	result = tester.Query("SELECT my_null_count([1], 42, NULL)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<uint64_t>(0, 0) == 1);
+
+	result = tester.Query("SELECT my_null_count(NULL, NULL, NULL)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<uint64_t>(0, 0) == 3);
+
+	result = tester.Query("SELECT my_null_count()");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
 }

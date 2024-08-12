@@ -169,8 +169,8 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		// constant block: no need to write anything to disk besides the stats
 		// set up the compression function to constant
 		auto &config = DBConfig::GetConfig(db);
-		CompressionInfo compression_info(block_size, segment->type.InternalType());
-		segment->function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, compression_info);
+		segment->function =
+		    *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
 		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
 	}
 
@@ -194,8 +194,10 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	data_pointers.push_back(std::move(data_pointer));
 }
 
-void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) {
-	writer.WriteColumnDataPointers(*this, serializer);
+PersistentColumnData ColumnCheckpointState::ToPersistentData() {
+	PersistentColumnData data(column_data.type.InternalType());
+	data.pointers = std::move(data_pointers);
+	return data;
 }
 
 } // namespace duckdb

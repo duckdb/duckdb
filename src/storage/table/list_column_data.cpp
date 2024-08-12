@@ -24,9 +24,9 @@ void ListColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	// table filters are not supported yet for list columns
-	return false;
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
@@ -340,12 +340,11 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		ColumnCheckpointState::WriteDataPointers(writer, serializer);
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
-		serializer.WriteObject(102, "child_column",
-		                       [&](Serializer &serializer) { child_state->WriteDataPointers(writer, serializer); });
+	PersistentColumnData ToPersistentData() override {
+		auto data = ColumnCheckpointState::ToPersistentData();
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		data.child_columns.push_back(child_state->ToPersistentData());
+		return data;
 	}
 };
 
@@ -366,16 +365,22 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	return base_state;
 }
 
-void ListColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	ColumnData::DeserializeColumn(deserializer, target_stats);
+bool ListColumnData::IsPersistent() {
+	return ColumnData::IsPersistent() && validity.IsPersistent() && child_column->IsPersistent();
+}
 
-	deserializer.ReadObject(
-	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
+PersistentColumnData ListColumnData::Serialize() {
+	auto persistent_data = ColumnData::Serialize();
+	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(child_column->Serialize());
+	return persistent_data;
+}
 
+void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	ColumnData::InitializeColumn(column_data, target_stats);
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 	auto &child_stats = ListStats::GetChildStats(target_stats);
-	deserializer.ReadObject(102, "child_column", [&](Deserializer &deserializer) {
-		child_column->DeserializeColumn(deserializer, child_stats);
-	});
+	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 }
 
 void ListColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

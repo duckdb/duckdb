@@ -77,7 +77,7 @@ public:
 public:
 	idx_t MaxThreads(ClientContext &context);
 
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };
 
 } // namespace duckdb

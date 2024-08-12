@@ -345,7 +345,9 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		break;
 	}
 	case CompressionCodec::LZ4_RAW: {
-		auto res = duckdb_lz4::LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst), src_size, dst_size);
+		auto res =
+		    duckdb_lz4::LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst),
+		                                    UnsafeNumericCast<int32_t>(src_size), UnsafeNumericCast<int32_t>(dst_size));
 		if (res != NumericCast<int>(dst_size)) {
 			throw std::runtime_error("LZ4 decompression failure");
 		}
@@ -979,8 +981,9 @@ unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p, c
 		row_group_offset_min += row_groups[i].num_rows;
 	}
 
-	NumericStats::SetMin(stats, Value::BIGINT(row_group_offset_min));
-	NumericStats::SetMax(stats, Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows));
+	NumericStats::SetMin(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min)));
+	NumericStats::SetMax(
+	    stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min + row_groups[row_group_idx_p].num_rows)));
 	stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	return stats.ToUnique();
 }
@@ -999,7 +1002,7 @@ idx_t RowNumberColumnReader::Read(uint64_t num_values, parquet_filter_t &filter,
 
 	auto data_ptr = FlatVector::GetData<int64_t>(result);
 	for (idx_t i = 0; i < num_values; i++) {
-		data_ptr[i] = row_group_offset++;
+		data_ptr[i] = UnsafeNumericCast<int64_t>(row_group_offset++);
 	}
 	return num_values;
 }
@@ -1046,14 +1049,33 @@ idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data
 	bool all_succeeded = VectorOperations::DefaultTryCast(intermediate_vector, result, amount, &error_message);
 	if (!all_succeeded) {
 		string extended_error;
-		extended_error =
-		    StringUtil::Format("In file \"%s\" the column \"%s\" has type %s, but we are trying to read it as type %s.",
-		                       reader.file_name, schema.name, intermediate_vector.GetType(), result.GetType());
-		extended_error += "\nThis can happen when reading multiple Parquet files. The schema information is taken from "
-		                  "the first Parquet file by default. Possible solutions:\n";
-		extended_error += "* Enable the union_by_name=True option to combine the schema of all Parquet files "
-		                  "(duckdb.org/docs/data/multiple_files/combining_schemas)\n";
-		extended_error += "* Use a COPY statement to automatically derive types from an existing table.";
+		if (!reader.table_columns.empty()) {
+			// COPY .. FROM
+			extended_error = StringUtil::Format(
+			    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column ",
+			    reader.file_name, schema.name, intermediate_vector.GetType());
+			if (FileIdx() < reader.table_columns.size()) {
+				extended_error += "\"" + reader.table_columns[FileIdx()] + "\" ";
+			}
+			extended_error += StringUtil::Format("with type %s.", result.GetType());
+			extended_error += "\nThis means the Parquet schema does not match the schema of the table.";
+			extended_error += "\nPossible solutions:";
+			extended_error += "\n* Insert by name instead of by position using \"INSERT INTO tbl BY NAME SELECT * FROM "
+			                  "read_parquet(...)\"";
+			extended_error += "\n* Manually specify which columns to insert using \"INSERT INTO tbl SELECT ... FROM "
+			                  "read_parquet(...)\"";
+		} else {
+			// read_parquet() with multiple files
+			extended_error = StringUtil::Format(
+			    "In file \"%s\" the column \"%s\" has type %s, but we are trying to read it as type %s.",
+			    reader.file_name, schema.name, intermediate_vector.GetType(), result.GetType());
+			extended_error +=
+			    "\nThis can happen when reading multiple Parquet files. The schema information is taken from "
+			    "the first Parquet file by default. Possible solutions:\n";
+			extended_error += "* Enable the union_by_name=True option to combine the schema of all Parquet files "
+			                  "(duckdb.org/docs/data/multiple_files/combining_schemas)\n";
+			extended_error += "* Use a COPY statement to automatically derive types from an existing table.";
+		}
 		throw ConversionException(
 		    "In Parquet reader of file \"%s\": failed to cast column \"%s\" from type %s to %s: %s\n\n%s",
 		    reader.file_name, schema.name, intermediate_vector.GetType(), result.GetType(), error_message,
@@ -1327,7 +1349,7 @@ double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t siz
 			res_ptr[sizeof(uint64_t) - k - 1] = positive ? byte : byte ^ 0xFF;
 		}
 		res *= double(NumericLimits<uint64_t>::Maximum()) + 1;
-		res += input;
+		res += static_cast<double>(input);
 	}
 	if (!positive) {
 		res += 1;
@@ -1368,8 +1390,7 @@ struct UUIDValueConversion {
 			result.lower <<= 8;
 			result.lower += input[i];
 		}
-		result.upper = unsigned_upper;
-		result.upper ^= (int64_t(1) << 63);
+		result.upper = static_cast<int64_t>(unsigned_upper ^ (uint64_t(1) << 63));
 		return result;
 	}
 
@@ -1427,8 +1448,8 @@ struct IntervalValueConversion {
 
 	static interval_t ReadParquetInterval(const_data_ptr_t input) {
 		interval_t result;
-		result.months = Load<uint32_t>(input);
-		result.days = Load<uint32_t>(input + sizeof(uint32_t));
+		result.months = Load<int32_t>(input);
+		result.days = Load<int32_t>(input + sizeof(uint32_t));
 		result.micros = int64_t(Load<uint32_t>(input + sizeof(uint32_t) * 2)) * 1000;
 		return result;
 	}

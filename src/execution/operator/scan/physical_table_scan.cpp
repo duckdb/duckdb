@@ -24,8 +24,11 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
 class TableScanGlobalSourceState : public GlobalSourceState {
 public:
 	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
+		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
+			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
+		}
 		if (op.function.init_global) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, op.table_filters.get());
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op));
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
 				max_threads = global_state->MaxThreads();
@@ -51,7 +54,12 @@ public:
 	unique_ptr<GlobalTableFunctionState> global_state;
 	bool in_out_final = false;
 	DataChunk input_chunk;
+	//! Combined table filters, if we have dynamic filters
+	unique_ptr<TableFilterSet> table_filters;
 
+	optional_ptr<TableFilterSet> GetTableFilters(const PhysicalTableScan &op) const {
+		return table_filters ? table_filters.get() : op.table_filters.get();
+	}
 	idx_t MaxThreads() override {
 		return max_threads;
 	}
@@ -62,7 +70,8 @@ public:
 	TableScanLocalSourceState(ExecutionContext &context, TableScanGlobalSourceState &gstate,
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, op.table_filters.get());
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
+			                             gstate.GetTableFilters(op));
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
@@ -125,58 +134,63 @@ string PhysicalTableScan::GetName() const {
 	return StringUtil::Upper(function.name + " " + function.extra_info);
 }
 
-string PhysicalTableScan::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
-		result = function.to_string(bind_data.get());
-		result += "\n[INFOSEPARATOR]\n";
+		result["Stringified"] = function.to_string(bind_data.get());
 	}
 	if (function.projection_pushdown) {
 		if (function.filter_prune) {
+			string projections;
 			for (idx_t i = 0; i < projection_ids.size(); i++) {
 				const auto &column_id = column_ids[projection_ids[i]];
 				if (column_id < names.size()) {
 					if (i > 0) {
-						result += "\n";
+						projections += "\n";
 					}
-					result += names[column_id];
+					projections += names[column_id];
 				}
 			}
+			result["Projections"] = projections;
 		} else {
+			string projections;
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column_id = column_ids[i];
 				if (column_id < names.size()) {
 					if (i > 0) {
-						result += "\n";
+						projections += "\n";
 					}
-					result += names[column_id];
+					projections += names[column_id];
 				}
 			}
+			result["Projections"] = projections;
 		}
 	}
 	if (function.filter_pushdown && table_filters) {
-		result += "\n[INFOSEPARATOR]\n";
-		result += "Filters: ";
+		string filters_info;
+		bool first_item = true;
 		for (auto &f : table_filters->filters) {
 			auto &column_index = f.first;
 			auto &filter = f.second;
 			if (column_index < names.size()) {
-				result += filter->ToString(names[column_ids[column_index]]);
-				result += "\n";
+				if (!first_item) {
+					filters_info += "\n";
+				}
+				first_item = false;
+				filters_info += filter->ToString(names[column_ids[column_index]]);
 			}
 		}
+		result["Filters"] = filters_info;
 	}
 	if (!extra_info.file_filters.empty()) {
-		result += "\n[INFOSEPARATOR]\n";
-		result += "File Filters: " + extra_info.file_filters;
+		result["File Filters"] = extra_info.file_filters;
 		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
-			result += StringUtil::Format("\nScanning: %llu/%llu files", extra_info.filtered_files.GetIndex(),
-			                             extra_info.total_files.GetIndex());
+			result["Scanning Files"] = StringUtil::Format("%llu/%llu", extra_info.filtered_files.GetIndex(),
+			                                              extra_info.total_files.GetIndex());
 		}
 	}
 
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu", estimated_cardinality);
+	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
 

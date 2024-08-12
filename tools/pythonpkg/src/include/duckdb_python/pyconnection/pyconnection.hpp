@@ -23,6 +23,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
@@ -40,17 +41,108 @@ public:
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 };
 
-struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
+struct ConnectionGuard {
 public:
+	ConnectionGuard() {
+	}
+	~ConnectionGuard() {
+	}
+
+public:
+	DuckDB &GetDatabase() {
+		if (!database) {
+			ThrowConnectionException();
+		}
+		return *database;
+	}
+	const DuckDB &GetDatabase() const {
+		if (!database) {
+			ThrowConnectionException();
+		}
+		return *database;
+	}
+	Connection &GetConnection() {
+		if (!connection) {
+			ThrowConnectionException();
+		}
+		return *connection;
+	}
+	const Connection &GetConnection() const {
+		if (!connection) {
+			ThrowConnectionException();
+		}
+		return *connection;
+	}
+	DuckDBPyRelation &GetResult() {
+		if (!result) {
+			ThrowConnectionException();
+		}
+		return *result;
+	}
+	const DuckDBPyRelation &GetResult() const {
+		if (!result) {
+			ThrowConnectionException();
+		}
+		return *result;
+	}
+
+public:
+	bool HasResult() const {
+		return result != nullptr;
+	}
+
+public:
+	void SetDatabase(shared_ptr<DuckDB> db) {
+		database = std::move(db);
+	}
+	void SetDatabase(ConnectionGuard &con) {
+		if (!con.database) {
+			ThrowConnectionException();
+		}
+		database = con.database;
+	}
+	void SetConnection(unique_ptr<Connection> con) {
+		connection = std::move(con);
+	}
+	void SetResult(unique_ptr<DuckDBPyRelation> res) {
+		result = std::move(res);
+	}
+
+private:
+	void ThrowConnectionException() const {
+		throw ConnectionException("Connection already closed!");
+	}
+
+private:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
 	unique_ptr<DuckDBPyRelation> result;
-	vector<weak_ptr<DuckDBPyConnection>> cursors;
-	unordered_map<string, shared_ptr<Relation>> temporary_views;
+};
+
+struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
+private:
+	class Cursors {
+	public:
+		Cursors() {
+		}
+
+	public:
+		void AddCursor(shared_ptr<DuckDBPyConnection> conn);
+		void ClearCursors();
+
+	private:
+		mutex lock;
+		vector<weak_ptr<DuckDBPyConnection>> cursors;
+	};
+
+public:
+	ConnectionGuard con;
+	Cursors cursors;
 	std::mutex py_connection_lock;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
 	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;
+	case_insensitive_set_t registered_objects;
 
 public:
 	explicit DuckDBPyConnection() {
@@ -72,22 +164,12 @@ public:
 	static PythonImportCache *ImportCache();
 	static bool IsInteractive();
 
-	unique_ptr<DuckDBPyRelation>
-	ReadCSV(const py::object &name, const py::object &header = py::none(), const py::object &compression = py::none(),
-	        const py::object &sep = py::none(), const py::object &delimiter = py::none(),
-	        const py::object &dtype = py::none(), const py::object &na_values = py::none(),
-	        const py::object &skiprows = py::none(), const py::object &quotechar = py::none(),
-	        const py::object &escapechar = py::none(), const py::object &encoding = py::none(),
-	        const py::object &parallel = py::none(), const py::object &date_format = py::none(),
-	        const py::object &timestamp_format = py::none(), const py::object &sample_size = py::none(),
-	        const py::object &all_varchar = py::none(), const py::object &normalize_names = py::none(),
-	        const py::object &filename = py::none(), const py::object &null_padding = py::none(),
-	        const py::object &names = py::none());
+	unique_ptr<DuckDBPyRelation> ReadCSV(const py::object &name, py::kwargs &kwargs);
 
 	py::list ExtractStatements(const string &query);
 
 	unique_ptr<DuckDBPyRelation> ReadJSON(
-	    const string &name, const Optional<py::object> &columns = py::none(),
+	    const py::object &name, const Optional<py::object> &columns = py::none(),
 	    const Optional<py::object> &sample_size = py::none(), const Optional<py::object> &maximum_depth = py::none(),
 	    const Optional<py::str> &records = py::none(), const Optional<py::str> &format = py::none(),
 	    const Optional<py::object> &date_format = py::none(), const Optional<py::object> &timestamp_format = py::none(),
@@ -204,7 +286,7 @@ public:
 
 	py::dict FetchNumpy();
 	PandasDataFrame FetchDF(bool date_as_object);
-	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
+	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false);
 
 	duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch);
 	PolarsDataFrame FetchPolars(idx_t rows_per_batch);
@@ -213,9 +295,9 @@ public:
 
 	py::dict FetchTF();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t rows_per_batch) const;
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t rows_per_batch);
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
+	static shared_ptr<DuckDBPyConnection> Connect(const py::object &database, bool read_only, const py::dict &config);
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
 	static case_insensitive_map_t<BoundParameterData> TransformPythonParamDict(const py::dict &params);

@@ -22,22 +22,15 @@ void ReadCSVRelation::InitializeAlias(const vector<string> &input) {
 	alias = StringUtil::Split(csv_file, ".")[0];
 }
 
-static Value CreateValueFromFileList(const vector<string> &file_list) {
-	vector<Value> files;
-	for (auto &file : file_list) {
-		files.push_back(file);
-	}
-	return Value::LIST(std::move(files));
-}
-
 ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const vector<string> &input,
                                  named_parameter_map_t &&options, string alias_p)
-    : TableFunctionRelation(context, "read_csv_auto", {CreateValueFromFileList(input)}, nullptr, false),
+    : TableFunctionRelation(context, "read_csv_auto", {MultiFileReader::CreateValueFromFileList(input)}, nullptr,
+                            false),
       alias(std::move(alias_p)) {
 
 	InitializeAlias(input);
 
-	auto file_list = CreateValueFromFileList(input);
+	auto file_list = MultiFileReader::CreateValueFromFileList(input);
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("ReadCSVRelation");
 	vector<string> files;

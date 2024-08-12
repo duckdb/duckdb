@@ -178,3 +178,8 @@ statement error
 SELECT '2001:DB8:100:30::C59B:CEF3:A0D1:6DE4'::INET;
 ----
 Invalid double-colon, too many hex digits.
+
+statement error
+SELECT 'gggg:gggg:gggg:gggg:gggg:gggg:gggg:gggg/128'::INET
+----
+Expected a number

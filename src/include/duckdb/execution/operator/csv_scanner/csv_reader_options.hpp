@@ -31,6 +31,7 @@ struct DialectOptions {
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! How many leading rows to skip
 	CSVOption<idx_t> skip_rows = 0;
+	idx_t rows_until_header = 0;
 };
 
 struct CSVReaderOptions {
@@ -50,7 +51,7 @@ struct CSVReaderOptions {
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
 	//! Number of samples to buffer
-	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
+	idx_t buffer_sample_size = static_cast<idx_t>(STANDARD_VECTOR_SIZE * 50);
 	//! Specifies the strings that represents a null value
 	vector<string> null_str = {""};
 	//! Whether file is compressed or not, and if so which compression type
@@ -58,6 +59,7 @@ struct CSVReaderOptions {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Option to convert quoted values to NULL values
 	bool allow_quoted_nulls = true;
+	char comment;
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
@@ -90,8 +92,10 @@ struct CSVReaderOptions {
 	unordered_set<string> force_not_null_names;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
+	//! Result size of sniffing phases
+	static constexpr idx_t sniff_size = 2048;
 	//! Number of sample chunks used in auto-detection
-	idx_t sample_size_chunks = 20480 / STANDARD_VECTOR_SIZE;
+	idx_t sample_size_chunks = 20480 / sniff_size;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
 	//! Whether or not to automatically detect dialect and datatypes
@@ -142,15 +146,17 @@ struct CSVReaderOptions {
 
 	void SetSkipRows(int64_t rows);
 
-	string GetQuote() const;
 	void SetQuote(const string &quote);
+	string GetQuote() const;
+	void SetComment(const string &comment);
+	string GetComment() const;
 	void SetDelimiter(const string &delimiter);
 	string GetDelimiter() const;
 
 	//! If we can safely ignore errors (i.e., they are being ignored and not being stored in a rejects table)
 	bool IgnoreErrors() const;
 
-	NewLineIdentifier GetNewline() const;
+	string GetNewline() const;
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
@@ -169,10 +175,12 @@ struct CSVReaderOptions {
 	//! If the type for column with idx i was manually set
 	bool WasTypeManuallySet(idx_t i) const;
 
-	string NewLineIdentifierToString() {
+	string NewLineIdentifierToString() const {
 		switch (dialect_options.state_machine_options.new_line.GetValue()) {
-		case NewLineIdentifier::SINGLE:
+		case NewLineIdentifier::SINGLE_N:
 			return "\\n";
+		case NewLineIdentifier::SINGLE_R:
+			return "\\r";
 		case NewLineIdentifier::CARRY_ON:
 			return "\\r\\n";
 		default:

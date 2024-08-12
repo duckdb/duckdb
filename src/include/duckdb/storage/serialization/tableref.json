@@ -91,6 +91,16 @@
         "id": 205,
         "name": "using_columns",
         "type": "vector<string>"
+      },
+      {
+        "id": 206,
+        "name": "delim_flipped",
+        "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "duplicate_eliminated_columns",
+        "type": "vector<unique_ptr<ParsedExpression>>"
       }
     ]
   },
@@ -170,10 +180,10 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "optionally_owned_ptr<ColumnDataCollection>"
+        "type": "shared_ptr<ColumnDataCollection>"
       }
     ],
-    "constructor": ["expected_names", "collection"]
+    "constructor": ["collection", "expected_names"]
   },
   {
     "class": "PivotRef",

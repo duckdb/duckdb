@@ -160,6 +160,7 @@ SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY l;
 statement error
 SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY 1-k;
 ----
+<REGEX>:Binder Error:.*Could not ORDER BY column.*
 
 # but ordering on computation elements should work
 query I

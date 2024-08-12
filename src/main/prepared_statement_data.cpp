@@ -1,7 +1,9 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
@@ -21,12 +23,21 @@ void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
 	}
 }
 
-void StartTransactionInCatalog(ClientContext &context, const string &catalog_name) {
+bool CheckCatalogIdentity(ClientContext &context, const string &catalog_name,
+                          const StatementProperties::CatalogIdentity catalog_identity) {
+	// some catalogs don't support catalog version, we can't check identity in that case
+	if (!catalog_identity.catalog_version.IsValid()) {
+		return false;
+	}
 	auto database = DatabaseManager::Get(context).GetDatabase(context, catalog_name);
 	if (!database) {
 		throw BinderException("Prepared statement requires database %s but it was not attached", catalog_name);
 	}
 	Transaction::Get(context, *database);
+	auto current_catalog_oid = database->GetCatalog().GetOid();
+	auto current_catalog_version = database->GetCatalog().GetCatalogVersion(context);
+
+	return StatementProperties::CatalogIdentity {current_catalog_oid, current_catalog_version} == catalog_identity;
 }
 
 bool PreparedStatementData::RequireRebind(ClientContext &context,
@@ -54,24 +65,23 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 			return true;
 		}
 	}
-	// prior to checking the catalog version we need to explicitly start transactions in all affected databases
-	// this ensures all catalog entries we rely on are cached
-	for (auto &catalog_name : properties.read_databases) {
-		StartTransactionInCatalog(context, catalog_name);
+	// Check the catalog versions to ensure all catalog entries we rely on are current
+	for (auto &it : properties.read_databases) {
+		if (!CheckCatalogIdentity(context, it.first, it.second)) {
+			return true;
+		}
 	}
-	for (auto &catalog_name : properties.modified_databases) {
-		StartTransactionInCatalog(context, catalog_name);
-	}
-	if (Catalog::GetSystemCatalog(context).GetCatalogVersion() != catalog_version) {
-		//! context is out of bounds
-		return true;
+	for (auto &it : properties.modified_databases) {
+		if (!CheckCatalogIdentity(context, it.first, it.second)) {
+			return true;
+		}
 	}
 	return false;
 }
 
 void PreparedStatementData::Bind(case_insensitive_map_t<BoundParameterData> values) {
 	// set parameters
-	D_ASSERT(!unbound_statement || unbound_statement->n_param == properties.parameter_count);
+	D_ASSERT(!unbound_statement || unbound_statement->named_param_map.size() == properties.parameter_count);
 	CheckParameterCount(values.size());
 
 	// bind the required values

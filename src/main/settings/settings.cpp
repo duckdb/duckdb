@@ -79,6 +79,22 @@ Value AllowPersistentSecrets::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Access Mode
+//===--------------------------------------------------------------------===//
+void CatalogErrorMaxSchema::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.catalog_error_max_schemas = UBigIntValue::Get(input);
+}
+
+void CatalogErrorMaxSchema::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.catalog_error_max_schemas = DBConfig().options.catalog_error_max_schemas;
+}
+
+Value CatalogErrorMaxSchema::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.catalog_error_max_schemas);
+}
+
+//===--------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===--------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -163,6 +179,22 @@ void DebugForceNoCrossProduct::SetLocal(ClientContext &context, const Value &inp
 
 Value DebugForceNoCrossProduct::GetSetting(const ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_no_cross_product);
+}
+
+//===--------------------------------------------------------------------===//
+// Debug Skip Checkpoint On Commit
+//===--------------------------------------------------------------------===//
+void DebugSkipCheckpointOnCommit::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	config.options.debug_skip_checkpoint_on_commit = BooleanValue::Get(parameter);
+}
+
+void DebugSkipCheckpointOnCommit::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.debug_skip_checkpoint_on_commit = DBConfig().options.debug_skip_checkpoint_on_commit;
+}
+
+Value DebugSkipCheckpointOnCommit::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(*context.db);
+	return Value::BOOLEAN(config.options.debug_skip_checkpoint_on_commit);
 }
 
 //===--------------------------------------------------------------------===//
@@ -644,18 +676,23 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	auto &config = ClientConfig::GetConfig(context);
+	config.enable_profiler = true;
+	config.emit_profiler_output = true;
+
 	if (parameter == "json") {
 		config.profiler_print_format = ProfilerPrintFormat::JSON;
 	} else if (parameter == "query_tree") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else if (parameter == "query_tree_optimizer") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	} else if (parameter == "no_output") {
+		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
+		config.emit_profiler_output = false;
 	} else {
 		throw ParserException(
-		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", parameter);
+		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]",
+		    parameter);
 	}
-	config.enable_profiler = true;
-	config.emit_profiler_output = true;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
@@ -670,6 +707,8 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 		return Value("query_tree");
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
 		return Value("query_tree_optimizer");
+	case ProfilerPrintFormat::NO_OUTPUT:
+		return Value("no_output");
 	default:
 		throw InternalException("Unsupported profiler print format");
 	}
@@ -852,7 +891,7 @@ void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value ErrorsAsJsonSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json ? 1 : 0);
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json);
 }
 
 //===--------------------------------------------------------------------===//

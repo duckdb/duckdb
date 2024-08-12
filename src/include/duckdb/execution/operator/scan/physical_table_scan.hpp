@@ -46,10 +46,12 @@ public:
 	ExtraOperatorInfo extra_info;
 	//! Parameters
 	vector<Value> parameters;
+	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
+	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 
 public:
 	string GetName() const override;
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	bool Equals(const PhysicalOperator &other) const override;
 

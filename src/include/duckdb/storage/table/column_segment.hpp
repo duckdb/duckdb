@@ -61,8 +61,8 @@ public:
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
-	                                                        const idx_t start,
-	                                                        const idx_t segment_size = Storage::BLOCK_SIZE);
+	                                                        const idx_t start, const idx_t segment_size,
+	                                                        const idx_t block_size);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);
@@ -100,6 +100,8 @@ public:
 	//! Updates pointers to refer to the given block and offset. This is only used
 	//! when sharing a block among segments. This is invoked only AFTER the block is written.
 	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);
+	//! Gets a data pointer from a persistent column segment
+	DataPointer GetDataPointer();
 
 	block_id_t GetBlockId() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);

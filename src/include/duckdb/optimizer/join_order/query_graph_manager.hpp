@@ -48,13 +48,16 @@ public:
 
 public:
 	unique_ptr<Expression> filter;
-	JoinRelationSet &set;
+	reference<JoinRelationSet> set;
 	idx_t filter_index;
 	JoinType join_type;
 	optional_ptr<JoinRelationSet> left_set;
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
+
+	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);
+	void SetRightSet(optional_ptr<JoinRelationSet> right_set_new);
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
@@ -74,7 +77,7 @@ public:
 	ClientContext &context;
 
 	//! Extract the join relations, optimizing non-reoderable relations when encountered
-	bool Build(LogicalOperator &op);
+	bool Build(JoinOrderOptimizer &optimizer, LogicalOperator &op);
 
 	//! Reconstruct the logical plan using the plan found by the plan enumerator
 	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan);

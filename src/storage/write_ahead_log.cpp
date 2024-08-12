@@ -15,6 +15,7 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,7 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 	if (initialized) {
 		return *writer;
 	}
+	lock_guard<mutex> lock(wal_lock);
 	if (!writer) {
 		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
 		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
@@ -54,14 +56,14 @@ idx_t WriteAheadLog::GetWALSize() {
 }
 
 idx_t WriteAheadLog::GetTotalWritten() {
-	if (!writer) {
+	if (!Initialized()) {
 		return 0;
 	}
 	return writer->GetTotalWritten();
 }
 
 void WriteAheadLog::Truncate(idx_t size) {
-	if (!writer) {
+	if (!Initialized()) {
 		return;
 	}
 	writer->Truncate(size);
@@ -69,7 +71,7 @@ void WriteAheadLog::Truncate(idx_t size) {
 }
 
 void WriteAheadLog::Delete() {
-	if (!writer) {
+	if (!Initialized()) {
 		return;
 	}
 	writer.reset();
@@ -355,6 +357,14 @@ void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 
 	WriteAheadLogSerializer serializer(*this, WALType::INSERT_TUPLE);
 	serializer.WriteProperty(101, "chunk", chunk);
+	serializer.End();
+}
+
+void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
+	D_ASSERT(!data.row_group_data.empty());
+
+	WriteAheadLogSerializer serializer(*this, WALType::ROW_GROUP_DATA);
+	serializer.WriteProperty(101, "row_group_data", data);
 	serializer.End();
 }
 

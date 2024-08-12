@@ -16,6 +16,13 @@
 #include <queue>
 #endif
 
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__GNUC__)
+#include <sched.h>
+#include <unistd.h>
+#endif
+
 namespace duckdb {
 
 struct SchedulerThread {
@@ -271,9 +278,6 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	}
 #endif
 	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
@@ -295,6 +299,34 @@ void TaskScheduler::Signal(idx_t n) {
 void TaskScheduler::YieldThread() {
 #ifndef DUCKDB_NO_THREADS
 	std::this_thread::yield();
+#endif
+}
+
+idx_t TaskScheduler::GetEstimatedCPUId() {
+#if defined(EMSCRIPTEN)
+	// FIXME: Wasm + multithreads can likely be implemented as
+	//   return return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+	return 0;
+#else
+	// this code comes from jemalloc
+#if defined(_WIN32)
+	return (idx_t)GetCurrentProcessorNumber();
+#elif defined(_GNU_SOURCE)
+	auto cpu = sched_getcpu();
+	if (cpu < 0) {
+		// fallback to thread id
+		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+	}
+	return (idx_t)cpu;
+#elif defined(__aarch64__) && defined(__APPLE__)
+	/* Other oses most likely use tpidr_el0 instead */
+	uintptr_t c;
+	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
+	return (idx_t)(c & (1 << 3) - 1);
+#else
+	// fallback to thread id
+	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#endif
 #endif
 }
 
@@ -347,6 +379,9 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		}
 	}
 	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 #endif
 }
 

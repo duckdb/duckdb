@@ -1,4 +1,4 @@
-#include "duckdb/common/platform.h"
+#include "duckdb/common/platform.hpp"
 #include <iostream>
 
 int main() {

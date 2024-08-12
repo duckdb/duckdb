@@ -3,7 +3,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/http_state.hpp"
+#include "http_state.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
@@ -55,8 +55,8 @@ static string ParseNextUrlFromLinkHeader(const string &link_header_content) {
 
 HFFileHandle::~HFFileHandle() {};
 
-void HFFileHandle::InitializeClient(optional_ptr<ClientContext> client_context) {
-	http_client = HTTPFileSystem::GetClient(this->http_params, parsed_url.endpoint.c_str(), this);
+unique_ptr<duckdb_httplib_openssl::Client> HFFileHandle::CreateClient(optional_ptr<ClientContext> client_context) {
+	return HTTPFileSystem::GetClient(this->http_params, parsed_url.endpoint.c_str(), this);
 }
 
 string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url,
