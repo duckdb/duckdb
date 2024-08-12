@@ -3044,7 +3044,7 @@ func_expr_common_subexpr:
 		;
 
 list_comprehension_lhs:
-	'(' columnList ')'
+	'(' columnrefList ')'
 	{
 		PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $2, @2);
 		$$ = (PGNode *) n;
@@ -3745,6 +3745,11 @@ case_default:
 
 case_arg:	a_expr									{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+columnrefList:
+			columnref								{ $$ = list_make1($1); }
+			| columnrefList ',' columnref				{ $$ = lappend($1, $3); }
 		;
 
 columnref:	ColId
