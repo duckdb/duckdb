@@ -38,6 +38,16 @@ class TestArrowReplacementScan(object):
         rel = duckdb_cursor.sql("select b, d from capsule")
         assert rel.fetchall() == [(i, i + 6) for i in range(4, 7)]
 
+        with pytest.raises(duckdb.InvalidInputException, match='The ArrowArrayStream was already released'):
+            rel = duckdb_cursor.sql("select b, d from capsule")
+
+        schema_obj = tbl.schema
+        schema_capsule = schema_obj.__arrow_c_schema__()
+        with pytest.raises(
+            duckdb.InvalidInputException, match="""Expected a 'arrow_array_stream' PyCapsule, got: arrow_schema"""
+        ):
+            rel = duckdb_cursor.sql("select b, d from schema_capsule")
+
     def test_arrow_table_replacement_scan_view(self, duckdb_cursor):
 
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'userdata1.parquet')
