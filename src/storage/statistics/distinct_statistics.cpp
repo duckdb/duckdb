@@ -33,10 +33,12 @@ void DistinctStatistics::Update(UnifiedVectorFormat &vdata, const LogicalType &t
 	if (count == 0) {
 		return;
 	}
-	
+
 	total_count += count;
 	if (sample) {
-		count = MinValue<idx_t>(MaxValue<idx_t>(idx_t(SAMPLE_RATE * static_cast<double>(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count))),1), count);
+		count = MinValue<idx_t>(
+		    MaxValue<idx_t>(idx_t(SAMPLE_RATE * static_cast<double>(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count))), 1),
+		    count);
 	}
 	sample_count += count;
 
