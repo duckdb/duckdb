@@ -1,6 +1,6 @@
 # name: benchmark/micro/json/RealNest/2_create_table_combined_all_json_fields.benchmark
 # description: Create a table combining all the fields from a JSON file, unnesting all structures
-# group: [real_nest]
+# group: [RealNest]
 
 name create_table_combined_all_json_fields
 group real_nest

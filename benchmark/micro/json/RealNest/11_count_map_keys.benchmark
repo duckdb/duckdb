@@ -1,8 +1,8 @@
-# name: benchmark/micro/json/RealNest/10_count_map_keys.benchmark
-# description: Count map keys and aggregate them
-# group: [real_nest]
+# name: benchmark/micro/json/RealNest/11_count_map_keys.benchmark
+# description: list_intersect to get common hashtags
+# group: [RealNest]
 
-name count_map_keys
+name list_intersect_hashtags
 group real_nest
 
 require json
@@ -12,8 +12,9 @@ require httpfs
 load benchmark/micro/json/RealNest/load.sql
 
 run
-select keys, count(*) mentions from
-      (select unnest(map_keys(tags)) as keys from daylight)
-  group by keys
-  order by mentions
-  desc limit 20;
+WITH A AS (
+    SELECT rowid, data.text AS text, list_transform(data.entities.hashtags, x -> x.tag) AS hashtag_list from twitter)
+    SELECT left_.text, right_.text, len(list_intersect(left_.hashtag_list, right_.hashtag_list)) AS common_hashtags
+FROM A left_, A right_
+    WHERE common_hashtags > 0 AND left_.rowid < right_.rowid 
+    ORDER BY common_hashtags DESC;

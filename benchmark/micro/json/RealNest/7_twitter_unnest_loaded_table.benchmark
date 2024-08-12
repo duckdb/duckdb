@@ -1,6 +1,6 @@
 # name: benchmark/micro/json/RealNest/7_twitter_unnest_loaded_table.benchmark
 # description: Multi layer unnest from 6 layers deep fom the loaded table
-# group: [real_nest]
+# group: [RealNest]
 
 name twitter_unnest_loaded_table
 group real_nest

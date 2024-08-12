@@ -1,6 +1,6 @@
 # name: benchmark/micro/json/RealNest/9_list_concat_ranges.benchmark
 # description: Concatinates two lists ranges
-# group: [real_nest]
+# group: [RealNest]
 
 name list_concat_ranges
 group real_nest

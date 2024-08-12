@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/RealNest/10_count_map_keys.benchmark
+# name: benchmark/micro/json/RealNest/12_list_intersect_hashtags.benchmark
 # description: Count map keys and aggregate them
-# group: [real_nest]
+# group: [RealNest]
 
 name count_map_keys
 group real_nest
@@ -12,8 +12,8 @@ require httpfs
 load benchmark/micro/json/RealNest/load.sql
 
 run
-select keys, count(*) mentions from
-      (select unnest(map_keys(tags)) as keys from daylight)
+SELECT keys, count(*) mentions FROM
+      (select unnest(map_keys(tags)) AS keys from daylight)
   group by keys
   order by mentions
   desc limit 20;

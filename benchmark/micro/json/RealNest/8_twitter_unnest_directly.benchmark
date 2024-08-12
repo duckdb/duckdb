@@ -1,6 +1,6 @@
 # name: benchmark/micro/json/RealNest/8_twitter_unnest_directly.benchmark
 # description: Multi layer from 6 layers deep unnest directly
-# group: [real_nest]
+# group: [RealNest]
 
 name twitter_unnest_directly
 group real_nest
