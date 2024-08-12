@@ -207,11 +207,15 @@ static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Va
 
 void DatabaseInstance::LoadExtensionSettings() {
 	auto &unrecognized_options = config.options.unrecognized_options;
+
 	if (config.options.autoload_known_extensions) {
 		if (unrecognized_options.empty()) {
 			// Nothing to do
 			return;
 		}
+
+		Connection con(*this);
+		con.BeginTransaction();
 
 		vector<string> extension_options;
 		for (auto &option : unrecognized_options) {
@@ -227,13 +231,19 @@ void DatabaseInstance::LoadExtensionSettings() {
 				    "To set the %s setting, the %s extension needs to be loaded. But it could not be autoloaded.", name,
 				    extension_name);
 			}
-			config.SetOptionByName(name, value);
+			auto it = config.extension_parameters.find(name);
+			if (it == config.extension_parameters.end()) {
+				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
+			}
+			auto &context = *con.context;
+			PhysicalSet::SetExtensionVariable(context, it->second, name, SetScope::GLOBAL, value);
 			extension_options.push_back(name);
 		}
 
 		for (auto &option : extension_options) {
 			unrecognized_options.erase(option);
 		}
+		con.Commit();
 	}
 	if (!unrecognized_options.empty()) {
 		ThrowExtensionSetUnrecognizedOptions(unrecognized_options);
