@@ -529,7 +529,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	ColumnList column_list;
 	try {
 		column_list = Parser::ParseColumnList("dummy " + str);
-	} catch (Exception &e) {
+	} catch (const std::runtime_error &e) {
 		const vector<string> suggested_types {"BIGINT",
 		                                      "INT8",
 		                                      "LONG",
