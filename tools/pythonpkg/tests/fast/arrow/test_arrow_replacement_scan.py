@@ -32,6 +32,12 @@ class TestArrowReplacementScan(object):
         rel = duckdb_cursor.sql("select * from capsule where a > 3 and a < 5")
         assert rel.fetchall() == [(4,)]
 
+        tbl = pa.Table.from_pydict({'a': [1, 2, 3], 'b': [4, 5, 6], 'c': [7, 8, 9], 'd': [10, 11, 12]})
+        capsule = tbl.__arrow_c_stream__()
+
+        rel = duckdb_cursor.sql("select b, d from capsule")
+        assert rel.fetchall() == [(i, i + 6) for i in range(4, 7)]
+
     def test_arrow_table_replacement_scan_view(self, duckdb_cursor):
 
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'userdata1.parquet')
