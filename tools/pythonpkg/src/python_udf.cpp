@@ -97,6 +97,7 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 	}
 
 	VectorOperations::Cast(context, result.data[0], out, count);
+	out.Flatten(count);
 }
 
 static string NullHandlingError() {
@@ -110,8 +111,20 @@ The UDF is not expected to return NULL values.
 	)";
 }
 
+static ValidityMask &GetResultValidity(Vector &result) {
+	auto vector_type = result.GetVectorType();
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		return ConstantVector::Validity(result);
+	} else if (vector_type == VectorType::FLAT_VECTOR) {
+		return FlatVector::Validity(result);
+	} else {
+		throw InternalException("VectorType %s was not expected here (GetResultValidity)",
+		                        EnumUtil::ToString(vector_type));
+	}
+}
+
 static void VerifyVectorizedNullHandling(Vector &result, idx_t count) {
-	auto &validity = FlatVector::Validity(result);
+	auto &validity = GetResultValidity(result);
 
 	if (validity.AllValid()) {
 		return;
@@ -176,7 +189,9 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 
 		// Call the function
 		auto ret = PyObject_CallObject(function, column_list.ptr());
+		bool exception_occurred = false;
 		if (ret == nullptr && PyErr_Occurred()) {
+			exception_occurred = true;
 			if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
 				auto exception = py::error_already_set();
 				throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
@@ -210,7 +225,9 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			Vector temp(result.GetType(), count);
 			// Convert the table into a temporary Vector
 			ConvertArrowTableToVector(python_object, temp, state.GetContext(), count);
-			VerifyVectorizedNullHandling(temp, count);
+			if (!exception_occurred) {
+				VerifyVectorizedNullHandling(temp, count);
+			}
 			if (count) {
 				SelectionVector inverted(input_size);
 				// Create a SelVec that inverts the filtering
@@ -233,7 +250,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			result.Verify(input_size);
 		} else {
 			ConvertArrowTableToVector(python_object, result, state.GetContext(), count);
-			if (default_null_handling) {
+			if (default_null_handling && !exception_occurred) {
 				VerifyVectorizedNullHandling(result, count);
 			}
 		}
