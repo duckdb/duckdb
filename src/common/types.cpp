@@ -29,7 +29,6 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/string_util.hpp"
 #include <cmath>
 
 namespace duckdb {
