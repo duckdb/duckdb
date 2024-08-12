@@ -28,6 +28,8 @@ enum class MetricsType : uint8_t {
 	EXTRA_INFO,
 	CUMULATIVE_CARDINALITY,
 	OPERATOR_CARDINALITY,
+	CUMULATIVE_ROWS_SCANNED,
+	OPERATOR_ROWS_SCANNED,
 	OPERATOR_TIMING
 };
 
@@ -61,6 +63,7 @@ public:
 	// get the metrics set
 	const profiler_settings_t &GetSettings();
 	static profiler_settings_t DefaultSettings();
+	static profiler_settings_t DefaultOperatorSettings();
 
 public:
 	// reset the metrics to default
