@@ -1,14 +1,16 @@
 # name: benchmark/micro/json/RealNest/10_select_text.benchmark
 # description: Creates a list of unnested texts, counts texts string's length and returns a number of unique values
-# group: [RealNest]
+# group: [real_nest]
 
 name list_operations_on_strings
 group real_nest
 
 require json
 
-load
-CREATE TABLE cord AS SELECT * FROM read_json('duckdb_benchmark_data/cord-19-document_parses/data.jsonl');
+require httpfs
+
+load benchmark/micro/json/RealNest/load.sql
 
 run
-select list_unique(list_transform(lt, s -> length(s))) from (select list(text) as lt from (select bm.text from (select unnest(back_matter) as bm from cord)));
+select list_unique(list_transform(lt, s -> length(s))) 
+from (select list(text) as lt from (select bm.text from (select unnest(back_matter) as bm from cord)));
