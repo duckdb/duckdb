@@ -393,6 +393,8 @@ ScalarFunctionSet HexFun::GetFunctions() {
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
+	    ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
+	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction<int64_t, HexIntegralOperator>));
