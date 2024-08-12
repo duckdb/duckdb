@@ -46,7 +46,6 @@ string_t IntToVarInt(Vector &result, T int_value) {
 	return blob;
 }
 
-
 template <>
 string_t HugeintCastToVarInt::Operation(uhugeint_t int_value, Vector &result) {
 	uint32_t data_byte_size;
@@ -95,15 +94,17 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 	if (is_negative) {
 		// We must check if it's -170141183460469231731687303715884105728, since it's not possible to negate it
 		// without overflowing
-		if (int_value == NumericLimits<hugeint_t>::Minimum()){
-			uhugeint_t u_int_value{0x8000000000000000,0};
-			auto cast_value =  Operation<uhugeint_t>(u_int_value, result);
+		if (int_value == NumericLimits<hugeint_t>::Minimum()) {
+			uhugeint_t u_int_value {0x8000000000000000, 0};
+			auto cast_value = Operation<uhugeint_t>(u_int_value, result);
 			// We have to do all the bit flipping.
 			auto writable_value_ptr = cast_value.GetDataWriteable();
-			Varint::SetHeader(writable_value_ptr, cast_value.GetSize()-Varint::VARINT_HEADER_SIZE, is_negative);
+			Varint::SetHeader(writable_value_ptr, cast_value.GetSize() - Varint::VARINT_HEADER_SIZE, is_negative);
 			for (idx_t i = Varint::VARINT_HEADER_SIZE; i < cast_value.GetSize(); i++) {
-				writable_value_ptr[i] = ~writable_value_ptr[i];
+				writable_value_ptr[i] = static_cast<char>(~writable_value_ptr[i]);
 			}
+			cast_value.Finalize();
+			return cast_value;
 		}
 		int_value = -int_value;
 	}
