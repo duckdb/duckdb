@@ -1,0 +1,36 @@
+# name: test/sql/catalog/function/test_macro_issue_13104.test
+# description: Test Issue 13104 - Macro default variable that is a boolean type fails
+# group: [function]
+
+statement ok
+create or replace macro my_macro(a:=true) as a;
+
+query I
+select my_macro()
+----
+true
+
+statement ok
+create or replace macro my_macro(a:=false) as a;
+
+query I
+select my_macro()
+----
+false
+
+# bonus: we can also use struct/list as default parameters now
+statement ok
+create or replace macro my_macro(a:={duck:42}) as a;
+
+query I
+select my_macro()
+----
+{'duck': 42}
+
+statement ok
+create or replace macro my_macro(a:=[42]) as a;
+
+query I
+select my_macro()
+----
+[42]

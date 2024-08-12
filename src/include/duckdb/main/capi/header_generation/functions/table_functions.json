@@ -1,0 +1,252 @@
+{
+    "group": "table_functions",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_create_table_function",
+            "return_type": "duckdb_table_function",
+            "params": [],
+            "comment": {
+                "description": "Creates a new empty table function.\n\nThe return value should be destroyed with `duckdb_destroy_table_function`.\n\n",
+                "return_value": "The table function object."
+            }
+        },
+        {
+            "name": "duckdb_destroy_table_function",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function *",
+                    "name": "table_function"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the given table function object.\n\n",
+                "param_comments": {
+                    "table_function": "The table function to destroy"
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_set_name",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Sets the name of the given table function.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "name": "The name of the table function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_add_parameter",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Adds a parameter to the table function.\n\n",
+                "param_comments": {
+                    "table_function": "The table function.",
+                    "type": "The parameter type. Cannot contain INVALID."
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_add_named_parameter",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                },
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Adds a named parameter to the table function.\n\n",
+                "param_comments": {
+                    "table_function": "The table function.",
+                    "name": "The parameter name.",
+                    "type": "The parameter type. Cannot contain INVALID."
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_set_extra_info",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "void *",
+                    "name": "extra_info"
+                },
+                {
+                    "type": "duckdb_delete_callback_t",
+                    "name": "destroy"
+                }
+            ],
+            "comment": {
+                "description": "Assigns extra information to the table function that can be fetched during binding, etc.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "extra_info": "The extra information",
+                    "destroy": "The callback that will be called to destroy the bind data (if any)"
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_set_bind",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "duckdb_table_function_bind_t",
+                    "name": "bind"
+                }
+            ],
+            "comment": {
+                "description": "Sets the bind function of the table function.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "bind": "The bind function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_set_init",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "duckdb_table_function_init_t",
+                    "name": "init"
+                }
+            ],
+            "comment": {
+                "description": "Sets the init function of the table function.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "init": "The init function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_set_local_init",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "duckdb_table_function_init_t",
+                    "name": "init"
+                }
+            ],
+            "comment": {
+                "description": "Sets the thread-local init function of the table function.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "init": "The init function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_set_function",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "duckdb_table_function_t",
+                    "name": "function"
+                }
+            ],
+            "comment": {
+                "description": "Sets the main function of the table function.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "function": "The function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_supports_projection_pushdown",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "bool",
+                    "name": "pushdown"
+                }
+            ],
+            "comment": {
+                "description": "Sets whether or not the given table function supports projection pushdown.\n\nIf this is set to true, the system will provide a list of all required columns in the `init` stage through\nthe `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.\nIf this is set to false (the default), the system will expect all columns to be projected.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "pushdown": "True if the table function supports projection pushdown, false otherwise."
+                }
+            }
+        },
+        {
+            "name": "duckdb_register_table_function",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_table_function",
+                    "name": "function"
+                }
+            ],
+            "comment": {
+                "description": "Register the table function object within the given connection.\n\nThe function requires at least a name, a bind function, an init function and a main function.\n\nIf the function is incomplete or a function with this name already exists DuckDBError is returned.\n\n",
+                "param_comments": {
+                    "con": "The connection to register it in.",
+                    "function": "The function pointer"
+                },
+                "return_value": "Whether or not the registration was successful."
+            }
+        }
+    ]
+}

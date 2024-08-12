@@ -10,8 +10,9 @@ CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
 # Linesize exceeds maximum_line_size
 statement error
-insert into test select * from read_csv('test/sql/copy/csv/data/test/test_long_line.csv', columns={'a': 'INTEGER',  'b': 'VARCHAR', 'c': 'INTEGER'}, maximum_line_size=0);
+insert into test select * from read_csv('data/csv/test/test_long_line.csv', columns={'a': 'INTEGER',  'b': 'VARCHAR', 'c': 'INTEGER'}, maximum_line_size=0);
 ----
+Maximum line size of 0 bytes exceeded. Actual Size:10006 bytes.
 
 # Single line too long
 # "a".repeat(2 * 1024 * 1024 + 10);

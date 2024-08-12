@@ -31,6 +31,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"->>", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"<<=", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {">>=", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"add_numbers_together", "demo_capi", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"add_parquet_key", "parquet", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"array_to_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"broadcast", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},

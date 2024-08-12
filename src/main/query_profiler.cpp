@@ -136,8 +136,9 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		Finalize(*child);
 		if (op_node.type == PhysicalOperatorType::UNION &&
 		    op_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-			op_node.GetProfilingInfo().metrics.operator_cardinality +=
-			    child->GetProfilingInfo().metrics.operator_cardinality;
+			op_node.GetProfilingInfo().AddToMetric(
+			    MetricsType::OPERATOR_CARDINALITY,
+			    child->GetProfilingInfo().metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>());
 		}
 	}
 }
@@ -146,14 +147,14 @@ void QueryProfiler::StartExplainAnalyze() {
 	this->is_explain_analyze = true;
 }
 
-static void GetTotalCPUTime(ProfilingNode &node) {
-	node.GetProfilingInfo().metrics.cpu_time = node.GetProfilingInfo().metrics.operator_timing;
-	if (node.GetChildCount() > 0) {
-		for (idx_t i = 0; i < node.GetChildCount(); i++) {
-			auto child = node.GetChild(i);
-			GetTotalCPUTime(*child);
-			node.GetProfilingInfo().metrics.cpu_time += child->GetProfilingInfo().metrics.cpu_time;
-		}
+template <class METRIC_TYPE>
+static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
+	node.GetProfilingInfo().metrics[cumulative_metric] = node.GetProfilingInfo().metrics[child_metric];
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		auto child = node.GetChild(i);
+		GetCumulativeMetric<METRIC_TYPE>(*child, cumulative_metric, child_metric);
+		node.GetProfilingInfo().AddToMetric(
+		    cumulative_metric, child->GetProfilingInfo().metrics[cumulative_metric].GetValue<METRIC_TYPE>());
 	}
 }
 
@@ -177,10 +178,14 @@ void QueryProfiler::EndQuery() {
 			query_info.query = query;
 			query_info.GetProfilingInfo() = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-				query_info.GetProfilingInfo().metrics.operator_timing = main_query.Elapsed();
+				query_info.GetProfilingInfo().metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();
 			}
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::CPU_TIME)) {
-				GetTotalCPUTime(*root);
+				GetCumulativeMetric<double>(*root, MetricsType::CPU_TIME, MetricsType::OPERATOR_TIMING);
+			}
+			if (query_info.GetProfilingInfo().Enabled(MetricsType::CUMULATIVE_CARDINALITY)) {
+				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_CARDINALITY,
+				                           MetricsType::OPERATOR_CARDINALITY);
 			}
 		}
 
@@ -263,6 +268,19 @@ OperatorProfiler::OperatorProfiler(ClientContext &context) {
 	settings = ClientConfig::GetConfig(context).profiler_settings;
 }
 
+bool OperatorProfiler::SettingIsEnabled(MetricsType metric) const {
+	if (settings.find(metric) != settings.end()) {
+		return true;
+	}
+	if (metric == MetricsType::OPERATOR_TIMING && SettingIsEnabled(MetricsType::CPU_TIME)) {
+		return true;
+	}
+	if (metric == MetricsType::OPERATOR_CARDINALITY && SettingIsEnabled(MetricsType::CUMULATIVE_CARDINALITY)) {
+		return true;
+	}
+	return false;
+}
+
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
 	if (!enabled) {
 		return;
@@ -275,7 +293,7 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	// start timing for current element
-	if (SettingEnabled(MetricsType::OPERATOR_TIMING)) {
+	if (SettingIsEnabled(MetricsType::OPERATOR_TIMING)) {
 		op.Start();
 	}
 }
@@ -289,8 +307,8 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
 	}
 
-	bool timing_enabled = SettingEnabled(MetricsType::OPERATOR_TIMING);
-	bool cardinality_enabled = SettingEnabled(MetricsType::OPERATOR_CARDINALITY);
+	bool timing_enabled = SettingIsEnabled(MetricsType::OPERATOR_TIMING);
+	bool cardinality_enabled = SettingIsEnabled(MetricsType::OPERATOR_CARDINALITY);
 	if (timing_enabled || cardinality_enabled) {
 		// get the operator info for the current element
 		auto &curr_operator_info = GetOperatorInfo(*active_operator);
@@ -339,11 +357,11 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		D_ASSERT(entry != tree_map.end());
 		auto &tree_node = entry->second.get();
 
-		if (profiler.SettingEnabled(MetricsType::OPERATOR_TIMING)) {
-			tree_node.GetProfilingInfo().metrics.operator_timing += node.second.time;
+		if (tree_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
+			tree_node.GetProfilingInfo().AddToMetric<double>(MetricsType::OPERATOR_TIMING, node.second.time);
 		}
-		if (profiler.SettingEnabled(MetricsType::OPERATOR_CARDINALITY)) {
-			tree_node.GetProfilingInfo().metrics.operator_cardinality += node.second.elements;
+		if (tree_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
+			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements);
 		}
 	}
 	profiler.timings.clear();
@@ -604,7 +622,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	node->depth = depth;
 	node->GetProfilingInfo() = ProfilingInfo(settings);
 	if (node->GetProfilingInfo().Enabled(MetricsType::EXTRA_INFO)) {
-		node->GetProfilingInfo().metrics.extra_info = root.ParamsToString();
+		node->GetProfilingInfo().extra_info = root.ParamsToString();
 	}
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<ProfilingNode>(*node)));
 	auto children = root.GetChildren();

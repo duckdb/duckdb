@@ -34,7 +34,6 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	buffer_size = buffer_handle->actual_size;
 	last_position = {buffer_handle->buffer_idx, buffer_position, buffer_size};
 	requested_size = buffer_handle->requested_size;
-
 	// Current Result information
 	current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle->actual_size};
 	current_line_position.end = current_line_position.begin;
@@ -58,6 +57,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		bool icu_loaded = csv_file_scan->buffer_manager->context.db->ExtensionIsLoaded("icu");
 		for (idx_t i = 0; i < csv_file_scan->file_types.size(); i++) {
 			auto &type = csv_file_scan->file_types[i];
+			if (type.IsJSONType()) {
+				type = LogicalType::VARCHAR;
+			}
 			if (StringValueScanner::CanDirectlyCast(type, icu_loaded)) {
 				parse_types[i] = ParseTypeInfo(type, true);
 				logical_types.emplace_back(type);
@@ -538,9 +540,7 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 
 bool LineError::HandleErrors(StringValueResult &result) {
 	if (ignore_errors && is_error_in_line && !result.figure_out_new_line) {
-		result.cur_col_id = 0;
-		result.chunk_col_id = 0;
-		result.number_of_rows--;
+		result.RemoveLastLine();
 		Reset();
 		return true;
 	}
@@ -764,7 +764,7 @@ bool StringValueResult::AddRowInternal() {
 				}
 			}
 			// If we are here we ignore_errors, so we delete this line
-			number_of_rows--;
+			RemoveLastLine();
 		}
 	}
 	line_positions_per_row[number_of_rows] = current_line_position;
@@ -924,7 +924,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		auto &result_vector = insert_chunk.data[result_idx];
 		auto &type = result_vector.GetType();
 		auto &parse_type = parse_vector.GetType();
-		if (type == LogicalType::VARCHAR || (type != LogicalType::VARCHAR && parse_type != LogicalType::VARCHAR)) {
+		if (!type.IsJSONType() &&
+		    (type == LogicalType::VARCHAR || (type != LogicalType::VARCHAR && parse_type != LogicalType::VARCHAR))) {
 			// reinterpret rather than reference
 			result_vector.Reinterpret(parse_vector);
 		} else {
@@ -962,7 +963,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					    first_nl, result.buffer_handles, result.PrintErrorLine());
 					std::ostringstream error;
 					error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
-					      << LogicalTypeIdToString(type.id()) << "\'";
+					      << type.ToString() << "\'";
 					string error_msg = error.str();
 					auto csv_error = CSVError::CastError(
 					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
@@ -1351,6 +1352,17 @@ void StringValueResult::SkipBOM() {
 	}
 }
 
+void StringValueResult::RemoveLastLine() {
+	// potentially de-nullify values
+	for (idx_t i = 0; i < chunk_col_id; i++) {
+		validity_mask[i]->SetValid(number_of_rows);
+	}
+	// reset column trackers
+	cur_col_id = 0;
+	chunk_col_id = 0;
+	// decrement row counter
+	number_of_rows--;
+}
 bool StringValueResult::PrintErrorLine() {
 	// To print a lint, result size must be different than one (i.e., this is a SetStart() trying to figure out new
 	// lines) And must either not be ignoring errors. OR must be storing them in a rejects table.

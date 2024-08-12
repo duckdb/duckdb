@@ -22,18 +22,18 @@ No files found that match the pattern
 query III
 FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.gz');
 ----
-a	bar	1
-a	foo	1
-a	foo	2
-b	bar	1
+1	a	bar
+1	a	foo
+2	a	foo
+1	b	bar
 
 query III
 FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.*');
 ----
-a	bar	1
-a	foo	1
-a	foo	2
-b	bar	1
+1	a	bar
+1	a	foo
+2	a	foo
+1	b	bar
 
 require parquet
 
@@ -49,15 +49,15 @@ No files found that match the pattern
 query III
 FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.zst');
 ----
-a	bar	1
-a	foo	1
-a	foo	2
-b	bar	1
+1	a	bar
+1	a	foo
+2	a	foo
+1	b	bar
 
 query III
 FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.*');
 ----
-a	bar	1
-a	foo	1
-a	foo	2
-b	bar	1
+1	a	bar
+1	a	foo
+2	a	foo
+1	b	bar

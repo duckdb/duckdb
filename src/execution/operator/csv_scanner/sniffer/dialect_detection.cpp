@@ -1,8 +1,11 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
+
+constexpr idx_t CSVReaderOptions::sniff_size;
 
 bool IsQuoteDefault(char quote) {
 	if (quote == '\"' || quote == '\'' || quote == '\0') {
@@ -29,6 +32,50 @@ vector<vector<char>> DialectCandidates::GetDefaultEscape() {
 
 vector<char> DialectCandidates::GetDefaultComment() {
 	return {'#', '\0'};
+}
+
+string DialectCandidates::Print() {
+	std::ostringstream search_space;
+
+	search_space << "Delimiter Candidates: ";
+	for (idx_t i = 0; i < delim_candidates.size(); i++) {
+		search_space << "\'" << delim_candidates[i] << "\'";
+		if (i < delim_candidates.size() - 1) {
+			search_space << ", ";
+		}
+	}
+	search_space << "\n";
+	search_space << "Quote/Escape Candidates: ";
+	for (uint8_t i = 0; i < static_cast<uint8_t>(quoterule_candidates.size()); i++) {
+		auto quote_candidate = quote_candidates_map[i];
+		auto escape_candidate = escape_candidates_map[i];
+		for (idx_t j = 0; j < quote_candidate.size(); j++) {
+			for (idx_t k = 0; k < escape_candidate.size(); k++) {
+				search_space << "[\'" << quote_candidate[j] << "\',\'" << escape_candidate[k] << "\']";
+				if (k < escape_candidate.size() - 1) {
+					search_space << ",";
+				}
+			}
+			if (j < quote_candidate.size() - 1) {
+				search_space << ",";
+			}
+		}
+		if (i < quoterule_candidates.size() - 1) {
+			search_space << ",";
+		}
+	}
+	search_space << "\n";
+
+	search_space << "Comment Candidates: ";
+	for (idx_t i = 0; i < comment_candidates.size(); i++) {
+		search_space << "\'" << comment_candidates[i] << "\'";
+		if (i < comment_candidates.size() - 1) {
+			search_space << ", ";
+		}
+	}
+	search_space << "\n";
+
+	return search_space.str();
 }
 
 DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
@@ -119,11 +166,12 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 							}
 							column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
 							    buffer_manager, std::move(sniffing_state_machine), detection_error_handler,
-							    STANDARD_VECTOR_SIZE, first_iterator));
+							    CSVReaderOptions::sniff_size, first_iterator));
 							continue;
 						}
-						column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
-						    buffer_manager, std::move(sniffing_state_machine), detection_error_handler));
+						column_count_scanners.emplace_back(
+						    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine),
+						                                  detection_error_handler, CSVReaderOptions::sniff_size));
 					}
 				}
 			}
@@ -470,7 +518,7 @@ void CSVSniffer::DetectDialect() {
 
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
-		auto error = CSVError::SniffingError(buffer_manager->GetFilePath());
+		auto error = CSVError::DialectSniffingError(options, dialect_candidates.Print());
 		error_handler->Error(error);
 	}
 }

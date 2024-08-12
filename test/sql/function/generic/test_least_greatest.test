@@ -12,6 +12,11 @@ SELECT LEAST(1)
 1
 
 query I
+SELECT LEAST('hello world')
+----
+hello world
+
+query I
 SELECT LEAST(1, 3)
 ----
 1

@@ -236,6 +236,23 @@ void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t o
 	block = std::move(block_p);
 }
 
+DataPointer ColumnSegment::GetDataPointer() {
+	if (segment_type != ColumnSegmentType::PERSISTENT) {
+		throw InternalException("Attempting to call ColumnSegment::GetDataPointer on a transient segment");
+	}
+	// set up the data pointer directly using the data from the persistent segment
+	DataPointer pointer(stats.statistics.Copy());
+	pointer.block_pointer.block_id = GetBlockId();
+	pointer.block_pointer.offset = NumericCast<uint32_t>(GetBlockOffset());
+	pointer.row_start = start;
+	pointer.tuple_count = count;
+	pointer.compression_type = function.get().type;
+	if (function.get().serialize_state) {
+		pointer.segment_state = function.get().serialize_state(*this);
+	}
+	return pointer;
+}
+
 //===--------------------------------------------------------------------===//
 // Drop Segment
 //===--------------------------------------------------------------------===//

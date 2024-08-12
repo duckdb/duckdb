@@ -63,6 +63,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	static inline timestamp_t WidthConvertibleToMicrosCommon(int64_t bucket_width_micros, const timestamp_t ts,
 	                                                         const timestamp_t origin, icu::Calendar *calendar) {
+		if (!bucket_width_micros) {
+			throw OutOfRangeException("Can't bucket using zero microseconds");
+		}
 		int64_t ts_micros = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(
 		    Timestamp::GetEpochMicroSeconds(ts), Timestamp::GetEpochMicroSeconds(origin));
 		int64_t result_micros = (ts_micros / bucket_width_micros) * bucket_width_micros;
@@ -76,6 +79,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	static inline timestamp_t WidthConvertibleToDaysCommon(int32_t bucket_width_days, const timestamp_t ts,
 	                                                       const timestamp_t origin, icu::Calendar *calendar) {
+		if (!bucket_width_days) {
+			throw OutOfRangeException("Can't bucket using zero days");
+		}
 		const auto sub_days = SubtractFactory(DatePartSpecifier::DAY);
 
 		int64_t ts_days = sub_days(calendar, origin, ts);
@@ -95,6 +101,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	static inline timestamp_t WidthConvertibleToMonthsCommon(int32_t bucket_width_months, const timestamp_t ts,
 	                                                         const timestamp_t origin, icu::Calendar *calendar) {
+		if (!bucket_width_months) {
+			throw OutOfRangeException("Can't bucket using zero months");
+		}
 		const auto trunc_months = TruncationFactory(DatePartSpecifier::MONTH);
 		const auto sub_months = SubtractFactory(DatePartSpecifier::MONTH);
 
@@ -106,8 +115,9 @@ struct ICUTimeBucket : public ICUDateFunc {
 		trunc_months(calendar, tmp_micros);
 		timestamp_t truncated_origin = GetTimeUnsafe(calendar, tmp_micros);
 
-		int64_t ts_months = sub_months(calendar, truncated_origin, truncated_ts);
-		int64_t result_months = (ts_months / bucket_width_months) * bucket_width_months;
+		int32_t ts_months =
+		    NumericCast<int64_t, int32_t>(sub_months(calendar, truncated_origin, truncated_ts)); // NOLINT
+		auto result_months = (ts_months / bucket_width_months) * bucket_width_months;
 		if (result_months < NumericLimits<int32_t>::Minimum() || result_months > NumericLimits<int32_t>::Maximum()) {
 			throw OutOfRangeException("Timestamp out of range");
 		}
