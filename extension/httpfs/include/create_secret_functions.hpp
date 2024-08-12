@@ -46,14 +46,4 @@ protected:
 	                                                                         CreateSecretInput &input);
 };
 
-struct CreateHTTPSecretFunctions {
-public:
-	//! Register all CreateSecretFunctions
-	static void Register(DatabaseInstance &instance);
-
-protected:
-	//! Function for the "config" provider: creates secret from parameters passed by user
-	static unique_ptr<BaseSecret> CreateHTTPSecretFromConfig(ClientContext &context, CreateSecretInput &input);
-};
-
 } // namespace duckdb

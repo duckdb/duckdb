@@ -72,6 +72,28 @@ value-1
 statement ok
 DROP SECRET http1
 
+require-env HTTP_PROXY
+
+statement error
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+Could not establish connection
+
+statement ok
+CREATE SECRET http1 (
+    TYPE HTTP, 
+    PROVIDER env
+);
+
+# This works now, because it uses the secret
+query I
+FROM 's3://test-bucket/proxy-test/test.parquet'
+----
+value-1
+
+statement ok
+DROP SECRET http1
+
 require-env HTTP_PROXY_PRIVATE
 
 require-env HTTP_PROXY_PRIVATE_USERNAME

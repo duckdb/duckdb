@@ -210,40 +210,4 @@ CreateBearerTokenFunctions::CreateHuggingFaceSecretFromCredentialChain(ClientCon
 	auto token = TryReadTokenFile("~/.cache/huggingface/token", "", false);
 	return CreateSecretFunctionInternal(context, input, token);
 }
-
-void CreateHTTPSecretFunctions::Register(DatabaseInstance &instance) {
-	// Generic Bearer secret
-	SecretType secret_type;
-	secret_type.name = "http";
-	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
-	secret_type.default_provider = "config";
-	ExtensionUtil::RegisterSecretType(instance, secret_type);
-
-	CreateSecretFunction config_fun = {"http", "config", CreateHTTPSecretFromConfig};
-	config_fun.named_parameters["http_proxy"] = LogicalType::VARCHAR;
-	config_fun.named_parameters["http_proxy_password"] = LogicalType::VARCHAR;
-	config_fun.named_parameters["http_proxy_username"] = LogicalType::VARCHAR;
-
-	config_fun.named_parameters["extra_http_headers"] = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	config_fun.named_parameters["bearer_token"] = LogicalType::VARCHAR;
-
-	ExtensionUtil::RegisterFunction(instance, config_fun);
-}
-
-unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromConfig(ClientContext &context,
-                                                                             CreateSecretInput &input) {
-	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
-
-	secret->TrySetValue("http_proxy", input);
-	secret->TrySetValue("http_proxy_password", input);
-	secret->TrySetValue("http_proxy_username", input);
-
-	secret->TrySetValue("extra_http_headers", input);
-	secret->TrySetValue("bearer_token", input);
-
-	//! Set redact keys
-	secret->redact_keys = {"http_proxy_password"};
-
-	return std::move(secret);
-}
 } // namespace duckdb
