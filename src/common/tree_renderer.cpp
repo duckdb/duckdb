@@ -1,6 +1,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/json_tree_renderer.hpp"
+#include "duckdb/common/tree_renderer/graphviz_tree_renderer.hpp"
 
 #include <sstream>
 
@@ -13,6 +14,8 @@ unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ExplainFormat format) {
 		return make_uniq<TextTreeRenderer>();
 	case ExplainFormat::JSON:
 		return make_uniq<JSONTreeRenderer>();
+	case ExplainFormat::GRAPHVIZ:
+		return make_uniq<GRAPHVIZTreeRenderer>();
 	default:
 		throw NotImplementedException("ExplainFormat %s not implemented", EnumUtil::ToString(format));
 	}

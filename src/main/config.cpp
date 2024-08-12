@@ -62,6 +62,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(CatalogErrorMaxSchema),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_GLOBAL(DebugCheckpointAbort),
+    DUCKDB_GLOBAL(DebugSkipCheckpointOnCommit),
     DUCKDB_GLOBAL(StorageCompatibilityVersion),
     DUCKDB_LOCAL(DebugForceExternal),
     DUCKDB_LOCAL(DebugForceNoCrossProduct),

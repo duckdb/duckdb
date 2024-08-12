@@ -2063,6 +2063,8 @@ const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
 		return "TEXT";
 	case ExplainFormat::JSON:
 		return "JSON";
+	case ExplainFormat::GRAPHVIZ:
+		return "GRAPHVIZ";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2078,6 +2080,9 @@ ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "JSON")) {
 		return ExplainFormat::JSON;
+	}
+	if (StringUtil::Equals(value, "GRAPHVIZ")) {
+		return ExplainFormat::GRAPHVIZ;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4311,6 +4316,10 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "CUMULATIVE_CARDINALITY";
 	case MetricsType::OPERATOR_CARDINALITY:
 		return "OPERATOR_CARDINALITY";
+	case MetricsType::CUMULATIVE_ROWS_SCANNED:
+		return "CUMULATIVE_ROWS_SCANNED";
+	case MetricsType::OPERATOR_ROWS_SCANNED:
+		return "OPERATOR_ROWS_SCANNED";
 	case MetricsType::OPERATOR_TIMING:
 		return "OPERATOR_TIMING";
 	default:
@@ -4331,6 +4340,12 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "OPERATOR_CARDINALITY")) {
 		return MetricsType::OPERATOR_CARDINALITY;
+	}
+	if (StringUtil::Equals(value, "CUMULATIVE_ROWS_SCANNED")) {
+		return MetricsType::CUMULATIVE_ROWS_SCANNED;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_ROWS_SCANNED")) {
+		return MetricsType::OPERATOR_ROWS_SCANNED;
 	}
 	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
 		return MetricsType::OPERATOR_TIMING;
@@ -7836,6 +7851,8 @@ const char* EnumUtil::ToChars<WALType>(WALType value) {
 		return "DELETE_TUPLE";
 	case WALType::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case WALType::ROW_GROUP_DATA:
+		return "ROW_GROUP_DATA";
 	case WALType::WAL_VERSION:
 		return "WAL_VERSION";
 	case WALType::CHECKPOINT:
@@ -7917,6 +7934,9 @@ WALType EnumUtil::FromString<WALType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return WALType::UPDATE_TUPLE;
+	}
+	if (StringUtil::Equals(value, "ROW_GROUP_DATA")) {
+		return WALType::ROW_GROUP_DATA;
 	}
 	if (StringUtil::Equals(value, "WAL_VERSION")) {
 		return WALType::WAL_VERSION;

@@ -23,6 +23,16 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	    MetricsType::EXTRA_INFO,
 	    MetricsType::CUMULATIVE_CARDINALITY,
 	    MetricsType::OPERATOR_CARDINALITY,
+	    MetricsType::CUMULATIVE_ROWS_SCANNED,
+	    MetricsType::OPERATOR_ROWS_SCANNED,
+	    MetricsType::OPERATOR_TIMING,
+	};
+}
+
+profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
+	return {
+	    MetricsType::OPERATOR_CARDINALITY,
+	    MetricsType::OPERATOR_ROWS_SCANNED,
 	    MetricsType::OPERATOR_TIMING,
 	};
 }
@@ -49,7 +59,9 @@ void ProfilingInfo::ResetMetrics() {
 			break;
 		}
 		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY: {
+		case MetricsType::OPERATOR_CARDINALITY:
+		case MetricsType::CUMULATIVE_ROWS_SCANNED:
+		case MetricsType::OPERATOR_ROWS_SCANNED: {
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
 			break;
 		}
@@ -63,12 +75,18 @@ bool ProfilingInfo::Enabled(const MetricsType setting) const {
 	if (settings.find(setting) != settings.end()) {
 		return true;
 	}
-	if (setting == MetricsType::OPERATOR_TIMING && Enabled(MetricsType::CPU_TIME)) {
-		return true;
+
+	switch (setting) {
+	case MetricsType::OPERATOR_TIMING:
+		return Enabled(MetricsType::CPU_TIME);
+	case MetricsType::OPERATOR_CARDINALITY:
+		return Enabled(MetricsType::CUMULATIVE_CARDINALITY);
+	case MetricsType::OPERATOR_ROWS_SCANNED:
+		return Enabled(MetricsType::CUMULATIVE_ROWS_SCANNED);
+	default:
+		break;
 	}
-	if (setting == MetricsType::OPERATOR_CARDINALITY && Enabled(MetricsType::CUMULATIVE_CARDINALITY)) {
-		return true;
-	}
+
 	return false;
 }
 
@@ -131,7 +149,9 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			break;
 		}
 		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY: {
+		case MetricsType::OPERATOR_CARDINALITY:
+		case MetricsType::CUMULATIVE_ROWS_SCANNED:
+		case MetricsType::OPERATOR_ROWS_SCANNED: {
 			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
 			break;
 		}

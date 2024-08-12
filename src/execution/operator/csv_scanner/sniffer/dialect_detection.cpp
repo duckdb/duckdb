@@ -34,6 +34,50 @@ vector<char> DialectCandidates::GetDefaultComment() {
 	return {'#', '\0'};
 }
 
+string DialectCandidates::Print() {
+	std::ostringstream search_space;
+
+	search_space << "Delimiter Candidates: ";
+	for (idx_t i = 0; i < delim_candidates.size(); i++) {
+		search_space << "\'" << delim_candidates[i] << "\'";
+		if (i < delim_candidates.size() - 1) {
+			search_space << ", ";
+		}
+	}
+	search_space << "\n";
+	search_space << "Quote/Escape Candidates: ";
+	for (uint8_t i = 0; i < static_cast<uint8_t>(quoterule_candidates.size()); i++) {
+		auto quote_candidate = quote_candidates_map[i];
+		auto escape_candidate = escape_candidates_map[i];
+		for (idx_t j = 0; j < quote_candidate.size(); j++) {
+			for (idx_t k = 0; k < escape_candidate.size(); k++) {
+				search_space << "[\'" << quote_candidate[j] << "\',\'" << escape_candidate[k] << "\']";
+				if (k < escape_candidate.size() - 1) {
+					search_space << ",";
+				}
+			}
+			if (j < quote_candidate.size() - 1) {
+				search_space << ",";
+			}
+		}
+		if (i < quoterule_candidates.size() - 1) {
+			search_space << ",";
+		}
+	}
+	search_space << "\n";
+
+	search_space << "Comment Candidates: ";
+	for (idx_t i = 0; i < comment_candidates.size(); i++) {
+		search_space << "\'" << comment_candidates[i] << "\'";
+		if (i < comment_candidates.size() - 1) {
+			search_space << ", ";
+		}
+	}
+	search_space << "\n";
+
+	return search_space.str();
+}
+
 DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 	// assert that quotes escapes and rules have equal size
 	auto default_quote = GetDefaultQuote();
@@ -474,7 +518,7 @@ void CSVSniffer::DetectDialect() {
 
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
-		auto error = CSVError::SniffingError(buffer_manager->GetFilePath());
+		auto error = CSVError::DialectSniffingError(options, dialect_candidates.Print());
 		error_handler->Error(error);
 	}
 }
