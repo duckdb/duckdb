@@ -3043,25 +3043,37 @@ func_expr_common_subexpr:
 				}
 		;
 
+list_comprehension_lhs:
+	'(' columnList ')'
+	{
+		PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $2, @2);
+		$$ = (PGNode *) n;
+	}
+	| ColId
+	{
+		PGNode *n = makeColumnRef($1, NIL, @1, yyscanner);
+		$$ = (PGNode *) n;
+	}
+
 list_comprehension:
-				'[' a_expr FOR ColId IN_P a_expr ']'
+				'[' a_expr FOR list_comprehension_lhs IN_P a_expr ']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
-					lambda->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda->lhs = $4;
 					lambda->rhs = $2;
 					lambda->location = @1;
 					PGFuncCall *n = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda), @1);
 					$$ = (PGNode *) n;
 				}
-				| '[' a_expr FOR ColId IN_P c_expr IF_P a_expr']'
+				| '[' a_expr FOR list_comprehension_lhs IN_P c_expr IF_P a_expr']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
-					lambda->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda->lhs = $4;
 					lambda->rhs = $2;
 					lambda->location = @1;
 
 					PGLambdaFunction *lambda_filter = makeNode(PGLambdaFunction);
-					lambda_filter->lhs = makeColumnRef($4, NIL, @4, yyscanner);
+					lambda_filter->lhs = $4;
 					lambda_filter->rhs = $8;
 					lambda_filter->location = @8;
 					PGFuncCall *filter = makeFuncCall(SystemFuncName("list_filter"), list_make2($6, lambda_filter), @1);
