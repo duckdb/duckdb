@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,7 @@ public:
 	idx_t table_index;
 	idx_t column_count;
 	string ctename;
+	vector<CorrelatedColumnInfo> correlated_columns;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

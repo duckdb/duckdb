@@ -374,6 +374,9 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 			auto &rec_cte = op.Cast<LogicalRecursiveCTE>();
 			binder.recursive_ctes[rec_cte.table_index] = &op;
+		} else if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			auto &mat_cte = op.Cast<LogicalMaterializedCTE>();
+			binder.recursive_ctes[mat_cte.table_index] = &op;
 		}
 		root = std::move(op.children[0]);
 		D_ASSERT(root);

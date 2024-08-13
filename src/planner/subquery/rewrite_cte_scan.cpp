@@ -31,6 +31,7 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 		}
 	}
 	VisitOperatorChildren(op);
+	VisitOperatorExpressions(op);
 }
 
 } // namespace duckdb

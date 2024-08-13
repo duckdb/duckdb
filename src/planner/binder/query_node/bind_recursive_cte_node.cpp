@@ -20,6 +20,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	result->union_all = statement.union_all;
 	result->setop_index = GenerateTableIndex();
 
+	bound_cte_nodes[result->setop_index] = result.get();
+
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->left = result->left_binder->BindNode(*statement.left);
 

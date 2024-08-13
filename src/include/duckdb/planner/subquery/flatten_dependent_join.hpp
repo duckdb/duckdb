@@ -41,6 +41,7 @@ struct FlattenDependentJoins {
 	column_binding_map_t<idx_t> replacement_map;
 	const vector<CorrelatedColumnInfo> &correlated_columns;
 	vector<LogicalType> delim_types;
+	vector<idx_t> cte_idx;
 
 	bool perform_delim;
 	bool any_join;

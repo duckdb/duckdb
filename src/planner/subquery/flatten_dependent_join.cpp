@@ -11,6 +11,7 @@
 #include "duckdb/planner/subquery/has_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_cte_scan.hpp"
+#include "duckdb/planner/subquery/rewrite_subquery.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 
@@ -131,10 +132,22 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 			auto rec_cte = binder.recursive_ctes.find(op.cte_index);
 			if (rec_cte != binder.recursive_ctes.end()) {
-				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
-				auto &rec_cte_op = rec_cte->second->Cast<LogicalRecursiveCTE>();
-				RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns);
-				cte_rewriter.VisitOperator(*plan);
+				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
+				         rec_cte->second->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
+				if (rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+					auto &rec_cte_op = rec_cte->second->Cast<LogicalRecursiveCTE>();
+					if (op.correlated_columns == 0) {
+						RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns);
+						cte_rewriter.VisitOperator(*plan);
+					}
+				} else if (rec_cte->second->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+					auto &rec_cte_op = rec_cte->second->Cast<LogicalMaterializedCTE>();
+
+					if (op.correlated_columns == 0) {
+						RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns);
+						cte_rewriter.VisitOperator(*plan);
+					}
+				}
 			}
 		}
 
@@ -165,6 +178,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
+		for (auto idx : cte_idx) {
+			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+			subquery_rewriter.VisitOperator(*plan);
+		}
+
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -189,6 +207,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			                                                  parent_propagate_null_values, lateral_depth);
 		}
 
+		for (auto idx : cte_idx) {
+			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+			subquery_rewriter.VisitOperator(*plan);
+		}
+
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -204,6 +227,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		base_binding.table_index = proj.table_index;
 		this->delim_offset = base_binding.column_index = plan->expressions.size() - correlated_columns.size();
 		this->data_offset = 0;
+
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -367,6 +391,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
+		for (auto idx : cte_idx) {
+			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+			subquery_rewriter.VisitOperator(*plan);
+		}
+
 		// Normal rewriter like in other joins
 		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -426,6 +455,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// push the child into the LHS
 			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
 			                                                  parent_propagate_null_values, lateral_depth);
+
+			for (auto idx : cte_idx) {
+				RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+				subquery_rewriter.VisitOperator(*plan);
+			}
+
 			// rewrite expressions in the join conditions
 			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 			rewriter.VisitOperator(*plan);
@@ -474,6 +509,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				logical_any_join.condition = std::move(conjunction);
 			}
 		}
+
+		for (auto idx : cte_idx) {
+			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+			subquery_rewriter.VisitOperator(*plan);
+		}
+
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(right_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
@@ -701,13 +742,18 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			base_binding.table_index = setop.table_index;
 			base_binding.column_index = setop.column_count;
 			table_index = setop.table_index;
+			cte_idx.emplace_back(setop.table_index);
 			setop.correlated_columns = correlated_columns;
 		} else if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 			auto &setop = plan->Cast<LogicalMaterializedCTE>();
 			base_binding.table_index = setop.table_index;
 			base_binding.column_index = setop.column_count;
 			table_index = setop.table_index;
+			cte_idx.emplace_back(setop.table_index);
+			setop.correlated_columns = correlated_columns;
 		}
+
+		binder.recursive_ctes[table_index] = plan.get();
 
 		RewriteCTEScan cte_rewriter(table_index, correlated_columns);
 		cte_rewriter.VisitOperator(*plan->children[1]);
@@ -734,6 +780,14 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			setop.column_count += correlated_columns.size();
 		}
 
+		if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			// we have to refer to the recursive CTE index now
+			auto &setop = plan->Cast<LogicalMaterializedCTE>();
+			auto bindings = setop.children[1]->GetColumnBindings();
+			setop.column_count += correlated_columns.size();
+		}
+
+		cte_idx.pop_back();
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {

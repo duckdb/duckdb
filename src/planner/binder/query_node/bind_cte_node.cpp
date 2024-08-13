@@ -26,6 +26,8 @@ unique_ptr<BoundCTENode> Binder::BindCTE(CTENode &statement) {
 	result->ctename = statement.ctename;
 	result->setop_index = GenerateTableIndex();
 
+	bound_cte_nodes[result->setop_index] = result.get();
+
 	result->query_binder = Binder::CreateBinder(context, this);
 	result->query = result->query_binder->BindNode(*statement.query);
 
