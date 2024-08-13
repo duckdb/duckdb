@@ -32,8 +32,8 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 #ifndef DEBUG
 	// In debug mode, we always apply compressed materialization to joins regardless of cardinalities,
 	// so that it is well-tested. In release mode, we require build cardinality > JOIN_BUILD_CARDINALITY_THRESHOLD,
-	// and we require the join cardinality divided by the build cardinality < JOIN_CARDINALITY_RATIO_THRESHOLD,
-	// so that we don't end up doing many more decompressions than compressions
+	// and we require join_cardinality / build_cardinality < JOIN_CARDINALITY_RATIO_THRESHOLD,
+	// so that we don't end up doing many more decompressions than compressions and hurting performance
 	const auto build_cardinality = right_child.has_estimated_cardinality ? right_child.estimated_cardinality
 	                                                                     : right_child.EstimateCardinality(context);
 	const auto join_cardinality =

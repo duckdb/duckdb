@@ -75,6 +75,7 @@ typedef column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map_t;
 //! but only if the data enters a materializing operator
 class CompressedMaterialization {
 private:
+	//! Somewhat defensive constants that try to limit when compressed materialization is triggered for joins
 	static constexpr idx_t JOIN_BUILD_CARDINALITY_THRESHOLD = 1048576;
 	static constexpr double JOIN_CARDINALITY_RATIO_THRESHOLD = 8;
 
