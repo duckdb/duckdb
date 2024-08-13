@@ -8,13 +8,14 @@
 
 #pragma once
 
+#include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
-class LogicalRecursiveCTE : public LogicalOperator {
-	LogicalRecursiveCTE() : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+class LogicalRecursiveCTE : public LogicalCTE {
+	LogicalRecursiveCTE() : LogicalCTE(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 	}
 
 public:
@@ -23,17 +24,12 @@ public:
 public:
 	LogicalRecursiveCTE(string ctename_p, idx_t table_index, idx_t column_count, bool union_all,
 	                    unique_ptr<LogicalOperator> top, unique_ptr<LogicalOperator> bottom)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), union_all(union_all),
-	      ctename(std::move(ctename_p)), table_index(table_index), column_count(column_count) {
-		children.push_back(std::move(top));
-		children.push_back(std::move(bottom));
+	    : LogicalCTE(std::move(ctename_p), table_index, column_count, std::move(top), std::move(bottom),
+	                 LogicalOperatorType::LOGICAL_RECURSIVE_CTE),
+	      union_all(union_all) {
 	}
 
 	bool union_all;
-	string ctename;
-	idx_t table_index;
-	idx_t column_count;
-	vector<CorrelatedColumnInfo> correlated_columns;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
