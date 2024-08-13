@@ -1,0 +1,28 @@
+# name: benchmark/micro/json/RealNest/4_list_filters.benchmark
+# description: Multiple list_filters
+# group: [RealNest]
+
+name list_filters
+group real_nest
+
+require json
+
+require httpfs
+
+load benchmark/realnest/load.sql
+
+run
+SELECT
+    count(*) as total_rows,
+    sum(len(list_filter(Tau, x -> x.charge < 0))) as negatives,
+    sum(len(list_filter(Tau, x -> x.charge > 0))) as positives,
+    sum(len(list_filter(Tau, x -> x.charge = 0))) as neutral,
+    sum(len(list_filter(Tau, x -> (x.pt % 2) - 1 > 0))) as odds,
+    sum(len(list_filter(Tau, x -> x.idIsoVLoose != x.idIsoLoose))) as idIsoMatch,
+    sum(len(list_filter(Muon, x -> x.tightId == true))) as muon,
+    sum(len(list_filter(Electron, x -> x.mass > x.eta + x.phi))) as elentron,
+    sum(len(list_filter(Photon, x -> x.mass > 0))) as photon,
+    sum(len(list_filter(Jet, x -> x.puId != false))) as jet,
+
+FROM Run2012B_SingleMu
+;

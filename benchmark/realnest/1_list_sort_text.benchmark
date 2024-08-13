@@ -1,0 +1,15 @@
+# name: benchmark/micro/json/RealNest/1_list_sort_text.benchmark
+# description: list_sort text entries
+# group: [RealNest]
+
+name list_sort_text
+group real_nest
+
+require json
+
+require httpfs
+
+load benchmark/realnest/load.sql
+
+run
+SELECT list_sort(list_transform(body_text, x -> x.text)) FROM cord;

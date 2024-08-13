@@ -9,8 +9,8 @@ require json
 
 require httpfs
 
-load benchmark/micro/json/RealNest/load.sql
+load benchmark/realnest/load.sql
 
 run
-select list_unique(list_transform(lt, s -> length(s))) 
-from (select list(text) as lt from (select bm.text from (select unnest(back_matter) as bm from cord)));
+SELECT list_unique(list_transform(lt, s -> length(s))) 
+FROM (SELECT list(text) AS lt FROM (SELECT bm.text FROM (SELECT UNNEST(back_matter) AS bm FROM cord)));

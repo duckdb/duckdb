@@ -1,0 +1,19 @@
+# name: benchmark/micro/json/RealNest/0_aggregate-on-one-deep-struct-members.benchmark
+# description: Aggregate functions on the struct, group by one parameter
+# group: [RealNest]
+
+name aggregate-on-one-deep-struct-members
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/load.sql
+
+run
+SELECT PV.npvs, sum(PV.x) AS sum_x, sum(PV.y) AS sum_y, sum(PV.z) AS sum_z, avg(MET.pt) as avg_pt, min(MET.phi) as min_phi, max(MET.sumet) as max_sumet
+      FROM Run2012B_SingleMu
+      GROUP BY PV.npvs HAVING sum_x > 1;

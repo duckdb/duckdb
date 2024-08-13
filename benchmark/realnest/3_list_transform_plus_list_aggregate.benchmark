@@ -1,0 +1,24 @@
+# name: benchmark/micro/json/RealNest/3_list_transform_plus_list_aggregate.benchmark
+# description: select average from transformed list and group by, having
+# group: [RealNest]
+
+name list_transform plus list_aggregate
+group real_nest
+
+require json
+
+require httpfs
+
+load benchmark/realnest/load.sql
+
+run
+SELECT PV.npvs as npvs, 
+  avg(list_aggregate(list_transform(Jet, x -> x.pt), 'avg')) as avg_pt,
+  avg(list_aggregate(list_transform(Jet, x -> x.eta), 'avg')) as avg_eta,
+  avg(list_aggregate(list_transform(Jet, x -> x.phi), 'avg')) as avg_phi,
+  avg(list_aggregate(list_transform(Jet, x -> x.mass), 'avg')) as avg_mass,
+  avg(list_aggregate(list_transform(Jet, x -> x.btag), 'avg')) as avg_btag
+  FROM Run2012B_SingleMu
+  GROUP BY npvs
+  HAVING avg_mass > avg_eta
+;

@@ -9,7 +9,7 @@ require json
 
 require httpfs
 
-load benchmark/micro/json/RealNest/load.sql
+load benchmark/realnest/load.sql
 
 run
 SELECT list_filter(
