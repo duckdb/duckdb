@@ -144,8 +144,6 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	auto &left_side_build_cost = build_sizes.left_side;
 	auto &right_side_build_cost = build_sizes.right_side;
 
-	Printer::PrintF("LHS: %f, RHS: %f", left_side_build_cost, right_side_build_cost);
-
 	bool swap = false;
 
 	idx_t left_child_joins = ChildHasJoins(*op.children[0]);
