@@ -21,9 +21,9 @@
                 }
             ],
             "comment": {
-                "description": "Destroys the given table function object.\n\n",
+                "description": "Destroys the given scalar function object.\n\n",
                 "param_comments": {
-                    "scalar_function": "The table function to destroy"
+                    "scalar_function": "The scalar function to destroy"
                 }
             }
         },
@@ -164,7 +164,7 @@
             "comment": {
                 "description": "Assigns extra information to the scalar function that can be fetched during binding, etc.\n\n",
                 "param_comments": {
-                    "scalar_function": "The table function",
+                    "scalar_function": "The scalar function",
                     "extra_info": "The extra information",
                     "destroy": "The callback that will be called to destroy the bind data (if any)"
                 }
@@ -184,7 +184,7 @@
                 }
             ],
             "comment": {
-                "description": "Sets the main function of the table function.\n\n",
+                "description": "Sets the main function of the scalar function.\n\n",
                 "param_comments": {
                     "scalar_function": "The scalar function",
                     "function": "The function"
@@ -249,6 +249,79 @@
                     "info": "The info object.",
                     "error": "The error message"
                 }
+            }
+        },
+        {
+            "name": "duckdb_create_scalar_function_set",
+            "return_type": "duckdb_scalar_function_set",
+            "params": [
+                {
+                    "type": "const char*",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Creates a new empty scalar function set.\n\nThe return value should be destroyed with `duckdb_destroy_scalar_function_set`.\n\n",
+                "return_value": "The scalar function set object."
+            }
+        },
+        {
+            "name": "duckdb_destroy_scalar_function_set",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function_set *",
+                    "name": "scalar_function_set"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the given scalar function set object.\n\n",
+                "param_comments": {
+                    "scalar_function": "The scalar function set to destroy"
+                }
+            }
+        },
+        {
+            "name": "duckdb_add_scalar_function_to_set",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function_set",
+                    "name": "set"
+                },
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "function"
+                }
+            ],
+            "comment": {
+                "description": "Adds the scalar function as a new overload to the scalar function set.\n\nReturns DuckDBError if the function could not be added, for example if the overload already exists.",
+                "param_comments": {
+                    "set": "The scalar function set",
+                    "function": "The function to add"
+                }
+            }
+        },
+        {
+            "name": "duckdb_register_scalar_function_set",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_scalar_function_set",
+                    "name": "set"
+                }
+            ],
+            "comment": {
+                "description": "Register the scalar function set within the given connection.\n\nThe set requires at least a single valid overload.\n\nIf the set is incomplete or a function with this name already exists DuckDBError is returned.\n\n",
+                "param_comments": {
+                    "con": "The connection to register it in.",
+                    "set": "The function set to register"
+                },
+                "return_value": "Whether or not the registration was successful."
             }
         }
     ]
