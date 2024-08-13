@@ -27,7 +27,7 @@ static unique_ptr<FunctionData> ListHasAllBind(ClientContext &context, ScalarFun
 		}
 	}
 
-	if(bound_function.name == "<@") {
+	if (bound_function.name == "<@") {
 		std::swap(arguments[0], arguments[1]);
 	}
 
