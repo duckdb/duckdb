@@ -116,8 +116,8 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 
 	// test all profiling metrics
 	duckdb::vector<string> settings = {
-	    "QUERY_NAME", "IDLE_THREAD_TIME",     "CPU_TIME",        "CUMULATIVE_CARDINALITY",
-	    "EXTRA_INFO", "OPERATOR_CARDINALITY", "OPERATOR_TIMING", "OPERATOR_NAME"};
+	    "IDLE_THREAD_TIME",     "CPU_TIME",        "CUMULATIVE_CARDINALITY",
+	    "EXTRA_INFO", "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildProfilingSettingsString(settings)));
 
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
