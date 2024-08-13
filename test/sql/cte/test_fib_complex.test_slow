@@ -19,7 +19,6 @@ FROM   (SELECT i FROM generate_series(2,3) AS _(i)) AS "input"("n"),
                     )
                       UNION ALL
                     (WITH
-                        -- "loop"(".iteration", ".mark", ".thread.this", ".label.this", ".thread.parent", ".label.parent", "fib.n", "fib.result.0") AS MATERIALIZED (TABLE "loop1"),
                        "fib.assignment.1"(".iteration", ".mark", ".thread.this", ".label.parent", "k", "n") AS NOT MATERIALIZED (
                          SELECT "input".".iteration",
                                 "input".".mark",
@@ -59,7 +58,7 @@ FROM   (SELECT i FROM generate_series(2,3) AS _(i)) AS "input"("n"),
                                            FROM   "loop"
                                            WHERE  "loop".".mark" > "input".".mark"
                                            AND    ("loop".".thread.this" IS NOT DISTINCT FROM "input".".thread.this" OR
-                                                   "loop".".thread.parent" IS NOT DISTINCT FROM "input".".thread.this")) -- Here is the error.
+                                                   "loop".".thread.parent" IS NOT DISTINCT FROM "input".".thread.this"))
                                  AS ".done",
                                 "input"."n"
                          FROM   ((SELECT "input".".iteration",
@@ -150,12 +149,6 @@ FROM   (SELECT i FROM generate_series(2,3) AS _(i)) AS "input"("n"),
                              "key".".label.parent",
                              CAST((NULL) AS int) AS "fib.n",
                              CAST(("aggregate"."n") AS int)
-                            --  (SELECT SUM(CAST(("input"."n") AS INT))
-                            --          FROM   "fib.wait.1.decide" AS "input"
-                            --          WHERE  "input".".done"
-                            --          AND    "key".".iteration" IS NOT DISTINCT FROM "input".".iteration"
-                            --          AND    "key".".thread.this" IS NOT DISTINCT FROM "input".".thread.this"
-                            --          AND    "key".".label.parent" IS NOT DISTINCT FROM "input".".label.parent") :: INT
                       FROM   (SELECT MIN("key".".mark") AS ".mark",
                                     "key".".iteration",
                                     "key".".thread.this",
