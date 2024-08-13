@@ -116,7 +116,7 @@ double BuildProbeSideOptimizer::GetBuildSize(vector<LogicalType> types, const id
 
 	// There is also a cost of NextPowerOfTwo(count * 2) * sizeof(data_ptr_t) per tuple in the hash table
 	// This is a not a smooth cost function, so instead we do the average, which is ~3 * sizeof(data_ptr_t)
-	row_width += 3.0 * sizeof(data_ptr_t);
+	row_width += 3 * sizeof(data_ptr_t);
 
 	return static_cast<double>(row_width * cardinality);
 }
@@ -143,6 +143,8 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	auto build_sizes = GetBuildSizes(op, lhs_cardinality, rhs_cardinality);
 	auto &left_side_build_cost = build_sizes.left_side;
 	auto &right_side_build_cost = build_sizes.right_side;
+
+	Printer::PrintF("LHS: %f, RHS: %f", left_side_build_cost, right_side_build_cost);
 
 	bool swap = false;
 
