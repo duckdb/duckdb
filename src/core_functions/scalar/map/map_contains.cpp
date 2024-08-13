@@ -2,7 +2,7 @@
 #include "duckdb/core_functions/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 
 namespace duckdb {
 
@@ -88,7 +88,6 @@ optionally_owned_ptr<Vector> GetTargetVector(DataChunk &args, MapContainsType ty
 		D_ASSERT(type == MapContainsType::BOTH);
 		break;
 	}
-	// Cant put this in the default or clang-tidy gets confused
 	// Create a struct vector holding both key and value
 	auto &entry_type = ListType::GetChildType(args.data[0].GetType());
 	auto target_vec = make_uniq<Vector>(entry_type, count);
