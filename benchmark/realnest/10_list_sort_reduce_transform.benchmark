@@ -1,0 +1,14 @@
+# name: benchmark/realnest/10_list_sort_reduce_transform.benchmark
+# description: Transform, aggregate, reduce and sort a list 
+# group: [realnest]
+
+name list_sort_reduce_transform
+group real_nest
+
+require json
+
+load benchmark/realnest/load.sql
+
+run
+SELECT list_sort(array_agg(list_reduce(list_transform(Photon, x -> x.pt), (x, y, z) -> (x + y)^z))) as List
+FROM Run2012B_SingleMu WHERE len(Photon) != 0;
