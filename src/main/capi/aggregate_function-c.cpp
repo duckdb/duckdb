@@ -58,6 +58,10 @@ duckdb::AggregateFunction &GetCAggregateFunction(duckdb_aggregate_function funct
 	return *reinterpret_cast<duckdb::AggregateFunction *>(function);
 }
 
+duckdb::AggregateFunctionSet &GetCAggregateFunctionSet(duckdb_aggregate_function_set function_set) {
+	return *reinterpret_cast<duckdb::AggregateFunctionSet *>(function_set);
+}
+
 unique_ptr<FunctionData> CAPIAggregateBind(ClientContext &context, AggregateFunction &function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	auto &info = function.function_info->Cast<CAggregateFunctionInfo>();
@@ -216,33 +220,11 @@ duckdb_state duckdb_register_aggregate_function(duckdb_connection connection, du
 	if (!connection || !function) {
 		return DuckDBError;
 	}
+
 	auto &aggregate_function = GetCAggregateFunction(function);
-	auto &info = aggregate_function.function_info->Cast<duckdb::CAggregateFunctionInfo>();
-
-	if (aggregate_function.name.empty() || !info.update || !info.combine || !info.finalize) {
-		return DuckDBError;
-	}
-	if (duckdb::TypeVisitor::Contains(aggregate_function.return_type, duckdb::LogicalTypeId::INVALID) ||
-	    duckdb::TypeVisitor::Contains(aggregate_function.return_type, duckdb::LogicalTypeId::ANY)) {
-		return DuckDBError;
-	}
-	for (const auto &argument : aggregate_function.arguments) {
-		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
-			return DuckDBError;
-		}
-	}
-
-	try {
-		auto con = reinterpret_cast<duckdb::Connection *>(connection);
-		con->context->RunFunctionInTransaction([&]() {
-			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
-			duckdb::CreateAggregateFunctionInfo sf_info(aggregate_function);
-			catalog.CreateFunction(*con->context, sf_info);
-		});
-	} catch (...) {
-		return DuckDBError;
-	}
-	return DuckDBSuccess;
+	duckdb::AggregateFunctionSet set(aggregate_function.name);
+	set.AddFunction(aggregate_function);
+	return duckdb_register_aggregate_function_set(connection, reinterpret_cast<duckdb_aggregate_function_set>(&set));
 }
 
 void duckdb_aggregate_function_set_special_handling(duckdb_aggregate_function function) {
@@ -278,4 +260,68 @@ void duckdb_aggregate_function_set_error(duckdb_function_info info_p, const char
 	auto &exec_info = GetCAggregateExecuteInfo(info_p);
 	exec_info.error = error;
 	exec_info.success = false;
+}
+
+duckdb_aggregate_function_set duckdb_create_aggregate_function_set(const char *name) {
+	if (!name || !*name) {
+		return nullptr;
+	}
+	auto function_set = new duckdb::AggregateFunctionSet(name);
+	return reinterpret_cast<duckdb_aggregate_function_set>(function_set);
+}
+
+void duckdb_destroy_aggregate_function_set(duckdb_aggregate_function_set *set) {
+	if (set && *set) {
+		auto aggregate_function_set = reinterpret_cast<duckdb::AggregateFunctionSet *>(*set);
+		delete aggregate_function_set;
+		*set = nullptr;
+	}
+}
+
+duckdb_state duckdb_add_aggregate_function_to_set(duckdb_aggregate_function_set set,
+                                                  duckdb_aggregate_function function) {
+	if (!set || !function) {
+		return DuckDBError;
+	}
+	auto &aggregate_function_set = duckdb::GetCAggregateFunctionSet(set);
+	auto &aggregate_function = GetCAggregateFunction(function);
+	aggregate_function_set.AddFunction(aggregate_function);
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_register_aggregate_function_set(duckdb_connection connection,
+                                                    duckdb_aggregate_function_set function_set) {
+	if (!connection || !function_set) {
+		return DuckDBError;
+	}
+	auto &set = duckdb::GetCAggregateFunctionSet(function_set);
+	for (idx_t idx = 0; idx < set.Size(); idx++) {
+		auto &aggregate_function = set.GetFunctionReferenceByOffset(idx);
+		auto &info = aggregate_function.function_info->Cast<duckdb::CAggregateFunctionInfo>();
+
+		if (aggregate_function.name.empty() || !info.update || !info.combine || !info.finalize) {
+			return DuckDBError;
+		}
+		if (duckdb::TypeVisitor::Contains(aggregate_function.return_type, duckdb::LogicalTypeId::INVALID) ||
+		    duckdb::TypeVisitor::Contains(aggregate_function.return_type, duckdb::LogicalTypeId::ANY)) {
+			return DuckDBError;
+		}
+		for (const auto &argument : aggregate_function.arguments) {
+			if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
+				return DuckDBError;
+			}
+		}
+	}
+
+	try {
+		auto con = reinterpret_cast<duckdb::Connection *>(connection);
+		con->context->RunFunctionInTransaction([&]() {
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
+			duckdb::CreateAggregateFunctionInfo sf_info(set);
+			catalog.CreateFunction(*con->context, sf_info);
+		});
+	} catch (...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
 }
