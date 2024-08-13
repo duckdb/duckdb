@@ -101,7 +101,18 @@ BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
 	return ret;
 }
 
-void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio) {
+idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
+	if (op.children.empty()) {
+		return 0;
+	} else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	           op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN ||
+	           op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return 1 + ChildHasJoins(*op.children[0]) + ChildHasJoins(*op.children[1]);
+	}
+	return ChildHasJoins(*op.children[0]);
+}
+
+void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	auto &left_child = op.children[0];
 	auto &right_child = op.children[1];
 	auto lhs_cardinality = left_child->has_estimated_cardinality ? left_child->estimated_cardinality
@@ -111,10 +122,20 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 
 	auto build_sizes = GetBuildSizes(op);
 	// special math.
-	auto left_side_build_cost = double(lhs_cardinality) * double(cardinality_ratio) * build_sizes.left_side;
+	auto left_side_build_cost = double(lhs_cardinality) * build_sizes.left_side;
 	auto right_side_build_cost = double(rhs_cardinality) * build_sizes.right_side;
 
 	bool swap = false;
+
+	idx_t left_child_joins = ChildHasJoins(*op.children[0]);
+	idx_t right_child_joins = ChildHasJoins(*op.children[1]);
+	// if the right child is a table scan, and the left child has joins, we should prefer the left child
+	// to be the build side. Since the tuples of the left side will already have been built on/be in flight,
+	// it will be faster to build on them again.
+	if (right_child_joins == 0 && left_child_joins > 0) {
+		right_side_build_cost *= (1 + PREFER_RIGHT_DEEP_PENALTY);
+	}
+
 	// RHS is build side.
 	// if right_side metric is larger than left_side metric, then right_side is more costly to build on
 	// than the lhs. So we swap
@@ -123,7 +144,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	}
 
 	// swap for preferred on probe side
-	if (rhs_cardinality == lhs_cardinality * cardinality_ratio && !preferred_on_probe_side.empty()) {
+	if (rhs_cardinality == lhs_cardinality && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
 		auto bindings_left = left_child->GetColumnBindings();
 		auto bindings_right = right_child->GetColumnBindings();
@@ -159,7 +180,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		case JoinType::LEFT:
 		case JoinType::RIGHT:
 			if (join.right_projection_map.empty()) {
-				TryFlipJoinChildren(join, 2);
+				TryFlipJoinChildren(join);
 			}
 			break;
 		case JoinType::SEMI:
@@ -170,7 +191,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 				// There is no physical join operator (yet) that can do a right_semi/anti join.
 				break;
 			}
-			TryFlipJoinChildren(join, 2);
+			TryFlipJoinChildren(join);
 			break;
 		}
 		default:
@@ -179,15 +200,15 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		TryFlipJoinChildren(op, 1);
+		TryFlipJoinChildren(op);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &join = op.Cast<LogicalAnyJoin>();
 		if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-			TryFlipJoinChildren(join, 2);
+			TryFlipJoinChildren(join);
 		} else if (join.join_type == JoinType::INNER) {
-			TryFlipJoinChildren(join, 1);
+			TryFlipJoinChildren(join);
 		}
 		break;
 	}

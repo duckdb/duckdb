@@ -57,6 +57,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		bool icu_loaded = csv_file_scan->buffer_manager->context.db->ExtensionIsLoaded("icu");
 		for (idx_t i = 0; i < csv_file_scan->file_types.size(); i++) {
 			auto &type = csv_file_scan->file_types[i];
+			if (type.IsJSONType()) {
+				type = LogicalType::VARCHAR;
+			}
 			if (StringValueScanner::CanDirectlyCast(type, icu_loaded)) {
 				parse_types[i] = ParseTypeInfo(type, true);
 				logical_types.emplace_back(type);
@@ -921,7 +924,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		auto &result_vector = insert_chunk.data[result_idx];
 		auto &type = result_vector.GetType();
 		auto &parse_type = parse_vector.GetType();
-		if (type == LogicalType::VARCHAR || (type != LogicalType::VARCHAR && parse_type != LogicalType::VARCHAR)) {
+		if (!type.IsJSONType() &&
+		    (type == LogicalType::VARCHAR || (type != LogicalType::VARCHAR && parse_type != LogicalType::VARCHAR))) {
 			// reinterpret rather than reference
 			result_vector.Reinterpret(parse_vector);
 		} else {
@@ -959,7 +963,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					    first_nl, result.buffer_handles, result.PrintErrorLine());
 					std::ostringstream error;
 					error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
-					      << LogicalTypeIdToString(type.id()) << "\'";
+					      << type.ToString() << "\'";
 					string error_msg = error.str();
 					auto csv_error = CSVError::CastError(
 					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
