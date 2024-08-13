@@ -111,9 +111,11 @@ bool ExpressionContainsColumnRef(Expression &expression) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		// Here you have a filter on a single column in a table. Return a binding for the column
 		// being filtered on so the filter estimator knows what HLL count to pull
+#ifdef DEBUG
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+#endif
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		return true;
 	}
