@@ -133,12 +133,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 								corr.depth += 1;
 								AddCorrelatedColumn(corr);
 							}
-						} else if (rec_cte->second->type == QueryNodeType::CTE_NODE) {
-							auto &rec_cte_node = rec_cte->second->Cast<BoundCTENode>();
-							for (auto corr : rec_cte_node.query_binder->correlated_columns) {
-								corr.depth += 1;
-								AddCorrelatedColumn(corr);
-							}
 						}
 						break;
 					}
