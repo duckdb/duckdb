@@ -118,6 +118,37 @@ emitter_gen_fmt(char *out_fmt, size_t out_size, const char *fmt_specifier,
 	return out_fmt;
 }
 
+static inline void
+emitter_emit_str(emitter_t *emitter, emitter_justify_t justify, int width,
+    char *fmt, size_t fmt_size, const char *str) {
+#define BUF_SIZE 256
+	char buf[BUF_SIZE];
+	size_t str_written = malloc_snprintf(buf, BUF_SIZE, "\"%s\"", str);
+	emitter_printf(emitter,
+	    emitter_gen_fmt(fmt, fmt_size, "%s", justify, width), buf);
+	if (str_written < BUF_SIZE) {
+		return;
+	}
+	/*
+	 * There is no support for long string justification at the moment as
+	 * we output them partially with multiple malloc_snprintf calls and
+	 * justufication will work correctly only withing one call.
+	 * Fortunately this is not a big concern as we don't use justufication
+	 * with long strings right now.
+	 *
+	 * We emitted leading quotation mark and trailing '\0', hence need to
+	 * exclude extra characters from str shift.
+	 */
+	str += BUF_SIZE - 2;
+	do {
+		str_written = malloc_snprintf(buf, BUF_SIZE, "%s\"", str);
+		str += str_written >= BUF_SIZE ? BUF_SIZE - 1 : str_written;
+		emitter_printf(emitter,
+		    emitter_gen_fmt(fmt, fmt_size, "%s", justify, width), buf);
+	} while (str_written >= BUF_SIZE);
+#undef BUF_SIZE
+}
+
 /*
  * Internal.  Emit the given value type in the relevant encoding (so that the
  * bool true gets mapped to json "true", but the string "true" gets mapped to
@@ -128,8 +159,6 @@ emitter_gen_fmt(char *out_fmt, size_t out_size, const char *fmt_specifier,
 static inline void
 emitter_print_value(emitter_t *emitter, emitter_justify_t justify, int width,
     emitter_type_t value_type, const void *value) {
-	size_t str_written;
-#define BUF_SIZE 256
 #define FMT_SIZE 10
 	/*
 	 * We dynamically generate a format string to emit, to let us use the
@@ -138,7 +167,6 @@ emitter_print_value(emitter_t *emitter, emitter_justify_t justify, int width,
 	 * cases.
 	 */
 	char fmt[FMT_SIZE];
-	char buf[BUF_SIZE];
 
 #define EMIT_SIMPLE(type, format)					\
 	emitter_printf(emitter,						\
@@ -167,15 +195,8 @@ emitter_print_value(emitter_t *emitter, emitter_justify_t justify, int width,
 		EMIT_SIMPLE(size_t, "%zu")
 		break;
 	case emitter_type_string:
-		str_written = malloc_snprintf(buf, BUF_SIZE, "\"%s\"",
+		emitter_emit_str(emitter, justify, width, fmt, FMT_SIZE,
 		    *(const char *const *)value);
-		/*
-		 * We control the strings we output; we shouldn't get anything
-		 * anywhere near the fmt size.
-		 */
-		assert(str_written < BUF_SIZE);
-		emitter_printf(emitter,
-		    emitter_gen_fmt(fmt, FMT_SIZE, "%s", justify, width), buf);
 		break;
 	case emitter_type_uint32:
 		EMIT_SIMPLE(uint32_t, "%" FMTu32)
@@ -189,7 +210,6 @@ emitter_print_value(emitter_t *emitter, emitter_justify_t justify, int width,
 	default:
 		unreachable();
 	}
-#undef BUF_SIZE
 #undef FMT_SIZE
 }
 
