@@ -342,4 +342,31 @@ struct ListHasAnyFunAlias {
 	static constexpr const char *Name = "&&";
 };
 
+struct ListHasAllFun {
+	static constexpr const char *Name = "list_has_all";
+	static constexpr const char *Parameters = "l1, l2";
+	static constexpr const char *Description = "Returns true if all elements of l2 are in l1. NULLs are ignored.";
+	static constexpr const char *Example = "list_has_all([1, 2, 3], [2, 3])";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayHasAllFun {
+	using ALIAS = ListHasAllFun;
+
+	static constexpr const char *Name = "array_has_all";
+};
+
+struct ListHasAllFunAlias {
+	using ALIAS = ListHasAllFun;
+
+	static constexpr const char *Name = "@>";
+};
+
+struct ListHasAllFunAlias2 {
+	using ALIAS = ListHasAllFun;
+
+	static constexpr const char *Name = "<@";
+};
+
 } // namespace duckdb
