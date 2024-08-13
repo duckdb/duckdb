@@ -1,6 +1,7 @@
 #include "duckdb/core_functions/scalar/map_functions.hpp"
 #include "duckdb/core_functions/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_map_set.hpp"
 
 namespace duckdb {
@@ -82,18 +83,19 @@ optionally_owned_ptr<Vector> GetTargetVector(DataChunk &args, MapContainsType ty
 	switch (type) {
 	case MapContainsType::KEY:
 	case MapContainsType::VALUE:
-		return args.data[1];
+		return optionally_owned_ptr<Vector>(&args.data[1]);
 	default:
 		D_ASSERT(type == MapContainsType::BOTH);
-		// Create a struct vector holding both key and value
-		auto &entry_type = ListType::GetChildType(args.data[0].GetType());
-		auto target_vec = make_uniq<Vector>(entry_type, count);
-		auto &target_parts = StructVector::GetEntries(*target_vec);
-		;
-		target_parts[0]->Reference(args.data[1]);
-		target_parts[1]->Reference(args.data[2]);
-		return target_vec;
+		break;
 	}
+	// Cant put this in the default or clang-tidy gets confused
+	// Create a struct vector holding both key and value
+	auto &entry_type = ListType::GetChildType(args.data[0].GetType());
+	auto target_vec = make_uniq<Vector>(entry_type, count);
+	auto &target_parts = StructVector::GetEntries(*target_vec);
+	target_parts[0]->Reference(args.data[1]);
+	target_parts[1]->Reference(args.data[2]);
+	return target_vec;
 }
 
 static Vector &GetSourceVector(Vector &map_vector, MapContainsType type) {
@@ -104,8 +106,9 @@ static Vector &GetSourceVector(Vector &map_vector, MapContainsType type) {
 		return MapVector::GetValues(map_vector);
 	default:
 		D_ASSERT(type == MapContainsType::BOTH);
-		return ListVector::GetEntry(map_vector);
+		break;
 	}
+	return ListVector::GetEntry(map_vector);
 }
 
 static void MapContainsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
