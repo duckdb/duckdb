@@ -41,6 +41,24 @@ class TestDuckDBQuery(object):
         res = con.query('show tables').fetchall()
         assert res == []
 
+    def test_parametrized_explain(self, duckdb_cursor):
+        query = """
+            EXPLAIN ANALYZE
+            SELECT
+                *
+            FROM (VALUES
+                (1, 'John'),
+                (2, 'Jane'),
+                (3, 'Doe')
+            ) my_table(id, name)
+            WHERE name = ?
+        """
+        params = ("John",)
+        duckdb_cursor.execute(query, params)
+
+        results = duckdb_cursor.fetchall()
+        assert 'EXPLAIN_ANALYZE' in results[0][1]
+
     def test_named_param(self):
         con = duckdb.connect()
 
