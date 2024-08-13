@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/RealNest/1_list_sort_text.benchmark
+# name: benchmark/realnest/1_list_sort_text.benchmark
 # description: list_sort text entries
-# group: [RealNest]
+# group: [realnest]
 
 name list_sort_text
 group real_nest

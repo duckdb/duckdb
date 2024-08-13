@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/RealNest/3_list_transform_plus_list_aggregate.benchmark
+# name: benchmark/realnest/3_list_transform_plus_list_aggregate.benchmark
 # description: select average from transformed list and group by, having
-# group: [RealNest]
+# group: [realnest]
 
 name list_transform plus list_aggregate
 group real_nest

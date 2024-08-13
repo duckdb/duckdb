@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/RealNest/11_count_map_keys.benchmark
+# name: benchmark/realnest/7_count_map_keys.benchmark
 # description: list_intersect to get common hashtags
-# group: [RealNest]
+# group: [realnest]
 
 name list_intersect_hashtags
 group real_nest

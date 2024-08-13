@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/RealNest/4_list_filters.benchmark
+# name: benchmark/realnest/4_list_filters.benchmark
 # description: Multiple list_filters
-# group: [RealNest]
+# group: [realnest]
 
 name list_filters
 group real_nest

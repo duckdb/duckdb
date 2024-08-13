@@ -1,6 +1,6 @@
-# name: benchmark/micro/json/RealNest/10_count_map_keys.benchmark
+# name: benchmark/realnest/8_list_intersect_hashtags.benchmark
 # description: Count map keys and aggregate them
-# group: [real_nest]
+# group: [realnest]
 
 name count_map_keys
 group real_nest
