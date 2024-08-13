@@ -235,7 +235,10 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 	// right thing.
 	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
 	    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		auto &setop = op.Cast<LogicalCTE>();
+		binder.recursive_ctes[setop.table_index] = &setop;
 		if (has_correlation) {
+			setop.correlated_columns = correlated_columns;
 			MarkSubtreeCorrelated(*op.children[1].get());
 		}
 	}
@@ -252,8 +255,17 @@ bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op) {
 	}
 	if (op.type != LogicalOperatorType::LOGICAL_GET || op.children.size() == 1) {
 		if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
-			has_correlated_expressions[op] = true;
-			return true;
+			// There may be multiple recursive CTEs. Only mark CTE_REFs as correlated,
+			// IFF the CTE that we are reading from is correlated.
+			auto &cteref = op.Cast<LogicalCTERef>();
+			auto cte = binder.recursive_ctes.find(cteref.cte_index);
+			bool has_correlation = false;
+			if (cte != binder.recursive_ctes.end()) {
+				auto &rec_cte = cte->second->Cast<LogicalCTE>();
+				has_correlation = !rec_cte.correlated_columns.empty();
+			}
+			has_correlated_expressions[op] = has_correlation;
+			return has_correlation;
 		} else {
 			has_correlated_expressions[op] = has_correlation;
 		}
@@ -306,10 +318,14 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 			auto rec_cte = binder.recursive_ctes.find(op.cte_index);
 			if (rec_cte != binder.recursive_ctes.end()) {
-				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
-				auto &rec_cte_op = rec_cte->second->Cast<LogicalRecursiveCTE>();
-				RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns);
-				cte_rewriter.VisitOperator(*plan);
+				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
+				         rec_cte->second->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
+
+				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
+				if (op.correlated_columns == 0) {
+					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns);
+					cte_rewriter.VisitOperator(*plan);
+				}
 			}
 		}
 
@@ -923,13 +939,16 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		idx_t table_index = 0;
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
+
+		auto &setop = plan->Cast<LogicalCTE>();
+		base_binding.table_index = setop.table_index;
+		base_binding.column_index = setop.column_count;
+		table_index = setop.table_index;
+		setop.correlated_columns = correlated_columns;
+		binder.recursive_ctes[setop.table_index] = &setop;
+
 		if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 			auto &setop = plan->Cast<LogicalRecursiveCTE>();
-			binder.recursive_ctes[setop.table_index] = &setop;
-			base_binding.table_index = setop.table_index;
-			base_binding.column_index = setop.column_count;
-			table_index = setop.table_index;
-			setop.correlated_columns = correlated_columns;
 
 			if (!setop.key_targets.empty()) {
 				for (idx_t i = 0; i < correlated_columns.size(); i++) {
@@ -940,12 +959,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 					setop.key_targets.push_back(std::move(colref));
 				}
 			}
-
-		} else if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-			auto &setop = plan->Cast<LogicalMaterializedCTE>();
-			base_binding.table_index = setop.table_index;
-			base_binding.column_index = setop.column_count;
-			table_index = setop.table_index;
 		}
 
 		RewriteCTEScan cte_rewriter(table_index, correlated_columns);
@@ -966,13 +979,14 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0]->ResolveOperatorTypes();
 		plan->children[1]->ResolveOperatorTypes();
 #endif
+
 		if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 			// we have to refer to the recursive CTE index now
-			auto &setop = plan->Cast<LogicalRecursiveCTE>();
 			base_binding.table_index = setop.table_index;
 			base_binding.column_index = setop.column_count;
-			setop.column_count += correlated_columns.size();
 		}
+
+		setop.column_count += correlated_columns.size();
 
 		return plan;
 	}
