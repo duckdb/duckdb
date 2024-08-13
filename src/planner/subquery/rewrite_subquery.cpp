@@ -16,10 +16,9 @@
 namespace duckdb {
 
 RewriteSubquery::RewriteSubquery(idx_t table_index, idx_t lateral_depth, ColumnBinding base_binding,
-                                 const vector<CorrelatedColumnInfo> &correlated_columns,
-                                 column_binding_map_t<idx_t> &correlated_map)
+                                 const vector<CorrelatedColumnInfo> &correlated_columns)
     : table_index(table_index), lateral_depth(lateral_depth), base_binding(base_binding),
-      correlated_columns(correlated_columns), correlated_map(correlated_map) {
+      correlated_columns(correlated_columns) {
 }
 
 void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
@@ -27,13 +26,9 @@ void RewriteSubquery::VisitOperator(duckdb::LogicalOperator &op) {
 }
 
 unique_ptr<Expression> RewriteSubquery::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	//	if (!expr.IsCorrelated()) {
-	//		return nullptr;
-	//	}
 	// subquery detected within this subquery
 	// recursively rewrite it using the RewriteCorrelatedRecursive class
-	RewriteCorrelatedSubqueriesRecursive rewrite(table_index, lateral_depth, this->base_binding, correlated_columns,
-	                                             correlated_map);
+	RewriteCorrelatedSubqueriesRecursive rewrite(table_index, lateral_depth, this->base_binding, correlated_columns);
 	bool rewrite_cte = expr.subquery_type == SubqueryType::EXISTS || expr.subquery_type == SubqueryType::NOT_EXISTS;
 	rewrite.RewriteCorrelatedSubquery(*expr.binder, *expr.subquery, rewrite_cte);
 	return nullptr;
@@ -41,9 +36,9 @@ unique_ptr<Expression> RewriteSubquery::VisitReplace(BoundSubqueryExpression &ex
 
 RewriteCorrelatedSubqueriesRecursive::RewriteCorrelatedSubqueriesRecursive(
     idx_t table_index, idx_t lateral_depth, ColumnBinding base_binding,
-    const vector<CorrelatedColumnInfo> &correlated_columns, column_binding_map_t<idx_t> &correlated_map)
+    const vector<CorrelatedColumnInfo> &correlated_columns)
     : table_index(table_index), lateral_depth(lateral_depth), base_binding(base_binding),
-      correlated_columns(correlated_columns), correlated_map(correlated_map) {
+      correlated_columns(correlated_columns) {
 }
 
 void RewriteCorrelatedSubqueriesRecursive::VisitBoundTableRef(BoundTableRef &ref) {
@@ -54,24 +49,25 @@ void RewriteCorrelatedSubqueriesRecursive::VisitBoundTableRef(BoundTableRef &ref
 	} else if (ref.type == TableReferenceType::CTE && add_filter) {
 		auto &cteref = ref.Cast<BoundCTERef>();
 
+		// check if this is the CTE we are looking for
 		if (cteref.cte_index == table_index) {
+			// this is the CTE we are looking for: add a filter to the CTE
+			// we add a filter to the CTE that compares the correlated columns of the CTE to the correlated columns of
+			// the outer query. This filter is added to the WHERE clause of the subquery.
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];
-				//				add_correlation.emplace_back(CorrelatedColumnInfo(col.binding, col.type, col.name, 1));
-				add_correlation.emplace_back(
-				    CorrelatedColumnInfo(ColumnBinding(base_binding.table_index, base_binding.column_index + i),
-				                         col.type, col.name, lateral_depth + 1));
-				auto row_num_ref = make_uniq<BoundColumnRefExpression>(
+				auto outer = make_uniq<BoundColumnRefExpression>(
 				    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i),
 				    lateral_depth + 1);
 
-				auto row_num_ref1 = make_uniq<BoundColumnRefExpression>(
+				auto inner = make_uniq<BoundColumnRefExpression>(
 				    col.name, col.type, ColumnBinding(cteref.bind_index, cteref.bound_columns.size() + i));
 				auto comp = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-				                                                 row_num_ref->Copy(), row_num_ref1->Copy());
+				                                                 std::move(outer), std::move(inner));
 				if (condition) {
 					auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(comp),
 					                                                  std::move(condition));
+					condition = std::move(conj);
 				} else {
 					condition = std::move(comp);
 				}
@@ -98,11 +94,6 @@ void RewriteCorrelatedSubqueriesRecursive::RewriteCorrelatedSubquery(Binder &bin
 			query.where_clause = std::move(condition);
 		}
 	}
-
-	//	binder.MergeCorrelatedColumns(add_correlation);
-	//	for (auto const &corr : correlated_columns) {
-	//		binder.AddCorrelatedColumn(corr);
-	//	}
 }
 
 void RewriteCorrelatedSubqueriesRecursive::VisitExpression(unique_ptr<Expression> &expression) {

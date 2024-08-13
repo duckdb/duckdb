@@ -179,7 +179,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
 		for (auto idx : cte_idx) {
-			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
 			subquery_rewriter.VisitOperator(*plan);
 		}
 
@@ -208,7 +208,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 
 		for (auto idx : cte_idx) {
-			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
 			subquery_rewriter.VisitOperator(*plan);
 		}
 
@@ -392,7 +392,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
 		for (auto idx : cte_idx) {
-			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
 			subquery_rewriter.VisitOperator(*plan);
 		}
 
@@ -457,7 +457,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			                                                  parent_propagate_null_values, lateral_depth);
 
 			for (auto idx : cte_idx) {
-				RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+				RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
 				subquery_rewriter.VisitOperator(*plan);
 			}
 
@@ -511,7 +511,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 
 		for (auto idx : cte_idx) {
-			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns, correlated_map);
+			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
 			subquery_rewriter.VisitOperator(*plan);
 		}
 
