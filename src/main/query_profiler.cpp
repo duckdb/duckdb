@@ -194,6 +194,10 @@ void QueryProfiler::EndQuery() {
 				                           MetricsType::OPERATOR_ROWS_SCANNED);
 			}
 			//			MoveOptimizerPhasesToRoot();
+
+			if (info.Enabled(MetricsType::OPERATOR_TYPE)) {
+				info.settings.erase(MetricsType::OPERATOR_TYPE);
+			}
 		}
 
 		string tree = ToString();
@@ -654,6 +658,9 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 
 	if (depth != 0) {
 		info.AddToMetric<uint8_t>(MetricsType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
+		if (info.Enabled(MetricsType::QUERY_NAME)) {
+            info.settings.erase(MetricsType::QUERY_NAME);
+        }
 	}
 	if (info.Enabled(MetricsType::EXTRA_INFO)) {
 		info.extra_info = root_p.ParamsToString();
