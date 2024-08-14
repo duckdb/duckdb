@@ -1985,33 +1985,34 @@ PyArrowObjectType DuckDBPyConnection::GetArrowType(const py::handle &obj) {
 		return PyArrowObjectType::PyCapsule;
 	}
 
-	if (!ModuleIsLoaded<PyarrowCacheItem>()) {
-		return PyArrowObjectType::Invalid;
+	if (ModuleIsLoaded<PyarrowCacheItem>()) {
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		// First Verify Lib Types
+		auto table_class = import_cache.pyarrow.Table();
+		auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
+		if (py::isinstance(obj, table_class)) {
+			return PyArrowObjectType::Table;
+		} else if (py::isinstance(obj, record_batch_reader_class)) {
+			return PyArrowObjectType::RecordBatchReader;
+		}
+
+		if (ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
+			// Then Verify dataset types
+			auto dataset_class = import_cache.pyarrow.dataset.Dataset();
+			auto scanner_class = import_cache.pyarrow.dataset.Scanner();
+
+			if (py::isinstance(obj, scanner_class)) {
+				return PyArrowObjectType::Scanner;
+			} else if (py::isinstance(obj, dataset_class)) {
+				return PyArrowObjectType::Dataset;
+			}
+		}
 	}
 
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	// First Verify Lib Types
-	auto table_class = import_cache.pyarrow.Table();
-	auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
-	if (py::isinstance(obj, table_class)) {
-		return PyArrowObjectType::Table;
-	} else if (py::isinstance(obj, record_batch_reader_class)) {
-		return PyArrowObjectType::RecordBatchReader;
+	if (py::hasattr(obj, "__arrow_c_stream__")) {
+		return PyArrowObjectType::PyCapsuleInterface;
 	}
 
-	if (!ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
-		return PyArrowObjectType::Invalid;
-	}
-
-	// Then Verify dataset types
-	auto dataset_class = import_cache.pyarrow.dataset.Dataset();
-	auto scanner_class = import_cache.pyarrow.dataset.Scanner();
-
-	if (py::isinstance(obj, scanner_class)) {
-		return PyArrowObjectType::Scanner;
-	} else if (py::isinstance(obj, dataset_class)) {
-		return PyArrowObjectType::Dataset;
-	}
 	return PyArrowObjectType::Invalid;
 }
 
