@@ -11,15 +11,9 @@ namespace duckdb {
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {
-	    MetricsType::QUERY_NAME,
-	    MetricsType::IDLE_THREAD_TIME,
-	    MetricsType::CPU_TIME,
-	    MetricsType::EXTRA_INFO,
-	    MetricsType::CUMULATIVE_CARDINALITY,
-	    MetricsType::OPERATOR_TYPE,
-	    MetricsType::OPERATOR_CARDINALITY,
-	    MetricsType::CUMULATIVE_ROWS_SCANNED,
-	    MetricsType::OPERATOR_ROWS_SCANNED,
+	    MetricsType::QUERY_NAME,           MetricsType::IDLE_THREAD_TIME,        MetricsType::CPU_TIME,
+	    MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY,  MetricsType::OPERATOR_TYPE,
+	    MetricsType::OPERATOR_CARDINALITY, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_ROWS_SCANNED,
 	    MetricsType::OPERATOR_TIMING,
 	};
 }
@@ -104,9 +98,9 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 	D_ASSERT(!metrics.at(setting).IsNull());
 
 	if (setting == MetricsType::OPERATOR_TYPE) {
-        auto type = PhysicalOperatorType(metrics.at(setting).GetValue<uint8_t>());
-        return EnumUtil::ToString(type);
-    }
+		auto type = PhysicalOperatorType(metrics.at(setting).GetValue<uint8_t>());
+		return EnumUtil::ToString(type);
+	}
 
 	return metrics.at(setting).ToString();
 }
@@ -152,8 +146,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			break;
 		}
 		case MetricsType::OPERATOR_TYPE: {
-			auto type = PhysicalOperatorType(metrics[metric].GetValue<uint8_t>());
-			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, EnumUtil::ToString(type).c_str());
+			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, GetMetricAsString(metric).c_str());
 			break;
 		}
 		case MetricsType::CUMULATIVE_CARDINALITY:

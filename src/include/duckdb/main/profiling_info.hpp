@@ -58,8 +58,8 @@ public:
 public:
 	ProfilingInfo() = default;
 	explicit ProfilingInfo(profiler_settings_t &n_settings, idx_t depth = 0) : settings(n_settings) {
-//		SetMandatorySettings();
-        if (depth == 0) {
+		//		SetMandatorySettings();
+		if (depth == 0) {
 			settings.insert(MetricsType::QUERY_NAME);
 		} else {
 			settings.insert(MetricsType::OPERATOR_TYPE);

@@ -276,15 +276,14 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
 
 # Check that idle thread time is collected
-query I
-SELECT 
-CASE 
-    WHEN idle_thread_time > 0 THEN 'true'
-    ELSE 'false'
-END
-FROM metrics_output;
+query I rowsort
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
 ----
-true
+"IDLE_THREAD_TIME": "true"
 
 ## ERRORS
 statement error
