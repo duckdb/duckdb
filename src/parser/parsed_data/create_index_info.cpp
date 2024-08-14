@@ -27,27 +27,8 @@ static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &expr
 	}
 }
 
-string CreateIndexInfo::ToString() const {
+string CreateIndexInfo::ExpressionsToString() const {
 	string result;
-
-	result += "CREATE";
-	D_ASSERT(constraint_type == IndexConstraintType::UNIQUE || constraint_type == IndexConstraintType::NONE);
-	if (constraint_type == IndexConstraintType::UNIQUE) {
-		result += " UNIQUE";
-	}
-	result += " INDEX ";
-	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-		result += "IF NOT EXISTS ";
-	}
-	result += KeywordHelper::WriteOptionallyQuoted(index_name);
-	result += " ON ";
-	result += QualifierToString(temporary ? "" : catalog, schema, table);
-	if (index_type != "ART") {
-		result += " USING ";
-		result += KeywordHelper::WriteOptionallyQuoted(index_type);
-		result += " ";
-	}
-	result += "(";
 	for (idx_t i = 0; i < parsed_expressions.size(); i++) {
 		auto &expr = parsed_expressions[i];
 		auto copy = expr->Copy();
@@ -72,6 +53,31 @@ string CreateIndexInfo::ToString() const {
 			result += StringUtil::Format("%s", copy->ToString());
 		}
 	}
+	return result;
+}
+
+string CreateIndexInfo::ToString() const {
+	string result;
+
+	result += "CREATE";
+	D_ASSERT(constraint_type == IndexConstraintType::UNIQUE || constraint_type == IndexConstraintType::NONE);
+	if (constraint_type == IndexConstraintType::UNIQUE) {
+		result += " UNIQUE";
+	}
+	result += " INDEX ";
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		result += "IF NOT EXISTS ";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(index_name);
+	result += " ON ";
+	result += QualifierToString(temporary ? "" : catalog, schema, table);
+	if (index_type != "ART") {
+		result += " USING ";
+		result += KeywordHelper::WriteOptionallyQuoted(index_type);
+		result += " ";
+	}
+	result += "(";
+	result += ExpressionsToString();
 	result += ")";
 	if (!options.empty()) {
 		result += " WITH (";
