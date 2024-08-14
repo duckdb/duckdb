@@ -56,13 +56,13 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 	SelectionVector sel(count);
 	vector<idx_t> invalid_offsets;
 
+	optional_idx first_valid_child_idx;
 	for (idx_t i = 0; i < count; i++) {
 		const auto list_index = list_data.sel->get_index(i);
 		const auto offsets_index = offsets_data.sel->get_index(i);
 
 		if (!list_data.validity.RowIsValid(list_index) || !offsets_data.validity.RowIsValid(offsets_index)) {
 			invalid_offsets.push_back(i);
-			sel.set_index(i, 0);
 			continue;
 		}
 
@@ -70,15 +70,25 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 
 		if (!child_offset.IsValid()) {
 			invalid_offsets.push_back(i);
-			sel.set_index(i, 0);
 			continue;
 		}
 
 		const auto child_idx = child_data.sel->get_index(child_offset.GetIndex());
 		sel.set_index(i, child_idx);
+
+		if (!first_valid_child_idx.IsValid()) {
+			// Save the first valid child as a dummy index to copy in VectorOperations::Copy later
+			first_valid_child_idx = child_idx;
+		}
 	}
 
-	VectorOperations::Copy(child_vector, result, sel, count, 0, 0);
+	if (first_valid_child_idx.IsValid()) {
+		// Only copy if we found at least one valid child
+		for (const auto &invalid_offset : invalid_offsets) {
+			sel.set_index(invalid_offset, first_valid_child_idx.GetIndex());
+		}
+		VectorOperations::Copy(child_vector, result, sel, count, 0, 0);
+	}
 
 	// Copy:ing the vectors also copies the validity mask, so we set the rows with invalid offsets (0) to false here.
 	for (const auto &invalid_idx : invalid_offsets) {

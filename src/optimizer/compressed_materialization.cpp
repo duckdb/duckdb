@@ -81,6 +81,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		break;
@@ -94,6 +95,9 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		CompressAggregate(op);
 		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		CompressComparisonJoin(op);
+		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		CompressDistinct(op);
 		break;
@@ -101,7 +105,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 		CompressOrder(op);
 		break;
 	default:
-		return;
+		break;
 	}
 }
 

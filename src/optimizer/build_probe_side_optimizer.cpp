@@ -1,11 +1,13 @@
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
-#include "duckdb/planner/operator/logical_join.hpp"
+
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/common/types/row/tuple_data_layout.hpp"
-#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
 
@@ -34,6 +36,7 @@ BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, Logical
 	// When we eventually do our build side probe side optimizations, if we get to a join where the left and right
 	// cardinalities are the same, we prefer to have the child with the rowid bindings in the probe side.
 	GetRowidBindings(op, preferred_on_probe_side);
+	op.ResolveOperatorTypes();
 }
 static void FlipChildren(LogicalOperator &op) {
 	std::swap(op.children[0], op.children[1]);
@@ -64,41 +67,58 @@ static inline idx_t ComputeOverlappingBindings(const vector<ColumnBinding> &hays
 	return result;
 }
 
-BuildSize BuildProbeSideOptimizer::GetBuildSizes(LogicalOperator &op) {
+BuildSize BuildProbeSideOptimizer::GetBuildSizes(const LogicalOperator &op, const idx_t lhs_cardinality,
+                                                 const idx_t rhs_cardinality) {
 	BuildSize ret;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-
-		auto &left_child = op.children[0];
-		auto &right_child = op.children[1];
-
-		// resolve operator types to determine how big the build side is going to be
-		op.ResolveOperatorTypes();
-		auto left_tuple_layout = TupleDataLayout();
-		auto left_types = left_child->types;
-		left_types.push_back(LogicalType::HASH);
-		left_tuple_layout.Initialize(left_types);
-
-		auto right_tuple_layout = TupleDataLayout();
-		auto right_types = right_child->types;
-		right_types.push_back(LogicalType::HASH);
-		right_tuple_layout.Initialize(right_types);
-
-		// Don't multiply by cardinalities, the only important metric is the size of the row
-		// in the hash table
-		ret.left_side =
-		    double(left_tuple_layout.GetRowWidth()) * (1 + COLUMN_COUNT_PENALTY * double(left_child->types.size()));
-		ret.right_side =
-		    double(right_tuple_layout.GetRowWidth()) * (1 + COLUMN_COUNT_PENALTY * double(right_child->types.size()));
+		ret.left_side = GetBuildSize(op.children[0]->types, lhs_cardinality);
+		ret.right_side = GetBuildSize(op.children[1]->types, rhs_cardinality);
 		return ret;
 	}
 	default:
 		break;
 	}
 	return ret;
+}
+
+double BuildProbeSideOptimizer::GetBuildSize(vector<LogicalType> types, const idx_t cardinality) {
+	// Row width in the hash table
+	types.push_back(LogicalType::HASH);
+	auto tuple_layout = TupleDataLayout();
+	tuple_layout.Initialize(types);
+	auto row_width = tuple_layout.GetRowWidth();
+
+	for (const auto &type : types) {
+		TypeVisitor::VisitReplace(type, [&](const LogicalType &visited_type) {
+			// Penalty for variable-size types (we don't have statistics here yet)
+			switch (visited_type.InternalType()) {
+			case PhysicalType::VARCHAR:
+				row_width += 8;
+				break;
+			case PhysicalType::LIST:
+			case PhysicalType::ARRAY:
+				row_width += 32;
+				break;
+			default:
+				break;
+			}
+
+			// Penalty for number of (recursive) columns
+			row_width += COLUMN_COUNT_PENALTY;
+
+			return visited_type;
+		});
+	}
+
+	// There is also a cost of NextPowerOfTwo(count * 2) * sizeof(data_ptr_t) per tuple in the hash table
+	// This is a not a smooth cost function, so instead we do the average, which is ~3 * sizeof(data_ptr_t)
+	row_width += 3 * sizeof(data_ptr_t);
+
+	return static_cast<double>(row_width * cardinality);
 }
 
 idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
@@ -113,17 +133,16 @@ idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
 }
 
 void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
-	auto &left_child = op.children[0];
-	auto &right_child = op.children[1];
-	auto lhs_cardinality = left_child->has_estimated_cardinality ? left_child->estimated_cardinality
-	                                                             : left_child->EstimateCardinality(context);
-	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
-	                                                              : right_child->EstimateCardinality(context);
+	auto &left_child = *op.children[0];
+	auto &right_child = *op.children[1];
+	const auto lhs_cardinality = left_child.has_estimated_cardinality ? left_child.estimated_cardinality
+	                                                                  : left_child.EstimateCardinality(context);
+	const auto rhs_cardinality = right_child.has_estimated_cardinality ? right_child.estimated_cardinality
+	                                                                   : right_child.EstimateCardinality(context);
 
-	auto build_sizes = GetBuildSizes(op);
-	// special math.
-	auto left_side_build_cost = double(lhs_cardinality) * build_sizes.left_side;
-	auto right_side_build_cost = double(rhs_cardinality) * build_sizes.right_side;
+	auto build_sizes = GetBuildSizes(op, lhs_cardinality, rhs_cardinality);
+	auto &left_side_build_cost = build_sizes.left_side;
+	auto &right_side_build_cost = build_sizes.right_side;
 
 	bool swap = false;
 
@@ -146,8 +165,8 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 	// swap for preferred on probe side
 	if (rhs_cardinality == lhs_cardinality && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
-		auto bindings_left = left_child->GetColumnBindings();
-		auto bindings_right = right_child->GetColumnBindings();
+		auto bindings_left = left_child.GetColumnBindings();
+		auto bindings_right = right_child.GetColumnBindings();
 		auto bindings_in_left = ComputeOverlappingBindings(bindings_left, preferred_on_probe_side);
 		auto bindings_in_right = ComputeOverlappingBindings(bindings_right, preferred_on_probe_side);
 		// (if the sides are planning to be swapped AND
