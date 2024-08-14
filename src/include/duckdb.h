@@ -501,7 +501,12 @@ typedef struct _duckdb_aggregate_function {
 	void *internal_ptr;
 } * duckdb_aggregate_function;
 
-//!
+//! A aggregate function set. Must be destroyed with `duckdb_destroy_aggregate_function_set`.
+typedef struct _duckdb_aggregate_function_set {
+	void *internal_ptr;
+} * duckdb_aggregate_function_set;
+
+//! Aggregate state
 typedef struct _duckdb_aggregate_state {
 	void *internal_ptr;
 } * duckdb_aggregate_state;
@@ -2963,6 +2968,45 @@ Report that an error has occurred while executing the aggregate function.
 * @param error The error message
 */
 DUCKDB_API void duckdb_aggregate_function_set_error(duckdb_function_info info, const char *error);
+
+/*!
+Creates a new empty aggregate function set.
+
+The return value should be destroyed with `duckdb_destroy_aggregate_function_set`.
+
+* @return The aggregate function set object.
+*/
+DUCKDB_API duckdb_aggregate_function_set duckdb_create_aggregate_function_set(const char *name);
+
+/*!
+Destroys the given aggregate function set object.
+
+*/
+DUCKDB_API void duckdb_destroy_aggregate_function_set(duckdb_aggregate_function_set *aggregate_function_set);
+
+/*!
+Adds the aggregate function as a new overload to the aggregate function set.
+
+Returns DuckDBError if the function could not be added, for example if the overload already exists.* @param set The
+aggregate function set
+* @param function The function to add
+*/
+DUCKDB_API duckdb_state duckdb_add_aggregate_function_to_set(duckdb_aggregate_function_set set,
+                                                             duckdb_aggregate_function function);
+
+/*!
+Register the aggregate function set within the given connection.
+
+The set requires at least a single valid overload.
+
+If the set is incomplete or a function with this name already exists DuckDBError is returned.
+
+* @param con The connection to register it in.
+* @param set The function set to register
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_API duckdb_state duckdb_register_aggregate_function_set(duckdb_connection con,
+                                                               duckdb_aggregate_function_set set);
 
 //===--------------------------------------------------------------------===//
 // Table Functions

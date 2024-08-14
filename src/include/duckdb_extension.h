@@ -383,6 +383,11 @@ typedef struct {
 	void (*duckdb_destroy_scalar_function_set)(duckdb_scalar_function_set *scalar_function_set);
 	duckdb_state (*duckdb_add_scalar_function_to_set)(duckdb_scalar_function_set set, duckdb_scalar_function function);
 	duckdb_state (*duckdb_register_scalar_function_set)(duckdb_connection con, duckdb_scalar_function_set set);
+	duckdb_aggregate_function_set (*duckdb_create_aggregate_function_set)(const char *name);
+	void (*duckdb_destroy_aggregate_function_set)(duckdb_aggregate_function_set *aggregate_function_set);
+	duckdb_state (*duckdb_add_aggregate_function_to_set)(duckdb_aggregate_function_set set,
+	                                                     duckdb_aggregate_function function);
+	duckdb_state (*duckdb_register_aggregate_function_set)(duckdb_connection con, duckdb_aggregate_function_set set);
 #endif
 
 #ifdef DUCKDB_EXTENSION_API_VERSION_DEV // dev
@@ -731,6 +736,11 @@ typedef struct {
 #define duckdb_destroy_scalar_function_set          duckdb_ext_api.duckdb_destroy_scalar_function_set
 #define duckdb_add_scalar_function_to_set           duckdb_ext_api.duckdb_add_scalar_function_to_set
 #define duckdb_register_scalar_function_set         duckdb_ext_api.duckdb_register_scalar_function_set
+
+#define duckdb_create_aggregate_function_set   duckdb_ext_api.duckdb_create_aggregate_function_set
+#define duckdb_destroy_aggregate_function_set  duckdb_ext_api.duckdb_destroy_aggregate_function_set
+#define duckdb_add_aggregate_function_to_set   duckdb_ext_api.duckdb_add_aggregate_function_to_set
+#define duckdb_register_aggregate_function_set duckdb_ext_api.duckdb_register_aggregate_function_set
 
 #define duckdb_get_profiling_info             duckdb_ext_api.duckdb_get_profiling_info
 #define duckdb_profiling_info_get_value       duckdb_ext_api.duckdb_profiling_info_get_value

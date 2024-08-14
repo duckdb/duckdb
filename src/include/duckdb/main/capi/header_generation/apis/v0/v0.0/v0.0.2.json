@@ -58,6 +58,10 @@
         "duckdb_create_scalar_function_set",
         "duckdb_destroy_scalar_function_set",
         "duckdb_add_scalar_function_to_set",
-        "duckdb_register_scalar_function_set"
+        "duckdb_register_scalar_function_set",
+        "duckdb_create_aggregate_function_set",
+        "duckdb_destroy_aggregate_function_set",
+        "duckdb_add_aggregate_function_to_set",
+        "duckdb_register_aggregate_function_set"
     ]
 }
