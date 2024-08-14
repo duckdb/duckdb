@@ -69,7 +69,7 @@ struct DuckDBAdbcStatementWrapper {
 	char *db_schema;
 	ArrowArrayStream ingestion_stream;
 	IngestionMode ingestion_mode = IngestionMode::CREATE;
-	bool temporary_table;
+	bool temporary_table = false;
 	uint8_t *substrait_plan;
 	uint64_t plan_length;
 };
@@ -669,6 +669,7 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	statement_wrapper->ingestion_table_name = nullptr;
 	statement_wrapper->db_schema = nullptr;
 	statement_wrapper->substrait_plan = nullptr;
+	statement_wrapper->temporary_table = false;
 
 	statement_wrapper->ingestion_mode = IngestionMode::CREATE;
 	return ADBC_STATUS_OK;
@@ -992,11 +993,19 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 		return ADBC_STATUS_OK;
 	}
 	if (strcmp(key, ADBC_INGEST_OPTION_TEMPORARY) == 0) {
+		if (wrapper->db_schema) {
+			SetError(error, "Temporary option is not supported with schema");
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
 		wrapper->ingestion_table_name = strdup(value);
 		wrapper->temporary_table = true;
 		return ADBC_STATUS_OK;
 	}
 	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA) == 0) {
+		if (wrapper->temporary_table) {
+			SetError(error, "Temporary option is not supported with schema");
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
 		wrapper->db_schema = strdup(value);
 		return ADBC_STATUS_OK;
 	}
