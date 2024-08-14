@@ -86,8 +86,6 @@ void RewriteCorrelatedSubqueriesRecursive::RewriteCorrelatedSubquery(Binder &bin
 
 	VisitBoundQueryNode(subquery);
 
-	D_ASSERT(subquery.type == QueryNodeType::SELECT_NODE);
-
 	if (subquery.type == QueryNodeType::SELECT_NODE && condition) {
 		auto &query = subquery.Cast<BoundSelectNode>();
 		if (query.where_clause) {
