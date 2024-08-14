@@ -1,4 +1,5 @@
 #include "duckdb/common/types/varint.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include <cmath>
 
 namespace duckdb {
