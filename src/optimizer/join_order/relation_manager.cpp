@@ -113,6 +113,7 @@ bool ExpressionContainsColumnRef(Expression &expression) {
 		// being filtered on so the filter estimator knows what HLL count to pull
 #ifdef DEBUG
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
+		(void)colref.depth;
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 #endif
