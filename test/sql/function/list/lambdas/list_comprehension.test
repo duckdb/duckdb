@@ -93,4 +93,4 @@ This lambda function only supports up to two lambda parameters!
 statement error
 select [a for (a[1], b[2]) in [1,2,3,4]];
 ----
-Invalid lambda parameters!
+Parser Error: syntax error at or near "["

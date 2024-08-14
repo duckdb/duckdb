@@ -2687,7 +2687,7 @@ c_expr:		d_expr
 				}
 		;
 
-d_expr:		columnref								{ $$ = $1; }
+d_expr:		columnref_opt_indirection								{ $$ = $1; }
 			| AexprConst							{ $$ = $1; }
 			| select_with_parens			%prec UMINUS
 				{
@@ -3698,7 +3698,7 @@ in_expr:	select_with_parens
 					$$ = (PGNode *)n;
 				}
 			| '(' expr_list_opt_comma ')'						{ $$ = (PGNode *)$2; }
-			| columnref
+			| columnref_opt_indirection
 			| indirection_expr { $$ = (PGNode *)$1; }
 		;
 
@@ -3752,7 +3752,13 @@ columnrefList:
 			| columnrefList ',' columnref				{ $$ = lappend($1, $3); }
 		;
 
-columnref:	ColId
+columnref: ColId
+		{
+			$$ = makeColumnRef($1, NIL, @1, yyscanner);
+		}
+	;
+
+columnref_opt_indirection:	ColId
 				{
 					$$ = makeColumnRef($1, NIL, @1, yyscanner);
 				}
