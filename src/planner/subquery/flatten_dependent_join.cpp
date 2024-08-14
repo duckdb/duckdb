@@ -170,10 +170,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
-		for (auto idx : cte_idx) {
-			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
-			subquery_rewriter.VisitOperator(*plan);
-		}
+		RewriteSubquery subquery_rewriter(cte_idx, lateral_depth, base_binding, correlated_columns);
+		subquery_rewriter.VisitOperator(*plan);
 
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
@@ -199,10 +197,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			                                                  parent_propagate_null_values, lateral_depth);
 		}
 
-		for (auto idx : cte_idx) {
-			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
-			subquery_rewriter.VisitOperator(*plan);
-		}
+		RewriteSubquery subquery_rewriter(cte_idx, lateral_depth, base_binding, correlated_columns);
+		subquery_rewriter.VisitOperator(*plan);
 
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
@@ -383,10 +379,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
-		for (auto idx : cte_idx) {
-			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
-			subquery_rewriter.VisitOperator(*plan);
-		}
+		RewriteSubquery subquery_rewriter(cte_idx, lateral_depth, base_binding, correlated_columns);
+		subquery_rewriter.VisitOperator(*plan);
 
 		// Normal rewriter like in other joins
 		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, lateral_depth);
@@ -448,10 +442,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
 			                                                  parent_propagate_null_values, lateral_depth);
 
-			for (auto idx : cte_idx) {
-				RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
-				subquery_rewriter.VisitOperator(*plan);
-			}
+			RewriteSubquery subquery_rewriter(cte_idx, lateral_depth, base_binding, correlated_columns);
+			subquery_rewriter.VisitOperator(*plan);
 
 			// rewrite expressions in the join conditions
 			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
@@ -502,10 +494,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
-		for (auto idx : cte_idx) {
-			RewriteSubquery subquery_rewriter(idx, lateral_depth, base_binding, correlated_columns);
-			subquery_rewriter.VisitOperator(*plan);
-		}
+		RewriteSubquery subquery_rewriter(cte_idx, lateral_depth, base_binding, correlated_columns);
+		subquery_rewriter.VisitOperator(*plan);
 
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(right_binding, correlated_map, lateral_depth);

@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-RewriteSubquery::RewriteSubquery(idx_t table_index, idx_t lateral_depth, ColumnBinding base_binding,
+RewriteSubquery::RewriteSubquery(const vector<idx_t> &table_index, idx_t lateral_depth, ColumnBinding base_binding,
                                  const vector<CorrelatedColumnInfo> &correlated_columns)
     : table_index(table_index), lateral_depth(lateral_depth), base_binding(base_binding),
       correlated_columns(correlated_columns) {
@@ -35,7 +35,7 @@ unique_ptr<Expression> RewriteSubquery::VisitReplace(BoundSubqueryExpression &ex
 }
 
 RewriteCorrelatedSubqueriesRecursive::RewriteCorrelatedSubqueriesRecursive(
-    idx_t table_index, idx_t lateral_depth, ColumnBinding base_binding,
+    const vector<idx_t> &table_index, idx_t lateral_depth, ColumnBinding base_binding,
     const vector<CorrelatedColumnInfo> &correlated_columns)
     : table_index(table_index), lateral_depth(lateral_depth), base_binding(base_binding),
       correlated_columns(correlated_columns) {
@@ -50,7 +50,9 @@ void RewriteCorrelatedSubqueriesRecursive::VisitBoundTableRef(BoundTableRef &ref
 		auto &cteref = ref.Cast<BoundCTERef>();
 
 		// check if this is the CTE we are looking for
-		if (cteref.cte_index == table_index) {
+		bool found = std::find(table_index.begin(), table_index.end(), cteref.cte_index) != table_index.end();
+
+		if (found) {
 			// this is the CTE we are looking for: add a filter to the CTE
 			// we add a filter to the CTE that compares the correlated columns of the CTE to the correlated columns of
 			// the outer query. This filter is added to the WHERE clause of the subquery.
@@ -83,6 +85,8 @@ void RewriteCorrelatedSubqueriesRecursive::RewriteCorrelatedSubquery(Binder &bin
 	this->add_filter = add_filter;
 
 	VisitBoundQueryNode(subquery);
+
+	D_ASSERT(subquery.type == QueryNodeType::SELECT_NODE);
 
 	if (subquery.type == QueryNodeType::SELECT_NODE && condition) {
 		auto &query = subquery.Cast<BoundSelectNode>();
