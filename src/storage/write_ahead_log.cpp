@@ -280,8 +280,9 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 
 	// now serialize the index data to the persistent storage and write the index metadata
 	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
+	auto &table_idx_list = duck_index_entry.GetDataTableInfo().GetIndexes();
+	lock_guard<mutex> lock(table_idx_list.indexes_lock);
 	auto &indexes = duck_index_entry.GetDataTableInfo().GetIndexes().Indexes();
-
 	// get the matching index and serialize its storage info
 	for (auto const &index : indexes) {
 		if (duck_index_entry.name == index->GetIndexName()) {
