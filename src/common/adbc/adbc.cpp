@@ -66,6 +66,7 @@ struct DuckDBAdbcStatementWrapper {
 	duckdb_arrow result;
 	duckdb_prepared_statement statement;
 	char *ingestion_table_name;
+	char *db_schema;
 	ArrowArrayStream ingestion_stream;
 	IngestionMode ingestion_mode = IngestionMode::CREATE;
 	bool temporary_table;
@@ -571,8 +572,9 @@ void stream_schema(ArrowArrayStream *stream, ArrowSchema &schema) {
 	stream->get_schema(stream, &schema);
 }
 
-AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, struct ArrowArrayStream *input,
-                      struct AdbcError *error, IngestionMode ingestion_mode, bool temporary) {
+AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, const char *schema,
+                      struct ArrowArrayStream *input, struct AdbcError *error, IngestionMode ingestion_mode,
+                      bool temporary) {
 
 	if (!connection) {
 		SetError(error, "Missing connection object");
@@ -586,10 +588,11 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 		SetError(error, "Missing database object name");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
-	if (temporary) {
-		/// This is not supported with ADBC_INGEST_OPTION_TARGET_CATALOG and
-		/// ADBC_INGEST_OPTION_TARGET_DB_SCHEMA.
+	if (schema && temporary) {
+		// Temporary option is not supported with ADBC_INGEST_OPTION_TARGET_DB_SCHEMA or
+		// ADBC_INGEST_OPTION_TARGET_CATALOG
+		SetError(error, "Temporary option is not supported with schema");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
 	auto cconn = reinterpret_cast<duckdb::Connection *>(connection);
@@ -601,11 +604,21 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 	try {
 		switch (ingestion_mode) {
 		case IngestionMode::CREATE:
-			arrow_scan->Create(table_name, temporary);
+			if (schema) {
+				arrow_scan->Create(schema, table_name, temporary);
+			} else {
+				arrow_scan->Create(table_name, temporary);
+			}
 			break;
 		case IngestionMode::APPEND: {
 			arrow_scan->CreateView("temp_adbc_view", true, true);
-			auto query = duckdb::StringUtil::Format("insert into \"%s\" select * from temp_adbc_view", table_name);
+			std::string query;
+			if (schema) {
+				query = duckdb::StringUtil::Format("insert into \"%s.%s\" select * from temp_adbc_view", schema,
+				                                   table_name);
+			} else {
+				query = duckdb::StringUtil::Format("insert into \"%s\" select * from temp_adbc_view", table_name);
+			}
 			auto result = cconn->Query(query);
 			break;
 		}
@@ -654,6 +667,7 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	statement_wrapper->result = nullptr;
 	statement_wrapper->ingestion_stream.release = nullptr;
 	statement_wrapper->ingestion_table_name = nullptr;
+	statement_wrapper->db_schema = nullptr;
 	statement_wrapper->substrait_plan = nullptr;
 
 	statement_wrapper->ingestion_mode = IngestionMode::CREATE;
@@ -680,6 +694,10 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 	if (wrapper->ingestion_table_name) {
 		free(wrapper->ingestion_table_name);
 		wrapper->ingestion_table_name = nullptr;
+	}
+	if (wrapper->db_schema) {
+		free(wrapper->db_schema);
+		wrapper->db_schema = nullptr;
 	}
 	if (wrapper->substrait_plan) {
 		free(wrapper->substrait_plan);
@@ -750,8 +768,8 @@ static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *s
 	statement->ingestion_stream.release = nullptr;
 
 	// Ingest into a table from the bound stream
-	return Ingest(statement->connection, statement->ingestion_table_name, &stream, error, statement->ingestion_mode,
-	              statement->temporary_table);
+	return Ingest(statement->connection, statement->ingestion_table_name, statement->db_schema, &stream, error,
+	              statement->ingestion_mode, statement->temporary_table);
 }
 
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
@@ -978,6 +996,11 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 		wrapper->temporary_table = true;
 		return ADBC_STATUS_OK;
 	}
+	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA) == 0) {
+		wrapper->db_schema = strdup(value);
+		return ADBC_STATUS_OK;
+	}
+
 	if (strcmp(key, ADBC_INGEST_OPTION_MODE) == 0) {
 		if (strcmp(value, ADBC_INGEST_OPTION_MODE_CREATE) == 0) {
 			wrapper->ingestion_mode = IngestionMode::CREATE;
@@ -990,6 +1013,9 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	}
+	std::stringstream ss;
+	ss << "Statement Set Option " << key << " is not yet accepted by DuckDB";
+	SetError(error, ss.str());
 	return ADBC_STATUS_INVALID_ARGUMENT;
 }
 

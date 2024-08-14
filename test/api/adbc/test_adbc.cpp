@@ -78,11 +78,15 @@ public:
 		return arrow_stream;
 	}
 
-	void CreateTable(const string &table_name, ArrowArrayStream &input_data, bool temporary = false) {
+	void CreateTable(const string &table_name, ArrowArrayStream &input_data, string schema = "",
+	                 bool temporary = false) {
 		REQUIRE(input_data.release);
 		AdbcStatement adbc_statement;
 		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
-
+		if (!schema.empty()) {
+			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
+			                                       table_name.c_str(), &adbc_error)));
+		}
 		if (temporary) {
 			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY, table_name.c_str(),
 			                                       &adbc_error)));
@@ -142,7 +146,24 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	auto input_data = db.QueryArrow("SELECT 42");
 
 	// Create Table 'my_table' from the Arrow Result
-	db.CreateTable("my_table", input_data, true);
+	string empty_schema = "";
+	db.CreateTable("my_table", input_data, empty_schema, true);
+
+	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+}
+
+TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	db.Query("CREATE SCHEMA my_schema;");
+	// Create Arrow Result
+	auto input_data = db.QueryArrow("SELECT 42");
+
+	// Create Table 'my_table' from the Arrow Result
+	string schema = "my_schema";
+	db.CreateTable("my_table", input_data, schema, true);
 
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
 }
