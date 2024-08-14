@@ -1,4 +1,4 @@
-# name: benchmark/realnest/6_select_text.benchmark
+# name: benchmark/realnest/07_select_text.benchmark
 # description: Creates a list of unnested texts, counts texts string's length and returns a number of unique values
 # group: [realnest]
 

@@ -1,4 +1,4 @@
-# name: benchmark/realnest/0_aggregate-on-one-deep-struct-members.benchmark
+# name: benchmark/realnest/01_aggregate-on-one-deep-struct-members.benchmark
 # description: Aggregate functions on the struct, group by one parameter
 # group: [realnest]
 

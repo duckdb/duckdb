@@ -1,4 +1,4 @@
-# name: benchmark/realnest/1_list_sort_text.benchmark
+# name: benchmark/realnest/02_list_sort_text.benchmark
 # description: list_sort text entries
 # group: [realnest]
 

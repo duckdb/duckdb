@@ -1,4 +1,4 @@
-# name: benchmark/realnest/3_list_transform_plus_list_aggregate.benchmark
+# name: benchmark/realnest/04_list_transform_plus_list_aggregate.benchmark
 # description: select average from transformed list and group by, having
 # group: [realnest]
 
