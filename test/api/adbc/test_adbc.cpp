@@ -1,6 +1,8 @@
+#include "arrow/arrow_test_helper.hpp"
 #include "catch.hpp"
 #include "duckdb/common/adbc/adbc.hpp"
-#include "arrow/arrow_test_helper.hpp"
+
+#include <duckdb/common/adbc/options.h>
 #include <iostream>
 
 using namespace std;
@@ -13,7 +15,7 @@ bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 
-const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
+const char *duckdb_lib = "/Users/holanda/Documents/Projects/duckdb/cmake-build-debug/src/libduckdb.dylib";
 class ADBCTestDatabase {
 public:
 	explicit ADBCTestDatabase(const string &path_parameter = ":memory:") {
@@ -47,12 +49,12 @@ public:
 
 	bool QueryAndCheck(const string &query) {
 		QueryArrow(query);
-		auto cconn = reinterpret_cast<duckdb::Connection *>(adbc_connection.private_data);
+		auto cconn = static_cast<Connection *>(adbc_connection.private_data);
 		return ArrowTestHelper::RunArrowComparison(*cconn, query, arrow_stream);
 	}
 
 	std::unique_ptr<MaterializedQueryResult> Query(const string &query) {
-		auto cconn = reinterpret_cast<duckdb::Connection *>(adbc_connection.private_data);
+		auto cconn = static_cast<Connection *>(adbc_connection.private_data);
 		return cconn->Query(query);
 	}
 
@@ -71,13 +73,18 @@ public:
 		return arrow_stream;
 	}
 
-	void CreateTable(const string &table_name, ArrowArrayStream &input_data) {
+	void CreateTable(const string &table_name, ArrowArrayStream &input_data, bool temporary = false) {
 		REQUIRE(input_data.release);
 		AdbcStatement adbc_statement;
 		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
-		REQUIRE(SUCCESS(
-		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
+		if (temporary) {
+			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY, table_name.c_str(),
+			                                       &adbc_error)));
+		} else {
+			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(),
+			                                       &adbc_error)));
+		}
 
 		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
@@ -116,6 +123,21 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
+
+	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+}
+
+TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create Arrow Result
+	auto input_data = db.QueryArrow("SELECT 42");
+
+	// Create Table 'my_table' from the Arrow Result
+	db.CreateTable("my_table", input_data, true);
 
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
 }
@@ -1496,7 +1518,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 
 		AdbcConnectionGetObjects(&db.adbc_connection, 42, nullptr, nullptr, nullptr, nullptr, nullptr, &arrow_stream,
 		                         &adbc_error);
-		REQUIRE(std::strcmp(adbc_error.message, "Invalid value of Depth") == 0);
+		REQUIRE((std::strcmp(adbc_error.message, "Invalid value of Depth") == 0));
 		adbc_error.release(&adbc_error);
 
 		const char table_types = '\0';
@@ -1505,7 +1527,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr,
 		                         reinterpret_cast<const char **>(table_type_ptr_ptr), nullptr, &arrow_stream,
 		                         &adbc_error);
-		REQUIRE(std::strcmp(adbc_error.message, "Table types parameter not yet supported") == 0);
+		REQUIRE((std::strcmp(adbc_error.message, "Table types parameter not yet supported") == 0));
 		adbc_error.release(&adbc_error);
 	}
 }
