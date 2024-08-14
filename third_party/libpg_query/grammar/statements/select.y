@@ -3044,16 +3044,12 @@ func_expr_common_subexpr:
 		;
 
 list_comprehension_lhs:
-	'(' columnrefList ')'
-	{
-		PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $2, @2);
-		$$ = (PGNode *) n;
-	}
-	| ColId
-	{
-		PGNode *n = makeColumnRef($1, NIL, @1, yyscanner);
-		$$ = (PGNode *) n;
-	}
+		columnrefList
+		{
+			PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
+			$$ = (PGNode *) n;
+		}
+	;
 
 list_comprehension:
 				'[' a_expr FOR list_comprehension_lhs IN_P a_expr ']'
