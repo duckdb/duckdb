@@ -30,7 +30,7 @@ public:
 	unique_ptr<BoundOrderModifier> order_by;
 
 public:
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	vector<ColumnBinding> GetColumnBindings() override {
 		return children[0]->GetColumnBindings();

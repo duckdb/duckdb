@@ -108,10 +108,8 @@ public:
 
 	//! Update all extensions, return a vector of extension names that were updated;
 	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
-	static vector<ExtensionUpdateResult> UpdateExtensions(DatabaseInstance &db, FileSystem &fs);
 	//! Update a specific extension
 	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const string &extension_name);
-	static ExtensionUpdateResult UpdateExtension(DatabaseInstance &db, FileSystem &fs, const string &extension_name);
 
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);

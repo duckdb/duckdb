@@ -14,12 +14,6 @@ SingleFileRowGroupWriter::SingleFileRowGroupWriter(TableCatalogEntry &table, Par
     : RowGroupWriter(table, partial_block_manager), writer(writer), table_data_writer(table_data_writer) {
 }
 
-void SingleFileRowGroupWriter::WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state,
-                                                       Serializer &serializer) {
-	const auto &data_pointers = column_checkpoint_state.data_pointers;
-	serializer.WriteProperty(100, "data_pointers", data_pointers);
-}
-
 CheckpointType SingleFileRowGroupWriter::GetCheckpointType() const {
 	return writer.GetCheckpointType();
 }

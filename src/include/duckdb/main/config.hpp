@@ -10,6 +10,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
@@ -224,6 +225,8 @@ struct DBConfigOptions {
 	bool immediate_transaction_mode = false;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
+	//! The set of user-provided options
+	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	unordered_map<string, Value> unrecognized_options;
 	//! Whether or not the configuration settings can be altered
@@ -256,6 +259,10 @@ struct DBConfigOptions {
 	//! This is a work-around that exists for certain clients (specifically R)
 	//! Because those clients do not like it when threads other than the main thread call into R, for e.g., arrow scans
 	bool initialize_in_main_thread = false;
+	//! The maximum number of schemas we will look through for "did you mean..." style errors in the catalog
+	idx_t catalog_error_max_schemas = 100;
+	//!  Whether or not to always write to the WAL file, even if this is not required
+	bool debug_skip_checkpoint_on_commit = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -348,18 +355,21 @@ public:
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
+	static idx_t GetSystemAvailableMemory(FileSystem &fs);
+	static idx_t ParseMemoryLimitSlurm(const string &arg);
 	void SetDefaultMaxMemory();
 	void SetDefaultTempDirectory();
 
 	OrderType ResolveOrder(OrderType order_type) const;
 	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
-	const std::string UserAgent() const;
+	const string UserAgent() const;
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<CastFunctionSet> cast_functions;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
+	bool is_user_config = true;
 };
 
 } // namespace duckdb

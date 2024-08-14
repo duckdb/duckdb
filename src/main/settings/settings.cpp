@@ -79,6 +79,22 @@ Value AllowPersistentSecrets::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Access Mode
+//===--------------------------------------------------------------------===//
+void CatalogErrorMaxSchema::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.catalog_error_max_schemas = UBigIntValue::Get(input);
+}
+
+void CatalogErrorMaxSchema::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.catalog_error_max_schemas = DBConfig().options.catalog_error_max_schemas;
+}
+
+Value CatalogErrorMaxSchema::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.catalog_error_max_schemas);
+}
+
+//===--------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===--------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -163,6 +179,22 @@ void DebugForceNoCrossProduct::SetLocal(ClientContext &context, const Value &inp
 
 Value DebugForceNoCrossProduct::GetSetting(const ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_no_cross_product);
+}
+
+//===--------------------------------------------------------------------===//
+// Debug Skip Checkpoint On Commit
+//===--------------------------------------------------------------------===//
+void DebugSkipCheckpointOnCommit::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	config.options.debug_skip_checkpoint_on_commit = BooleanValue::Get(parameter);
+}
+
+void DebugSkipCheckpointOnCommit::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.debug_skip_checkpoint_on_commit = DBConfig().options.debug_skip_checkpoint_on_commit;
+}
+
+Value DebugSkipCheckpointOnCommit::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(*context.db);
+	return Value::BOOLEAN(config.options.debug_skip_checkpoint_on_commit);
 }
 
 //===--------------------------------------------------------------------===//
@@ -859,7 +891,7 @@ void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value ErrorsAsJsonSetting::GetSetting(const ClientContext &context) {
-	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json ? 1 : 0);
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json);
 }
 
 //===--------------------------------------------------------------------===//

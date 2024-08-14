@@ -97,6 +97,7 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/profiling_info.hpp"
@@ -830,6 +831,8 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "QUOTED_NEW_LINE";
 	case CSVState::EMPTY_SPACE:
 		return "EMPTY_SPACE";
+	case CSVState::COMMENT:
+		return "COMMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -869,6 +872,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EMPTY_SPACE")) {
 		return CSVState::EMPTY_SPACE;
+	}
+	if (StringUtil::Equals(value, "COMMENT")) {
+		return CSVState::COMMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1907,6 +1913,8 @@ const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value) {
 		return "AUTOLOAD";
 	case ExceptionType::SEQUENCE:
 		return "SEQUENCE";
+	case ExceptionType::INVALID_CONFIGURATION:
+		return "INVALID_CONFIGURATION";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2040,6 +2048,9 @@ ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
 	if (StringUtil::Equals(value, "SEQUENCE")) {
 		return ExceptionType::SEQUENCE;
 	}
+	if (StringUtil::Equals(value, "INVALID_CONFIGURATION")) {
+		return ExceptionType::INVALID_CONFIGURATION;
+	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
@@ -2052,6 +2063,8 @@ const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
 		return "TEXT";
 	case ExplainFormat::JSON:
 		return "JSON";
+	case ExplainFormat::GRAPHVIZ:
+		return "GRAPHVIZ";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2067,6 +2080,9 @@ ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "JSON")) {
 		return ExplainFormat::JSON;
+	}
+	if (StringUtil::Equals(value, "GRAPHVIZ")) {
+		return ExplainFormat::GRAPHVIZ;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -2717,6 +2733,34 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BOUND_EXPANDED")) {
 		return ExpressionType::BOUND_EXPANDED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value) {
+	switch(value) {
+	case ExtensionABIType::UNKNOWN:
+		return "UNKNOWN";
+	case ExtensionABIType::CPP:
+		return "CPP";
+	case ExtensionABIType::C_STRUCT:
+		return "C_STRUCT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionABIType::UNKNOWN;
+	}
+	if (StringUtil::Equals(value, "CPP")) {
+		return ExtensionABIType::CPP;
+	}
+	if (StringUtil::Equals(value, "C_STRUCT")) {
+		return ExtensionABIType::C_STRUCT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4268,8 +4312,14 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "CPU_TIME";
 	case MetricsType::EXTRA_INFO:
 		return "EXTRA_INFO";
+	case MetricsType::CUMULATIVE_CARDINALITY:
+		return "CUMULATIVE_CARDINALITY";
 	case MetricsType::OPERATOR_CARDINALITY:
 		return "OPERATOR_CARDINALITY";
+	case MetricsType::CUMULATIVE_ROWS_SCANNED:
+		return "CUMULATIVE_ROWS_SCANNED";
+	case MetricsType::OPERATOR_ROWS_SCANNED:
+		return "OPERATOR_ROWS_SCANNED";
 	case MetricsType::OPERATOR_TIMING:
 		return "OPERATOR_TIMING";
 	default:
@@ -4285,8 +4335,17 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	if (StringUtil::Equals(value, "EXTRA_INFO")) {
 		return MetricsType::EXTRA_INFO;
 	}
+	if (StringUtil::Equals(value, "CUMULATIVE_CARDINALITY")) {
+		return MetricsType::CUMULATIVE_CARDINALITY;
+	}
 	if (StringUtil::Equals(value, "OPERATOR_CARDINALITY")) {
 		return MetricsType::OPERATOR_CARDINALITY;
+	}
+	if (StringUtil::Equals(value, "CUMULATIVE_ROWS_SCANNED")) {
+		return MetricsType::CUMULATIVE_ROWS_SCANNED;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_ROWS_SCANNED")) {
+		return MetricsType::OPERATOR_ROWS_SCANNED;
 	}
 	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
 		return MetricsType::OPERATOR_TIMING;
@@ -4569,6 +4628,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "JOIN_FILTER_PUSHDOWN";
 	case OptimizerType::EXTENSION:
 		return "EXTENSION";
+	case OptimizerType::MATERIALIZED_CTE:
+		return "MATERIALIZED_CTE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4644,6 +4705,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return OptimizerType::EXTENSION;
+	}
+	if (StringUtil::Equals(value, "MATERIALIZED_CTE")) {
+		return OptimizerType::MATERIALIZED_CTE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6309,6 +6373,8 @@ const char* EnumUtil::ToChars<SettingScope>(SettingScope value) {
 		return "GLOBAL";
 	case SettingScope::LOCAL:
 		return "LOCAL";
+	case SettingScope::SECRET:
+		return "SECRET";
 	case SettingScope::INVALID:
 		return "INVALID";
 	default:
@@ -6323,6 +6389,9 @@ SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LOCAL")) {
 		return SettingScope::LOCAL;
+	}
+	if (StringUtil::Equals(value, "SECRET")) {
+		return SettingScope::SECRET;
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return SettingScope::INVALID;
@@ -7782,6 +7851,8 @@ const char* EnumUtil::ToChars<WALType>(WALType value) {
 		return "DELETE_TUPLE";
 	case WALType::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case WALType::ROW_GROUP_DATA:
+		return "ROW_GROUP_DATA";
 	case WALType::WAL_VERSION:
 		return "WAL_VERSION";
 	case WALType::CHECKPOINT:
@@ -7863,6 +7934,9 @@ WALType EnumUtil::FromString<WALType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return WALType::UPDATE_TUPLE;
+	}
+	if (StringUtil::Equals(value, "ROW_GROUP_DATA")) {
+		return WALType::ROW_GROUP_DATA;
 	}
 	if (StringUtil::Equals(value, "WAL_VERSION")) {
 		return WALType::WAL_VERSION;

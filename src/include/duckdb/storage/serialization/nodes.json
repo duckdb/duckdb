@@ -798,6 +798,14 @@
         "name": "columns_set",
         "type": "bool",
         "default": "false"
+      },
+      {"id": 137,
+        "name": "dialect_options.state_machine_options.comment",
+        "type": "CSVOption<char>"
+      },
+      {"id": 138,
+        "name": "dialect_options.rows_until_header",
+        "type": "idx_t"
       }
     ],
     "pointer_type": "none"

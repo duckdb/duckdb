@@ -142,6 +142,16 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	}
 }
 
+void DuckTransaction::UpdateCollection(shared_ptr<RowGroupCollection> &collection) {
+	auto collection_ref = reference<RowGroupCollection>(*collection);
+	auto entry = updated_collections.find(collection_ref);
+	if (entry != updated_collections.end()) {
+		// already exists
+		return;
+	}
+	updated_collections.insert(make_pair(collection_ref, collection));
+}
+
 bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
@@ -185,9 +195,9 @@ ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCo
 		D_ASSERT(ShouldWriteToWAL(db));
 		auto &storage_manager = db.GetStorageManager();
 		auto log = storage_manager.GetWAL();
-		storage->Commit();
 		commit_state = storage_manager.GenStorageCommitState(*log);
-		undo_buffer.WriteToWAL(*log);
+		storage->Commit(commit_state.get());
+		undo_buffer.WriteToWAL(*log, commit_state.get());
 	} catch (std::exception &ex) {
 		if (commit_state) {
 			commit_state->RevertCommit();
@@ -213,7 +223,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 
 	UndoBuffer::IteratorState iterator_state;
 	try {
-		storage->Commit();
+		storage->Commit(commit_state.get());
 		undo_buffer.Commit(iterator_state, commit_id);
 		if (commit_state) {
 			// if we have written to the WAL - flush after the commit has been successful
@@ -235,8 +245,8 @@ void DuckTransaction::Rollback() noexcept {
 	undo_buffer.Rollback();
 }
 
-void DuckTransaction::Cleanup() {
-	undo_buffer.Cleanup();
+void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
+	undo_buffer.Cleanup(lowest_active_transaction);
 }
 
 void DuckTransaction::SetReadWrite() {

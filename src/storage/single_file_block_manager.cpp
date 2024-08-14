@@ -362,6 +362,28 @@ void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 	newly_freed_list.insert(block_id);
 }
 
+void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
+	lock_guard<mutex> lock(block_lock);
+	D_ASSERT(block_id >= 0);
+	if (max_block <= block_id) {
+		// the block is past the current max_block
+		// in this case we need to increment  "max_block" to "block_id"
+		// any blocks in the middle are added to the free list
+		// i.e. if max_block = 0, and block_id = 3, we need to add blocks 1 and 2 to the free list
+		while (max_block < block_id) {
+			free_list.insert(max_block);
+			max_block++;
+		}
+		max_block++;
+	} else if (free_list.find(block_id) != free_list.end()) {
+		// block is currently int he free list - erase
+		free_list.erase(block_id);
+	} else {
+		// block is already in use - increase reference count
+		IncreaseBlockReferenceCountInternal(block_id);
+	}
+}
+
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
@@ -386,8 +408,7 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	modified_blocks.insert(block_id);
 }
 
-void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
-	lock_guard<mutex> lock(block_lock);
+void SingleFileBlockManager::IncreaseBlockReferenceCountInternal(block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
 	D_ASSERT(block_id < max_block);
 	D_ASSERT(free_list.find(block_id) == free_list.end());
@@ -397,6 +418,11 @@ void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
 	} else {
 		multi_use_blocks[block_id] = 2;
 	}
+}
+
+void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
+	lock_guard<mutex> lock(block_lock);
+	IncreaseBlockReferenceCountInternal(block_id);
 }
 
 idx_t SingleFileBlockManager::GetMetaBlock() {

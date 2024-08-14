@@ -116,22 +116,21 @@ static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
-	string extra_info;
+	InsertionOrderPreservingMap<string> extra_info;
 	if (op.GetProfilingInfo().Enabled(MetricsType::EXTRA_INFO)) {
-		extra_info = op.GetProfilingInfo().metrics.extra_info;
+		extra_info = op.GetProfilingInfo().extra_info;
 	}
 
-	unique_ptr<RenderTreeNode> result;
-	if (op.node_type == ProfilingNodeType::QUERY_ROOT) {
-		result = make_uniq<RenderTreeNode>(EnumUtil::ToString(op.node_type), extra_info);
-	} else {
-		auto &op_node = op.Cast<OperatorProfilingNode>();
-		result = make_uniq<RenderTreeNode>(op_node.name, extra_info);
+	auto node_name = op.GetName();
+	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
+	if (op.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
+		result->extra_text["Cardinality"] = op.GetProfilingInfo().GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
 	}
-	result->extra_text += "\n[INFOSEPARATOR]";
-	result->extra_text += "\n" + to_string(op.GetProfilingInfo().metrics.operator_cardinality);
-	string timing = StringUtil::Format("%.2f", op.GetProfilingInfo().metrics.operator_timing);
-	result->extra_text += "\n(" + timing + "s)";
+	if (op.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
+		string timing = StringUtil::Format(
+		    "%.2f", op.GetProfilingInfo().metrics.at(MetricsType::OPERATOR_TIMING).GetValue<double>());
+		result->extra_text["Timing"] = timing + "s";
+	}
 	return result;
 }
 

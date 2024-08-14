@@ -188,7 +188,9 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 	}
 	case LogicalTypeId::TIME_TZ: {
 		int64_t val;
-		if (stats.size() == sizeof(int64_t)) {
+		if (stats.size() == sizeof(int32_t)) {
+			val = Load<int32_t>(stats_data);
+		} else if (stats.size() == sizeof(int64_t)) {
 			val = Load<int64_t>(stats_data);
 		} else {
 			throw InternalException("Incorrect stats size for type TIMETZ");
@@ -196,7 +198,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
 			// logical type
 			if (schema_ele.logicalType.TIME.unit.__isset.MILLIS) {
-				return Value::TIMETZ(ParquetIntToTimeMsTZ(val));
+				return Value::TIMETZ(ParquetIntToTimeMsTZ(NumericCast<int32_t>(val)));
 			} else if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
 				return Value::TIMETZ(ParquetIntToTimeTZ(val));
 			} else if (schema_ele.logicalType.TIME.unit.__isset.NANOS) {

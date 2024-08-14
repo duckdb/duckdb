@@ -1,0 +1,180 @@
+{
+    "group": "date_time_timestamp_helpers",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_from_date",
+            "return_type": "duckdb_date_struct",
+            "params": [
+                {
+                    "type": "duckdb_date",
+                    "name": "date"
+                }
+            ],
+            "comment": {
+                "description": "Decompose a `duckdb_date` object into year, month and date (stored as `duckdb_date_struct`).\n\n",
+                "param_comments": {
+                    "date": "The date object, as obtained from a `DUCKDB_TYPE_DATE` column."
+                },
+                "return_value": "The `duckdb_date_struct` with the decomposed elements."
+            }
+        },
+        {
+            "name": "duckdb_to_date",
+            "return_type": "duckdb_date",
+            "params": [
+                {
+                    "type": "duckdb_date_struct",
+                    "name": "date"
+                }
+            ],
+            "comment": {
+                "description": "Re-compose a `duckdb_date` from year, month and date (`duckdb_date_struct`).\n\n",
+                "param_comments": {
+                    "date": "The year, month and date stored in a `duckdb_date_struct`."
+                },
+                "return_value": "The `duckdb_date` element."
+            }
+        },
+        {
+            "name": "duckdb_is_finite_date",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_date",
+                    "name": "date"
+                }
+            ],
+            "comment": {
+                "description": "Test a `duckdb_date` to see if it is a finite value.\n\n",
+                "param_comments": {
+                    "date": "The date object, as obtained from a `DUCKDB_TYPE_DATE` column."
+                },
+                "return_value": "True if the date is finite, false if it is \u00b1infinity."
+            }
+        },
+        {
+            "name": "duckdb_from_time",
+            "return_type": "duckdb_time_struct",
+            "params": [
+                {
+                    "type": "duckdb_time",
+                    "name": "time"
+                }
+            ],
+            "comment": {
+                "description": "Decompose a `duckdb_time` object into hour, minute, second and microsecond (stored as `duckdb_time_struct`).\n\n",
+                "param_comments": {
+                    "time": "The time object, as obtained from a `DUCKDB_TYPE_TIME` column."
+                },
+                "return_value": "The `duckdb_time_struct` with the decomposed elements."
+            }
+        },
+        {
+            "name": "duckdb_create_time_tz",
+            "return_type": "duckdb_time_tz",
+            "params": [
+                {
+                    "type": "int64_t",
+                    "name": "micros"
+                },
+                {
+                    "type": "int32_t",
+                    "name": "offset"
+                }
+            ],
+            "comment": {
+                "description": "Create a `duckdb_time_tz` object from micros and a timezone offset.\n\n",
+                "param_comments": {
+                    "micros": "The microsecond component of the time.",
+                    "offset": "The timezone offset component of the time."
+                },
+                "return_value": "The `duckdb_time_tz` element."
+            }
+        },
+        {
+            "name": "duckdb_from_time_tz",
+            "return_type": "duckdb_time_tz_struct",
+            "params": [
+                {
+                    "type": "duckdb_time_tz",
+                    "name": "micros"
+                }
+            ],
+            "comment": {
+                "description": "Decompose a TIME_TZ objects into micros and a timezone offset.\n\nUse `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.\n\n",
+                "param_comments": {
+                    "micros": "The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column."
+                }
+            }
+        },
+        {
+            "name": "duckdb_to_time",
+            "return_type": "duckdb_time",
+            "params": [
+                {
+                    "type": "duckdb_time_struct",
+                    "name": "time"
+                }
+            ],
+            "comment": {
+                "description": "Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).\n\n",
+                "param_comments": {
+                    "time": "The hour, minute, second and microsecond in a `duckdb_time_struct`."
+                },
+                "return_value": "The `duckdb_time` element."
+            }
+        },
+        {
+            "name": "duckdb_from_timestamp",
+            "return_type": "duckdb_timestamp_struct",
+            "params": [
+                {
+                    "type": "duckdb_timestamp",
+                    "name": "ts"
+                }
+            ],
+            "comment": {
+                "description": "Decompose a `duckdb_timestamp` object into a `duckdb_timestamp_struct`.\n\n",
+                "param_comments": {
+                    "ts": "The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column."
+                },
+                "return_value": "The `duckdb_timestamp_struct` with the decomposed elements."
+            }
+        },
+        {
+            "name": "duckdb_to_timestamp",
+            "return_type": "duckdb_timestamp",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_struct",
+                    "name": "ts"
+                }
+            ],
+            "comment": {
+                "description": "Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.\n\n",
+                "param_comments": {
+                    "ts": "The de-composed elements in a `duckdb_timestamp_struct`."
+                },
+                "return_value": "The `duckdb_timestamp` element."
+            }
+        },
+        {
+            "name": "duckdb_is_finite_timestamp",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_timestamp",
+                    "name": "ts"
+                }
+            ],
+            "comment": {
+                "description": "Test a `duckdb_timestamp` to see if it is a finite value.\n\n",
+                "param_comments": {
+                    "ts": "The timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column."
+                },
+                "return_value": "True if the timestamp is finite, false if it is \u00b1infinity."
+            }
+        }
+    ]
+}
