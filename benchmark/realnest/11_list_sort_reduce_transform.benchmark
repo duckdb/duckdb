@@ -7,6 +7,8 @@ group real_nest
 
 require json
 
+require httpfs
+
 load benchmark/realnest/load.sql
 
 run
