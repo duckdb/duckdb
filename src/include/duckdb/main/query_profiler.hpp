@@ -199,7 +199,7 @@ private:
 
 private:
 	vector<PhaseTimingItem> GetOrderedPhaseTimings() const;
-	void MoveOptimizerPhasesToRoot();
+	//	void MoveOptimizerPhasesToRoot();
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.

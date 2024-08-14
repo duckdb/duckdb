@@ -193,7 +193,7 @@ void QueryProfiler::EndQuery() {
 				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_ROWS_SCANNED,
 				                           MetricsType::OPERATOR_ROWS_SCANNED);
 			}
-			MoveOptimizerPhasesToRoot();
+			//			MoveOptimizerPhasesToRoot();
 		}
 
 		string tree = ToString();
@@ -242,7 +242,7 @@ void QueryProfiler::StartPhase(string new_phase) {
 			if (phase == "optimizer") {
 				prefix += phase + "_";
 			} else {
-			    prefix += phase + " > ";
+				prefix += phase + " > ";
 			}
 		}
 		// when there are previous phases, we prefix the current phase with those phases
@@ -715,7 +715,7 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	return result;
 }
 
-//void QueryProfiler::MoveOptimizerPhasesToRoot(&QueryProfiler::query_info &root) {
+// void QueryProfiler::MoveOptimizerPhasesToRoot(&QueryProfiler::query_info &root) {
 //    auto &root_info = root.GetProfilingInfo();
 //    auto &root_metrics = root_info.metrics;
 //    for (auto &entry : phase_timings) {
@@ -727,7 +727,6 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 //        }
 //    }
 //}
-
 
 void QueryProfiler::Propagate(QueryProfiler &) {
 }

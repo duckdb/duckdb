@@ -15,6 +15,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
@@ -22,19 +23,6 @@ struct yyjson_mut_val;
 } // namespace duckdb_yyjson
 
 namespace duckdb {
-
-enum class MetricsType : uint8_t {
-	QUERY_NAME,
-	IDLE_THREAD_TIME,
-	CPU_TIME,
-	EXTRA_INFO,
-	CUMULATIVE_CARDINALITY,
-	OPERATOR_TYPE,
-	OPERATOR_CARDINALITY,
-	CUMULATIVE_ROWS_SCANNED,
-	OPERATOR_ROWS_SCANNED,
-	OPERATOR_TIMING,
-};
 
 struct MetricsTypeHashFunction {
 	uint64_t operator()(const MetricsType &index) const {

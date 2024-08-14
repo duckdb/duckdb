@@ -32,6 +32,7 @@
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
@@ -100,7 +101,6 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
-#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
@@ -4322,6 +4322,56 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "OPERATOR_ROWS_SCANNED";
 	case MetricsType::OPERATOR_TIMING:
 		return "OPERATOR_TIMING";
+	case MetricsType::ALL_OPTIMIZERS:
+		return "ALL_OPTIMIZERS";
+	case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
+		return "CUMULATIVE_OPTIMIZER_TIMING";
+	case MetricsType::OPTIMIZER_EXPRESSION_REWRITER_TIMING:
+		return "OPTIMIZER_EXPRESSION_REWRITER_TIMING";
+	case MetricsType::OPTIMIZER_FILTER_PULLUP_TIMING:
+		return "OPTIMIZER_FILTER_PULLUP_TIMING";
+	case MetricsType::OPTIMIZER_FILTER_PUSHDOWN_TIMING:
+		return "OPTIMIZER_FILTER_PUSHDOWN_TIMING";
+	case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER_TIMING:
+		return "OPTIMIZER_CTE_FILTER_PUSHER_TIMING";
+	case MetricsType::OPTIMIZER_REGEX_RANGE_TIMING:
+		return "OPTIMIZER_REGEX_RANGE_TIMING";
+	case MetricsType::OPTIMIZER_IN_CLAUSE_TIMING:
+		return "OPTIMIZER_IN_CLAUSE_TIMING";
+	case MetricsType::OPTIMIZER_JOIN_ORDER_TIMING:
+		return "OPTIMIZER_JOIN_ORDER_TIMING";
+	case MetricsType::OPTIMIZER_DELIMINATOR_TIMING:
+		return "OPTIMIZER_DELIMINATOR_TIMING";
+	case MetricsType::OPTIMIZER_UNNEST_REWRITER_TIMING:
+		return "OPTIMIZER_UNNEST_REWRITER_TIMING";
+	case MetricsType::OPTIMIZER_UNUSED_COLUMNS_TIMING:
+		return "OPTIMIZER_UNUSED_COLUMNS_TIMING";
+	case MetricsType::OPTIMIZER_STATISTICS_PROPAGATION_TIMING:
+		return "OPTIMIZER_STATISTICS_PROPAGATION_TIMING";
+	case MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING:
+		return "OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING";
+	case MetricsType::OPTIMIZER_COMMON_AGGREGATE_TIMING:
+		return "OPTIMIZER_COMMON_AGGREGATE_TIMING";
+	case MetricsType::OPTIMIZER_COLUMN_LIFETIME_TIMING:
+		return "OPTIMIZER_COLUMN_LIFETIME_TIMING";
+	case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING:
+		return "OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING";
+	case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN_TIMING:
+		return "OPTIMIZER_LIMIT_PUSHDOWN_TIMING";
+	case MetricsType::OPTIMIZER_TOP_N_TIMING:
+		return "OPTIMIZER_TOP_N_TIMING";
+	case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING:
+		return "OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING";
+	case MetricsType::OPTIMIZER_DUPLICATE_GROUPS_TIMING:
+		return "OPTIMIZER_DUPLICATE_GROUPS_TIMING";
+	case MetricsType::OPTIMIZER_REORDER_FILTER_TIMING:
+		return "OPTIMIZER_REORDER_FILTER_TIMING";
+	case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING:
+		return "OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING";
+	case MetricsType::OPTIMIZER_EXTENSION_TIMING:
+		return "OPTIMIZER_EXTENSION_TIMING";
+	case MetricsType::OPTIMIZER_MATERIALIZED_CTE_TIMING:
+		return "OPTIMIZER_MATERIALIZED_CTE_TIMING";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4358,6 +4408,81 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
 		return MetricsType::OPERATOR_TIMING;
+	}
+	if (StringUtil::Equals(value, "ALL_OPTIMIZERS")) {
+		return MetricsType::ALL_OPTIMIZERS;
+	}
+	if (StringUtil::Equals(value, "CUMULATIVE_OPTIMIZER_TIMING")) {
+		return MetricsType::CUMULATIVE_OPTIMIZER_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_EXPRESSION_REWRITER_TIMING")) {
+		return MetricsType::OPTIMIZER_EXPRESSION_REWRITER_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PULLUP_TIMING")) {
+		return MetricsType::OPTIMIZER_FILTER_PULLUP_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PUSHDOWN_TIMING")) {
+		return MetricsType::OPTIMIZER_FILTER_PUSHDOWN_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_CTE_FILTER_PUSHER_TIMING")) {
+		return MetricsType::OPTIMIZER_CTE_FILTER_PUSHER_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_REGEX_RANGE_TIMING")) {
+		return MetricsType::OPTIMIZER_REGEX_RANGE_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_IN_CLAUSE_TIMING")) {
+		return MetricsType::OPTIMIZER_IN_CLAUSE_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_ORDER_TIMING")) {
+		return MetricsType::OPTIMIZER_JOIN_ORDER_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_DELIMINATOR_TIMING")) {
+		return MetricsType::OPTIMIZER_DELIMINATOR_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_UNNEST_REWRITER_TIMING")) {
+		return MetricsType::OPTIMIZER_UNNEST_REWRITER_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_UNUSED_COLUMNS_TIMING")) {
+		return MetricsType::OPTIMIZER_UNUSED_COLUMNS_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_STATISTICS_PROPAGATION_TIMING")) {
+		return MetricsType::OPTIMIZER_STATISTICS_PROPAGATION_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING")) {
+		return MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_AGGREGATE_TIMING")) {
+		return MetricsType::OPTIMIZER_COMMON_AGGREGATE_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COLUMN_LIFETIME_TIMING")) {
+		return MetricsType::OPTIMIZER_COLUMN_LIFETIME_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING")) {
+		return MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_LIMIT_PUSHDOWN_TIMING")) {
+		return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_TOP_N_TIMING")) {
+		return MetricsType::OPTIMIZER_TOP_N_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING")) {
+		return MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_DUPLICATE_GROUPS_TIMING")) {
+		return MetricsType::OPTIMIZER_DUPLICATE_GROUPS_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_REORDER_FILTER_TIMING")) {
+		return MetricsType::OPTIMIZER_REORDER_FILTER_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING")) {
+		return MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_EXTENSION_TIMING")) {
+		return MetricsType::OPTIMIZER_EXTENSION_TIMING;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_MATERIALIZED_CTE_TIMING")) {
+		return MetricsType::OPTIMIZER_MATERIALIZED_CTE_TIMING;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
