@@ -63,7 +63,7 @@ struct ApproxDistinctCountState {
 
 	//! Algorithm 6
 	static int64_t EstimateCardinality(uint32_t *c) {
-		auto z = M * duckdb_hll::hllTau((M - c[Q]) / double(M));
+		auto z = M * duckdb_hll::hllTau((double(M) - c[Q]) / double(M));
 
 		for (idx_t k = Q; k >= 1; --k) {
 			z += c[k];

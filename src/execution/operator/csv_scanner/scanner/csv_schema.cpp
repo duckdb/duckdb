@@ -62,7 +62,7 @@ bool CSVSchema::Empty() const {
 
 bool CSVSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
                              const string &cur_file_path) {
-	D_ASSERT(names.size() == types.size() && !names.empty());
+	D_ASSERT(names.size() == types.size());
 	bool match = true;
 	unordered_map<string, TypeIdxPair> current_schema;
 	for (idx_t i = 0; i < names.size(); i++) {

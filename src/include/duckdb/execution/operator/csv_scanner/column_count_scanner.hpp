@@ -17,17 +17,20 @@
 
 namespace duckdb {
 
+struct ColumnCount {
+	idx_t number_of_columns = 0;
+	bool last_value_always_empty = true;
+};
 class ColumnCountResult : public ScannerResult {
 public:
 	ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
-	inline idx_t &operator[](size_t index) {
+	inline ColumnCount &operator[](size_t index) {
 		return column_counts[index];
 	}
 
-	idx_t column_counts[STANDARD_VECTOR_SIZE];
+	ColumnCount column_counts[STANDARD_VECTOR_SIZE];
 	idx_t current_column_count = 0;
 	bool error = false;
-	bool last_value_always_empty = true;
 	idx_t result_position = 0;
 
 	//! Adds a Value to the result

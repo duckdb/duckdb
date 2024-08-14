@@ -33,28 +33,28 @@ static const DefaultMacro internal_macros[] = {
 	{"pg_catalog", "current_schemas", {"include_implicit"}, "current_schemas(include_implicit)"},  	// names of schemas in search path
 
 	// privilege functions
-	// {"has_any_column_privilege", {"user", "table", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for any column of table
 	{"pg_catalog", "has_any_column_privilege", {"table", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for any column of table
-	// {"has_column_privilege", {"user", "table", "column", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for column
+	{"pg_catalog", "has_any_column_privilege", {"user", "table", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for any column of table
 	{"pg_catalog", "has_column_privilege", {"table", "column", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for column
-	// {"has_database_privilege", {"user", "database", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for database
+	{"pg_catalog", "has_column_privilege", {"user", "table", "column", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for column
 	{"pg_catalog", "has_database_privilege", {"database", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for database
-	// {"has_foreign_data_wrapper_privilege", {"user", "fdw", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for foreign-data wrapper
+	{"pg_catalog", "has_database_privilege", {"user", "database", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for database
 	{"pg_catalog", "has_foreign_data_wrapper_privilege", {"fdw", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for foreign-data wrapper
-	// {"has_function_privilege", {"user", "function", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for function
+	{"pg_catalog", "has_foreign_data_wrapper_privilege", {"user", "fdw", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for foreign-data wrapper
 	{"pg_catalog", "has_function_privilege", {"function", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for function
-	// {"has_language_privilege", {"user", "language", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for language
+	{"pg_catalog", "has_function_privilege", {"user", "function", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for function
 	{"pg_catalog", "has_language_privilege", {"language", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for language
-	// {"has_schema_privilege", {"user", "schema, privilege", nullptr}, "true"},  //boolean  //does user have privilege for schema
+	{"pg_catalog", "has_language_privilege", {"user", "language", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for language
 	{"pg_catalog", "has_schema_privilege", {"schema", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for schema
-	// {"has_sequence_privilege", {"user", "sequence", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for sequence
+	{"pg_catalog", "has_schema_privilege", {"user", "schema", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for schema
 	{"pg_catalog", "has_sequence_privilege", {"sequence", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for sequence
-	// {"has_server_privilege", {"user", "server", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for foreign server
+	{"pg_catalog", "has_sequence_privilege", {"user", "sequence", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for sequence
 	{"pg_catalog", "has_server_privilege", {"server", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for foreign server
-	// {"has_table_privilege", {"user", "table", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for table
+	{"pg_catalog", "has_server_privilege", {"user", "server", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for foreign server
 	{"pg_catalog", "has_table_privilege", {"table", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for table
-	// {"has_tablespace_privilege", {"user", "tablespace", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for tablespace
+	{"pg_catalog", "has_table_privilege", {"user", "table", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for table
 	{"pg_catalog", "has_tablespace_privilege", {"tablespace", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for tablespace
+	{"pg_catalog", "has_tablespace_privilege", {"user", "tablespace", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for tablespace
 
 	// various postgres system functions
 	{"pg_catalog", "pg_get_viewdef", {"oid", nullptr}, "(select sql from duckdb_views() v where v.view_oid=oid)"},
@@ -166,44 +166,61 @@ static const DefaultMacro internal_macros[] = {
 	// regexp functions
 	{DEFAULT_SCHEMA, "regexp_split_to_table", {"text", "pattern", nullptr}, "unnest(string_split_regex(text, pattern))"},
 
-    // storage helper functions
-    {DEFAULT_SCHEMA, "get_block_size", {"db_name"}, "(SELECT block_size FROM pragma_database_size() WHERE database_name = db_name)"},
+	// storage helper functions
+	{DEFAULT_SCHEMA, "get_block_size", {"db_name"}, "(SELECT block_size FROM pragma_database_size() WHERE database_name = db_name)"},
+
+	// string functions
+	{DEFAULT_SCHEMA, "md5_number_upper", {"param"}, "((md5_number(param)::bit::varchar)[65:])::bit::uint64"},
+	{DEFAULT_SCHEMA, "md5_number_lower", {"param"}, "((md5_number(param)::bit::varchar)[:64])::bit::uint64"},
 
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};
 
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro, unique_ptr<MacroFunction> function) {
-	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
-		function->parameters.push_back(
-		    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
-	}
-	D_ASSERT(function->type == MacroType::SCALAR_MACRO);
-	auto type = CatalogType::MACRO_ENTRY;
-	auto bind_info = make_uniq<CreateMacroInfo>(type);
-	bind_info->schema = default_macro.schema;
-	bind_info->name = default_macro.name;
-	bind_info->temporary = true;
-	bind_info->internal = true;
-	bind_info->function = std::move(function);
-	return bind_info;
-
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro) {
+	return CreateInternalMacroInfo(array_ptr<const DefaultMacro>(default_macro));
 }
 
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro) {
-	// parse the expression
-	auto expressions = Parser::ParseExpressionList(default_macro.macro);
-	D_ASSERT(expressions.size() == 1);
 
-	auto result = make_uniq<ScalarMacroFunction>(std::move(expressions[0]));
-	return CreateInternalMacroInfo(default_macro, std::move(result));
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(array_ptr<const DefaultMacro> macros) {
+	auto type = CatalogType::MACRO_ENTRY;
+	auto bind_info = make_uniq<CreateMacroInfo>(type);
+	for(auto &default_macro : macros) {
+		// parse the expression
+		auto expressions = Parser::ParseExpressionList(default_macro.macro);
+		D_ASSERT(expressions.size() == 1);
+
+		auto function = make_uniq<ScalarMacroFunction>(std::move(expressions[0]));
+		for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
+			function->parameters.push_back(
+			    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
+		}
+		D_ASSERT(function->type == MacroType::SCALAR_MACRO);
+		bind_info->macros.push_back(std::move(function));
+	}
+	bind_info->schema = macros[0].schema;
+	bind_info->name = macros[0].name;
+	bind_info->temporary = true;
+	bind_info->internal = true;
+	return bind_info;
+}
+
+static bool DefaultFunctionMatches(const DefaultMacro &macro, const string &schema, const string &name) {
+	return macro.schema == schema && macro.name == name;
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {
 	auto schema = StringUtil::Lower(input_schema);
 	auto name = StringUtil::Lower(input_name);
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
-		if (internal_macros[index].schema == schema && internal_macros[index].name == name) {
-			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
+		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
+			// found the function! keep on iterating to find all overloads
+			idx_t overload_count;
+			for(overload_count = 1; internal_macros[index + overload_count].name; overload_count++) {
+				if (!DefaultFunctionMatches(internal_macros[index + overload_count], schema, name)) {
+					break;
+				}
+			}
+			return DefaultFunctionGenerator::CreateInternalMacroInfo(array_ptr<const DefaultMacro>(internal_macros + index, overload_count));
 		}
 	}
 	return nullptr;

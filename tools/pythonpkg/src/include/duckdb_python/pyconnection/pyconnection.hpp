@@ -163,7 +163,7 @@ public:
 	py::list ExtractStatements(const string &query);
 
 	unique_ptr<DuckDBPyRelation> ReadJSON(
-	    const string &name, const Optional<py::object> &columns = py::none(),
+	    const py::object &name, const Optional<py::object> &columns = py::none(),
 	    const Optional<py::object> &sample_size = py::none(), const Optional<py::object> &maximum_depth = py::none(),
 	    const Optional<py::str> &records = py::none(), const Optional<py::str> &format = py::none(),
 	    const Optional<py::object> &date_format = py::none(), const Optional<py::object> &timestamp_format = py::none(),
