@@ -2,6 +2,14 @@
 # description: Run query 22 from the TPC-DS benchmark ()
 # group: [tpcds-sf100]
 
-template benchmark/large/tpcds-sf100/tpcds_sf100.benchmark.in
-QUERY_NUMBER=22
-QUERY_NUMBER_PADDED=22
+name q22
+group tpcds
+subgroup sf100
+
+require tpcds
+
+cache tpcds_sf100.duckdb
+
+load benchmark/large/tpcds-sf100/load.sql
+
+run extension/tpcds/dsdgen/queries/22.sql
