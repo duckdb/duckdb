@@ -27,7 +27,7 @@ class TestArrowPyCapsule(object):
             conn = duckdb.connect()
             rel = conn.sql("select i, i+1, -i from range(100) t(i)")
 
-            capsule = rel.arrow_capsule()
+            capsule = rel.__arrow_c_stream__()
             return capsule
 
         capsule = create_capsule()
