@@ -1,6 +1,6 @@
 # name: test/fuzzer/duckfuzz/fuzzer_issue_2698.test
 # description: Test fuzzyduck
-# group: [fuzzyduck]
+# group: [duckfuzz]
 
 require json
 
