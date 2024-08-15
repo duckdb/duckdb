@@ -167,12 +167,13 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	// Create Arrow Result
 	auto input_data = db.QueryArrow("SELECT 42");
 
+	// Since this is temporary and has a schema, it will fail in a internal code path
 	db.CreateTable("my_table", input_data, "my_schema", true);
 
-	// input_data = db.QueryArrow("SELECT 42");
-
+	// we can then reuse the same input data to properly insert into a table with a schema
 	db.CreateTable("my_table", input_data, "my_schema");
 
+	// we can check it works
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_schema.my_table"));
 }
 
