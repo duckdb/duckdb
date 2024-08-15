@@ -52,8 +52,8 @@ vector<CreateSecretFunction> CreateHTTPSecretFunctions::GetDefaultSecretFunction
 	return result;
 }
 
-static const char *TryGetEnv(string name) {
-	const char *res = std::getenv(name.c_str());
+static const char *TryGetEnv(const char *name) {
+	const char *res = std::getenv(name);
 	if (res) {
 		return res;
 	}

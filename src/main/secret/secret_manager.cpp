@@ -115,7 +115,7 @@ void SecretManager::RegisterSecretType(SecretType &type) {
 
 void SecretManager::RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) {
 	unique_lock<mutex> lck(manager_lock);
-	RegisterSecretFunctionInternal(function, on_conflict);
+	RegisterSecretFunctionInternal(std::move(function), on_conflict);
 }
 
 unique_ptr<SecretEntry> SecretManager::RegisterSecret(CatalogTransaction transaction,
