@@ -1,5 +1,9 @@
 #include "duckdb/optimizer/filter_pullup.hpp"
 
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 
