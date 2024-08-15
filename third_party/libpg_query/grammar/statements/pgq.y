@@ -60,7 +60,7 @@ DropPropertyGraphStmt:
         			{
         				PGDropPropertyGraphStmt *n = makeNode(PGDropPropertyGraphStmt);
         				n->name = $6;
-        				n->behavior = $5;
+        				n->behavior = $7;
         				n->missing_ok = true;
         				$$ = (PGNode *)n;
         			}
