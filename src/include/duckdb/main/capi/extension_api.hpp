@@ -319,6 +319,15 @@ typedef struct {
 	duckdb_interval (*duckdb_get_interval)(duckdb_value val);
 	duckdb_logical_type (*duckdb_get_value_type)(duckdb_value val);
 	duckdb_blob (*duckdb_get_blob)(duckdb_value val);
+	duckdb_scalar_function_set (*duckdb_create_scalar_function_set)(const char *name);
+	void (*duckdb_destroy_scalar_function_set)(duckdb_scalar_function_set *scalar_function_set);
+	duckdb_state (*duckdb_add_scalar_function_to_set)(duckdb_scalar_function_set set, duckdb_scalar_function function);
+	duckdb_state (*duckdb_register_scalar_function_set)(duckdb_connection con, duckdb_scalar_function_set set);
+	duckdb_aggregate_function_set (*duckdb_create_aggregate_function_set)(const char *name);
+	void (*duckdb_destroy_aggregate_function_set)(duckdb_aggregate_function_set *aggregate_function_set);
+	duckdb_state (*duckdb_add_aggregate_function_to_set)(duckdb_aggregate_function_set set,
+	                                                     duckdb_aggregate_function function);
+	duckdb_state (*duckdb_register_aggregate_function_set)(duckdb_connection con, duckdb_aggregate_function_set set);
 	// dev
 	// WARNING! the functions below are not (yet) stable
 
@@ -637,6 +646,14 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_get_interval = duckdb_get_interval;
 	result.duckdb_get_value_type = duckdb_get_value_type;
 	result.duckdb_get_blob = duckdb_get_blob;
+	result.duckdb_create_scalar_function_set = duckdb_create_scalar_function_set;
+	result.duckdb_destroy_scalar_function_set = duckdb_destroy_scalar_function_set;
+	result.duckdb_add_scalar_function_to_set = duckdb_add_scalar_function_to_set;
+	result.duckdb_register_scalar_function_set = duckdb_register_scalar_function_set;
+	result.duckdb_create_aggregate_function_set = duckdb_create_aggregate_function_set;
+	result.duckdb_destroy_aggregate_function_set = duckdb_destroy_aggregate_function_set;
+	result.duckdb_add_aggregate_function_to_set = duckdb_add_aggregate_function_to_set;
+	result.duckdb_register_aggregate_function_set = duckdb_register_aggregate_function_set;
 	result.duckdb_create_aggregate_function = duckdb_create_aggregate_function;
 	result.duckdb_destroy_aggregate_function = duckdb_destroy_aggregate_function;
 	result.duckdb_aggregate_function_set_name = duckdb_aggregate_function_set_name;

@@ -170,8 +170,6 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 
 	idx_t i = 0;
 	for (auto &active_state : active_states) {
-		D_ASSERT(active_state.get().GetRemainingSize() != 0);
-		D_ASSERT(active_state.get().GetReservation() != 0);
 		siz[i] = MaxValue<double>(static_cast<double>(active_state.get().GetRemainingSize()), 1);
 		res[i] = MaxValue<double>(static_cast<double>(active_state.get().GetReservation()), 1);
 		pen[i] = static_cast<double>(active_state.get().materialization_penalty.load());
