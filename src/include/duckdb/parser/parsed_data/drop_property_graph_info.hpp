@@ -23,10 +23,11 @@ namespace duckdb {
 
 struct DropPropertyGraphInfo : public DropInfo {
 	DropPropertyGraphInfo();
-	explicit DropPropertyGraphInfo(string property_graph_name);
+	explicit DropPropertyGraphInfo(string property_graph_name, bool missing_ok);
 
 	//! Property graph name
 	string property_graph_name;
+	bool missing_ok;
 
 public:
 	unique_ptr<DropInfo> Copy() const override;
