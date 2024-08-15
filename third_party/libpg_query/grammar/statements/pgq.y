@@ -52,8 +52,18 @@ DropPropertyGraphStmt:
 				PGDropPropertyGraphStmt *n = makeNode(PGDropPropertyGraphStmt);
 				n->name = $4;
 				n->behavior = $5;
+				n->missing_ok = false;
 				$$ = (PGNode *)n;
 			}
+        |
+        DROP PROPERTY GRAPH IF_P EXISTS qualified_name opt_drop_behavior
+        			{
+        				PGDropPropertyGraphStmt *n = makeNode(PGDropPropertyGraphStmt);
+        				n->name = $6;
+        				n->behavior = $5;
+        				n->missing_ok = true;
+        				$$ = (PGNode *)n;
+        			}
 		;
 
 /* -------------------------------
