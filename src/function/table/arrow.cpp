@@ -7,12 +7,14 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/table/arrow.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/function/table/arrow/arrow_type_info.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "utf8proc_wrapper.hpp"
+
+#include <iostream>
 
 namespace duckdb {
 
@@ -31,6 +33,11 @@ static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSiz
 
 static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
 	auto format = string(schema.format);
+
+	auto canonical_extension = string(schema.metadata);
+	if (canonical_extension == "arrow.uuid") {
+		return make_uniq<ArrowType>(LogicalType::UUID);
+	}
 	if (format == "n") {
 		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
@@ -242,9 +249,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
 		return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
-	} else if (format == "arrow.uuid") {
-		return make_uniq<ArrowType>(LogicalType::UUID);
-	} else {
+	}  else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 	}
 }

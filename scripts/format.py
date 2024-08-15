@@ -22,7 +22,7 @@ except Exception as e:
     exit(-1)
 
 try:
-    ver = subprocess.check_output(('clang-format', '--version'), text=True)
+    ver = subprocess.check_output(('/opt/homebrew/bin/clang-format', '--version'), text=True)
     if '11.' not in ver:
         print('you need to run `pip install clang_format==11.0.1 - `', ver)
         exit(-1)
@@ -30,7 +30,7 @@ except Exception as e:
     print('you need to run `pip install clang_format==11.0.1 - `', e)
     exit(-1)
 
-cpp_format_command = 'clang-format --sort-includes=0 -style=file'
+cpp_format_command = '/opt/homebrew/bin/clang-format --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
 
 try:
