@@ -94,6 +94,8 @@ public:
 				// We must Release the error (Malloc-ed string)
 				adbc_error.release(&adbc_error);
 				InitializeADBCError(&adbc_error);
+				REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+				arrow_stream.release = nullptr;
 				return;
 			}
 			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY, table_name.c_str(),
