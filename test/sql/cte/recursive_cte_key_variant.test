@@ -56,7 +56,7 @@ WITH RECURSIVE tbl(a,b,c) USING KEY (a,b,c) AS (SELECT * FROM (VALUES (1, 2, 3),
 
 # Reference the recurring table more than once
 query III
-WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT 1, NULL, NULL UNION SELECT tbl.a+1, rec1.a, rec2.b FROM tbl, recurring_tbl AS rec1, recurring_tbl AS rec2 WHERE tbl.a < 5) SELECT * FROM tbl;
+WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT 1, NULL, NULL UNION SELECT tbl.a+1, rec1.a, rec2.b FROM tbl, RECURRING tbl AS rec1, RECURRING tbl AS rec2 WHERE tbl.a < 5) SELECT * FROM tbl;
 ----
 1	NULL	NULL
 2	1	NULL
@@ -92,7 +92,7 @@ WITH RECURSIVE cc(node, comp) USING KEY (node) AS (
 	FROM nodes AS n
 		UNION
 	(SELECT DISTINCT ON (u.node) u.node, v.comp
-	FROM recurring_cc AS u, cc AS v, edges AS e
+	FROM RECURRING cc AS u, cc AS v, edges AS e
 	WHERE (e.here, e.there) = (u.node, v.node)
 	AND v.comp < u.comp
 	ORDER BY u.node asc, v.comp asc)
@@ -146,7 +146,7 @@ WITH RECURSIVE bellman(knode, distance) USING KEY (knode) AS (
   FROM   nodes AS n
   UNION
   (SELECT rec.knode AS knode, n.distance + e.length AS distance
-  FROM   bellman AS n, edges AS e, recurring_bellman AS rec
+  FROM   bellman AS n, edges AS e, RECURRING bellman AS rec
   WHERE  (e.here, e.there) = (n.knode, rec.knode)
   AND    rec.distance > n.distance + e.length
   ORDER BY distance DESC)

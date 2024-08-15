@@ -11,13 +11,15 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include <utility>
+
 namespace duckdb {
 
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
                                            unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
                                            idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, types, estimated_cardinality), ctename(std::move(ctename)),
-      table_index(table_index), union_all(union_all) {
+    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
+      ctename(std::move(ctename)), table_index(table_index), union_all(union_all) {
 	children.push_back(std::move(top));
 	children.push_back(std::move(bottom));
 }

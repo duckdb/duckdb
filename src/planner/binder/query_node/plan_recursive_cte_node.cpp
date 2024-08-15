@@ -26,9 +26,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 
 	// Check if there is a reference to the recursive or recurring table, if not create a set operator.
 	if ((!node.right_binder->bind_context.cte_references[node.ctename] ||
-	     *node.right_binder->bind_context.cte_references[node.ctename] == 0) &&
-	    (!node.right_binder->bind_context.cte_references["recurring_" + node.ctename] ||
-	     *node.right_binder->bind_context.cte_references["recurring_" + node.ctename] == 0)) {
+	     *node.right_binder->bind_context.cte_references[node.ctename] == 0)) {
 		auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
 		                                           std::move(right_node), LogicalOperatorType::LOGICAL_UNION, true);
 		return VisitQueryNode(node, std::move(root));

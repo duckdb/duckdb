@@ -25,6 +25,7 @@ public:
 	TableReferenceType type;
 	//! The sample options (if any)
 	unique_ptr<SampleOptions> sample;
+	bool is_recurring = false;
 
 public:
 	template <class TARGET>

@@ -1473,6 +1473,11 @@ relation_expr:
 					$$->inh = false;
 					$$->alias = NULL;
 				}
+			| RECURRING qualified_name
+				{
+					$$ = $2;
+					$$->is_recurring = true;
+				}
 		;
 
 

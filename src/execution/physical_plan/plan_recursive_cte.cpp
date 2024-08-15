@@ -84,7 +84,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	} else {
 		// If the key variant has been used, a recurring table will be created.
 		auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
-		recursive_cte_tables[op.recurring_index] = recurring_table;
+		recurring_cte_tables[op.table_index] = recurring_table;
 
 		auto right = CreatePlan(*op.children[1]);
 
@@ -133,8 +133,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 		throw InvalidInputException("Referenced recursive CTE does not exist.");
 	}
 
+	// If we found a recursive CTE and we want to scan the recursive table, we search for it,
+	if (op.is_recurring) {
+		cte = recurring_cte_tables.find(op.cte_index);
+	}
+
 	auto chunk_scan = make_uniq<PhysicalColumnDataScan>(
-	    cte->second.get()->Types(), PhysicalOperatorType::RECURSIVE_CTE_SCAN, op.estimated_cardinality, op.cte_index);
+	    cte->second.get()->Types(),
+	    op.is_recurring ? PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN : PhysicalOperatorType::RECURSIVE_CTE_SCAN,
+	    op.estimated_cardinality, op.cte_index);
 
 	chunk_scan->collection = cte->second.get();
 

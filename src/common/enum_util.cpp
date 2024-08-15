@@ -5091,6 +5091,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "CHUNK_SCAN";
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
 		return "RECURSIVE_CTE_SCAN";
+	case PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN:
+		return "RECURSIVE_RECURRING_CTE_SCAN";
 	case PhysicalOperatorType::CTE_SCAN:
 		return "CTE_SCAN";
 	case PhysicalOperatorType::DELIM_SCAN:
@@ -5280,6 +5282,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "RECURSIVE_CTE_SCAN")) {
 		return PhysicalOperatorType::RECURSIVE_CTE_SCAN;
+	}
+	if (StringUtil::Equals(value, "RECURSIVE_RECURRING_CTE_SCAN")) {
+		return PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN;
 	}
 	if (StringUtil::Equals(value, "CTE_SCAN")) {
 		return PhysicalOperatorType::CTE_SCAN;
