@@ -67,10 +67,12 @@ unique_ptr<LogicalOperator> FilterPullup::PullupInnerJoin(unique_ptr<LogicalOper
 
 	// Get the filters from both sides of the join
 	op = PullupBothSide(std::move(op));
-	unique_ptr<LogicalOperator> filter = make_uniq<LogicalFilter>();
+	vector<unique_ptr<Expression>> expressions;
 	if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
-		filter->expressions = std::move(op->expressions);
+		expressions = std::move(op->expressions);
 		op = std::move(op->children[0]);
+	} else if (!can_pullup) {
+		return op; // No filters from below, and we can't pullup, stop.
 	}
 
 	// Also extract the filters of the joins
@@ -78,24 +80,30 @@ unique_ptr<LogicalOperator> FilterPullup::PullupInnerJoin(unique_ptr<LogicalOper
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op->Cast<LogicalComparisonJoin>();
 		for (auto &cond : comp_join.conditions) {
-			filter->expressions.push_back(
+			expressions.push_back(
 			    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right)));
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &any_join = op->Cast<LogicalAnyJoin>();
-		filter->expressions.push_back(std::move(any_join.condition));
+		expressions.push_back(std::move(any_join.condition));
 		break;
 	}
 	default:
 		throw NotImplementedException("PullupInnerJoin for LogicalOperatorType::%s", EnumUtil::ToString(op->type));
 	}
 
-	// Convert to cross product and pull everything up
+	// Convert to cross product
 	op = make_uniq<LogicalCrossProduct>(std::move(op->children[0]), std::move(op->children[1]));
-	filter->children.push_back(std::move(op));
-	return PullupFilter(std::move(filter));
+	if (can_pullup) {
+		for (auto &expr : expressions) {
+			filters_expr_pullup.push_back(std::move(expr));
+		}
+	} else {
+		op = GeneratePullupFilter(std::move(op), expressions);
+	}
+	return op;
 }
 
 unique_ptr<LogicalOperator> FilterPullup::PullupCrossProduct(unique_ptr<LogicalOperator> op) {
