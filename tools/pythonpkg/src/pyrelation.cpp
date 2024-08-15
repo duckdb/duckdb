@@ -946,6 +946,17 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	return ToArrowTableInternal(batch_size, false);
 }
 
+py::object DuckDBPyRelation::ToArrowCapsule() {
+	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
+		ExecuteOrThrow();
+	}
+	AssertResultOpen();
+	return result->FetchArrowCapsule();
+}
+
 PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size) {
 	auto arrow = ToArrowTableInternal(batch_size, true);
 	return py::cast<PolarsDataFrame>(pybind11::module_::import("polars").attr("DataFrame")(arrow));

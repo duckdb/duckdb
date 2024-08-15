@@ -194,6 +194,8 @@ public:
 
 	PolarsDataFrame ToPolars(idx_t batch_size);
 
+	py::object ToArrowCapsule();
+
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
