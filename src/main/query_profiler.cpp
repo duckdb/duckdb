@@ -442,8 +442,7 @@ string QueryProfiler::QueryTreeToString() const {
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	if (!IsEnabled()) {
-		ss << "Query profiling is disabled. Call "
-		      "Connection::EnableProfiling() to enable profiling!";
+		ss << "Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!";
 		return;
 	}
 	ss << "┌─────────────────────────────────────┐\n";
