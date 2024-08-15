@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-const uint64_t VERSION_NUMBER = 65;
+const uint64_t VERSION_NUMBER = 64;
 
 struct StorageVersionInfo {
 	const char *version_name;
