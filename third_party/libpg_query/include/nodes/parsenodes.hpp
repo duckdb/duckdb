@@ -2192,7 +2192,7 @@ typedef struct PGDropPropertyGraphStmt {
     PGNodeTag type;
     PGRangeVar *name;
     PGDropBehavior behavior;
-	bool missing_ok; /* What to do if property graph is missing
+	bool missing_ok; /* What to do if property graph is missing */
 } PGDropPropertyGraphStmt;
 
 typedef struct PGCreatePropertyGraphStmt {
