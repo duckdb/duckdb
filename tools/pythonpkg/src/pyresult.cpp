@@ -379,6 +379,16 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 	                             result->client_properties);
 }
 
+ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
+	if (!result) {
+		throw InvalidInputException("There is no query result");
+	}
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
+	// The 'result_stream' is part of the 'private_data' of the ArrowArrayStream and its lifetime is bound to that of
+	// the ArrowArrayStream.
+	return result_stream->stream;
+}
+
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
@@ -386,10 +396,28 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t 
 	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
-	//! We have to construct an Arrow Array Stream
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
-	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream); // NOLINT
+	auto stream = FetchArrowArrayStream(rows_per_batch);
+	py::object record_batch_reader = record_batch_reader_func((uint64_t)&stream); // NOLINT
 	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
+}
+
+static void ArrowArrayStreamPyCapsuleDestructor(PyObject *object) {
+	auto data = PyCapsule_GetPointer(object, "arrow_array_stream");
+	if (!data) {
+		return;
+	}
+	auto stream = reinterpret_cast<ArrowArrayStream *>(data);
+	if (stream->release) {
+		stream->release(stream);
+	}
+	delete stream;
+}
+
+py::object DuckDBPyResult::FetchArrowCapsule(idx_t rows_per_batch) {
+	auto stream_p = FetchArrowArrayStream(rows_per_batch);
+	auto stream = new ArrowArrayStream();
+	*stream = stream_p;
+	return py::capsule(stream, "arrow_array_stream", ArrowArrayStreamPyCapsuleDestructor);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {
