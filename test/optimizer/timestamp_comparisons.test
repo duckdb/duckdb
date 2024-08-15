@@ -11,6 +11,9 @@ statement ok
 SET TimeZone='ECT';
 
 statement ok
+SET CALENDAR='gregorian';
+
+statement ok
 insert into t values('2028-02-28 01:00:00');
 
 # EQUAL is affected (and LOWER, GREATER too)
@@ -69,22 +72,16 @@ select '1993-03-28 02:00:00'::timestamp, '1993-03-28 02:00:00'::timestamp::times
 ----
 1993-03-28 02:00:00	1993-03-28 03:00:00
 
-query II
-select '1993-03-28 02:00:00'::timestamp, '1993-03-28 02:00:00'::timestamp::timestamptz::timestamp;
-----
-1993-03-28 02:00:00	1993-03-28 03:00:00
-
-
 statement ok
 create table t1 (ts_s TIMESTAMP_S, ts_ms TIMESTAMP_MS, ts_ns TIMESTAMP_NS, ts TIMESTAMP);
 
 statement ok
-insert into t1 values ('2028-02-28 01:00:00.123456', '2028-02-28 01:00:00.123456', '2028-02-28 01:00:00.123456', '2028-02-28 01:00:00.123456');
+insert into t1 values ('2028-02-28 01:00:00.123456789', '2028-02-28 01:00:00.123456789', '2028-02-28 01:00:00.123456789', '2028-02-28 01:00:00.123456789');
 
 query IIII
 select * from t1;
 ----
-2028-02-28 01:00:00	2028-02-28 01:00:00.123	2028-02-28 01:00:00.123456	2028-02-28 01:00:00.123456
+2028-02-28 01:00:00	2028-02-28 01:00:00.123	2028-02-28 01:00:00.123456789	2028-02-28 01:00:00.123456
 
 # ts is more precise than timestamp_s and timestamp_ms, so casting ts_s, ts_ms to ts is not valid.
 query III
@@ -96,21 +93,21 @@ false	false	true
 query III
 select ts::TIMESTAMP_S = ts_s, ts::TIMESTAMP_MS = ts_ms, ts::TIMESTAMP_NS = ts_ns from t1;
 ----
-true	true	true
+true	true	false
 
-# ts_s only has second precision, so the value of ts_s is 2028-02-28 01:00:00 and not equal to 2028-02-28 01:00:00.123456
+# ts_s only has second precision, so the value of ts_s is 2028-02-28 01:00:00 and not equal to 2028-02-28 01:00:00.123456789
 query III
-select ts_s::timestamp = timestamp '2028-02-28 01:00:00.123456', ts_ms::timestamp = timestamp '2028-02-28 01:00:00.123456', ts_ns::timestamp = timestamp '2028-02-28 01:00:00.123456'  from t1;
+select ts_s::timestamp = timestamp '2028-02-28 01:00:00.123456789', ts_ms::timestamp = timestamp '2028-02-28 01:00:00.123456789', ts_ns::timestamp = timestamp '2028-02-28 01:00:00.123456789'  from t1;
 ----
 false	false	true
 
-# ts_ms only has micro second precision, so the value of ts_ms is 2028-02-28 01:00:00.123 and not equal to 2028-02-28 01:00:00.123456
+# ts_ms only has micro second precision, so the value of ts_ms is 2028-02-28 01:00:00.123 and not equal to 2028-02-28 01:00:00.123456789
 query II
-select ts_s::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456', ts_ms = timestamp_ms '2028-02-28 01:00:00.123456'  from t1;
+select ts_s::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456789', ts_ms = timestamp_ms '2028-02-28 01:00:00.123456789'  from t1;
 ----
 false	true
 
 statement error
-select ts_ns::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456' from t1;
+select ts_ns::timestamp_ms = timestamp_ms '2028-02-28 01:00:00.123456789' from t1;
 ----
 <REGEX>:.*Conversion Error.*
