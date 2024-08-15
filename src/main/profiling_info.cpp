@@ -26,12 +26,40 @@ profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
 	};
 }
 
+profiler_settings_t ProfilingInfo::AllSettings() {
+	auto all_settings = DefaultSettings();
+	const auto optimizer_settings = GetAllOptimizerMetrics();
+
+	for (auto &setting : optimizer_settings) {
+		all_settings.insert(setting);
+	}
+
+	all_settings.insert(MetricsType::ALL_OPTIMIZERS);
+	all_settings.insert(MetricsType::CUMULATIVE_OPTIMIZER_TIMING);
+	return all_settings;
+}
+
+bool IsOptimizerMetric(MetricsType metric) {
+	const auto optimizers = GetAllOptimizerMetrics();
+	if (std::find(optimizers.begin(), optimizers.end(), metric) != optimizers.end()) {
+        return true;
+    }
+    return false;
+}
+
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
 
-	auto default_settings = DefaultSettings();
-	for (auto &metric : default_settings) {
+	auto all_settings = AllSettings();
+
+
+	for (auto &metric : all_settings) {
 		if (!Enabled(metric)) {
+			continue;
+		}
+
+		if (IsOptimizerMetric(metric)) {
+			metrics[metric] = Value::CreateValue(0.0);
 			continue;
 		}
 
@@ -39,13 +67,16 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::QUERY_NAME:
 		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING: {
+		case MetricsType::OPERATOR_TIMING:
+		case MetricsType::ALL_OPTIMIZERS:
+		case MetricsType::CUMULATIVE_OPTIMIZER_TIMING: {
 			metrics[metric] = Value::CreateValue(0.0);
 			break;
 		}
-		case MetricsType::OPERATOR_TYPE:
+		case MetricsType::OPERATOR_TYPE: {
 			metrics[metric] = Value::CreateValue<uint8_t>(0);
 			break;
+		}
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY:
 		case MetricsType::CUMULATIVE_ROWS_SCANNED:
@@ -55,6 +86,8 @@ void ProfilingInfo::ResetMetrics() {
 		}
 		case MetricsType::EXTRA_INFO:
 			break;
+		default:
+            throw Exception(ExceptionType::INTERNAL, "MetricsType" + EnumUtil::ToString(metric) + "not implemented");
 		}
 	}
 }
@@ -74,6 +107,10 @@ bool ProfilingInfo::Enabled(const MetricsType setting) const {
 	default:
 		break;
 	}
+
+	if (IsOptimizerMetric(setting)) {
+        return Enabled(MetricsType::CUMULATIVE_OPTIMIZER_TIMING);
+    }
 
 	return false;
 }
@@ -135,13 +172,20 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		// The metric cannot be NULL, and should have been 0 initialized.
 		D_ASSERT(!metrics[metric].IsNull());
 
+		if (IsOptimizerMetric(metric)) {
+			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
+			continue;
+		}
+
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
 			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
 			break;
 		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING: {
+		case MetricsType::OPERATOR_TIMING:
+		case MetricsType::ALL_OPTIMIZERS:
+		case MetricsType::CUMULATIVE_OPTIMIZER_TIMING: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			break;
 		}

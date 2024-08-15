@@ -8,7 +8,8 @@ import os
 
 os.chdir(os.path.dirname(__file__))
 
-metrics_file = os.path.join("..", "src", "include", "duckdb", "common", "enums", "metric_type.hpp")
+metrics_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enums", "metric_type.hpp")
+metrics_cpp_file = os.path.join("..", "src", "common", "enums", "metric_type.cpp")
 optimizer_file = os.path.join("..", "src", "include", "duckdb", "common", "enums", "optimizer_type.hpp")
 
 metrics = [
@@ -25,6 +26,8 @@ metrics = [
     "ALL_OPTIMIZERS",
     "CUMULATIVE_OPTIMIZER_TIMING",
 ]
+
+optimizer_metrics = []
 
 # Regular expression to match the enum values
 enum_pattern = r'\s*([A-Z_]+)\s*=\s*\d+,?|\s*([A-Z_]+),?'
@@ -49,7 +52,9 @@ with open(optimizer_file, "r") as f:
                 optimizer_type = match[1] if match[1] else match[2]
                 if optimizer_type == "INVALID":
                     continue
-                metrics.append('OPTIMIZER_' + optimizer_type + '_TIMING')
+                optimizer_type = 'OPTIMIZER_' + optimizer_type + '_TIMING'
+                metrics.append(optimizer_type)
+                optimizer_metrics.append(optimizer_type)
 
 
 header = """//-------------------------------------------------------------------------
@@ -63,8 +68,13 @@ header = """//------------------------------------------------------------------
 //-------------------------------------------------------------------------\n
 """
 
-# Write the metric type header
-with open(metrics_file, "w") as f:
+get_all_optimizer_metrics_function = """
+const std::vector<MetricsType> GetAllOptimizerMetrics() {
+    return {
+"""
+
+# Write the metric type header file
+with open(metrics_header_file, "w") as f:
     f.write(header)
 
     f.write('#pragma once\n\n')
@@ -79,7 +89,28 @@ with open(metrics_file, "w") as f:
 
     f.write("};\n\n")
 
+    f.write('const std::vector<MetricsType> GetAllOptimizerMetrics();\n\n')
+
     f.write("} // namespace duckdb\n")
+
+# Write the metric_type.cpp file
+with open(metrics_cpp_file, "w") as f:
+    f.write(header)
+
+    f.write('#include "duckdb/common/enums/metric_type.hpp"\n\n')
+    f.write("namespace duckdb {\n\n")
+
+    f.write('const std::vector<MetricsType> GetAllOptimizerMetrics() {\n')
+    f.write(f"    return{{\n")
+    
+    for metric in optimizer_metrics:
+        f.write(f"        MetricsType::{metric},\n")
+    f.write("    };\n")
+    f.write("}\n\n")
+
+
+    f.write("} // namespace duckdb\n")
+
 
 # Run the generate_enum_util.py script to update the enums.hpp file
 os.system("python generate_enum_util.py")

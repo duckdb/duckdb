@@ -728,6 +728,15 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &j
 	return metrics;
 }
 
+void AddOptimizerMetrics(profiler_settings_t &settings) {
+	if (settings.find(MetricsType::ALL_OPTIMIZERS) != settings.end()) {
+        auto &optimizer_metrics = GetAllOptimizerMetrics();
+		for (auto &metric : optimizer_metrics) {
+			settings.insert(metric);
+		}
+    }
+}
+
 void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 
@@ -742,7 +751,9 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 	}
 
 	config.enable_profiler = true;
-	config.profiler_settings = FillTreeNodeSettings(json);
+	auto settings = FillTreeNodeSettings(json);
+	AddOptimizerMetrics(settings);
+	config.profiler_settings = settings;
 }
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {

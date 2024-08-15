@@ -52,4 +52,6 @@ enum class MetricsType : uint8_t {
     OPTIMIZER_MATERIALIZED_CTE_TIMING,
 };
 
+const std::vector<MetricsType> GetAllOptimizerMetrics();
+
 } // namespace duckdb

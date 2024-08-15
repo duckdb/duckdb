@@ -1,0 +1,50 @@
+# name: test/sql/pragma/test_custom_optimizer_profiling.test
+# description: Test PRAGMA custom_profiling_settings with optimizers
+# group: [pragma]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = 'test/sql/pragma/output.json';
+
+# Turn on all optimizer settings
+statement ok
+PRAGMA custom_profiling_settings='{"ALL_OPTIMIZERS": "true"}'
+
+query I rowsort
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
+----
+"ALL_OPTIMIZERS": "true"
+"OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING": "true"
+"OPTIMIZER_COLUMN_LIFETIME_TIMING": "true"
+"OPTIMIZER_COMMON_AGGREGATE_TIMING": "true"
+"OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING": "true"
+"OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING": "true"
+"OPTIMIZER_CTE_FILTER_PUSHER_TIMING": "true"
+"OPTIMIZER_DELIMINATOR_TIMING": "true"
+"OPTIMIZER_DUPLICATE_GROUPS_TIMING": "true"
+"OPTIMIZER_EXPRESSION_REWRITER_TIMING": "true"
+"OPTIMIZER_EXTENSION_TIMING": "true"
+"OPTIMIZER_FILTER_PULLUP_TIMING": "true"
+"OPTIMIZER_FILTER_PUSHDOWN_TIMING": "true"
+"OPTIMIZER_IN_CLAUSE_TIMING": "true"
+"OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING": "true"
+"OPTIMIZER_JOIN_ORDER_TIMING": "true"
+"OPTIMIZER_LIMIT_PUSHDOWN_TIMING": "true"
+"OPTIMIZER_MATERIALIZED_CTE_TIMING": "true"
+"OPTIMIZER_REGEX_RANGE_TIMING": "true"
+"OPTIMIZER_REORDER_FILTER_TIMING": "true"
+"OPTIMIZER_STATISTICS_PROPAGATION_TIMING": "true"
+"OPTIMIZER_TOP_N_TIMING": "true"
+"OPTIMIZER_UNNEST_REWRITER_TIMING": "true"
+"OPTIMIZER_UNUSED_COLUMNS_TIMING": "true"
