@@ -242,6 +242,8 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
 		return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
+	} else if (format == "arrow.uuid") {
+		return make_uniq<ArrowType>(LogicalType::UUID);
 	} else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 	}

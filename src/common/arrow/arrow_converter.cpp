@@ -128,6 +128,9 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "g";
 		break;
 	case LogicalTypeId::UUID:
+		// This is a canonical extension, hence needs the arrow. prefix
+		child.format = "arrow.uuid";
+		break;
 	case LogicalTypeId::VARCHAR:
 		if (options.produce_arrow_string_view) {
 			child.format = "vu";
