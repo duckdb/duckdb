@@ -1093,7 +1093,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-IndexStorageInfo ART::GetStorageInfo(const bool get_buffers) {
+IndexStorageInfo ART::GetStorageInfo(bool get_buffers) const {
 
 	// set the name and root node
 	IndexStorageInfo info;
@@ -1118,7 +1118,7 @@ IndexStorageInfo ART::GetStorageInfo(const bool get_buffers) {
 	return info;
 }
 
-void ART::WritePartialBlocks() {
+void ART::WritePartialBlocks() const {
 
 	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();

@@ -80,10 +80,9 @@ public:
 
 	vector<column_t> GetRequiredColumns();
 
-	mutex indexes_lock;
-
 private:
 	//! Indexes associated with the current table
 	vector<unique_ptr<Index>> indexes;
+	mutex indexes_lock;
 };
 } // namespace duckdb

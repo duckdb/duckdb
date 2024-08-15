@@ -259,11 +259,11 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 
-void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<Index> &index) {
+void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const Index &index) {
 
 	// We will never write an index to the WAL that is not bound
 	D_ASSERT(index->IsBound());
-	auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(true);
+	const auto index_storage_info = index.Cast<BoundIndex>().GetStorageInfo(true);
 	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
 
 	serializer.WriteList(103, "index_storage", index_storage_info.buffers.size(), [&](Serializer::List &list, idx_t i) {
@@ -281,14 +281,16 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	// now serialize the index data to the persistent storage and write the index metadata
 	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
 	auto &table_idx_list = duck_index_entry.GetDataTableInfo().GetIndexes();
-	lock_guard<mutex> lock(table_idx_list.indexes_lock);
+	table_idx_list.Scan([&](Index &index) {
+		if (duck_index_entry.name == index.GetIndexName()) {
+			SerializeIndexToWAL(serializer, index);
+			return true;
+		}
+		return false;
+	});
 	auto &indexes = duck_index_entry.GetDataTableInfo().GetIndexes().Indexes();
 	// get the matching index and serialize its storage info
 	for (auto const &index : indexes) {
-		if (duck_index_entry.name == index->GetIndexName()) {
-			SerializeIndexToWAL(serializer, index);
-			break;
-		}
 	}
 
 	serializer.End();
