@@ -193,7 +193,7 @@ void QueryProfiler::EndQuery() {
 				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_ROWS_SCANNED,
 				                           MetricsType::OPERATOR_ROWS_SCANNED);
 			}
-			//			MoveOptimizerPhasesToRoot();
+            MoveOptimizerPhasesToRoot();
 
 			if (info.Enabled(MetricsType::OPERATOR_TYPE)) {
 				info.settings.erase(MetricsType::OPERATOR_TYPE);
@@ -231,30 +231,13 @@ string QueryProfiler::ToString(ExplainFormat explain_format) const {
 	}
 }
 
-void QueryProfiler::StartPhase(string new_phase) {
+void QueryProfiler::StartPhase(MetricsType PhaseMetric) {
 	if (!IsEnabled() || !running) {
 		return;
 	}
 
-	if (!phase_stack.empty()) {
-		// there are active phases
-		phase_profiler.End();
-		// add the timing to all phases prior to this one
-		string prefix = "";
-		for (auto &phase : phase_stack) {
-			phase_timings[phase] += phase_profiler.Elapsed();
-			if (phase == "optimizer") {
-				prefix += phase + "_";
-			} else {
-				prefix += phase + " > ";
-			}
-		}
-		// when there are previous phases, we prefix the current phase with those phases
-		new_phase = prefix + new_phase;
-	}
-
 	// start a new phase
-	phase_stack.push_back(new_phase);
+	phase_stack.push_back(PhaseMetric);
 	// restart the timer
 	phase_profiler.Start();
 }
@@ -459,6 +442,71 @@ string QueryProfiler::QueryTreeToString() const {
 	return str.str();
 }
 
+string RemovePhaseTimingName(string name, string metric) {
+    return metric.substr(name.size());
+}
+
+void RenderPhaseTimings(std::ostream &ss, pair<string, double> head, map<string, double> timings, idx_t width) {
+	ss << "┌────────────────────────────────────────────────┐\n";
+	ss << "│" +
+	         QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second),
+	                     width - 2) +
+	          "│\n";
+	ss << "│┌──────────────────────────────────────────────┐│\n";
+
+	for (const auto &entry : timings) {
+			ss << "││" +
+		          QueryProfiler::DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
+			                     width - 4) +
+			          "││\n";
+    }
+    ss << "│└──────────────────────────────────────────────┘│\n";
+    ss << "└────────────────────────────────────────────────┘\n";
+}
+
+void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo info, idx_t width) {
+	map<string, double> optimizer_timings;
+	map<string, double> planner_timings;
+	map<string, double> physical_planner_timings;
+
+	pair<string, double> optimizer_head;
+	pair<string, double> planner_head;
+	pair<string, double> physical_planner_head;
+
+	for (const auto &entry : info.metrics) {
+		if (info.IsOptimizerMetric(entry.first)) {
+			optimizer_timings[EnumUtil::ToString(entry.first).substr(10)] = entry.second.GetValue<double>();
+		} else if (info.IsPhaseTimingMetric(entry.first)) {
+			switch (entry.first) {
+			case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
+				continue;
+			case MetricsType::ALL_OPTIMIZERS:
+				optimizer_head = {"Optimizer Timing", entry.second.GetValue<double>()};
+				break;
+			case MetricsType::PHYSICAL_PLANNER_TIMING:
+				physical_planner_head = {"Physical Planner Timing", entry.second.GetValue<double>()};
+				break;
+			case MetricsType::PLANNER_TIMING:
+				planner_head = {"Planner Timing", entry.second.GetValue<double>()};
+				break;
+			default:
+				break;
+			}
+
+			auto metric = EnumUtil::ToString(entry.first);
+			if (StringUtil::StartsWith(metric, "PHYSICAL_PLANNER") && entry.first != MetricsType::PHYSICAL_PLANNER_TIMING) {
+				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
+			} else if (StringUtil::StartsWith(metric, "PLANNER") && entry.first != MetricsType::PLANNER_TIMING) {
+				planner_timings[metric.substr(8)] = entry.second.GetValue<double>();
+			}
+		}
+	}
+
+	RenderPhaseTimings(ss, optimizer_head, optimizer_timings, width);
+	RenderPhaseTimings(ss, physical_planner_head, physical_planner_timings, width);
+	RenderPhaseTimings(ss, planner_head, planner_timings, width);
+}
+
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	if (!IsEnabled()) {
 		ss << "Query profiling is disabled. Call "
@@ -482,42 +530,16 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		state->WriteProfilingInformation(ss);
 	}
 
-	constexpr idx_t TOTAL_BOX_WIDTH = 39;
-	ss << "┌─────────────────────────────────────┐\n";
-	ss << "│┌───────────────────────────────────┐│\n";
+	constexpr idx_t TOTAL_BOX_WIDTH = 50;
+	ss << "┌────────────────────────────────────────────────┐\n";
+	ss << "│┌──────────────────────────────────────────────┐│\n";
 	string total_time = "Total Time: " + RenderTiming(main_query.Elapsed());
 	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
-	ss << "│└───────────────────────────────────┘│\n";
-	ss << "└─────────────────────────────────────┘\n";
+	ss << "│└──────────────────────────────────────────────┘│\n";
+	ss << "└────────────────────────────────────────────────┘\n";
 	// print phase timings
 	if (PrintOptimizerOutput()) {
-		bool has_previous_phase = false;
-		for (const auto &entry : GetOrderedPhaseTimings()) {
-			if (!StringUtil::Contains(entry.first, " > ")) {
-				// primary phase!
-				if (has_previous_phase) {
-					ss << "│└───────────────────────────────────┘│\n";
-					ss << "└─────────────────────────────────────┘\n";
-				}
-				ss << "┌─────────────────────────────────────┐\n";
-				ss << "│" +
-				          DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
-				                     TOTAL_BOX_WIDTH - 2) +
-				          "│\n";
-				ss << "│┌───────────────────────────────────┐│\n";
-				has_previous_phase = true;
-			} else {
-				string entry_name = StringUtil::Split(entry.first, " > ")[1];
-				ss << "││" +
-				          DrawPadded(RenderTitleCase(entry_name) + ": " + RenderTiming(entry.second),
-				                     TOTAL_BOX_WIDTH - 4) +
-				          "││\n";
-			}
-		}
-		if (has_previous_phase) {
-			ss << "│└───────────────────────────────────┘│\n";
-			ss << "└─────────────────────────────────────┘\n";
-		}
+		PrintPhaseTimingsToStream(ss, root->GetProfilingInfo(), TOTAL_BOX_WIDTH);
 	}
 	// render the main operator tree
 	if (root) {
@@ -615,16 +637,16 @@ string QueryProfiler::ToJSON() const {
 	auto &settings = root->GetProfilingInfo();
 
 	settings.WriteMetricsToJSON(doc, result_obj);
-	if (settings.Enabled(MetricsType::EXTRA_INFO)) {
-		auto timings_list = yyjson_mut_arr(doc);
-		const auto &ordered_phase_timings = GetOrderedPhaseTimings();
-		for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
-			auto timing_object = yyjson_mut_arr_add_obj(doc, timings_list);
-			yyjson_mut_obj_add_strcpy(doc, timing_object, "annotation", ordered_phase_timings[i].first.c_str());
-			yyjson_mut_obj_add_real(doc, timing_object, "timing", ordered_phase_timings[i].second);
-		}
-		yyjson_mut_obj_add_val(doc, result_obj, "timings", timings_list);
-	}
+//	if (settings.Enabled(MetricsType::EXTRA_INFO)) {
+//		auto timings_list = yyjson_mut_arr(doc);
+//		const auto &ordered_phase_timings = GetOrderedPhaseTimings();
+//		for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
+//			auto timing_object = yyjson_mut_arr_add_obj(doc, timings_list);
+//			yyjson_mut_obj_add_strcpy(doc, timing_object, "annotation", ordered_phase_timings[i].first.c_str());
+//			yyjson_mut_obj_add_real(doc, timing_object, "timing", ordered_phase_timings[i].second);
+//		}
+//		yyjson_mut_obj_add_val(doc, result_obj, "timings", timings_list);
+//	}
 
 	// recursively print the physical operator tree
 
@@ -645,6 +667,22 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	}
 }
 
+profiler_settings_t EraseOptimizerSettings(profiler_settings_t settings) {
+    profiler_settings_t optimizer_settings_to_erase;
+
+	for (auto &setting : settings) {
+		if (ProfilingInfo::IsOptimizerMetric(setting)) {
+            optimizer_settings_to_erase.insert(setting);
+        }
+	}
+
+	for (auto &setting : optimizer_settings_to_erase) {
+        settings.erase(setting);
+    }
+
+	return settings;
+}
+
 unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root_p, profiler_settings_t settings,
                                                     idx_t depth) {
 	if (OperatorRequiresProfiling(root_p.type)) {
@@ -654,6 +692,10 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	unique_ptr<ProfilingNode> node = make_uniq<ProfilingNode>();
 	auto &info = node->GetProfilingInfo();
 	info = ProfilingInfo(settings, depth);
+	auto child_settings = settings;
+	if (depth == 0) {
+		child_settings = EraseOptimizerSettings(child_settings);
+    }
 	node->depth = depth;
 
 	if (depth != 0) {
@@ -669,7 +711,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root_p), reference<ProfilingNode>(*node)));
 	auto children = root_p.GetChildren();
 	for (auto &child : children) {
-		auto child_node = CreateTree(child.get(), settings, depth + 1);
+		auto child_node = CreateTree(child.get(), child_settings, depth + 1);
 		node->AddChild(std::move(child_node));
 	}
 	return node;
@@ -706,34 +748,17 @@ void QueryProfiler::Print() {
 	Printer::Print(QueryTreeToString());
 }
 
-vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() const {
-	vector<PhaseTimingItem> result;
-	// first sort the phases alphabetically
-	vector<string> phases;
-	for (auto &entry : phase_timings) {
-		phases.push_back(entry.first);
-	}
-	std::sort(phases.begin(), phases.end());
-	for (const auto &phase : phases) {
-		auto entry = phase_timings.find(phase);
-		D_ASSERT(entry != phase_timings.end());
-		result.emplace_back(entry->first, entry->second);
-	}
-	return result;
+void QueryProfiler::MoveOptimizerPhasesToRoot() {
+    auto &root_info = root->GetProfilingInfo();
+    auto &root_metrics = root_info.metrics;
+    for (auto &entry : phase_timings) {
+        auto &phase = entry.first;
+        auto &timing = entry.second;
+		if (root_info.Enabled(phase)) {
+			root_metrics[phase] = Value::CreateValue(timing);
+		}
+    }
 }
-
-// void QueryProfiler::MoveOptimizerPhasesToRoot(&QueryProfiler::query_info &root) {
-//    auto &root_info = root.GetProfilingInfo();
-//    auto &root_metrics = root_info.metrics;
-//    for (auto &entry : phase_timings) {
-//        auto &phase = entry.first;
-//        auto &timing = entry.second;
-//        if (StringUtil::StartsWith(phase, "optimizer")) {
-//            auto phase_name = StringUtil::Split(phase, " > ")[1];
-//            root_metrics[MetricsType::OPTIMIZER_TIMING] = timing;
-//        }
-//    }
-//}
 
 void QueryProfiler::Propagate(QueryProfiler &) {
 }

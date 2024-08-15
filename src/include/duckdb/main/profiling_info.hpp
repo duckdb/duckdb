@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/tree_node_settings.hpp
+// duckdb/main/profiling_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -24,15 +24,6 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
-struct MetricsTypeHashFunction {
-	uint64_t operator()(const MetricsType &index) const {
-		return std::hash<uint8_t>()(static_cast<uint8_t>(index));
-	}
-};
-
-typedef unordered_set<MetricsType, MetricsTypeHashFunction> profiler_settings_t;
-typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metrics_t;
-
 class ProfilingInfo {
 public:
 	// Enabling a metric adds it to this set.
@@ -46,7 +37,6 @@ public:
 public:
 	ProfilingInfo() = default;
 	explicit ProfilingInfo(profiler_settings_t &n_settings, idx_t depth = 0) : settings(n_settings) {
-		//		SetMandatorySettings();
 		if (depth == 0) {
 			settings.insert(MetricsType::QUERY_NAME);
 		} else {
@@ -60,11 +50,14 @@ public:
 public:
 	static profiler_settings_t DefaultSettings();
 	static profiler_settings_t DefaultOperatorSettings();
+	static profiler_settings_t PhaseTimingsSettings();
 	static profiler_settings_t AllSettings();
 
 public:
 	void ResetMetrics();
 	bool Enabled(const MetricsType setting) const;
+	static bool IsOptimizerMetric(MetricsType metric);
+	static bool IsPhaseTimingMetric(MetricsType metric);
 
 public:
 	string GetMetricAsString(MetricsType setting) const;

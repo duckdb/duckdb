@@ -25,9 +25,15 @@ metrics = [
     "OPERATOR_TIMING",
     "ALL_OPTIMIZERS",
     "CUMULATIVE_OPTIMIZER_TIMING",
+    "PLANNER_TIMING",
+    "PLANNER_BINDING_TIMING",
+    "PHYSICAL_PLANNER_TIMING",
+    "PHYSICAL_PLANNER_COLUMN_BINDING_TIMING",
+    "PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING",
+    "PHYSICAL_PLANNER_CREATE_PLAN_TIMING",
 ]
 
-optimizer_metrics = []
+optimizer_types = []
 
 # Regular expression to match the enum values
 enum_pattern = r'\s*([A-Z_]+)\s*=\s*\d+,?|\s*([A-Z_]+),?'
@@ -52,10 +58,7 @@ with open(optimizer_file, "r") as f:
                 optimizer_type = match[1] if match[1] else match[2]
                 if optimizer_type == "INVALID":
                     continue
-                optimizer_type = 'OPTIMIZER_' + optimizer_type + '_TIMING'
-                metrics.append(optimizer_type)
-                optimizer_metrics.append(optimizer_type)
-
+                optimizer_types.append(optimizer_type)
 
 header = """//-------------------------------------------------------------------------
 //                         DuckDB
@@ -68,9 +71,15 @@ header = """//------------------------------------------------------------------
 //-------------------------------------------------------------------------\n
 """
 
-get_all_optimizer_metrics_function = """
-const std::vector<MetricsType> GetAllOptimizerMetrics() {
-    return {
+typedefs = """struct MetricsTypeHashFunction {
+	uint64_t operator()(const MetricsType &index) const {
+		return std::hash<uint8_t>()(static_cast<uint8_t>(index));
+	}
+};
+
+typedef unordered_set<MetricsType, MetricsTypeHashFunction> profiler_settings_t;
+typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metrics_t;
+
 """
 
 # Write the metric type header file
@@ -78,7 +87,8 @@ with open(metrics_header_file, "w") as f:
     f.write(header)
 
     f.write('#pragma once\n\n')
-    f.write('#include "duckdb/common/constants.hpp"\n\n')
+    f.write('#include "duckdb/common/constants.hpp"\n')
+    f.write('#include "duckdb/common/unordered_set.hpp"\n\n')
 
     f.write("namespace duckdb {\n\n")
 
@@ -87,9 +97,15 @@ with open(metrics_header_file, "w") as f:
     for metric in metrics:
         f.write(f"    {metric},\n")
 
+    for metric in optimizer_types:
+        f.write(f"    OPTIMIZER_{metric}_TIMING,\n")
+
     f.write("};\n\n")
 
-    f.write('const std::vector<MetricsType> GetAllOptimizerMetrics();\n\n')
+    f.write(typedefs)
+
+    f.write('profiler_settings_t GetAllOptimizerMetrics();\n')
+    f.write('MetricsType GetOptimizerMetricFromOptimizerType(OptimizerType type);\n\n')
 
     f.write("} // namespace duckdb\n")
 
@@ -97,20 +113,32 @@ with open(metrics_header_file, "w") as f:
 with open(metrics_cpp_file, "w") as f:
     f.write(header)
 
-    f.write('#include "duckdb/common/enums/metric_type.hpp"\n\n')
+    f.write('#include "duckdb/common/enums/metric_type.hpp"\n')
+    f.write('#include "duckdb/common/enums/optimizer_type.hpp"\n\n')
     f.write("namespace duckdb {\n\n")
 
-    f.write('const std::vector<MetricsType> GetAllOptimizerMetrics() {\n')
-    f.write(f"    return{{\n")
-    
-    for metric in optimizer_metrics:
-        f.write(f"        MetricsType::{metric},\n")
+    f.write('profiler_settings_t GetAllOptimizerMetrics() {\n')
+    f.write(f"    return {{\n")
+
+    for metric in optimizer_types:
+        f.write(f"        MetricsType::OPTIMIZER_{metric}_TIMING,\n")
     f.write("    };\n")
     f.write("}\n\n")
 
+    f.write('MetricsType GetOptimizerMetricFromOptimizerType(OptimizerType type) {\n')
+    f.write('    switch(type) {\n')
+
+    for metric in optimizer_types:
+        f.write(f"        case OptimizerType::{metric}:\n")
+        f.write(f"            return MetricsType::OPTIMIZER_{metric}_TIMING;\n")
+
+    f.write('       default:\n')
+    f.write('            throw InternalException("OptimizerType %s cannot be converted to a MetricType", '
+            'EnumUtil::ToString(type));\n')
+    f.write('    };\n')
+    f.write('}\n\n')
 
     f.write("} // namespace duckdb\n")
-
 
 # Run the generate_enum_util.py script to update the enums.hpp file
 os.system("python generate_enum_util.py")

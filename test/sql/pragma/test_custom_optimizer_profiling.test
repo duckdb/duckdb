@@ -17,6 +17,12 @@ PRAGMA profiling_output = 'test/sql/pragma/output.json';
 statement ok
 PRAGMA custom_profiling_settings='{"ALL_OPTIMIZERS": "true"}'
 
+statement ok
+select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+statement ok
+PRAGMA disable_profiling;
+
 query I rowsort
 SELECT unnest(res) from (
 	select current_setting('custom_profiling_settings') as raw_setting,
@@ -48,3 +54,4 @@ SELECT unnest(res) from (
 "OPTIMIZER_TOP_N_TIMING": "true"
 "OPTIMIZER_UNNEST_REWRITER_TIMING": "true"
 "OPTIMIZER_UNUSED_COLUMNS_TIMING": "true"
+

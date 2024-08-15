@@ -26,25 +26,51 @@ profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
 	};
 }
 
+profiler_settings_t ProfilingInfo::PhaseTimingsSettings() {
+	return {
+        MetricsType::ALL_OPTIMIZERS,
+        MetricsType::CUMULATIVE_OPTIMIZER_TIMING,
+	    MetricsType::PHYSICAL_PLANNER_TIMING,
+	    MetricsType::PHYSICAL_PLANNER_CREATE_PLAN_TIMING,
+	    MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING_TIMING,
+	    MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING,
+	    MetricsType::PLANNER_TIMING,
+	    MetricsType::PLANNER_BINDING_TIMING,
+	};
+}
+
 profiler_settings_t ProfilingInfo::AllSettings() {
 	auto all_settings = DefaultSettings();
-	const auto optimizer_settings = GetAllOptimizerMetrics();
+	auto optimizer_settings = GetAllOptimizerMetrics();
+	auto phase_timings = PhaseTimingsSettings();
 
 	for (auto &setting : optimizer_settings) {
 		all_settings.insert(setting);
 	}
 
-	all_settings.insert(MetricsType::ALL_OPTIMIZERS);
-	all_settings.insert(MetricsType::CUMULATIVE_OPTIMIZER_TIMING);
+	for (auto &setting : phase_timings) {
+        all_settings.insert(setting);
+    }
+
 	return all_settings;
 }
 
-bool IsOptimizerMetric(MetricsType metric) {
-	const auto optimizers = GetAllOptimizerMetrics();
+bool ProfilingInfo::IsOptimizerMetric(MetricsType metric) {
+	auto optimizers = GetAllOptimizerMetrics();
 	if (std::find(optimizers.begin(), optimizers.end(), metric) != optimizers.end()) {
         return true;
     }
+
     return false;
+}
+
+bool ProfilingInfo::IsPhaseTimingMetric(MetricsType metric) {
+	auto phase_timings = PhaseTimingsSettings();
+	if (std::find(phase_timings.begin(), phase_timings.end(), metric) != phase_timings.end()) {
+		return true;
+	}
+
+	return false;
 }
 
 void ProfilingInfo::ResetMetrics() {
@@ -52,13 +78,12 @@ void ProfilingInfo::ResetMetrics() {
 
 	auto all_settings = AllSettings();
 
-
 	for (auto &metric : all_settings) {
 		if (!Enabled(metric)) {
 			continue;
 		}
 
-		if (IsOptimizerMetric(metric)) {
+		if (IsOptimizerMetric(metric) || IsPhaseTimingMetric(metric)) {
 			metrics[metric] = Value::CreateValue(0.0);
 			continue;
 		}
@@ -67,9 +92,7 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::QUERY_NAME:
 		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING:
-		case MetricsType::ALL_OPTIMIZERS:
-		case MetricsType::CUMULATIVE_OPTIMIZER_TIMING: {
+		case MetricsType::OPERATOR_TIMING: {
 			metrics[metric] = Value::CreateValue(0.0);
 			break;
 		}
@@ -172,7 +195,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		// The metric cannot be NULL, and should have been 0 initialized.
 		D_ASSERT(!metrics[metric].IsNull());
 
-		if (IsOptimizerMetric(metric)) {
+		if (IsOptimizerMetric(metric) || IsPhaseTimingMetric(metric)) {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			continue;
 		}
@@ -183,9 +206,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			break;
 		case MetricsType::IDLE_THREAD_TIME:
 		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING:
-		case MetricsType::ALL_OPTIMIZERS:
-		case MetricsType::CUMULATIVE_OPTIMIZER_TIMING: {
+		case MetricsType::OPERATOR_TIMING: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			break;
 		}

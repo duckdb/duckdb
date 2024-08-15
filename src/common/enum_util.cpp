@@ -4326,6 +4326,18 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "ALL_OPTIMIZERS";
 	case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
 		return "CUMULATIVE_OPTIMIZER_TIMING";
+	case MetricsType::PLANNER_TIMING:
+		return "PLANNER_TIMING";
+	case MetricsType::PLANNER_BINDING_TIMING:
+		return "PLANNER_BINDING_TIMING";
+	case MetricsType::PHYSICAL_PLANNER_TIMING:
+		return "PHYSICAL_PLANNER_TIMING";
+	case MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING_TIMING:
+		return "PHYSICAL_PLANNER_COLUMN_BINDING_TIMING";
+	case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING:
+		return "PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING";
+	case MetricsType::PHYSICAL_PLANNER_CREATE_PLAN_TIMING:
+		return "PHYSICAL_PLANNER_CREATE_PLAN_TIMING";
 	case MetricsType::OPTIMIZER_EXPRESSION_REWRITER_TIMING:
 		return "OPTIMIZER_EXPRESSION_REWRITER_TIMING";
 	case MetricsType::OPTIMIZER_FILTER_PULLUP_TIMING:
@@ -4414,6 +4426,24 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CUMULATIVE_OPTIMIZER_TIMING")) {
 		return MetricsType::CUMULATIVE_OPTIMIZER_TIMING;
+	}
+	if (StringUtil::Equals(value, "PLANNER_TIMING")) {
+		return MetricsType::PLANNER_TIMING;
+	}
+	if (StringUtil::Equals(value, "PLANNER_BINDING_TIMING")) {
+		return MetricsType::PLANNER_BINDING_TIMING;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_TIMING")) {
+		return MetricsType::PHYSICAL_PLANNER_TIMING;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_COLUMN_BINDING_TIMING")) {
+		return MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING_TIMING;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING")) {
+		return MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_CREATE_PLAN_TIMING")) {
+		return MetricsType::PHYSICAL_PLANNER_CREATE_PLAN_TIMING;
 	}
 	if (StringUtil::Equals(value, "OPTIMIZER_EXPRESSION_REWRITER_TIMING")) {
 		return MetricsType::OPTIMIZER_EXPRESSION_REWRITER_TIMING;

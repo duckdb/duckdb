@@ -11,6 +11,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,12 @@ enum class MetricsType : uint8_t {
     OPERATOR_TIMING,
     ALL_OPTIMIZERS,
     CUMULATIVE_OPTIMIZER_TIMING,
+    PLANNER_TIMING,
+    PLANNER_BINDING_TIMING,
+    PHYSICAL_PLANNER_TIMING,
+    PHYSICAL_PLANNER_COLUMN_BINDING_TIMING,
+    PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING,
+    PHYSICAL_PLANNER_CREATE_PLAN_TIMING,
     OPTIMIZER_EXPRESSION_REWRITER_TIMING,
     OPTIMIZER_FILTER_PULLUP_TIMING,
     OPTIMIZER_FILTER_PUSHDOWN_TIMING,
@@ -52,6 +59,16 @@ enum class MetricsType : uint8_t {
     OPTIMIZER_MATERIALIZED_CTE_TIMING,
 };
 
-const std::vector<MetricsType> GetAllOptimizerMetrics();
+struct MetricsTypeHashFunction {
+	uint64_t operator()(const MetricsType &index) const {
+		return std::hash<uint8_t>()(static_cast<uint8_t>(index));
+	}
+};
+
+typedef unordered_set<MetricsType, MetricsTypeHashFunction> profiler_settings_t;
+typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metrics_t;
+
+profiler_settings_t GetAllOptimizerMetrics();
+MetricsType GetOptimizerMetricFromOptimizerType(OptimizerType type);
 
 } // namespace duckdb
