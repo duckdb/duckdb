@@ -249,7 +249,7 @@ void LogicalCTERef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "chunk_types", chunk_types);
 	serializer.WritePropertyWithDefault<vector<string>>(203, "bound_columns", bound_columns);
 	serializer.WriteProperty<CTEMaterialize>(204, "materialized_cte", materialized_cte);
-	serializer.WriteProperty<bool>(205, "is_recurring", is_recurring);
+	serializer.WritePropertyWithDefault<bool>(205, "is_recurring", is_recurring);
 }
 
 unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(Deserializer &deserializer) {
