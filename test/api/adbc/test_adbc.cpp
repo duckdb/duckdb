@@ -19,8 +19,7 @@ bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 
-const char *duckdb_lib = "/Users/holanda/Documents/Projects/duckdb/cmake-build-debug/src/libduckdb.dylib";
-
+const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
 class ADBCTestDatabase {
 public:
 	explicit ADBCTestDatabase(const string &path_parameter = ":memory:") {
@@ -84,10 +83,19 @@ public:
 		AdbcStatement adbc_statement;
 		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 		if (!schema.empty()) {
-			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
-			                                       table_name.c_str(), &adbc_error)));
+			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, schema.c_str(),
+			                                       &adbc_error)));
 		}
 		if (temporary) {
+			if (!schema.empty()) {
+				REQUIRE(!SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY,
+				                                        table_name.c_str(), &adbc_error)));
+				REQUIRE((std::strcmp(adbc_error.message, "Temporary option is not supported with schema") == 0));
+				// We must Release the error (Malloc-ed string)
+				adbc_error.release(&adbc_error);
+				InitializeADBCError(&adbc_error);
+				return;
+			}
 			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY, table_name.c_str(),
 			                                       &adbc_error)));
 		} else {
@@ -96,7 +104,6 @@ public:
 		}
 
 		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
-
 		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 		// Release the statement
 		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
@@ -146,8 +153,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	auto input_data = db.QueryArrow("SELECT 42");
 
 	// Create Table 'my_table' from the Arrow Result
-	string empty_schema = "";
-	db.CreateTable("my_table", input_data, empty_schema, true);
+	db.CreateTable("my_table", input_data, "", true);
 
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
 }
@@ -161,11 +167,13 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	// Create Arrow Result
 	auto input_data = db.QueryArrow("SELECT 42");
 
-	// Create Table 'my_table' from the Arrow Result
-	string schema = "my_schema";
-	db.CreateTable("my_table", input_data, schema, true);
+	db.CreateTable("my_table", input_data, "my_schema", true);
 
-	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+	// input_data = db.QueryArrow("SELECT 42");
+
+	db.CreateTable("my_table", input_data, "my_schema");
+
+	REQUIRE(db.QueryAndCheck("SELECT * FROM my_schema.my_table"));
 }
 
 TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
