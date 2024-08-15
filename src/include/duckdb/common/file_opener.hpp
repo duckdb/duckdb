@@ -45,8 +45,8 @@ public:
 	                                                           Value &result, FileOpenerInfo &info);
 
 	template <class TYPE>
-	static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
-	                                                           TYPE &result, optional_ptr<FileOpenerInfo> info) {
+	static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key, TYPE &result,
+	                                                optional_ptr<FileOpenerInfo> info) {
 		Value output;
 		SettingLookupResult lookup_result;
 
