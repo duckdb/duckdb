@@ -55,7 +55,7 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableF
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	names.emplace_back("expressions");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -78,7 +78,15 @@ unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, T
 Value GetIndexExpressions(IndexCatalogEntry &index) {
 	auto create_info = index.GetInfo();
 	auto &create_index_info = create_info->Cast<CreateIndexInfo>();
-	return Value(create_index_info.ExpressionsToString());
+
+	auto vec = create_index_info.ExpressionsToList();
+
+	vector<Value> content;
+	content.reserve(vec.size());
+	for (auto &item : vec) {
+		content.push_back(Value(item));
+	}
+	return Value::LIST(std::move(content));
 }
 
 void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

@@ -27,14 +27,12 @@ static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &expr
 	}
 }
 
-string CreateIndexInfo::ExpressionsToString() const {
-	string result;
+vector<string> CreateIndexInfo::ExpressionsToList() const {
+	vector<string> list;
+
 	for (idx_t i = 0; i < parsed_expressions.size(); i++) {
 		auto &expr = parsed_expressions[i];
 		auto copy = expr->Copy();
-		if (i > 0) {
-			result += ", ";
-		}
 		// column ref expressions are qualified with the table name
 		// we need to remove them to reproduce the original query
 		RemoveTableQualificationRecursive(copy, table);
@@ -48,12 +46,17 @@ string CreateIndexInfo::ExpressionsToString() const {
 			}
 		}
 		if (add_parenthesis) {
-			result += StringUtil::Format("(%s)", copy->ToString());
+			list.push_back(StringUtil::Format("(%s)", copy->ToString()));
 		} else {
-			result += StringUtil::Format("%s", copy->ToString());
+			list.push_back(StringUtil::Format("%s", copy->ToString()));
 		}
 	}
-	return result;
+	return list;
+}
+
+string CreateIndexInfo::ExpressionsToString() const {
+	auto list = ExpressionsToList();
+	return StringUtil::Join(list, ", ");
 }
 
 string CreateIndexInfo::ToString() const {
