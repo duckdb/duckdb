@@ -7,11 +7,13 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/tableref/bound_cteref.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
-#include "duckdb/planner/operator/logical_dependent_join.hpp"
 
 namespace duckdb {
 
