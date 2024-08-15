@@ -16,6 +16,8 @@ class ClientContext;
 class BaseSecret;
 struct CreateSecretInput;
 class SecretManager;
+struct SecretType;
+class CreateSecretFunction;
 
 struct CreateHTTPSecretFunctions {
 public:
