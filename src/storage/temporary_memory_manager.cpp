@@ -19,7 +19,6 @@ TemporaryMemoryState::~TemporaryMemoryState() {
 }
 
 void TemporaryMemoryState::SetRemainingSize(idx_t new_remaining_size) {
-	D_ASSERT(new_remaining_size != 0); // Use SetZero instead
 	auto guard = temporary_memory_manager.Lock();
 	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
 }
