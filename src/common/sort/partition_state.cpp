@@ -520,21 +520,21 @@ bool PartitionGlobalMergeState::TryPrepareNextStage() {
 		return true;
 
 	case PartitionSortStage::PREPARE:
-		total_tasks = global_sort->sorted_blocks.size() / 2;
-		if (!total_tasks) {
+		if (!(global_sort->sorted_blocks.size() / 2)) {
 			break;
 		}
 		stage = PartitionSortStage::MERGE;
 		global_sort->InitializeMergeRound();
+		total_tasks = num_threads;
 		return true;
 
 	case PartitionSortStage::MERGE:
 		global_sort->CompleteMergeRound(true);
-		total_tasks = global_sort->sorted_blocks.size() / 2;
-		if (!total_tasks) {
+		if (!(global_sort->sorted_blocks.size() / 2)) {
 			break;
 		}
 		global_sort->InitializeMergeRound();
+		total_tasks = num_threads;
 		return true;
 
 	case PartitionSortStage::SORTED:

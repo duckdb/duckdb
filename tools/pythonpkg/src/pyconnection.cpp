@@ -512,11 +512,12 @@ case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedS
                                                                        const py::object &params) {
 	case_insensitive_map_t<BoundParameterData> named_values;
 	if (py::is_list_like(params)) {
-		if (prep.n_param != py::len(params)) {
+		if (prep.named_param_map.size() != py::len(params)) {
 			if (py::len(params) == 0) {
-				throw InvalidInputException("Expected %d parameters, but none were supplied", prep.n_param);
+				throw InvalidInputException("Expected %d parameters, but none were supplied",
+				                            prep.named_param_map.size());
 			}
-			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.n_param,
+			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.named_param_map.size(),
 			                            py::len(params));
 		}
 		auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(params);
@@ -1276,7 +1277,7 @@ void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> sta
 		return;
 	}
 	for (auto &stmt : statements) {
-		if (stmt->n_param != 0) {
+		if (!stmt->named_param_map.empty()) {
 			throw NotImplementedException(
 			    "Prepared parameters are only supported for the last statement, please split your query up into "
 			    "separate 'execute' calls if you want to use prepared parameters");
@@ -1562,16 +1563,8 @@ void DuckDBPyConnection::Close() {
 	con.SetConnection(nullptr);
 	con.SetDatabase(nullptr);
 	// https://peps.python.org/pep-0249/#Connection.close
-	for (auto &cur : cursors) {
-		auto cursor = cur.lock();
-		if (!cursor) {
-			// The cursor has already been closed
-			continue;
-		}
-		cursor->Close();
-	}
+	cursors.ClearCursors();
 	registered_functions.clear();
-	cursors.clear();
 }
 
 void DuckDBPyConnection::Interrupt() {
@@ -1589,12 +1582,47 @@ void DuckDBPyConnection::LoadExtension(const string &extension) {
 	ExtensionHelper::LoadExternalExtension(*connection.context, extension);
 }
 
-// cursor() is stupid
+void DuckDBPyConnection::Cursors::AddCursor(shared_ptr<DuckDBPyConnection> conn) {
+	lock_guard<mutex> l(lock);
+
+	// Clean up previously created cursors
+	vector<weak_ptr<DuckDBPyConnection>> compacted_cursors;
+	bool needs_compaction = false;
+	for (auto &cur_p : cursors) {
+		auto cur = cur_p.lock();
+		if (!cur) {
+			needs_compaction = true;
+			continue;
+		}
+		compacted_cursors.push_back(cur_p);
+	}
+	if (needs_compaction) {
+		cursors = std::move(compacted_cursors);
+	}
+
+	cursors.push_back(conn);
+}
+
+void DuckDBPyConnection::Cursors::ClearCursors() {
+	lock_guard<mutex> l(lock);
+
+	for (auto &cur : cursors) {
+		auto cursor = cur.lock();
+		if (!cursor) {
+			// The cursor has already been closed
+			continue;
+		}
+		cursor->Close();
+	}
+
+	cursors.clear();
+}
+
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared_ptr<DuckDBPyConnection>();
 	res->con.SetDatabase(con);
 	res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
-	cursors.push_back(res);
+	cursors.AddCursor(res);
 	return res;
 }
 
@@ -1942,20 +1970,53 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 	return NumpyObjectType::INVALID;
 }
 
-bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
+PyArrowObjectType DuckDBPyConnection::GetArrowType(const py::handle &obj) {
+	D_ASSERT(py::gil_check());
+
+	if (py::isinstance<py::capsule>(obj)) {
+		auto capsule = py::reinterpret_borrow<py::capsule>(obj);
+		if (string(capsule.name()) != "arrow_array_stream") {
+			throw InvalidInputException("Expected a 'arrow_array_stream' PyCapsule, got: %s", string(capsule.name()));
+		}
+		auto stream = capsule.get_pointer<struct ArrowArrayStream>();
+		if (!stream->release) {
+			throw InvalidInputException("The ArrowArrayStream was already released");
+		}
+		return PyArrowObjectType::PyCapsule;
+	}
+
 	if (!ModuleIsLoaded<PyarrowCacheItem>()) {
-		return false;
+		return PyArrowObjectType::Invalid;
 	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	if (py::isinstance(object, import_cache_py.pyarrow.Table()) ||
-	    py::isinstance(object, import_cache_py.pyarrow.RecordBatchReader())) {
-		return true;
+
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	// First Verify Lib Types
+	auto table_class = import_cache.pyarrow.Table();
+	auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
+	if (py::isinstance(obj, table_class)) {
+		return PyArrowObjectType::Table;
+	} else if (py::isinstance(obj, record_batch_reader_class)) {
+		return PyArrowObjectType::RecordBatchReader;
 	}
+
 	if (!ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
-		return false;
+		return PyArrowObjectType::Invalid;
 	}
-	return (py::isinstance(object, import_cache_py.pyarrow.dataset.Dataset()) ||
-	        py::isinstance(object, import_cache_py.pyarrow.dataset.Scanner()));
+
+	// Then Verify dataset types
+	auto dataset_class = import_cache.pyarrow.dataset.Dataset();
+	auto scanner_class = import_cache.pyarrow.dataset.Scanner();
+
+	if (py::isinstance(obj, scanner_class)) {
+		return PyArrowObjectType::Scanner;
+	} else if (py::isinstance(obj, dataset_class)) {
+		return PyArrowObjectType::Dataset;
+	}
+	return PyArrowObjectType::Invalid;
+}
+
+bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
+	return DuckDBPyConnection::GetArrowType(object) != PyArrowObjectType::Invalid;
 }
 
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {

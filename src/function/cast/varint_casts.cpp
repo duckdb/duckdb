@@ -47,12 +47,66 @@ string_t IntToVarInt(Vector &result, T int_value) {
 }
 
 template <>
+string_t HugeintCastToVarInt::Operation(uhugeint_t int_value, Vector &result) {
+	uint32_t data_byte_size;
+	if (int_value.upper != NumericLimits<uint64_t>::Maximum()) {
+		data_byte_size =
+		    (int_value.upper == 0) ? 0 : static_cast<uint32_t>(std::ceil(std::log2(int_value.upper + 1) / 8.0));
+	} else {
+		data_byte_size = static_cast<uint32_t>(std::ceil(std::log2(int_value.upper) / 8.0));
+	}
+
+	uint32_t upper_byte_size = data_byte_size;
+	if (data_byte_size > 0) {
+		// If we have at least one byte on the upper side, the bottom side is complete
+		data_byte_size += 8;
+	} else {
+		if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
+			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
+		} else {
+			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+		}
+	}
+	if (data_byte_size == 0) {
+		data_byte_size++;
+	}
+	uint32_t blob_size = data_byte_size + Varint::VARINT_HEADER_SIZE;
+	auto blob = StringVector::EmptyString(result, blob_size);
+	auto writable_blob = blob.GetDataWriteable();
+	Varint::SetHeader(writable_blob, data_byte_size, false);
+
+	// Add data bytes to the blob, starting off after header bytes
+	idx_t wb_idx = Varint::VARINT_HEADER_SIZE;
+	for (int i = static_cast<int>(upper_byte_size) - 1; i >= 0; --i) {
+		writable_blob[wb_idx++] = static_cast<char>(int_value.upper >> i * 8 & 0xFF);
+	}
+	for (int i = static_cast<int>(data_byte_size - upper_byte_size) - 1; i >= 0; --i) {
+		writable_blob[wb_idx++] = static_cast<char>(int_value.lower >> i * 8 & 0xFF);
+	}
+	blob.Finalize();
+	return blob;
+}
+
+template <>
 string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 	// Determine if the number is negative
-	bool is_negative = (int_value.upper >> 63) & 1;
+	bool is_negative = int_value.upper >> 63 & 1;
 	if (is_negative) {
-		int_value.lower = ~int_value.lower + 1;
-		int_value.upper = ~int_value.upper;
+		// We must check if it's -170141183460469231731687303715884105728, since it's not possible to negate it
+		// without overflowing
+		if (int_value == NumericLimits<hugeint_t>::Minimum()) {
+			uhugeint_t u_int_value {0x8000000000000000, 0};
+			auto cast_value = Operation<uhugeint_t>(u_int_value, result);
+			// We have to do all the bit flipping.
+			auto writable_value_ptr = cast_value.GetDataWriteable();
+			Varint::SetHeader(writable_value_ptr, cast_value.GetSize() - Varint::VARINT_HEADER_SIZE, is_negative);
+			for (idx_t i = Varint::VARINT_HEADER_SIZE; i < cast_value.GetSize(); i++) {
+				writable_value_ptr[i] = static_cast<char>(~writable_value_ptr[i]);
+			}
+			cast_value.Finalize();
+			return cast_value;
+		}
+		int_value = -int_value;
 	}
 	// Determine the number of data bytes
 	uint64_t abs_value_upper = static_cast<uint64_t>(int_value.upper);
@@ -66,11 +120,17 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 	}
 
 	uint32_t upper_byte_size = data_byte_size;
-	if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
-		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
+	if (data_byte_size > 0) {
+		// If we have at least one byte on the upper side, the bottom side is complete
+		data_byte_size += 8;
 	} else {
-		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+		if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
+			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
+		} else {
+			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+		}
 	}
+
 	if (data_byte_size == 0) {
 		data_byte_size++;
 	}
@@ -98,41 +158,6 @@ string_t HugeintCastToVarInt::Operation(hugeint_t int_value, Vector &result) {
 	blob.Finalize();
 	return blob;
 }
-template <>
-string_t HugeintCastToVarInt::Operation(uhugeint_t int_value, Vector &result) {
-	uint32_t data_byte_size;
-	if (int_value.upper != NumericLimits<uint64_t>::Maximum()) {
-		data_byte_size =
-		    (int_value.upper == 0) ? 0 : static_cast<uint32_t>(std::ceil(std::log2(int_value.upper + 1) / 8.0));
-	} else {
-		data_byte_size = static_cast<uint32_t>(std::ceil(std::log2(int_value.upper) / 8.0));
-	}
-
-	uint32_t upper_byte_size = data_byte_size;
-	if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
-		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
-	} else {
-		data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
-	}
-	if (data_byte_size == 0) {
-		data_byte_size++;
-	}
-	uint32_t blob_size = data_byte_size + Varint::VARINT_HEADER_SIZE;
-	auto blob = StringVector::EmptyString(result, blob_size);
-	auto writable_blob = blob.GetDataWriteable();
-	Varint::SetHeader(writable_blob, data_byte_size, false);
-
-	// Add data bytes to the blob, starting off after header bytes
-	idx_t wb_idx = Varint::VARINT_HEADER_SIZE;
-	for (int i = static_cast<int>(upper_byte_size) - 1; i >= 0; --i) {
-		writable_blob[wb_idx++] = static_cast<char>(int_value.upper >> i * 8 & 0xFF);
-	}
-	for (int i = static_cast<int>(data_byte_size - upper_byte_size) - 1; i >= 0; --i) {
-		writable_blob[wb_idx++] = static_cast<char>(int_value.lower >> i * 8 & 0xFF);
-	}
-	blob.Finalize();
-	return blob;
-}
 
 // Varchar to Varint
 // TODO: This is a slow quadratic algorithm, we can still optimize it further.
@@ -149,10 +174,6 @@ bool TryCastToVarInt::Operation(string_t input_value, string_t &result_value, Ve
 	for (idx_t i = 0; i < blob_string.size(); i++) {
 		writable_blob[i] = blob_string[i];
 	}
-	// idx_t blob_string_idx = blob_string.size() - 1;
-	// for (idx_t i = Varint::VARINT_HEADER_SIZE; i < blob_size; i++) {
-	// 	writable_blob[i] = blob_string[blob_string_idx--];
-	// }
 	result_value.Finalize();
 	return true;
 }

@@ -1,0 +1,98 @@
+{
+    "group": "table_description",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_table_description_create",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "schema"
+                },
+                {
+                    "type": "const char *",
+                    "name": "table"
+                },
+                {
+                    "type": "duckdb_table_description *",
+                    "name": "out"
+                }
+            ],
+            "comment": {
+                "description": "Creates a table description object. Note that `duckdb_table_description_destroy` should always be called on the resulting table_description, even if the function returns `DuckDBError`.\n\n",
+                "param_comments": {
+                    "connection": "The connection context.",
+                    "schema": "The schema of the table, or `nullptr` for the default schema.",
+                    "table": "The table name.",
+                    "out": "The resulting table description object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_table_description_destroy",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_description *",
+                    "name": "table_description"
+                }
+            ],
+            "comment": {
+                "description": "Destroy the TableDescription object.\n\n",
+                "param_comments": {
+                    "table_description": "The table_description to destroy."
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_description_error",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_table_description",
+                    "name": "table_description"
+                }
+            ],
+            "comment": {
+                "description": "Returns the error message associated with the given table_description.\nIf the table_description has no error message, this returns `nullptr` instead.\nThe error message should not be freed. It will be de-allocated when `duckdb_table_description_destroy` is called.\n\n",
+                "param_comments": {
+                    "table_description": "The table_description to get the error from."
+                },
+                "return_value": "The error message, or `nullptr` if there is none."
+            }
+        },
+        {
+            "name": "duckdb_column_has_default",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_table_description",
+                    "name": "table_description"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                },
+                {
+                    "type": "bool *",
+                    "name": "out"
+                }
+            ],
+            "comment": {
+                "description": "Check if the column at 'index' index of the table has a DEFAULT expression.\n\n",
+                "param_comments": {
+                    "table_description": "The table_description to query.",
+                    "index": "The index of the column to query.",
+                    "out": "The out-parameter used to store the result."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        }
+    ]
+}

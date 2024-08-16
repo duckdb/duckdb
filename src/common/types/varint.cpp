@@ -220,8 +220,8 @@ string Varint::VarcharToVarInt(const string_t &value) {
 	// In the worst case a remainder of a division will be 255, which is 3 digits
 	// Since the max value is 184, we need to take one more digit out
 	// Hence we end up with a max of 16 digits supported.
-	const uint8_t max_digits = 16;
-	const idx_t number_of_digits = static_cast<idx_t>(std::ceil((double)actual_size / max_digits));
+	constexpr uint8_t max_digits = 16;
+	const idx_t number_of_digits = static_cast<idx_t>(std::ceil(static_cast<double>(actual_size) / max_digits));
 
 	// lets convert the string to a uint64_t vector
 	idx_t cur_end = end_pos;

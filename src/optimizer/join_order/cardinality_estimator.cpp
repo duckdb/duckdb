@@ -21,7 +21,7 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 }
 
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
-	D_ASSERT(filter_info.set.count >= 1);
+	D_ASSERT(filter_info.set.get().count >= 1);
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info.left_binding) != i_set.end()) {
@@ -37,11 +37,14 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 }
 
 bool CardinalityEstimator::SingleColumnFilter(duckdb::FilterInfo &filter_info) {
-	if (filter_info.left_set && filter_info.right_set && filter_info.set.count > 1) {
+	if (filter_info.left_set && filter_info.right_set && filter_info.set.get().count > 1) {
 		// Both set and are from different relations
 		return false;
 	}
 	if (EmptyFilter(filter_info)) {
+		return false;
+	}
+	if (filter_info.join_type == JoinType::SEMI || filter_info.join_type == JoinType::ANTI) {
 		return false;
 	}
 	return true;
@@ -301,9 +304,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			left_subgraph.numerator_relations = edge.filter_info->left_set;
 			right_subgraph.relations = edge.filter_info->right_set;
 			right_subgraph.numerator_relations = edge.filter_info->right_set;
-
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
-			left_subgraph.relations = &edge.filter_info->set;
+			left_subgraph.relations = edge.filter_info->set.get();
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
 			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {

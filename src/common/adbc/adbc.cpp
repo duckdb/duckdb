@@ -792,7 +792,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		}
 		duckdb::unique_ptr<duckdb::DataChunk> chunk;
 		auto prepared_statement_params =
-		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->n_param;
+		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->named_param_map.size();
 
 		while ((chunk = result->Fetch()) != nullptr) {
 			if (chunk->size() == 0) {

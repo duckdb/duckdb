@@ -7,6 +7,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
 
 #include <algorithm>
 
@@ -228,6 +229,22 @@ public:
 		append_count = 0;
 	}
 
+	void SetDataWithoutPartitions(DataChunk &chunk, const DataChunk &source, const vector<LogicalType> &col_types,
+	                              const vector<idx_t> &part_cols) {
+		D_ASSERT(source.ColumnCount() == col_types.size());
+		auto types = LogicalCopyToFile::GetTypesWithoutPartitions(col_types, part_cols, false);
+		chunk.InitializeEmpty(types);
+		set<idx_t> part_col_set(part_cols.begin(), part_cols.end());
+		idx_t new_col_id = 0;
+		for (idx_t col_idx = 0; col_idx < source.ColumnCount(); col_idx++) {
+			if (part_col_set.find(col_idx) == part_col_set.end()) {
+				chunk.data[new_col_id].Reference(source.data[col_idx]);
+				new_col_id++;
+			}
+		}
+		chunk.SetCardinality(source.size());
+	}
+
 	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
 		if (!part_buffer) {
 			return;
@@ -247,7 +264,14 @@ public:
 			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 			// push the chunks into the write state
 			for (auto &chunk : partitions[i]->Chunks()) {
-				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+				if (op.write_partition_columns) {
+					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+				} else {
+					DataChunk filtered_chunk;
+					SetDataWithoutPartitions(filtered_chunk, chunk, op.expected_types, op.partition_columns);
+					op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state,
+					                         filtered_chunk);
+				}
 			}
 			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
 			local_copy_state.reset();

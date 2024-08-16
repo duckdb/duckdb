@@ -15,6 +15,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
 #include "yyjson.hpp"
 
@@ -136,8 +137,9 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		Finalize(*child);
 		if (op_node.type == PhysicalOperatorType::UNION &&
 		    op_node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-			op_node.GetProfilingInfo().metrics.operator_cardinality +=
-			    child->GetProfilingInfo().metrics.operator_cardinality;
+			op_node.GetProfilingInfo().AddToMetric(
+			    MetricsType::OPERATOR_CARDINALITY,
+			    child->GetProfilingInfo().metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>());
 		}
 	}
 }
@@ -146,14 +148,14 @@ void QueryProfiler::StartExplainAnalyze() {
 	this->is_explain_analyze = true;
 }
 
-static void GetTotalCPUTime(ProfilingNode &node) {
-	node.GetProfilingInfo().metrics.cpu_time = node.GetProfilingInfo().metrics.operator_timing;
-	if (node.GetChildCount() > 0) {
-		for (idx_t i = 0; i < node.GetChildCount(); i++) {
-			auto child = node.GetChild(i);
-			GetTotalCPUTime(*child);
-			node.GetProfilingInfo().metrics.cpu_time += child->GetProfilingInfo().metrics.cpu_time;
-		}
+template <class METRIC_TYPE>
+static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
+	node.GetProfilingInfo().metrics[cumulative_metric] = node.GetProfilingInfo().metrics[child_metric];
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		auto child = node.GetChild(i);
+		GetCumulativeMetric<METRIC_TYPE>(*child, cumulative_metric, child_metric);
+		node.GetProfilingInfo().AddToMetric(
+		    cumulative_metric, child->GetProfilingInfo().metrics[cumulative_metric].GetValue<METRIC_TYPE>());
 	}
 }
 
@@ -177,10 +179,18 @@ void QueryProfiler::EndQuery() {
 			query_info.query = query;
 			query_info.GetProfilingInfo() = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::OPERATOR_TIMING)) {
-				query_info.GetProfilingInfo().metrics.operator_timing = main_query.Elapsed();
+				query_info.GetProfilingInfo().metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();
 			}
 			if (query_info.GetProfilingInfo().Enabled(MetricsType::CPU_TIME)) {
-				GetTotalCPUTime(*root);
+				GetCumulativeMetric<double>(*root, MetricsType::CPU_TIME, MetricsType::OPERATOR_TIMING);
+			}
+			if (query_info.GetProfilingInfo().Enabled(MetricsType::CUMULATIVE_CARDINALITY)) {
+				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_CARDINALITY,
+				                           MetricsType::OPERATOR_CARDINALITY);
+			}
+			if (query_info.GetProfilingInfo().Enabled(MetricsType::CUMULATIVE_ROWS_SCANNED)) {
+				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_ROWS_SCANNED,
+				                           MetricsType::OPERATOR_ROWS_SCANNED);
 			}
 		}
 
@@ -258,9 +268,35 @@ void QueryProfiler::EndPhase() {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(ClientContext &context) {
+bool SettingIsEnabled(const profiler_settings_t &settings, MetricsType metric) {
+	if (settings.find(metric) != settings.end()) {
+		return true;
+	}
+
+	switch (metric) {
+	case MetricsType::OPERATOR_TIMING:
+		return SettingIsEnabled(settings, MetricsType::CPU_TIME);
+	case MetricsType::OPERATOR_CARDINALITY:
+		return SettingIsEnabled(settings, MetricsType::CUMULATIVE_CARDINALITY);
+	case MetricsType::OPERATOR_ROWS_SCANNED:
+		return SettingIsEnabled(settings, MetricsType::CUMULATIVE_ROWS_SCANNED);
+	default:
+		break;
+	}
+
+	return false;
+}
+
+OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	enabled = QueryProfiler::Get(context).IsEnabled();
-	settings = ClientConfig::GetConfig(context).profiler_settings;
+	auto &settings = ClientConfig::GetConfig(context).profiler_settings;
+
+	profiler_settings_t op_metrics = ProfilingInfo::DefaultOperatorSettings();
+	for (auto &metric : op_metrics) {
+		if (SettingIsEnabled(settings, metric)) {
+			operator_settings.insert(metric);
+		}
+	}
 }
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
@@ -275,7 +311,7 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	// start timing for current element
-	if (SettingEnabled(MetricsType::OPERATOR_TIMING)) {
+	if (HasOperatorSetting(MetricsType::OPERATOR_TIMING)) {
 		op.Start();
 	}
 }
@@ -289,19 +325,17 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
 	}
 
-	bool timing_enabled = SettingEnabled(MetricsType::OPERATOR_TIMING);
-	bool cardinality_enabled = SettingEnabled(MetricsType::OPERATOR_CARDINALITY);
-	if (timing_enabled || cardinality_enabled) {
+	if (!operator_settings.empty()) {
 		// get the operator info for the current element
 		auto &curr_operator_info = GetOperatorInfo(*active_operator);
 
 		// finish timing for the current element
-		if (timing_enabled) {
+		if (HasOperatorSetting(MetricsType::OPERATOR_TIMING)) {
 			op.End();
 			curr_operator_info.AddTime(op.Elapsed());
 		}
-		if (cardinality_enabled && chunk) {
-			curr_operator_info.AddElements(chunk->size());
+		if (HasOperatorSetting(MetricsType::OPERATOR_CARDINALITY) && chunk) {
+			curr_operator_info.AddReturnedElements(chunk->size());
 		}
 	}
 	active_operator = nullptr;
@@ -339,11 +373,25 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		D_ASSERT(entry != tree_map.end());
 		auto &tree_node = entry->second.get();
 
-		if (profiler.SettingEnabled(MetricsType::OPERATOR_TIMING)) {
-			tree_node.GetProfilingInfo().metrics.operator_timing += node.second.time;
+		if (profiler.HasOperatorSetting(MetricsType::OPERATOR_TIMING)) {
+			tree_node.GetProfilingInfo().AddToMetric<double>(MetricsType::OPERATOR_TIMING, node.second.time);
 		}
-		if (profiler.SettingEnabled(MetricsType::OPERATOR_CARDINALITY)) {
-			tree_node.GetProfilingInfo().metrics.operator_cardinality += node.second.elements;
+		if (profiler.HasOperatorSetting(MetricsType::OPERATOR_CARDINALITY)) {
+			tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_CARDINALITY,
+			                                                node.second.elements_returned);
+		}
+		if (profiler.HasOperatorSetting(MetricsType::OPERATOR_ROWS_SCANNED)) {
+			if (op.type == PhysicalOperatorType::TABLE_SCAN) {
+				auto &scan_op = op.Cast<PhysicalTableScan>();
+				auto &bind_data = scan_op.bind_data;
+				if (bind_data && scan_op.function.cardinality) {
+					auto cardinality = scan_op.function.cardinality(context, &(*bind_data));
+					if (cardinality && cardinality->has_estimated_cardinality) {
+						tree_node.GetProfilingInfo().AddToMetric<idx_t>(MetricsType::OPERATOR_ROWS_SCANNED,
+						                                                cardinality->estimated_cardinality);
+					}
+				}
+			}
 		}
 	}
 	profiler.timings.clear();
@@ -394,8 +442,7 @@ string QueryProfiler::QueryTreeToString() const {
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	if (!IsEnabled()) {
-		ss << "Query profiling is disabled. Call "
-		      "Connection::EnableProfiling() to enable profiling!";
+		ss << "Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!";
 		return;
 	}
 	ss << "┌─────────────────────────────────────┐\n";
@@ -604,7 +651,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	node->depth = depth;
 	node->GetProfilingInfo() = ProfilingInfo(settings);
 	if (node->GetProfilingInfo().Enabled(MetricsType::EXTRA_INFO)) {
-		node->GetProfilingInfo().metrics.extra_info = root.ParamsToString();
+		node->GetProfilingInfo().extra_info = root.ParamsToString();
 	}
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<ProfilingNode>(*node)));
 	auto children = root.GetChildren();
