@@ -14,7 +14,6 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
-#include <iostream>
 
 namespace duckdb {
 
