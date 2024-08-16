@@ -37,108 +37,120 @@ unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	return std::move(result);
 }
 
-static string GetDeduplicatedName(case_insensitive_map_t<string> &bindings, const string &name) {
-	auto it = bindings.find(name);
-	if (it == bindings.end()) {
-		// Binding not seen, safe to assume it's unique (I assume this errors later anyways?)
-		return name;
+namespace {
+
+class BindingDeduplicator {
+public:
+	BindingDeduplicator() {
 	}
 
-	// If 'second' is not empty, this is the start of a deduplication chain that we need to follow
-	while (!it->second.empty()) {
-		it = bindings.find(it->second);
+public:
+	unique_ptr<TableRef> DeduplicateBindings(unique_ptr<TableRef> original) {
+		auto &ref = *original;
+		switch (ref.type) {
+		case TableReferenceType::BASE_TABLE:
+		case TableReferenceType::EMPTY_FROM:
+		case TableReferenceType::SHOW_REF:
+		case TableReferenceType::COLUMN_DATA:
+		case TableReferenceType::DELIM_GET:
+		case TableReferenceType::SUBQUERY:
+		case TableReferenceType::EXPRESSION_LIST: {
+			auto &alias = ref.alias;
+			if (alias.empty() && ref.type == TableReferenceType::BASE_TABLE) {
+				auto &base_table = ref.Cast<BaseTableRef>();
+				alias = base_table.table_name;
+			}
+			if (!alias.empty()) {
+				AddBinding(alias);
+			}
+			return std::move(original);
+		}
+		case TableReferenceType::JOIN: {
+			auto &j_ref = ref.Cast<JoinRef>();
+			j_ref.left = DeduplicateBindings(std::move(j_ref.left));
+			j_ref.right = DeduplicateBindings(std::move(j_ref.right));
+			if (j_ref.condition) {
+				ReplaceQualificationRecursive(j_ref.condition);
+			}
+			return std::move(original);
+		}
+		case TableReferenceType::PIVOT: {
+			auto &p_ref = ref.Cast<PivotRef>();
+			if (!ref.alias.empty()) {
+				AddBinding(ref.alias);
+			}
+			p_ref.source = DeduplicateBindings(std::move(p_ref.source));
+			for (auto &aggr : p_ref.aggregates) {
+				ReplaceQualificationRecursive(aggr);
+			}
+			return std::move(original);
+		}
+		case TableReferenceType::TABLE_FUNCTION: {
+			auto &tf_ref = ref.Cast<TableFunctionRef>();
+			if (!ref.alias.empty()) {
+				AddBinding(ref.alias);
+			}
+			ReplaceQualificationRecursive(tf_ref.function);
+			return std::move(original);
+		}
+		default:
+			break;
+		}
+		throw NotImplementedException("TableRef type (%s) not implemented for traversal", EnumUtil::ToString(ref.type));
 	}
-	return it->first;
-}
 
-static void ReplaceQualificationRecursive(unique_ptr<ParsedExpression> &expr,
-                                          case_insensitive_map_t<string> &changed_bindings) {
-	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		if (col_ref.IsQualified()) {
-			auto deduplicated_name = GetDeduplicatedName(changed_bindings, col_ref.GetTableName());
-			col_ref.ReplaceOrRemoveTableName(deduplicated_name);
-		}
-	} else {
-		ParsedExpressionIterator::EnumerateChildren(*expr, [&changed_bindings](unique_ptr<ParsedExpression> &child) {
-			ReplaceQualificationRecursive(child, changed_bindings);
-		});
-	}
-}
+private:
+	string GetDeduplicatedName(const string &name) {
+		auto it = bindings.find(name);
+		D_ASSERT(it != bindings.end());
 
-static void AddBinding(case_insensitive_map_t<string> &bindings, string &name) {
-	auto it = bindings.find(name);
-	if (it == bindings.end()) {
-		bindings[name] = "";
-		return;
-	}
-	// If the value is not an empty string, the binding name already has a duplicate
-	// this creates a chain of name -> name_1 -> name_1_1 -> ...
-	while (!it->second.empty()) {
-		it = bindings.find(it->second);
+		if (it->second == 1) {
+			return name;
+		}
+		D_ASSERT(it->second > 1);
+		return StringUtil::Format("%s_%d", name, it->second - 1);
 	}
 
-	string deduplicated_name = it->first + "_1";
-	it->second = deduplicated_name;
-	bindings[deduplicated_name] = "";
+	void ReplaceQualificationRecursive(unique_ptr<ParsedExpression> &expr) {
+		if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+			auto &col_ref = expr->Cast<ColumnRefExpression>();
+			if (col_ref.IsQualified()) {
+				auto deduplicated_name = GetDeduplicatedName(col_ref.GetTableName());
+				col_ref.ReplaceOrRemoveTableName(deduplicated_name);
+			}
+		} else {
+			ParsedExpressionIterator::EnumerateChildren(
+			    *expr, [this](unique_ptr<ParsedExpression> &child) { ReplaceQualificationRecursive(child); });
+		}
+	}
 
-	// Update the alias of the tableref
-	name = deduplicated_name;
-}
+	void AddBinding(string &name) {
+		// put it all lower_case
+		auto low_name = StringUtil::Lower(name);
+		if (bindings.find(low_name) == bindings.end()) {
+			// Name does not exist yet
+			bindings[low_name]++;
+		} else {
+			// Name already exists, we add _x where x is the repetition number
+			string binding_name = name + "_" + std::to_string(bindings[low_name]);
+			auto binding_name_low = StringUtil::Lower(binding_name);
+			while (bindings.find(binding_name_low) != bindings.end()) {
+				// This name is already here due to a previous definition
+				bindings[low_name]++;
+				binding_name = name + "_" + std::to_string(bindings[low_name]);
+				binding_name_low = StringUtil::Lower(binding_name);
+			}
+			name = binding_name;
+			bindings[binding_name_low]++;
+		}
+	}
 
-unique_ptr<TableRef> DeduplicateBindings(unique_ptr<TableRef> original, case_insensitive_map_t<string> &bindings) {
-	auto &ref = *original;
-	switch (ref.type) {
-	case TableReferenceType::BASE_TABLE:
-	case TableReferenceType::EMPTY_FROM:
-	case TableReferenceType::SHOW_REF:
-	case TableReferenceType::COLUMN_DATA:
-	case TableReferenceType::DELIM_GET:
-	case TableReferenceType::SUBQUERY:
-	case TableReferenceType::EXPRESSION_LIST: {
-		auto &alias = ref.alias;
-		if (alias.empty() && ref.type == TableReferenceType::BASE_TABLE) {
-			auto &base_table = ref.Cast<BaseTableRef>();
-			alias = base_table.table_name;
-		}
-		if (!alias.empty()) {
-			AddBinding(bindings, alias);
-		}
-		return std::move(original);
-	}
-	case TableReferenceType::JOIN: {
-		auto &j_ref = ref.Cast<JoinRef>();
-		j_ref.left = DeduplicateBindings(std::move(j_ref.left), bindings);
-		j_ref.right = DeduplicateBindings(std::move(j_ref.right), bindings);
-		if (j_ref.condition) {
-			ReplaceQualificationRecursive(j_ref.condition, bindings);
-		}
-		return std::move(original);
-	}
-	case TableReferenceType::PIVOT: {
-		auto &p_ref = ref.Cast<PivotRef>();
-		if (!ref.alias.empty()) {
-			AddBinding(bindings, ref.alias);
-		}
-		p_ref.source = DeduplicateBindings(std::move(p_ref.source), bindings);
-		for (auto &aggr : p_ref.aggregates) {
-			ReplaceQualificationRecursive(aggr, bindings);
-		}
-		return std::move(original);
-	}
-	case TableReferenceType::TABLE_FUNCTION: {
-		auto &tf_ref = ref.Cast<TableFunctionRef>();
-		if (!ref.alias.empty()) {
-			AddBinding(bindings, ref.alias);
-		}
-		ReplaceQualificationRecursive(tf_ref.function, bindings);
-		return std::move(original);
-	}
-	default:
-		break;
-	}
-	throw NotImplementedException("TableRef type (%s) not implemented for traversal", EnumUtil::ToString(ref.type));
-}
+private:
+	//! Records how many times a given binding has been seen
+	case_insensitive_map_t<idx_t> bindings;
+};
+
+} // namespace
 
 unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	auto join_ref = make_uniq<JoinRef>(join_ref_type);
@@ -153,8 +165,9 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	for (auto &col : duplicate_eliminated_columns) {
 		join_ref->duplicate_eliminated_columns.emplace_back(col->Copy());
 	}
-	case_insensitive_map_t<string> bindings;
-	return DeduplicateBindings(std::move(join_ref), bindings);
+	BindingDeduplicator deduplicator;
+	auto res = deduplicator.DeduplicateBindings(std::move(join_ref));
+	return res;
 }
 
 const vector<ColumnDefinition> &JoinRelation::Columns() {
