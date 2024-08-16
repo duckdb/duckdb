@@ -47,6 +47,17 @@ void MetaPipeline::GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bo
 	}
 }
 
+optional_ptr<MetaPipeline> MetaPipeline::GetLastChild() const {
+	if (children.empty()) {
+		return nullptr;
+	}
+	reference<const vector<shared_ptr<MetaPipeline>>> current_children = children;
+	while (!current_children.get().back()->children.empty()) {
+		current_children = current_children.get().back()->children;
+	}
+	return current_children.get().back().get();
+}
+
 optional_ptr<const vector<reference<Pipeline>>> MetaPipeline::GetDependencies(Pipeline &dependant) const {
 	const auto it = dependencies.find(dependant);
 	return it == dependencies.end() ? nullptr : &it->second;

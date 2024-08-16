@@ -56,11 +56,8 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		// If the LHS child can saturate all available threads,
 		// we recursively make all RHS children depend on the LHS.
 		// This prevents breadth-first plan evaluation
-		vector<shared_ptr<MetaPipeline>> child_meta_pipelines;
-		meta_pipeline.GetMetaPipelines(child_meta_pipelines, true, true);
-		if (!child_meta_pipelines.empty()) {
-			child_meta_pipeline_ptr = child_meta_pipelines.back().get();
-		}
+		// We do this by letting them depend on the last child meta pipeline added after building out the LHS
+		child_meta_pipeline_ptr = meta_pipeline.GetLastChild();
 	}
 
 	// build the union pipeline

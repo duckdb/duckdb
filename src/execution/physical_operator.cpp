@@ -49,8 +49,13 @@ idx_t PhysicalOperator::SumOfEstimatedCardinalities() const {
 }
 
 bool PhysicalOperator::CanSaturateThreads(ClientContext &context) const {
+#ifdef DEBUG
+	// In debug mode we always return true here so that the code that depends on it is well-tested
+	return true;
+#else
 	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 	return SumOfEstimatedCardinalities() / Storage::ROW_GROUP_SIZE > num_threads;
+#endif
 }
 
 //===--------------------------------------------------------------------===//

@@ -48,6 +48,8 @@ public:
 	void GetPipelines(vector<shared_ptr<Pipeline>> &result, bool recursive);
 	//! Get the MetaPipeline children of this MetaPipeline
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
+	//! Recursively gets the last child added
+	optional_ptr<MetaPipeline> GetLastChild() const;
 	//! Get the dependencies (within this MetaPipeline) of the given Pipeline
 	optional_ptr<const vector<reference<Pipeline>>> GetDependencies(Pipeline &dependant) const;
 	//! Whether the sink of this pipeline is a join build
