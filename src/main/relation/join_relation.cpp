@@ -96,7 +96,7 @@ unique_ptr<TableRef> DeduplicateBindings(unique_ptr<TableRef> original, case_ins
 	case TableReferenceType::DELIM_GET:
 	case TableReferenceType::SUBQUERY:
 	case TableReferenceType::EXPRESSION_LIST: {
-		auto alias = ref.alias;
+		auto &alias = ref.alias;
 		if (alias.empty() && ref.type == TableReferenceType::BASE_TABLE) {
 			auto &base_table = ref.Cast<BaseTableRef>();
 			alias = base_table.table_name;
