@@ -1,0 +1,55 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_tpch_sf1.test_slow
+# description: Test large appends within individual transactions
+# group: [optimistic_write]
+
+require parquet
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+foreach tbl lineitem orders partsupp part customer supplier nation region
+
+statement ok
+COPY ${tbl} TO '__TEST_DIR__/${tbl}_sf1.parquet'
+
+endloop
+
+load __TEST_DIR__/optimistic_write_lineitem.db
+
+statement ok
+SET debug_skip_checkpoint_on_commit=true
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+foreach tbl lineitem orders partsupp part customer supplier nation region
+
+statement ok
+CREATE TABLE ${tbl} AS FROM '__TEST_DIR__/${tbl}_sf1.parquet';
+
+endloop
+
+restart
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
+
+statement ok
+CHECKPOINT

@@ -36,7 +36,7 @@ public:
 		return column_counts[index];
 	}
 
-	ColumnCount column_counts[STANDARD_VECTOR_SIZE];
+	vector<ColumnCount> column_counts;
 	idx_t current_column_count = 0;
 	bool error = false;
 	idx_t result_position = 0;

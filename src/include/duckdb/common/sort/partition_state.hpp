@@ -232,12 +232,13 @@ public:
 
 class PartitionMergeEvent : public BasePipelineEvent {
 public:
-	PartitionMergeEvent(PartitionGlobalSinkState &gstate_p, Pipeline &pipeline_p)
-	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), merge_states(gstate_p) {
+	PartitionMergeEvent(PartitionGlobalSinkState &gstate_p, Pipeline &pipeline_p, const PhysicalOperator &op_p)
+	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), merge_states(gstate_p), op(op_p) {
 	}
 
 	PartitionGlobalSinkState &gstate;
 	PartitionGlobalMergeStates merge_states;
+	const PhysicalOperator &op;
 
 public:
 	void Schedule() override;

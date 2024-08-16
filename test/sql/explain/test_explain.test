@@ -30,3 +30,13 @@ query II
 EXPLAIN (FORMAT JSON) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
 ----
 logical_opt	<REGEX>:.*"name": "CROSS_PRODUCT".*
+
+query II
+EXPLAIN (FORMAT HTML) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+logical_opt	<REGEX>:.*<div class="title">CROSS_PRODUCT</div>.*
+
+query II
+EXPLAIN (FORMAT GRAPHVIZ) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+logical_opt	<REGEX>:.*node_0_0 -> node_0_1;.*

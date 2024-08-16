@@ -148,5 +148,13 @@
         "example": "list_has_any([1, 2, 3], [2, 3, 4])",
         "type": "scalar_function",
         "aliases": ["array_has_any", "&&"]
+    },
+    {
+        "name": "list_has_all",
+        "parameters": "l1, l2",
+        "description": "Returns true if all elements of l2 are in l1. NULLs are ignored.",
+        "example": "list_has_all([1, 2, 3], [2, 3])",
+        "type": "scalar_function",
+        "aliases": ["array_has_all", "@>", "<@"]
     }
 ]

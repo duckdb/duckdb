@@ -2,13 +2,16 @@
 # description: Test Windows Newlines with a long file
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # many strings with windows newlines
 # load CSV file into a table
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/windows_newline.csv';
+COPY test FROM 'data/csv/test/windows_newline.csv';
 ----
 20000
 
@@ -22,7 +25,7 @@ DELETE FROM test;
 
 # now do the same with a multi-byte quote that is not actually used
 statement error
-COPY test FROM 'test/sql/copy/csv/data/test/windows_newline.csv' (QUOTE 'BLABLABLA', AUTO_DETECT FALSE);
+COPY test FROM 'data/csv/test/windows_newline.csv' (QUOTE 'BLABLABLA', AUTO_DETECT FALSE);
 ----
 The quote option cannot exceed a size of 1 byte.
 
@@ -35,7 +38,7 @@ statement ok
 CREATE TABLE test (a INTEGER);
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/windows_newline_empty.csv' (HEADER 0);
+COPY test FROM 'data/csv/test/windows_newline_empty.csv' (HEADER 0);
 ----
 20000
 
