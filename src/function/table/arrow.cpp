@@ -33,11 +33,31 @@ static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSiz
 
 static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
 	auto format = string(schema.format);
+	// Let's first figure out if this type is a special canonical type
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
 	auto canonical_extension = schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
 	if (canonical_extension == "arrow.uuid") {
+		if (format != "w:16") {
+			throw InvalidInputException(
+			    "arrow.uuid must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly defined as: %s",
+			    format);
+		}
 		return make_uniq<ArrowType>(LogicalType::UUID);
+	} else if (canonical_extension == "arrow.json") {
+		if (format == "u") {
+			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+		} else if (format == "U") {
+			return make_uniq<ArrowType>(LogicalType::JSON(),
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		} else if (format == "vu") {
+			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
+		} else {
+			throw InvalidInputException("arrow.json must be of a varchar format (i.e., \'u\',\'U\' or \'vu\'). It is "
+			                            "incorrectly defined as: %s",
+			                            format);
+		}
 	}
+	// If not, we just check the format itself
 	if (format == "n") {
 		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {

@@ -89,6 +89,9 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
 	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)");
+
+	// JSON
+	TestArrowRoundtrip("SELECT '{\"name\":\"John\", \"age\":28, \"car\":\"VW Fox\"}'::JSON str FROM range(5) tbl(i)");
 }
 
 TEST_CASE("Test Arrow String View", "[arrow][.]") {

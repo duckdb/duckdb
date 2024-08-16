@@ -141,6 +141,13 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::VARCHAR:
+		if (type.IsJSONType()) {
+			auto schema_metadata = ArrowSchemaMetadata();
+			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.json");
+			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		}
 		if (options.produce_arrow_string_view) {
 			child.format = "vu";
 		} else {
