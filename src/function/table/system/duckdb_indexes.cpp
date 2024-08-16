@@ -86,7 +86,7 @@ Value GetIndexExpressions(IndexCatalogEntry &index) {
 	for (auto &item : vec) {
 		content.push_back(Value(item));
 	}
-	return Value::LIST(std::move(content));
+	return Value::LIST(LogicalType::VARCHAR, std::move(content));
 }
 
 void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
