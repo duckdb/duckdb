@@ -23,7 +23,7 @@ public:
 	void AddOption(const string &key, const string &value);
 	//! Gets an option from the metadata, returns an empty string if does not exist.
 	string GetOption(const string &key);
-	//! Transforms metadata to a char*, used when creating an arrow object (Is malloced, should be properly released)
+	//! Transforms metadata to a char*, used when creating an arrow object
 	unsafe_unique_array<char> SerializeMetadata() const;
 	//! Key for encode of the extension type name
 	static constexpr const char *ARROW_EXTENSION_NAME = "ARROW:extension:name";

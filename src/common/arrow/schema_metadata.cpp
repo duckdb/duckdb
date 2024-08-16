@@ -76,7 +76,6 @@ unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {
 		memcpy(metadata_ptr, value.c_str(), value_size);
 		metadata_ptr += value_size;
 	}
-	// Now we malloc the string
 	return metadata_array_ptr;
 }
 } // namespace duckdb
