@@ -13,7 +13,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "utf8proc_wrapper.hpp"
-
+#include "duckdb/common/arrow/schema_metadata.hpp"
 #include <iostream>
 
 namespace duckdb {
@@ -33,8 +33,8 @@ static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSiz
 
 static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
 	auto format = string(schema.format);
-
-	auto canonical_extension = string(schema.metadata);
+	ArrowSchemaMetadata schema_metadata(schema.metadata);
+	auto canonical_extension = schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
 	if (canonical_extension == "arrow.uuid") {
 		return make_uniq<ArrowType>(LogicalType::UUID);
 	}
@@ -249,7 +249,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
 		return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
-	}  else {
+	} else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 	}
 }
