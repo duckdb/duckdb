@@ -21,3 +21,15 @@ class TestArrowPyCapsule(object):
 
         res = duckdb_cursor.sql("select * from capsule")
         assert res.fetchall() == [(1, 5), (2, 6), (3, 7), (4, 8)]
+
+    def test_capsule_roundtrip(self, duckdb_cursor):
+        def create_capsule():
+            conn = duckdb.connect()
+            rel = conn.sql("select i, i+1, -i from range(100) t(i)")
+
+            capsule = rel.__arrow_c_stream__()
+            return capsule
+
+        capsule = create_capsule()
+        rel2 = duckdb_cursor.sql("select * from capsule")
+        assert rel2.fetchall() == [(i, i + 1, -i) for i in range(100)]

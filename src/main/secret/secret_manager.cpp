@@ -465,12 +465,10 @@ bool SecretManager::PersistentSecretsEnabled() {
 }
 
 void SecretManager::SetDefaultStorage(const string &storage) {
-	ThrowOnSettingChangeIfInitialized();
 	config.default_persistent_storage = storage;
 }
 
 void SecretManager::ResetDefaultStorage() {
-	ThrowOnSettingChangeIfInitialized();
 	config.default_persistent_storage = SecretManager::LOCAL_FILE_STORAGE_NAME;
 }
 
