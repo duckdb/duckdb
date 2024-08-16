@@ -332,8 +332,8 @@ unique_ptr<QueryResult> Relation::Query(const string &name, const string &sql) {
 	return Query(sql);
 }
 
-unique_ptr<QueryResult> Relation::Explain(ExplainType type) {
-	auto explain = make_shared_ptr<ExplainRelation>(shared_from_this(), type);
+unique_ptr<QueryResult> Relation::Explain(ExplainType type, ExplainFormat format) {
+	auto explain = make_shared_ptr<ExplainRelation>(shared_from_this(), type, format);
 	return explain->Execute();
 }
 
