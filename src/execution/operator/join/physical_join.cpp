@@ -42,14 +42,23 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	meta_pipeline.GetPipelines(pipelines_so_far, false);
 	auto &last_pipeline = *pipelines_so_far.back();
 
+	optional_ptr<MetaPipeline> child_meta_pipeline_ptr;
 	if (build_rhs) {
 		// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op, MetaPipelineType::JOIN_BUILD);
 		child_meta_pipeline.Build(*op.children[1]);
+		child_meta_pipeline_ptr = &child_meta_pipeline;
 	}
 
 	// continue building the current pipeline on the LHS (probe side)
 	op.children[0]->BuildPipelines(current, meta_pipeline);
+
+	if (build_rhs && op.children[1]->CanSaturateThreads(current.GetClientContext())) {
+		// If the build side can saturate all available threads,
+		// we don't just make the LHS pipeline depend on the RHS, but recursively all LHS children too.
+		// This prevents breadth-first plan evaluation
+		meta_pipeline.AddRecursiveDependency(*child_meta_pipeline_ptr);
+	}
 
 	switch (op.type) {
 	case PhysicalOperatorType::POSITIONAL_JOIN:

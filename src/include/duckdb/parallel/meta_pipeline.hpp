@@ -61,6 +61,8 @@ public:
 	//! Let 'dependant' depend on all pipeline that were created since 'start',
 	//! where 'including' determines whether 'start' is added to the dependencies
 	void AddDependenciesFrom(Pipeline &dependant, const Pipeline &start, bool including);
+	//! Recursively makes all children of this MetaPipeline depend on the given MetaPipeline
+	void AddRecursiveDependency(MetaPipeline &meta_pipeline);
 	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
 	void AddFinishEvent(Pipeline &pipeline);
 	//! Whether the pipeline needs its own PipelineFinishEvent

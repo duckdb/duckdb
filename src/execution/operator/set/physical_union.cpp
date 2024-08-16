@@ -40,7 +40,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		}
 	}
 
-	// create a union pipeline that is identical to 'current'
+	// create a union pipeline that has identical dependencies to 'current'
 	auto &union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
 
 	// continue with the current pipeline
@@ -51,8 +51,25 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
 	}
 
+	optional_ptr<MetaPipeline> child_meta_pipeline_ptr;
+	if (children[0]->CanSaturateThreads(current.GetClientContext())) {
+		// If the LHS child can saturate all available threads,
+		// we recursively make all RHS children depend on the LHS.
+		// This prevents breadth-first plan evaluation
+		vector<shared_ptr<MetaPipeline>> child_meta_pipelines;
+		meta_pipeline.GetMetaPipelines(child_meta_pipelines, true, true);
+		if (!child_meta_pipelines.empty()) {
+			child_meta_pipeline_ptr = child_meta_pipelines.back().get();
+		}
+	}
+
 	// build the union pipeline
 	children[1]->BuildPipelines(union_pipeline, meta_pipeline);
+
+	if (child_meta_pipeline_ptr) {
+		// The pointer was stored above, so we have to add the recursive dependency here
+		meta_pipeline.AddRecursiveDependency(*child_meta_pipeline_ptr);
+	}
 
 	// Assign proper batch index to the union pipeline
 	// This needs to happen after the pipelines have been built because unions can be nested

@@ -77,6 +77,10 @@ public:
 		return false;
 	}
 
+	//! Functions to help decide how to set up pipeline dependencies
+	idx_t SumOfEstimatedCardinalities() const;
+	bool CanSaturateThreads(ClientContext &context) const;
+
 	virtual void Verify();
 
 public:

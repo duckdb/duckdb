@@ -40,6 +40,19 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const 
 	return result;
 }
 
+idx_t PhysicalOperator::SumOfEstimatedCardinalities() const {
+	idx_t result = estimated_cardinality;
+	for (auto &child : children) {
+		result += child->SumOfEstimatedCardinalities();
+	}
+	return result;
+}
+
+bool PhysicalOperator::CanSaturateThreads(ClientContext &context) const {
+	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	return SumOfEstimatedCardinalities() / Storage::ROW_GROUP_SIZE > num_threads;
+}
+
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//

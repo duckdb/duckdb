@@ -124,6 +124,24 @@ void MetaPipeline::AddDependenciesFrom(Pipeline &dependant, const Pipeline &star
 	deps.insert(deps.begin(), created_pipelines.begin(), created_pipelines.end());
 }
 
+void MetaPipeline::AddRecursiveDependency(MetaPipeline &meta_pipeline) {
+	vector<shared_ptr<MetaPipeline>> child_meta_pipelines;
+	this->GetMetaPipelines(child_meta_pipelines, true, true);
+
+	// find 'meta_pipeline'
+	auto it = child_meta_pipelines.begin();
+	for (; !RefersToSameObject(**it, meta_pipeline); it++) {
+	}
+	D_ASSERT(it != child_meta_pipelines.end());
+
+	// skip over it
+	it++;
+
+	for (; it != child_meta_pipelines.end(); it++) {
+		it->get()->GetBasePipeline()->AddDependency(meta_pipeline.GetBasePipeline());
+	}
+}
+
 void MetaPipeline::AddFinishEvent(Pipeline &pipeline) {
 	D_ASSERT(finish_pipelines.find(pipeline) == finish_pipelines.end());
 	finish_pipelines.insert(pipeline);
