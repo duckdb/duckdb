@@ -218,8 +218,7 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	auto minimum_reservation = num_threads * ht_size;
 
 	temporary_memory_state->SetMinimumReservation(minimum_reservation);
-	temporary_memory_state->SetRemainingSize(minimum_reservation);
-	temporary_memory_state->UpdateReservation(context);
+	temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, minimum_reservation);
 }
 
 RadixHTGlobalSinkState::~RadixHTGlobalSinkState() {
@@ -388,8 +387,7 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 				// Out-of-core would be triggered below, try to increase the reservation
 				auto remaining_size =
 				    MaxValue<idx_t>(gstate.number_of_threads * total_size, temporary_memory_state.GetRemainingSize());
-				temporary_memory_state.SetRemainingSize(2 * remaining_size);
-				temporary_memory_state.UpdateReservation(context);
+				temporary_memory_state.SetRemainingSizeAndUpdateReservation(context, 2 * remaining_size);
 				thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
 			}
 		}
@@ -550,8 +548,7 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 	// Minimum of combining one partition at a time
 	gstate.temporary_memory_state->SetMinimumReservation(gstate.max_partition_size);
 	// Set size to 0 until the scan actually starts
-	gstate.temporary_memory_state->SetRemainingSize(0);
-	gstate.temporary_memory_state->UpdateReservation(gstate.context);
+	gstate.temporary_memory_state->SetZero();
 	gstate.finalized = true;
 }
 
@@ -566,8 +563,8 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 
 	const auto max_threads = MinValue<idx_t>(
 	    NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), sink.partitions.size());
-	sink.temporary_memory_state->SetRemainingSize(max_threads * sink.max_partition_size);
-	sink.temporary_memory_state->UpdateReservation(sink.context);
+	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(sink.context,
+	                                                                  max_threads * sink.max_partition_size);
 
 	// This many partitions will fit given our reservation (at least 1))
 	const auto partitions_fit =
@@ -766,8 +763,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	D_ASSERT(finalizes_done <= sink.partitions.size());
 	if (finalizes_done == sink.partitions.size()) {
 		// All finalizes are done, set remaining size to 0
-		sink.temporary_memory_state->SetRemainingSize(0);
-		sink.temporary_memory_state->UpdateReservation(sink.context);
+		sink.temporary_memory_state->SetZero();
 	}
 
 	// Update partition state
