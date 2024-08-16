@@ -70,7 +70,7 @@ unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {
 		const std::string &value = pair.second;
 		const idx_t value_size = value.size();
 		// Length of the value (int32)
-		memcpy(metadata_ptr, &key_size, sizeof(int32_t));
+		memcpy(metadata_ptr, &value_size, sizeof(int32_t));
 		metadata_ptr += sizeof(int32_t);
 		// Value
 		memcpy(metadata_ptr, value.c_str(), value_size);
