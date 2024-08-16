@@ -262,7 +262,7 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const Index &index) {
 
 	// We will never write an index to the WAL that is not bound
-	D_ASSERT(index->IsBound());
+	D_ASSERT(index.IsBound());
 	const auto index_storage_info = index.Cast<BoundIndex>().GetStorageInfo(true);
 	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
 
@@ -288,11 +288,6 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 		}
 		return false;
 	});
-	auto &indexes = duck_index_entry.GetDataTableInfo().GetIndexes().Indexes();
-	// get the matching index and serialize its storage info
-	for (auto const &index : indexes) {
-	}
-
 	serializer.End();
 }
 
