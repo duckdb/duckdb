@@ -29,7 +29,7 @@ bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
 void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op,
-                                      bool build_rhs) {
+                                      bool build_rhs, bool set_depth_first_dependencies) {
 	op.op_state.reset();
 	op.sink_state.reset();
 
@@ -42,24 +42,27 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	meta_pipeline.GetPipelines(pipelines_so_far, false);
 	auto &last_pipeline = *pipelines_so_far.back();
 
-	optional_ptr<MetaPipeline> child_meta_pipeline_ptr;
+	vector<shared_ptr<Pipeline>> dependencies;
+	optional_ptr<MetaPipeline> last_child_ptr;
 	if (build_rhs) {
 		// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op, MetaPipelineType::JOIN_BUILD);
 		child_meta_pipeline.Build(*op.children[1]);
-		// get the ptr to the last child to set up dependencies later
-		child_meta_pipeline_ptr = meta_pipeline.GetLastChild();
+		if (set_depth_first_dependencies && op.children[1]->CanSaturateThreads(current.GetClientContext())) {
+			// if the build side can saturate all available threads,
+			// we don't just make the LHS pipeline depend on the RHS, but recursively all LHS children too.
+			// this prevents breadth-first plan evaluation
+			child_meta_pipeline.GetPipelines(dependencies, false);
+			last_child_ptr = meta_pipeline.GetLastChild();
+		}
 	}
 
 	// continue building the current pipeline on the LHS (probe side)
 	op.children[0]->BuildPipelines(current, meta_pipeline);
 
-	if (build_rhs && op.type != PhysicalOperatorType::LEFT_DELIM_JOIN &&
-	    op.children[1]->CanSaturateThreads(current.GetClientContext())) {
-		// If the build side can saturate all available threads,
-		// we don't just make the LHS pipeline depend on the RHS, but recursively all LHS children too.
-		// This prevents breadth-first plan evaluation
-		meta_pipeline.AddRecursiveDependency(*child_meta_pipeline_ptr);
+	if (last_child_ptr) {
+		// the pointer was set, set up the dependencies
+		meta_pipeline.AddRecursiveDependencies(dependencies, *last_child_ptr);
 	}
 
 	switch (op.type) {

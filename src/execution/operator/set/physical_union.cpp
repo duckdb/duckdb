@@ -46,26 +46,26 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	// continue with the current pipeline
 	children[0]->BuildPipelines(current, meta_pipeline);
 
-	if (order_matters) {
+	vector<shared_ptr<Pipeline>> dependencies;
+	optional_ptr<MetaPipeline> last_child_ptr;
+	if (order_matters || children[0]->CanSaturateThreads(current.GetClientContext())) {
 		// order matters, so 'union_pipeline' must come after all pipelines created by building out 'current'
-		meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
-	}
-
-	optional_ptr<MetaPipeline> child_meta_pipeline_ptr;
-	if (children[0]->CanSaturateThreads(current.GetClientContext())) {
+		dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
 		// If the LHS child can saturate all available threads,
 		// we recursively make all RHS children depend on the LHS.
 		// This prevents breadth-first plan evaluation
 		// We do this by letting them depend on the last child meta pipeline added after building out the LHS
-		child_meta_pipeline_ptr = meta_pipeline.GetLastChild();
+		if (children[0]->CanSaturateThreads(current.GetClientContext())) {
+			last_child_ptr = meta_pipeline.GetLastChild();
+		}
 	}
 
 	// build the union pipeline
 	children[1]->BuildPipelines(union_pipeline, meta_pipeline);
 
-	if (child_meta_pipeline_ptr) {
-		// The pointer was stored above, so we have to add the recursive dependency here
-		meta_pipeline.AddRecursiveDependency(*child_meta_pipeline_ptr);
+	if (last_child_ptr) {
+		// the pointer was set, set up the dependencies
+		meta_pipeline.AddRecursiveDependencies(dependencies, *last_child_ptr);
 	}
 
 	// Assign proper batch index to the union pipeline

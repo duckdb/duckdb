@@ -161,26 +161,12 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 	// add base stack to the event data too
 	event_map.insert(make_pair(reference<Pipeline>(*base_pipeline), base_stack));
 
-	// set up the dependencies within this MetaPipeline
 	for (auto &pipeline : pipelines) {
 		auto &config = DBConfig::GetConfig(context);
 		auto source = pipeline->GetSource();
 		if (source->type == PhysicalOperatorType::TABLE_SCAN && config.options.initialize_in_main_thread) {
 			// this is a work-around for the R client that requires the init to be called in the main thread
 			pipeline->ResetSource(true);
-		}
-		auto dependencies = meta_pipeline->GetDependencies(*pipeline);
-		if (!dependencies) {
-			continue;
-		}
-		auto root_entry = event_map.find(*pipeline);
-		D_ASSERT(root_entry != event_map.end());
-		auto &pipeline_stack = root_entry->second;
-		for (auto &dependency : *dependencies) {
-			auto event_entry = event_map.find(dependency);
-			D_ASSERT(event_entry != event_map.end());
-			auto &dependency_stack = event_entry->second;
-			pipeline_stack.pipeline_event.AddDependency(dependency_stack.pipeline_event);
 		}
 	}
 }
@@ -194,7 +180,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		SchedulePipeline(meta_pipeline, event_data);
 	}
 
-	// set up the dependencies across MetaPipelines
+	// set up the implicit dependencies between MetaPipelines (parent depends on child)
 	auto &event_map = event_data.event_map;
 	for (auto &entry : event_map) {
 		auto &pipeline = entry.first.get();
@@ -208,6 +194,22 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			D_ASSERT(event_map_entry != event_map.end());
 			auto &dep_entry = event_map_entry->second;
 			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_complete_event);
+		}
+	}
+
+	// set up explicitly set dependencies
+	for (auto &meta_pipeline : event_data.meta_pipelines) {
+		for (auto &entry : meta_pipeline->GetDependencies()) {
+			auto &pipeline = entry.first.get();
+			auto root_entry = event_map.find(pipeline);
+			D_ASSERT(root_entry != event_map.end());
+			auto &pipeline_stack = root_entry->second;
+			for (auto &dependency : entry.second) {
+				auto event_entry = event_map.find(dependency);
+				D_ASSERT(event_entry != event_map.end());
+				auto &dependency_stack = event_entry->second;
+				pipeline_stack.pipeline_event.AddDependency(dependency_stack.pipeline_event);
+			}
 		}
 	}
 
@@ -234,7 +236,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			D_ASSERT(child1_entry != event_map.end());
 
 			for (auto &child2 : children) {
-				if (child2->Type() == MetaPipelineType::JOIN_BUILD || RefersToSameObject(*child1, *child2)) {
+				if (child2->Type() != MetaPipelineType::JOIN_BUILD || RefersToSameObject(*child1, *child2)) {
 					continue;
 				}
 				auto &child2_base = *child2->GetBasePipeline();
