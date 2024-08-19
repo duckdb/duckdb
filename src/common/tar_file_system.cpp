@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 namespace duckdb {
 
@@ -12,10 +13,10 @@ namespace duckdb {
 
 struct TarArchiveFileMetadataCache final : public ObjectCacheEntry {
 public:
-	TarArchiveFileMetadataCache() : read_time(0) {
+	TarArchiveFileMetadataCache() : read_time(0), byte_offset(0), byte_size(0) {
 	}
-	TarArchiveFileMetadataCache(time_t read_time_p, idx_t byte_offset_p)
-	    : read_time(read_time_p), byte_offset(byte_offset_p) {
+	TarArchiveFileMetadataCache(time_t read_time_p, idx_t byte_offset_p, idx_t byte_size_p)
+	    : read_time(read_time_p), byte_offset(byte_offset_p), byte_size(byte_size_p) {
 	}
 
 	//! Read time (of the archive as a whole)
@@ -23,6 +24,9 @@ public:
 
 	//! Byte offset to the file in the tar archive
 	idx_t byte_offset;
+
+	//! Byte length of the file in the tar archive
+	idx_t byte_size;
 
 public:
 	static string ObjectType() {
@@ -34,8 +38,34 @@ public:
 	}
 };
 
+static shared_ptr<TarArchiveFileMetadataCache> TryGetCachedArchiveMetadata(optional_ptr<FileOpener> opener,
+                                                                           FileHandle &handle, string path) {
+	// Do we have a client context?
+	if (!opener) {
+		return nullptr;
+	}
+	auto context = opener->TryGetClientContext();
+	if (!context) {
+		return nullptr;
+	}
+	// Is this archive file already in the cache?
+	if (!ObjectCache::ObjectCacheEnabled(*context)) {
+		return nullptr;
+	}
+	auto &cache = ObjectCache::GetObjectCache(*context);
+	auto entry = cache.Get<TarArchiveFileMetadataCache>(path);
+	if (!entry) {
+		return nullptr;
+	}
+	// Check if the file has been modified since the last read
+	if (handle.file_system.GetLastModifiedTime(handle) > entry->read_time) {
+		return nullptr;
+	}
+	return entry;
+}
+
 //------------------------------------------------------------------------------
-// Tar Scan
+// Tar Block Iterator
 //------------------------------------------------------------------------------
 struct TarBlockHeader {
 	char file_name[100];
@@ -60,29 +90,20 @@ struct TarBlockHeader {
 		return strtoul(file_size, nullptr, 8);
 	}
 };
-
 static_assert(sizeof(TarBlockHeader) == 512, "TarBlockHeader must be 512 bytes");
 
-template <class T>
-struct IteratorPair {
-	T &begin() {
-		return begin_it;
-	}
-	T &end() {
-		return end_it;
-	}
-	IteratorPair(T begin_it_p, T end_it_p) : begin_it(begin_it_p), end_it(end_it_p) {
-	}
-
-private:
-	T begin_it;
-	T end_it;
+struct TarBlockEntry {
+	unique_ptr<TarBlockHeader> header;
+	idx_t file_offset;
 };
 
+struct TarBlockIteratorHelper;
+
 struct TarBlockIterator {
-	TarBlockIterator();
+	TarBlockIterator() : current_block({nullptr, 0}), archive_handle(nullptr), stop(true) {
+	}
 	explicit TarBlockIterator(FileHandle &archive_handle_p)
-	    : current_header(make_uniq<TarBlockHeader>()), archive_handle(archive_handle_p) {
+	    : current_block({make_uniq<TarBlockHeader>(), 0}), archive_handle(archive_handle_p), stop(false) {
 		Next();
 	}
 
@@ -91,74 +112,62 @@ struct TarBlockIterator {
 		return *this;
 	}
 
-	const TarBlockHeader &operator*() const {
-		return *current_header;
+	const TarBlockEntry &operator*() const {
+		return current_block;
 	}
 
-	bool operator==(const TarBlockIterator &other) const {
-		return stop == other.stop;
+	bool operator!=(const TarBlockIterator &other) const {
+		return stop != other.stop;
 	}
 
-	static IteratorPair<TarBlockIterator> Scan(FileHandle &archive_handle) {
-		return {TarBlockIterator(archive_handle), TarBlockIterator()};
-	}
+	static TarBlockIteratorHelper Scan(FileHandle &archive_handle);
 
 private:
 	void Next() {
-		if (!archive_handle.Read(current_header.get(), sizeof(TarBlockHeader))) {
+		if (!archive_handle->Read(current_block.header.get(), sizeof(TarBlockHeader))) {
 			stop = true;
 			return;
 		}
-		if (current_header->file_name[0] == 0) {
+		if (current_block.header->file_name[0] == 0) {
 			stop = true;
 			return;
 		}
-		const auto file_offset = archive_handle.SeekPosition();
-		const auto file_size = current_header->GetFileSize();
+		const auto file_offset = archive_handle->SeekPosition();
+		const auto file_size = current_block.header->GetFileSize();
 		const auto file_blocks = (file_size + 511) / 512;
-		archive_handle.Seek(file_offset + file_blocks * 512);
+		current_block.file_offset = file_offset;
+		archive_handle->Seek(file_offset + file_blocks * 512);
 	}
 
 private:
-	bool stop = false;
-	unique_ptr<TarBlockHeader> current_header;
+	TarBlockEntry current_block;
+	optional_ptr<FileHandle> archive_handle;
+	bool stop;
+};
+
+struct TarBlockIteratorHelper {
+	explicit TarBlockIteratorHelper(FileHandle &archive_handle_p) : archive_handle(archive_handle_p) {
+	}
+	TarBlockIterator begin() const {
+		return TarBlockIterator {archive_handle};
+	}
+	TarBlockIterator end() const {
+		return TarBlockIterator {};
+	}
+
+private:
 	FileHandle &archive_handle;
 };
 
-struct TarEntry {
-	string name;
-	idx_t byte_offset;
-
-	TarEntry(const string &name, const idx_t byte_offset) : name(name), byte_offset(byte_offset) {
-	}
-};
-
-static vector<TarEntry> GlobTarFile(FileSystem &fs, string tar_path, optional_ptr<FileOpener> opener) {
-	auto file = fs.OpenFile(tar_path, FileFlags::FILE_FLAGS_READ, opener);
-	if (!file) {
-		throw IOException("Failed to open file: %s", tar_path);
-	}
-
-	vector<TarEntry> entries;
-	while (true) {
-		TarBlockHeader header;
-		auto byte_offset = file->SeekPosition();
-		if (!file->Read(&header, sizeof(TarBlockHeader))) {
-			break;
-		}
-		if (header.file_name[0] == 0) {
-			break;
-		}
-		entries.emplace_back(header.file_name, byte_offset);
-		const auto file_size = header.GetFileSize();
-		const auto file_blocks = (file_size + 511) / 512;
-		file->Seek(file->SeekPosition() + file_blocks * 512);
-	}
-
-	return entries;
+inline TarBlockIteratorHelper TarBlockIterator::Scan(FileHandle &archive_handle) {
+	return TarBlockIteratorHelper {archive_handle};
 }
 
-// Returns the path to the archive file that contains the given file
+//------------------------------------------------------------------------------
+// Tar Utilities
+//------------------------------------------------------------------------------
+
+// Split a tar path into the path to the archive and the path within the archive
 static pair<string, string> SplitArchivePath(const string &path) {
 	constexpr char suffix[] = ".tar";
 	auto tar_path = std::find_end(path.begin(), path.end(), suffix, suffix + 4);
@@ -203,19 +212,31 @@ unique_ptr<FileHandle> TarFileSystem::OpenFile(const string &path, FileOpenFlags
                                                optional_ptr<FileOpener> opener) {
 
 	// Get the path to the tar file
-	auto paths = SplitArchivePath(path.substr(6));
-	auto &tar_path = paths.first;
-	auto &file_path = paths.second;
+	const auto paths = SplitArchivePath(path.substr(6));
+	const auto &tar_path = paths.first;
+	const auto &file_path = paths.second;
 
 	// Now we need to find the file within the tar file and return out file handle
 	auto handle = parent_file_system.OpenFile(tar_path, flags, opener);
 
-	// TODO: Check the cache to avoid re-reading the tar file
+	// Check if the offset is cached
+	const auto cached_entry = TryGetCachedArchiveMetadata(opener, *handle, path);
+	if (cached_entry) {
+		const auto start_offset = cached_entry->byte_offset;
+		const auto end_offset = start_offset + cached_entry->byte_size;
 
+		// Seek to the cached byte offset
+		handle->Seek(start_offset);
+
+		// Return a file handle that reads from the cached byte offset
+		return make_uniq<TarFileHandle>(*this, path, std::move(handle), start_offset, end_offset);
+	}
+
+	// Else, we need to perform a sequential scan through the tar archive to find the file
 	for (const auto &block : TarBlockIterator::Scan(*handle)) {
-		if (block.file_name == file_path) {
-			auto start_offset = handle->SeekPosition();
-			auto end_offset = start_offset + block.GetFileSize();
+		if (block.header->file_name == file_path) {
+			auto start_offset = block.file_offset;
+			auto end_offset = start_offset + block.header->GetFileSize();
 			return make_uniq<TarFileHandle>(*this, path, std::move(handle), start_offset, end_offset);
 		}
 	}
@@ -275,34 +296,7 @@ bool TarFileSystem::OnDiskFile(FileHandle &handle) {
 	return t_handle.inner_handle->OnDiskFile();
 }
 
-static shared_ptr<TarArchiveFileMetadataCache> TryGetCachedArchiveMetadata(FileOpener *opener, FileHandle &handle) {
-	// Do we have a client context?
-	if (!opener) {
-		return nullptr;
-	}
-	auto context = opener->TryGetClientContext();
-	if (!context) {
-		return nullptr;
-	}
-	// Is this archive file already in the cache?
-	auto &cache = ObjectCache::GetObjectCache(*context);
-	auto entry = cache.Get<TarArchiveFileMetadataCache>(handle.path);
-	if (!entry) {
-		return nullptr;
-	}
-	// Check if the file has been modified since the last read
-	if (handle.file_system.GetLastModifiedTime(handle) >= entry->read_time) {
-		return nullptr;
-	}
-	return entry;
-}
-
 vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
-	if (!HasGlob(path)) {
-		// If there is no glob pattern, just return the path itself
-		// TODO: Do a file exists check?
-		return {path};
-	}
 
 	// Remove the "tar://" prefix
 	const auto parts = SplitArchivePath(path.substr(6));
@@ -319,7 +313,6 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 	}
 
 	// Given the path to the tar file, open it
-	auto entries = GlobTarFile(parent_file_system, tar_path, opener);
 	auto archive_handle = parent_file_system.OpenFile(tar_path, FileFlags::FILE_FLAGS_READ, opener);
 	if (!archive_handle) {
 		throw IOException("Failed to open file: %s", tar_path);
@@ -328,10 +321,17 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 	vector<string> result;
 	auto pattern_parts = StringUtil::Split(file_path, '/');
 
-	// TODO: CAche all the entries we pass through
+	optional_ptr<ObjectCache> cache;
+	optional_ptr<ClientContext> context = opener->TryGetClientContext();
+	if (context) {
+		if (ObjectCache::ObjectCacheEnabled(*context)) {
+			cache = ObjectCache::GetObjectCache(*context);
+		}
+	}
 
-	for (const auto &entry : TarBlockIterator::Scan(*archive_handle)) {
-		string entry_name = entry.file_name;
+	auto last_modified = archive_handle->file_system.GetLastModifiedTime(*archive_handle);
+	for (auto &entry : TarBlockIterator::Scan(*archive_handle)) {
+		string entry_name = entry.header->file_name;
 
 		auto entry_parts = StringUtil::Split(entry_name, '/');
 
@@ -347,9 +347,7 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 			const auto &ep = entry_parts[i];
 
 			if (IsCrawl(pp)) {
-				// Crawl pattern, match everything from here on
-				// TODO: Not true.
-				break;
+				throw NotImplementedException("Crawl not supported in tar file system");
 			}
 
 			if (!LikeFun::Glob(ep.c_str(), ep.size(), pp.c_str(), pp.size())) {
@@ -359,7 +357,15 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 			}
 		}
 		if (match) {
-			result.push_back(JoinPath("tar://" + tar_path, entry_name));
+			auto entry_path = JoinPath("tar://" + tar_path, entry_name);
+			// Cache the offset and size for this file
+			if (cache) {
+				auto offset = entry.file_offset;
+				auto size = entry.header->GetFileSize();
+				auto cache_entry = make_shared_ptr<TarArchiveFileMetadataCache>(last_modified, offset, size);
+				cache->Put(entry_path, std::move(cache_entry));
+			}
+			result.push_back(entry_path);
 		}
 	}
 
