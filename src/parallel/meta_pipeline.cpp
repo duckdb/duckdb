@@ -1,6 +1,5 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 
-#include "duckdb/common/printer.hpp"
 #include "duckdb/execution/executor.hpp"
 
 namespace duckdb {
@@ -21,6 +20,10 @@ PipelineBuildState &MetaPipeline::GetState() const {
 
 optional_ptr<PhysicalOperator> MetaPipeline::GetSink() const {
 	return sink;
+}
+
+optional_ptr<Pipeline> MetaPipeline::GetParent() const {
+	return parent;
 }
 
 shared_ptr<Pipeline> &MetaPipeline::GetBasePipeline() {
@@ -60,7 +63,7 @@ MetaPipeline &MetaPipeline::GetLastChild() {
 }
 
 const reference_map_t<Pipeline, vector<reference<Pipeline>>> &MetaPipeline::GetDependencies() const {
-	return explicit_dependencies;
+	return pipeline_dependencies;
 }
 
 MetaPipelineType MetaPipeline::Type() const {
@@ -96,12 +99,14 @@ void MetaPipeline::Ready() const {
 
 MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type) {
 	children.push_back(make_shared_ptr<MetaPipeline>(executor, state, &op, type));
-	auto child_meta_pipeline = children.back().get();
+	auto &child_meta_pipeline = *children.back().get();
+	// store the parent
+	child_meta_pipeline.parent = &current;
 	// child MetaPipeline must finish completely before this MetaPipeline can start
-	current.AddDependency(child_meta_pipeline->GetBasePipeline());
+	current.AddDependency(child_meta_pipeline.GetBasePipeline());
 	// child meta pipeline is part of the recursive CTE too
-	child_meta_pipeline->recursive_cte = recursive_cte;
-	return *child_meta_pipeline;
+	child_meta_pipeline.recursive_cte = recursive_cte;
+	return child_meta_pipeline;
 }
 
 Pipeline &MetaPipeline::CreatePipeline() {
@@ -132,7 +137,7 @@ vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependa
 	}
 
 	// add them to the dependencies
-	auto &explicit_deps = explicit_dependencies[dependant];
+	auto &explicit_deps = pipeline_dependencies[dependant];
 	for (auto &created_pipeline : created_pipelines) {
 		explicit_deps.push_back(*created_pipeline);
 	}
@@ -156,7 +161,7 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 
 	for (; it != child_meta_pipelines.end(); it++) {
 		auto &pipeline = *it->get()->GetBasePipeline();
-		auto &explicit_deps = explicit_dependencies[pipeline];
+		auto &explicit_deps = pipeline_dependencies[pipeline];
 		for (auto &dependency : dependencies) {
 			explicit_deps.push_back(*dependency);
 		}
@@ -194,14 +199,14 @@ Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 
 	// 'union_pipeline' inherits ALL dependencies of 'current' (within this MetaPipeline, and across MetaPipelines)
 	union_pipeline.dependencies = current.dependencies;
-	auto it = explicit_dependencies.find(current);
-	if (it != explicit_dependencies.end()) {
-		explicit_dependencies[union_pipeline] = it->second;
+	auto it = pipeline_dependencies.find(current);
+	if (it != pipeline_dependencies.end()) {
+		pipeline_dependencies[union_pipeline] = it->second;
 	}
 
 	if (order_matters) {
 		// if we need to preserve order, or if the sink is not parallel, we set a dependency
-		explicit_dependencies[union_pipeline].push_back(current);
+		pipeline_dependencies[union_pipeline].push_back(current);
 	}
 
 	return union_pipeline;
@@ -218,9 +223,9 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator &op, 
 
 	// child pipeline has a dependency (within this MetaPipeline on all pipelines that were scheduled
 	// between 'current' and now (including 'current') - set them up
-	explicit_dependencies[child_pipeline].push_back(current);
+	pipeline_dependencies[child_pipeline].push_back(current);
 	AddDependenciesFrom(child_pipeline, last_pipeline, false);
-	D_ASSERT(explicit_dependencies.find(child_pipeline) != explicit_dependencies.end());
+	D_ASSERT(pipeline_dependencies.find(child_pipeline) != pipeline_dependencies.end());
 }
 
 } // namespace duckdb

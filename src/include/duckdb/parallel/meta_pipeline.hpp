@@ -41,6 +41,8 @@ public:
 	PipelineBuildState &GetState() const;
 	//! Get the sink operator for this MetaPipeline
 	optional_ptr<PhysicalOperator> GetSink() const;
+	//! Get the parent pipeline
+	optional_ptr<Pipeline> GetParent() const;
 
 	//! Get the initial pipeline of this MetaPipeline
 	shared_ptr<Pipeline> &GetBasePipeline();
@@ -94,6 +96,8 @@ private:
 	Executor &executor;
 	//! The PipelineBuildState for all MetaPipelines in the query plan
 	PipelineBuildState &state;
+	//! Parent pipeline (optional)
+	optional_ptr<Pipeline> parent;
 	//! The sink of all pipelines within this MetaPipeline
 	optional_ptr<PhysicalOperator> sink;
 	//! The type of this MetaPipeline (regular, join build)
@@ -103,7 +107,7 @@ private:
 	//! All pipelines with a different source, but the same sink
 	vector<shared_ptr<Pipeline>> pipelines;
 	//! Dependencies of Pipelines of this MetaPipeline
-	reference_map_t<Pipeline, vector<reference<Pipeline>>> explicit_dependencies;
+	reference_map_t<Pipeline, vector<reference<Pipeline>>> pipeline_dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
 	vector<shared_ptr<MetaPipeline>> children;
 	//! Next batch index

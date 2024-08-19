@@ -77,13 +77,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	}
 
 	// Join can become a source operator if it's RIGHT/OUTER, or if the hash join goes out-of-core
-	bool add_child_pipeline = false;
-	auto &join_op = op.Cast<PhysicalJoin>();
-	if (join_op.IsSource()) {
-		add_child_pipeline = true;
-	}
-
-	if (add_child_pipeline) {
+	if (op.Cast<PhysicalJoin>().IsSource()) {
 		meta_pipeline.CreateChildPipeline(current, op, last_pipeline);
 	}
 }

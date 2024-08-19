@@ -180,7 +180,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		SchedulePipeline(meta_pipeline, event_data);
 	}
 
-	// set up the implicit dependencies between MetaPipelines (parent depends on child)
+	// set up the dependencies for complete event
 	auto &event_map = event_data.event_map;
 	for (auto &entry : event_map) {
 		auto &pipeline = entry.first.get();
@@ -197,7 +197,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 		}
 	}
 
-	// set up explicitly set dependencies
+	// set the dependencies for pipeline event
 	for (auto &meta_pipeline : event_data.meta_pipelines) {
 		for (auto &entry : meta_pipeline->GetDependencies()) {
 			auto &pipeline = entry.first.get();
@@ -227,9 +227,24 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 
 		vector<shared_ptr<MetaPipeline>> children;
 		meta_pipeline->GetMetaPipelines(children, false, true);
+
+		bool different_parents = false;
+		for (auto &child1 : children) {
+			for (auto &child2 : children) {
+				if (!RefersToSameObject(*child1->GetParent(), *child2->GetParent())) {
+					different_parents = true;
+					break;
+				}
+			}
+		}
+
+		if (different_parents) {
+			continue; // We can do this when there are different parents without creating a circular dependency
+		}
+
 		for (auto &child1 : children) {
 			if (child1->Type() != MetaPipelineType::JOIN_BUILD) {
-				continue;
+				continue; // We only want to do this for join builds
 			}
 			auto &child1_base = *child1->GetBasePipeline();
 			auto child1_entry = event_map.find(child1_base);
@@ -237,8 +252,9 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 
 			for (auto &child2 : children) {
 				if (child2->Type() != MetaPipelineType::JOIN_BUILD || RefersToSameObject(*child1, *child2)) {
-					continue;
+					continue; // We don't want to depent on itself
 				}
+
 				auto &child2_base = *child2->GetBasePipeline();
 				auto child2_entry = event_map.find(child2_base);
 				D_ASSERT(child2_entry != event_map.end());
