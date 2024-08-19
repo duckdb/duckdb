@@ -347,7 +347,7 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 			const auto &pp = pattern_parts[i];
 			const auto &ep = entry_parts[i];
 
-			if (IsCrawl(pp)) {
+			if (pp == "**") {
 				throw NotImplementedException("Crawl not supported in tar file system");
 			}
 
