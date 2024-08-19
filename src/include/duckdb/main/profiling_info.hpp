@@ -25,7 +25,7 @@ namespace duckdb {
 
 enum class MetricsType : uint8_t {
 	QUERY_NAME,
-	IDLE_THREAD_TIME,
+	BLOCKED_THREAD_TIME,
 	CPU_TIME,
 	EXTRA_INFO,
 	CUMULATIVE_CARDINALITY,
@@ -58,7 +58,6 @@ public:
 public:
 	ProfilingInfo() = default;
 	explicit ProfilingInfo(profiler_settings_t &n_settings, idx_t depth = 0) : settings(n_settings) {
-		//		SetMandatorySettings();
 		if (depth == 0) {
 			settings.insert(MetricsType::QUERY_NAME);
 		} else {

@@ -4304,8 +4304,8 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 	switch(value) {
 	case MetricsType::QUERY_NAME:
 		return "QUERY_NAME";
-	case MetricsType::IDLE_THREAD_TIME:
-		return "IDLE_THREAD_TIME";
+	case MetricsType::BLOCKED_THREAD_TIME:
+		return "BLOCKED_THREAD_TIME";
 	case MetricsType::CPU_TIME:
 		return "CPU_TIME";
 	case MetricsType::EXTRA_INFO:
@@ -4332,8 +4332,8 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	if (StringUtil::Equals(value, "QUERY_NAME")) {
 		return MetricsType::QUERY_NAME;
 	}
-	if (StringUtil::Equals(value, "IDLE_THREAD_TIME")) {
-		return MetricsType::IDLE_THREAD_TIME;
+	if (StringUtil::Equals(value, "BLOCKED_THREAD_TIME")) {
+		return MetricsType::BLOCKED_THREAD_TIME;
 	}
 	if (StringUtil::Equals(value, "CPU_TIME")) {
 		return MetricsType::CPU_TIME;
