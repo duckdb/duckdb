@@ -262,8 +262,10 @@ def get_deserialize_element_template(
         template = template.replace(', result{assignment}{property_name}', '').replace(
             'ReadProperty', 'ReadDeletedProperty'
         )
-    elif has_default:
+    elif has_default and default_value is None:
         template = template.replace('ReadProperty', 'ReadPropertyWithDefault')
+    elif has_default and default_value is not None:
+        template = template.replace('ReadProperty', 'ReadPropertyWithExplicitDefault')
     return template.format(
         property_name=property_name,
         property_key=property_key,
