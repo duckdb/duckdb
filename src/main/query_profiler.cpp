@@ -131,11 +131,12 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 	for (idx_t i = 0; i < node.GetChildCount(); i++) {
 		auto child = node.GetChild(i);
 		Finalize(*child);
-		auto type = PhysicalOperatorType(node.GetProfilingInfo().GetMetricValue<uint8_t>(MetricsType::OPERATOR_TYPE));
-		if (type == PhysicalOperatorType::UNION && node.GetProfilingInfo().Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-			node.GetProfilingInfo().AddToMetric(
-			    MetricsType::OPERATOR_CARDINALITY,
-			    child->GetProfilingInfo().metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>());
+
+		auto &info = node.GetProfilingInfo();
+		auto type = PhysicalOperatorType(info.GetMetricValue<uint8_t>(MetricsType::OPERATOR_TYPE));
+		if (type == PhysicalOperatorType::UNION && info.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
+			info.AddToMetric(MetricsType::OPERATOR_CARDINALITY,
+			                 child->GetProfilingInfo().metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>());
 		}
 	}
 }
@@ -176,8 +177,8 @@ void QueryProfiler::EndQuery() {
 			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			info.metrics[MetricsType::QUERY_NAME] = query_info.query_name;
 
-			if (info.Enabled(MetricsType::IDLE_THREAD_TIME)) {
-				info.metrics[MetricsType::IDLE_THREAD_TIME] = query_info.idle_thread_time;
+			if (info.Enabled(MetricsType::BLOCKED_THREAD_TIME)) {
+				info.metrics[MetricsType::BLOCKED_THREAD_TIME] = query_info.blocked_thread_time;
 			}
 			if (info.Enabled(MetricsType::OPERATOR_TIMING)) {
 				info.metrics[MetricsType::OPERATOR_TIMING] = main_query.Elapsed();
@@ -402,13 +403,13 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	profiler.timings.clear();
 }
 
-void QueryProfiler::SetInfo(const double &idle_thread_time) {
+void QueryProfiler::SetInfo(const double &blocked_thread_time) {
 	lock_guard<mutex> guard(flush_lock);
-	if (!IsEnabled() || !running || !root->GetProfilingInfo().Enabled(MetricsType::IDLE_THREAD_TIME)) {
+	if (!IsEnabled() || !running || !root->GetProfilingInfo().Enabled(MetricsType::BLOCKED_THREAD_TIME)) {
 		return;
 	}
 
-	query_info.idle_thread_time = idle_thread_time;
+	query_info.blocked_thread_time = blocked_thread_time;
 }
 
 string QueryProfiler::DrawPadded(const string &str, idx_t width) {

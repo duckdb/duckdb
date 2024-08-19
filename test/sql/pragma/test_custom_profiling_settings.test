@@ -37,7 +37,7 @@ SELECT unnest(res) from (
 "CUMULATIVE_CARDINALITY": "true"
 "CUMULATIVE_ROWS_SCANNED": "true"
 "EXTRA_INFO": "true"
-"IDLE_THREAD_TIME": "true"
+"BLOCKED_THREAD_TIME": "true"
 "OPERATOR_CARDINALITY": "true"
 "OPERATOR_ROWS_SCANNED": "true"
 "OPERATOR_TIMING": "true"
@@ -227,7 +227,7 @@ true
 
 # Rerun the same query but without the operator metrics to make sure the cumulative metrics are still collected
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "IDLE_THREAD_TIME": "true"}';
+PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "BLOCKED_THREAD_TIME": "true"}';
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -263,7 +263,7 @@ statement ok
 CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);
 
 statement ok
-PRAGMA custom_profiling_settings='{"IDLE_THREAD_TIME": "true"}';
+PRAGMA custom_profiling_settings='{"BLOCKED_THREAD_TIME": "true"}';
 
 # Complicated query to make sure that idle thread time is collected
 statement ok
@@ -283,7 +283,7 @@ SELECT unnest(res) from (
 	string_split(setting, ', ') as res
 )
 ----
-"IDLE_THREAD_TIME": "true"
+"BLOCKED_THREAD_TIME": "true"
 
 ## ERRORS
 statement error

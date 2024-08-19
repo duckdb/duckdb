@@ -115,7 +115,7 @@ TEST_CASE("Test Profiling with All Metrics", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
 	// test all profiling metrics
-	duckdb::vector<string> settings = {"IDLE_THREAD_TIME",     "CPU_TIME",       "CUMULATIVE_CARDINALITY", "EXTRA_INFO",
+	duckdb::vector<string> settings = {"BLOCKED_THREAD_TIME",  "CPU_TIME",       "CUMULATIVE_CARDINALITY", "EXTRA_INFO",
 	                                   "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildProfilingSettingsString(settings)));
 

@@ -11,7 +11,7 @@ namespace duckdb {
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {
-	    MetricsType::QUERY_NAME,           MetricsType::IDLE_THREAD_TIME,        MetricsType::CPU_TIME,
+	    MetricsType::QUERY_NAME,           MetricsType::BLOCKED_THREAD_TIME,     MetricsType::CPU_TIME,
 	    MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY,  MetricsType::OPERATOR_TYPE,
 	    MetricsType::OPERATOR_CARDINALITY, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_ROWS_SCANNED,
 	    MetricsType::OPERATOR_TIMING,
@@ -37,7 +37,7 @@ void ProfilingInfo::ResetMetrics() {
 
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
-		case MetricsType::IDLE_THREAD_TIME:
+		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
 			metrics[metric] = Value::CreateValue(0.0);
@@ -139,7 +139,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::QUERY_NAME:
 			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
 			break;
-		case MetricsType::IDLE_THREAD_TIME:
+		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
