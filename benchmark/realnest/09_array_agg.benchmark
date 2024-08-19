@@ -18,9 +18,3 @@ SELECT array_agg(data.entities.hashtags),
     array_agg(data.entities.annotations),
     array_agg(data.entities.cashtags) 
 FROM twitter;
-
-select array_agg(list_slice(list_sort(list_transform(Jet, x -> x.eta)), 2, 3)) as jet,
-    array_agg(list_slice(list_sort(list_transform(Electron, x -> x.pt)), 1, 3)) as electron,
-    array_agg(list_slice(list_sort(list_transform(Photon, x -> x.phi)), 2, 4)) as photon,
-    array_agg(list_slice(list_sort(list_transform(Tau, x -> x.mass)), 2, 3)) as tau,
-    array_agg(list_slice(list_sort(list_transform(Muon, x -> x.charge)), 2, 5)) as muon from Run2012B_SingleMu;
