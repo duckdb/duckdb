@@ -5,6 +5,41 @@
 statement ok
 PRAGMA enable_verification;
 
+statement ok
+CREATE TABLE tbl(a int);
+
+statement error
+SELECT * FROM RECURRING tbl;
+----
+Invalid Input Error: RECURRING can only be used with USING KEY in recursive CTE.
+
+statement error
+WITH RECURSIVE tbl2(a) AS (SELECT 1 UNION SELECT a.a + 1 FROM tbl2 AS a, RECURRING tbl2 AS b WHERE a.a < 2) SELECT * FROM tbl2;
+----
+Invalid Input Error: RECURRING can only be used with USING KEY in recursive CTE.
+
+statement error
+WITH RECURSIVE tbl2(a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl2 AS a, (SELECT * FROM RECURRING tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
+----
+Invalid Input Error: RECURRING can only be used with USING KEY in recursive CTE.
+
+query I
+WITH RECURSIVE tbl(a) USING KEY (a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS a, (SELECT * FROM RECURRING tbl AS d WHERE d.a = 1) AS b WHERE a.a < 2) SELECT * FROM tbl;
+----
+1
+2
+
+statement error
+WITH RECURSIVE tbl2(a,b) AS (SELECT 1, NULL UNION SELECT a.a+1, a.b FROM tbl2 AS a, (SELECT * FROM RECURRING tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
+----
+Invalid Input Error: RECURRING can only be used with USING KEY in recursive CTE.
+
+query II
+WITH RECURSIVE tbl2(a,b) USING KEY (a) AS (SELECT 1, NULL UNION SELECT a.a+1, a.b FROM tbl2 AS a, (SELECT * FROM RECURRING tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
+----
+1	NULL
+2	NULL
+
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT * FROM (VALUES (1, 2, 3), (2,2,5)) UNION SELECT a+1, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
 ----

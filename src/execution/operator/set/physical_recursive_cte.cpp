@@ -106,7 +106,9 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
 		PopulateChunk(distinct_rows, chunk, distinct_idx, true);
 		DataChunk payload_rows;
-		payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+		if (!payload_types.empty()) {
+			payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+		}
 		PopulateChunk(payload_rows, chunk, payload_idx, true);
 
 		// Add the chunk to the hash table and append it to the intermediate table
@@ -162,7 +164,9 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 				DataChunk payload_rows;
 				DataChunk distinct_rows;
 				distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
-				payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+				if (!payload_types.empty()) {
+					payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+				}
 				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 
 				while (gstate.ht->Scan(scan_state, distinct_rows, payload_rows)) {

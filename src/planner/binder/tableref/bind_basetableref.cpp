@@ -89,6 +89,10 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		found_ctes = FindCTE(ref.table_name, ref.table_name == alias);
 	}
 
+	if (found_ctes.empty() && ref.is_recurring) {
+		throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
+	}
+
 	if (!found_ctes.empty()) {
 		// Check if there is a CTE binding in the BindContext
 		bool circular_cte = false;

@@ -72,7 +72,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 
 	// If the logical operator has no key targets or all columns are referenced, we create a normal recursive CTE
 	// operator
-	if (op.key_targets.empty() || distinct_types.size() == left->GetTypes().size()) {
+	if (op.key_targets.empty()) {
 
 		auto right = CreatePlan(*op.children[1]);
 
@@ -120,6 +120,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 			if (cte == recursive_cte_tables.end()) {
 				throw InvalidInputException("Referenced materialized CTE does not exist.");
 			}
+
 			chunk_scan->collection = cte->second.get();
 			materialized_cte->second.push_back(*chunk_scan.get());
 
@@ -133,9 +134,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 		throw InvalidInputException("Referenced recursive CTE does not exist.");
 	}
 
-	// If we found a recursive CTE and we want to scan the recursive table, we search for it,
+	// If we found a recursive CTE and we want to scan the recurring table, we search for it,
 	if (op.is_recurring) {
 		cte = recurring_cte_tables.find(op.cte_index);
+		if (cte == recurring_cte_tables.end()) {
+			throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
+		}
 	}
 
 	auto chunk_scan = make_uniq<PhysicalColumnDataScan>(
