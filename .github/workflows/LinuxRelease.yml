@@ -50,6 +50,33 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
+
+ old-gcc:
+    name: GCC 4.8
+ #   needs: linux-memory-leaks
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/manylinux_2014_setup
+        with:
+          ninja-build: 1
+          ccache: 1
+          gcc_4_8: 1
+
+      - name: Test
+        shell: bash
+        run: make unit
+        env:
+          CC: /usr/bin/gcc
+          CXX: /usr/bin/g++
+          GEN: ninja
+
  linux-release-64:
     # Builds binaries for linux_amd64_gcc4
     name: Linux (x64)
