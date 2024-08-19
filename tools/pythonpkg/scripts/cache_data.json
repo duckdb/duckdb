@@ -199,13 +199,20 @@
         "full_path": "IPython.display",
         "name": "display",
         "children": [
-            "IPython.display.display"
+            "IPython.display.display",
+            "IPython.display.HTML"
         ]
     },
     "IPython.display.display": {
         "type": "attribute",
         "full_path": "IPython.display.display",
         "name": "display",
+        "children": []
+    },
+    "IPython.display.HTML": {
+        "type": "attribute",
+        "full_path": "IPython.display.HTML",
+        "name": "HTML",
         "children": []
     },
     "ipywidgets": {
