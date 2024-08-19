@@ -33,11 +33,11 @@ SELECT unnest(res) from (
 	string_split(setting, ', ') as res
 )
 ----
+"BLOCKED_THREAD_TIME": "true"
 "CPU_TIME": "true"
 "CUMULATIVE_CARDINALITY": "true"
 "CUMULATIVE_ROWS_SCANNED": "true"
 "EXTRA_INFO": "true"
-"BLOCKED_THREAD_TIME": "true"
 "OPERATOR_CARDINALITY": "true"
 "OPERATOR_ROWS_SCANNED": "true"
 "OPERATOR_TIMING": "true"
