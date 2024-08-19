@@ -55,3 +55,52 @@ SELECT unnest(res) from (
 "OPTIMIZER_UNNEST_REWRITER_TIMING": "true"
 "OPTIMIZER_UNUSED_COLUMNS_TIMING": "true"
 
+# Turn all settings off
+statement ok
+PRAGMA custom_profiling_settings='{}'
+
+statement ok
+select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+query I rowsort
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
+----
+(empty)
+
+# Turn only one setting on
+statement ok
+PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER_TIMING": "true"}'
+
+statement ok
+select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+query I rowsort
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
+----
+"OPTIMIZER_JOIN_ORDER_TIMING": "true"
+
+# Test Physical Plan and Planner Metrics
+statement ok
+PRAGMA custom_profiling_settings='{"PLANNER_TIMING": "true", "PHYSICAL_PLANNER_TIMING": "true"}'
+
+statement ok
+select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+query I rowsort
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+)
+----
+"PHYSICAL_PLANNER_TIMING": "true"
+"PLANNER_TIMING": "true"
+

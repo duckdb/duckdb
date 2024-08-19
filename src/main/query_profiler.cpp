@@ -637,19 +637,8 @@ string QueryProfiler::ToJSON() const {
 	auto &settings = root->GetProfilingInfo();
 
 	settings.WriteMetricsToJSON(doc, result_obj);
-//	if (settings.Enabled(MetricsType::EXTRA_INFO)) {
-//		auto timings_list = yyjson_mut_arr(doc);
-//		const auto &ordered_phase_timings = GetOrderedPhaseTimings();
-//		for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
-//			auto timing_object = yyjson_mut_arr_add_obj(doc, timings_list);
-//			yyjson_mut_obj_add_strcpy(doc, timing_object, "annotation", ordered_phase_timings[i].first.c_str());
-//			yyjson_mut_obj_add_real(doc, timing_object, "timing", ordered_phase_timings[i].second);
-//		}
-//		yyjson_mut_obj_add_val(doc, result_obj, "timings", timings_list);
-//	}
 
 	// recursively print the physical operator tree
-
 	auto children_list = yyjson_mut_arr(doc);
 	yyjson_mut_obj_add_val(doc, result_obj, "children", children_list);
 	auto child = ToJSONRecursive(doc, *root->GetChild(0));
@@ -667,16 +656,16 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	}
 }
 
-profiler_settings_t EraseOptimizerSettings(profiler_settings_t settings) {
-    profiler_settings_t optimizer_settings_to_erase;
+profiler_settings_t ErasePhaseTimingSettings(profiler_settings_t settings) {
+    profiler_settings_t phase_timing_settings_to_erase;
 
 	for (auto &setting : settings) {
-		if (ProfilingInfo::IsOptimizerMetric(setting)) {
-            optimizer_settings_to_erase.insert(setting);
+		if (ProfilingInfo::IsOptimizerMetric(setting) || ProfilingInfo::IsPhaseTimingMetric(setting)) {
+            phase_timing_settings_to_erase.insert(setting);
         }
 	}
 
-	for (auto &setting : optimizer_settings_to_erase) {
+	for (auto &setting : phase_timing_settings_to_erase) {
         settings.erase(setting);
     }
 
@@ -694,7 +683,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	info = ProfilingInfo(settings, depth);
 	auto child_settings = settings;
 	if (depth == 0) {
-		child_settings = EraseOptimizerSettings(child_settings);
+		child_settings = ErasePhaseTimingSettings(child_settings);
     }
 	node->depth = depth;
 
