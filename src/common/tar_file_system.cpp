@@ -12,7 +12,6 @@ namespace duckdb {
 //------------------------------------------------------------------------------
 // Tar Metadata Cache
 //------------------------------------------------------------------------------
-
 struct TarArchiveFileMetadataCache final : public ObjectCacheEntry {
 public:
 	TarArchiveFileMetadataCache() : read_time(0), byte_offset(0), byte_size(0) {
@@ -41,7 +40,7 @@ public:
 };
 
 static shared_ptr<TarArchiveFileMetadataCache> TryGetCachedArchiveMetadata(optional_ptr<FileOpener> opener,
-                                                                           FileHandle &handle, string path) {
+                                                                           FileHandle &handle, const string &path) {
 	// Is this file compressed?
 	if (handle.GetFileCompressionType() != FileCompressionType::UNCOMPRESSED) {
 		return nullptr;
