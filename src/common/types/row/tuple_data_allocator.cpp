@@ -38,10 +38,14 @@ TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
 
 void TupleDataAllocator::SetCanDestroy() {
 	for (auto &block : row_blocks) {
-		block.handle->SetCanDestroy(true);
+		if (block.handle) {
+			block.handle->SetCanDestroy(true);
+		}
 	}
 	for (auto &block : heap_blocks) {
-		block.handle->SetCanDestroy(true);
+		if (block.handle) {
+			block.handle->SetCanDestroy(true);
+		}
 	}
 }
 
