@@ -45,6 +45,9 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientP
 
 static void ConvertArrowTableToVector(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
 	// Create the stream factory from the Table object
+	auto ptr = table.ptr();
+	py::gil_scoped_release gil;
+
 	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), context.GetClientProperties());
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
@@ -80,6 +83,10 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 		    "The returned table from a pyarrow scalar udf should only contain one column, found %d",
 		    return_types.size());
 	}
+
+	// if (out.GetType() == LogicalType::UUID && return_types[0] == LogicalType::BLOB) {
+	// 	return_types[0] = LogicalType::UUID;
+	// }
 
 	DataChunk result;
 	// Reserve for STANDARD_VECTOR_SIZE instead of count, in case the returned table contains too many tuples
@@ -181,43 +188,48 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 				input.Slice(selvec, index);
 			}
 		}
-
-		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
-		py::tuple column_list = pyarrow_table.attr("columns");
-
-		auto count = input.size();
-
-		// Call the function
-		auto ret = PyObject_CallObject(function, column_list.ptr());
+		idx_t count;
 		bool exception_occurred = false;
-		if (ret == nullptr && PyErr_Occurred()) {
-			exception_occurred = true;
-			if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
-				auto exception = py::error_already_set();
-				throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
-			} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
-				PyErr_Clear();
-				python_object = py::module_::import("pyarrow").attr("nulls")(count);
-			} else {
-				throw NotImplementedException("Exception handling type not implemented");
-			}
-		} else {
-			python_object = py::reinterpret_steal<py::object>(ret);
-		}
-		if (!py::isinstance(python_object, py::module_::import("pyarrow").attr("lib").attr("Table"))) {
-			// Try to convert into a table
-			py::list single_array(1);
-			py::list single_name(1);
+		{
+			auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
+			py::tuple column_list = pyarrow_table.attr("columns");
 
-			single_array[0] = python_object;
-			single_name[0] = "c0";
-			try {
-				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
-				    single_array, py::arg("names") = single_name);
-			} catch (py::error_already_set &) {
-				throw InvalidInputException("Could not convert the result into an Arrow Table");
+			count = input.size();
+
+			// Call the function
+			auto ret = PyObject_CallObject(function, column_list.ptr());
+
+			if (ret == nullptr && PyErr_Occurred()) {
+				exception_occurred = true;
+				if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
+					auto exception = py::error_already_set();
+					throw InvalidInputException("Python exception occurred while executing the UDF: %s",
+					                            exception.what());
+				} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
+					PyErr_Clear();
+					python_object = py::module_::import("pyarrow").attr("nulls")(count);
+				} else {
+					throw NotImplementedException("Exception handling type not implemented");
+				}
+			} else {
+				python_object = py::reinterpret_steal<py::object>(ret);
+			}
+			if (!py::isinstance(python_object, py::module_::import("pyarrow").attr("lib").attr("Table"))) {
+				// Try to convert into a table
+				py::list single_array(1);
+				py::list single_name(1);
+
+				single_array[0] = python_object;
+				single_name[0] = "c0";
+				try {
+					python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+					    single_array, py::arg("names") = single_name);
+				} catch (py::error_already_set &) {
+					throw InvalidInputException("Could not convert the result into an Arrow Table");
+				}
 			}
 		}
+
 		// Convert the pyarrow result back to a DuckDB datachunk
 		if (count != input_size) {
 			D_ASSERT(default_null_handling);

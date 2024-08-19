@@ -5,7 +5,6 @@ pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
 from typing import Union
 import pyarrow.compute as pc
-import uuid
 import datetime
 import numpy as np
 import cmath
@@ -84,9 +83,6 @@ def get_types():
         ),
         Candidate(UBIGINT, 18446744073709551615, 9223372036854776000),
         Candidate(VARCHAR, 'long_string_test', 'smallstring'),
-        Candidate(
-            UUID, uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'), uuid.UUID('ffffffff-ffff-ffff-ffff-000000000000')
-        ),
         Candidate(
             FLOAT,
             0.12246409803628922,

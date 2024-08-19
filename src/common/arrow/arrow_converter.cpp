@@ -131,7 +131,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "g";
 		break;
 	case LogicalTypeId::UUID: {
-		// This is a canonical extension, hence needs the arrow. prefix
+		// This is a canonical extension, hence needs the "arrow." prefix
 		child.format = "w:16";
 		auto schema_metadata = ArrowSchemaMetadata();
 		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.uuid");

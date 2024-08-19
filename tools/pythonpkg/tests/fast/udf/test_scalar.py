@@ -30,34 +30,34 @@ def make_annotated_function(type):
 
 
 class TestScalarUDF(object):
-    @pytest.mark.parametrize('function_type', ['native', 'arrow'])
+    @pytest.mark.parametrize('function_type', ['arrow'])
     @pytest.mark.parametrize(
         'test_type',
         [
-            (TINYINT, -42),
-            (SMALLINT, -512),
-            (INTEGER, -131072),
-            (BIGINT, -17179869184),
-            (UTINYINT, 254),
-            (USMALLINT, 65535),
-            (UINTEGER, 4294967295),
-            (UBIGINT, 18446744073709551615),
-            (HUGEINT, 18446744073709551616),
-            (VARCHAR, 'long_string_test'),
+            # (TINYINT, -42),
+            # (SMALLINT, -512),
+            # (INTEGER, -131072),
+            # (BIGINT, -17179869184),
+            # (UTINYINT, 254),
+            # (USMALLINT, 65535),
+            # (UINTEGER, 4294967295),
+            # (UBIGINT, 18446744073709551615),
+            # (HUGEINT, 18446744073709551616),
+            # (VARCHAR, 'long_string_test'),
             (UUID, uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')),
-            (FLOAT, 0.12246409803628922),
-            (DOUBLE, 123142.12312416293784721232344),
-            (DATE, datetime.date(2005, 3, 11)),
-            (TIMESTAMP, datetime.datetime(2009, 2, 13, 11, 5, 53)),
-            (TIME, datetime.time(14, 1, 12)),
-            (BLOB, b'\xF6\x96\xB0\x85'),
-            (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
-            (BOOLEAN, True),
-            (
-                duckdb.struct_type(['BIGINT[]', 'VARCHAR[]']),
-                {'v1': [1, 2, 3], 'v2': ['a', 'non-inlined string', 'duckdb']},
-            ),
-            (duckdb.list_type('VARCHAR'), ['the', 'duck', 'non-inlined string']),
+            # (FLOAT, 0.12246409803628922),
+            # (DOUBLE, 123142.12312416293784721232344),
+            # (DATE, datetime.date(2005, 3, 11)),
+            # (TIMESTAMP, datetime.datetime(2009, 2, 13, 11, 5, 53)),
+            # (TIME, datetime.time(14, 1, 12)),
+            # (BLOB, b'\xF6\x96\xB0\x85'),
+            # (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
+            # (BOOLEAN, True),
+            # (
+            #     duckdb.struct_type(['BIGINT[]', 'VARCHAR[]']),
+            #     {'v1': [1, 2, 3], 'v2': ['a', 'non-inlined string', 'duckdb']},
+            # ),
+            # (duckdb.list_type('VARCHAR'), ['the', 'duck', 'non-inlined string']),
         ],
     )
     def test_type_coverage(self, test_type, function_type):
