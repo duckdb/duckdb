@@ -1970,20 +1970,53 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 	return NumpyObjectType::INVALID;
 }
 
-bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
+PyArrowObjectType DuckDBPyConnection::GetArrowType(const py::handle &obj) {
+	D_ASSERT(py::gil_check());
+
+	if (py::isinstance<py::capsule>(obj)) {
+		auto capsule = py::reinterpret_borrow<py::capsule>(obj);
+		if (string(capsule.name()) != "arrow_array_stream") {
+			throw InvalidInputException("Expected a 'arrow_array_stream' PyCapsule, got: %s", string(capsule.name()));
+		}
+		auto stream = capsule.get_pointer<struct ArrowArrayStream>();
+		if (!stream->release) {
+			throw InvalidInputException("The ArrowArrayStream was already released");
+		}
+		return PyArrowObjectType::PyCapsule;
+	}
+
 	if (!ModuleIsLoaded<PyarrowCacheItem>()) {
-		return false;
+		return PyArrowObjectType::Invalid;
 	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	if (py::isinstance(object, import_cache_py.pyarrow.Table()) ||
-	    py::isinstance(object, import_cache_py.pyarrow.RecordBatchReader())) {
-		return true;
+
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	// First Verify Lib Types
+	auto table_class = import_cache.pyarrow.Table();
+	auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
+	if (py::isinstance(obj, table_class)) {
+		return PyArrowObjectType::Table;
+	} else if (py::isinstance(obj, record_batch_reader_class)) {
+		return PyArrowObjectType::RecordBatchReader;
 	}
+
 	if (!ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
-		return false;
+		return PyArrowObjectType::Invalid;
 	}
-	return (py::isinstance(object, import_cache_py.pyarrow.dataset.Dataset()) ||
-	        py::isinstance(object, import_cache_py.pyarrow.dataset.Scanner()));
+
+	// Then Verify dataset types
+	auto dataset_class = import_cache.pyarrow.dataset.Dataset();
+	auto scanner_class = import_cache.pyarrow.dataset.Scanner();
+
+	if (py::isinstance(obj, scanner_class)) {
+		return PyArrowObjectType::Scanner;
+	} else if (py::isinstance(obj, dataset_class)) {
+		return PyArrowObjectType::Dataset;
+	}
+	return PyArrowObjectType::Invalid;
+}
+
+bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
+	return DuckDBPyConnection::GetArrowType(object) != PyArrowObjectType::Invalid;
 }
 
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {

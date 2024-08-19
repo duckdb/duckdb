@@ -22,7 +22,7 @@ static unique_ptr<FunctionData> ListHasAnyBind(ClientContext &context, ScalarFun
 			arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), common_type);
 			arguments[1] = BoundCastExpression::AddCastToType(context, std::move(arguments[1]), common_type);
 		} else {
-			throw BinderException("ListHasAny: cannot compare lists of different types: '%s' and '%s'",
+			throw BinderException("list_has_any: cannot compare lists of different types: '%s' and '%s'",
 			                      left_type.ToString(), right_type.ToString());
 		}
 	}

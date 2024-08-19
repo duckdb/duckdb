@@ -13,6 +13,8 @@
 #  define calloc jet_calloc
 #  define dallocx jet_dallocx
 #  define free jet_free
+#  define free_sized jet_free_sized
+#  define free_aligned_sized jet_free_aligned_sized
 #  define mallctl jet_mallctl
 #  define mallctlbymib jet_mallctlbymib
 #  define mallctlnametomib jet_mallctlnametomib
@@ -23,7 +25,7 @@
 #  define malloc_stats_print jet_malloc_stats_print
 #  define malloc_usable_size jet_malloc_usable_size
 #  define mallocx jet_mallocx
-#  define smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9 jet_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9
+#  define smallocx_a25b9b8ba91881964be3083db349991bbbbf1661 jet_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661
 #  define nallocx jet_nallocx
 #  define posix_memalign jet_posix_memalign
 #  define rallocx jet_rallocx
@@ -47,6 +49,8 @@
 #  undef jet_calloc
 #  undef jet_dallocx
 #  undef jet_free
+#  undef jet_free_sized
+#  undef jet_free_aligned_sized
 #  undef jet_mallctl
 #  undef jet_mallctlbymib
 #  undef jet_mallctlnametomib
@@ -57,7 +61,7 @@
 #  undef jet_malloc_stats_print
 #  undef jet_malloc_usable_size
 #  undef jet_mallocx
-#  undef jet_smallocx_fa451de17fff73cc03c31ec8cd817d62927d1ff9
+#  undef jet_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661
 #  undef jet_nallocx
 #  undef jet_posix_memalign
 #  undef jet_rallocx
