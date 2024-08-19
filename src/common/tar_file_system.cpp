@@ -4,6 +4,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/storage/object_cache.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 namespace duckdb {
 
