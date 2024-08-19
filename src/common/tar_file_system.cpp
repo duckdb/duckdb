@@ -348,7 +348,7 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 			const auto &ep = entry_parts[i];
 
 			if (pp == "**") {
-				throw NotImplementedException("Crawl not supported in tar file system");
+				throw NotImplementedException("Recursive globbing ('**') not supported in tar file system paths");
 			}
 
 			if (!LikeFun::Glob(ep.c_str(), ep.size(), pp.c_str(), pp.size())) {

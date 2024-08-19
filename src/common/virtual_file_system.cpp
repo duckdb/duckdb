@@ -2,6 +2,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/tar_file_system.hpp"
 
 namespace duckdb {
 
