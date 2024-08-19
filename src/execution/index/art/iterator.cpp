@@ -75,21 +75,12 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 				}
 				row_id[ROW_ID_SIZE - 1] = byte;
 				ARTKey key(&row_id[0], ROW_ID_SIZE);
-				row_ids.push_back(key.GetRowID());
+				row_ids.push_back(key.GetRowId());
 				if (byte == NumericLimits<uint8_t>::Maximum()) {
 					break;
 				}
 				byte++;
 			}
-			break;
-		}
-		case NType::PREFIX_INLINED: {
-			Prefix prefix(art, last_leaf);
-			for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
-				row_id[i + nested_depth] = prefix.data[i];
-			}
-			ARTKey key(&row_id[0], ROW_ID_SIZE);
-			row_ids.push_back(key.GetRowID());
 			break;
 		}
 		default:

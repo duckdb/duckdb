@@ -140,7 +140,7 @@ void ARTKey::Concat(ArenaAllocator &allocator, const ARTKey &other) {
 	data = compound_data;
 }
 
-row_t ARTKey::GetRowID() const {
+row_t ARTKey::GetRowId() const {
 	D_ASSERT(len == sizeof(row_t));
 	return Radix::DecodeData<row_t>(data);
 }

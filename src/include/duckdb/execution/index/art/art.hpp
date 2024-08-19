@@ -37,9 +37,9 @@ public:
 	//! Index type name for the ART.
 	static constexpr const char *TYPE_NAME = "ART";
 	//! FixedSizeAllocator count of the ART.
-	static constexpr uint8_t ALLOCATOR_COUNT = 10;
+	static constexpr uint8_t ALLOCATOR_COUNT = 9;
 	//! FixedSizeAllocator count of deprecated ARTs.
-	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 4;
+	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 3;
 
 public:
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,

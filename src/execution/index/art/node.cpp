@@ -3,6 +3,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node15_leaf.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
@@ -74,7 +75,6 @@ void Node::Free(ART &art, Node &node) {
 		break;
 	case NType::LEAF_INLINED:
 		return node.Clear();
-	case NType::PREFIX_INLINED:
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
 	case NType::NODE_256_LEAF:
@@ -107,14 +107,12 @@ uint8_t Node::GetAllocatorIdx(const NType type) {
 		return 4;
 	case NType::NODE_256:
 		return 5;
-	case NType::PREFIX_INLINED:
-		return 6;
 	case NType::NODE_7_LEAF:
-		return 7;
+		return 6;
 	case NType::NODE_15_LEAF:
-		return 8;
+		return 7;
 	case NType::NODE_256_LEAF:
-		return 9;
+		return 8;
 	default:
 		throw InternalException("Invalid node type for GetAllocatorIdx.");
 	}
@@ -169,12 +167,13 @@ void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chil
 // Delete
 //===--------------------------------------------------------------------===//
 
-void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
+void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const bool in_gate,
+                       const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
 
 	switch (node.GetType()) {
 	case NType::NODE_4:
-		return Node4::DeleteChild(art, node, prefix, byte);
+		return Node4::DeleteChild(art, node, prefix, byte, in_gate);
 	case NType::NODE_16:
 		return Node16::DeleteChild(art, node, byte);
 	case NType::NODE_48:
@@ -182,7 +181,7 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 	case NType::NODE_256:
 		return Node256::DeleteChild(art, node, byte);
 	case NType::NODE_7_LEAF:
-		return Node7Leaf::DeleteByte(art, node, prefix, byte);
+		return Node7Leaf::DeleteByte(art, node, prefix, byte, row_id);
 	case NType::NODE_15_LEAF:
 		return Node15Leaf::DeleteByte(art, node, byte);
 	case NType::NODE_256_LEAF:
@@ -342,7 +341,6 @@ bool Node::IsAnyLeaf() const {
 	switch (GetType()) {
 	case NType::LEAF_INLINED:
 	case NType::LEAF:
-	case NType::PREFIX_INLINED:
 		return true;
 	default:
 		return false;
@@ -376,7 +374,6 @@ void Node::InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 		break;
 	case NType::LEAF_INLINED:
 		return;
-	case NType::PREFIX_INLINED:
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
 	case NType::NODE_256_LEAF:
@@ -501,7 +498,7 @@ bool Node::MergePrefixes(ART &art, Node &other, const bool in_gate) {
 	reference<Node> r_node(other);
 	auto pos = DConstants::INVALID_INDEX;
 
-	if (l_node.get().IsPrefix() && r_node.get().IsPrefix()) {
+	if (l_node.get().GetType() == NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
 		// Traverse prefixes. Possibly change the referenced nodes.
 		if (!Prefix::Traverse(art, l_node, r_node, pos, in_gate)) {
 			return false;
@@ -512,14 +509,14 @@ bool Node::MergePrefixes(ART &art, Node &other, const bool in_gate) {
 
 	} else {
 		// l_prefix contains r_prefix.
-		if (l_node.get().IsPrefix()) {
+		if (l_node.get().GetType() == NType::PREFIX) {
 			swap(*this, other);
 		}
 		pos = 0;
 	}
 
 	D_ASSERT(pos != DConstants::INVALID_INDEX);
-	if (!l_node.get().IsPrefix() && r_node.get().IsPrefix()) {
+	if (l_node.get().GetType() != NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
 		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(pos), in_gate);
 	}
 
@@ -607,7 +604,6 @@ void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
 	case NType::NODE_256_LEAF:
-	case NType::PREFIX_INLINED:
 		return;
 	default:
 		throw InternalException("Invalid node type for Vacuum.");
@@ -664,15 +660,6 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 		if (IsGate()) {
 			str = "Gate [ " + str + " ]";
 		}
-		return only_verify ? "" : "\n" + str;
-	}
-	case NType::PREFIX_INLINED: {
-		Prefix prefix(art, *this);
-		string str = " Inlined Prefix [ ";
-		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
-			str += to_string(prefix.data[i]) + "-";
-		}
-		str += " ] ";
 		return only_verify ? "" : "\n" + str;
 	}
 	default:
@@ -734,7 +721,6 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 	case NType::NODE_256:
 		VerifyAllocationsInternal(art, Ref<Node256>(art, *this, type), node_counts);
 		break;
-	case NType::PREFIX_INLINED:
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
 	case NType::NODE_256_LEAF:

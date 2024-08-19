@@ -14,9 +14,14 @@ namespace duckdb {
 void Leaf::New(Node &node, const row_t row_id) {
 	D_ASSERT(row_id < MAX_ROW_ID_LOCAL);
 
+	auto was_gate = node.IsGate();
 	node.Clear();
 	node.SetMetadata(static_cast<uint8_t>(INLINED));
 	node.SetRowId(row_id);
+
+	if (was_gate) {
+		node.SetGate();
+	}
 }
 
 void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
@@ -38,14 +43,12 @@ void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
 	r_node.Clear();
 }
 
-void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id) {
+void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, const bool in_gate) {
 	D_ASSERT(node.GetType() == INLINED);
 
-	// We cannot call art.Insert(...) on both row IDs, as the first insertion can
-	// exceed the maximum length of PREFIX_INLINED.
-	// Instead, we create a Node4 or a Node7Leaf and insert manually.
 	ArenaAllocator allocator(Allocator::Get(art.db));
 	auto key = ARTKey::CreateARTKey<row_t>(allocator, node.GetRowId());
+	auto set_gate = !in_gate || node.IsGate();
 	node.Clear();
 
 	// Get the mismatching position.
@@ -54,19 +57,30 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id) {
 	D_ASSERT(pos != DConstants::INVALID_INDEX);
 	auto byte = row_id.data[pos];
 
-	// Create the remainder.
-	Node remainder;
-	if (pos != Prefix::ROW_ID_COUNT) {
-		auto count = row_id.len - pos - 1;
-		Prefix::NewInlined(art, remainder, row_id, pos + 1, UnsafeNumericCast<uint8_t>(count));
-	}
-
+	// Create the (optional) prefix and the node.
 	reference<Node> next(node);
 	if (pos != 0) {
 		Prefix::New(art, next, row_id, 0, pos);
 	}
-	Prefix::Fork(art, next, pos, byte, remainder, key);
-	node.SetGate();
+	if (pos == Prefix::ROW_ID_COUNT) {
+		Node7Leaf::New(art, next);
+	} else {
+		Node4::New<Node4>(art, next, NType::NODE_4);
+	}
+
+	// Create the children.
+	Node row_id_node;
+	Leaf::New(row_id_node, row_id.GetRowId());
+	Node remainder;
+	if (pos != Prefix::ROW_ID_COUNT) {
+		Leaf::New(remainder, key.GetRowId());
+	}
+
+	Node::InsertChild(art, next, key[pos], row_id_node);
+	Node::InsertChild(art, next, byte, remainder);
+	if (set_gate) {
+		node.SetGate();
+	}
 }
 
 void Leaf::TransformToNested(ART &art, Node &node) {
@@ -140,7 +154,7 @@ bool Leaf::ContainsRowId(ART &art, const Node &node, const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
 
 	if (node.GetType() == INLINED) {
-		return node.GetRowId() == row_id.GetRowID();
+		return node.GetRowId() == row_id.GetRowId();
 	}
 
 	// Note: This is a DEBUG function. We only call this after ART::Insert, ART::Delete,

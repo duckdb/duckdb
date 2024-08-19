@@ -71,7 +71,7 @@ public:
 	}
 
 	void Concat(ArenaAllocator &allocator, const ARTKey &other);
-	row_t GetRowID() const;
+	row_t GetRowId() const;
 	idx_t GetMismatchPos(const ARTKey &other) const;
 
 private:

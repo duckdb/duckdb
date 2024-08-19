@@ -17,16 +17,14 @@ class ARTKey;
 
 //! Prefix is a wrapper class to access a prefix.
 //! The prefix contains up to the ART's prefix size bytes and an additional byte for the count.
-//! Non-inlined prefixes also contain a Node pointer to a child node.
+//! It also contains a Node pointer to a child node.
 class Prefix {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;
-	static constexpr NType INLINED = NType::PREFIX_INLINED;
 
 	static constexpr uint8_t ROW_ID_SIZE = sizeof(row_t);
 	static constexpr uint8_t ROW_ID_COUNT = ROW_ID_SIZE - 1;
 	static constexpr uint8_t DEPRECATED_COUNT = 15;
-	static constexpr row_t INVALID_ROW_ID = -1;
 	static constexpr uint8_t METADATA_SIZE = sizeof(Node) + 1;
 
 public:
@@ -47,8 +45,6 @@ public:
 	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
 public:
-	//! Get a new inlined prefix.
-	static void NewInlined(ART &art, Node &node, const ARTKey &key, const idx_t depth, const uint8_t count);
 	//! Get a new list of prefix nodes. The node reference holds the last prefix of the list.
 	static void New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count);
 
@@ -58,13 +54,10 @@ public:
 	//! Initializes a merge by incrementing the buffer ID of the prefix and its child.
 	static void InitializeMerge(ART &art, Node &node, const unsafe_vector<idx_t> &upper_bounds);
 
-	//! Returns the row ID, if we can inline it, else INVALID_ROW_ID.
-	static row_t CanInline(ART &art, const Node &parent, const Node &node, const uint8_t byte,
-	                       const Node &child = Node());
 	//! Concatenates parent -> byte -> child. Special-handling, if
 	//! 1. the byte was in a gate node.
 	//! 2. the byte was in PREFIX_INLINED.
-	static void Concat(ART &art, Node &parent, uint8_t byte, const bool is_gate, const Node &child = Node());
+	static void Concat(ART &art, Node &parent, uint8_t byte, const bool is_gate, const Node &child, const bool in_gate);
 
 	//! Traverse a prefix and a key until
 	//! 1. a non-prefix node.
@@ -91,10 +84,6 @@ public:
 	//! Insert a key into a prefix.
 	static bool Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const bool in_gate);
 
-	//! Fork a prefix.
-	static void Fork(ART &art, reference<Node> &node, const idx_t pos, const uint8_t byte, const Node &remainder,
-	                 const ARTKey &key, const bool freed_gate = false);
-
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
 	//! Count the number of prefixes.
@@ -111,18 +100,9 @@ private:
 	                          const NType type);
 
 	static Prefix GetTail(ART &art, const Node &node);
-	static void PrependByte(ART &art, const Node &node, const uint8_t byte);
 
 	static void ConcatGate(ART &art, Node &parent, uint8_t byte, const Node &child);
 	static void ConcatChildIsGate(ART &art, Node &parent, uint8_t byte, const Node &child);
-	static void ConcatInlinedPrefix(ART &art, Node &parent, uint8_t byte, const Node &child);
-
-	static void TraverseInlined(ART &art, Node &l_node, Node &r_node, idx_t &pos);
-
-	static void ReduceInlinedPrefix(ART &art, Node &node, const idx_t pos);
-	static void ReducePrefix(ART &art, Node &node, const idx_t pos);
-
-	static bool SplitInlined(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
 
 	Prefix Append(ART &art, const uint8_t byte);
 	void Append(ART &art, Node other);

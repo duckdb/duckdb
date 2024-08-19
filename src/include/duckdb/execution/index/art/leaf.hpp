@@ -47,7 +47,7 @@ public:
 	static void MergeInlined(ART &art, Node &l_node, Node &r_node);
 
 	//! Insert a row ID into an inlined leaf.
-	static void InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id);
+	static void InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, const bool in_gate);
 
 	//! Transforms a deprecated leaf to a nested leaf.
 	static void TransformToNested(ART &art, Node &node);

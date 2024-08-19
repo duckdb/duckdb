@@ -55,7 +55,7 @@ public:
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
+	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const bool in_gate);
 	//! Replace the child at byte.
 	template <class NODE>
 	static void ReplaceChild(NODE &n, const uint8_t byte, const Node child) {

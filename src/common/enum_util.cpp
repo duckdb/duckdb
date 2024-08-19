@@ -4375,8 +4375,6 @@ const char* EnumUtil::ToChars<NType>(NType value) {
 		return "NODE_256";
 	case NType::LEAF_INLINED:
 		return "LEAF_INLINED";
-	case NType::PREFIX_INLINED:
-		return "PREFIX_INLINED";
 	case NType::NODE_7_LEAF:
 		return "NODE_7_LEAF";
 	case NType::NODE_15_LEAF:
@@ -4410,9 +4408,6 @@ NType EnumUtil::FromString<NType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LEAF_INLINED")) {
 		return NType::LEAF_INLINED;
-	}
-	if (StringUtil::Equals(value, "PREFIX_INLINED")) {
-		return NType::PREFIX_INLINED;
 	}
 	if (StringUtil::Equals(value, "NODE_7_LEAF")) {
 		return NType::NODE_7_LEAF;

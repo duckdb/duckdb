@@ -19,23 +19,15 @@ void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chi
 	InsertChildInternal<Node4>(art, n4, byte, child);
 }
 
-void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
+void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const bool in_gate) {
 	auto &n4 = DeleteChildInternal<Node4>(art, node, byte);
 
 	// Compress one-way nodes.
 	if (n4.count == 1) {
-		// Inline the leaf.
 		auto &child = n4.children[0];
-		auto row_id = Prefix::CanInline(art, prefix, node, n4.key[0], child);
-		if (row_id != Prefix::INVALID_ROW_ID) {
-			Node::Free(art, prefix);
-			Leaf::New(prefix, row_id);
-			return;
-		}
-
-		// Concatenate the byte and the child to the prefix.
 		auto old_n4_node = node;
-		Prefix::Concat(art, prefix, n4.key[0], node.IsGate(), child);
+
+		Prefix::Concat(art, prefix, n4.key[0], node.IsGate(), child, in_gate);
 		n4.count--;
 		Node::Free(art, old_n4_node);
 	}

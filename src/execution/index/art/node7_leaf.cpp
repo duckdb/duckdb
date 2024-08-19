@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/node7_leaf.hpp"
 
+#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node15_leaf.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
@@ -30,24 +31,25 @@ void Node7Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 	InsertByteInternal(art, n7, byte);
 }
 
-void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte) {
+void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte, const ARTKey &row_id) {
 	auto &n7 = DeleteByteInternal<Node7Leaf>(art, node, byte);
 
 	// Compress one-way nodes.
 	if (n7.count == 1) {
-		// Inline the leaf.
-		auto row_id = Prefix::CanInline(art, prefix, node, n7.key[0]);
-		if (row_id != Prefix::INVALID_ROW_ID) {
-			Node::Free(art, prefix);
-			Leaf::New(prefix, row_id);
-			return;
-		}
-
-		// Concatenate the byte to the prefix.
-		auto old_n7_node = node;
-		Prefix::Concat(art, prefix, n7.key[0], node.IsGate());
+		D_ASSERT(!node.IsGate());
 		n7.count--;
-		Node::Free(art, old_n7_node);
+		Node::Free(art, node);
+
+		// Get the remaining row ID.
+		auto remainder = UnsafeNumericCast<idx_t>(row_id.GetRowId()) & AND_LAST_BYTE;
+		remainder |= UnsafeNumericCast<idx_t>(n7.key[0]);
+
+		if (prefix.GetType() == NType::PREFIX) {
+			Node::Free(art, prefix);
+			Leaf::New(prefix, UnsafeNumericCast<row_t>(remainder));
+		} else {
+			Leaf::New(node, UnsafeNumericCast<row_t>(remainder));
+		}
 	}
 }
 

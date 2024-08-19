@@ -22,6 +22,7 @@ class Node7Leaf {
 public:
 	static constexpr NType NODE_7_LEAF = NType::NODE_7_LEAF;
 	static constexpr uint8_t CAPACITY = 7;
+	static constexpr idx_t AND_LAST_BYTE = 0xFFFFFFFFFFFFFF00;
 
 public:
 	Node7Leaf() = delete;
@@ -39,7 +40,7 @@ public:
 	//! Insert a byte.
 	static void InsertByte(ART &art, Node &node, const uint8_t byte);
 	//! Delete a byte.
-	static void DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte);
+	static void DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte, const ARTKey &row_id);
 
 	//! Get the first byte greater than or equal to the byte.
 	template <class NODE>

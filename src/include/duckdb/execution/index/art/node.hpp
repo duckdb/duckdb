@@ -24,14 +24,14 @@ enum class NType : uint8_t {
 	NODE_48 = 5,
 	NODE_256 = 6,
 	LEAF_INLINED = 7,
-	PREFIX_INLINED = 8,
-	NODE_7_LEAF = 9,
-	NODE_15_LEAF = 10,
-	NODE_256_LEAF = 11,
+	NODE_7_LEAF = 8,
+	NODE_15_LEAF = 9,
+	NODE_256_LEAF = 10,
 };
 
 class ART;
 class Prefix;
+class ARTKey;
 
 //! The Node is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
@@ -57,13 +57,13 @@ public:
 	//! Get a reference to a node.
 	template <class NODE>
 	static inline NODE &Ref(const ART &art, const Node ptr, const NType type) {
-		D_ASSERT(!ptr.IsPrefix());
+		D_ASSERT(ptr.GetType() != NType::PREFIX);
 		return *(GetAllocator(art, type).Get<NODE>(ptr, !std::is_const<NODE>::value));
 	}
 	//! Get a node pointer, if the node is in memory, else nullptr.
 	template <class NODE>
 	static inline NODE *InMemoryRef(const ART &art, const Node ptr, const NType type) {
-		D_ASSERT(!ptr.IsPrefix());
+		D_ASSERT(ptr.GetType() != NType::PREFIX);
 		return GetAllocator(art, type).GetInMemoryPtr<NODE>(ptr);
 	}
 
@@ -72,7 +72,8 @@ public:
 	//! Insert the child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child = Node());
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
+	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const bool in_gate,
+	                        const ARTKey &row_id);
 
 	//! Get the immutable child at byte.
 	const Node *GetChild(ART &art, const uint8_t byte) const;
@@ -110,10 +111,6 @@ public:
 	//! Returns the node type.
 	inline NType GetType() const {
 		return NType(GetMetadata() & ~AND_GATE);
-	}
-	//! True, if the node is a Prefix or PrefixInlined.
-	inline bool IsPrefix() const {
-		return GetType() == NType::PREFIX || GetType() == NType::PREFIX_INLINED;
 	}
 
 	//! True, if the node is a Node4, Node16, Node48, or Node256.
