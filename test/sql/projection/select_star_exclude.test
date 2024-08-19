@@ -83,6 +83,21 @@ SELECT i1.* EXCLUDE (i, j), i2.* EXCLUDE (k) FROM integers i1, integers i2
 ----
 3	1	2
 
+query IIIII
+SELECT * EXCLUDE i1.i FROM integers i1, integers i2
+----
+2	3	1	2	3
+
+query IIII
+SELECT * EXCLUDE (i1.i, i2.k) FROM integers i1, integers i2
+----
+2	3	1	2
+
+query III
+SELECT * EXCLUDE (i1.i, i2.i, i2.k,) FROM integers i1, integers i2
+----
+2	3	2
+
 query IIII
 SELECT * EXCLUDE (i) FROM integers i1 JOIN integers i2 USING (i)
 ----
