@@ -117,7 +117,7 @@ private:
 	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, unsafe_vector<row_t> &row_ids);
 	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
 	                      unsafe_vector<row_t> &row_ids);
-	const Node *Lookup(const Node &node, const ARTKey &key, idx_t depth);
+	const unsafe_optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
 
 	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const bool in_gate);
 	bool InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const bool in_gate);

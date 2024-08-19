@@ -56,7 +56,7 @@ public:
 	}
 
 	template <class NODE>
-	static Node *GetChild(NODE &n, const uint8_t byte) {
+	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte) {
 		if (n.children[byte].HasMetadata()) {
 			return &n.children[byte];
 		}
@@ -64,7 +64,7 @@ public:
 	}
 
 	template <class NODE>
-	static Node *GetNextChild(NODE &n, uint8_t &byte) {
+	static unsafe_optional_ptr<Node> GetNextChild(NODE &n, uint8_t &byte) {
 		for (idx_t i = byte; i < CAPACITY; i++) {
 			if (n.children[i].HasMetadata()) {
 				byte = UnsafeNumericCast<uint8_t>(i);

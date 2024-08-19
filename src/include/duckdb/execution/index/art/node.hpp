@@ -9,10 +9,11 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
+#include "duckdb/execution/index/index_pointer.hpp"
 
 namespace duckdb {
 
@@ -62,9 +63,9 @@ public:
 	}
 	//! Get a node pointer, if the node is in memory, else nullptr.
 	template <class NODE>
-	static inline NODE *InMemoryRef(const ART &art, const Node ptr, const NType type) {
+	static inline unsafe_optional_ptr<NODE> InMemoryRef(const ART &art, const Node ptr, const NType type) {
 		D_ASSERT(ptr.GetType() != NType::PREFIX);
-		return GetAllocator(art, type).GetInMemoryPtr<NODE>(ptr);
+		return GetAllocator(art, type).GetIfLoaded<NODE>(ptr);
 	}
 
 	//! Replace the child at byte.
@@ -76,13 +77,13 @@ public:
 	                        const ARTKey &row_id);
 
 	//! Get the immutable child at byte.
-	const Node *GetChild(ART &art, const uint8_t byte) const;
+	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
-	Node *GetChildMutable(ART &art, const uint8_t byte) const;
+	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte) const;
 	//! Get the first immutable child greater than or equal to the byte.
-	const Node *GetNextChild(ART &art, uint8_t &byte) const;
+	const unsafe_optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Get the first child greater than or equal to the byte.
-	Node *GetNextChildMutable(ART &art, uint8_t &byte) const;
+	unsafe_optional_ptr<Node> GetNextChildMutable(ART &art, uint8_t &byte) const;
 	//! Get the first byte greater than or equal to the byte.
 	bool GetNextByte(ART &art, uint8_t &byte) const;
 
@@ -168,7 +169,8 @@ private:
 	}
 
 	template <class NODE>
-	static void TransformToDeprecatedInternal(ART &art, NODE *ptr, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
+	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
+	                                          unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
 		if (ptr) {
 			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, allocator); });
 		}

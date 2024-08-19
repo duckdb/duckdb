@@ -14,7 +14,7 @@ Prefix::Prefix(const ART &art, const Node ptr_p, const bool is_mutable, const bo
 	if (!set_in_memory) {
 		data = Node::GetAllocator(art, PREFIX).Get(ptr_p, is_mutable);
 	} else {
-		data = Node::GetAllocator(art, PREFIX).GetInMemoryPtr(ptr_p);
+		data = Node::GetAllocator(art, PREFIX).GetIfLoaded(ptr_p);
 		if (!data) {
 			ptr = nullptr;
 			in_memory = false;

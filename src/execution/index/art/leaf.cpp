@@ -43,23 +43,26 @@ void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
 	r_node.Clear();
 }
 
-void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, const bool in_gate) {
+void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t depth, const bool in_gate) {
 	D_ASSERT(node.GetType() == INLINED);
 
 	ArenaAllocator allocator(Allocator::Get(art.db));
 	auto key = ARTKey::CreateARTKey<row_t>(allocator, node.GetRowId());
 	auto set_gate = !in_gate || node.IsGate();
+	if (set_gate) {
+		depth = 0;
+	}
 	node.Clear();
 
 	// Get the mismatching position.
 	D_ASSERT(row_id.len == key.len);
-	auto pos = row_id.GetMismatchPos(key);
+	auto pos = row_id.GetMismatchPos(key, depth);
 	D_ASSERT(pos != DConstants::INVALID_INDEX);
 	auto byte = row_id.data[pos];
 
 	// Create the (optional) prefix and the node.
 	reference<Node> next(node);
-	if (pos != 0) {
+	if (pos != 0 && pos != depth) {
 		Prefix::New(art, next, row_id, 0, pos);
 	}
 	if (pos == Prefix::ROW_ID_COUNT) {
@@ -160,7 +163,7 @@ bool Leaf::ContainsRowId(ART &art, const Node &node, const ARTKey &row_id) {
 	// Note: This is a DEBUG function. We only call this after ART::Insert, ART::Delete,
 	// and ART::ConstructFromSorted. It can never have deprecated storage.
 	D_ASSERT(node.IsGate());
-	return art.Lookup(node, row_id, 0) != nullptr;
+	return art.Lookup(node, row_id, 0);
 }
 
 //===--------------------------------------------------------------------===//

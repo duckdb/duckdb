@@ -145,8 +145,10 @@ row_t ARTKey::GetRowId() const {
 	return Radix::DecodeData<row_t>(data);
 }
 
-idx_t ARTKey::GetMismatchPos(const ARTKey &other) const {
-	for (idx_t i = 0; i < other.len; i++) {
+idx_t ARTKey::GetMismatchPos(const ARTKey &other, const idx_t start) const {
+	D_ASSERT(len <= other.len);
+	D_ASSERT(start <= len);
+	for (idx_t i = start; i < other.len; i++) {
 		if (data[i] != other.data[i]) {
 			return i;
 		}

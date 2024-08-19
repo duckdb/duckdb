@@ -116,6 +116,7 @@ void Iterator::FindMinimum(const Node &node) {
 			if (in_gate) {
 				row_id[nested_depth] = prefix.data[i];
 				nested_depth++;
+				D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 			}
 		}
 		nodes.emplace(node, 0);
@@ -132,6 +133,7 @@ void Iterator::FindMinimum(const Node &node) {
 	if (in_gate) {
 		row_id[nested_depth] = byte;
 		nested_depth++;
+		D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 	}
 	nodes.emplace(node, byte);
 	FindMinimum(*next);
@@ -261,6 +263,7 @@ void Iterator::PopNode() {
 		current_key.Pop(1);
 		if (in_gate) {
 			nested_depth--;
+			D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 		}
 		nodes.pop();
 		return;
@@ -272,6 +275,7 @@ void Iterator::PopNode() {
 	current_key.Pop(prefix_byte_count);
 	if (in_gate) {
 		nested_depth -= prefix_byte_count;
+		D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 	}
 	nodes.pop();
 }

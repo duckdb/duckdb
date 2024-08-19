@@ -54,12 +54,12 @@ public:
 	}
 
 	template <class NODE>
-	static Node *GetChild(NODE &n, const uint8_t byte) {
+	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte) {
 		return Node4::GetChild(n, byte);
 	}
 
 	template <class NODE>
-	static Node *GetNextChild(NODE &n, uint8_t &byte) {
+	static unsafe_optional_ptr<Node> GetNextChild(NODE &n, uint8_t &byte) {
 		return Node4::GetNextChild(n, byte);
 	}
 

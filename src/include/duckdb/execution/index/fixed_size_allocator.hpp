@@ -45,7 +45,7 @@ public:
 
 	//! Returns a pointer of type T to a segment. If dirty is false, then T must be a const class.
 	template <class T>
-	inline T *Get(const IndexPointer ptr, const bool dirty = true) {
+	inline unsafe_optional_ptr<T> Get(const IndexPointer ptr, const bool dirty = true) {
 		return (T *)Get(ptr, dirty);
 	}
 
@@ -61,12 +61,12 @@ public:
 
 	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
 	template <class T>
-	inline T *GetInMemoryPtr(const IndexPointer ptr) {
-		return (T *)GetInMemoryPtr(ptr);
+	inline unsafe_optional_ptr<T> GetIfLoaded(const IndexPointer ptr) {
+		return (T *)GetIfLoaded(ptr);
 	}
 
 	//! Returns the data_ptr_t to a segment, or nullptr, if the buffer is not in memory.
-	inline data_ptr_t GetInMemoryPtr(const IndexPointer ptr) {
+	inline data_ptr_t GetIfLoaded(const IndexPointer ptr) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 

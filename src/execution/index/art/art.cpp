@@ -661,7 +661,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 		if (IsUnique()) {
 			return false;
 		}
-		Leaf::InsertIntoInlined(*this, node, row_id, in_gate);
+		Leaf::InsertIntoInlined(*this, node, row_id, depth, in_gate);
 		return true;
 	}
 	case NType::LEAF: {
@@ -823,13 +823,13 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 // Point and range lookups
 //===--------------------------------------------------------------------===//
 
-const Node *ART::Lookup(const Node &node, const ARTKey &key, idx_t depth) {
+const unsafe_optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey &key, idx_t depth) {
 	reference<const Node> ref(node);
 	while (ref.get().HasMetadata()) {
 
 		// Return the leaf.
 		if (ref.get().IsAnyLeaf() || ref.get().IsGate()) {
-			return &ref.get();
+			return unsafe_optional_ptr<const Node>(ref.get());
 		}
 
 		// Traverse the prefix.

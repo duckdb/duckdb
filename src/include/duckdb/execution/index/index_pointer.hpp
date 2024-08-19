@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {

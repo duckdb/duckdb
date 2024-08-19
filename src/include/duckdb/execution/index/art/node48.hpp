@@ -61,7 +61,7 @@ public:
 	}
 
 	template <class NODE>
-	static Node *GetChild(NODE &n, const uint8_t byte) {
+	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte) {
 		if (n.child_index[byte] != Node48::EMPTY_MARKER) {
 			return &n.children[n.child_index[byte]];
 		}
@@ -69,7 +69,7 @@ public:
 	}
 
 	template <class NODE>
-	static Node *GetNextChild(NODE &n, uint8_t &byte) {
+	static unsafe_optional_ptr<Node> GetNextChild(NODE &n, uint8_t &byte) {
 		for (idx_t i = byte; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
 				byte = UnsafeNumericCast<uint8_t>(i);

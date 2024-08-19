@@ -81,7 +81,7 @@ public:
 	}
 
 	template <class NODE>
-	static Node *GetChild(NODE &n, const uint8_t byte) {
+	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
 				return &n.children[i];
@@ -91,7 +91,7 @@ public:
 	}
 
 	template <class NODE>
-	static Node *GetNextChild(NODE &n, uint8_t &byte) {
+	static unsafe_optional_ptr<Node> GetNextChild(NODE &n, uint8_t &byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] >= byte) {
 				byte = n.key[i];
