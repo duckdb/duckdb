@@ -22,19 +22,8 @@
 
 namespace duckdb {
 
-static bool ResultIsOpen(optional_ptr<QueryResult> result) {
-	if (!result) {
-		return false;
-	}
-	if (result->type != QueryResultType::STREAM_RESULT) {
-		return true;
-	}
-	auto &stream_result = result->Cast<StreamQueryResult>();
-	return stream_result.IsOpen();
-}
-
 DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::move(result_p)) {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InternalException("PyResult created without a result object");
 	}
 }
@@ -49,21 +38,21 @@ DuckDBPyResult::~DuckDBPyResult() {
 }
 
 const vector<string> &DuckDBPyResult::GetNames() {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InternalException("Calling GetNames without a result object");
 	}
 	return result->names;
 }
 
 const vector<LogicalType> &DuckDBPyResult::GetTypes() {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InternalException("Calling GetTypes without a result object");
 	}
 	return result->types;
 }
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchChunk() {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InternalException("FetchChunk called without a result object");
 	}
 	return FetchNext(*result);
@@ -120,7 +109,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &query_result) {
 Optional<py::tuple> DuckDBPyResult::Fetchone() {
 	{
 		py::gil_scoped_release release;
-		if (!ResultIsOpen(result.get())) {
+		if (!result) {
 			throw InvalidInputException("result closed");
 		}
 		if (!current_chunk || chunk_offset >= current_chunk->size()) {
@@ -211,7 +200,7 @@ void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categor
 }
 
 unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion(bool pandas) {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InvalidInputException("result closed");
 	}
 
@@ -229,7 +218,7 @@ unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion(bool
 
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk,
                                             unique_ptr<NumpyResultConversion> conversion_p) {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InvalidInputException("result closed");
 	}
 	if (!conversion_p) {
@@ -366,7 +355,7 @@ bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batch
 }
 
 py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch, bool to_polars) {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InvalidInputException("result closed");
 	}
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
@@ -379,7 +368,7 @@ py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch, bool to_polar
 }
 
 duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, bool to_polars) {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
 	auto names = result->names;
@@ -391,7 +380,7 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 }
 
 ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
 	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
@@ -401,7 +390,7 @@ ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {
-	if (!ResultIsOpen(result.get())) {
+	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
 	py::gil_scoped_acquire acquire;
