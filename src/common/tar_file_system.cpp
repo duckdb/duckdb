@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
@@ -41,6 +42,10 @@ public:
 
 static shared_ptr<TarArchiveFileMetadataCache> TryGetCachedArchiveMetadata(optional_ptr<FileOpener> opener,
                                                                            FileHandle &handle, string path) {
+	// Is this file compressed?
+	if (handle.GetFileCompressionType() != FileCompressionType::UNCOMPRESSED) {
+		return nullptr;
+	}
 	// Do we have a client context?
 	if (!opener) {
 		return nullptr;
@@ -331,6 +336,8 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 	}
 
 	auto last_modified = archive_handle->file_system.GetLastModifiedTime(*archive_handle);
+	auto is_uncompressed = archive_handle->GetFileCompressionType() == FileCompressionType::UNCOMPRESSED;
+
 	for (auto &entry : TarBlockIterator::Scan(*archive_handle)) {
 		string entry_name = entry.header->file_name;
 
@@ -359,8 +366,8 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 		}
 		if (match) {
 			auto entry_path = JoinPath("tar://" + tar_path, entry_name);
-			// Cache the offset and size for this file
-			if (cache) {
+			// Cache the offset and size for this file (if it is uncompressed)
+			if (cache && is_uncompressed) {
 				auto offset = entry.file_offset;
 				auto size = entry.header->GetFileSize();
 				auto cache_entry = make_shared_ptr<TarArchiveFileMetadataCache>(last_modified, offset, size);
