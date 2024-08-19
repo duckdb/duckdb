@@ -102,7 +102,7 @@ struct MergeSortTree {
 
 	explicit MergeSortTree(const CMP &cmp = CMP()) : cmp(cmp) {
 	}
-	explicit MergeSortTree(Elements &&lowest_level, const CMP &cmp = CMP());
+	void Build(Elements &&lowest_level);
 
 	idx_t SelectNth(const SubFrames &frames, idx_t n) const;
 
@@ -250,7 +250,7 @@ protected:
 };
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
-MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP &cmp) : cmp(cmp) {
+void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
 	const auto fanout = F;
 	const auto cascading = C;
 	const auto count = lowest_level.size();

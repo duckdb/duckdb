@@ -1401,12 +1401,22 @@ WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const v
 
 class WindowDistinctAggregatorLocalState;
 
-class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
+class WindowDistinctAggregatorGlobalState;
+
+class WindowDistinctSortTree : public MergeSortTree<idx_t, idx_t> {
 public:
-	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
 	// prev_idx, input_idx
 	using ZippedTuple = std::tuple<idx_t, idx_t>;
 	using ZippedElements = vector<ZippedTuple>;
+
+	void Build(ZippedElements &&prev_idcs, WindowDistinctAggregatorGlobalState &gdsink);
+};
+
+class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
+public:
+	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+	using ZippedTuple = WindowDistinctSortTree::ZippedTuple;
+	using ZippedElements = WindowDistinctSortTree::ZippedElements;
 
 	class DistinctSortTree;
 
@@ -1449,8 +1459,9 @@ public:
 	mutable ZippedElements prev_idcs;
 	//! The block boundary seconds
 	mutable ZippedElements seconds;
+	MergeSortTree<ZippedTuple> zipped_tree;
 	//! The merge sort tree for the aggregate.
-	unique_ptr<DistinctSortTree> merge_sort_tree;
+	WindowDistinctSortTree merge_sort_tree;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	WindowAggregateStates levels_flat_native;
@@ -1725,11 +1736,6 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 	}
 }
 
-class WindowDistinctAggregatorGlobalState::DistinctSortTree : public MergeSortTree<idx_t, idx_t> {
-public:
-	DistinctSortTree(ZippedElements &&prev_idcs, WindowDistinctAggregatorGlobalState &gdsink);
-};
-
 void WindowDistinctAggregatorLocalState::Sorted() {
 	using ZippedTuple = WindowDistinctAggregatorGlobalState::ZippedTuple;
 	auto &global_sort = gastate.global_sort;
@@ -1817,11 +1823,11 @@ void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 }
 
 void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
-	merge_sort_tree = make_uniq<DistinctSortTree>(std::move(prev_idcs), *this);
+	zipped_tree.Build(std::move(prev_idcs));
+	merge_sort_tree.Build(std::move(prev_idcs), *this);
 }
 
-WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedElements &&prev_idcs,
-                                                                        WindowDistinctAggregatorGlobalState &gdsink) {
+void WindowDistinctSortTree::Build(ZippedElements &&prev_idcs, WindowDistinctAggregatorGlobalState &gdsink) {
 	auto &aggr = gdsink.aggregator.aggr;
 	auto &allocator = gdsink.allocator;
 	auto &inputs = gdsink.inputs;
@@ -1849,7 +1855,7 @@ WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedEl
 
 	// compute space required to store aggregation states of merge sort tree
 	// this is one aggregate state per entry per level
-	MergeSortTree<ZippedTuple> zipped_tree(std::move(prev_idcs));
+	auto &zipped_tree = gdsink.zipped_tree;
 	idx_t internal_nodes = 0;
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		internal_nodes += zipped_tree.tree[level_nr].first.size();
@@ -1925,6 +1931,8 @@ WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedEl
 		aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
 		ncombine = 0;
 	}
+
+	zipped_tree.tree.clear();
 }
 
 void WindowDistinctAggregatorLocalState::FlushStates() {
@@ -1945,7 +1953,7 @@ void WindowDistinctAggregatorLocalState::Evaluate(const WindowDistinctAggregator
 	auto ldata = FlatVector::GetData<const_data_ptr_t>(statel);
 	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
 
-	const auto &merge_sort_tree = *gdstate.merge_sort_tree;
+	const auto &merge_sort_tree = gdstate.merge_sort_tree;
 	const auto &levels_flat_native = gdstate.levels_flat_native;
 	const auto exclude_mode = gdstate.aggregator.exclude_mode;
 
