@@ -80,6 +80,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 	} else {
 		// no join conditions found: keep as cross product
 		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT || op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+		}
 		return op;
 	}
 }

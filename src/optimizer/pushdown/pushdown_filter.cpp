@@ -20,7 +20,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 		}
 	}
 	GenerateFilters();
-	return Rewrite(std::move(filter.children[0]));
+	auto plan = Rewrite(std::move(filter.children[0]));
+	if (!plan->children.empty() && plan->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+		return make_uniq<LogicalEmptyResult>(std::move(plan));
+	}
+	return plan;
 }
 
 } // namespace duckdb
