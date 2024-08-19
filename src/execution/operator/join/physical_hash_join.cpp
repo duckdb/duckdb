@@ -332,8 +332,7 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 	gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
 	if (gstate.local_hash_tables.size() == gstate.active_local_states) {
 		// Set to 0 until PrepareFinalize
-		gstate.temporary_memory_state->SetRemainingSize(0);
-		gstate.temporary_memory_state->UpdateReservation(context.client);
+		gstate.temporary_memory_state->SetZero();
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
@@ -952,14 +951,12 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	auto &ht = *sink.hash_table;
 
 	// Update remaining size
-	sink.temporary_memory_state->SetRemainingSize(ht.GetRemainingSize());
-	sink.temporary_memory_state->UpdateReservation(sink.context);
+	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(sink.context, ht.GetRemainingSize());
 
 	// Try to put the next partitions in the block collection of the HT
 	if (!sink.external || !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation())) {
 		global_stage = HashJoinSourceStage::DONE;
-		sink.temporary_memory_state->SetRemainingSize(0);
-		sink.temporary_memory_state->UpdateReservation(sink.context);
+		sink.temporary_memory_state->SetZero();
 		return;
 	}
 
@@ -1181,8 +1178,7 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 		if (gstate.global_stage != HashJoinSourceStage::DONE) {
 			gstate.global_stage = HashJoinSourceStage::DONE;
 			sink.hash_table->Reset();
-			sink.temporary_memory_state->SetRemainingSize(0);
-			sink.temporary_memory_state->UpdateReservation(context.client);
+			sink.temporary_memory_state->SetZero();
 		}
 		return SourceResultType::FINISHED;
 	}

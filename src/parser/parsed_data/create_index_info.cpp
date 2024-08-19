@@ -27,6 +27,38 @@ static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &expr
 	}
 }
 
+vector<string> CreateIndexInfo::ExpressionsToList() const {
+	vector<string> list;
+
+	for (idx_t i = 0; i < parsed_expressions.size(); i++) {
+		auto &expr = parsed_expressions[i];
+		auto copy = expr->Copy();
+		// column ref expressions are qualified with the table name
+		// we need to remove them to reproduce the original query
+		RemoveTableQualificationRecursive(copy, table);
+		bool add_parenthesis = true;
+		if (copy->type == ExpressionType::COLUMN_REF) {
+			auto &column_ref = copy->Cast<ColumnRefExpression>();
+			if (!column_ref.IsQualified()) {
+				// Only when column references are not qualified, i.e (col1, col2)
+				// then these expressions do not need to be wrapped in parenthesis
+				add_parenthesis = false;
+			}
+		}
+		if (add_parenthesis) {
+			list.push_back(StringUtil::Format("(%s)", copy->ToString()));
+		} else {
+			list.push_back(StringUtil::Format("%s", copy->ToString()));
+		}
+	}
+	return list;
+}
+
+string CreateIndexInfo::ExpressionsToString() const {
+	auto list = ExpressionsToList();
+	return StringUtil::Join(list, ", ");
+}
+
 string CreateIndexInfo::ToString() const {
 	string result;
 
@@ -48,30 +80,7 @@ string CreateIndexInfo::ToString() const {
 		result += " ";
 	}
 	result += "(";
-	for (idx_t i = 0; i < parsed_expressions.size(); i++) {
-		auto &expr = parsed_expressions[i];
-		auto copy = expr->Copy();
-		if (i > 0) {
-			result += ", ";
-		}
-		// column ref expressions are qualified with the table name
-		// we need to remove them to reproduce the original query
-		RemoveTableQualificationRecursive(copy, table);
-		bool add_parenthesis = true;
-		if (copy->type == ExpressionType::COLUMN_REF) {
-			auto &column_ref = copy->Cast<ColumnRefExpression>();
-			if (!column_ref.IsQualified()) {
-				// Only when column references are not qualified, i.e (col1, col2)
-				// then these expressions do not need to be wrapped in parenthesis
-				add_parenthesis = false;
-			}
-		}
-		if (add_parenthesis) {
-			result += StringUtil::Format("(%s)", copy->ToString());
-		} else {
-			result += StringUtil::Format("%s", copy->ToString());
-		}
-	}
+	result += ExpressionsToString();
 	result += ")";
 	if (!options.empty()) {
 		result += " WITH (";
