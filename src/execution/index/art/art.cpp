@@ -614,6 +614,7 @@ bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const
 
 	// Recurse, if a child exists at key[depth].
 	if (child) {
+		D_ASSERT(child->HasMetadata());
 		bool success = Insert(*child, key, depth + 1, row_id, in_gate);
 		node.ReplaceChild(*this, key[depth], *child);
 		return success;
@@ -816,7 +817,11 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 
 	// Recurse.
 	Erase(*child, key, depth + 1, row_id, in_gate);
-	next.get().ReplaceChild(*this, key.get()[depth], *child);
+	if (!child->HasMetadata()) {
+		Node::DeleteChild(*this, next, node, key.get()[depth], in_gate, key.get());
+	} else {
+		next.get().ReplaceChild(*this, key.get()[depth], *child);
+	}
 }
 
 //===--------------------------------------------------------------------===//

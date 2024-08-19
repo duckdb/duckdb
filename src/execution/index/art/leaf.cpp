@@ -79,8 +79,8 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t d
 		Leaf::New(remainder, key.GetRowId());
 	}
 
-	Node::InsertChild(art, next, key[pos], row_id_node);
-	Node::InsertChild(art, next, byte, remainder);
+	Node::InsertChild(art, next, key[pos], remainder);
+	Node::InsertChild(art, next, byte, row_id_node);
 	if (set_gate) {
 		node.SetGate();
 	}

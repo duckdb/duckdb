@@ -117,7 +117,6 @@ void Prefix::InitializeMerge(ART &art, Node &node, const unsafe_vector<idx_t> &u
 }
 
 void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const bool is_gate, const Node &child, const bool in_gate) {
-	D_ASSERT(parent.HasMetadata());
 	D_ASSERT(!parent.IsAnyLeaf());
 	D_ASSERT(child.HasMetadata());
 
@@ -135,8 +134,12 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const bool is_gate, co
 	if (in_gate && child.GetType() == NType::LEAF_INLINED) {
 		auto row_id = child.GetRowId();
 		if (parent.GetType() == PREFIX) {
+			auto freed_gate = parent.IsGate();
 			Free(art, parent);
 			Leaf::New(parent, row_id);
+			if (freed_gate) {
+				parent.SetGate();
+			}
 		} else {
 			Leaf::New(parent, row_id);
 		}

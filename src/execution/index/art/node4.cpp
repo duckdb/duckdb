@@ -24,12 +24,14 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, 
 
 	// Compress one-way nodes.
 	if (n4.count == 1) {
-		auto &child = n4.children[0];
-		auto old_n4_node = node;
-
-		Prefix::Concat(art, prefix, n4.key[0], node.IsGate(), child, in_gate);
 		n4.count--;
-		Node::Free(art, old_n4_node);
+
+		auto child = n4.children[0];
+		auto remainder = n4.key[0];
+		auto is_gate = node.IsGate();
+
+		Node::Free(art, node);
+		Prefix::Concat(art, prefix, remainder, is_gate, child, in_gate);
 	}
 }
 

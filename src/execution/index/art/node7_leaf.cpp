@@ -37,12 +37,13 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 	// Compress one-way nodes.
 	if (n7.count == 1) {
 		D_ASSERT(!node.IsGate());
-		n7.count--;
-		Node::Free(art, node);
 
 		// Get the remaining row ID.
 		auto remainder = UnsafeNumericCast<idx_t>(row_id.GetRowId()) & AND_LAST_BYTE;
 		remainder |= UnsafeNumericCast<idx_t>(n7.key[0]);
+
+		n7.count--;
+		Node::Free(art, node);
 
 		if (prefix.GetType() == NType::PREFIX) {
 			Node::Free(art, prefix);
