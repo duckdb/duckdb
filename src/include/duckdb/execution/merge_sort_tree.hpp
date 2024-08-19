@@ -265,7 +265,7 @@ void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
 		const auto num_runs = (count + run_length - 1) / run_length;
 
 		Elements elements;
-		elements.reserve(count);
+		elements.resize(count);
 
 		//	Allocate cascading pointers only if there is room
 		Offsets cascades;
@@ -299,18 +299,19 @@ void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
 
 			//	Play the first round and extract the winner
 			Games games;
+			auto child_idx = child_base;
 			auto winner = StartGames(games, players, SENTINEL);
 			while (winner != SENTINEL) {
 				// Add fractional cascading pointers
 				// if we are on a fraction boundary
-				if (cascading > 0 && run_length > cascading && elements.size() % cascading == 0) {
+				if (cascading > 0 && run_length > cascading && child_idx % cascading == 0) {
 					for (idx_t i = 0; i < fanout; ++i) {
 						cascades.emplace_back(bounds[i].first);
 					}
 				}
 
 				//	Insert new winner element into the current run
-				elements.emplace_back(winner.first);
+				elements[child_idx++] = winner.first;
 				const auto child_run = winner.second;
 				auto &child_idx = bounds[child_run].first;
 				++child_idx;
