@@ -21,6 +21,10 @@ class TestArrowReplacementScan(object):
             assert con.execute("select count(*) from userdata_parquet_table").fetchone() == (1000,)
             assert con.execute("select count(*) from df").fetchone() == (1000,)
 
+    @pytest.mark.skipif(
+        not hasattr(pa.Table, '__arrow_c_stream__'),
+        reason='This version of pyarrow does not support the Arrow Capsule Interface',
+    )
     def test_arrow_pycapsule_replacement_scan(self, duckdb_cursor):
         tbl = pa.Table.from_pydict({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9]})
         capsule = tbl.__arrow_c_stream__()
