@@ -6,12 +6,11 @@ from uuid import UUID
 
 pa = pytest.importorskip('pyarrow')
 
-from arrow_uuid import UuidType
+from arrow_canonical_extensions import UuidType, JSONType
 
 class TestCanonicalExtensionTypes(object):
 
     def test_uuid(self, duckdb_cursor):
-
         pa.register_extension_type(UuidType())
 
         storage_array = pa.array([uuid.uuid4().bytes for _ in range(4)], pa.binary(16))
@@ -56,21 +55,6 @@ class TestCanonicalExtensionTypes(object):
         pa.unregister_extension_type("arrow.uuid")
 
     def test_json(self, duckdb_cursor):
-        class JSONType(pa.ExtensionType):
-            def __init__(self):
-                pa.ExtensionType.__init__(self, pa.string(), "arrow.json")
-
-            def __arrow_ext_serialize__(self):
-                # since we don't have a parameterized type, we don't need extra
-                # metadata to be deserialized
-                return b''
-
-            @classmethod
-            def __arrow_ext_deserialize__(self, storage_type, serialized):
-                # return an instance of this subclass given the serialized
-                # metadata.
-                return JSONType()
-
         pa.register_extension_type(JSONType())
 
         data = {"name": "Pedro", "age": 28, "car": "VW Fox"}
@@ -79,8 +63,8 @@ class TestCanonicalExtensionTypes(object):
         json_string = json.dumps(data)
 
         storage_array = pa.array([json_string], pa.string())
-        uuid_type = JSONType()
-        storage_array = uuid_type.wrap_array(storage_array)
+        json_type = JSONType()
+        storage_array = json_type.wrap_array(storage_array)
 
         arrow_table = pa.Table.from_arrays([storage_array], names=['json_col'])
 
@@ -91,7 +75,7 @@ class TestCanonicalExtensionTypes(object):
         pa.unregister_extension_type("arrow.json")
 
     def test_json_throw(self, duckdb_cursor):
-        class JSONType(pa.ExtensionType):
+        class JSONTypeWrong(pa.ExtensionType):
             def __init__(self):
                 pa.ExtensionType.__init__(self, pa.int32(), "arrow.json")
 
@@ -104,13 +88,13 @@ class TestCanonicalExtensionTypes(object):
             def __arrow_ext_deserialize__(self, storage_type, serialized):
                 # return an instance of this subclass given the serialized
                 # metadata.
-                return JSONType()
+                return JSONTypeWrong()
 
-        pa.register_extension_type(JSONType())
+        pa.register_extension_type(JSONTypeWrong())
 
         storage_array = pa.array([32], pa.int32())
-        uuid_type = JSONType()
-        storage_array = uuid_type.wrap_array(storage_array)
+        json_type = JSONTypeWrong()
+        storage_array = json_type.wrap_array(storage_array)
 
         arrow_table = pa.Table.from_arrays([storage_array], names=['json_col'])
 

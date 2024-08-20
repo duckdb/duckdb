@@ -12,7 +12,7 @@ import cmath
 from typing import NamedTuple, Any, List
 
 from duckdb.typing import *
-from arrow_uuid import UuidType
+from arrow_canonical_extensions import UuidType
 
 
 class Candidate(NamedTuple):

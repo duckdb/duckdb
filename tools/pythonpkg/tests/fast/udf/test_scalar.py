@@ -13,7 +13,7 @@ import cmath
 
 from duckdb.typing import *
 
-from arrow_uuid import UuidType
+from arrow_canonical_extensions import UuidType
 
 def make_annotated_function(type):
     # Create a function that returns its input
