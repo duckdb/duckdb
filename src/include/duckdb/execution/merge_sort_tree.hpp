@@ -103,6 +103,8 @@ struct MergeSortTree {
 	explicit MergeSortTree(const CMP &cmp = CMP()) : cmp(cmp) {
 	}
 	void Build(Elements &&lowest_level);
+	void Allocate(Elements &&lowest_level);
+	void BuildRun(idx_t level_idx, idx_t run_idx);
 
 	idx_t SelectNth(const SubFrames &frames, idx_t n) const;
 
@@ -250,16 +252,12 @@ protected:
 };
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
-void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
+void MergeSortTree<E, O, CMP, F, C>::Allocate(Elements &&lowest_level) {
 	const auto fanout = F;
 	const auto cascading = C;
 	const auto count = lowest_level.size();
 	tree.emplace_back(Level(std::move(lowest_level), Offsets()));
 
-	const RunElement SENTINEL(MergeSortTraits<ElementType>::SENTINEL(), MergeSortTraits<idx_t>::SENTINEL());
-
-	//	Fan in parent levels until we are at the top
-	//	Note that we don't build the top layer as that would just be all the data.
 	for (idx_t child_run_length = 1; child_run_length < count;) {
 		const auto run_length = child_run_length * fanout;
 		const auto num_runs = (count + run_length - 1) / run_length;
@@ -274,73 +272,109 @@ void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
 			cascades.resize(num_cascades);
 		}
 
-		//	Create each parent run by merging the child runs using a tournament tree
-		// 	https://en.wikipedia.org/wiki/K-way_merge_algorithm
-		//	TODO: Because the runs are independent, they can be parallelised with parallel_for
-		const auto &child_level = tree.back();
-		for (idx_t run_idx = 0; run_idx < num_runs; ++run_idx) {
-			//	Position markers for scanning the children.
-			using Bounds = pair<idx_t, idx_t>;
-			array<Bounds, fanout> bounds;
-			//	Start with first element of each (sorted) child run
-			RunElements players;
-			const auto child_base = run_idx * run_length;
-			for (idx_t child_run = 0; child_run < fanout; ++child_run) {
-				const auto child_idx = child_base + child_run * child_run_length;
-				bounds[child_run] = {MinValue<idx_t>(child_idx, count),
-				                     MinValue<idx_t>(child_idx + child_run_length, count)};
-				if (bounds[child_run].first != bounds[child_run].second) {
-					players[child_run] = {child_level.first[child_idx], child_run};
-				} else {
-					//	Empty child
-					players[child_run] = SENTINEL;
-				}
-			}
-
-			//	Play the first round and extract the winner
-			Games games;
-			auto element_idx = child_base;
-			auto cascade_idx = fanout * run_idx * (run_length / cascading + 2);
-			auto winner = StartGames(games, players, SENTINEL);
-			while (winner != SENTINEL) {
-				// Add fractional cascading pointers
-				// if we are on a fraction boundary
-				if (!cascades.empty() && element_idx % cascading == 0) {
-					for (idx_t i = 0; i < fanout; ++i) {
-						cascades[cascade_idx++] = bounds[i].first;
-					}
-				}
-
-				//	Insert new winner element into the current run
-				elements[element_idx++] = winner.first;
-				const auto child_run = winner.second;
-				auto &child_idx = bounds[child_run].first;
-				++child_idx;
-
-				//	Move to the next entry in the child run (if any)
-				if (child_idx < bounds[child_run].second) {
-					winner = ReplayGames(games, child_run, {child_level.first[child_idx], child_run});
-				} else {
-					winner = ReplayGames(games, child_run, SENTINEL);
-				}
-			}
-
-			// Add terminal cascade pointers to the end
-			if (!cascades.empty()) {
-				for (idx_t j = 0; j < 2; ++j) {
-					for (idx_t i = 0; i < fanout; ++i) {
-						cascades[cascade_idx++] = bounds[i].first;
-					}
-				}
-			}
-		}
-
 		//	Insert completed level and move up to the next one
 		tree.emplace_back(std::move(elements), std::move(cascades));
 		child_run_length = run_length;
 	}
 }
 
+template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
+void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
+	const auto fanout = F;
+	const auto count = lowest_level.size();
+	Allocate(std::move(lowest_level));
+
+	//	Fan in parent levels until we are at the top
+	//	Note that we don't build the top layer as that would just be all the data.
+	idx_t level_idx = 1;
+	for (idx_t child_run_length = 1; child_run_length < count; ++level_idx) {
+		const auto run_length = child_run_length * fanout;
+		const auto num_runs = (count + run_length - 1) / run_length;
+
+		//	Create each parent run by merging the child runs using a tournament tree
+		// 	https://en.wikipedia.org/wiki/K-way_merge_algorithm
+		//	TODO: Because the runs are independent, they can be parallelised with parallel_for
+		for (idx_t run_idx = 0; run_idx < num_runs; ++run_idx) {
+			BuildRun(level_idx, run_idx);
+		}
+
+		child_run_length = run_length;
+	}
+}
+
+template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
+void MergeSortTree<E, O, CMP, F, C>::BuildRun(idx_t level_idx, idx_t run_idx) {
+	const auto fanout = F;
+	const auto cascading = C;
+
+	auto &elements = tree[level_idx].first;
+	auto &cascades = tree[level_idx].second;
+	const auto &child_level = tree[level_idx - 1];
+	const auto count = elements.size();
+
+	idx_t child_run_length = 1;
+	auto run_length = child_run_length * fanout;
+	for (idx_t l = 1; l < level_idx; ++l) {
+		child_run_length = run_length;
+		run_length *= fanout;
+	}
+
+	const RunElement SENTINEL(MergeSortTraits<ElementType>::SENTINEL(), MergeSortTraits<idx_t>::SENTINEL());
+
+	//	Position markers for scanning the children.
+	using Bounds = pair<idx_t, idx_t>;
+	array<Bounds, fanout> bounds;
+	//	Start with first element of each (sorted) child run
+	RunElements players;
+	const auto child_base = run_idx * run_length;
+	for (idx_t child_run = 0; child_run < fanout; ++child_run) {
+		const auto child_idx = child_base + child_run * child_run_length;
+		bounds[child_run] = {MinValue<idx_t>(child_idx, count), MinValue<idx_t>(child_idx + child_run_length, count)};
+		if (bounds[child_run].first != bounds[child_run].second) {
+			players[child_run] = {child_level.first[child_idx], child_run};
+		} else {
+			//	Empty child
+			players[child_run] = SENTINEL;
+		}
+	}
+
+	//	Play the first round and extract the winner
+	Games games;
+	auto element_idx = child_base;
+	auto cascade_idx = fanout * run_idx * (run_length / cascading + 2);
+	auto winner = StartGames(games, players, SENTINEL);
+	while (winner != SENTINEL) {
+		// Add fractional cascading pointers
+		// if we are on a fraction boundary
+		if (!cascades.empty() && element_idx % cascading == 0) {
+			for (idx_t i = 0; i < fanout; ++i) {
+				cascades[cascade_idx++] = bounds[i].first;
+			}
+		}
+
+		//	Insert new winner element into the current run
+		elements[element_idx++] = winner.first;
+		const auto child_run = winner.second;
+		auto &child_idx = bounds[child_run].first;
+		++child_idx;
+
+		//	Move to the next entry in the child run (if any)
+		if (child_idx < bounds[child_run].second) {
+			winner = ReplayGames(games, child_run, {child_level.first[child_idx], child_run});
+		} else {
+			winner = ReplayGames(games, child_run, SENTINEL);
+		}
+	}
+
+	// Add terminal cascade pointers to the end
+	if (!cascades.empty()) {
+		for (idx_t j = 0; j < 2; ++j) {
+			for (idx_t i = 0; i < fanout; ++i) {
+				cascades[cascade_idx++] = bounds[i].first;
+			}
+		}
+	}
+}
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
 idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n) const {
 	// Handle special case of a one-element tree
