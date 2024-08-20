@@ -111,16 +111,17 @@ static_assert(sizeof(TarBlockHeader) == 512, "TarBlockHeader must be 512 bytes")
 struct TarBlockEntry {
 	unique_ptr<TarBlockHeader> header;
 	idx_t file_offset;
+	idx_t file_size;
 	string file_name;
 };
 
 struct TarBlockIteratorHelper;
 
 struct TarBlockIterator {
-	TarBlockIterator() : current_block({nullptr, 0, ""}), archive_handle(nullptr), stop(true) {
+	TarBlockIterator() : current_block({nullptr, 0, 0, ""}), archive_handle(nullptr), stop(true) {
 	}
 	explicit TarBlockIterator(FileHandle &archive_handle_p)
-	    : current_block({make_uniq<TarBlockHeader>(), 0, ""}), archive_handle(archive_handle_p), stop(false) {
+	    : current_block({make_uniq<TarBlockHeader>(), 0, 0, ""}), archive_handle(archive_handle_p), stop(false) {
 		Next();
 	}
 
@@ -195,8 +196,11 @@ private:
 
 	void Next() {
 		unordered_map<string, string> pax_records;
-		bool is_done = false;
-		while (!is_done) {
+		while (true) {
+			// Move to the next header
+			const auto current_file_blocks = (current_block.file_size + 511) / 512;
+			archive_handle->Seek(current_block.file_offset + current_file_blocks * 512);
+
 			if (!archive_handle->Read(current_block.header.get(), sizeof(TarBlockHeader))) {
 				stop = true;
 				return;
@@ -206,10 +210,8 @@ private:
 				return;
 			}
 
-			const auto file_offset = archive_handle->SeekPosition();
-			const auto file_size = current_block.header->GetFileSize();
-			const auto file_blocks = (file_size + 511) / 512;
-			current_block.file_offset = file_offset;
+			current_block.file_size = current_block.header->GetFileSize();
+			current_block.file_offset = archive_handle->SeekPosition();
 
 			// Normal file
 			if (current_block.header->type[0] == '0' || current_block.header->type[0] == 0) {
@@ -219,15 +221,13 @@ private:
 				} else {
 					current_block.file_name = current_block.header->GetFileName();
 				}
-				is_done = true;
-			}
-			// Pax header
-			else if (current_block.header->type[0] == 'x') {
-				pax_records = ParsePaxRecords(file_size);
+				return;
 			}
 
-			// Move to the next header
-			archive_handle->Seek(file_offset + file_blocks * 512);
+			// Pax header
+			if (current_block.header->type[0] == 'x') {
+				pax_records = ParsePaxRecords(current_block.file_size);
+			}
 		}
 	}
 
@@ -263,7 +263,7 @@ inline TarBlockIteratorHelper TarBlockIterator::Scan(FileHandle &archive_handle)
 static pair<string, string> SplitArchivePath(const string &path) {
 	const string suffix = ".tar";
 
-	const auto tar_path = std::find_end(path.begin(), path.end(), suffix.begin(), suffix.end());
+	const auto tar_path = std::search(path.begin(), path.end(), suffix.begin(), suffix.end());
 
 	if (tar_path == path.end()) {
 		throw IOException("Could not find a '.tar' archive to open in: '%s'", path);
@@ -408,14 +408,13 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 		return {path};
 	}
 
-	// Given the path to the tar file, open it
-	auto archive_handle = parent_file_system.OpenFile(tar_path, FileFlags::FILE_FLAGS_READ, opener);
-	if (!archive_handle) {
-		throw IOException("Failed to open file: %s", tar_path);
-	}
-
-	vector<string> result;
 	auto pattern_parts = StringUtil::Split(file_path, '/');
+	for (auto &part : pattern_parts) {
+		if (part == "tar:") {
+			// We can not glob into nested tar files
+			throw NotImplementedException("Globbing into nested tar files is not supported");
+		}
+	}
 
 	optional_ptr<ObjectCache> cache;
 	optional_ptr<ClientContext> context = opener->TryGetClientContext();
@@ -425,9 +424,16 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 		}
 	}
 
+	// Given the path to the tar file, open it
+	auto archive_handle = parent_file_system.OpenFile(tar_path, FileFlags::FILE_FLAGS_READ, opener);
+	if (!archive_handle) {
+		throw IOException("Failed to open file: %s", tar_path);
+	}
+
 	auto last_modified = archive_handle->file_system.GetLastModifiedTime(*archive_handle);
 	auto is_uncompressed = archive_handle->GetFileCompressionType() == FileCompressionType::UNCOMPRESSED;
 
+	vector<string> result;
 	for (auto &entry : TarBlockIterator::Scan(*archive_handle)) {
 
 		auto entry_name = entry.file_name;
@@ -469,7 +475,7 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 		}
 
 		if (match) {
-			auto entry_path = JoinPath("tar://" + tar_path, entry_name);
+			auto entry_path = "tar://" + tar_path + "/" + entry_name;
 			// Cache the offset and size for this file (if it is uncompressed)
 			if (cache && is_uncompressed) {
 				auto offset = entry.file_offset;
