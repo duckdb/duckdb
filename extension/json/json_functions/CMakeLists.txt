@@ -4,6 +4,7 @@ add_library_unity(
   copy_json.cpp
   json_array_length.cpp
   json_contains.cpp
+  json_exists.cpp
   json_extract.cpp
   json_keys.cpp
   json_merge_patch.cpp

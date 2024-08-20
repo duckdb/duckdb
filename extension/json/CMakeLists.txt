@@ -18,6 +18,7 @@ set(JSON_EXTENSION_FILES
     json_functions/copy_json.cpp
     json_functions/json_array_length.cpp
     json_functions/json_contains.cpp
+    json_functions/json_exists.cpp
     json_functions/json_extract.cpp
     json_functions/json_keys.cpp
     json_functions/json_merge_patch.cpp

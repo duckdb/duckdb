@@ -96,6 +96,7 @@ private:
 
 	static ScalarFunctionSet GetArrayLengthFunction();
 	static ScalarFunctionSet GetContainsFunction();
+	static ScalarFunctionSet GetExistsFunction();
 	static ScalarFunctionSet GetKeysFunction();
 	static ScalarFunctionSet GetTypeFunction();
 	static ScalarFunctionSet GetValidFunction();

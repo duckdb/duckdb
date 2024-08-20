@@ -2,8 +2,13 @@
 
 namespace duckdb {
 
-static inline string_t GetType(yyjson_val *val, yyjson_alc *alc, Vector &result) {
-	return JSONCommon::ValTypeToStringT(val);
+static inline string_t GetType(yyjson_val *val, yyjson_alc *, Vector &, ValidityMask &mask, idx_t idx) {
+	if (!val) {
+		mask.SetInvalid(idx);
+		return string_t {};
+	} else {
+		return JSONCommon::ValTypeToStringT(val);
+	}
 }
 
 static void UnaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {

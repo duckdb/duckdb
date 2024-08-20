@@ -27,3 +27,10 @@ SELECT
 FROM (VALUES ('b')) AS t (p);
 ----
 NULL	NULL
+
+# let's also test the extract many functionality
+query I
+select unnest(json_type(JSON '{"a": null}', ['$.a', '$.a'])) = 'NULL';
+----
+true
+true

@@ -160,6 +160,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	// Other
 	functions.push_back(GetArrayLengthFunction());
 	functions.push_back(GetContainsFunction());
+	functions.push_back(GetExistsFunction());
 	functions.push_back(GetKeysFunction());
 	functions.push_back(GetTypeFunction());
 	functions.push_back(GetValidFunction());

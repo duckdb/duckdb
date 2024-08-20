@@ -15,6 +15,7 @@ source_files = [
         'extension/json/json_functions/copy_json.cpp',
         'extension/json/json_functions/json_array_length.cpp',
         'extension/json/json_functions/json_contains.cpp',
+        'extension/json/json_functions/json_exists.cpp',
         'extension/json/json_functions/json_extract.cpp',
         'extension/json/json_functions/json_keys.cpp',
         'extension/json/json_functions/json_merge_patch.cpp',
