@@ -271,7 +271,7 @@ void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
 		Offsets cascades;
 		if (cascading > 0 && run_length > cascading) {
 			const auto num_cascades = fanout * num_runs * (run_length / cascading + 2);
-			cascades.reserve(num_cascades);
+			cascades.resize(num_cascades);
 		}
 
 		//	Create each parent run by merging the child runs using a tournament tree
@@ -299,19 +299,20 @@ void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
 
 			//	Play the first round and extract the winner
 			Games games;
-			auto child_idx = child_base;
+			auto element_idx = child_base;
+			auto cascade_idx = fanout * run_idx * (run_length / cascading + 2);
 			auto winner = StartGames(games, players, SENTINEL);
 			while (winner != SENTINEL) {
 				// Add fractional cascading pointers
 				// if we are on a fraction boundary
-				if (cascading > 0 && run_length > cascading && child_idx % cascading == 0) {
+				if (!cascades.empty() && element_idx % cascading == 0) {
 					for (idx_t i = 0; i < fanout; ++i) {
-						cascades.emplace_back(bounds[i].first);
+						cascades[cascade_idx++] = bounds[i].first;
 					}
 				}
 
 				//	Insert new winner element into the current run
-				elements[child_idx++] = winner.first;
+				elements[element_idx++] = winner.first;
 				const auto child_run = winner.second;
 				auto &child_idx = bounds[child_run].first;
 				++child_idx;
@@ -325,10 +326,10 @@ void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
 			}
 
 			// Add terminal cascade pointers to the end
-			if (cascading > 0 && run_length > cascading) {
+			if (!cascades.empty()) {
 				for (idx_t j = 0; j < 2; ++j) {
 					for (idx_t i = 0; i < fanout; ++i) {
-						cascades.emplace_back(bounds[i].first);
+						cascades[cascade_idx++] = bounds[i].first;
 					}
 				}
 			}
