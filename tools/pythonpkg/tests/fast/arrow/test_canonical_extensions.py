@@ -175,4 +175,5 @@ class TestCanonicalExtensionTypes(object):
         con.create_function('test', test_function, ['UUID'], 'UUID', type='arrow')
 
         rel = con.sql("select ? as x", params=[uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')])
-        rel.project("test(x) from t").fetchall()
+        with pytest.raises(duckdb.Error, match="It seems that you are using the UUID arrow canonical extension"):
+            rel.project("test(x) from t").fetchall()

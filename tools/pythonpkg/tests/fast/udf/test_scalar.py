@@ -14,6 +14,21 @@ import cmath
 from duckdb.typing import *
 
 
+class UuidType(pa.ExtensionType):
+    def __init__(self):
+        pa.ExtensionType.__init__(self, pa.binary(16), "arrow.uuid")
+
+    def __arrow_ext_serialize__(self):
+        # since we don't have a parameterized type, we don't need extra
+        # metadata to be deserialized
+        return b''
+
+    @classmethod
+    def __arrow_ext_deserialize__(self, storage_type, serialized):
+        # return an instance of this subclass given the serialized
+        # metadata.
+        return UuidType()
+
 def make_annotated_function(type):
     # Create a function that returns its input
     def test_base(x):
@@ -30,34 +45,34 @@ def make_annotated_function(type):
 
 
 class TestScalarUDF(object):
-    @pytest.mark.parametrize('function_type', ['arrow'])
+    @pytest.mark.parametrize('function_type', ['native', 'arrow'])
     @pytest.mark.parametrize(
         'test_type',
         [
-            # (TINYINT, -42),
-            # (SMALLINT, -512),
-            # (INTEGER, -131072),
-            # (BIGINT, -17179869184),
-            # (UTINYINT, 254),
-            # (USMALLINT, 65535),
-            # (UINTEGER, 4294967295),
-            # (UBIGINT, 18446744073709551615),
-            # (HUGEINT, 18446744073709551616),
-            # (VARCHAR, 'long_string_test'),
+            (TINYINT, -42),
+            (SMALLINT, -512),
+            (INTEGER, -131072),
+            (BIGINT, -17179869184),
+            (UTINYINT, 254),
+            (USMALLINT, 65535),
+            (UINTEGER, 4294967295),
+            (UBIGINT, 18446744073709551615),
+            (HUGEINT, 18446744073709551616),
+            (VARCHAR, 'long_string_test'),
             (UUID, uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')),
-            # (FLOAT, 0.12246409803628922),
-            # (DOUBLE, 123142.12312416293784721232344),
-            # (DATE, datetime.date(2005, 3, 11)),
-            # (TIMESTAMP, datetime.datetime(2009, 2, 13, 11, 5, 53)),
-            # (TIME, datetime.time(14, 1, 12)),
-            # (BLOB, b'\xF6\x96\xB0\x85'),
-            # (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
-            # (BOOLEAN, True),
-            # (
-            #     duckdb.struct_type(['BIGINT[]', 'VARCHAR[]']),
-            #     {'v1': [1, 2, 3], 'v2': ['a', 'non-inlined string', 'duckdb']},
-            # ),
-            # (duckdb.list_type('VARCHAR'), ['the', 'duck', 'non-inlined string']),
+            (FLOAT, 0.12246409803628922),
+            (DOUBLE, 123142.12312416293784721232344),
+            (DATE, datetime.date(2005, 3, 11)),
+            (TIMESTAMP, datetime.datetime(2009, 2, 13, 11, 5, 53)),
+            (TIME, datetime.time(14, 1, 12)),
+            (BLOB, b'\xF6\x96\xB0\x85'),
+            (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
+            (BOOLEAN, True),
+            (
+                duckdb.struct_type(['BIGINT[]', 'VARCHAR[]']),
+                {'v1': [1, 2, 3], 'v2': ['a', 'non-inlined string', 'duckdb']},
+            ),
+            (duckdb.list_type('VARCHAR'), ['the', 'duck', 'non-inlined string']),
         ],
     )
     def test_type_coverage(self, test_type, function_type):
@@ -68,7 +83,8 @@ class TestScalarUDF(object):
 
         con = duckdb.connect()
         con.create_function('test', test_function, type=function_type)
-
+        if (type == UUID):
+            pa.register_extension_type(UuidType())
         # Single value
         res = con.execute(f"select test(?::{str(type)})", [value]).fetchall()
         assert res[0][0] == value
@@ -118,6 +134,8 @@ class TestScalarUDF(object):
         table_rel = con.table('tbl')
         res = table_rel.project('test(x)').fetchall()
         assert res[0][0] == value
+        if (type == UUID):
+            pa.unregister_extension_type("arrow.uuid")
 
     @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
     def test_map_coverage(self, udf_type):
