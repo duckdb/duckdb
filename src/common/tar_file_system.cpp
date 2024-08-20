@@ -73,42 +73,54 @@ static shared_ptr<TarArchiveFileMetadataCache> TryGetCachedArchiveMetadata(optio
 // Tar Block Iterator
 //------------------------------------------------------------------------------
 struct TarBlockHeader {
-	char file_name[100];
-	char file_mode[8];
-	char owner_id[8];
-	char group_id[8];
-	char file_size[12];
-	char last_modification[12];
-	char checksum[8];
-	char type[1];
-	char linked_file_name[100];
-	char ustar[6];
-	char ustar_version[2];
-	char owner_name[32];
-	char group_name[32];
-	char device_major[8];
-	char device_minor[8];
-	char filename_prefix[155];
-	char padding[12];
-
+public:
 	idx_t GetFileSize() const {
 		return strtoul(file_size, nullptr, 8);
 	}
+	string GetFileName() const {
+		// Check if USTAR and the filename prefix are set
+		if (strncmp(ustar, "ustar", 5) == 0 && filename_prefix[0] != 0) {
+			return string(filename_prefix) + "/" + string(file_name);
+		}
+		return string(file_name);
+	}
+	bool IsSet() const {
+		return file_name[0] != 0;
+	}
+
+	char file_name[100] = {};
+	char file_mode[8] = {};
+	char owner_id[8] = {};
+	char group_id[8] = {};
+	char file_size[12] = {};
+	char last_modification[12] = {};
+	char checksum[8] = {};
+	char type[1] = {};
+	char linked_file_name[100] = {};
+	char ustar[6] = {};
+	char ustar_version[2] = {};
+	char owner_name[32] = {};
+	char group_name[32] = {};
+	char device_major[8] = {};
+	char device_minor[8] = {};
+	char filename_prefix[155] = {};
+	char padding[12] = {};
 };
 static_assert(sizeof(TarBlockHeader) == 512, "TarBlockHeader must be 512 bytes");
 
 struct TarBlockEntry {
 	unique_ptr<TarBlockHeader> header;
 	idx_t file_offset;
+	string file_name;
 };
 
 struct TarBlockIteratorHelper;
 
 struct TarBlockIterator {
-	TarBlockIterator() : current_block({nullptr, 0}), archive_handle(nullptr), stop(true) {
+	TarBlockIterator() : current_block({nullptr, 0, ""}), archive_handle(nullptr), stop(true) {
 	}
 	explicit TarBlockIterator(FileHandle &archive_handle_p)
-	    : current_block({make_uniq<TarBlockHeader>(), 0}), archive_handle(archive_handle_p), stop(false) {
+	    : current_block({make_uniq<TarBlockHeader>(), 0, ""}), archive_handle(archive_handle_p), stop(false) {
 		Next();
 	}
 
@@ -128,20 +140,95 @@ struct TarBlockIterator {
 	static TarBlockIteratorHelper Scan(FileHandle &archive_handle);
 
 private:
+	unordered_map<string, string> ParsePaxRecords(const idx_t file_size) {
+		auto bytes_remaining = file_size;
+		unordered_map<string, string> pax_records;
+		vector<char> buffer;
+		while (bytes_remaining > 0) {
+			buffer.clear();
+			while (bytes_remaining > 0) {
+				char c;
+				if (!archive_handle->Read(&c, 1)) {
+					throw IOException("Failed to read pax key-value size byte");
+				}
+				bytes_remaining--;
+				if (c == ' ') {
+					break;
+				}
+				buffer.push_back(c);
+			}
+			auto record_size = strtoul(buffer.data(), nullptr, 10);
+			buffer.clear();
+			// Now parse everything up to the equals sign
+			while (bytes_remaining > 0) {
+				char c;
+				if (!archive_handle->Read(&c, 1)) {
+					throw IOException("Failed to read pax key-value size byte");
+				}
+				bytes_remaining--;
+				record_size--;
+				if (c == '=') {
+					break;
+				}
+				buffer.push_back(c);
+			}
+			auto key = string(buffer.begin(), buffer.end());
+			buffer.clear();
+			// Now parse everything up to the record size
+			while (bytes_remaining > 0 && record_size > 0) {
+				char c;
+				if (!archive_handle->Read(&c, 1)) {
+					throw IOException("Failed to read pax key-value size byte");
+				}
+				bytes_remaining--;
+				record_size--;
+				if (c == '\n') {
+					break;
+				}
+				buffer.push_back(c);
+			}
+			pax_records[key] = string(buffer.begin(), buffer.end());
+		}
+		D_ASSERT(bytes_remaining == 0);
+		return pax_records;
+	}
+
 	void Next() {
-		if (!archive_handle->Read(current_block.header.get(), sizeof(TarBlockHeader))) {
-			stop = true;
-			return;
+		unordered_map<string, string> pax_records;
+		bool is_done = false;
+		while (!is_done) {
+			if (!archive_handle->Read(current_block.header.get(), sizeof(TarBlockHeader))) {
+				stop = true;
+				return;
+			}
+			if (current_block.header->file_name[0] == 0) {
+				stop = true;
+				return;
+			}
+
+			const auto file_offset = archive_handle->SeekPosition();
+			const auto file_size = current_block.header->GetFileSize();
+			const auto file_blocks = (file_size + 511) / 512;
+			current_block.file_offset = file_offset;
+
+			// Normal file
+			if (current_block.header->type[0] == '0' || current_block.header->type[0] == 0) {
+				auto pax_path = pax_records.find("path");
+				if (pax_path != pax_records.end()) {
+					current_block.file_name = pax_path->second;
+				} else {
+					current_block.file_name = current_block.header->GetFileName();
+				}
+				is_done = true;
+			}
+			// Pax header
+			else if (current_block.header->type[0] == 'x') {
+				pax_records = ParsePaxRecords(file_size);
+			}
+
+			// Move to the next header
+			archive_handle->Seek(file_offset + file_blocks * 512);
 		}
-		if (current_block.header->file_name[0] == 0) {
-			stop = true;
-			return;
-		}
-		const auto file_offset = archive_handle->SeekPosition();
-		const auto file_size = current_block.header->GetFileSize();
-		const auto file_blocks = (file_size + 511) / 512;
-		current_block.file_offset = file_offset;
-		archive_handle->Seek(file_offset + file_blocks * 512);
 	}
 
 private:
@@ -239,7 +326,7 @@ unique_ptr<FileHandle> TarFileSystem::OpenFile(const string &path, FileOpenFlags
 
 	// Else, we need to perform a sequential scan through the tar archive to find the file
 	for (const auto &block : TarBlockIterator::Scan(*handle)) {
-		if (block.header->file_name == file_path) {
+		if (block.file_name == file_path) {
 			auto start_offset = block.file_offset;
 			auto end_offset = start_offset + block.header->GetFileSize();
 			return make_uniq<TarFileHandle>(*this, path, std::move(handle), start_offset, end_offset);
@@ -338,11 +425,11 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 	auto is_uncompressed = archive_handle->GetFileCompressionType() == FileCompressionType::UNCOMPRESSED;
 
 	for (auto &entry : TarBlockIterator::Scan(*archive_handle)) {
-		string entry_name = entry.header->file_name;
 
+		auto entry_name = entry.file_name;
 		auto entry_parts = StringUtil::Split(entry_name, '/');
 
-		if (pattern_parts.size() > entry_parts.size()) {
+		if (entry_parts.size() < pattern_parts.size()) {
 			// This entry is not deep enough to match the pattern
 			continue;
 		}
@@ -354,7 +441,14 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 			const auto &ep = entry_parts[i];
 
 			if (pp == "**") {
-				throw NotImplementedException("Recursive globbing ('**') not supported in tar file system paths");
+				// We only allow crawl's to be at the end of the pattern
+				if (i != pattern_parts.size() - 1) {
+					throw NotImplementedException(
+					    "Recursive globs are only supported at the end of tar file path patterns");
+				}
+				// Otherwise, everything else is a match
+				match = true;
+				break;
 			}
 
 			if (!LikeFun::Glob(ep.c_str(), ep.size(), pp.c_str(), pp.size())) {
@@ -362,7 +456,14 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 				match = false;
 				break;
 			}
+
+			if (i == pattern_parts.size() - 1 && entry_parts.size() > pattern_parts.size()) {
+				// If the entry is deeper than the pattern (and we havent hit a **), then it is not a match
+				match = false;
+				break;
+			}
 		}
+
 		if (match) {
 			auto entry_path = JoinPath("tar://" + tar_path, entry_name);
 			// Cache the offset and size for this file (if it is uncompressed)

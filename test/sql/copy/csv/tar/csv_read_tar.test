@@ -25,3 +25,49 @@ query III
 SELECT * FROM read_csv('tar://data/csv/tar/ab.tar/b.*') ORDER BY ALL;
 ----
 4	5	6
+
+# Shallow glob
+query I
+SELECT filename FROM read_blob('tar://data/csv/tar/deep.tar/*') ORDER BY ALL;
+----
+
+# Deep glob, also make sure we can read large filenames
+query I
+SELECT filename FROM read_blob('tar://data/csv/tar/deep.tar/**') ORDER BY ALL;
+----
+tar://data/csv/tar/deep.tar/nested_dir/another_dir/really_long_file_name_that_is_over_100_characters_total_therefore_using_the_ustar_file_prefix_field.csv
+
+# But we dont support nested globs
+statement error
+SELECT filename FROM read_blob('tar://data/csv/tar/deep.tar/**/*.csv') ORDER BY ALL;
+----
+Not implemented Error: Recursive globs are only supported at the end of tar file path patterns
+
+# Now do it all again with the object cache enabled to cache the byte offsets of the tar entries
+statement ok
+SET enable_object_cache = true;
+
+query I
+SELECT filename FROM read_blob('tar://data/csv/tar/ab.tar/*') ORDER BY ALL;
+----
+tar://data/csv/tar/ab.tar/a.csv
+tar://data/csv/tar/ab.tar/b.csv
+
+# Explicit path
+query III
+SELECT * FROM read_csv('tar://data/csv/tar/ab.tar/a.csv') ORDER BY ALL;
+----
+1	2	3
+
+# Full glob
+query III
+SELECT * FROM read_csv('tar://data/csv/tar/ab.tar/*') ORDER BY ALL;
+----
+1	2	3
+4	5	6
+
+# Partial glob
+query III
+SELECT * FROM read_csv('tar://data/csv/tar/ab.tar/b.*') ORDER BY ALL;
+----
+4	5	6
