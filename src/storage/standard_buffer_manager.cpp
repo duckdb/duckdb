@@ -387,13 +387,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 		handle->readers--;
 		if (handle->readers == 0) {
 			VerifyZeroReaders(handle);
-			if (handle->can_destroy) {
-				// We can immediately destroy this block!
-				handle->Unload();
-			} else {
-				// Only add to the eviction queue if we can't destroy
-				purge = buffer_pool.AddToEvictionQueue(handle);
-			}
+			purge = buffer_pool.AddToEvictionQueue(handle);
 		}
 	}
 
