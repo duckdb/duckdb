@@ -470,9 +470,19 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 		;
 
 opt_on_key:
-		USING KEY '(' expr_list_opt_comma ')' 				{ $$ = $4; }
+		USING KEY '(' column_ref_list_opt_comma ')' 				{ $$ = $4; }
 		| /*EMPTY*/												{ $$ = list_make1(NIL); }
 		;
+
+column_ref_list_opt_comma:
+		column_ref_list	 						{ $$ = $1; }
+		| column_ref_list ','					{ $$ = $1; }
+		;
+
+column_ref_list:
+		columnref								{ $$ = list_make1($1); }
+			| column_ref_list ',' columnref		{ $$ = lappend($1, $3); }
+			;
 
 opt_materialized:
 		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }
