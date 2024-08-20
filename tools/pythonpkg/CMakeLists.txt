@@ -3,10 +3,10 @@ include_directories(../../)
 include_directories(src/include)
 
 find_package(PythonLibs)
-# if(NOT PythonLibs_FOUND) return() endif()
+ if(NOT PythonLibs_FOUND) return() endif()
 
 find_package(pybind11)
-# if(NOT pybind11_FOUND) return() endif()
+ if(NOT pybind11_FOUND) return() endif()
 
 include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_DIRS})
