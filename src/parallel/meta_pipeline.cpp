@@ -169,9 +169,12 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 	const auto cardinality_threshold = num_threads * Storage::ROW_GROUP_SIZE;
 	for (; it != child_meta_pipelines.end(); it++) {
 		for (auto &pipeline : it->get()->pipelines) {
+#ifndef DEBUG
+			// we always add the dependency in debug mode so that this is well-tested
 			if (pipeline->GetSource()->estimated_cardinality < cardinality_threshold) {
 				continue; // low cardinality, skip
 			}
+#endif
 			auto &pipeline_deps = pipeline_dependencies[*pipeline];
 			for (auto &new_dependency : new_dependencies) {
 				pipeline_deps.push_back(*new_dependency);
