@@ -52,10 +52,10 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 		                      "increase the maximum expression depth.",
 		                      context.config.max_expression_depth);
 	}
-	return make_shared_ptr<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, binder_type);
+	return shared_ptr<Binder>(new Binder(context, parent ? parent->shared_from_this() : nullptr, binder_type));
 }
 
-Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
+Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
       entry_retriever(context) {
 	if (parent) {
