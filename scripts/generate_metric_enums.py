@@ -100,6 +100,7 @@ with open(metrics_header_file, "w") as f:
     f.write('#pragma once\n\n')
     f.write('#include "duckdb/common/constants.hpp"\n')
     f.write('#include "duckdb/common/unordered_set.hpp"\n')
+    f.write('#include "duckdb/common/unordered_map.hpp"\n')
     f.write('#include "duckdb/common/enum_util.hpp"\n')
     f.write('#include "duckdb/common/types/value.hpp"\n')
     f.write('#include "duckdb/common/enums/optimizer_type.hpp"\n\n')
