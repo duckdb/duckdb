@@ -59,6 +59,7 @@ public:
 	//! Replace the child at byte.
 	template <class NODE>
 	static void ReplaceChild(NODE &n, const uint8_t byte, const Node child) {
+		D_ASSERT(n.count != 0);
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
 				auto was_gate = n.children[i].IsGate();

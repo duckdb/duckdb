@@ -54,9 +54,6 @@ public:
 	//! Transforms a nested leaf to a deprecated leaf.
 	static void TransformToDeprecated(ART &art, Node &node);
 
-	//! Returns true, if the leaf contains the row ID.
-	static bool ContainsRowId(ART &art, const Node &node, const ARTKey &row_id);
-
 public:
 	//! Frees the linked list of leaves.
 	static void DeprecatedFree(ART &art, Node &node);

@@ -72,6 +72,8 @@ void Node48::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 }
 
 void Node48::ReplaceChild(const uint8_t byte, const Node child) {
+	D_ASSERT(count >= SHRINK_THRESHOLD);
+
 	auto was_gate = children[child_index[byte]].IsGate();
 	children[child_index[byte]] = child;
 	if (was_gate && child.HasMetadata()) {

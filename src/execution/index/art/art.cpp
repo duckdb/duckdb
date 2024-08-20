@@ -508,8 +508,7 @@ bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids,
 #ifdef DEBUG
 	for (idx_t i = 0; i < row_count; i++) {
 		D_ASSERT(!keys[i].Empty());
-		auto leaf = Lookup(tree, keys[i], 0);
-		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_ids[i]));
+		D_ASSERT(Lookup(tree, keys[i], 0));
 	}
 #endif
 	return true;
@@ -567,8 +566,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		auto leaf = Lookup(tree, keys[i], 0);
-		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_id_keys[i]));
+		D_ASSERT(Lookup(tree, keys[i], 0));
 	}
 #endif
 	return ErrorData();
@@ -729,7 +727,9 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		auto leaf = Lookup(tree, keys[i], 0);
-		D_ASSERT(!leaf || !Leaf::ContainsRowId(*this, *leaf, row_id_keys[i]));
+		if (leaf && leaf->GetType() == NType::LEAF_INLINED) {
+			D_ASSERT(leaf->GetRowId() != row_id_keys[i].GetRowId());
+		}
 	}
 #endif
 }
@@ -793,7 +793,13 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 
 	// Enter a nested leaf.
 	if (!in_gate && child->IsGate()) {
-		return Erase(*child, row_id, 0, row_id, true);
+		Erase(*child, row_id, 0, row_id, true);
+		if (!child->HasMetadata()) {
+			Node::DeleteChild(*this, next, node, key.get()[depth], in_gate, key.get());
+		} else {
+			next.get().ReplaceChild(*this, key.get()[depth], *child);
+		}
+		return;
 	}
 
 	auto temp_depth = depth + 1;

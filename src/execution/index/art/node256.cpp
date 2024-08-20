@@ -47,6 +47,8 @@ void Node256::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 }
 
 void Node256::ReplaceChild(const uint8_t byte, const Node child) {
+	D_ASSERT(count > SHRINK_THRESHOLD);
+
 	auto was_gate = children[byte].IsGate();
 	children[byte] = child;
 	if (was_gate && child.HasMetadata()) {

@@ -39,6 +39,7 @@ void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 }
 
 void Node16::ReplaceChild(const uint8_t byte, const Node child) {
+	D_ASSERT(count >= Node4::CAPACITY);
 	Node4::ReplaceChild(*this, byte, child);
 }
 

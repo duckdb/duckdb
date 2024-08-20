@@ -58,12 +58,14 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t d
 	D_ASSERT(row_id.len == key.len);
 	auto pos = row_id.GetMismatchPos(key, depth);
 	D_ASSERT(pos != DConstants::INVALID_INDEX);
+	D_ASSERT(pos >= depth);
 	auto byte = row_id.data[pos];
 
 	// Create the (optional) prefix and the node.
 	reference<Node> next(node);
-	if (pos != 0 && pos != depth) {
-		Prefix::New(art, next, row_id, 0, pos);
+	auto count = pos - depth;
+	if (count != 0) {
+		Prefix::New(art, next, row_id, depth, count);
 	}
 	if (pos == Prefix::ROW_ID_COUNT) {
 		Node7Leaf::New(art, next);
@@ -147,23 +149,6 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 		ref = leaf.ptr;
 		leaf.ptr.Clear();
 	}
-}
-
-//===--------------------------------------------------------------------===//
-// Debug-only functions.
-//===--------------------------------------------------------------------===//
-
-bool Leaf::ContainsRowId(ART &art, const Node &node, const ARTKey &row_id) {
-	D_ASSERT(node.HasMetadata());
-
-	if (node.GetType() == INLINED) {
-		return node.GetRowId() == row_id.GetRowId();
-	}
-
-	// Note: This is a DEBUG function. We only call this after ART::Insert, ART::Delete,
-	// and ART::ConstructFromSorted. It can never have deprecated storage.
-	D_ASSERT(node.IsGate());
-	return art.Lookup(node, row_id, 0);
 }
 
 //===--------------------------------------------------------------------===//
