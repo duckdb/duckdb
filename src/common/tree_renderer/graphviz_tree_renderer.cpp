@@ -84,7 +84,12 @@ digraph G {
 			vector<string> body;
 			body.push_back(node->name);
 			for (auto &item : node->extra_text) {
-				auto &key = item.first;
+				auto key = item.first;
+				if (StringUtil::StartsWith(key, "__")) {
+					key = StringUtil::Replace(key, "__", "");
+					key = StringUtil::Replace(key, "_", " ");
+					key = StringUtil::Title(key);
+				}
 				auto &value_raw = item.second;
 
 				auto value = QueryProfiler::JSONSanitize(value_raw);

@@ -77,7 +77,12 @@ static yyjson_mut_val *RenderRecursive(yyjson_mut_doc *doc, RenderTree &tree, id
 	yyjson_mut_obj_add_val(doc, object, "children", children);
 	auto extra_info = yyjson_mut_obj(doc);
 	for (auto &it : node.extra_text) {
-		auto &key = it.first;
+		auto key = it.first;
+		if (StringUtil::StartsWith(key, "__")) {
+			key = StringUtil::Replace(key, "__", "");
+			key = StringUtil::Replace(key, "_", " ");
+			key = StringUtil::Title(key);
+		}
 		auto &value = it.second;
 		auto splits = StringUtil::Split(value, "\n");
 		if (splits.size() > 1) {
