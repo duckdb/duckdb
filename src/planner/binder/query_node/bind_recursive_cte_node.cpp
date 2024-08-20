@@ -15,6 +15,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// the left side is visited first and is added to the BindContext of the right side
 	D_ASSERT(statement.left);
 	D_ASSERT(statement.right);
+	if (statement.union_all && !statement.key_targets.empty()) {
+		throw BinderException("UNION ALL cannot be used with USING KEY in recursive CTE.");
+	}
 
 	result->ctename = statement.ctename;
 	result->union_all = statement.union_all;

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
 
 namespace duckdb {
 
