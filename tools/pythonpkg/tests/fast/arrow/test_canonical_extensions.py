@@ -151,21 +151,28 @@ class TestCanonicalExtensionTypes(object):
             (None,),
         ]
 
-    # def test_uuid_no_def_stream(self, duckdb_cursor):
+    def test_uuid_udf_registered(self, duckdb_cursor):
+        pa.register_extension_type(UuidType())
 
+        def test_function(x):
+            print(x.type.__class__)
+            return x
 
-pa.register_extension_type(UuidType())
+        con = duckdb.connect()
+        con.create_function('test', test_function, ['UUID'], 'UUID', type='arrow')
 
+        rel = con.sql("select ? as x", params=[uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')])
+        rel.project("test(x) from t").fetchall()
 
-def test_function(x):
-    print(x.type.__class__)
-    return x
+        pa.unregister_extension_type("arrow.uuid")
 
+    def test_uuid_udf_unregistered(self, duckdb_cursor):
+        def test_function(x):
+            print(x.type.__class__)
+            return x
 
-con = duckdb.connect()
-con.create_function('test', test_function, ['UUID'], 'UUID', type='arrow')
+        con = duckdb.connect()
+        con.create_function('test', test_function, ['UUID'], 'UUID', type='arrow')
 
-rel = con.sql("select ? as x", params=[uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')])
-rel.project("test(x) from t").fetchall()
-
-pa.unregister_extension_type("arrow.uuid")
+        rel = con.sql("select ? as x", params=[uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')])
+        rel.project("test(x) from t").fetchall()
