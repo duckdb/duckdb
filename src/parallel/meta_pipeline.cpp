@@ -166,14 +166,16 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 	// we try to limit the performance impact of these dependencies on smaller workloads,
 	// by only adding the dependency if the source operator can likely keep all threads busy
 	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(executor.context).NumberOfThreads());
+	const auto cardinality_threshold = num_threads * Storage::ROW_GROUP_SIZE;
 	for (; it != child_meta_pipelines.end(); it++) {
-		auto &pipeline = *it->get()->GetBasePipeline();
-		if (pipeline.GetSource()->EstimatedThreadCount() < num_threads) {
-			continue; // low cardinality, skip
-		}
-		auto &pipeline_deps = pipeline_dependencies[pipeline];
-		for (auto &new_dependency : new_dependencies) {
-			pipeline_deps.push_back(*new_dependency);
+		for (auto &pipeline : it->get()->pipelines) {
+			if (pipeline->GetSource()->estimated_cardinality < cardinality_threshold) {
+				continue; // low cardinality, skip
+			}
+			auto &pipeline_deps = pipeline_dependencies[*pipeline];
+			for (auto &new_dependency : new_dependencies) {
+				pipeline_deps.push_back(*new_dependency);
+			}
 		}
 	}
 }
