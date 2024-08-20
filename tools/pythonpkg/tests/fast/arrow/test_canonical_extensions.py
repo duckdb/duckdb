@@ -8,6 +8,7 @@ pa = pytest.importorskip('pyarrow')
 
 from arrow_canonical_extensions import UuidType, JSONType
 
+
 class TestCanonicalExtensionTypes(object):
 
     def test_uuid(self, duckdb_cursor):

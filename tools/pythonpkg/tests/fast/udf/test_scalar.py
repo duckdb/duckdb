@@ -15,6 +15,7 @@ from duckdb.typing import *
 
 from arrow_canonical_extensions import UuidType
 
+
 def make_annotated_function(type):
     # Create a function that returns its input
     def test_base(x):
@@ -69,7 +70,7 @@ class TestScalarUDF(object):
 
         con = duckdb.connect()
         con.create_function('test', test_function, type=function_type)
-        if (type == UUID):
+        if type == UUID:
             pa.register_extension_type(UuidType())
         # Single value
         res = con.execute(f"select test(?::{str(type)})", [value]).fetchall()
@@ -120,7 +121,7 @@ class TestScalarUDF(object):
         table_rel = con.table('tbl')
         res = table_rel.project('test(x)').fetchall()
         assert res[0][0] == value
-        if (type == UUID):
+        if type == UUID:
             pa.unregister_extension_type("arrow.uuid")
 
     @pytest.mark.parametrize('udf_type', ['arrow', 'native'])

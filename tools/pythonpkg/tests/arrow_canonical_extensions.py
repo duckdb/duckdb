@@ -1,5 +1,7 @@
 import pytest
+
 pa = pytest.importorskip("pyarrow")
+
 
 class UuidType(pa.ExtensionType):
     def __init__(self):
@@ -15,6 +17,7 @@ class UuidType(pa.ExtensionType):
         # return an instance of this subclass given the serialized
         # metadata.
         return UuidType()
+
 
 class JSONType(pa.ExtensionType):
     def __init__(self):
