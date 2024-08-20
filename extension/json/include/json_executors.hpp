@@ -95,7 +95,7 @@ public:
 			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
 				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 				    auto val = JSONCommon::Get(doc->root, path);
-				    if (!val || unsafe_yyjson_is_null(val)) {
+				    if (!val || (NULL_IF_NULL && unsafe_yyjson_is_null(val))) {
 					    mask.SetInvalid(idx);
 					    return T {};
 				    } else {
