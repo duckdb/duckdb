@@ -124,8 +124,8 @@ unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserialize
 	deserializer.ReadProperty(101, "order", result->order);
 	deserializer.ReadProperty(102, "desc", result->desc);
 	QuantileSerializationType deserialization_type;
-	deserializer.ReadPropertyWithDefault(103, "quantile_type", deserialization_type,
-	                                     QuantileSerializationType::NON_DECIMAL);
+	deserializer.ReadPropertyWithExplicitDefault(103, "quantile_type", deserialization_type,
+	                                             QuantileSerializationType::NON_DECIMAL);
 
 	if (deserialization_type != QuantileSerializationType::NON_DECIMAL) {
 		deserializer.ReadDeletedProperty<LogicalType>(104, "logical_type");

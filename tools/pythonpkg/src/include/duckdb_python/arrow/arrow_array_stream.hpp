@@ -36,6 +36,7 @@ public:
 		return !py::none().is(object);
 	}
 };
+
 class Table : public py::object {
 public:
 	Table(const py::object &o) : py::object(o, borrowed_t {}) {

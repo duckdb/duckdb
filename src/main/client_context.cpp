@@ -1030,6 +1030,11 @@ void ClientContext::Interrupt() {
 	interrupted = true;
 }
 
+void ClientContext::CancelTransaction() {
+	auto lock = LockContext();
+	InitialCleanup(*lock);
+}
+
 void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
 	auto &client_config = ClientConfig::GetConfig(*this);

@@ -17,12 +17,13 @@ struct IpythonDisplayCacheItem : public PythonImportCacheItem {
 
 public:
 	IpythonDisplayCacheItem(optional_ptr<PythonImportCacheItem> parent)
-	    : PythonImportCacheItem("display", parent), display("display", this) {
+	    : PythonImportCacheItem("display", parent), display("display", this), HTML("HTML", this) {
 	}
 	~IpythonDisplayCacheItem() override {
 	}
 
 	PythonImportCacheItem display;
+	PythonImportCacheItem HTML;
 };
 
 struct IpythonCacheItem : public PythonImportCacheItem {

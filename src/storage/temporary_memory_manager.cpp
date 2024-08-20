@@ -4,7 +4,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include <math.h>
+#include <cmath>
 
 namespace duckdb {
 
@@ -21,6 +21,19 @@ TemporaryMemoryState::~TemporaryMemoryState() {
 void TemporaryMemoryState::SetRemainingSize(idx_t new_remaining_size) {
 	auto guard = temporary_memory_manager.Lock();
 	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
+}
+
+void TemporaryMemoryState::SetRemainingSizeAndUpdateReservation(ClientContext &context, idx_t new_remaining_size) {
+	D_ASSERT(new_remaining_size != 0); // Use SetZero instead
+	auto guard = temporary_memory_manager.Lock();
+	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
+	temporary_memory_manager.UpdateState(context, *this);
+}
+
+void TemporaryMemoryState::SetZero() {
+	auto guard = temporary_memory_manager.Lock();
+	temporary_memory_manager.SetRemainingSize(*this, 0);
+	temporary_memory_manager.SetReservation(*this, 0);
 }
 
 idx_t TemporaryMemoryState::GetRemainingSize() const {
@@ -45,6 +58,7 @@ idx_t TemporaryMemoryState::GetReservation() const {
 }
 
 void TemporaryMemoryState::SetMaterializationPenalty(idx_t new_materialization_penalty) {
+	auto guard = temporary_memory_manager.Lock();
 	materialization_penalty = new_materialization_penalty;
 }
 
@@ -102,15 +116,15 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 	const auto lower_bound =
 	    MinValue(temporary_memory_state.GetMinimumReservation(), temporary_memory_state.GetRemainingSize());
 
-	if (context.config.force_external) {
+	if (temporary_memory_state.GetRemainingSize() == 0) {
+		// Sometimes set to 0 to denote end of state (before actually deleting the state)
+		SetReservation(temporary_memory_state, 0);
+	} else if (context.config.force_external) {
 		// We're forcing external processing. Give it the minimum
 		SetReservation(temporary_memory_state, lower_bound);
 	} else if (!has_temporary_directory) {
 		// We cannot offload, so we cannot limit memory usage. Set reservation equal to the remaining size
 		SetReservation(temporary_memory_state, temporary_memory_state.GetRemainingSize());
-	} else if (temporary_memory_state.GetRemainingSize() == 0) {
-		// Sometimes set to 0 to denote end of state (before actually deleting the state)
-		SetReservation(temporary_memory_state, 0);
 	} else if (reservation - temporary_memory_state.GetReservation() + lower_bound >= memory_limit) {
 		// We overshot. Set reservation equal to the minimum
 		SetReservation(temporary_memory_state, lower_bound);
@@ -158,46 +172,48 @@ void TemporaryMemoryManager::SetReservation(TemporaryMemoryState &temporary_memo
 idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state,
                                                         const idx_t free_memory, const idx_t lower_bound,
                                                         const idx_t upper_bound) const {
-	static constexpr idx_t OPTIMIZATION_ITERATIONS_BASE = 10;
+	static constexpr idx_t OPTIMIZATION_ITERATIONS_MULTIPLIER = 5;
 	const idx_t n = active_states.size();
 
 	// Collect sizes and reservations in vectors for ease
 	optional_idx state_index;
-	vector<double> siz(n, 0);
-	vector<double> res(n, 0);
+	vector<idx_t> siz(n, 0);
+	vector<idx_t> res(n, 0);
 	vector<double> pen(n, 0);
 	vector<double> der(n, 0);
 
 	idx_t i = 0;
 	for (auto &active_state : active_states) {
-		siz[i] = MaxValue<double>(static_cast<double>(active_state.get().GetRemainingSize()), 1);
-		res[i] = MaxValue<double>(static_cast<double>(active_state.get().GetReservation()), 1);
+		siz[i] = active_state.get().GetRemainingSize();
+		res[i] = MaxValue<idx_t>(active_state.get().GetReservation(), 1);
 		pen[i] = static_cast<double>(active_state.get().materialization_penalty.load());
 		if (RefersToSameObject(active_state.get(), temporary_memory_state)) {
 			state_index = i;
 			// We can't actually reserve memory for all active operators, only for "temporary_memory_state"
 			// So, we're essentially computing how much of the remaining memory should go to "temporary_memory_state"
 			// We initialize it with its lower bound
-			res[i] = static_cast<double>(lower_bound);
+			res[i] = lower_bound;
 		}
 		i++;
 	}
 
 	// Distribute memory in OPTIMIZATION_ITERATIONS
 	idx_t remaining_memory = free_memory - lower_bound;
-	const idx_t optimization_iterations = OPTIMIZATION_ITERATIONS_BASE + n;
+	const idx_t optimization_iterations = OPTIMIZATION_ITERATIONS_MULTIPLIER * n;
 	for (idx_t opt_idx = 0; opt_idx < optimization_iterations; opt_idx++) {
 		// Cost function takes "throughput" (reservation / size) of each operator as its principal input
 		double prod_siz = 1;
 		double prod_res = 1;
 		double mat_cost = 0;
 		for (i = 0; i < n; i++) {
-			if (res[i] == siz[i]) {
+			if (res[i] >= siz[i]) {
 				continue; // We can't increase the reservation of "maxed" states, so we skip these
 			}
-			prod_siz *= siz[i];
-			prod_res *= res[i];
-			mat_cost += pen[i] * (1 - res[i] / siz[i]); // Materialization cost: sum of (1 - throughput)
+			const auto sizd = static_cast<double>(siz[i]);
+			const auto resd = static_cast<double>(res[i]);
+			prod_siz *= sizd;
+			prod_res *= resd;
+			mat_cost += pen[i] * (1 - resd / sizd); // Materialization cost: sum of (1 - throughput)
 		}
 		const double nd = static_cast<double>(n); // n as double for convenience
 		const double tp_mult =                    // Throughput multiplier: 1 - geometric mean of throughputs
@@ -208,39 +224,30 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 		// Just use https://www.derivative-calculator.net with this (n = 3) to see what's going on
 		// (3 - (a_1/s_1)-(a_2/s_2)-(a_3/s_3))*(1-((a_1/s_1)*(a_2/s_2)*(a_3/s_3))^(1/3))
 		const double intermediate = -(pow(prod_res, 1 / nd) * mat_cost) / (nd * pow(prod_siz, 1 / nd));
-
-		double sum_of_nonmaxed = 0;
-		idx_t nonmax_count = 0;
 		for (i = 0; i < n; i++) {
-			if (res[i] == siz[i]) {
-				continue; // We can't increase the reservation of "maxed" states, so we skip these
+			if (res[i] >= siz[i]) {
+				der[i] = NumericLimits<double>::Maximum();
+			} else {
+				der[i] = intermediate / static_cast<double>(res[i]) - pen[i] * tp_mult / static_cast<double>(siz[i]);
 			}
-			der[i] = intermediate / res[i] - pen[i] * tp_mult / siz[i];
-			D_ASSERT(res[i] <= siz[i]);
-			sum_of_nonmaxed += der[i];
-			nonmax_count++;
 		}
-		// We will increase the reservation of every operator with a gradient less than the average gradient
-		const auto avg_of_nonmaxed = sum_of_nonmaxed / static_cast<double>(nonmax_count);
+
+		// Index of the state with the lowest derivative
+		const auto min_idx = NumericCast<idx_t>(std::distance(der.begin(), std::min_element(der.begin(), der.end())));
 
 		// This is how much memory we will distribute in this round
-		const auto iter_memory = LossyNumericCast<idx_t>(static_cast<double>(remaining_memory) /
-		                                                 static_cast<double>(optimization_iterations - opt_idx));
-		for (i = 0; i < n; i++) {
-			if (res[i] == siz[i] || der[i] > avg_of_nonmaxed) {
-				continue;
-			}
-			const auto delta = LossyNumericCast<idx_t>(
-			    MinValue<double>(siz[i] - res[i], (der[i] / sum_of_nonmaxed) * static_cast<double>(iter_memory)));
-			D_ASSERT(delta > 0 && delta <= remaining_memory);
-			res[i] += static_cast<double>(delta);
-			remaining_memory -= delta;
-		}
+		const auto iter_memory = NumericCast<idx_t>(
+		    std::ceil(static_cast<double>(remaining_memory) / static_cast<double>(optimization_iterations - opt_idx)));
+		const auto state_room = siz[min_idx] - res[min_idx];
+		const auto delta = MinValue<idx_t>(iter_memory, state_room);
+
+		res[min_idx] += delta;
+		remaining_memory -= delta;
 	}
 	D_ASSERT(remaining_memory == 0);
 
 	// Return computed reservation of this state
-	return MinValue(NumericCast<idx_t>(res[state_index.GetIndex()]), upper_bound);
+	return MinValue<idx_t>(res[state_index.GetIndex()], upper_bound);
 }
 
 void TemporaryMemoryManager::Verify() const {

@@ -374,7 +374,7 @@ Value DefaultNullOrderSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Default Null Order
+// Default Secret Storage
 //===--------------------------------------------------------------------===//
 void DefaultSecretStorage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.secret_manager->SetDefaultStorage(input.ToString());

@@ -337,8 +337,8 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		} else {
 			// now we can actually load the current block
 			D_ASSERT(handle->readers == 0);
-			handle->readers = 1;
 			buf = handle->Load(handle, std::move(reusable_buffer));
+			handle->readers = 1;
 			handle->memory_charge = std::move(reservation);
 			// in the case of a variable sized block, the buffer may be smaller than a full block.
 			int64_t delta =
