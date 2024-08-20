@@ -96,7 +96,7 @@ IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result.root);
 	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result.allocator_infos);
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<Value>>(103, "options", result.options, case_insensitive_map_t<Value>());
+	deserializer.ReadPropertyWithExplicitDefault<case_insensitive_map_t<Value>>(103, "options", result.options, case_insensitive_map_t<Value>());
 	return result;
 }
 
