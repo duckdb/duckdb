@@ -8,7 +8,7 @@ statement ok
 pragma enable_verification
 
 query I
-SELECT json_exists('{"duck": 42}', '$.duck')
+SELECT json_exists('{"duck": null}', '$.duck')
 ----
 true
 
@@ -16,12 +16,12 @@ query I
 with path AS (
     SELECT '$.duck' p
 )
-SELECT json_exists('{"duck": 42}', p) FROM path
+SELECT json_exists('{"duck": null}', p) FROM path
 ----
 true
 
 query I
-SELECT json_exists('{"duck": 42}', '$.goose')
+SELECT json_exists('{"duck": null}', '$.goose')
 ----
 false
 
@@ -29,11 +29,11 @@ query I
 with path AS (
     SELECT '$.goose' p
 )
-SELECT json_exists('{"duck": 42}', p) FROM path
+SELECT json_exists('{"duck": null}', p) FROM path
 ----
 false
 
 query I
-SELECT json_exists('{"duck": 42}', ['$.duck', '$.goose'])
+SELECT json_exists('{"duck": null}', ['$.duck', '$.goose'])
 ----
 [true, false]

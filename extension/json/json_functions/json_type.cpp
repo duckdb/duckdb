@@ -3,12 +3,7 @@
 namespace duckdb {
 
 static inline string_t GetType(yyjson_val *val, yyjson_alc *, Vector &, ValidityMask &mask, idx_t idx) {
-	if (!val) {
-		mask.SetInvalid(idx);
-		return string_t {};
-	} else {
-		return JSONCommon::ValTypeToStringT(val);
-	}
+	return JSONCommon::ValTypeToStringT(val);
 }
 
 static void UnaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -16,11 +11,11 @@ static void UnaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void BinaryTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONExecutors::BinaryExecute<string_t, false>(args, state, result, GetType);
+	JSONExecutors::BinaryExecute<string_t>(args, state, result, GetType);
 }
 
 static void ManyTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONExecutors::ExecuteMany<string_t, false>(args, state, result, GetType);
+	JSONExecutors::ExecuteMany<string_t>(args, state, result, GetType);
 }
 
 static void GetTypeFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
