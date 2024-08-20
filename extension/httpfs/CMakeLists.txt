@@ -14,6 +14,7 @@ build_static_extension(
   http_state.cpp
   crypto.cpp
   create_secret_functions.cpp
+  http_functions.cpp
   httpfs_extension.cpp)
 
 set(PARAMETERS "-warnings")
@@ -26,6 +27,7 @@ build_loadable_extension(
   http_state.cpp
   crypto.cpp
   create_secret_functions.cpp
+  http_functions.cpp
   httpfs_extension.cpp)
 
 if(MINGW)
