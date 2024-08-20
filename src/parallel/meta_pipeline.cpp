@@ -148,7 +148,7 @@ vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependa
 void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies,
                                             const MetaPipeline &last_child) {
 	if (recursive_cte) {
-		return; // Let's not burn our fingers on this
+		return; // let's not burn our fingers on this for now
 	}
 
 	vector<shared_ptr<MetaPipeline>> child_meta_pipelines;
@@ -163,8 +163,14 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 	// skip over it
 	it++;
 
+	// we try to limit the performance impact of these dependencies on smaller workloads,
+	// by only adding the dependency if the source operator can likely keep all threads busy
+	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(executor.context).NumberOfThreads());
 	for (; it != child_meta_pipelines.end(); it++) {
 		auto &pipeline = *it->get()->GetBasePipeline();
+		if (pipeline.GetSource()->EstimatedThreadCount() < num_threads) {
+			continue; // low cardinality, skip
+		}
 		auto &pipeline_deps = pipeline_dependencies[pipeline];
 		for (auto &new_dependency : new_dependencies) {
 			pipeline_deps.push_back(*new_dependency);
