@@ -514,7 +514,7 @@ InsertionOrderPreservingMap<string> QueryProfiler::JSONSanitize(const InsertionO
 			key = StringUtil::Replace(key, "_", " ");
 			key = StringUtil::Title(key);
 		}
-		result[key] = JSONSanitize(it.second);
+		result[key] = it.second;
 	}
 	return result;
 }
