@@ -111,7 +111,7 @@ void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_dat
 
 unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &) {
 	auto create_info = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<CreateInfo>>(100, "sequence_create_info",
-	                                                                                unique_ptr<CreateInfo>());
+	                                                                                        unique_ptr<CreateInfo>());
 	if (!create_info) {
 		return nullptr;
 	}

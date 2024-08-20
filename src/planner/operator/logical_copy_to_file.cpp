@@ -107,7 +107,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	    deserializer.ReadPropertyWithExplicitDefault<string>(213, "file_extension", std::move(default_extension));
 
 	auto rotate = deserializer.ReadPropertyWithExplicitDefault(214, "rotate", false);
-	auto return_type = deserializer.ReadPropertyWithExplicitDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
+	auto return_type =
+	    deserializer.ReadPropertyWithExplicitDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
 	auto write_partition_columns = deserializer.ReadProperty<bool>(216, "write_partition_columns");
 
 	if (!has_serialize) {
