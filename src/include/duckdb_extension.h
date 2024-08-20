@@ -328,8 +328,6 @@ typedef struct {
 	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
 	idx_t (*duckdb_profiling_info_get_child_count)(duckdb_profiling_info info);
 	duckdb_profiling_info (*duckdb_profiling_info_get_child)(duckdb_profiling_info info, idx_t index);
-	const char *(*duckdb_profiling_info_get_name)(duckdb_profiling_info info);
-	const char *(*duckdb_profiling_info_get_query)(duckdb_profiling_info info);
 	void (*duckdb_scalar_function_set_varargs)(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 	void (*duckdb_scalar_function_set_special_handling)(duckdb_scalar_function scalar_function);
 	void (*duckdb_scalar_function_set_volatile)(duckdb_scalar_function scalar_function);
@@ -746,8 +744,6 @@ typedef struct {
 #define duckdb_profiling_info_get_value       duckdb_ext_api.duckdb_profiling_info_get_value
 #define duckdb_profiling_info_get_child_count duckdb_ext_api.duckdb_profiling_info_get_child_count
 #define duckdb_profiling_info_get_child       duckdb_ext_api.duckdb_profiling_info_get_child
-#define duckdb_profiling_info_get_name        duckdb_ext_api.duckdb_profiling_info_get_name
-#define duckdb_profiling_info_get_query       duckdb_ext_api.duckdb_profiling_info_get_query
 
 #define duckdb_table_description_create  duckdb_ext_api.duckdb_table_description_create
 #define duckdb_table_description_destroy duckdb_ext_api.duckdb_table_description_destroy

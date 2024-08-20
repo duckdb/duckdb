@@ -757,11 +757,13 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 		                  input.ToString());
 	}
 
+	config.enable_profiler = true;
 	config.profiler_settings = FillTreeNodeSettings(json);
 }
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
+	config.enable_profiler = ClientConfig().enable_profiler;
 	config.profiler_settings = ProfilingInfo::DefaultSettings();
 }
 
