@@ -215,7 +215,7 @@ string StringUtil::Lower(const string &str) {
 string StringUtil::Title(const string &str) {
 	string copy;
 	bool first_character = true;
-	for(auto c : str) {
+	for (auto c : str) {
 		bool is_alpha = StringUtil::CharacterIsAlpha(c);
 		if (is_alpha) {
 			if (first_character) {
