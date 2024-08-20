@@ -90,9 +90,9 @@ private:
 };
 
 struct QueryInfo {
-	QueryInfo() : idle_thread_time(0) {};
+	QueryInfo() : blocked_thread_time(0) {};
 	string query_name;
-	double idle_thread_time;
+	double blocked_thread_time;
 };
 
 //! The QueryProfiler can be used to measure timings of queries
@@ -127,7 +127,7 @@ public:
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.
-	DUCKDB_API void SetInfo(const double &idle_thread_time);
+	DUCKDB_API void SetInfo(const double &blocked_thread_time);
 
 	DUCKDB_API void StartPhase(MetricsType PhaseMetric);
 	DUCKDB_API void EndPhase();

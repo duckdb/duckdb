@@ -22,7 +22,7 @@
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context) : context(context), executor_tasks(0), idle_thread_time(0) {
+Executor::Executor(ClientContext &context) : context(context), executor_tasks(0), blocked_thread_time(0) {
 }
 
 Executor::~Executor() {
@@ -476,7 +476,7 @@ void Executor::WaitForTask() {
 		return;
 	}
 
-	idle_thread_time++;
+	blocked_thread_time++;
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
 }
 
@@ -675,8 +675,8 @@ void Executor::Flush(ThreadContext &thread_context) {
 	if (global_profiler) {
 		global_profiler->Flush(thread_context.profiler);
 
-		auto idle_time = idle_thread_time.load();
-		global_profiler->SetInfo(double(idle_time * WAIT_TIME_MS.count()) / 1000);
+		auto blocked_time = blocked_thread_time.load();
+		global_profiler->SetInfo(double(blocked_time * WAIT_TIME_MS.count()) / 1000);
 	}
 }
 
