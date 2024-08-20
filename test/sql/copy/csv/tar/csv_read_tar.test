@@ -7,6 +7,18 @@ SELECT filename FROM read_blob('tar://data/csv/tar/ab.tar/*') ORDER BY ALL;
 tar://data/csv/tar/ab.tar/a.csv
 tar://data/csv/tar/ab.tar/b.csv
 
+# Not a tar file
+statement error
+SELECT filename FROM read_blob('tar://data/csv/tar/a.csv') ORDER BY ALL;
+----
+IO Error: Could not find a '.tar' archive to open in: 'data/csv/tar/a.csv'
+
+# Compressed file (not supported)
+statement error
+SELECT filename FROM read_blob('tar://data/csv/tar/ab.tar.gz/*') ORDER BY ALL;
+----
+IO Error: Could not find a '.tar' archive to open in: 'data/csv/tar/ab.tar.gz/*'. Note that DuckDB's tar archive filesystem does not support compressed tar archives (such as '.tar.gz' and '.tar.bz2')
+
 # Explicit path
 query III
 SELECT * FROM read_csv('tar://data/csv/tar/ab.tar/a.csv') ORDER BY ALL;

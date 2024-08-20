@@ -261,13 +261,15 @@ inline TarBlockIteratorHelper TarBlockIterator::Scan(FileHandle &archive_handle)
 
 // Split a tar path into the path to the archive and the path within the archive
 static pair<string, string> SplitArchivePath(const string &path) {
-	constexpr char suffix[] = ".tar";
-	auto tar_path = std::find_end(path.begin(), path.end(), suffix, suffix + 4);
+	const string suffix = ".tar";
+
+	const auto tar_path = std::find_end(path.begin(), path.end(), suffix.begin(), suffix.end());
+
 	if (tar_path == path.end()) {
-		throw IOException("Invalid path: %s", path);
+		throw IOException("Could not find a '.tar' archive to open in: '%s'", path);
 	}
 
-	auto suffix_path = std::next(tar_path, 4);
+	const auto suffix_path = tar_path + UnsafeNumericCast<int64_t>(suffix.size());
 	if (suffix_path == path.end()) {
 		return {path, ""};
 	}
@@ -280,7 +282,9 @@ static pair<string, string> SplitArchivePath(const string &path) {
 	}
 
 	// Else, this is not a raw .tar, e.g. .tar.gz or .target
-	throw IOException("Invalid path: %s", path);
+	throw IOException("Could not find a '.tar' archive to open in: '%s'. Note that DuckDB's tar archive filesystem "
+	                  "does not support compressed tar archives (such as '.tar.gz' and '.tar.bz2')",
+	                  path);
 }
 
 //------------------------------------------------------------------------------
