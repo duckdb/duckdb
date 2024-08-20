@@ -49,19 +49,17 @@ void Node256::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 void Node256::ReplaceChild(const uint8_t byte, const Node child) {
 	D_ASSERT(count > SHRINK_THRESHOLD);
 
-	auto was_gate = children[byte].IsGate();
+	auto status = children[byte].GetGateStatus();
 	children[byte] = child;
-	if (was_gate && child.HasMetadata()) {
-		children[byte].SetGate();
+	if (status == GateStatus::GATE_SET && child.HasMetadata()) {
+		children[byte].SetGateStatus(status);
 	}
 }
 
 Node256 &Node256::GrowNode48(ART &art, Node &node256, Node &node48) {
 	auto &n48 = Node::Ref<Node48>(art, node48, NType::NODE_48);
 	auto &n256 = New(art, node256);
-	if (node48.IsGate()) {
-		node256.SetGate();
-	}
+	node256.SetGateStatus(node48.GetGateStatus());
 
 	n256.count = n48.count;
 	for (uint16_t i = 0; i < CAPACITY; i++) {

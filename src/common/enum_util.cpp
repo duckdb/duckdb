@@ -3243,6 +3243,29 @@ FunctionStability EnumUtil::FromString<FunctionStability>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<GateStatus>(GateStatus value) {
+	switch(value) {
+	case GateStatus::GATE_NOT_SET:
+		return "OUTSIDE";
+	case GateStatus::GATE_SET:
+		return "INSIDE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
+	if (StringUtil::Equals(value, "OUTSIDE")) {
+		return GateStatus::GATE_NOT_SET;
+	}
+	if (StringUtil::Equals(value, "INSIDE")) {
+		return GateStatus::GATE_SET;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value) {
 	switch(value) {
 	case HLLStorageType::UNCOMPRESSED:

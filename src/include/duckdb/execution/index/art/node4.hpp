@@ -55,18 +55,18 @@ public:
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const bool in_gate);
+	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status);
 	//! Replace the child at byte.
 	template <class NODE>
 	static void ReplaceChild(NODE &n, const uint8_t byte, const Node child) {
 		D_ASSERT(n.count != 0);
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
-				auto was_gate = n.children[i].IsGate();
+				auto status = n.children[i].GetGateStatus();
 				n.children[i] = child;
 
-				if (was_gate && child.HasMetadata()) {
-					n.children[i].SetGate();
+				if (status == GateStatus::GATE_SET && child.HasMetadata()) {
+					n.children[i].SetGateStatus(status);
 				}
 				return;
 			}

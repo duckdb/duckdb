@@ -414,7 +414,7 @@ void ConstructLeaf(ART &art, const unsafe_vector<ARTKey> &keys, Node &node, ARTK
 }
 
 bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-                            ARTKeySection &section, const bool in_gate) {
+                            ARTKeySection &section, const GateStatus status) {
 	D_ASSERT(section.start < keys.size());
 	D_ASSERT(section.end < keys.size());
 	D_ASSERT(section.start <= section.end);
@@ -423,7 +423,7 @@ bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vect
 	auto &end = keys[section.end];
 
 	D_ASSERT(start.len != 0);
-	if (in_gate && start.len - 1 == section.depth) {
+	if (status == GateStatus::GATE_SET && start.len - 1 == section.depth) {
 		// Create an inlined leaf, or a nested leaf node.
 		auto count = section.end - section.start + 1;
 		if (count == 1) {
@@ -440,7 +440,7 @@ bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vect
 		section.depth++;
 	}
 
-	if (in_gate && start.len - 1 == section.depth) {
+	if (status == GateStatus::GATE_SET && start.len - 1 == section.depth) {
 		D_ASSERT(section.depth < start.len);
 		D_ASSERT(section.depth > prefix_depth);
 
@@ -462,7 +462,7 @@ bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vect
 
 		// Early-out, if inlined leaf.
 		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
-		if (in_gate && row_id_count == 1) {
+		if (status == GateStatus::GATE_SET && row_id_count == 1) {
 			Leaf::New(node, row_ids[section.start].GetRowId());
 			return true;
 		}
@@ -490,7 +490,7 @@ bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vect
 	Node::New(*this, ref, Node::GetNodeType(children.size()));
 	for (auto &child : children) {
 		Node new_child;
-		auto success = ConstructInternal(keys, row_ids, new_child, child, in_gate);
+		auto success = ConstructInternal(keys, row_ids, new_child, child, status);
 		Node::InsertChild(*this, ref, child.key_byte, new_child);
 		if (!success) {
 			return false;
@@ -501,7 +501,7 @@ bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vect
 
 bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
 	ARTKeySection section(0, row_count - 1, 0, 0);
-	if (!ConstructInternal(keys, row_ids, tree, section, tree.IsGate())) {
+	if (!ConstructInternal(keys, row_ids, tree, section, tree.GetGateStatus())) {
 		return false;
 	}
 
@@ -534,7 +534,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		if (!Insert(tree, keys[i], 0, row_id_keys[i], tree.IsGate())) {
+		if (!Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus())) {
 			// Insertion failure due to a constraint violation.
 			failed_index = i;
 			break;
@@ -547,7 +547,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			if (keys[i].Empty()) {
 				continue;
 			}
-			Erase(tree, keys[i], 0, row_id_keys[i], tree.IsGate());
+			Erase(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus());
 		}
 	}
 
@@ -590,11 +590,12 @@ void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
 	CheckConstraintsForChunk(chunk, conflict_manager);
 }
 
-void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const bool in_gate) {
+void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+                          const GateStatus status) {
 	D_ASSERT(depth <= key.len);
 	D_ASSERT(!node.HasMetadata());
 
-	if (in_gate) {
+	if (status == GateStatus::GATE_SET) {
 		Leaf::New(node, row_id.GetRowId());
 		return;
 	}
@@ -606,23 +607,24 @@ void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, cons
 	Leaf::New(ref, row_id.GetRowId());
 }
 
-bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const bool in_gate) {
+bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+                         const GateStatus status) {
 	D_ASSERT(depth < key.len);
 	auto child = node.GetChildMutable(*this, key[depth]);
 
 	// Recurse, if a child exists at key[depth].
 	if (child) {
 		D_ASSERT(child->HasMetadata());
-		bool success = Insert(*child, key, depth + 1, row_id, in_gate);
+		bool success = Insert(*child, key, depth + 1, row_id, status);
 		node.ReplaceChild(*this, key[depth], *child);
 		return success;
 	}
 
 	// Create an inlined prefix at key[depth].
-	if (in_gate) {
+	if (status == GateStatus::GATE_SET) {
 		Node remainder;
 		auto byte = key[depth];
-		auto success = Insert(remainder, key, depth + 1, row_id, in_gate);
+		auto success = Insert(remainder, key, depth + 1, row_id, status);
 		Node::InsertChild(*this, node, byte, remainder);
 		return success;
 	}
@@ -643,15 +645,15 @@ bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const
 	return true;
 }
 
-bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const bool in_gate) {
+bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status) {
 	if (!node.HasMetadata()) {
-		InsertIntoEmpty(node, key, depth, row_id, in_gate);
+		InsertIntoEmpty(node, key, depth, row_id, status);
 		return true;
 	}
 
 	// Enter a nested leaf.
-	if (!in_gate && node.IsGate()) {
-		return Insert(node, row_id, 0, row_id, true);
+	if (status == GateStatus::GATE_NOT_SET && node.GetGateStatus() == GateStatus::GATE_SET) {
+		return Insert(node, row_id, 0, row_id, GateStatus::GATE_SET);
 	}
 
 	auto type = node.GetType();
@@ -660,12 +662,12 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 		if (IsUnique()) {
 			return false;
 		}
-		Leaf::InsertIntoInlined(*this, node, row_id, depth, in_gate);
+		Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
 		return true;
 	}
 	case NType::LEAF: {
 		Leaf::TransformToNested(*this, node);
-		return Insert(node, key, depth, row_id, in_gate);
+		return Insert(node, key, depth, row_id, status);
 	}
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
@@ -678,9 +680,9 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 	case NType::NODE_16:
 	case NType::NODE_48:
 	case NType::NODE_256:
-		return InsertIntoNode(node, key, depth, row_id, in_gate);
+		return InsertIntoNode(node, key, depth, row_id, status);
 	case NType::PREFIX:
-		return Prefix::Insert(*this, node, key, depth, row_id, in_gate);
+		return Prefix::Insert(*this, node, key, depth, row_id, status);
 	default:
 		throw InternalException("Invalid node type for Insert.");
 	}
@@ -713,7 +715,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		Erase(tree, keys[i], 0, row_id_keys[i], tree.IsGate());
+		Erase(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus());
 	}
 
 	if (!tree.HasMetadata()) {
@@ -734,7 +736,8 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #endif
 }
 
-void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, bool in_gate) {
+void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id,
+                GateStatus status) {
 	if (!node.HasMetadata()) {
 		return;
 	}
@@ -745,7 +748,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 		Prefix::TraverseMutable(*this, next, key, depth);
 
 		// Prefixes don't match: nothing to erase.
-		if (next.get().GetType() == NType::PREFIX && !next.get().IsGate()) {
+		if (next.get().GetType() == NType::PREFIX && next.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
 			return;
 		}
 	}
@@ -761,20 +764,20 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 
 	// Transform a deprecated leaf.
 	if (next.get().GetType() == NType::LEAF) {
-		D_ASSERT(!in_gate);
+		D_ASSERT(status == GateStatus::GATE_NOT_SET);
 		Leaf::TransformToNested(*this, next);
 	}
 
 	// Enter a nested leaf.
-	if (!in_gate && next.get().IsGate()) {
-		return Erase(next, row_id, 0, row_id, true);
+	if (status == GateStatus::GATE_NOT_SET && next.get().GetGateStatus() == GateStatus::GATE_SET) {
+		return Erase(next, row_id, 0, row_id, GateStatus::GATE_SET);
 	}
 
 	D_ASSERT(depth < key.get().len);
 	if (next.get().IsLeafNode()) {
 		auto byte = key.get()[depth];
 		if (next.get().GetNextByte(*this, byte)) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], in_gate, key.get());
+			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
 		}
 		return;
 	}
@@ -787,15 +790,15 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 
 	// Transform a deprecated leaf.
 	if (child->GetType() == NType::LEAF) {
-		D_ASSERT(!in_gate);
+		D_ASSERT(status == GateStatus::GATE_NOT_SET);
 		Leaf::TransformToNested(*this, *child);
 	}
 
 	// Enter a nested leaf.
-	if (!in_gate && child->IsGate()) {
-		Erase(*child, row_id, 0, row_id, true);
+	if (status == GateStatus::GATE_NOT_SET && child->GetGateStatus() == GateStatus::GATE_SET) {
+		Erase(*child, row_id, 0, row_id, GateStatus::GATE_SET);
 		if (!child->HasMetadata()) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], in_gate, key.get());
+			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
 		} else {
 			next.get().ReplaceChild(*this, key.get()[depth], *child);
 		}
@@ -809,22 +812,22 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 		Prefix::TraverseMutable(*this, ref, key, temp_depth);
 
 		// Prefixes don't match: nothing to erase.
-		if (ref.get().GetType() == NType::PREFIX && !ref.get().IsGate()) {
+		if (ref.get().GetType() == NType::PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
 			return;
 		}
 	}
 
 	if (ref.get().GetType() == NType::LEAF_INLINED) {
 		if (ref.get().GetRowId() == row_id.get().GetRowId()) {
-			Node::DeleteChild(*this, next, node, key.get()[depth], in_gate, key.get());
+			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
 		}
 		return;
 	}
 
 	// Recurse.
-	Erase(*child, key, depth + 1, row_id, in_gate);
+	Erase(*child, key, depth + 1, row_id, status);
 	if (!child->HasMetadata()) {
-		Node::DeleteChild(*this, next, node, key.get()[depth], in_gate, key.get());
+		Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
 	} else {
 		next.get().ReplaceChild(*this, key.get()[depth], *child);
 	}
@@ -839,14 +842,14 @@ const unsafe_optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey
 	while (ref.get().HasMetadata()) {
 
 		// Return the leaf.
-		if (ref.get().IsAnyLeaf() || ref.get().IsGate()) {
+		if (ref.get().IsAnyLeaf() || ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 			return unsafe_optional_ptr<const Node>(ref.get());
 		}
 
 		// Traverse the prefix.
 		if (ref.get().GetType() == NType::PREFIX) {
 			Prefix::Traverse(*this, ref, key, depth);
-			if (ref.get().GetType() == NType::PREFIX && !ref.get().IsGate()) {
+			if (ref.get().GetType() == NType::PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
 				// Prefix mismatch, return nullptr.
 				return nullptr;
 			}
@@ -1289,8 +1292,8 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 	}
 
 	// Merge the ARTs.
-	D_ASSERT(tree.IsGate() == other_art.tree.IsGate());
-	if (!tree.Merge(*this, other_art.tree, tree.IsGate())) {
+	D_ASSERT(tree.GetGateStatus() == other_art.tree.GetGateStatus());
+	if (!tree.Merge(*this, other_art.tree, tree.GetGateStatus())) {
 		return false;
 	}
 	return true;

@@ -46,9 +46,7 @@ void Node16::ReplaceChild(const uint8_t byte, const Node child) {
 Node16 &Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 	auto &n4 = Node::Ref<Node4>(art, node4, NType::NODE_4);
 	auto &n16 = New(art, node16);
-	if (node4.IsGate()) {
-		node16.SetGate();
-	}
+	node16.SetGateStatus(node4.GetGateStatus());
 
 	n16.count = n4.count;
 	for (uint8_t i = 0; i < n4.count; i++) {
@@ -64,9 +62,7 @@ Node16 &Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 Node16 &Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 	auto &n16 = New(art, node16);
 	auto &n48 = Node::Ref<Node48>(art, node48, NType::NODE_48);
-	if (node48.IsGate()) {
-		node16.SetGate();
-	}
+	node16.SetGateStatus(node48.GetGateStatus());
 
 	n16.count = 0;
 	for (uint16_t i = 0; i < Node256::CAPACITY; i++) {

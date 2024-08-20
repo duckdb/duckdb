@@ -41,9 +41,7 @@ bool Node15Leaf::GetNextByte(uint8_t &byte) const {
 Node15Leaf &Node15Leaf::GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf) {
 	auto &n7 = Node::Ref<Node7Leaf>(art, node7_leaf, NType::NODE_7_LEAF);
 	auto &n15 = New(art, node15_leaf);
-	if (node7_leaf.IsGate()) {
-		node15_leaf.SetGate();
-	}
+	node15_leaf.SetGateStatus(node7_leaf.GetGateStatus());
 
 	n15.count = n7.count;
 	for (uint8_t i = 0; i < n7.count; i++) {
@@ -58,9 +56,7 @@ Node15Leaf &Node15Leaf::GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_l
 Node15Leaf &Node15Leaf::ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &node256_leaf) {
 	auto &n15 = New(art, node15_leaf);
 	auto &n256 = Node::Ref<Node256Leaf>(art, node256_leaf, NType::NODE_256_LEAF);
-	if (node256_leaf.IsGate()) {
-		node15_leaf.SetGate();
-	}
+	node15_leaf.SetGateStatus(node256_leaf.GetGateStatus());
 
 	ValidityMask mask(&n256.mask[0]);
 	for (uint16_t i = 0; i < Node256::CAPACITY; i++) {

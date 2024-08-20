@@ -58,7 +58,7 @@ public:
 	static constexpr uint8_t ROW_ID_SIZE = sizeof(row_t);
 
 public:
-	explicit Iterator(ART &art) : art(art), in_gate(false) {};
+	explicit Iterator(ART &art) : art(art), status(GateStatus::GATE_NOT_SET) {};
 	//! Holds the current key leading down to the top node on the stack.
 	IteratorKey current_key;
 
@@ -82,7 +82,7 @@ private:
 	//! Holds the row ID of nested leaves.
 	uint8_t row_id[ROW_ID_SIZE];
 	//! True, if we passed a gate.
-	bool in_gate = false;
+	GateStatus status;
 	//! Depth in a nested leaf.
 	uint8_t nested_depth = 0;
 

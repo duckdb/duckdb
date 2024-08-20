@@ -57,7 +57,8 @@ public:
 	//! Concatenates parent -> byte -> child. Special-handling, if
 	//! 1. the byte was in a gate node.
 	//! 2. the byte was in PREFIX_INLINED.
-	static void Concat(ART &art, Node &parent, uint8_t byte, const bool is_gate, const Node &child, const bool in_gate);
+	static void Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_status, const Node &child,
+	                   const GateStatus status);
 
 	//! Traverse a prefix and a key until
 	//! 1. a non-prefix node.
@@ -70,7 +71,8 @@ public:
 	//! 1. that they match.
 	//! 2. that they mismatch.
 	//! 3. that one prefix contains the other prefix.
-	static bool Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &pos, const bool in_gate);
+	static bool Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &pos,
+	                     const GateStatus status);
 
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
@@ -78,11 +80,12 @@ public:
 	//! Splits the prefix at pos.
 	//! prefix_node points to the node that replaces the split byte.
 	//! child_node points to the remaining node after the split.
-	//! Returns true, if a gate was freed.
-	static bool Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
+	//! Returns INSIDE, if a gate node was freed, else OUTSIDE.
+	static GateStatus Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
 
 	//! Insert a key into a prefix.
-	static bool Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const bool in_gate);
+	static bool Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id,
+	                   const GateStatus status);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
@@ -116,7 +119,7 @@ private:
 			lambda(prefix);
 
 			ref = *prefix.ptr;
-			if (exit_gate && ref.get().IsGate()) {
+			if (exit_gate && ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 				break;
 			}
 		}

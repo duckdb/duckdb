@@ -167,13 +167,13 @@ void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chil
 // Delete
 //===--------------------------------------------------------------------===//
 
-void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const bool in_gate,
+void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status,
                        const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
 
 	switch (node.GetType()) {
 	case NType::NODE_4:
-		return Node4::DeleteChild(art, node, prefix, byte, in_gate);
+		return Node4::DeleteChild(art, node, prefix, byte, status);
 	case NType::NODE_16:
 		return Node16::DeleteChild(art, node, byte);
 	case NType::NODE_48:
@@ -384,10 +384,10 @@ void Node::InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 	IncreaseBufferId(upper_bounds[idx]);
 }
 
-bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const bool in_gate) {
+bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const GateStatus status) {
 	// Merge N4, N16, N48, N256 nodes.
 	D_ASSERT(l_node.IsNode() && r_node.IsNode());
-	D_ASSERT((l_node.IsGate() && r_node.IsGate()) || (!l_node.IsGate() && !r_node.IsGate()));
+	D_ASSERT(l_node.GetGateStatus() == r_node.GetGateStatus());
 
 	auto r_child = r_node.GetNextChildMutable(art, byte);
 	while (r_child) {
@@ -396,7 +396,7 @@ bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte,
 			Node::InsertChild(art, l_node, byte, *r_child);
 			r_node.ReplaceChild(art, byte);
 		} else {
-			if (!l_child->MergeInternal(art, *r_child, in_gate)) {
+			if (!l_child->MergeInternal(art, *r_child, status)) {
 				return false;
 			}
 		}
@@ -415,7 +415,8 @@ bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte,
 void Node::MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte) {
 	// Merge N7, N15, N256 leaf nodes.
 	D_ASSERT(l_node.IsLeafNode() && r_node.IsLeafNode());
-	D_ASSERT(!l_node.IsGate() && !r_node.IsGate());
+	D_ASSERT(l_node.GetGateStatus() == GateStatus::GATE_NOT_SET);
+	D_ASSERT(r_node.GetGateStatus() == GateStatus::GATE_NOT_SET);
 
 	auto has_next = r_node.GetNextByte(art, byte);
 	while (has_next) {
@@ -431,7 +432,7 @@ void Node::MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte) {
 	Node::Free(art, r_node);
 }
 
-bool Node::MergeNodes(ART &art, Node &other, bool in_gate) {
+bool Node::MergeNodes(ART &art, Node &other, GateStatus status) {
 	// Merge the smaller node into the bigger node.
 	if (GetType() < other.GetType()) {
 		swap(*this, other);
@@ -439,15 +440,15 @@ bool Node::MergeNodes(ART &art, Node &other, bool in_gate) {
 
 	uint8_t byte = 0;
 	if (IsNode()) {
-		return MergeNormalNodes(art, *this, other, byte, in_gate);
+		return MergeNormalNodes(art, *this, other, byte, status);
 	}
 	MergeLeafNodes(art, *this, other, byte);
 	return true;
 }
 
-bool Node::Merge(ART &art, Node &other, const bool in_gate) {
+bool Node::Merge(ART &art, Node &other, const GateStatus status) {
 	if (HasMetadata()) {
-		return MergeInternal(art, other, in_gate);
+		return MergeInternal(art, other, status);
 	}
 
 	*this = other;
@@ -455,7 +456,7 @@ bool Node::Merge(ART &art, Node &other, const bool in_gate) {
 	return true;
 }
 
-bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const bool in_gate) {
+bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const GateStatus status) {
 	// r_node's prefix contains l_node's prefix. l_node must be a node with child nodes.
 	D_ASSERT(l_node.IsNode());
 
@@ -466,7 +467,7 @@ bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8
 	// Reduce r_node's prefix to the bytes after pos.
 	Prefix::Reduce(art, r_node, pos);
 	if (child) {
-		return child->MergeInternal(art, r_node, in_gate);
+		return child->MergeInternal(art, r_node, status);
 	}
 
 	Node::InsertChild(art, l_node, byte, r_node);
@@ -479,11 +480,9 @@ void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t po
 	auto l_byte = Prefix::GetByte(art, l_node, pos);
 
 	reference<Node> ref(l_node);
-	auto freed_gate = Prefix::Split(art, ref, l_child, pos);
+	auto status = Prefix::Split(art, ref, l_child, pos);
 	Node4::New<Node4>(art, ref, NType::NODE_4);
-	if (freed_gate) {
-		ref.get().SetGate();
-	}
+	ref.get().SetGateStatus(status);
 
 	Node4::InsertChild(art, ref, l_byte, l_child);
 
@@ -493,14 +492,14 @@ void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t po
 	r_node.Clear();
 }
 
-bool Node::MergePrefixes(ART &art, Node &other, const bool in_gate) {
+bool Node::MergePrefixes(ART &art, Node &other, const GateStatus status) {
 	reference<Node> l_node(*this);
 	reference<Node> r_node(other);
 	auto pos = DConstants::INVALID_INDEX;
 
 	if (l_node.get().GetType() == NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
 		// Traverse prefixes. Possibly change the referenced nodes.
-		if (!Prefix::Traverse(art, l_node, r_node, pos, in_gate)) {
+		if (!Prefix::Traverse(art, l_node, r_node, pos, status)) {
 			return false;
 		}
 		if (pos == DConstants::INVALID_INDEX) {
@@ -517,7 +516,7 @@ bool Node::MergePrefixes(ART &art, Node &other, const bool in_gate) {
 
 	D_ASSERT(pos != DConstants::INVALID_INDEX);
 	if (l_node.get().GetType() != NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
-		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(pos), in_gate);
+		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(pos), status);
 	}
 
 	// The prefixes differ.
@@ -525,7 +524,7 @@ bool Node::MergePrefixes(ART &art, Node &other, const bool in_gate) {
 	return true;
 }
 
-bool Node::MergeInternal(ART &art, Node &other, const bool in_gate) {
+bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 	D_ASSERT(HasMetadata());
 	D_ASSERT(other.HasMetadata());
 
@@ -534,8 +533,8 @@ bool Node::MergeInternal(ART &art, Node &other, const bool in_gate) {
 		swap(*this, other);
 	}
 	if (other.GetType() == NType::LEAF_INLINED) {
-		D_ASSERT(!in_gate);
-		D_ASSERT(other.IsGate() || other.GetType() == NType::LEAF_INLINED);
+		D_ASSERT(status == GateStatus::GATE_NOT_SET);
+		D_ASSERT(other.GetGateStatus() == GateStatus::GATE_SET || other.GetType() == NType::LEAF_INLINED);
 		if (art.IsUnique()) {
 			return false;
 		}
@@ -544,22 +543,23 @@ bool Node::MergeInternal(ART &art, Node &other, const bool in_gate) {
 	}
 
 	// Enter a gate.
-	if (IsGate() && other.IsGate() && !in_gate) {
-		return Merge(art, other, true);
+	if (GetGateStatus() == GateStatus::GATE_SET && other.GetGateStatus() == GateStatus::GATE_SET &&
+	    status == GateStatus::GATE_NOT_SET) {
+		return Merge(art, other, GateStatus::GATE_SET);
 	}
 
 	// Merge N4, N16, N48, N256 nodes.
 	if (IsNode() && other.IsNode()) {
-		return MergeNodes(art, other, in_gate);
+		return MergeNodes(art, other, status);
 	}
 	// Merge N7, N15, N256 leaf nodes.
 	if (IsLeafNode() && other.IsLeafNode()) {
-		D_ASSERT(in_gate);
-		return MergeNodes(art, other, in_gate);
+		D_ASSERT(status == GateStatus::GATE_SET);
+		return MergeNodes(art, other, status);
 	}
 
 	// Merge prefixes.
-	return MergePrefixes(art, other, in_gate);
+	return MergePrefixes(art, other, status);
 }
 
 //===--------------------------------------------------------------------===//
@@ -617,7 +617,7 @@ void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
 	D_ASSERT(node.HasMetadata());
 
-	if (node.IsGate()) {
+	if (node.GetGateStatus() == GateStatus::GATE_SET) {
 		return Leaf::TransformToDeprecated(art, node);
 	}
 
@@ -657,7 +657,7 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 		return Leaf::DeprecatedVerifyAndToString(art, *this, only_verify);
 	case NType::PREFIX: {
 		auto str = Prefix::VerifyAndToString(art, *this, only_verify);
-		if (IsGate()) {
+		if (GetGateStatus() == GateStatus::GATE_SET) {
 			str = "Gate [ " + str + " ]";
 		}
 		return only_verify ? "" : "\n" + str;
@@ -692,7 +692,7 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 		}
 	}
 
-	if (IsGate()) {
+	if (GetGateStatus() == GateStatus::GATE_SET) {
 		str = "Gate [ " + str + " ]";
 	}
 	return only_verify ? "" : "\n" + str + "]";

@@ -30,6 +30,11 @@ enum class NType : uint8_t {
 	NODE_256_LEAF = 10,
 };
 
+enum class GateStatus : uint8_t {
+	GATE_NOT_SET = 0,
+	GATE_SET = 1,
+};
+
 class ART;
 class Prefix;
 class ARTKey;
@@ -73,7 +78,7 @@ public:
 	//! Insert the child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child = Node());
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const bool in_gate,
+	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status,
 	                        const ARTKey &row_id);
 
 	//! Get the immutable child at byte.
@@ -101,7 +106,7 @@ public:
 	//! Initialize a merge by incrementing the buffer IDs of a node and its children.
 	void InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
 	//! Merge a node into this node.
-	bool Merge(ART &art, Node &other, const bool in_gate);
+	bool Merge(ART &art, Node &other, const GateStatus status);
 
 	//! Vacuum all nodes exceeding their vacuum threshold.
 	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
@@ -130,17 +135,20 @@ public:
 		Set((Get() & AND_METADATA) | UnsafeNumericCast<idx_t>(row_id));
 	}
 
-	//! Returns true, if the node is a gate node.
-	inline bool IsGate() const {
-		return GetMetadata() & AND_GATE;
+	//! Returns the gate status of a node.
+	inline GateStatus GetGateStatus() const {
+		return (GetMetadata() & AND_GATE) == 0 ? GateStatus::GATE_NOT_SET : GateStatus::GATE_SET;
 	}
-	//! Turns the node into a gate node.
-	inline void SetGate() {
-		SetMetadata(GetMetadata() | AND_GATE);
-	}
-	//! Removes the gate flag from a node.
-	inline void ResetGate() {
-		SetMetadata(GetMetadata() & ~AND_GATE);
+	//! Sets the gate status of a node.
+	inline void SetGateStatus(const GateStatus status) {
+		switch (status) {
+		case GateStatus::GATE_SET:
+			SetMetadata(GetMetadata() | AND_GATE);
+			break;
+		case GateStatus::GATE_NOT_SET:
+			SetMetadata(GetMetadata() & ~AND_GATE);
+			break;
+		}
 	}
 
 	//! Assign operator.
@@ -149,13 +157,13 @@ public:
 	}
 
 private:
-	bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const bool in_gate);
+	bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const GateStatus status);
 	void MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte);
-	bool MergeNodes(ART &art, Node &other, const bool in_gate);
-	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const bool in_gate);
+	bool MergeNodes(ART &art, Node &other, const GateStatus status);
+	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const GateStatus status);
 	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t pos);
-	bool MergePrefixes(ART &art, Node &other, const bool in_gate);
-	bool MergeInternal(ART &art, Node &other, const bool in_gate);
+	bool MergePrefixes(ART &art, Node &other, const GateStatus status);
+	bool MergeInternal(ART &art, Node &other, const GateStatus status);
 
 private:
 	template <class NODE>

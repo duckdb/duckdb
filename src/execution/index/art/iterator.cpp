@@ -47,7 +47,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 	bool has_next;
 	do {
 		// An empty upper bound indicates that no upper bound exists.
-		if (!upper_bound.Empty() && !in_gate) {
+		if (!upper_bound.Empty() && status == GateStatus::GATE_NOT_SET) {
 			if (current_key.GreaterThan(upper_bound, equal)) {
 				return true;
 			}
@@ -102,9 +102,9 @@ void Iterator::FindMinimum(const Node &node) {
 	}
 
 	// We are passing a gate node.
-	if (node.IsGate()) {
-		D_ASSERT(!in_gate);
-		in_gate = true;
+	if (node.GetGateStatus() == GateStatus::GATE_SET) {
+		D_ASSERT(status == GateStatus::GATE_NOT_SET);
+		status = GateStatus::GATE_SET;
 		nested_depth = 0;
 	}
 
@@ -113,7 +113,7 @@ void Iterator::FindMinimum(const Node &node) {
 		Prefix prefix(art, node);
 		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 			current_key.Push(prefix.data[i]);
-			if (in_gate) {
+			if (status == GateStatus::GATE_SET) {
 				row_id[nested_depth] = prefix.data[i];
 				nested_depth++;
 				D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
@@ -130,7 +130,7 @@ void Iterator::FindMinimum(const Node &node) {
 
 	// Recurse on the leftmost node.
 	current_key.Push(byte);
-	if (in_gate) {
+	if (status == GateStatus::GATE_SET) {
 		row_id[nested_depth] = byte;
 		nested_depth++;
 		D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
@@ -145,14 +145,14 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 	}
 
 	// We found any leaf node, or a gate.
-	if (node.IsAnyLeaf() || node.IsGate()) {
-		D_ASSERT(!in_gate);
+	if (node.IsAnyLeaf() || node.GetGateStatus() == GateStatus::GATE_SET) {
+		D_ASSERT(status == GateStatus::GATE_NOT_SET);
 		D_ASSERT(current_key.Size() == key.len);
 		if (!equal && current_key.Contains(key)) {
 			return Next();
 		}
 
-		if (node.IsGate()) {
+		if (node.GetGateStatus() == GateStatus::GATE_SET) {
 			FindMinimum(node);
 		} else {
 			last_leaf = node;
@@ -160,7 +160,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 		return true;
 	}
 
-	D_ASSERT(!node.IsGate());
+	D_ASSERT(node.GetGateStatus() == GateStatus::GATE_NOT_SET);
 	if (node.GetType() != NType::PREFIX) {
 		auto next_byte = key[depth];
 		auto child = node.GetNextChild(art, next_byte);
@@ -241,7 +241,7 @@ bool Iterator::Next() {
 
 		current_key.Pop(1);
 		current_key.Push(top.byte);
-		if (in_gate) {
+		if (status == GateStatus::GATE_SET) {
 			row_id[nested_depth - 1] = top.byte;
 		}
 
@@ -253,15 +253,15 @@ bool Iterator::Next() {
 
 void Iterator::PopNode() {
 	// We are popping a gate node.
-	if (nodes.top().node.IsGate()) {
-		D_ASSERT(in_gate);
-		in_gate = false;
+	if (nodes.top().node.GetGateStatus() == GateStatus::GATE_SET) {
+		D_ASSERT(status == GateStatus::GATE_SET);
+		status = GateStatus::GATE_NOT_SET;
 	}
 
 	// Pop the byte and the node.
 	if (nodes.top().node.GetType() != NType::PREFIX) {
 		current_key.Pop(1);
-		if (in_gate) {
+		if (status == GateStatus::GATE_SET) {
 			nested_depth--;
 			D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 		}
@@ -273,7 +273,7 @@ void Iterator::PopNode() {
 	Prefix prefix(art, nodes.top().node);
 	auto prefix_byte_count = prefix.data[Prefix::Count(art)];
 	current_key.Pop(prefix_byte_count);
-	if (in_gate) {
+	if (status == GateStatus::GATE_SET) {
 		nested_depth -= prefix_byte_count;
 		D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 	}

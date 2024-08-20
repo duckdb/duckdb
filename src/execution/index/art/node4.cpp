@@ -19,7 +19,7 @@ void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chi
 	InsertChildInternal<Node4>(art, n4, byte, child);
 }
 
-void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const bool in_gate) {
+void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status) {
 	auto &n4 = DeleteChildInternal<Node4>(art, node, byte);
 
 	// Compress one-way nodes.
@@ -28,19 +28,17 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, 
 
 		auto child = n4.children[0];
 		auto remainder = n4.key[0];
-		auto is_gate = node.IsGate();
+		auto old_status = node.GetGateStatus();
 
 		Node::Free(art, node);
-		Prefix::Concat(art, prefix, remainder, is_gate, child, in_gate);
+		Prefix::Concat(art, prefix, remainder, old_status, child, status);
 	}
 }
 
 Node4 &Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 	auto &n4 = New<Node4>(art, node4, NODE_4);
 	auto &n16 = Node::Ref<Node16>(art, node16, NType::NODE_16);
-	if (node16.IsGate()) {
-		node4.SetGate();
-	}
+	node4.SetGateStatus(node16.GetGateStatus());
 
 	n4.count = n16.count;
 	for (uint8_t i = 0; i < n16.count; i++) {

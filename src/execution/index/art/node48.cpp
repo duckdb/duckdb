@@ -74,19 +74,17 @@ void Node48::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 void Node48::ReplaceChild(const uint8_t byte, const Node child) {
 	D_ASSERT(count >= SHRINK_THRESHOLD);
 
-	auto was_gate = children[child_index[byte]].IsGate();
+	auto status = children[child_index[byte]].GetGateStatus();
 	children[child_index[byte]] = child;
-	if (was_gate && child.HasMetadata()) {
-		children[child_index[byte]].SetGate();
+	if (status == GateStatus::GATE_SET && child.HasMetadata()) {
+		children[child_index[byte]].SetGateStatus(status);
 	}
 }
 
 Node48 &Node48::GrowNode16(ART &art, Node &node48, Node &node16) {
 	auto &n16 = Node::Ref<Node16>(art, node16, NType::NODE_16);
 	auto &n48 = New(art, node48);
-	if (node16.IsGate()) {
-		node48.SetGate();
-	}
+	node48.SetGateStatus(node16.GetGateStatus());
 
 	n48.count = n16.count;
 	for (uint16_t i = 0; i < Node256::CAPACITY; i++) {
@@ -108,9 +106,7 @@ Node48 &Node48::GrowNode16(ART &art, Node &node48, Node &node16) {
 Node48 &Node48::ShrinkNode256(ART &art, Node &node48, Node &node256) {
 	auto &n48 = New(art, node48);
 	auto &n256 = Node::Ref<Node256>(art, node256, NType::NODE_256);
-	if (node256.IsGate()) {
-		node48.SetGate();
-	}
+	node48.SetGateStatus(node256.GetGateStatus());
 
 	n48.count = 0;
 	for (uint16_t i = 0; i < Node256::CAPACITY; i++) {

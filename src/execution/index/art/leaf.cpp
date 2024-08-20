@@ -14,14 +14,12 @@ namespace duckdb {
 void Leaf::New(Node &node, const row_t row_id) {
 	D_ASSERT(row_id < MAX_ROW_ID_LOCAL);
 
-	auto was_gate = node.IsGate();
+	auto status = node.GetGateStatus();
 	node.Clear();
+
 	node.SetMetadata(static_cast<uint8_t>(INLINED));
 	node.SetRowId(row_id);
-
-	if (was_gate) {
-		node.SetGate();
-	}
+	node.SetGateStatus(status);
 }
 
 void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
@@ -30,8 +28,8 @@ void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row
 	D_ASSERT(!node.get().HasMetadata());
 
 	ARTKeySection section(start, start + count - 1, 0, 0);
-	art.ConstructInternal(row_ids, row_ids, node, section, true);
-	node.get().SetGate();
+	art.ConstructInternal(row_ids, row_ids, node, section, GateStatus::GATE_SET);
+	node.get().SetGateStatus(GateStatus::GATE_SET);
 }
 
 void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
@@ -39,17 +37,24 @@ void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
 
 	ArenaAllocator arena_allocator(Allocator::Get(art.db));
 	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, r_node.GetRowId());
-	art.Insert(l_node, key, 0, key, l_node.IsGate());
+	art.Insert(l_node, key, 0, key, l_node.GetGateStatus());
 	r_node.Clear();
 }
 
-void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t depth, const bool in_gate) {
+void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t depth, const GateStatus status) {
 	D_ASSERT(node.GetType() == INLINED);
 
 	ArenaAllocator allocator(Allocator::Get(art.db));
 	auto key = ARTKey::CreateARTKey<row_t>(allocator, node.GetRowId());
-	auto set_gate = !in_gate || node.IsGate();
-	if (set_gate) {
+
+	GateStatus new_status;
+	if (status == GateStatus::GATE_NOT_SET || node.GetGateStatus() == GateStatus::GATE_SET) {
+		new_status = GateStatus::GATE_SET;
+	} else {
+		new_status = GateStatus::GATE_NOT_SET;
+	}
+
+	if (new_status == GateStatus::GATE_SET) {
 		depth = 0;
 	}
 	node.Clear();
@@ -83,9 +88,7 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t d
 
 	Node::InsertChild(art, next, key[pos], remainder);
 	Node::InsertChild(art, next, byte, row_id_node);
-	if (set_gate) {
-		node.SetGate();
-	}
+	node.SetGateStatus(new_status);
 }
 
 void Leaf::TransformToNested(ART &art, Node &node) {
@@ -100,21 +103,21 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, LEAF);
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, leaf.row_ids[i]);
-			art.Insert(root, row_id, 0, row_id, true);
+			art.Insert(root, row_id, 0, row_id, GateStatus::GATE_SET);
 		}
 		leaf_ref = leaf.ptr;
 	}
 
-	root.SetGate();
+	root.SetGateStatus(GateStatus::GATE_SET);
 	Node::Free(art, node);
 	node = root;
 }
 
 void Leaf::TransformToDeprecated(ART &art, Node &node) {
-	D_ASSERT(node.IsGate() || node.GetType() == LEAF);
+	D_ASSERT(node.GetGateStatus() == GateStatus::GATE_SET || node.GetType() == LEAF);
 
 	// Early-out, if we never transformed this leaf.
-	if (!node.IsGate()) {
+	if (node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
 		return;
 	}
 

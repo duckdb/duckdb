@@ -74,7 +74,7 @@ public:
 	//! Append a chunk by first executing the ART's expressions.
 	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids) override;
 	//! Insert a chunk.
-	bool Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const bool in_gate);
+	bool Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status);
 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Constraint verification for a chunk.
@@ -119,8 +119,10 @@ private:
 	                      unsafe_vector<row_t> &row_ids);
 	const unsafe_optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
 
-	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const bool in_gate);
-	bool InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const bool in_gate);
+	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+	                     const GateStatus status);
+	bool InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+	                    const GateStatus status);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
@@ -128,10 +130,10 @@ private:
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 
-	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, bool in_gate);
+	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, GateStatus status);
 
 	bool ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-	                       ARTKeySection &section, const bool in_gate);
+	                       ARTKeySection &section, const GateStatus status);
 
 	void InitializeMerge(unsafe_vector<idx_t> &upper_bounds);
 

@@ -50,9 +50,7 @@ bool Node256Leaf::GetNextByte(uint8_t &byte) {
 Node256Leaf &Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &node15_leaf) {
 	auto &n15 = Node::Ref<Node15Leaf>(art, node15_leaf, NType::NODE_15_LEAF);
 	auto &n256 = New(art, node256_leaf);
-	if (node15_leaf.IsGate()) {
-		node256_leaf.SetGate();
-	}
+	node256_leaf.SetGateStatus(node15_leaf.GetGateStatus());
 
 	n256.count = n15.count;
 	ValidityMask mask(&n256.mask[0]);

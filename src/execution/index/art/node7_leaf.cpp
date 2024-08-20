@@ -36,7 +36,7 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 
 	// Compress one-way nodes.
 	if (n7.count == 1) {
-		D_ASSERT(!node.IsGate());
+		D_ASSERT(node.GetGateStatus() == GateStatus::GATE_NOT_SET);
 
 		// Get the remaining row ID.
 		auto remainder = UnsafeNumericCast<idx_t>(row_id.GetRowId()) & AND_LAST_BYTE;
@@ -57,9 +57,7 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 Node7Leaf &Node7Leaf::ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf) {
 	auto &n7 = New(art, node7_leaf);
 	auto &n15 = Node::Ref<Node15Leaf>(art, node15_leaf, NType::NODE_15_LEAF);
-	if (node15_leaf.IsGate()) {
-		node7_leaf.SetGate();
-	}
+	node7_leaf.SetGateStatus(node15_leaf.GetGateStatus());
 
 	n7.count = n15.count;
 	for (uint8_t i = 0; i < n15.count; i++) {
