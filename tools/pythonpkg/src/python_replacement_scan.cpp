@@ -17,6 +17,12 @@ namespace duckdb {
 static void CreateArrowScan(const string &name, py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
                             PyArrowObjectType type) {
+
+	if (type == PyArrowObjectType::PyCapsuleInterface) {
+		entry = entry.attr("__arrow_c_stream__")();
+		type = PyArrowObjectType::PyCapsule;
+	}
+
 	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties);
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
@@ -83,8 +89,6 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 			dependency->AddDependency("copy", PythonDependencyItem::Create(new_df));
 			table_function->external_dependency = std::move(dependency);
 		}
-	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
-		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type);
 	} else if (DuckDBPyRelation::IsRelation(entry)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
 		if (!pyrel->CanBeRegisteredBy(context)) {
@@ -101,6 +105,8 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		dependency->AddDependency("replacement_cache", PythonDependencyItem::Create(entry));
 		subquery->external_dependency = std::move(dependency);
 		return std::move(subquery);
+	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
+		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type);
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
 		auto arrow_dataset = entry.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table);
