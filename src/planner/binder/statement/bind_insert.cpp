@@ -201,7 +201,8 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 	for (idx_t i = 0; i < logical_column_ids.size(); i++) {
 		auto &column = logical_column_ids[i];
 		if (indexed_columns.count(column)) {
-			throw BinderException("Can not assign to column '%s' because it has a UNIQUE/PRIMARY KEY constraint",
+			throw BinderException("Can not assign to column '%s' because it has a UNIQUE/PRIMARY KEY constraint or is "
+			                      "referenced by an INDEX",
 			                      column_names[i]);
 		}
 	}
@@ -311,8 +312,8 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		if (!index_references_columns) {
 			// Same as before, this is essentially a no-op, turning this into a DO THROW instead
 			// But since this makes no logical sense, it's probably better to throw an error
-			throw BinderException(
-			    "The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT");
+			throw BinderException("The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY "
+			                      "CONSTRAINT or INDEX");
 		}
 	} else {
 		// When omitting the conflict target, the ON CONFLICT applies to every UNIQUE/PRIMARY KEY on the table
