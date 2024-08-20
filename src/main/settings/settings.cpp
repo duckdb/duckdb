@@ -671,6 +671,18 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else if (parameter == "query_tree_optimizer") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+
+		// add optimizer settings to the profiler settings
+		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
+		for (auto &setting : optimizer_settings) {
+			config.profiler_settings.insert(setting);
+		}
+
+		// add the phase timing settings to the profiler settings
+		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
+		for (auto &setting : phase_timing_settings) {
+			config.profiler_settings.insert(setting);
+		}
 	} else if (parameter == "no_output") {
 		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
 		config.emit_profiler_output = false;
