@@ -29,7 +29,7 @@ bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
 void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op,
-                                      bool build_rhs, bool set_depth_first_dependencies) {
+                                      bool build_rhs) {
 	op.op_state.reset();
 	op.sink_state.reset();
 
@@ -48,7 +48,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 		// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op, MetaPipelineType::JOIN_BUILD);
 		child_meta_pipeline.Build(*op.children[1]);
-		if (set_depth_first_dependencies && op.children[1]->CanSaturateThreads(current.GetClientContext())) {
+		if (op.children[1]->CanSaturateThreads(current.GetClientContext())) {
 			// if the build side can saturate all available threads,
 			// we don't just make the LHS pipeline depend on the RHS, but recursively all LHS children too.
 			// this prevents breadth-first plan evaluation

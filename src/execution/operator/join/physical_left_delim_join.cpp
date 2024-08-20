@@ -137,7 +137,7 @@ void PhysicalLeftDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta
 		state.delim_join_dependencies.insert(
 		    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
-	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, *join, true, false);
+	join->BuildPipelines(current, meta_pipeline);
 }
 
 } // namespace duckdb

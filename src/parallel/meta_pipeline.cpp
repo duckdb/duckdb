@@ -145,7 +145,7 @@ vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependa
 	return created_pipelines;
 }
 
-void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &dependencies,
+void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies,
                                             const MetaPipeline &last_child) {
 	vector<shared_ptr<MetaPipeline>> child_meta_pipelines;
 	this->GetMetaPipelines(child_meta_pipelines, true, false);
@@ -161,9 +161,9 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 
 	for (; it != child_meta_pipelines.end(); it++) {
 		auto &pipeline = *it->get()->GetBasePipeline();
-		auto &explicit_deps = pipeline_dependencies[pipeline];
-		for (auto &dependency : dependencies) {
-			explicit_deps.push_back(*dependency);
+		auto &pipeline_deps = pipeline_dependencies[pipeline];
+		for (auto &new_dependency : new_dependencies) {
+			pipeline_deps.push_back(*new_dependency);
 		}
 	}
 }

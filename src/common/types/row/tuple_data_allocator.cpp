@@ -3,9 +3,8 @@
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-
-#include <duckdb/storage/buffer/block_handle.hpp>
 
 namespace duckdb {
 

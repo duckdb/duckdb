@@ -216,32 +216,12 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	// these dependencies make it so that things happen in this order:
 	// 1. all join build child pipelines run until Combine
 	// 2. all join build child pipeline PrepareFinalize
-	// 3. the parent base pipeline is initialized
-	// 4. all join build child pipelines Finalize
+	// 3. all join build child pipelines Finalize
 	// operators communicate their memory usage through the TemporaryMemoryManger (TMM) in PrepareFinalize
 	// then, when the child pipelines Finalize, all required memory is known, and TMM can make an informed decision
 	for (auto &meta_pipeline : event_data.meta_pipelines) {
-		auto &meta_base = *meta_pipeline->GetBasePipeline();
-		auto meta_entry = event_map.find(meta_base);
-		D_ASSERT(meta_entry != event_map.end());
-
 		vector<shared_ptr<MetaPipeline>> children;
 		meta_pipeline->GetMetaPipelines(children, false, true);
-
-		bool different_parents = false;
-		for (auto &child1 : children) {
-			for (auto &child2 : children) {
-				if (!RefersToSameObject(*child1->GetParent(), *child2->GetParent())) {
-					different_parents = true;
-					break;
-				}
-			}
-		}
-
-		if (different_parents) {
-			continue; // We can do this when there are different parents without creating a circular dependency
-		}
-
 		for (auto &child1 : children) {
 			if (child1->Type() != MetaPipelineType::JOIN_BUILD) {
 				continue; // We only want to do this for join builds
@@ -252,22 +232,22 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 
 			for (auto &child2 : children) {
 				if (child2->Type() != MetaPipelineType::JOIN_BUILD || RefersToSameObject(*child1, *child2)) {
-					continue; // We don't want to depent on itself
+					continue; // We don't want to depend on itself
+				}
+				if (!RefersToSameObject(*child1->GetParent(), *child2->GetParent())) {
+					continue; // Different parents, skip
 				}
 
 				auto &child2_base = *child2->GetBasePipeline();
 				auto child2_entry = event_map.find(child2_base);
 				D_ASSERT(child2_entry != event_map.end());
 
-				// all children PrepareFinalizes must wait until all Combine
+				// all children PrepareFinalize must wait until all Combine
 				child1_entry->second.pipeline_prepare_finish_event.AddDependency(child2_entry->second.pipeline_event);
+				// all children Finalize must wait until all PrepareFinalize
+				child1_entry->second.pipeline_finish_event.AddDependency(
+				    child2_entry->second.pipeline_prepare_finish_event);
 			}
-
-			// the parent initializes after all children PrepareFinalize
-			meta_entry->second.pipeline_initialize_event.AddDependency(
-			    child1_entry->second.pipeline_prepare_finish_event);
-			// all children Finalize after parent initializes
-			child1_entry->second.pipeline_finish_event.AddDependency(meta_entry->second.pipeline_initialize_event);
 		}
 	}
 
