@@ -1,6 +1,6 @@
 #include "duckdb/execution/index/art/node256_leaf.hpp"
 
-#include "duckdb/execution/index/art/node15_leaf.hpp"
+#include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 
 namespace duckdb {

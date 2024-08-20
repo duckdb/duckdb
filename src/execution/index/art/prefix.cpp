@@ -3,10 +3,10 @@
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/base_leaf.hpp"
+#include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/node4.hpp"
-#include "duckdb/execution/index/art/node7_leaf.hpp"
 
 namespace duckdb {
 
@@ -314,7 +314,7 @@ bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const 
 	Node remainder;
 	auto byte = GetByte(art, next, UnsafeNumericCast<uint8_t>(pos));
 	auto split_status = Split(art, next, remainder, UnsafeNumericCast<uint8_t>(pos));
-	Node4::New<Node4>(art, next, NType::NODE_4);
+	Node4::New(art, next);
 	next.get().SetGateStatus(split_status);
 
 	// Insert the remaining prefix into the new Node4.

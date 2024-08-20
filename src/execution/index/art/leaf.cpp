@@ -3,10 +3,10 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/base_leaf.hpp"
+#include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/node4.hpp"
-#include "duckdb/execution/index/art/node7_leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
@@ -75,7 +75,7 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t d
 	if (pos == Prefix::ROW_ID_COUNT) {
 		Node7Leaf::New(art, next);
 	} else {
-		Node4::New<Node4>(art, next, NType::NODE_4);
+		Node4::New(art, next);
 	}
 
 	// Create the children.

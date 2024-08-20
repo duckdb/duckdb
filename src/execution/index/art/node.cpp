@@ -4,14 +4,12 @@
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/base_leaf.hpp"
+#include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
-#include "duckdb/execution/index/art/node15_leaf.hpp"
-#include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
-#include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
-#include "duckdb/execution/index/art/node7_leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
@@ -33,7 +31,7 @@ void Node::New(ART &art, Node &node, NType type) {
 		Node256Leaf::New(art, node);
 		break;
 	case NType::NODE_4:
-		Node4::New<Node4>(art, node, NType::NODE_4);
+		Node4::New(art, node);
 		break;
 	case NType::NODE_16:
 		Node16::New(art, node);
@@ -62,7 +60,7 @@ void Node::Free(ART &art, Node &node) {
 	case NType::LEAF:
 		return Leaf::DeprecatedFree(art, node);
 	case NType::NODE_4:
-		Node4::Free<Node4>(art, node);
+		Node4::Free(art, node);
 		break;
 	case NType::NODE_16:
 		Node16::Free(art, node);
@@ -130,7 +128,7 @@ void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) co
 	case NType::NODE_4:
 		return Node4::ReplaceChild(Ref<Node4>(art, *this, type), byte, child);
 	case NType::NODE_16:
-		return Ref<Node16>(art, *this, type).ReplaceChild(byte, child);
+		return Node16::ReplaceChild(Ref<Node16>(art, *this, type), byte, child);
 	case NType::NODE_48:
 		return Ref<Node48>(art, *this, type).ReplaceChild(byte, child);
 	case NType::NODE_256:
@@ -257,7 +255,7 @@ bool Node::GetNextByte(ART &art, uint8_t &byte) const {
 	case NType::NODE_7_LEAF:
 		return Node7Leaf::GetNextByte(Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF), byte);
 	case NType::NODE_15_LEAF:
-		return Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF).GetNextByte(byte);
+		return Node15Leaf::GetNextByte(Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF), byte);
 	case NType::NODE_256_LEAF:
 		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
 	default:
@@ -481,7 +479,7 @@ void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t po
 
 	reference<Node> ref(l_node);
 	auto status = Prefix::Split(art, ref, l_child, pos);
-	Node4::New<Node4>(art, ref, NType::NODE_4);
+	Node4::New(art, ref);
 	ref.get().SetGateStatus(status);
 
 	Node4::InsertChild(art, ref, l_byte, l_child);
