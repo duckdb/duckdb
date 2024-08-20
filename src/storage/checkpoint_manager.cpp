@@ -408,7 +408,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// also, we have to read the root_block_pointer, which will not be valid for newer storage versions.
 	// This leads to different code paths in this function.
 	auto root_block_pointer =
-	    deserializer.ReadPropertyWithDefault<BlockPointer>(101, "root_block_pointer", BlockPointer());
+	    deserializer.ReadPropertyWithExplicitDefault<BlockPointer>(101, "root_block_pointer", BlockPointer());
 
 	// create the index in the catalog
 
@@ -526,10 +526,10 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
 
 	// old file read
-	auto index_pointers = deserializer.ReadPropertyWithDefault<vector<BlockPointer>>(103, "index_pointers", {});
+	auto index_pointers = deserializer.ReadPropertyWithExplicitDefault<vector<BlockPointer>>(103, "index_pointers", {});
 	// new file read
 	auto index_storage_infos =
-	    deserializer.ReadPropertyWithDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
+	    deserializer.ReadPropertyWithExplicitDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 
 	if (!index_storage_infos.empty()) {
 		bound_info.indexes = index_storage_infos;

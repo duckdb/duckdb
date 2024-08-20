@@ -33,7 +33,7 @@ struct Foo {
 	static unique_ptr<Foo> Deserialize(Deserializer &deserializer) {
 		auto result = make_uniq<Foo>();
 		deserializer.ReadProperty<int32_t>(1, "a", result->a);
-		deserializer.ReadPropertyWithDefault<unique_ptr<Bar>>(2, "bar", result->bar, unique_ptr<Bar>());
+		deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Bar>>(2, "bar", result->bar, unique_ptr<Bar>());
 		deserializer.ReadProperty<int32_t>(3, "c", result->c);
 		return result;
 	}
