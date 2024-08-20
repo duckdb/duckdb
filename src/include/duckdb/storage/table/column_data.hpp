@@ -218,7 +218,7 @@ struct PersistentColumnData {
 	PersistentColumnData &operator=(const PersistentColumnData &) = delete;
 	//! enable move constructors
 	PersistentColumnData(PersistentColumnData &&other) noexcept = default;
-	PersistentColumnData &operator=(PersistentColumnData &&) noexcept = default;
+	PersistentColumnData &operator=(PersistentColumnData &&) = default;
 	~PersistentColumnData();
 
 	PhysicalType physical_type;
@@ -239,7 +239,7 @@ struct PersistentRowGroupData {
 	PersistentRowGroupData &operator=(const PersistentRowGroupData &) = delete;
 	//! enable move constructors
 	PersistentRowGroupData(PersistentRowGroupData &&other) noexcept = default;
-	PersistentRowGroupData &operator=(PersistentRowGroupData &&) noexcept = default;
+	PersistentRowGroupData &operator=(PersistentRowGroupData &&) = default;
 	~PersistentRowGroupData() = default;
 
 	vector<LogicalType> types;
@@ -258,7 +258,7 @@ struct PersistentCollectionData {
 	PersistentCollectionData &operator=(const PersistentCollectionData &) = delete;
 	//! enable move constructors
 	PersistentCollectionData(PersistentCollectionData &&other) noexcept = default;
-	PersistentCollectionData &operator=(PersistentCollectionData &&) noexcept = default;
+	PersistentCollectionData &operator=(PersistentCollectionData &&) = default;
 	~PersistentCollectionData() = default;
 
 	vector<PersistentRowGroupData> row_group_data;

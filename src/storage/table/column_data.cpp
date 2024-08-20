@@ -657,7 +657,7 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 	auto &type = deserializer.Get<const LogicalType &>();
 	auto physical_type = type.InternalType();
 	PersistentColumnData result(physical_type);
-	deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
+	deserializer.ReadPropertyWithDefault(100, "data_pointers", static_cast<vector<DataPointer> &>(result.pointers));
 	if (result.physical_type == PhysicalType::BIT) {
 		// validity: return
 		return result;
