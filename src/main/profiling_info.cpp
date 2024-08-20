@@ -26,51 +26,20 @@ profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
 	};
 }
 
-profiler_settings_t ProfilingInfo::PhaseTimingsSettings() {
-	return {
-        MetricsType::ALL_OPTIMIZERS,
-        MetricsType::CUMULATIVE_OPTIMIZER_TIMING,
-	    MetricsType::PHYSICAL_PLANNER,
-	    MetricsType::PHYSICAL_PLANNER_CREATE_PLAN,
-	    MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING,
-	    MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES,
-	    MetricsType::PLANNER,
-	    MetricsType::PLANNER_BINDING,
-	};
-}
-
 profiler_settings_t ProfilingInfo::AllSettings() {
 	auto all_settings = DefaultSettings();
-	auto optimizer_settings = GetOptimizerMetrics();
-	auto phase_timings = PhaseTimingsSettings();
+	auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
+	auto phase_timings = MetricsUtils::GetPhaseTimingMetrics();
 
 	for (auto &setting : optimizer_settings) {
 		all_settings.insert(setting);
 	}
 
 	for (auto &setting : phase_timings) {
-        all_settings.insert(setting);
-    }
-
-	return all_settings;
-}
-
-bool ProfilingInfo::IsOptimizerMetric(MetricsType metric) {
-	auto optimizers = GetOptimizerMetrics();
-	if (optimizers.find(metric) != optimizers.end()) {
-        return true;
-    }
-
-    return false;
-}
-
-bool ProfilingInfo::IsPhaseTimingMetric(MetricsType metric) {
-	auto phase_timings = PhaseTimingsSettings();
-	if (phase_timings.find(metric) != phase_timings.end()) {
-		return true;
+		all_settings.insert(setting);
 	}
 
-	return false;
+	return all_settings;
 }
 
 void ProfilingInfo::ResetMetrics() {
@@ -83,7 +52,7 @@ void ProfilingInfo::ResetMetrics() {
 			continue;
 		}
 
-		if (IsOptimizerMetric(metric) || IsPhaseTimingMetric(metric)) {
+		if (MetricsUtils::IsOptimizerMetric(metric) || MetricsUtils::IsPhaseTimingMetric(metric)) {
 			metrics[metric] = Value::CreateValue(0.0);
 			continue;
 		}
@@ -110,7 +79,7 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::EXTRA_INFO:
 			break;
 		default:
-            throw Exception(ExceptionType::INTERNAL, "MetricsType" + EnumUtil::ToString(metric) + "not implemented");
+			throw Exception(ExceptionType::INTERNAL, "MetricsType" + EnumUtil::ToString(metric) + "not implemented");
 		}
 	}
 }
@@ -131,9 +100,9 @@ bool ProfilingInfo::Enabled(const MetricsType setting) const {
 		break;
 	}
 
-	if (IsOptimizerMetric(setting)) {
-        return Enabled(MetricsType::CUMULATIVE_OPTIMIZER_TIMING);
-    }
+	if (MetricsUtils::IsOptimizerMetric(setting)) {
+		return Enabled(MetricsType::CUMULATIVE_OPTIMIZER_TIMING);
+	}
 
 	return false;
 }
@@ -195,7 +164,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		// The metric cannot be NULL, and should have been 0 initialized.
 		D_ASSERT(!metrics[metric].IsNull());
 
-		if (IsOptimizerMetric(metric) || IsPhaseTimingMetric(metric)) {
+		if (MetricsUtils::IsOptimizerMetric(metric) || MetricsUtils::IsPhaseTimingMetric(metric)) {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			continue;
 		}

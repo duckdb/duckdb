@@ -68,7 +68,15 @@ struct MetricsTypeHashFunction {
 typedef unordered_set<MetricsType, MetricsTypeHashFunction> profiler_settings_t;
 typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metrics_t;
 
-profiler_settings_t GetOptimizerMetrics();
-MetricsType GetOptimizerMetricByType(OptimizerType type);
+class MetricsUtils {
+public:
+    static profiler_settings_t GetOptimizerMetrics();
+    static profiler_settings_t GetPhaseTimingMetrics();
+
+    static MetricsType GetOptimizerMetricByType(OptimizerType type);
+
+    static bool IsOptimizerMetric(MetricsType type);
+    static bool IsPhaseTimingMetric(MetricsType type);
+};
 
 } // namespace duckdb

@@ -730,11 +730,11 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &j
 
 void AddOptimizerMetrics(profiler_settings_t &settings) {
 	if (settings.find(MetricsType::ALL_OPTIMIZERS) != settings.end()) {
-        auto optimizer_metrics = GetOptimizerMetrics();
+		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
 		for (auto &metric : optimizer_metrics) {
 			settings.insert(metric);
 		}
-    }
+	}
 }
 
 void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
@@ -1550,19 +1550,34 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = false;
 		config.emit_profiler_output = true;
+
+		// remove optimizer and phase timing settings from the profiler settings
+		profiler_settings_t ToErase;
+		for (auto &setting : config.profiler_settings) {
+			if (MetricsUtils::IsOptimizerMetric(setting) || MetricsUtils::IsPhaseTimingMetric(setting)) {
+				ToErase.insert(setting);
+			}
+		}
+
+		for (auto &setting : ToErase) {
+			config.profiler_settings.erase(setting);
+		}
 	} else if (parameter == "detailed") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = true;
 		config.emit_profiler_output = true;
+
 		// add optimizer settings to the profiler settings
-		auto optimizer_settings = GetOptimizerMetrics();
-		auto phase_timing_settings = ProfilingInfo::PhaseTimingsSettings();
+		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
 		for (auto &setting : optimizer_settings) {
-            config.profiler_settings.insert(setting);
-        }
+			config.profiler_settings.insert(setting);
+		}
+
+		// add the phase timing settings to the profiler settings
+		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
 		for (auto &setting : phase_timing_settings) {
-            config.profiler_settings.insert(setting);
-        }
+			config.profiler_settings.insert(setting);
+		}
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);
 	}

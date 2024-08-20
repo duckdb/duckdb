@@ -56,8 +56,6 @@ public:
 public:
 	void ResetMetrics();
 	bool Enabled(const MetricsType setting) const;
-	static bool IsOptimizerMetric(MetricsType metric);
-	static bool IsPhaseTimingMetric(MetricsType metric);
 
 public:
 	string GetMetricAsString(MetricsType setting) const;

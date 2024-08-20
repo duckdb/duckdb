@@ -78,6 +78,9 @@ PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER": "true"}'
 statement ok
 select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
 
+statement ok
+PRAGMA disable_profiling
+
 query I rowsort
 SELECT unnest(res) from (
 	select current_setting('custom_profiling_settings') as raw_setting,
@@ -87,12 +90,29 @@ SELECT unnest(res) from (
 ----
 "OPTIMIZER_JOIN_ORDER": "true"
 
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
+
+# test if optimizer_join_order actually records timings
+query I
+SELECT 
+CASE 
+    WHEN optimizer_join_order > 0 THEN 'true'
+    ELSE 'false'
+END
+FROM metrics_output;
+----
+true
+
 # Test Physical Plan and Planner Metrics
 statement ok
 PRAGMA custom_profiling_settings='{"PLANNER": "true", "PHYSICAL_PLANNER": "true"}'
 
 statement ok
 select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+statement ok
+PRAGMA disable_profiling
 
 query I rowsort
 SELECT unnest(res) from (
@@ -104,3 +124,26 @@ SELECT unnest(res) from (
 "PHYSICAL_PLANNER": "true"
 "PLANNER": "true"
 
+# test if physical planner and planner actually record timings
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
+
+query I
+SELECT 
+CASE 
+    WHEN physical_planner > 0 THEN 'true'
+    ELSE 'false'
+END
+FROM metrics_output;
+----
+true
+
+query I
+SELECT 
+CASE 
+    WHEN planner > 0 THEN 'true'
+    ELSE 'false'
+END
+FROM metrics_output;
+----
+true

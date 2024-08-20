@@ -84,6 +84,14 @@ typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metr
 
 """
 
+get_optimizer_metric_fun = 'GetOptimizerMetrics()'
+get_phase_timing_metric_fun = 'GetPhaseTimingMetrics()'
+get_optimizer_metric_by_type_fun = 'GetOptimizerMetricByType(OptimizerType type)'
+is_optimizer_metric_fun = 'IsOptimizerMetric(MetricsType type)'
+is_phase_timing_metric_fun = 'IsPhaseTimingMetric(MetricsType type)'
+
+metrics_class = 'MetricsUtils'
+
 # Write the metric type header file
 with open(metrics_header_file, "w") as f:
     f.write(header)
@@ -109,8 +117,14 @@ with open(metrics_header_file, "w") as f:
 
     f.write(typedefs)
 
-    f.write('profiler_settings_t GetOptimizerMetrics();\n')
-    f.write('MetricsType GetOptimizerMetricByType(OptimizerType type);\n\n')
+    f.write('class MetricsUtils {\n')
+    f.write('public:\n')
+    f.write(f'    static profiler_settings_t {get_optimizer_metric_fun};\n')
+    f.write(f'    static profiler_settings_t {get_phase_timing_metric_fun};\n\n')
+    f.write(f'    static MetricsType {get_optimizer_metric_by_type_fun};\n\n')
+    f.write(f'    static bool {is_optimizer_metric_fun};\n')
+    f.write(f'    static bool {is_phase_timing_metric_fun};\n')
+    f.write('};\n\n')
 
     f.write("} // namespace duckdb\n")
 
@@ -122,7 +136,7 @@ with open(metrics_cpp_file, "w") as f:
     f.write('#include "duckdb/common/enums/optimizer_type.hpp"\n\n')
     f.write("namespace duckdb {\n\n")
 
-    f.write('profiler_settings_t GetOptimizerMetrics() {\n')
+    f.write(f'profiler_settings_t {metrics_class}::{get_optimizer_metric_fun} {{\n')
     f.write(f"    return {{\n")
 
     for metric in optimizer_types:
@@ -130,7 +144,14 @@ with open(metrics_cpp_file, "w") as f:
     f.write("    };\n")
     f.write("}\n\n")
 
-    f.write('MetricsType GetOptimizerMetricByType(OptimizerType type) {\n')
+    f.write(f'profiler_settings_t {metrics_class}::{get_phase_timing_metric_fun} {{\n')
+    f.write(f"    return {{\n")
+    for metric in phase_timing_metrics:
+        f.write(f"        MetricsType::{metric},\n")
+    f.write("    };\n")
+    f.write("}\n\n")
+
+    f.write(f'MetricsType {metrics_class}::{get_optimizer_metric_by_type_fun} {{\n')
     f.write('    switch(type) {\n')
 
     for metric in optimizer_types:
@@ -138,8 +159,32 @@ with open(metrics_cpp_file, "w") as f:
         f.write(f"            return MetricsType::OPTIMIZER_{metric};\n")
 
     f.write('       default:\n')
-    f.write('            throw InternalException("OptimizerType %s cannot be converted to a MetricType", '
-            'EnumUtil::ToString(type));\n')
+    f.write(
+        '            throw InternalException("OptimizerType %s cannot be converted to a MetricType", '
+        'EnumUtil::ToString(type));\n'
+    )
+    f.write('    };\n')
+    f.write('}\n\n')
+
+    f.write(f'bool {metrics_class}::{is_optimizer_metric_fun} {{\n')
+    f.write('    switch(type) {\n')
+    for metric in optimizer_types:
+        f.write(f"        case MetricsType::OPTIMIZER_{metric}:\n")
+
+    f.write('            return true;\n')
+    f.write('        default:\n')
+    f.write('            return false;\n')
+    f.write('    };\n')
+    f.write('}\n\n')
+
+    f.write(f'bool {metrics_class}::{is_phase_timing_metric_fun} {{\n')
+    f.write('    switch(type) {\n')
+    for metric in phase_timing_metrics:
+        f.write(f"        case MetricsType::{metric}:\n")
+
+    f.write('            return true;\n')
+    f.write('        default:\n')
+    f.write('            return false;\n')
     f.write('    };\n')
     f.write('}\n\n')
 

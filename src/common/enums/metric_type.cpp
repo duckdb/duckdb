@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-profiler_settings_t GetOptimizerMetrics() {
+profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
     return {
         MetricsType::OPTIMIZER_EXPRESSION_REWRITER,
         MetricsType::OPTIMIZER_FILTER_PULLUP,
@@ -41,7 +41,20 @@ profiler_settings_t GetOptimizerMetrics() {
     };
 }
 
-MetricsType GetOptimizerMetricByType(OptimizerType type) {
+profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
+    return {
+        MetricsType::ALL_OPTIMIZERS,
+        MetricsType::CUMULATIVE_OPTIMIZER_TIMING,
+        MetricsType::PLANNER,
+        MetricsType::PLANNER_BINDING,
+        MetricsType::PHYSICAL_PLANNER,
+        MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING,
+        MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES,
+        MetricsType::PHYSICAL_PLANNER_CREATE_PLAN,
+    };
+}
+
+MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
     switch(type) {
         case OptimizerType::EXPRESSION_REWRITER:
             return MetricsType::OPTIMIZER_EXPRESSION_REWRITER;
@@ -91,6 +104,53 @@ MetricsType GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
        default:
             throw InternalException("OptimizerType %s cannot be converted to a MetricType", EnumUtil::ToString(type));
+    };
+}
+
+bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
+    switch(type) {
+        case MetricsType::OPTIMIZER_EXPRESSION_REWRITER:
+        case MetricsType::OPTIMIZER_FILTER_PULLUP:
+        case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
+        case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:
+        case MetricsType::OPTIMIZER_REGEX_RANGE:
+        case MetricsType::OPTIMIZER_IN_CLAUSE:
+        case MetricsType::OPTIMIZER_JOIN_ORDER:
+        case MetricsType::OPTIMIZER_DELIMINATOR:
+        case MetricsType::OPTIMIZER_UNNEST_REWRITER:
+        case MetricsType::OPTIMIZER_UNUSED_COLUMNS:
+        case MetricsType::OPTIMIZER_STATISTICS_PROPAGATION:
+        case MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
+        case MetricsType::OPTIMIZER_COMMON_AGGREGATE:
+        case MetricsType::OPTIMIZER_COLUMN_LIFETIME:
+        case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
+        case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
+        case MetricsType::OPTIMIZER_TOP_N:
+        case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
+        case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
+        case MetricsType::OPTIMIZER_REORDER_FILTER:
+        case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
+        case MetricsType::OPTIMIZER_EXTENSION:
+        case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
+            return true;
+        default:
+            return false;
+    };
+}
+
+bool MetricsUtils::IsPhaseTimingMetric(MetricsType type) {
+    switch(type) {
+        case MetricsType::ALL_OPTIMIZERS:
+        case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
+        case MetricsType::PLANNER:
+        case MetricsType::PLANNER_BINDING:
+        case MetricsType::PHYSICAL_PLANNER:
+        case MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING:
+        case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES:
+        case MetricsType::PHYSICAL_PLANNER_CREATE_PLAN:
+            return true;
+        default:
+            return false;
     };
 }
 

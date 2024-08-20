@@ -198,7 +198,7 @@ private:
 	vector<MetricsType> phase_stack;
 
 private:
-    void MoveOptimizerPhasesToRoot();
+	void MoveOptimizerPhasesToRoot();
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
