@@ -172,17 +172,11 @@ static string CreateGridItemContent(RenderTreeNode &node) {
 
 	vector<string> items;
 	for (auto &item : node.extra_text) {
-		auto key = item.first;
+		auto &key = item.first;
 		auto &value = item.second;
 		if (value.empty()) {
 			continue;
 		}
-		if (StringUtil::StartsWith(key, "__")) {
-			key = StringUtil::Replace(key, "__", "");
-			key = StringUtil::Replace(key, "_", " ");
-			key = StringUtil::Title(key);
-		}
-
 		items.push_back(StringUtil::Format(R"(                <div class="sub-title">%s</div>)", key));
 		auto splits = StringUtil::Split(value, "\n");
 		for (auto &split : splits) {
@@ -263,7 +257,7 @@ function toggleDisplay(button) {
 	return StringUtil::Format(body_section, CreateTreeRecursive(root, 0, 0));
 }
 
-void HTMLTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	string result;
 	result += CreateHeadSection(root);
 	result += CreateBodySection(root);

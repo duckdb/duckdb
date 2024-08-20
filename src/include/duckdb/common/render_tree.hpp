@@ -63,6 +63,7 @@ public:
 	optional_ptr<RenderTreeNode> GetNode(idx_t x, idx_t y);
 	void SetNode(idx_t x, idx_t y, unique_ptr<RenderTreeNode> node);
 	bool HasNode(idx_t x, idx_t y);
+	void SanitizeKeyNames();
 
 private:
 	idx_t GetPosition(idx_t x, idx_t y);

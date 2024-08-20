@@ -59,7 +59,7 @@ void GRAPHVIZTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+void GRAPHVIZTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	const string digraph_format = R"(
 digraph G {
     node [shape=box, style=rounded, fontname="Courier New", fontsize=10];
@@ -84,12 +84,7 @@ digraph G {
 			vector<string> body;
 			body.push_back(node->name);
 			for (auto &item : node->extra_text) {
-				auto key = item.first;
-				if (StringUtil::StartsWith(key, "__")) {
-					key = StringUtil::Replace(key, "__", "");
-					key = StringUtil::Replace(key, "_", " ");
-					key = StringUtil::Title(key);
-				}
+				auto &key = item.first;
 				auto &value_raw = item.second;
 
 				auto value = QueryProfiler::JSONSanitize(value_raw);

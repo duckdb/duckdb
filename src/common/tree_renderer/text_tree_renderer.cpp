@@ -304,7 +304,7 @@ void TextTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void TextTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+void TextTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	while (root.width * config.node_render_width > config.maximum_render_width) {
 		if (config.node_render_width - 2 < config.minimum_render_width) {
 			break;

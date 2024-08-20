@@ -204,6 +204,26 @@ unique_ptr<RenderTree> RenderTree::CreateRenderTree(const ProfilingNode &op) {
 	return CreateTree<ProfilingNode>(op);
 }
 
+void RenderTree::SanitizeKeyNames() {
+	for (idx_t i = 0; i < width * height; i++) {
+		if (!nodes[i]) {
+			continue;
+		}
+		InsertionOrderPreservingMap<string> new_map;
+		for (auto &entry : nodes[i]->extra_text) {
+			auto key = entry.first;
+			if (StringUtil::StartsWith(key, "__")) {
+				key = StringUtil::Replace(key, "__", "");
+				key = StringUtil::Replace(key, "_", " ");
+				key = StringUtil::Title(key);
+			}
+			auto &value = entry.second;
+			new_map.insert(make_pair(key, value));
+		}
+		nodes[i]->extra_text = std::move(new_map);
+	}
+}
+
 unique_ptr<RenderTree> RenderTree::CreateRenderTree(const Pipeline &pipeline) {
 	auto operators = pipeline.GetOperators();
 	D_ASSERT(!operators.empty());
