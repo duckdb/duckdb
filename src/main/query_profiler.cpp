@@ -491,13 +491,13 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 			case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
 				continue;
 			case MetricsType::ALL_OPTIMIZERS:
-				optimizer_head = {"Optimizer Timing", entry.second.GetValue<double>()};
+				optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
 				break;
 			case MetricsType::PHYSICAL_PLANNER:
-				physical_planner_head = {"Physical Planner Timing", entry.second.GetValue<double>()};
+				physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
 				break;
 			case MetricsType::PLANNER:
-				planner_head = {"Planner Timing", entry.second.GetValue<double>()};
+				planner_head = {"Planner", entry.second.GetValue<double>()};
 				break;
 			default:
 				break;
