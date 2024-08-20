@@ -22,6 +22,11 @@ struct PipelineRenderNode;
 
 struct RenderTreeNode {
 public:
+	static constexpr const char *CARDINALITY = "__cardinality__";
+	static constexpr const char *ESTIMATED_CARDINALITY = "__estimated_cardinality__";
+	static constexpr const char *TIMING = "__timing__";
+
+public:
 	struct Coordinate {
 	public:
 		Coordinate(idx_t x, idx_t y) : x(x), y(y) {

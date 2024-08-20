@@ -115,7 +115,7 @@ InsertionOrderPreservingMap<string> PhysicalTableInOutFunction::ParamsToString()
 	} else {
 		result["Name"] = function.name;
 	}
-	result["__estimated_cardinality__"] = StringUtil::Format("%llu", estimated_cardinality);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

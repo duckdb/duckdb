@@ -123,7 +123,7 @@ InsertionOrderPreservingMap<string> PhysicalColumnDataScan::ParamsToString() con
 	default:
 		break;
 	}
-	result["__estimated_cardinality__"] = StringUtil::Format("%llu", estimated_cardinality);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

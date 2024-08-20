@@ -241,25 +241,25 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 					}
 				}
 				if (render_y + 1 == extra_height && render_text.empty()) {
-					auto entry = node->extra_text.find("__cardinality__");
+					auto entry = node->extra_text.find(RenderTreeNode::CARDINALITY);
 					if (entry != node->extra_text.end()) {
 						render_text = entry->second + " Rows";
 					}
 				}
 				if (render_y == extra_height && render_text.empty()) {
-					auto timing_entry = node->extra_text.find("__timing__");
+					auto timing_entry = node->extra_text.find(RenderTreeNode::TIMING);
 					if (timing_entry != node->extra_text.end()) {
 						render_text = "(" + timing_entry->second + ")";
-					} else if (node->extra_text.find("__cardinality__") == node->extra_text.end()) {
+					} else if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
 						// we only render estimated cardinality if there is no real cardinality
-						auto entry = node->extra_text.find("__estimated_cardinality__");
+						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
 						if (entry != node->extra_text.end()) {
 							render_text = "~" + entry->second + " Rows";
 						}
 					}
-					if (node->extra_text.find("__cardinality__") == node->extra_text.end()) {
+					if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
 						// we only render estimated cardinality if there is no real cardinality
-						auto entry = node->extra_text.find("__estimated_cardinality__");
+						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
 						if (entry != node->extra_text.end()) {
 							render_text = "~" + entry->second + " Rows";
 						}
@@ -444,17 +444,17 @@ void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string
 		}
 		// cardinality, timing and estimated cardinality are rendered separately
 		// this is to allow alignment horizontally across nodes
-		if (item.first == "__cardinality__") {
+		if (item.first == RenderTreeNode::CARDINALITY) {
 			// cardinality - need to reserve space for cardinality AND timing
 			result.emplace_back();
-			if (extra_info.find("__timing__") != extra_info.end()) {
+			if (extra_info.find(RenderTreeNode::TIMING) != extra_info.end()) {
 				result.emplace_back();
 			}
 			break;
 		}
-		if (item.first == "__estimated_cardinality__") {
+		if (item.first == RenderTreeNode::ESTIMATED_CARDINALITY) {
 			// estimated cardinality - reserve space for estimate
-			if (extra_info.find("__cardinality__") != extra_info.end()) {
+			if (extra_info.find(RenderTreeNode::CARDINALITY) != extra_info.end()) {
 				// if we have a true cardinality render that instead of the estimate
 				result.pop_back();
 				continue;
