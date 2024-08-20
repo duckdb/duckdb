@@ -51,7 +51,7 @@ void AreExtensionsRegistered(const LogicalType &arrow_type, const LogicalType &d
 		if (arrow_type.id() == LogicalTypeId::BLOB && duckdb_type.id() == LogicalTypeId::UUID) {
 			throw InvalidConfigurationException(
 			    "Mismatch on return type from Arrow object (%s) and DuckDB (%s). It seems that you are using the UUID "
-			    "arrow canonical extension, but the same is not yet registered. Mmake sure to register it first with "
+			    "arrow canonical extension, but the same is not yet registered. Make sure to register it first with "
 			    "e.g., pa.register_extension_type(UUIDType()). ",
 			    arrow_type.ToString(), duckdb_type.ToString());
 		}
@@ -59,7 +59,7 @@ void AreExtensionsRegistered(const LogicalType &arrow_type, const LogicalType &d
 		if (!arrow_type.IsJSONType() && duckdb_type.IsJSONType()) {
 			throw InvalidConfigurationException(
 			    "Mismatch on return type from Arrow object (%s) and DuckDB (%s). It seems that you are using the JSON "
-			    "arrow canonical extension, but the same is not yet registered. Mmake sure to register it first with "
+			    "arrow canonical extension, but the same is not yet registered. Make sure to register it first with "
 			    "e.g., pa.register_extension_type(JSONType()). ",
 			    arrow_type.ToString(), duckdb_type.ToString());
 		}
@@ -208,48 +208,43 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 				input.Slice(selvec, index);
 			}
 		}
-		idx_t count;
+
+		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
+		py::tuple column_list = pyarrow_table.attr("columns");
+
+		auto count = input.size();
+
+		// Call the function
+		auto ret = PyObject_CallObject(function, column_list.ptr());
 		bool exception_occurred = false;
-		{
-			auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
-			py::tuple column_list = pyarrow_table.attr("columns");
-
-			count = input.size();
-
-			// Call the function
-			auto ret = PyObject_CallObject(function, column_list.ptr());
-
-			if (ret == nullptr && PyErr_Occurred()) {
-				exception_occurred = true;
-				if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
-					auto exception = py::error_already_set();
-					throw InvalidInputException("Python exception occurred while executing the UDF: %s",
-					                            exception.what());
-				} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
-					PyErr_Clear();
-					python_object = py::module_::import("pyarrow").attr("nulls")(count);
-				} else {
-					throw NotImplementedException("Exception handling type not implemented");
-				}
+		if (ret == nullptr && PyErr_Occurred()) {
+			exception_occurred = true;
+			if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
+				auto exception = py::error_already_set();
+				throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
+			} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
+				PyErr_Clear();
+				python_object = py::module_::import("pyarrow").attr("nulls")(count);
 			} else {
-				python_object = py::reinterpret_steal<py::object>(ret);
+				throw NotImplementedException("Exception handling type not implemented");
 			}
-			if (!py::isinstance(python_object, py::module_::import("pyarrow").attr("lib").attr("Table"))) {
-				// Try to convert into a table
-				py::list single_array(1);
-				py::list single_name(1);
+		} else {
+			python_object = py::reinterpret_steal<py::object>(ret);
+		}
+		if (!py::isinstance(python_object, py::module_::import("pyarrow").attr("lib").attr("Table"))) {
+			// Try to convert into a table
+			py::list single_array(1);
+			py::list single_name(1);
 
-				single_array[0] = python_object;
-				single_name[0] = "c0";
-				try {
-					python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
-					    single_array, py::arg("names") = single_name);
-				} catch (py::error_already_set &) {
-					throw InvalidInputException("Could not convert the result into an Arrow Table");
-				}
+			single_array[0] = python_object;
+			single_name[0] = "c0";
+			try {
+				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+				    single_array, py::arg("names") = single_name);
+			} catch (py::error_already_set &) {
+				throw InvalidInputException("Could not convert the result into an Arrow Table");
 			}
 		}
-
 		// Convert the pyarrow result back to a DuckDB datachunk
 		if (count != input_size) {
 			D_ASSERT(default_null_handling);

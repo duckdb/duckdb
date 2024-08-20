@@ -55,6 +55,10 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 			                            "incorrectly defined as: %s",
 			                            format);
 		}
+	} else if (!canonical_extension.empty()) {
+		throw NotImplementedException(
+		    "Arrow Type with extension name: %s and format: %s, is not currently supported in DuckDB ",
+		    canonical_extension, format);
 	}
 	// If not, we just check the format itself
 	if (format == "n") {

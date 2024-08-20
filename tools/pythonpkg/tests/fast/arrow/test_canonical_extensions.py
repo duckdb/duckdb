@@ -147,3 +147,26 @@ class TestCanonicalExtensionTypes(object):
         rel = con.sql("select ? as x", params=[uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')])
         with pytest.raises(duckdb.Error, match="It seems that you are using the UUID arrow canonical extension"):
             rel.project("test(x) from t").fetchall()
+
+    def test_unimplemented_extension(self, duckdb_cursor):
+        class MyType(pa.ExtensionType):
+            def __init__(self):
+                pa.ExtensionType.__init__(self, pa.binary(5), "pedro.binary")
+
+            def __arrow_ext_serialize__(self):
+                return b''
+
+            @classmethod
+            def __arrow_ext_deserialize__(self, storage_type, serialized):
+                return UuidTypeWrong()
+
+                pa.register_extension_type(UuidType())
+
+        storage_array = pa.array(['pedro'], pa.binary(5))
+        my_type = MyType()
+        storage_array = my_type.wrap_array(storage_array)
+
+        arrow_table = pa.Table.from_arrays([storage_array], names=['pedro_pedro_pedro'])
+
+        with pytest.raises(duckdb.NotImplementedException, match=" Arrow Type with extension name: pedro.binary"):
+            duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
