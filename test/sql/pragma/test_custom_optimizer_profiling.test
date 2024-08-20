@@ -31,29 +31,29 @@ SELECT unnest(res) from (
 )
 ----
 "ALL_OPTIMIZERS": "true"
-"OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING": "true"
-"OPTIMIZER_COLUMN_LIFETIME_TIMING": "true"
-"OPTIMIZER_COMMON_AGGREGATE_TIMING": "true"
-"OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING": "true"
-"OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING": "true"
-"OPTIMIZER_CTE_FILTER_PUSHER_TIMING": "true"
-"OPTIMIZER_DELIMINATOR_TIMING": "true"
-"OPTIMIZER_DUPLICATE_GROUPS_TIMING": "true"
-"OPTIMIZER_EXPRESSION_REWRITER_TIMING": "true"
-"OPTIMIZER_EXTENSION_TIMING": "true"
-"OPTIMIZER_FILTER_PULLUP_TIMING": "true"
-"OPTIMIZER_FILTER_PUSHDOWN_TIMING": "true"
-"OPTIMIZER_IN_CLAUSE_TIMING": "true"
-"OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING": "true"
-"OPTIMIZER_JOIN_ORDER_TIMING": "true"
-"OPTIMIZER_LIMIT_PUSHDOWN_TIMING": "true"
-"OPTIMIZER_MATERIALIZED_CTE_TIMING": "true"
-"OPTIMIZER_REGEX_RANGE_TIMING": "true"
-"OPTIMIZER_REORDER_FILTER_TIMING": "true"
-"OPTIMIZER_STATISTICS_PROPAGATION_TIMING": "true"
-"OPTIMIZER_TOP_N_TIMING": "true"
-"OPTIMIZER_UNNEST_REWRITER_TIMING": "true"
-"OPTIMIZER_UNUSED_COLUMNS_TIMING": "true"
+"OPTIMIZER_BUILD_SIDE_PROBE_SIDE": "true"
+"OPTIMIZER_COLUMN_LIFETIME": "true"
+"OPTIMIZER_COMMON_AGGREGATE": "true"
+"OPTIMIZER_COMMON_SUBEXPRESSIONS": "true"
+"OPTIMIZER_COMPRESSED_MATERIALIZATION": "true"
+"OPTIMIZER_CTE_FILTER_PUSHER": "true"
+"OPTIMIZER_DELIMINATOR": "true"
+"OPTIMIZER_DUPLICATE_GROUPS": "true"
+"OPTIMIZER_EXPRESSION_REWRITER": "true"
+"OPTIMIZER_EXTENSION": "true"
+"OPTIMIZER_FILTER_PULLUP": "true"
+"OPTIMIZER_FILTER_PUSHDOWN": "true"
+"OPTIMIZER_IN_CLAUSE": "true"
+"OPTIMIZER_JOIN_FILTER_PUSHDOWN": "true"
+"OPTIMIZER_JOIN_ORDER": "true"
+"OPTIMIZER_LIMIT_PUSHDOWN": "true"
+"OPTIMIZER_MATERIALIZED_CTE": "true"
+"OPTIMIZER_REGEX_RANGE": "true"
+"OPTIMIZER_REORDER_FILTER": "true"
+"OPTIMIZER_STATISTICS_PROPAGATION": "true"
+"OPTIMIZER_TOP_N": "true"
+"OPTIMIZER_UNNEST_REWRITER": "true"
+"OPTIMIZER_UNUSED_COLUMNS": "true"
 
 # Turn all settings off
 statement ok
@@ -73,7 +73,7 @@ SELECT unnest(res) from (
 
 # Turn only one setting on
 statement ok
-PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER_TIMING": "true"}'
+PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER": "true"}'
 
 statement ok
 select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
@@ -85,11 +85,11 @@ SELECT unnest(res) from (
 	string_split(setting, ', ') as res
 )
 ----
-"OPTIMIZER_JOIN_ORDER_TIMING": "true"
+"OPTIMIZER_JOIN_ORDER": "true"
 
 # Test Physical Plan and Planner Metrics
 statement ok
-PRAGMA custom_profiling_settings='{"PLANNER_TIMING": "true", "PHYSICAL_PLANNER_TIMING": "true"}'
+PRAGMA custom_profiling_settings='{"PLANNER": "true", "PHYSICAL_PLANNER": "true"}'
 
 statement ok
 select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
@@ -101,6 +101,6 @@ SELECT unnest(res) from (
 	string_split(setting, ', ') as res
 )
 ----
-"PHYSICAL_PLANNER_TIMING": "true"
-"PLANNER_TIMING": "true"
+"PHYSICAL_PLANNER": "true"
+"PLANNER": "true"
 

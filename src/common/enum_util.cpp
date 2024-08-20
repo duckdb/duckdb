@@ -4326,64 +4326,64 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 		return "ALL_OPTIMIZERS";
 	case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
 		return "CUMULATIVE_OPTIMIZER_TIMING";
-	case MetricsType::PLANNER_TIMING:
-		return "PLANNER_TIMING";
-	case MetricsType::PLANNER_BINDING_TIMING:
-		return "PLANNER_BINDING_TIMING";
-	case MetricsType::PHYSICAL_PLANNER_TIMING:
-		return "PHYSICAL_PLANNER_TIMING";
-	case MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING_TIMING:
-		return "PHYSICAL_PLANNER_COLUMN_BINDING_TIMING";
-	case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING:
-		return "PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING";
-	case MetricsType::PHYSICAL_PLANNER_CREATE_PLAN_TIMING:
-		return "PHYSICAL_PLANNER_CREATE_PLAN_TIMING";
-	case MetricsType::OPTIMIZER_EXPRESSION_REWRITER_TIMING:
-		return "OPTIMIZER_EXPRESSION_REWRITER_TIMING";
-	case MetricsType::OPTIMIZER_FILTER_PULLUP_TIMING:
-		return "OPTIMIZER_FILTER_PULLUP_TIMING";
-	case MetricsType::OPTIMIZER_FILTER_PUSHDOWN_TIMING:
-		return "OPTIMIZER_FILTER_PUSHDOWN_TIMING";
-	case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER_TIMING:
-		return "OPTIMIZER_CTE_FILTER_PUSHER_TIMING";
-	case MetricsType::OPTIMIZER_REGEX_RANGE_TIMING:
-		return "OPTIMIZER_REGEX_RANGE_TIMING";
-	case MetricsType::OPTIMIZER_IN_CLAUSE_TIMING:
-		return "OPTIMIZER_IN_CLAUSE_TIMING";
-	case MetricsType::OPTIMIZER_JOIN_ORDER_TIMING:
-		return "OPTIMIZER_JOIN_ORDER_TIMING";
-	case MetricsType::OPTIMIZER_DELIMINATOR_TIMING:
-		return "OPTIMIZER_DELIMINATOR_TIMING";
-	case MetricsType::OPTIMIZER_UNNEST_REWRITER_TIMING:
-		return "OPTIMIZER_UNNEST_REWRITER_TIMING";
-	case MetricsType::OPTIMIZER_UNUSED_COLUMNS_TIMING:
-		return "OPTIMIZER_UNUSED_COLUMNS_TIMING";
-	case MetricsType::OPTIMIZER_STATISTICS_PROPAGATION_TIMING:
-		return "OPTIMIZER_STATISTICS_PROPAGATION_TIMING";
-	case MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING:
-		return "OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING";
-	case MetricsType::OPTIMIZER_COMMON_AGGREGATE_TIMING:
-		return "OPTIMIZER_COMMON_AGGREGATE_TIMING";
-	case MetricsType::OPTIMIZER_COLUMN_LIFETIME_TIMING:
-		return "OPTIMIZER_COLUMN_LIFETIME_TIMING";
-	case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING:
-		return "OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING";
-	case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN_TIMING:
-		return "OPTIMIZER_LIMIT_PUSHDOWN_TIMING";
-	case MetricsType::OPTIMIZER_TOP_N_TIMING:
-		return "OPTIMIZER_TOP_N_TIMING";
-	case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING:
-		return "OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING";
-	case MetricsType::OPTIMIZER_DUPLICATE_GROUPS_TIMING:
-		return "OPTIMIZER_DUPLICATE_GROUPS_TIMING";
-	case MetricsType::OPTIMIZER_REORDER_FILTER_TIMING:
-		return "OPTIMIZER_REORDER_FILTER_TIMING";
-	case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING:
-		return "OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING";
-	case MetricsType::OPTIMIZER_EXTENSION_TIMING:
-		return "OPTIMIZER_EXTENSION_TIMING";
-	case MetricsType::OPTIMIZER_MATERIALIZED_CTE_TIMING:
-		return "OPTIMIZER_MATERIALIZED_CTE_TIMING";
+	case MetricsType::PLANNER:
+		return "PLANNER";
+	case MetricsType::PLANNER_BINDING:
+		return "PLANNER_BINDING";
+	case MetricsType::PHYSICAL_PLANNER:
+		return "PHYSICAL_PLANNER";
+	case MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING:
+		return "PHYSICAL_PLANNER_COLUMN_BINDING";
+	case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES:
+		return "PHYSICAL_PLANNER_RESOLVE_TYPES";
+	case MetricsType::PHYSICAL_PLANNER_CREATE_PLAN:
+		return "PHYSICAL_PLANNER_CREATE_PLAN";
+	case MetricsType::OPTIMIZER_EXPRESSION_REWRITER:
+		return "OPTIMIZER_EXPRESSION_REWRITER";
+	case MetricsType::OPTIMIZER_FILTER_PULLUP:
+		return "OPTIMIZER_FILTER_PULLUP";
+	case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
+		return "OPTIMIZER_FILTER_PUSHDOWN";
+	case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:
+		return "OPTIMIZER_CTE_FILTER_PUSHER";
+	case MetricsType::OPTIMIZER_REGEX_RANGE:
+		return "OPTIMIZER_REGEX_RANGE";
+	case MetricsType::OPTIMIZER_IN_CLAUSE:
+		return "OPTIMIZER_IN_CLAUSE";
+	case MetricsType::OPTIMIZER_JOIN_ORDER:
+		return "OPTIMIZER_JOIN_ORDER";
+	case MetricsType::OPTIMIZER_DELIMINATOR:
+		return "OPTIMIZER_DELIMINATOR";
+	case MetricsType::OPTIMIZER_UNNEST_REWRITER:
+		return "OPTIMIZER_UNNEST_REWRITER";
+	case MetricsType::OPTIMIZER_UNUSED_COLUMNS:
+		return "OPTIMIZER_UNUSED_COLUMNS";
+	case MetricsType::OPTIMIZER_STATISTICS_PROPAGATION:
+		return "OPTIMIZER_STATISTICS_PROPAGATION";
+	case MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
+		return "OPTIMIZER_COMMON_SUBEXPRESSIONS";
+	case MetricsType::OPTIMIZER_COMMON_AGGREGATE:
+		return "OPTIMIZER_COMMON_AGGREGATE";
+	case MetricsType::OPTIMIZER_COLUMN_LIFETIME:
+		return "OPTIMIZER_COLUMN_LIFETIME";
+	case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
+		return "OPTIMIZER_BUILD_SIDE_PROBE_SIDE";
+	case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
+		return "OPTIMIZER_LIMIT_PUSHDOWN";
+	case MetricsType::OPTIMIZER_TOP_N:
+		return "OPTIMIZER_TOP_N";
+	case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
+		return "OPTIMIZER_COMPRESSED_MATERIALIZATION";
+	case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
+		return "OPTIMIZER_DUPLICATE_GROUPS";
+	case MetricsType::OPTIMIZER_REORDER_FILTER:
+		return "OPTIMIZER_REORDER_FILTER";
+	case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
+		return "OPTIMIZER_JOIN_FILTER_PUSHDOWN";
+	case MetricsType::OPTIMIZER_EXTENSION:
+		return "OPTIMIZER_EXTENSION";
+	case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
+		return "OPTIMIZER_MATERIALIZED_CTE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4427,92 +4427,92 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	if (StringUtil::Equals(value, "CUMULATIVE_OPTIMIZER_TIMING")) {
 		return MetricsType::CUMULATIVE_OPTIMIZER_TIMING;
 	}
-	if (StringUtil::Equals(value, "PLANNER_TIMING")) {
-		return MetricsType::PLANNER_TIMING;
+	if (StringUtil::Equals(value, "PLANNER")) {
+		return MetricsType::PLANNER;
 	}
-	if (StringUtil::Equals(value, "PLANNER_BINDING_TIMING")) {
-		return MetricsType::PLANNER_BINDING_TIMING;
+	if (StringUtil::Equals(value, "PLANNER_BINDING")) {
+		return MetricsType::PLANNER_BINDING;
 	}
-	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_TIMING")) {
-		return MetricsType::PHYSICAL_PLANNER_TIMING;
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER")) {
+		return MetricsType::PHYSICAL_PLANNER;
 	}
-	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_COLUMN_BINDING_TIMING")) {
-		return MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING_TIMING;
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_COLUMN_BINDING")) {
+		return MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING;
 	}
-	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING")) {
-		return MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING;
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_RESOLVE_TYPES")) {
+		return MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES;
 	}
-	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_CREATE_PLAN_TIMING")) {
-		return MetricsType::PHYSICAL_PLANNER_CREATE_PLAN_TIMING;
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_CREATE_PLAN")) {
+		return MetricsType::PHYSICAL_PLANNER_CREATE_PLAN;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_EXPRESSION_REWRITER_TIMING")) {
-		return MetricsType::OPTIMIZER_EXPRESSION_REWRITER_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_EXPRESSION_REWRITER")) {
+		return MetricsType::OPTIMIZER_EXPRESSION_REWRITER;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PULLUP_TIMING")) {
-		return MetricsType::OPTIMIZER_FILTER_PULLUP_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PULLUP")) {
+		return MetricsType::OPTIMIZER_FILTER_PULLUP;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PUSHDOWN_TIMING")) {
-		return MetricsType::OPTIMIZER_FILTER_PUSHDOWN_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_FILTER_PUSHDOWN;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_CTE_FILTER_PUSHER_TIMING")) {
-		return MetricsType::OPTIMIZER_CTE_FILTER_PUSHER_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_CTE_FILTER_PUSHER")) {
+		return MetricsType::OPTIMIZER_CTE_FILTER_PUSHER;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_REGEX_RANGE_TIMING")) {
-		return MetricsType::OPTIMIZER_REGEX_RANGE_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_REGEX_RANGE")) {
+		return MetricsType::OPTIMIZER_REGEX_RANGE;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_IN_CLAUSE_TIMING")) {
-		return MetricsType::OPTIMIZER_IN_CLAUSE_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_IN_CLAUSE")) {
+		return MetricsType::OPTIMIZER_IN_CLAUSE;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_ORDER_TIMING")) {
-		return MetricsType::OPTIMIZER_JOIN_ORDER_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_ORDER")) {
+		return MetricsType::OPTIMIZER_JOIN_ORDER;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_DELIMINATOR_TIMING")) {
-		return MetricsType::OPTIMIZER_DELIMINATOR_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_DELIMINATOR")) {
+		return MetricsType::OPTIMIZER_DELIMINATOR;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_UNNEST_REWRITER_TIMING")) {
-		return MetricsType::OPTIMIZER_UNNEST_REWRITER_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_UNNEST_REWRITER")) {
+		return MetricsType::OPTIMIZER_UNNEST_REWRITER;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_UNUSED_COLUMNS_TIMING")) {
-		return MetricsType::OPTIMIZER_UNUSED_COLUMNS_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_UNUSED_COLUMNS")) {
+		return MetricsType::OPTIMIZER_UNUSED_COLUMNS;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_STATISTICS_PROPAGATION_TIMING")) {
-		return MetricsType::OPTIMIZER_STATISTICS_PROPAGATION_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_STATISTICS_PROPAGATION")) {
+		return MetricsType::OPTIMIZER_STATISTICS_PROPAGATION;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING")) {
-		return MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_SUBEXPRESSIONS")) {
+		return MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_AGGREGATE_TIMING")) {
-		return MetricsType::OPTIMIZER_COMMON_AGGREGATE_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_AGGREGATE")) {
+		return MetricsType::OPTIMIZER_COMMON_AGGREGATE;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_COLUMN_LIFETIME_TIMING")) {
-		return MetricsType::OPTIMIZER_COLUMN_LIFETIME_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_COLUMN_LIFETIME")) {
+		return MetricsType::OPTIMIZER_COLUMN_LIFETIME;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING")) {
-		return MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_BUILD_SIDE_PROBE_SIDE")) {
+		return MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_LIMIT_PUSHDOWN_TIMING")) {
-		return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_LIMIT_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_TOP_N_TIMING")) {
-		return MetricsType::OPTIMIZER_TOP_N_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_TOP_N")) {
+		return MetricsType::OPTIMIZER_TOP_N;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING")) {
-		return MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_COMPRESSED_MATERIALIZATION")) {
+		return MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_DUPLICATE_GROUPS_TIMING")) {
-		return MetricsType::OPTIMIZER_DUPLICATE_GROUPS_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_DUPLICATE_GROUPS")) {
+		return MetricsType::OPTIMIZER_DUPLICATE_GROUPS;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_REORDER_FILTER_TIMING")) {
-		return MetricsType::OPTIMIZER_REORDER_FILTER_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_REORDER_FILTER")) {
+		return MetricsType::OPTIMIZER_REORDER_FILTER;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING")) {
-		return MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_FILTER_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_EXTENSION_TIMING")) {
-		return MetricsType::OPTIMIZER_EXTENSION_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_EXTENSION")) {
+		return MetricsType::OPTIMIZER_EXTENSION;
 	}
-	if (StringUtil::Equals(value, "OPTIMIZER_MATERIALIZED_CTE_TIMING")) {
-		return MetricsType::OPTIMIZER_MATERIALIZED_CTE_TIMING;
+	if (StringUtil::Equals(value, "OPTIMIZER_MATERIALIZED_CTE")) {
+		return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

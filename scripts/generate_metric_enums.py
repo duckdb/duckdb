@@ -1,7 +1,6 @@
 # Script that takes src/include/duckdb/common/enums/optimizer_type.hpp, extracts the optimizer types
 # and adds them to the metrics types.
 # Then it creates a new file src/include/duckdb/common/enums/metric_type.hpp with the new metrics types as enums.
-# "Generate_enums_util.py" is then run to update the enums.hpp file
 
 import re
 import os
@@ -14,7 +13,7 @@ optimizer_file = os.path.join("..", "src", "include", "duckdb", "common", "enums
 
 metrics = [
     "QUERY_NAME",
-    "IDLE_THREAD_TIME",
+    "BLOCKED_THREAD_TIME",
     "CPU_TIME",
     "EXTRA_INFO",
     "CUMULATIVE_CARDINALITY",
@@ -23,14 +22,17 @@ metrics = [
     "CUMULATIVE_ROWS_SCANNED",
     "OPERATOR_ROWS_SCANNED",
     "OPERATOR_TIMING",
+]
+
+phase_timing_metrics = [
     "ALL_OPTIMIZERS",
     "CUMULATIVE_OPTIMIZER_TIMING",
-    "PLANNER_TIMING",
-    "PLANNER_BINDING_TIMING",
-    "PHYSICAL_PLANNER_TIMING",
-    "PHYSICAL_PLANNER_COLUMN_BINDING_TIMING",
-    "PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING",
-    "PHYSICAL_PLANNER_CREATE_PLAN_TIMING",
+    "PLANNER",
+    "PLANNER_BINDING",
+    "PHYSICAL_PLANNER",
+    "PHYSICAL_PLANNER_COLUMN_BINDING",
+    "PHYSICAL_PLANNER_RESOLVE_TYPES",
+    "PHYSICAL_PLANNER_CREATE_PLAN",
 ]
 
 optimizer_types = []
@@ -97,15 +99,18 @@ with open(metrics_header_file, "w") as f:
     for metric in metrics:
         f.write(f"    {metric},\n")
 
+    for metric in phase_timing_metrics:
+        f.write(f"    {metric},\n")
+
     for metric in optimizer_types:
-        f.write(f"    OPTIMIZER_{metric}_TIMING,\n")
+        f.write(f"    OPTIMIZER_{metric},\n")
 
     f.write("};\n\n")
 
     f.write(typedefs)
 
-    f.write('profiler_settings_t GetAllOptimizerMetrics();\n')
-    f.write('MetricsType GetOptimizerMetricFromOptimizerType(OptimizerType type);\n\n')
+    f.write('profiler_settings_t GetOptimizerMetrics();\n')
+    f.write('MetricsType GetOptimizerMetricByType(OptimizerType type);\n\n')
 
     f.write("} // namespace duckdb\n")
 
@@ -117,20 +122,20 @@ with open(metrics_cpp_file, "w") as f:
     f.write('#include "duckdb/common/enums/optimizer_type.hpp"\n\n')
     f.write("namespace duckdb {\n\n")
 
-    f.write('profiler_settings_t GetAllOptimizerMetrics() {\n')
+    f.write('profiler_settings_t GetOptimizerMetrics() {\n')
     f.write(f"    return {{\n")
 
     for metric in optimizer_types:
-        f.write(f"        MetricsType::OPTIMIZER_{metric}_TIMING,\n")
+        f.write(f"        MetricsType::OPTIMIZER_{metric},\n")
     f.write("    };\n")
     f.write("}\n\n")
 
-    f.write('MetricsType GetOptimizerMetricFromOptimizerType(OptimizerType type) {\n')
+    f.write('MetricsType GetOptimizerMetricByType(OptimizerType type) {\n')
     f.write('    switch(type) {\n')
 
     for metric in optimizer_types:
         f.write(f"        case OptimizerType::{metric}:\n")
-        f.write(f"            return MetricsType::OPTIMIZER_{metric}_TIMING;\n")
+        f.write(f"            return MetricsType::OPTIMIZER_{metric};\n")
 
     f.write('       default:\n')
     f.write('            throw InternalException("OptimizerType %s cannot be converted to a MetricType", '
@@ -139,6 +144,3 @@ with open(metrics_cpp_file, "w") as f:
     f.write('}\n\n')
 
     f.write("} // namespace duckdb\n")
-
-# Run the generate_enum_util.py script to update the enums.hpp file
-os.system("python generate_enum_util.py")

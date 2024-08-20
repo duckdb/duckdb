@@ -730,7 +730,7 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &j
 
 void AddOptimizerMetrics(profiler_settings_t &settings) {
 	if (settings.find(MetricsType::ALL_OPTIMIZERS) != settings.end()) {
-        auto optimizer_metrics = GetAllOptimizerMetrics();
+        auto optimizer_metrics = GetOptimizerMetrics();
 		for (auto &metric : optimizer_metrics) {
 			settings.insert(metric);
 		}
@@ -1555,7 +1555,7 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 		config.enable_detailed_profiling = true;
 		config.emit_profiler_output = true;
 		// add optimizer settings to the profiler settings
-		auto optimizer_settings = GetAllOptimizerMetrics();
+		auto optimizer_settings = GetOptimizerMetrics();
 		auto phase_timing_settings = ProfilingInfo::PhaseTimingsSettings();
 		for (auto &setting : optimizer_settings) {
             config.profiler_settings.insert(setting);

@@ -232,13 +232,13 @@ string QueryProfiler::ToString(ExplainFormat explain_format) const {
 	}
 }
 
-void QueryProfiler::StartPhase(MetricsType PhaseMetric) {
+void QueryProfiler::StartPhase(MetricsType phase_metric) {
 	if (!IsEnabled() || !running) {
 		return;
 	}
 
 	// start a new phase
-	phase_stack.push_back(PhaseMetric);
+	phase_stack.push_back(phase_metric);
 	// restart the timer
 	phase_profiler.Start();
 }
@@ -443,11 +443,9 @@ string QueryProfiler::QueryTreeToString() const {
 	return str.str();
 }
 
-string RemovePhaseTimingName(string name, string metric) {
-    return metric.substr(name.size());
-}
 
-void RenderPhaseTimings(std::ostream &ss, pair<string, double> head, map<string, double> timings, idx_t width) {
+
+void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<string, double> timings, idx_t width) {
 	ss << "┌────────────────────────────────────────────────┐\n";
 	ss << "│" +
 	         QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second),
@@ -465,7 +463,7 @@ void RenderPhaseTimings(std::ostream &ss, pair<string, double> head, map<string,
     ss << "└────────────────────────────────────────────────┘\n";
 }
 
-void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo info, idx_t width) {
+void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_t width) {
 	map<string, double> optimizer_timings;
 	map<string, double> planner_timings;
 	map<string, double> physical_planner_timings;
@@ -484,10 +482,10 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo info, idx_t
 			case MetricsType::ALL_OPTIMIZERS:
 				optimizer_head = {"Optimizer Timing", entry.second.GetValue<double>()};
 				break;
-			case MetricsType::PHYSICAL_PLANNER_TIMING:
+			case MetricsType::PHYSICAL_PLANNER:
 				physical_planner_head = {"Physical Planner Timing", entry.second.GetValue<double>()};
 				break;
-			case MetricsType::PLANNER_TIMING:
+			case MetricsType::PLANNER:
 				planner_head = {"Planner Timing", entry.second.GetValue<double>()};
 				break;
 			default:
@@ -495,9 +493,9 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo info, idx_t
 			}
 
 			auto metric = EnumUtil::ToString(entry.first);
-			if (StringUtil::StartsWith(metric, "PHYSICAL_PLANNER") && entry.first != MetricsType::PHYSICAL_PLANNER_TIMING) {
+			if (StringUtil::StartsWith(metric, "PHYSICAL_PLANNER") && entry.first != MetricsType::PHYSICAL_PLANNER) {
 				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
-			} else if (StringUtil::StartsWith(metric, "PLANNER") && entry.first != MetricsType::PLANNER_TIMING) {
+			} else if (StringUtil::StartsWith(metric, "PLANNER") && entry.first != MetricsType::PLANNER) {
 				planner_timings[metric.substr(8)] = entry.second.GetValue<double>();
 			}
 		}

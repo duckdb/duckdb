@@ -41,13 +41,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 	auto &profiler = QueryProfiler::Get(context);
 
 	// first resolve column references
-	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING_TIMING);
+	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING);
 	ColumnBindingResolver resolver;
 	resolver.VisitOperator(*op);
 	profiler.EndPhase();
 
 	// now resolve types of all the operators
-	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING);
+	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES);
 	op->ResolveOperatorTypes();
 	profiler.EndPhase();
 
@@ -56,7 +56,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 	extractor.VisitOperator(*op);
 
 	// then create the main physical plan
-	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN_TIMING);
+	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN);
 	auto plan = CreatePlan(*op);
 	profiler.EndPhase();
 

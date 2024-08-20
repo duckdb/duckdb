@@ -30,18 +30,18 @@ profiler_settings_t ProfilingInfo::PhaseTimingsSettings() {
 	return {
         MetricsType::ALL_OPTIMIZERS,
         MetricsType::CUMULATIVE_OPTIMIZER_TIMING,
-	    MetricsType::PHYSICAL_PLANNER_TIMING,
-	    MetricsType::PHYSICAL_PLANNER_CREATE_PLAN_TIMING,
-	    MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING_TIMING,
-	    MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES_TIMING,
-	    MetricsType::PLANNER_TIMING,
-	    MetricsType::PLANNER_BINDING_TIMING,
+	    MetricsType::PHYSICAL_PLANNER,
+	    MetricsType::PHYSICAL_PLANNER_CREATE_PLAN,
+	    MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING,
+	    MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES,
+	    MetricsType::PLANNER,
+	    MetricsType::PLANNER_BINDING,
 	};
 }
 
 profiler_settings_t ProfilingInfo::AllSettings() {
 	auto all_settings = DefaultSettings();
-	auto optimizer_settings = GetAllOptimizerMetrics();
+	auto optimizer_settings = GetOptimizerMetrics();
 	auto phase_timings = PhaseTimingsSettings();
 
 	for (auto &setting : optimizer_settings) {
@@ -56,8 +56,8 @@ profiler_settings_t ProfilingInfo::AllSettings() {
 }
 
 bool ProfilingInfo::IsOptimizerMetric(MetricsType metric) {
-	auto optimizers = GetAllOptimizerMetrics();
-	if (std::find(optimizers.begin(), optimizers.end(), metric) != optimizers.end()) {
+	auto optimizers = GetOptimizerMetrics();
+	if (optimizers.find(metric) != optimizers.end()) {
         return true;
     }
 
@@ -66,7 +66,7 @@ bool ProfilingInfo::IsOptimizerMetric(MetricsType metric) {
 
 bool ProfilingInfo::IsPhaseTimingMetric(MetricsType metric) {
 	auto phase_timings = PhaseTimingsSettings();
-	if (std::find(phase_timings.begin(), phase_timings.end(), metric) != phase_timings.end()) {
+	if (phase_timings.find(metric) != phase_timings.end()) {
 		return true;
 	}
 
