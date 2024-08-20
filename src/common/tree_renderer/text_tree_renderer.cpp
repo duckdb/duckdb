@@ -243,7 +243,7 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 				if (render_y == extra_height && render_text.empty()) {
 					auto entry = node->extra_text.find("__estimated_cardinality__");
 					if (entry != node->extra_text.end()) {
-						render_text = "EC: " + entry->second;
+						render_text = "~" + entry->second + " Rows";
 					}
 				}
 				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
