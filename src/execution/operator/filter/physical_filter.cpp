@@ -54,7 +54,7 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 
 InsertionOrderPreservingMap<string> PhysicalFilter::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["__text__"] = expression->GetName();
+	result["__expression__"] = expression->GetName();
 	result["__estimated_cardinality__"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
