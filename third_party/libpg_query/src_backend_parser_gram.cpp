@@ -1197,12 +1197,28 @@ namespace duckdb_libpgquery {
 #define YYFREE   pfree
 #define YYINITDEPTH 1000
 
+/* yields an integer bitmask of these flags: */
+#define CAS_NOT_DEFERRABLE			0x01
+#define CAS_DEFERRABLE				0x02
+#define CAS_INITIALLY_IMMEDIATE		0x04
+#define CAS_INITIALLY_DEFERRED		0x08
+#define CAS_NOT_VALID				0x10
+#define CAS_NO_INHERIT				0x20
+
+
+#define parser_yyerror(msg)  scanner_yyerror(msg, yyscanner)
+#define parser_errposition(pos)  scanner_errposition(pos, yyscanner)
+
+#if YYBISON == 1
+// explicitly define stack growing support
+// yacc cannot handle stack growing by default YYLTYPE is overriden - which the Postgres parser overrides with an `int`
+// so we need to copy these definitions here explicitly
 /* A type that is properly aligned for any stack member.  */
 union yyalloc
 {
   short int yyss;
   YYSTYPE yyvs;
-    YYLTYPE yyls;
+  YYLTYPE yyls;
 };
 
 /* The size of the maximum gap between one aligned stack and the next.  */
@@ -1247,20 +1263,7 @@ union yyalloc
 	yyptr += yynewbytes / sizeof (*yyptr);				\
       }									\
     while (YYID (0))
-
-
-
-/* yields an integer bitmask of these flags: */
-#define CAS_NOT_DEFERRABLE			0x01
-#define CAS_DEFERRABLE				0x02
-#define CAS_INITIALLY_IMMEDIATE		0x04
-#define CAS_INITIALLY_DEFERRED		0x08
-#define CAS_NOT_VALID				0x10
-#define CAS_NO_INHERIT				0x20
-
-
-#define parser_yyerror(msg)  scanner_yyerror(msg, yyscanner)
-#define parser_errposition(pos)  scanner_errposition(pos, yyscanner)
+#endif
 
 static void base_yyerror(YYLTYPE *yylloc, core_yyscan_t yyscanner,
 						 const char *msg);
@@ -1381,7 +1384,7 @@ typedef union YYSTYPE
 	PGTransactionStmtType transactiontype;
 }
 /* Line 193 of yacc.c.  */
-#line 1385 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1388 "third_party/libpg_query/grammar/grammar_out.cpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
@@ -1406,7 +1409,7 @@ typedef struct YYLTYPE
 
 
 /* Line 216 of yacc.c.  */
-#line 1410 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1413 "third_party/libpg_query/grammar/grammar_out.cpp"
 
 #ifdef short
 # undef short
@@ -31112,7 +31115,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 31116 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 31119 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
