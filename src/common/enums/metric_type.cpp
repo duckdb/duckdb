@@ -103,7 +103,60 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
         case OptimizerType::MATERIALIZED_CTE:
             return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
        default:
-            throw InternalException("OptimizerType %s cannot be converted to a MetricType", EnumUtil::ToString(type));
+            throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));
+    };
+}
+
+OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
+    switch(type) {
+        case MetricsType::OPTIMIZER_EXPRESSION_REWRITER:
+            return OptimizerType::EXPRESSION_REWRITER;
+        case MetricsType::OPTIMIZER_FILTER_PULLUP:
+            return OptimizerType::FILTER_PULLUP;
+        case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
+            return OptimizerType::FILTER_PUSHDOWN;
+        case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:
+            return OptimizerType::CTE_FILTER_PUSHER;
+        case MetricsType::OPTIMIZER_REGEX_RANGE:
+            return OptimizerType::REGEX_RANGE;
+        case MetricsType::OPTIMIZER_IN_CLAUSE:
+            return OptimizerType::IN_CLAUSE;
+        case MetricsType::OPTIMIZER_JOIN_ORDER:
+            return OptimizerType::JOIN_ORDER;
+        case MetricsType::OPTIMIZER_DELIMINATOR:
+            return OptimizerType::DELIMINATOR;
+        case MetricsType::OPTIMIZER_UNNEST_REWRITER:
+            return OptimizerType::UNNEST_REWRITER;
+        case MetricsType::OPTIMIZER_UNUSED_COLUMNS:
+            return OptimizerType::UNUSED_COLUMNS;
+        case MetricsType::OPTIMIZER_STATISTICS_PROPAGATION:
+            return OptimizerType::STATISTICS_PROPAGATION;
+        case MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
+            return OptimizerType::COMMON_SUBEXPRESSIONS;
+        case MetricsType::OPTIMIZER_COMMON_AGGREGATE:
+            return OptimizerType::COMMON_AGGREGATE;
+        case MetricsType::OPTIMIZER_COLUMN_LIFETIME:
+            return OptimizerType::COLUMN_LIFETIME;
+        case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
+            return OptimizerType::BUILD_SIDE_PROBE_SIDE;
+        case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
+            return OptimizerType::LIMIT_PUSHDOWN;
+        case MetricsType::OPTIMIZER_TOP_N:
+            return OptimizerType::TOP_N;
+        case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
+            return OptimizerType::COMPRESSED_MATERIALIZATION;
+        case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
+            return OptimizerType::DUPLICATE_GROUPS;
+        case MetricsType::OPTIMIZER_REORDER_FILTER:
+            return OptimizerType::REORDER_FILTER;
+        case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
+            return OptimizerType::JOIN_FILTER_PUSHDOWN;
+        case MetricsType::OPTIMIZER_EXTENSION:
+            return OptimizerType::EXTENSION;
+        case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
+            return OptimizerType::MATERIALIZED_CTE;
+    default:
+            return OptimizerType::INVALID;
     };
 }
 

@@ -156,6 +156,17 @@ static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metr
 	}
 }
 
+Value GetCumulativeOptimizers(ProfilingNode &node) {
+	auto &metrics = node.GetProfilingInfo().metrics;
+	double count = 0;
+	for (auto &metric : metrics) {
+		if (MetricsUtils::IsOptimizerMetric(metric.first)) {
+			count += metric.second.GetValue<double>();
+		}
+	}
+	return Value::CreateValue(count);
+}
+
 void QueryProfiler::EndQuery() {
 	lock_guard<mutex> guard(flush_lock);
 	if (!IsEnabled() || !running) {
@@ -194,7 +205,11 @@ void QueryProfiler::EndQuery() {
 				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_ROWS_SCANNED,
 				                           MetricsType::OPERATOR_ROWS_SCANNED);
 			}
+
 			MoveOptimizerPhasesToRoot();
+			if (info.Enabled(MetricsType::CUMULATIVE_OPTIMIZER_TIMING)) {
+				info.metrics.at(MetricsType::CUMULATIVE_OPTIMIZER_TIMING) = GetCumulativeOptimizers(*root);
+			}
 
 			if (info.Enabled(MetricsType::OPERATOR_TYPE)) {
 				info.settings.erase(MetricsType::OPERATOR_TYPE);

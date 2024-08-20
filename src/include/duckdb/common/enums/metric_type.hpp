@@ -74,6 +74,7 @@ public:
     static profiler_settings_t GetPhaseTimingMetrics();
 
     static MetricsType GetOptimizerMetricByType(OptimizerType type);
+    static OptimizerType GetOptimizerTypeByMetric(MetricsType type);
 
     static bool IsOptimizerMetric(MetricsType type);
     static bool IsPhaseTimingMetric(MetricsType type);

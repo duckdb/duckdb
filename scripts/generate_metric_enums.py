@@ -87,6 +87,7 @@ typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metr
 get_optimizer_metric_fun = 'GetOptimizerMetrics()'
 get_phase_timing_metric_fun = 'GetPhaseTimingMetrics()'
 get_optimizer_metric_by_type_fun = 'GetOptimizerMetricByType(OptimizerType type)'
+get_optimizer_type_by_metric_fun = 'GetOptimizerTypeByMetric(MetricsType type)'
 is_optimizer_metric_fun = 'IsOptimizerMetric(MetricsType type)'
 is_phase_timing_metric_fun = 'IsPhaseTimingMetric(MetricsType type)'
 
@@ -121,7 +122,8 @@ with open(metrics_header_file, "w") as f:
     f.write('public:\n')
     f.write(f'    static profiler_settings_t {get_optimizer_metric_fun};\n')
     f.write(f'    static profiler_settings_t {get_phase_timing_metric_fun};\n\n')
-    f.write(f'    static MetricsType {get_optimizer_metric_by_type_fun};\n\n')
+    f.write(f'    static MetricsType {get_optimizer_metric_by_type_fun};\n')
+    f.write(f'    static OptimizerType {get_optimizer_type_by_metric_fun};\n\n')
     f.write(f'    static bool {is_optimizer_metric_fun};\n')
     f.write(f'    static bool {is_phase_timing_metric_fun};\n')
     f.write('};\n\n')
@@ -138,7 +140,6 @@ with open(metrics_cpp_file, "w") as f:
 
     f.write(f'profiler_settings_t {metrics_class}::{get_optimizer_metric_fun} {{\n')
     f.write(f"    return {{\n")
-
     for metric in optimizer_types:
         f.write(f"        MetricsType::OPTIMIZER_{metric},\n")
     f.write("    };\n")
@@ -153,16 +154,24 @@ with open(metrics_cpp_file, "w") as f:
 
     f.write(f'MetricsType {metrics_class}::{get_optimizer_metric_by_type_fun} {{\n')
     f.write('    switch(type) {\n')
-
     for metric in optimizer_types:
         f.write(f"        case OptimizerType::{metric}:\n")
         f.write(f"            return MetricsType::OPTIMIZER_{metric};\n")
-
     f.write('       default:\n')
     f.write(
-        '            throw InternalException("OptimizerType %s cannot be converted to a MetricType", '
+        '            throw InternalException("OptimizerType %s cannot be converted to a MetricsType", '
         'EnumUtil::ToString(type));\n'
     )
+    f.write('    };\n')
+    f.write('}\n\n')
+
+    f.write(f'OptimizerType {metrics_class}::{get_optimizer_type_by_metric_fun} {{\n')
+    f.write('    switch(type) {\n')
+    for metric in optimizer_types:
+        f.write(f"        case MetricsType::OPTIMIZER_{metric}:\n")
+        f.write(f"            return OptimizerType::{metric};\n")
+    f.write('    default:\n')
+    f.write('            return OptimizerType::INVALID;\n')
     f.write('    };\n')
     f.write('}\n\n')
 

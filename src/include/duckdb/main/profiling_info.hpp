@@ -50,7 +50,6 @@ public:
 public:
 	static profiler_settings_t DefaultSettings();
 	static profiler_settings_t DefaultOperatorSettings();
-	static profiler_settings_t PhaseTimingsSettings();
 	static profiler_settings_t AllSettings();
 
 public:
