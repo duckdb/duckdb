@@ -136,9 +136,10 @@ string PhysicalTableScan::GetName() const {
 
 InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["Function"] = StringUtil::Upper(function.name);
 	if (function.to_string) {
 		result["__text__"] = function.to_string(bind_data.get());
+	} else {
+		result["Function"] = StringUtil::Upper(function.name);
 	}
 	if (function.projection_pushdown) {
 		if (function.filter_prune) {

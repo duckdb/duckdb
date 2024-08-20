@@ -240,10 +240,29 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 						render_text = extra_info[x][render_y - 1];
 					}
 				}
-				if (render_y == extra_height && render_text.empty()) {
-					auto entry = node->extra_text.find("__estimated_cardinality__");
+				if (render_y + 1 == extra_height && render_text.empty()) {
+					auto entry = node->extra_text.find("__cardinality__");
 					if (entry != node->extra_text.end()) {
-						render_text = "~" + entry->second + " Rows";
+						render_text = entry->second + " Rows";
+					}
+				}
+				if (render_y == extra_height && render_text.empty()) {
+					auto timing_entry = node->extra_text.find("__timing__");
+					if (timing_entry != node->extra_text.end()) {
+						render_text = "(" + timing_entry->second + ")";
+					} else if (node->extra_text.find("__cardinality__") == node->extra_text.end()) {
+						// we only render estimated cardinality if there is no real cardinality
+						auto entry = node->extra_text.find("__estimated_cardinality__");
+						if (entry != node->extra_text.end()) {
+							render_text = "~" + entry->second + " Rows";
+						}
+					}
+					if (node->extra_text.find("__cardinality__") == node->extra_text.end()) {
+						// we only render estimated cardinality if there is no real cardinality
+						auto entry = node->extra_text.find("__estimated_cardinality__");
+						if (entry != node->extra_text.end()) {
+							render_text = "~" + entry->second + " Rows";
+						}
 					}
 				}
 				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
@@ -423,11 +442,25 @@ void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string
 		if (requires_padding) {
 			result.emplace_back();
 		}
-		if (item.first == "__estimated_cardinality__") {
-			// estimated cardinality is rendered separately for alignment reasons
-			// but we do need to reserve space for it in the box
+		// cardinality, timing and estimated cardinality are rendered separately
+		// this is to allow alignment horizontally across nodes
+		if (item.first == "__cardinality__") {
+			// cardinality - need to reserve space for cardinality AND timing
 			result.emplace_back();
-			continue;
+			if (extra_info.find("__timing__") != extra_info.end()) {
+				result.emplace_back();
+			}
+			break;
+		}
+		if (item.first == "__estimated_cardinality__") {
+			// estimated cardinality - reserve space for estimate
+			if (extra_info.find("__cardinality__") != extra_info.end()) {
+				// if we have a true cardinality render that instead of the estimate
+				result.pop_back();
+				continue;
+			}
+			result.emplace_back();
+			break;
 		}
 		auto splits = StringUtil::Split(str, "\n");
 		for (auto &split : splits) {
