@@ -78,7 +78,7 @@ public:
 	}
 
 	//! Functions to help decide how to set up pipeline dependencies
-	idx_t SumOfEstimatedCardinalities() const;
+	idx_t EstimatedThreadCount() const;
 	bool CanSaturateThreads(ClientContext &context) const;
 
 	virtual void Verify();

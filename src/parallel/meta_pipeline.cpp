@@ -147,6 +147,10 @@ vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependa
 
 void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies,
                                             const MetaPipeline &last_child) {
+	if (recursive_cte) {
+		return; // Let's not burn our fingers on this
+	}
+
 	vector<shared_ptr<MetaPipeline>> child_meta_pipelines;
 	this->GetMetaPipelines(child_meta_pipelines, true, false);
 

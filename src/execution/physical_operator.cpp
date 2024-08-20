@@ -40,10 +40,21 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const 
 	return result;
 }
 
-idx_t PhysicalOperator::SumOfEstimatedCardinalities() const {
-	idx_t result = estimated_cardinality;
-	for (auto &child : children) {
-		result += child->SumOfEstimatedCardinalities();
+idx_t PhysicalOperator::EstimatedThreadCount() const {
+	idx_t result = 0;
+	if (children.empty()) {
+		// Terminal operator, e.g., base table, these decide the degree of parallelism of pipelines
+		result = MaxValue<idx_t>(estimated_cardinality / Storage::ROW_GROUP_SIZE, 1);
+	} else if (type == PhysicalOperatorType::UNION) {
+		// We can run union pipelines in parallel, so we sum up the thread count of the children
+		for (auto &child : children) {
+			result += child->EstimatedThreadCount();
+		}
+	} else {
+		// For other operators we take the maximum of the children
+		for (auto &child : children) {
+			result = MaxValue(child->EstimatedThreadCount(), result);
+		}
 	}
 	return result;
 }
@@ -54,7 +65,7 @@ bool PhysicalOperator::CanSaturateThreads(ClientContext &context) const {
 	return true;
 #else
 	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
-	return SumOfEstimatedCardinalities() / Storage::ROW_GROUP_SIZE > num_threads;
+	return EstimatedThreadCount() >= num_threads;
 #endif
 }
 
