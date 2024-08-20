@@ -191,7 +191,7 @@ private:
 	//! The timer used to time the individual phases of the planning process
 	Profiler phase_profiler;
 	//! A mapping of the phase names to the timings
-	using PhaseTimingStorage = unordered_map<MetricsType, double>;
+	using PhaseTimingStorage = unordered_map<MetricsType, double, MetricsTypeHashFunction>;
 	PhaseTimingStorage phase_timings;
 	using PhaseTimingItem = PhaseTimingStorage::value_type;
 	//! The stack of currently active phases
