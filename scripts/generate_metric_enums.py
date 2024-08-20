@@ -99,7 +99,10 @@ with open(metrics_header_file, "w") as f:
 
     f.write('#pragma once\n\n')
     f.write('#include "duckdb/common/constants.hpp"\n')
-    f.write('#include "duckdb/common/unordered_set.hpp"\n\n')
+    f.write('#include "duckdb/common/unordered_set.hpp"\n')
+    f.write('#include "duckdb/common/enum_util.hpp"\n')
+    f.write('#include "duckdb/common/types/value.hpp"\n')
+    f.write('#include "duckdb/common/enums/optimizer_type.hpp"\n\n')
 
     f.write("namespace duckdb {\n\n")
 
@@ -135,7 +138,6 @@ with open(metrics_cpp_file, "w") as f:
     f.write(header)
 
     f.write('#include "duckdb/common/enums/metric_type.hpp"\n')
-    f.write('#include "duckdb/common/enums/optimizer_type.hpp"\n\n')
     f.write("namespace duckdb {\n\n")
 
     f.write(f'profiler_settings_t {metrics_class}::{get_optimizer_metric_fun} {{\n')

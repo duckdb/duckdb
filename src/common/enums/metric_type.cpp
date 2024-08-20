@@ -9,8 +9,6 @@
 //-------------------------------------------------------------------------
 
 #include "duckdb/common/enums/metric_type.hpp"
-#include "duckdb/common/enums/optimizer_type.hpp"
-
 namespace duckdb {
 
 profiler_settings_t MetricsUtils::GetOptimizerMetrics() {

@@ -12,6 +12,9 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
 
 namespace duckdb {
 

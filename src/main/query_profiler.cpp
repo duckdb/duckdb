@@ -458,7 +458,7 @@ string QueryProfiler::QueryTreeToString() const {
 	return str.str();
 }
 
-void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<string, double> timings, idx_t width) {
+void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<string, double> &timings, idx_t width) {
 	ss << "┌────────────────────────────────────────────────┐\n";
 	ss << "│" + QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second), width - 2) +
 	          "│\n";
