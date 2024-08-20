@@ -240,6 +240,12 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 						render_text = extra_info[x][render_y - 1];
 					}
 				}
+				if (render_y == extra_height && render_text.empty()) {
+					auto entry = node->extra_text.find("__estimated_cardinality__");
+					if (entry != node->extra_text.end()) {
+						render_text = "EC: " + entry->second;
+					}
+				}
 				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
 				ss << render_text;
 
@@ -386,24 +392,54 @@ void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string
 			return;
 		}
 	}
+	result.push_back(ExtraInfoSeparator());
 
+	bool requires_padding = false;
+	bool was_inlined = false;
 	for (auto &item : extra_info) {
 		string str = RemovePadding(item.second);
 		if (str.empty()) {
 			continue;
 		}
-		result.push_back(ExtraInfoSeparator());
-
-		str = item.first + ":\n" + str;
+		bool is_inlined = false;
+		if (!StringUtil::StartsWith(item.first, "__")) {
+			// the name is not internal (i.e. not __text__) - so we display the name in addition to the entry
+			const idx_t available_width = (config.node_render_width - 7);
+			idx_t total_size = item.first.size() + str.size() + 2;
+			bool is_multiline = StringUtil::Contains(str, "\n");
+			if (!is_multiline && total_size < available_width) {
+				// we can inline the full entry - no need for any separators unless the previous entry explicitly
+				// requires it
+				str = item.first + ": " + str;
+				is_inlined = true;
+			} else {
+				str = item.first + ":\n" + str;
+			}
+		}
+		if (is_inlined && was_inlined) {
+			// we can skip the padding if we have multiple inlined entries in a row
+			requires_padding = false;
+		}
+		if (requires_padding) {
+			result.emplace_back();
+		}
+		if (item.first == "__estimated_cardinality__") {
+			// estimated cardinality is rendered separately for alignment reasons
+			// but we do need to reserve space for it in the box
+			result.emplace_back();
+			continue;
+		}
 		auto splits = StringUtil::Split(str, "\n");
 		for (auto &split : splits) {
 			SplitStringBuffer(split, result);
 		}
+		requires_padding = true;
+		was_inlined = is_inlined;
 	}
 }
 
 string TextTreeRenderer::ExtraInfoSeparator() {
-	return StringUtil::Repeat(string(config.HORIZONTAL) + " ", (config.node_render_width - 7) / 2);
+	return StringUtil::Repeat(string(config.HORIZONTAL), (config.node_render_width - 9));
 }
 
 } // namespace duckdb

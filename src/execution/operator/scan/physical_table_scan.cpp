@@ -137,7 +137,7 @@ string PhysicalTableScan::GetName() const {
 InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
-		result["Stringified"] = function.to_string(bind_data.get());
+		result["__text__"] = function.to_string(bind_data.get());
 	}
 	if (function.projection_pushdown) {
 		if (function.filter_prune) {
@@ -190,7 +190,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		}
 	}
 
-	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
+	result["__estimated_cardinality__"] = StringUtil::Format("%llu", estimated_cardinality);
 	return result;
 }
 
