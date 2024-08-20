@@ -315,6 +315,10 @@ unique_ptr<FileHandle> TarFileSystem::OpenFile(const string &path, FileOpenFlags
 	// Now we need to find the file within the tar file and return out file handle
 	auto handle = parent_file_system.OpenFile(tar_path, flags, opener);
 
+	if (file_path.empty()) {
+		return handle;
+	}
+
 	// Check if the offset is cached
 	const auto cached_entry = TryGetCachedArchiveMetadata(opener, *handle, path);
 	if (cached_entry) {
@@ -393,7 +397,6 @@ bool TarFileSystem::OnDiskFile(FileHandle &handle) {
 }
 
 vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
-
 	// Remove the "tar://" prefix
 	const auto parts = SplitArchivePath(path.substr(6));
 	auto &tar_path = parts.first;
@@ -410,7 +413,7 @@ vector<string> TarFileSystem::Glob(const string &path, FileOpener *opener) {
 
 	auto pattern_parts = StringUtil::Split(file_path, '/');
 	for (auto &part : pattern_parts) {
-		if (part == "tar:") {
+		if (part == "tar:" || StringUtil::EndsWith(part, ".tar")) {
 			// We can not glob into nested tar files
 			throw NotImplementedException("Globbing into nested tar files is not supported");
 		}

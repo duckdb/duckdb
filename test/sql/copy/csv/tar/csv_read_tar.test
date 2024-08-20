@@ -57,11 +57,21 @@ Not implemented Error: Recursive globs are only supported at the end of tar file
 
 # We can read a file from a nested tar file
 query I
+SELECT filename FROM read_blob('tar://tar://data/csv/tar/complex.tar/ab.tar/a.csv') ORDER BY ALL;
+----
+tar://tar://data/csv/tar/complex.tar/ab.tar/a.csv
+
+# But we cant glob into nested tar files
+statement error
+SELECT filename FROM read_blob('tar://tar://data/csv/tar/complex.tar/ab.tar/*') ORDER BY ALL;
+----
+Not implemented Error: Globbing into nested tar files is not supported
+
+query I
 SELECT filename FROM read_blob('tar://data/csv/tar/complex.tar/tar://ab.tar/a.csv') ORDER BY ALL;
 ----
 tar://data/csv/tar/complex.tar/tar://ab.tar/a.csv
 
-# But we cant glob into nested tar files
 statement error
 SELECT filename FROM read_blob('tar://data/csv/tar/complex.tar/tar://ab.tar/*') ORDER BY ALL;
 ----
