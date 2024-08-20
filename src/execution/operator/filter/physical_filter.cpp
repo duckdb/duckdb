@@ -31,7 +31,7 @@ public:
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, executor, "filter", 0);
+		context.thread.profiler.Flush(op);
 	}
 };
 
