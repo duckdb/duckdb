@@ -145,6 +145,17 @@ vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependa
 	return created_pipelines;
 }
 
+static bool PipelinesExceedCardinalityThreshold(Pipeline &dependant, Pipeline &dependancy,
+                                                const idx_t cardinality_threshold) {
+#ifdef DEBUG
+	// we always add the dependency in debug mode so that this is well-tested
+	return true;
+#else
+	return dependant.GetSource()->estimated_cardinality > cardinality_threshold &&
+	       dependancy.GetSource()->estimated_cardinality > cardinality_threshold;
+#endif
+}
+
 void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies,
                                             const MetaPipeline &last_child) {
 	if (recursive_cte) {
@@ -165,21 +176,15 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 
 	// we try to limit the performance impact of these dependencies on smaller workloads,
 	// by only adding the dependencies if the source operator can likely keep all threads busy
-#ifndef DEBUG
 	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(executor.context).NumberOfThreads());
 	const auto cardinality_threshold = num_threads * Storage::ROW_GROUP_SIZE;
-#endif
 	for (; it != child_meta_pipelines.end(); it++) {
 		for (auto &pipeline : it->get()->pipelines) {
-#ifndef DEBUG
-			// we always add the dependencies in debug mode so that this is well-tested
-			if (pipeline->GetSource()->estimated_cardinality < cardinality_threshold) {
-				continue; // low cardinality, skip
-			}
-#endif
 			auto &pipeline_deps = pipeline_dependencies[*pipeline];
 			for (auto &new_dependency : new_dependencies) {
-				pipeline_deps.push_back(*new_dependency);
+				if (PipelinesExceedCardinalityThreshold(*pipeline, *new_dependency, cardinality_threshold)) {
+					pipeline_deps.push_back(*new_dependency);
+				}
 			}
 		}
 	}
