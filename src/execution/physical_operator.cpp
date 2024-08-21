@@ -11,6 +11,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/render_tree.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,11 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const 
 		result.push_back(*child);
 	}
 	return result;
+}
+
+void PhysicalOperator::SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result,
+                                               idx_t estimated_cardinality) {
+	result[RenderTreeNode::ESTIMATED_CARDINALITY] = StringUtil::Format("%llu", estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
