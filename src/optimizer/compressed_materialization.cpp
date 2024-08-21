@@ -263,7 +263,7 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	auto decompress_projection = make_uniq<LogicalProjection>(table_index, std::move(decompress_exprs));
 	if (op->has_estimated_cardinality) {
 		decompress_projection->SetEstimatedCardinality(op->estimated_cardinality);
-	}\
+	}
 
 	decompress_projection->children.emplace_back(std::move(op));
 	op = std::move(decompress_projection);
