@@ -1261,7 +1261,7 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 		result["Build Min"] = perfect_join_statistics.build_min.ToString();
 		result["Build Max"] = perfect_join_statistics.build_max.ToString();
 	}
-	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

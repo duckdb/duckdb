@@ -240,6 +240,31 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 						render_text = extra_info[x][render_y - 1];
 					}
 				}
+				if (render_y + 1 == extra_height && render_text.empty()) {
+					auto entry = node->extra_text.find(RenderTreeNode::CARDINALITY);
+					if (entry != node->extra_text.end()) {
+						render_text = entry->second + " Rows";
+					}
+				}
+				if (render_y == extra_height && render_text.empty()) {
+					auto timing_entry = node->extra_text.find(RenderTreeNode::TIMING);
+					if (timing_entry != node->extra_text.end()) {
+						render_text = "(" + timing_entry->second + ")";
+					} else if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
+						// we only render estimated cardinality if there is no real cardinality
+						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
+						if (entry != node->extra_text.end()) {
+							render_text = "~" + entry->second + " Rows";
+						}
+					}
+					if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
+						// we only render estimated cardinality if there is no real cardinality
+						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
+						if (entry != node->extra_text.end()) {
+							render_text = "~" + entry->second + " Rows";
+						}
+					}
+				}
 				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
 				ss << render_text;
 
@@ -298,7 +323,7 @@ void TextTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void TextTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+void TextTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	while (root.width * config.node_render_width > config.maximum_render_width) {
 		if (config.node_render_width - 2 < config.minimum_render_width) {
 			break;
@@ -386,24 +411,68 @@ void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string
 			return;
 		}
 	}
+	result.push_back(ExtraInfoSeparator());
 
+	bool requires_padding = false;
+	bool was_inlined = false;
 	for (auto &item : extra_info) {
 		string str = RemovePadding(item.second);
 		if (str.empty()) {
 			continue;
 		}
-		result.push_back(ExtraInfoSeparator());
-
-		str = item.first + ":\n" + str;
+		bool is_inlined = false;
+		if (!StringUtil::StartsWith(item.first, "__")) {
+			// the name is not internal (i.e. not __text__) - so we display the name in addition to the entry
+			const idx_t available_width = (config.node_render_width - 7);
+			idx_t total_size = item.first.size() + str.size() + 2;
+			bool is_multiline = StringUtil::Contains(str, "\n");
+			if (!is_multiline && total_size < available_width) {
+				// we can inline the full entry - no need for any separators unless the previous entry explicitly
+				// requires it
+				str = item.first + ": " + str;
+				is_inlined = true;
+			} else {
+				str = item.first + ":\n" + str;
+			}
+		}
+		if (is_inlined && was_inlined) {
+			// we can skip the padding if we have multiple inlined entries in a row
+			requires_padding = false;
+		}
+		if (requires_padding) {
+			result.emplace_back();
+		}
+		// cardinality, timing and estimated cardinality are rendered separately
+		// this is to allow alignment horizontally across nodes
+		if (item.first == RenderTreeNode::CARDINALITY) {
+			// cardinality - need to reserve space for cardinality AND timing
+			result.emplace_back();
+			if (extra_info.find(RenderTreeNode::TIMING) != extra_info.end()) {
+				result.emplace_back();
+			}
+			break;
+		}
+		if (item.first == RenderTreeNode::ESTIMATED_CARDINALITY) {
+			// estimated cardinality - reserve space for estimate
+			if (extra_info.find(RenderTreeNode::CARDINALITY) != extra_info.end()) {
+				// if we have a true cardinality render that instead of the estimate
+				result.pop_back();
+				continue;
+			}
+			result.emplace_back();
+			break;
+		}
 		auto splits = StringUtil::Split(str, "\n");
 		for (auto &split : splits) {
 			SplitStringBuffer(split, result);
 		}
+		requires_padding = true;
+		was_inlined = is_inlined;
 	}
 }
 
 string TextTreeRenderer::ExtraInfoSeparator() {
-	return StringUtil::Repeat(string(config.HORIZONTAL) + " ", (config.node_render_width - 7) / 2);
+	return StringUtil::Repeat(string(config.HORIZONTAL), (config.node_render_width - 9));
 }
 
 } // namespace duckdb
