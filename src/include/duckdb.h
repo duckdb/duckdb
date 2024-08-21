@@ -220,7 +220,7 @@ typedef enum duckdb_error_type {
 	DUCKDB_INVALID_CONFIGURATION = 42
 } duckdb_error_type;
 //! An enum over DuckDB's different cast modes.
-typedef enum duckdb_cast_mode { DUCKDB_CAST_STRICT = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
+typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
 
 //===--------------------------------------------------------------------===//
 // General type definitions
