@@ -60,16 +60,6 @@ public:
 	static unique_ptr<HyperLogLog> Deserialize(Deserializer &deserializer);
 
 private:
-	//! Taken from https://stackoverflow.com/a/72088344
-	static inline uint8_t CountTrailingZeros(const uint64_t &x) {
-		static constexpr const uint64_t DEBRUIJN = 0x03f79d71b4cb0a89;
-		static constexpr const uint8_t LOOKUP[] = {0,  47, 1,  56, 48, 27, 2,  60, 57, 49, 41, 37, 28, 16, 3,  61,
-		                                           54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4,  62,
-		                                           46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45,
-		                                           25, 39, 14, 33, 19, 30, 9,  24, 13, 18, 8,  12, 7,  6,  5,  63};
-		return LOOKUP[(DEBRUIJN * (x ^ (x - 1))) >> 58];
-	}
-
 	inline void Update(const idx_t &i, const uint8_t &z) {
 		k[i] = MaxValue<uint8_t>(k[i], z);
 	}
