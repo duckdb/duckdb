@@ -373,14 +373,15 @@ void MergeSortTree<E, O, CMP, F, C>::BuildRun(idx_t level_idx, idx_t run_idx) {
 	const RunElement SENTINEL(MergeSortTraits<ElementType>::SENTINEL(), MergeSortTraits<idx_t>::SENTINEL());
 
 	//	Position markers for scanning the children.
-	using Bounds = pair<idx_t, idx_t>;
+	using Bounds = pair<OffsetType, OffsetType>;
 	array<Bounds, fanout> bounds;
 	//	Start with first element of each (sorted) child run
 	RunElements players;
 	const auto child_base = run_idx * run_length;
 	for (idx_t child_run = 0; child_run < fanout; ++child_run) {
 		const auto child_idx = child_base + child_run * child_run_length;
-		bounds[child_run] = {MinValue<idx_t>(child_idx, count), MinValue<idx_t>(child_idx + child_run_length, count)};
+		bounds[child_run] = {OffsetType(MinValue<idx_t>(child_idx, count)),
+		                     OffsetType(MinValue<idx_t>(child_idx + child_run_length, count))};
 		if (bounds[child_run].first != bounds[child_run].second) {
 			players[child_run] = {child_level.first[child_idx], child_run};
 		} else {
