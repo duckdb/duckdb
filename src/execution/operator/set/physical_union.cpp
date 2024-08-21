@@ -48,13 +48,14 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 
 	vector<shared_ptr<Pipeline>> dependencies;
 	optional_ptr<MetaPipeline> last_child_ptr;
-	if (order_matters || children[0]->CanSaturateThreads(current.GetClientContext())) {
+	const auto can_saturate_threads = children[0]->CanSaturateThreads(current.GetClientContext());
+	if (order_matters || can_saturate_threads) {
 		// we add dependencies if order matters: union_pipeline comes after all pipelines created by building current
 		dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
 		// we also add dependencies if the LHS child can saturate all available threads
 		// in that case, we recursively make all RHS children depend on the LHS.
 		// This prevents breadth-first plan evaluation
-		if (children[0]->CanSaturateThreads(current.GetClientContext())) {
+		if (can_saturate_threads) {
 			last_child_ptr = meta_pipeline.GetLastChild();
 		}
 	}
