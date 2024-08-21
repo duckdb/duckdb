@@ -9,13 +9,16 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include <iomanip>
+#include <thread>
 
 namespace duckdb {
 
@@ -110,7 +113,6 @@ struct MergeSortTree {
 	Elements &Allocate(idx_t count);
 
 	void Build();
-	void BuildRun(idx_t level_idx, idx_t run_idx);
 
 	idx_t SelectNth(const SubFrames &frames, idx_t n) const;
 
@@ -128,6 +130,47 @@ struct MergeSortTree {
 	static constexpr auto CASCADING = C;
 
 protected:
+	//! Parallel build machinery
+	mutex build_lock;
+	atomic<idx_t> build_level;
+	atomic<idx_t> build_complete;
+	idx_t build_run;
+	idx_t build_run_length;
+	idx_t build_num_runs;
+
+	bool TryNextRun(idx_t &level_idx, idx_t &run_idx) {
+		const auto fanout = F;
+
+		lock_guard<mutex> stage_guard(build_lock);
+
+		// Finished with this level?
+		if (build_complete >= build_num_runs) {
+			++build_level;
+			if (build_level >= tree.size()) {
+				return false;
+			}
+
+			const auto count = LowestLevel().size();
+			build_run_length *= fanout;
+			build_num_runs = (count + build_run_length - 1) / build_run_length;
+			build_run = 0;
+			build_complete = 0;
+		}
+
+		// If all runs are in flight,
+		// yield until the next level is ready
+		if (build_run >= build_num_runs) {
+			return false;
+		}
+
+		level_idx = build_level;
+		run_idx = build_run++;
+
+		return true;
+	}
+
+	void BuildRun(idx_t level_idx, idx_t run_idx);
+
 	RunElement StartGames(Games &losers, const RunElements &elements, const RunElement &sentinel) {
 		const auto elem_nodes = elements.size();
 		const auto game_nodes = losers.size();
@@ -283,35 +326,35 @@ vector<E> &MergeSortTree<E, O, CMP, F, C>::Allocate(idx_t count) {
 		child_run_length = run_length;
 	}
 
+	//	Set up for parallel build
+	build_level = 1;
+	build_complete = 0;
+	build_run = 0;
+	build_run_length = fanout;
+	build_num_runs = (count + build_run_length - 1) / build_run_length;
+
 	return LowestLevel();
 }
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
 void MergeSortTree<E, O, CMP, F, C>::Build() {
-	const auto fanout = F;
-	const auto &lowest_level = tree[0].first;
-	const auto count = lowest_level.size();
-
 	//	Fan in parent levels until we are at the top
 	//	Note that we don't build the top layer as that would just be all the data.
-	idx_t level_idx = 1;
-	for (idx_t child_run_length = 1; child_run_length < count; ++level_idx) {
-		const auto run_length = child_run_length * fanout;
-		const auto num_runs = (count + run_length - 1) / run_length;
-
-		//	Create each parent run by merging the child runs using a tournament tree
-		// 	https://en.wikipedia.org/wiki/K-way_merge_algorithm
-		//	TODO: Because the runs are independent, they can be parallelised with parallel_for
-		for (idx_t run_idx = 0; run_idx < num_runs; ++run_idx) {
+	while (build_level.load() < tree.size()) {
+		idx_t level_idx;
+		idx_t run_idx;
+		if (TryNextRun(level_idx, run_idx)) {
 			BuildRun(level_idx, run_idx);
+		} else {
+			std::this_thread::yield();
 		}
-
-		child_run_length = run_length;
 	}
 }
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
 void MergeSortTree<E, O, CMP, F, C>::BuildRun(idx_t level_idx, idx_t run_idx) {
+	//	Create each parent run by merging the child runs using a tournament tree
+	// 	https://en.wikipedia.org/wiki/K-way_merge_algorithm
 	const auto fanout = F;
 	const auto cascading = C;
 
@@ -382,7 +425,10 @@ void MergeSortTree<E, O, CMP, F, C>::BuildRun(idx_t level_idx, idx_t run_idx) {
 			}
 		}
 	}
+
+	++build_complete;
 }
+
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
 idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n) const {
 	// Handle special case of a one-element tree
