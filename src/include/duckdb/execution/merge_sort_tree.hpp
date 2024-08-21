@@ -102,8 +102,14 @@ struct MergeSortTree {
 
 	explicit MergeSortTree(const CMP &cmp = CMP()) : cmp(cmp) {
 	}
-	void Build(Elements &&lowest_level);
-	void Allocate(Elements &&lowest_level);
+
+	inline Elements &LowestLevel() {
+		return tree[0].first;
+	}
+
+	Elements &Allocate(idx_t count);
+
+	void Build();
 	void BuildRun(idx_t level_idx, idx_t run_idx);
 
 	idx_t SelectNth(const SubFrames &frames, idx_t n) const;
@@ -252,10 +258,10 @@ protected:
 };
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
-void MergeSortTree<E, O, CMP, F, C>::Allocate(Elements &&lowest_level) {
+vector<E> &MergeSortTree<E, O, CMP, F, C>::Allocate(idx_t count) {
 	const auto fanout = F;
 	const auto cascading = C;
-	const auto count = lowest_level.size();
+	Elements lowest_level(count);
 	tree.emplace_back(Level(std::move(lowest_level), Offsets()));
 
 	for (idx_t child_run_length = 1; child_run_length < count;) {
@@ -276,13 +282,15 @@ void MergeSortTree<E, O, CMP, F, C>::Allocate(Elements &&lowest_level) {
 		tree.emplace_back(std::move(elements), std::move(cascades));
 		child_run_length = run_length;
 	}
+
+	return LowestLevel();
 }
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
-void MergeSortTree<E, O, CMP, F, C>::Build(Elements &&lowest_level) {
+void MergeSortTree<E, O, CMP, F, C>::Build() {
 	const auto fanout = F;
+	const auto &lowest_level = tree[0].first;
 	const auto count = lowest_level.size();
-	Allocate(std::move(lowest_level));
 
 	//	Fan in parent levels until we are at the top
 	//	Note that we don't build the top layer as that would just be all the data.

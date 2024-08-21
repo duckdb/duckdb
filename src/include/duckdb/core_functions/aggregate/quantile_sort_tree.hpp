@@ -248,7 +248,9 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	using Elements = typename BaseTree::Elements;
 
 	explicit QuantileSortTree(Elements &&lowest_level) {
-		BaseTree::Build(std::move(lowest_level));
+		BaseTree::Allocate(lowest_level.size());
+		BaseTree::LowestLevel() = std::move(lowest_level);
+		BaseTree::Build();
 	}
 
 	template <class INPUT_TYPE>

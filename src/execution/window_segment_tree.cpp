@@ -1409,7 +1409,7 @@ public:
 	using ZippedTuple = std::tuple<idx_t, idx_t>;
 	using ZippedElements = vector<ZippedTuple>;
 
-	void Build(ZippedElements &&prev_idcs, WindowDistinctAggregatorGlobalState &gdsink);
+	void Build(WindowDistinctAggregatorGlobalState &gdsink);
 };
 
 class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
@@ -1455,11 +1455,10 @@ public:
 	//! The block starts (the scanner doesn't know this) plus the total count
 	vector<idx_t> block_starts;
 
-	//! The tree indices
-	mutable ZippedElements prev_idcs;
 	//! The block boundary seconds
 	mutable ZippedElements seconds;
-	MergeSortTree<ZippedTuple> zipped_tree;
+	//! The MST with the distinct back pointers
+	mutable MergeSortTree<ZippedTuple> zipped_tree;
 	//! The merge sort tree for the aggregate.
 	WindowDistinctSortTree merge_sort_tree;
 
@@ -1499,7 +1498,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const W
 
 	//	6:	prevIdcs ← []
 	//	7:	prevIdcs[0] ← “-”
-	prev_idcs.resize(group_count);
+	auto &prev_idcs = zipped_tree.Allocate(group_count);
 
 	//	To handle FILTER clauses we make the missing elements
 	//	point to themselves so they won't be counted.
@@ -1739,7 +1738,7 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 void WindowDistinctAggregatorLocalState::Sorted() {
 	using ZippedTuple = WindowDistinctAggregatorGlobalState::ZippedTuple;
 	auto &global_sort = gastate.global_sort;
-	auto &prev_idcs = gastate.prev_idcs;
+	auto &prev_idcs = gastate.zipped_tree.LowestLevel();
 	auto &aggregator = gastate.aggregator;
 	auto &scan_chunk = payload_chunk;
 
@@ -1811,6 +1810,7 @@ void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 
 	// Patch up the indices at block boundaries
 	// (We don't need to patch block 0.)
+	auto &prev_idcs = zipped_tree.LowestLevel();
 	for (idx_t block_idx = 1; block_idx < seconds.size(); ++block_idx) {
 		// We only need to patch if the first index in the block
 		// was a back link to the previous block (10:)
@@ -1823,11 +1823,11 @@ void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 }
 
 void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
-	zipped_tree.Build(std::move(prev_idcs));
-	merge_sort_tree.Build(std::move(prev_idcs), *this);
+	zipped_tree.Build();
+	merge_sort_tree.Build(*this);
 }
 
-void WindowDistinctSortTree::Build(ZippedElements &&prev_idcs, WindowDistinctAggregatorGlobalState &gdsink) {
+void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) {
 	auto &aggr = gdsink.aggregator.aggr;
 	auto &allocator = gdsink.allocator;
 	auto &inputs = gdsink.inputs;
