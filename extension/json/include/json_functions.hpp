@@ -100,6 +100,7 @@ private:
 	static ScalarFunctionSet GetKeysFunction();
 	static ScalarFunctionSet GetTypeFunction();
 	static ScalarFunctionSet GetValidFunction();
+	static ScalarFunctionSet GetValueFunction();
 	static ScalarFunctionSet GetSerializeSqlFunction();
 	static ScalarFunctionSet GetDeserializeSqlFunction();
 	static ScalarFunctionSet GetSerializePlanFunction();

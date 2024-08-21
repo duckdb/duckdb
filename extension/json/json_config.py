@@ -25,6 +25,7 @@ source_files = [
         'extension/json/json_functions/json_create.cpp',
         'extension/json/json_functions/json_type.cpp',
         'extension/json/json_functions/json_valid.cpp',
+        'extension/json/json_functions/json_value.cpp',
         'extension/json/json_functions/read_json_objects.cpp',
         'extension/json/json_functions/read_json.cpp',
         'extension/json/json_functions/json_serialize_plan.cpp',
