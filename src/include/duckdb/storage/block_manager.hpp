@@ -112,6 +112,10 @@ public:
 		block_alloc_size = block_alloc_size_p.GetIndex();
 	}
 
+	//! Verify the block usage count
+	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
+	}
+
 private:
 	//! The lock for the set of blocks
 	mutex blocks_lock;
