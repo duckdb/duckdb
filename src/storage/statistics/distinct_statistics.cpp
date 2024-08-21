@@ -1,6 +1,7 @@
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <math.h>
 
