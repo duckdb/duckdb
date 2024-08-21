@@ -90,7 +90,7 @@ public:
 	bool SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &result_ids);
 
 	//! Returns all ART storage information for serialization
-	IndexStorageInfo GetStorageInfo(bool get_buffers) const override;
+	IndexStorageInfo GetStorageInfo(const bool get_buffers) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -156,7 +156,7 @@ private:
 	//! STABLE STORAGE NOTE: This is for old storage files, to deserialize the allocators of the ART
 	void Deserialize(const BlockPointer &pointer);
 	//! Initializes the serialization of the index by combining the allocator data onto partial blocks
-	void WritePartialBlocks() const;
+	void WritePartialBlocks();
 
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;

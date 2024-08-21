@@ -259,7 +259,7 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 
-void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const Index &index) {
+void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, Index &index) {
 
 	// We will never write an index to the WAL that is not bound
 	D_ASSERT(index.IsBound());

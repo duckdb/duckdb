@@ -82,7 +82,7 @@ public:
 
 private:
 	//! Indexes associated with the current table
-	vector<unique_ptr<Index>> indexes;
 	mutex indexes_lock;
+	vector<unique_ptr<Index>> indexes;
 };
 } // namespace duckdb
