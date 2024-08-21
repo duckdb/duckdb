@@ -15,12 +15,16 @@ namespace duckdb {
 
 unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_ptr<LogicalOperator> op) {
 	JoinType join_type = JoinType::INVALID;
-	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN);
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	         op->type == LogicalOperatorType::LOGICAL_ANY_JOIN);
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		join_type = op->Cast<LogicalComparisonJoin>().join_type;
 	}
 	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		join_type = op->Cast<LogicalAnyJoin>().join_type;
+	}
+	if (op->type == LogicalOperatorType::LOGICAL_EXCEPT) {
+		join_type == JoinType::ANTI;
 	}
 	switch (join_type) {
 	case JoinType::SEMI:
@@ -33,14 +37,16 @@ unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_pt
 		}
 		break;
 	}
+	// TODO: For ANTI joins, if the right child is empty, you can replace the whole join with
+	//  the left child
 	case JoinType::ANTI:
 	case JoinType::MARK:
 	case JoinType::SINGLE:
 	case JoinType::LEFT: {
 		if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 			op = make_uniq<LogicalEmptyResult>(std::move(op));
-			break;
 		}
+		break;
 	}
 	default:
 		break;
@@ -72,14 +78,10 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 		}
 		return op;
 	}
+	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		op = PullUpEmptyJoinChildren(std::move(op));
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		// TODO: if child is empty, replace aggregate columns with
-		// 1 value answer, (i.e count(*) should return row with value 1).
-		break;
 	}
 	default:
 		break;
