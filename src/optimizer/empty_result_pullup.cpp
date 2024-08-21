@@ -24,7 +24,7 @@ unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_pt
 		join_type = op->Cast<LogicalAnyJoin>().join_type;
 	}
 	if (op->type == LogicalOperatorType::LOGICAL_EXCEPT) {
-		join_type == JoinType::ANTI;
+		join_type = JoinType::ANTI;
 	}
 	switch (join_type) {
 	case JoinType::SEMI:
