@@ -129,7 +129,7 @@ public:
 	//! Adds the top level query information to the global profiler.
 	DUCKDB_API void SetInfo(const double &blocked_thread_time);
 
-	DUCKDB_API void StartPhase(MetricsType PhaseMetric);
+	DUCKDB_API void StartPhase(MetricsType phase_metric);
 	DUCKDB_API void EndPhase();
 
 	DUCKDB_API void Initialize(const PhysicalOperator &root);
