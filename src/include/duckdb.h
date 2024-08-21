@@ -2189,7 +2189,7 @@ Returns the MAP key at index as a duckdb_value.
 
 * @param value The MAP value.
 * @param index The index of the key.
-* @return The value as a duckdb_value.
+* @return The key as a duckdb_value.
 */
 DUCKDB_API duckdb_value duckdb_get_map_key(duckdb_value value, idx_t index);
 
