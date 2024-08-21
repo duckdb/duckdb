@@ -4907,6 +4907,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	if (StringUtil::Equals(value, "FILTER_PUSHDOWN")) {
 		return OptimizerType::FILTER_PUSHDOWN;
 	}
+	if (StringUtil::Equals(value, "EMPTY_RESULT_PULLUP")) {
+		return OptimizerType::EMPTY_RESULT_PULLUP;
+	}
 	if (StringUtil::Equals(value, "CTE_FILTER_PUSHER")) {
 		return OptimizerType::CTE_FILTER_PUSHER;
 	}
