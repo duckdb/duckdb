@@ -89,6 +89,8 @@ public:
 	const unsafe_optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Get the first child greater than or equal to the byte.
 	unsafe_optional_ptr<Node> GetNextChildMutable(ART &art, uint8_t &byte) const;
+	//! Returns true, if the byte exists, else false.
+	bool HasByte(ART &art, uint8_t &byte) const;
 	//! Get the first byte greater than or equal to the byte.
 	bool GetNextByte(ART &art, uint8_t &byte) const;
 

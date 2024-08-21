@@ -41,6 +41,8 @@ public:
 	//! Delete a byte.
 	static void DeleteByte(ART &art, Node &node, const uint8_t byte);
 
+	//! Returns true, if the byte exists, else false.
+	bool HasByte(uint8_t &byte);
 	//! Get the first byte greater or equal to the byte.
 	bool GetNextByte(uint8_t &byte);
 

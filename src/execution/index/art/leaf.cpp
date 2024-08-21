@@ -27,8 +27,11 @@ void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row
 	D_ASSERT(count > 1);
 	D_ASSERT(!node.get().HasMetadata());
 
-	ARTKeySection section(start, start + count - 1, 0, 0);
-	art.ConstructInternal(row_ids, row_ids, node, section, GateStatus::GATE_SET);
+	// We cannot recurse into the leaf during Construct(...) because row IDs are not sorted.
+	for (idx_t i = 0; i < count; i++) {
+		idx_t offset = start + i;
+		art.Insert(node, row_ids[offset], 0, row_ids[offset], GateStatus::GATE_SET);
+	}
 	node.get().SetGateStatus(GateStatus::GATE_SET);
 }
 

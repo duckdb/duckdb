@@ -3246,9 +3246,9 @@ template<>
 const char* EnumUtil::ToChars<GateStatus>(GateStatus value) {
 	switch(value) {
 	case GateStatus::GATE_NOT_SET:
-		return "OUTSIDE";
+		return "GATE_NOT_SET";
 	case GateStatus::GATE_SET:
-		return "INSIDE";
+		return "GATE_SET";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3256,10 +3256,10 @@ const char* EnumUtil::ToChars<GateStatus>(GateStatus value) {
 
 template<>
 GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
-	if (StringUtil::Equals(value, "OUTSIDE")) {
+	if (StringUtil::Equals(value, "GATE_NOT_SET")) {
 		return GateStatus::GATE_NOT_SET;
 	}
-	if (StringUtil::Equals(value, "INSIDE")) {
+	if (StringUtil::Equals(value, "GATE_SET")) {
 		return GateStatus::GATE_SET;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));

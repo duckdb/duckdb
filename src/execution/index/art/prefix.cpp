@@ -374,8 +374,10 @@ void Prefix::Vacuum(ART &art, Node &node, const unordered_set<uint8_t> &indexes)
 	reference<Node> ref(node);
 	while (ref.get().GetType() == PREFIX) {
 		if (set && allocator.NeedsVacuum(ref)) {
+			auto status = ref.get().GetGateStatus();
 			ref.get() = allocator.VacuumPointer(ref);
 			ref.get().SetMetadata(static_cast<uint8_t>(PREFIX));
+			ref.get().SetGateStatus(status);
 		}
 		Prefix prefix(art, ref, true);
 		ref = *prefix.ptr;

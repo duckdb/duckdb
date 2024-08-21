@@ -32,9 +32,11 @@ private:
 public:
 	//! Get a new BaseLeaf and initialize it.
 	static BaseLeaf &New(ART &art, Node &node);
+	//! Returns true, if the byte exists, else false.
+	bool HasByte(uint8_t &byte) const;
 	//! Get the first byte greater than or equal to the byte.
 	//! Returns true, if such a byte exists, else false.
-	static bool GetNextByte(const BaseLeaf &n, uint8_t &byte);
+	bool GetNextByte(uint8_t &byte) const;
 
 private:
 	static void InsertByteInternal(BaseLeaf &n, const uint8_t byte);

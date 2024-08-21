@@ -36,6 +36,11 @@ void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 	}
 }
 
+bool Node256Leaf::HasByte(uint8_t &byte) {
+	ValidityMask v_mask(&mask[0]);
+	return v_mask.RowIsValid(byte);
+}
+
 bool Node256Leaf::GetNextByte(uint8_t &byte) {
 	ValidityMask v_mask(&mask[0]);
 	for (uint16_t i = byte; i < CAPACITY; i++) {

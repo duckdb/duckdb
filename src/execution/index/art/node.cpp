@@ -6,6 +6,7 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
+#include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
@@ -248,14 +249,29 @@ unsafe_optional_ptr<Node> Node::GetNextChildMutable(ART &art, uint8_t &byte) con
 	return GetNextChildInternal(art, *this, byte);
 }
 
+bool Node::HasByte(ART &art, uint8_t &byte) const {
+	D_ASSERT(HasMetadata());
+
+	switch (GetType()) {
+	case NType::NODE_7_LEAF:
+		return Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF).HasByte(byte);
+	case NType::NODE_15_LEAF:
+		return Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF).HasByte(byte);
+	case NType::NODE_256_LEAF:
+		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).HasByte(byte);
+	default:
+		throw InternalException("Invalid node type for GetNextByte.");
+	}
+}
+
 bool Node::GetNextByte(ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 
 	switch (GetType()) {
 	case NType::NODE_7_LEAF:
-		return Node7Leaf::GetNextByte(Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF), byte);
+		return Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF).GetNextByte(byte);
 	case NType::NODE_15_LEAF:
-		return Node15Leaf::GetNextByte(Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF), byte);
+		return Ref<const Node15Leaf>(art, *this, NType::NODE_15_LEAF).GetNextByte(byte);
 	case NType::NODE_256_LEAF:
 		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
 	default:
@@ -533,6 +549,8 @@ bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 	if (other.GetType() == NType::LEAF_INLINED) {
 		D_ASSERT(status == GateStatus::GATE_NOT_SET);
 		D_ASSERT(other.GetGateStatus() == GateStatus::GATE_SET || other.GetType() == NType::LEAF_INLINED);
+		D_ASSERT(GetType() == NType::LEAF_INLINED || GetGateStatus() == GateStatus::GATE_SET);
+
 		if (art.IsUnique()) {
 			return false;
 		}
@@ -541,9 +559,27 @@ bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 	}
 
 	// Enter a gate.
-	if (GetGateStatus() == GateStatus::GATE_SET && other.GetGateStatus() == GateStatus::GATE_SET &&
-	    status == GateStatus::GATE_NOT_SET) {
-		return Merge(art, other, GateStatus::GATE_SET);
+	if (GetGateStatus() == GateStatus::GATE_SET && status == GateStatus::GATE_NOT_SET) {
+		D_ASSERT(other.GetGateStatus() == GateStatus::GATE_SET);
+		D_ASSERT(GetType() != NType::LEAF_INLINED);
+		D_ASSERT(other.GetType() != NType::LEAF_INLINED);
+
+		// Get all row IDs.
+		unsafe_vector<row_t> row_ids;
+		Iterator it(art);
+		it.FindMinimum(other);
+		ARTKey empty_key = ARTKey();
+		it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids, false);
+		Node::Free(art, other);
+		D_ASSERT(row_ids.size() > 1);
+
+		// Insert all row IDs.
+		ArenaAllocator allocator(Allocator::Get(art.db));
+		for (idx_t i = 0; i < row_ids.size(); i++) {
+			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, row_ids[i]);
+			art.Insert(*this, row_id, 0, row_id, GateStatus::GATE_SET);
+		}
+		return true;
 	}
 
 	// Merge N4, N16, N48, N256 nodes.
@@ -586,8 +622,10 @@ void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	auto &allocator = GetAllocator(art, type);
 	auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(*this);
 	if (needs_vacuum) {
+		auto status = GetGateStatus();
 		*this = allocator.VacuumPointer(*this);
 		SetMetadata(static_cast<uint8_t>(type));
+		SetGateStatus(status);
 	}
 
 	switch (type) {

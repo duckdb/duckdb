@@ -412,43 +412,19 @@ void ConstructLeaf(ART &art, const unsafe_vector<ARTKey> &keys, Node &node, ARTK
 }
 
 bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-                            ARTKeySection &section, const GateStatus status) {
+                            ARTKeySection &section) {
 	D_ASSERT(section.start < keys.size());
 	D_ASSERT(section.end < keys.size());
 	D_ASSERT(section.start <= section.end);
 
 	auto &start = keys[section.start];
 	auto &end = keys[section.end];
-
 	D_ASSERT(start.len != 0);
-	if (status == GateStatus::GATE_SET && start.len - 1 == section.depth) {
-		// Create an inlined leaf, or a nested leaf node.
-		auto count = section.end - section.start + 1;
-		if (count == 1) {
-			Leaf::New(node, row_ids[section.start].GetRowId());
-		} else {
-			ConstructLeaf(*this, keys, node, section);
-		}
-		return true;
-	}
 
 	// Increment the depth until we reach a leaf or find a mismatching byte.
 	auto prefix_depth = section.depth;
 	while (start.len != section.depth && start.ByteMatches(end, section.depth)) {
 		section.depth++;
-	}
-
-	if (status == GateStatus::GATE_SET && start.len - 1 == section.depth) {
-		D_ASSERT(section.depth < start.len);
-		D_ASSERT(section.depth > prefix_depth);
-
-		// Create a nested leaf.
-		D_ASSERT(section.end - section.start + 1 != 1);
-		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth - 1);
-		reference<Node> ref(node);
-		Prefix::New(*this, ref, start, prefix_depth, count);
-		ConstructLeaf(*this, keys, ref, section);
-		return true;
 	}
 
 	if (start.len == section.depth) {
@@ -458,14 +434,8 @@ bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vect
 			return false;
 		}
 
-		// Early-out, if inlined leaf.
-		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
-		if (status == GateStatus::GATE_SET && row_id_count == 1) {
-			Leaf::New(node, row_ids[section.start].GetRowId());
-			return true;
-		}
-
 		reference<Node> ref(node);
+		auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
 		Prefix::New(*this, ref, start, prefix_depth, count);
 		if (row_id_count == 1) {
 			Leaf::New(ref, row_ids[section.start].GetRowId());
@@ -488,7 +458,7 @@ bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vect
 	Node::New(*this, ref, Node::GetNodeType(children.size()));
 	for (auto &child : children) {
 		Node new_child;
-		auto success = ConstructInternal(keys, row_ids, new_child, child, status);
+		auto success = ConstructInternal(keys, row_ids, new_child, child);
 		Node::InsertChild(*this, ref, child.key_byte, new_child);
 		if (!success) {
 			return false;
@@ -499,15 +469,17 @@ bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vect
 
 bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count) {
 	ARTKeySection section(0, row_count - 1, 0, 0);
-	if (!ConstructInternal(keys, row_ids, tree, section, tree.GetGateStatus())) {
+	if (!ConstructInternal(keys, row_ids, tree, section)) {
 		return false;
 	}
 
 #ifdef DEBUG
-	for (idx_t i = 0; i < row_count; i++) {
-		D_ASSERT(!keys[i].Empty());
-		D_ASSERT(Lookup(tree, keys[i], 0));
-	}
+	unsafe_vector<row_t> row_ids_debug;
+	Iterator it(*this);
+	it.FindMinimum(tree);
+	ARTKey empty_key = ARTKey();
+	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids_debug, false);
+	D_ASSERT(row_count == row_ids_debug.size());
 #endif
 	return true;
 }
@@ -774,7 +746,7 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	D_ASSERT(depth < key.get().len);
 	if (next.get().IsLeafNode()) {
 		auto byte = key.get()[depth];
-		if (next.get().GetNextByte(*this, byte)) {
+		if (next.get().HasByte(*this, byte)) {
 			Node::DeleteChild(*this, next, node, key.get()[depth], status, key.get());
 		}
 		return;

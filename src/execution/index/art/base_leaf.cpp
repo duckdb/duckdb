@@ -23,10 +23,20 @@ BaseLeaf<CAPACITY, TYPE> &BaseLeaf<CAPACITY, TYPE>::New(ART &art, Node &node) {
 }
 
 template <uint8_t CAPACITY, NType TYPE>
-bool BaseLeaf<CAPACITY, TYPE>::GetNextByte(const BaseLeaf &n, uint8_t &byte) {
-	for (uint8_t i = 0; i < n.count; i++) {
-		if (n.key[i] >= byte) {
-			byte = n.key[i];
+bool BaseLeaf<CAPACITY, TYPE>::HasByte(uint8_t &byte) const {
+	for (uint8_t i = 0; i < count; i++) {
+		if (key[i] == byte) {
+			return true;
+		}
+	}
+	return false;
+}
+
+template <uint8_t CAPACITY, NType TYPE>
+bool BaseLeaf<CAPACITY, TYPE>::GetNextByte(uint8_t &byte) const {
+	for (uint8_t i = 0; i < count; i++) {
+		if (key[i] >= byte) {
+			byte = key[i];
 			return true;
 		}
 	}
@@ -147,7 +157,7 @@ void Node15Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 }
 
 void Node15Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
-	auto &n15 = Node7Leaf::DeleteByteInternal(art, node, byte);
+	auto &n15 = DeleteByteInternal(art, node, byte);
 
 	// Shrink node to Node7.
 	if (n15.count < Node7Leaf::CAPACITY) {
