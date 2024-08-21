@@ -1,24 +1,15 @@
 #include "duckdb/optimizer/empty_result_pullup.hpp"
-
-#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_distinct.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
-#include "duckdb/planner/operator/logical_order.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_set_operation.hpp"
-#include "duckdb/planner/operator/logical_simple.hpp"
 
 namespace duckdb {
 
 unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_ptr<LogicalOperator> op) {
 	JoinType join_type = JoinType::INVALID;
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	         op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
-	         op->type == LogicalOperatorType::LOGICAL_EXCEPT);
+	         op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_EXCEPT);
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		join_type = op->Cast<LogicalComparisonJoin>().join_type;
 	}
