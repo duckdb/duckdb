@@ -58,27 +58,3 @@ duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info
 	ProfilingNode *profiling_info_ptr = node.GetChild(index).get();
 	return reinterpret_cast<duckdb_profiling_info>(profiling_info_ptr);
 }
-
-const char *duckdb_profiling_info_get_name(duckdb_profiling_info info) {
-	if (!info) {
-		return nullptr;
-	}
-	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	if (node.node_type != duckdb::ProfilingNodeType::OPERATOR) {
-		return nullptr;
-	}
-	auto &op_node = node.Cast<duckdb::OperatorProfilingNode>();
-	return strdup(op_node.name.c_str());
-}
-
-const char *duckdb_profiling_info_get_query(duckdb_profiling_info info) {
-	if (!info) {
-		return nullptr;
-	}
-	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	if (node.node_type != duckdb::ProfilingNodeType::QUERY_ROOT) {
-		return nullptr;
-	}
-	auto &query_node = node.Cast<duckdb::QueryProfilingNode>();
-	return strdup(query_node.query.c_str());
-}
