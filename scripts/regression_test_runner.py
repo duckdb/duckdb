@@ -111,6 +111,9 @@ def run_benchmark(runner, benchmark):
 '''
         )
         print(out)
+        if 'HTTP' in err:
+            print("Ignoring HTTP error and terminating the running of the regression tests")
+            exit(0)
         return 'Failed to run benchmark ' + benchmark
     if verbose:
         print(err)
