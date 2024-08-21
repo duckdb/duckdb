@@ -1,6 +1,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/render_tree.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/execution/execution_context.hpp"
@@ -38,6 +39,11 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const 
 		result.push_back(*child);
 	}
 	return result;
+}
+
+void PhysicalOperator::SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result,
+                                               idx_t estimated_cardinality) {
+	result[RenderTreeNode::ESTIMATED_CARDINALITY] = StringUtil::Format("%llu", estimated_cardinality);
 }
 
 idx_t PhysicalOperator::EstimatedThreadCount() const {

@@ -268,8 +268,6 @@ typedef struct {
 	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
 	idx_t (*duckdb_profiling_info_get_child_count)(duckdb_profiling_info info);
 	duckdb_profiling_info (*duckdb_profiling_info_get_child)(duckdb_profiling_info info, idx_t index);
-	const char *(*duckdb_profiling_info_get_name)(duckdb_profiling_info info);
-	const char *(*duckdb_profiling_info_get_query)(duckdb_profiling_info info);
 	void (*duckdb_scalar_function_set_varargs)(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 	void (*duckdb_scalar_function_set_special_handling)(duckdb_scalar_function scalar_function);
 	void (*duckdb_scalar_function_set_volatile)(duckdb_scalar_function scalar_function);
@@ -596,8 +594,6 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_profiling_info_get_value = duckdb_profiling_info_get_value;
 	result.duckdb_profiling_info_get_child_count = duckdb_profiling_info_get_child_count;
 	result.duckdb_profiling_info_get_child = duckdb_profiling_info_get_child;
-	result.duckdb_profiling_info_get_name = duckdb_profiling_info_get_name;
-	result.duckdb_profiling_info_get_query = duckdb_profiling_info_get_query;
 	result.duckdb_scalar_function_set_varargs = duckdb_scalar_function_set_varargs;
 	result.duckdb_scalar_function_set_special_handling = duckdb_scalar_function_set_special_handling;
 	result.duckdb_scalar_function_set_volatile = duckdb_scalar_function_set_volatile;

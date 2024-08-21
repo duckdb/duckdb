@@ -101,7 +101,6 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/profiling_info.hpp"
-#include "duckdb/main/profiling_node.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
@@ -4313,12 +4312,18 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 	switch(value) {
+	case MetricsType::QUERY_NAME:
+		return "QUERY_NAME";
+	case MetricsType::BLOCKED_THREAD_TIME:
+		return "BLOCKED_THREAD_TIME";
 	case MetricsType::CPU_TIME:
 		return "CPU_TIME";
 	case MetricsType::EXTRA_INFO:
 		return "EXTRA_INFO";
 	case MetricsType::CUMULATIVE_CARDINALITY:
 		return "CUMULATIVE_CARDINALITY";
+	case MetricsType::OPERATOR_TYPE:
+		return "OPERATOR_TYPE";
 	case MetricsType::OPERATOR_CARDINALITY:
 		return "OPERATOR_CARDINALITY";
 	case MetricsType::CUMULATIVE_ROWS_SCANNED:
@@ -4334,6 +4339,12 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
+	if (StringUtil::Equals(value, "QUERY_NAME")) {
+		return MetricsType::QUERY_NAME;
+	}
+	if (StringUtil::Equals(value, "BLOCKED_THREAD_TIME")) {
+		return MetricsType::BLOCKED_THREAD_TIME;
+	}
 	if (StringUtil::Equals(value, "CPU_TIME")) {
 		return MetricsType::CPU_TIME;
 	}
@@ -4342,6 +4353,9 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CUMULATIVE_CARDINALITY")) {
 		return MetricsType::CUMULATIVE_CARDINALITY;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_TYPE")) {
+		return MetricsType::OPERATOR_TYPE;
 	}
 	if (StringUtil::Equals(value, "OPERATOR_CARDINALITY")) {
 		return MetricsType::OPERATOR_CARDINALITY;
@@ -5726,29 +5740,6 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	}
 	if (StringUtil::Equals(value, "NO_OUTPUT")) {
 		return ProfilerPrintFormat::NO_OUTPUT;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value) {
-	switch(value) {
-	case ProfilingNodeType::QUERY_ROOT:
-		return "QUERY_ROOT";
-	case ProfilingNodeType::OPERATOR:
-		return "OPERATOR";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value) {
-	if (StringUtil::Equals(value, "QUERY_ROOT")) {
-		return ProfilingNodeType::QUERY_ROOT;
-	}
-	if (StringUtil::Equals(value, "OPERATOR")) {
-		return ProfilingNodeType::OPERATOR;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
