@@ -1729,6 +1729,10 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 		}
 	}
 
+	//	This is a parallel implementation,
+	//	so every thread can call it.
+	gdsink.zipped_tree.Build();
+
 	//	Last one out turns off the lights!
 	if (++gdsink.finalized == gdsink.locals) {
 		gdsink.Finalize(stats);
@@ -1823,7 +1827,6 @@ void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 }
 
 void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
-	zipped_tree.Build();
 	merge_sort_tree.Build(*this);
 }
 
