@@ -252,8 +252,6 @@ enum class PreparedStatementMode : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
 
-enum class ProfilingNodeType : uint8_t;
-
 enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
@@ -688,9 +686,6 @@ const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value
 
 template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
-
-template<>
-const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
@@ -1178,9 +1173,6 @@ PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *va
 
 template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
-
-template<>
-ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value);
 
 template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);

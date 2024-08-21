@@ -147,7 +147,7 @@ SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, Operato
 	gstate.tables[gstate.child]->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(*this, lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 
 	return SinkCombineResultType::FINISHED;

@@ -336,7 +336,7 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(*this, lstate.join_key_executor, "join_key_executor", 1);
+	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
 	if (filter_pushdown) {
 		filter_pushdown->Combine(*gstate.global_filter_state, *lstate.local_filter_state);
@@ -693,7 +693,7 @@ public:
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, probe_executor, "probe_executor", 0);
+		context.thread.profiler.Flush(op);
 	}
 };
 
@@ -1261,7 +1261,7 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 		result["Build Min"] = perfect_join_statistics.build_min.ToString();
 		result["Build Max"] = perfect_join_statistics.build_max.ToString();
 	}
-	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

@@ -43,11 +43,11 @@ struct OperatorInformation {
 	string name;
 
 	void AddTime(double n_time) {
-		this->time += n_time;
+		time += n_time;
 	}
 
 	void AddReturnedElements(idx_t n_elements) {
-		this->elements_returned += n_elements;
+		elements_returned += n_elements;
 	}
 };
 
@@ -62,9 +62,8 @@ public:
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
 
-	//! Adds the timings gathered in the OperatorProfiler (tree) to the QueryProfiler (tree)
-	DUCKDB_API void Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor, const string &name,
-	                      int id);
+	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
+	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 
 	~OperatorProfiler() {
@@ -88,6 +87,12 @@ private:
 	optional_ptr<const PhysicalOperator> active_operator;
 	//! A mapping of physical operators to recorded timings
 	reference_map_t<const PhysicalOperator, OperatorInformation> timings;
+};
+
+struct QueryInfo {
+	QueryInfo() : blocked_thread_time(0) {};
+	string query_name;
+	double blocked_thread_time;
 };
 
 //! The QueryProfiler can be used to measure timings of queries
@@ -121,6 +126,8 @@ public:
 
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
+	//! Adds the top level query information to the global profiler.
+	DUCKDB_API void SetInfo(const double &blocked_thread_time);
 
 	DUCKDB_API void StartPhase(string phase);
 	DUCKDB_API void EndPhase();
@@ -166,8 +173,8 @@ private:
 	//! The root of the query tree
 	unique_ptr<ProfilingNode> root;
 
-	//! The query string
-	string query;
+	//! Top level query information.
+	QueryInfo query_info;
 	//! The timer used to time the execution time of the entire query
 	Profiler main_query;
 	//! A map of a Physical Operator pointer to a tree node

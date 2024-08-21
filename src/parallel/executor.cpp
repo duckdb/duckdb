@@ -22,7 +22,7 @@
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context) : context(context), executor_tasks(0) {
+Executor::Executor(ClientContext &context) : context(context), executor_tasks(0), blocked_thread_time(0) {
 }
 
 Executor::~Executor() {
@@ -466,7 +466,7 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 }
 
 void Executor::WaitForTask() {
-	static constexpr std::chrono::milliseconds WAIT_TIME = std::chrono::milliseconds(20);
+	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
 	std::unique_lock<mutex> l(executor_lock);
 	if (to_be_rescheduled_tasks.empty()) {
 		return;
@@ -476,7 +476,8 @@ void Executor::WaitForTask() {
 		return;
 	}
 
-	task_reschedule.wait_for(l, WAIT_TIME);
+	blocked_thread_time++;
+	task_reschedule.wait_for(l, WAIT_TIME_MS);
 }
 
 void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
@@ -668,10 +669,14 @@ void Executor::ThrowException() {
 	error_manager.ThrowException();
 }
 
-void Executor::Flush(ThreadContext &tcontext) {
+void Executor::Flush(ThreadContext &thread_context) {
+	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
 	auto global_profiler = profiler;
 	if (global_profiler) {
-		global_profiler->Flush(tcontext.profiler);
+		global_profiler->Flush(thread_context.profiler);
+
+		auto blocked_time = blocked_thread_time.load();
+		global_profiler->SetInfo(double(blocked_time * WAIT_TIME_MS.count()) / 1000);
 	}
 }
 

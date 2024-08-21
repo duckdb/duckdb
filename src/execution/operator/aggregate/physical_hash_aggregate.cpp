@@ -920,7 +920,7 @@ InsertionOrderPreservingMap<string> PhysicalHashAggregate::ParamsToString() cons
 		}
 	}
 	result["Aggregates"] = aggregate_info;
-	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

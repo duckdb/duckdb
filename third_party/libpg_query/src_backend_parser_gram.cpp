@@ -1209,6 +1209,7 @@ namespace duckdb_libpgquery {
 #define parser_yyerror(msg)  scanner_yyerror(msg, yyscanner)
 #define parser_errposition(pos)  scanner_errposition(pos, yyscanner)
 
+#if YYBISON == 1
 // explicitly define stack growing support
 // yacc cannot handle stack growing by default YYLTYPE is overriden - which the Postgres parser overrides with an `int`
 // so we need to copy these definitions here explicitly
@@ -1262,6 +1263,7 @@ union yyalloc
 	yyptr += yynewbytes / sizeof (*yyptr);				\
       }									\
     while (YYID (0))
+#endif
 
 static void base_yyerror(YYLTYPE *yylloc, core_yyscan_t yyscanner,
 						 const char *msg);
@@ -1382,7 +1384,7 @@ typedef union YYSTYPE
 	PGTransactionStmtType transactiontype;
 }
 /* Line 193 of yacc.c.  */
-#line 1386 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1388 "third_party/libpg_query/grammar/grammar_out.cpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
@@ -1407,7 +1409,7 @@ typedef struct YYLTYPE
 
 
 /* Line 216 of yacc.c.  */
-#line 1411 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1413 "third_party/libpg_query/grammar/grammar_out.cpp"
 
 #ifdef short
 # undef short
@@ -31112,7 +31114,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 31116 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 31118 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);

@@ -3395,24 +3395,6 @@ Returns the child node at the specified index.
 */
 DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
 
-/*!
-Returns the operator name of the current profiling info node, if the node is an Operator Node.
-
-* @param info A profiling information object.
-* @return The name of the operator of the current node. Returns nullptr, if the node is not an Operator Node. The result
-must be freed with `duckdb_free`.
-*/
-DUCKDB_API const char *duckdb_profiling_info_get_name(duckdb_profiling_info info);
-
-/*!
-Returns the query of the current profiling info node, if the node is the root.
-
-* @param info A profiling information object.
-* @return The query of the current node. Returns nullptr, if the node is not the root. The result must be freed
- * with `duckdb_free`.
-*/
-DUCKDB_API const char *duckdb_profiling_info_get_query(duckdb_profiling_info info);
-
 //===--------------------------------------------------------------------===//
 // Appender
 //===--------------------------------------------------------------------===//
