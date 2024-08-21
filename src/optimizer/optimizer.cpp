@@ -30,7 +30,13 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
+#include <iostream>
+
 namespace duckdb {
+
+std::map<std::string, idx_t> nonset_ec_map;
+idx_t num_ops = 0;
+
 
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
@@ -84,6 +90,35 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 
 void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(op);
+}
+
+bool HasNonsetEstimatedCardinality(LogicalOperator &op) {
+	num_ops++;
+	if (!op.has_estimated_cardinality) {
+		std::string type_info = duckdb::LogicalOperatorToString(op.type);
+		if (op.type == duckdb::LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto join_type = op.Cast<duckdb::LogicalJoin>().join_type;
+			type_info += "+" + duckdb::JoinTypeToString(join_type);
+		}
+		if (op.type == duckdb::LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			const duckdb::string ungrouped = op.Cast<duckdb::LogicalAggregate>().groups.empty() ? "ungrouped" : "grouped";
+			type_info += "+" + ungrouped;
+		}
+		nonset_ec_map[type_info]++;
+	}
+	for (auto const &child : op.children) {
+		HasNonsetEstimatedCardinality(*child.get());
+	}
+}
+
+std::string NonSetECMapToString() {
+	std::ostringstream oss;
+	oss << "#ops:" << num_ops << ";";
+	oss << "#types:" << nonset_ec_map.size() << ";";
+	for (auto const &entry : nonset_ec_map) {
+		oss << entry.first << ":" << entry.second << ";";
+	}
+	return oss.str();
 }
 
 void Optimizer::RunBuiltInOptimizers() {
@@ -226,6 +261,11 @@ void Optimizer::RunBuiltInOptimizers() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
 		join_filter_pushdown.VisitOperator(*plan);
 	});
+
+	HasNonsetEstimatedCardinality(*plan.get());
+	std::cout << NonSetECMapToString() << std::endl;
+	nonset_ec_map.clear();
+	num_ops = 0;
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
