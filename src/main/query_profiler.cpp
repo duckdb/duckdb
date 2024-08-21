@@ -523,7 +523,13 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 InsertionOrderPreservingMap<string> QueryProfiler::JSONSanitize(const InsertionOrderPreservingMap<string> &input) {
 	InsertionOrderPreservingMap<string> result;
 	for (auto &it : input) {
-		result[it.first] = JSONSanitize(it.second);
+		auto key = it.first;
+		if (StringUtil::StartsWith(key, "__")) {
+			key = StringUtil::Replace(key, "__", "");
+			key = StringUtil::Replace(key, "_", " ");
+			key = StringUtil::Title(key);
+		}
+		result[key] = it.second;
 	}
 	return result;
 }
@@ -564,8 +570,9 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 
 static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node) {
 	auto result_obj = yyjson_mut_obj(doc);
-
-	node.GetProfilingInfo().WriteMetricsToJSON(doc, result_obj);
+	auto &profiling_info = node.GetProfilingInfo();
+	profiling_info.extra_info = QueryProfiler::JSONSanitize(profiling_info.extra_info);
+	profiling_info.WriteMetricsToJSON(doc, result_obj);
 
 	auto children_list = yyjson_mut_arr(doc);
 	for (idx_t i = 0; i < node.GetChildCount(); i++) {

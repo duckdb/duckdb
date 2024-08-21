@@ -79,8 +79,8 @@ InsertionOrderPreservingMap<string> PhysicalProjection::ParamsToString() const {
 		auto &expr = select_list[i];
 		projections += expr->GetName();
 	}
-	result["Projections"] = projections;
-	result["Estimated Cardinality"] = StringUtil::Format("%llu", estimated_cardinality);
+	result["__projections__"] = projections;
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 
