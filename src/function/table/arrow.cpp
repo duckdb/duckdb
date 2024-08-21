@@ -34,15 +34,15 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 	auto format = string(schema.format);
 	// Let's first figure out if this type is a special canonical type
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
-	auto canonical_extension = schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
-	if (canonical_extension == "arrow.uuid") {
+	auto arrow_extension = schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
+	if (arrow_extension == "arrow.uuid") {
 		if (format != "w:16") {
 			throw InvalidInputException(
 			    "arrow.uuid must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly defined as: %s",
 			    format);
 		}
 		return make_uniq<ArrowType>(LogicalType::UUID);
-	} else if (canonical_extension == "arrow.json") {
+	} else if (arrow_extension == "arrow.json") {
 		if (format == "u") {
 			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 		} else if (format == "U") {
@@ -55,10 +55,12 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 			                            "incorrectly defined as: %s",
 			                            format);
 		}
-	} else if (!canonical_extension.empty()) {
+	} else if (!arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc")) {
+		// FIXME: ogc is the extension format used in geo.arrow right now we consume these types, but do not create
+		// the proper GEO types
 		throw NotImplementedException(
-		    "Arrow Type with extension name: %s and format: %s, is not currently supported in DuckDB ",
-		    canonical_extension, format);
+		    "Arrow Type with extension name: %s and format: %s, is not currently supported in DuckDB ", arrow_extension,
+		    format);
 	}
 	// If not, we just check the format itself
 	if (format == "n") {
