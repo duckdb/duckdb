@@ -1,5 +1,16 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/helper.hpp"
+
+namespace duckdb {
+
+struct CCustomType {
+	unique_ptr<LogicalType> base_type;
+	string name;
+};
+
+} // namespace duckdb
 
 static bool AssertLogicalTypeId(duckdb_logical_type type, duckdb::LogicalTypeId type_id) {
 	if (!type) {
@@ -341,13 +352,6 @@ duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_
 	    new duckdb::LogicalType(duckdb::StructType::GetChildType(logical_type, index)));
 }
 
-namespace duckdb {
-struct CCustomType {
-	unique_ptr<LogicalType> base_type;
-	string name;
-};
-} // namespace duckdb
-
 duckdb_custom_type duckdb_create_custom_type() {
 	return reinterpret_cast<duckdb_custom_type>(new duckdb::CCustomType());
 }
@@ -374,7 +378,7 @@ void duckdb_custom_type_set_base_type(duckdb_custom_type type, duckdb_logical_ty
 	}
 	const auto &logical_type = *(reinterpret_cast<duckdb::LogicalType *>(base_type));
 	auto &custom_type = *(reinterpret_cast<duckdb::CCustomType *>(type));
-	custom_type.base_type = duckdb::make_uniq<LogicalType>(logical_type);
+	custom_type.base_type = duckdb::make_uniq<duckdb::LogicalType>(logical_type);
 }
 
 duckdb_state duckdb_register_custom_type(duckdb_connection connection, duckdb_custom_type type) {

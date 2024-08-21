@@ -623,7 +623,7 @@
                 }
             ],
             "comment": {
-                "description": "Sets the name of an custom type.\n\n",
+                "description": "Sets the name of a custom type.\n\n",
                 "param_comments": {
                     "type": "The custom type",
                     "name": "The name to set"

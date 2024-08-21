@@ -2487,7 +2487,7 @@ Sets the base type of an custom type.
 DUCKDB_API void duckdb_custom_type_set_base_type(duckdb_custom_type type, duckdb_logical_type base_type);
 
 /*!
-Sets the name of an custom type.
+Sets the name of a custom type.
 
 * @param type The custom type
 * @param name The name to set
