@@ -993,14 +993,24 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 		return ADBC_STATUS_OK;
 	}
 	if (strcmp(key, ADBC_INGEST_OPTION_TEMPORARY) == 0) {
-		if (wrapper->db_schema) {
-			SetError(error, "Temporary option is not supported with schema");
+		if (strcmp(value, ADBC_OPTION_VALUE_ENABLED) == 0) {
+			if (wrapper->db_schema) {
+				SetError(error, "Temporary option is not supported with schema");
+				return ADBC_STATUS_INVALID_ARGUMENT;
+			}
+			wrapper->temporary_table = true;
+			return ADBC_STATUS_OK;
+		} else if (strcmp(value, ADBC_OPTION_VALUE_DISABLED) == 0) {
+			wrapper->temporary_table = false;
+			return ADBC_STATUS_OK;
+		} else {
+			SetError(
+			    error,
+			    "ADBC_INGEST_OPTION_TEMPORARY, can only be ADBC_OPTION_VALUE_ENABLED or ADBC_OPTION_VALUE_DISABLED");
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
-		wrapper->ingestion_table_name = strdup(value);
-		wrapper->temporary_table = true;
-		return ADBC_STATUS_OK;
 	}
+
 	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA) == 0) {
 		if (wrapper->temporary_table) {
 			SetError(error, "Temporary option is not supported with schema");

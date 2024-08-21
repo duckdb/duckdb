@@ -19,7 +19,7 @@ bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 
-const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
+const char *duckdb_lib = "/Users/holanda/Documents/Projects/duckdb/cmake-build-release/src/libduckdb.dylib";
 class ADBCTestDatabase {
 public:
 	explicit ADBCTestDatabase(const string &path_parameter = ":memory:") {
@@ -89,7 +89,7 @@ public:
 		if (temporary) {
 			if (!schema.empty()) {
 				REQUIRE(!SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY,
-				                                        table_name.c_str(), &adbc_error)));
+				                                        ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
 				REQUIRE((std::strcmp(adbc_error.message, "Temporary option is not supported with schema") == 0));
 				// We must Release the error (Malloc-ed string)
 				adbc_error.release(&adbc_error);
@@ -98,12 +98,11 @@ public:
 				arrow_stream.release = nullptr;
 				return;
 			}
-			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY, table_name.c_str(),
-			                                       &adbc_error)));
-		} else {
-			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(),
-			                                       &adbc_error)));
+			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY,
+			                                       ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
 		}
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
 
 		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
