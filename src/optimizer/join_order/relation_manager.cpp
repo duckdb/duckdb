@@ -229,6 +229,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			combined_stats.cardinality = (idx_t)MaxValue(
 			    double(combined_stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
+		op->SetEstimatedCardinality(combined_stats.cardinality);
 		AddRelation(input_op, parent, combined_stats);
 		return true;
 	}
@@ -245,6 +246,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			operator_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
 			                                                     RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
+		aggr.SetEstimatedCardinality(operator_stats.cardinality);
 		ModifyStatsIfLimit(limit_op.get(), child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
@@ -260,6 +262,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			operator_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
 			                                                     RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
+		window.SetEstimatedCardinality(operator_stats.cardinality);
 		ModifyStatsIfLimit(limit_op.get(), child_stats);
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
@@ -327,6 +330,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			    (idx_t)MaxValue(double(stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
 		ModifyStatsIfLimit(limit_op.get(), stats);
+		get.SetEstimatedCardinality(stats.cardinality);
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
@@ -339,6 +343,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
 		ModifyStatsIfLimit(limit_op.get(), proj_stats);
+		proj.SetEstimatedCardinality(proj_stats.cardinality);
 		AddRelation(input_op, parent, proj_stats);
 		return true;
 	}
@@ -401,7 +406,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		// Used to not be possible to reorder these. We added reordering (without stats) before,
 		// but ran into terrible join orders (see internal issue #596), so we removed it again
 		// We now have proper statistics for DelimGets, and get an even better query plan for #596
-		AddAggregateOrWindowRelation(input_op, parent, optimizer.GetDelimScanStats(), op->type);
+		auto delim_scan_stats = optimizer.GetDelimScanStats();
+		op->SetEstimatedCardinality(delim_scan_stats.cardinality);
+		AddAggregateOrWindowRelation(input_op, parent, delim_scan_stats, op->type);
 		return true;
 	}
 	default:

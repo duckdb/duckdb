@@ -66,6 +66,10 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		RelationStatisticsHelper::CopyRelationStats(*stats, new_stats);
 	}
 
+	if (new_logical_plan->type == LogicalOperatorType::LOGICAL_EXPLAIN) {
+		new_logical_plan->SetEstimatedCardinality(3);
+	}
+
 	return new_logical_plan;
 }
 
