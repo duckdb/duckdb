@@ -13,6 +13,41 @@
 
 namespace duckdb {
 
+unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_ptr<LogicalOperator> op) {
+	JoinType join_type = JoinType::INVALID;
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN);
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		join_type = op->Cast<LogicalComparisonJoin>().join_type;
+	}
+	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		join_type = op->Cast<LogicalAnyJoin>().join_type;
+	}
+	switch (join_type) {
+	case JoinType::SEMI:
+	case JoinType::INNER: {
+		for (auto &child : op->children) {
+			if (child->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+				op = make_uniq<LogicalEmptyResult>(std::move(op));
+				break;
+			}
+		}
+		break;
+	}
+	case JoinType::ANTI:
+	case JoinType::MARK:
+	case JoinType::SINGLE:
+	case JoinType::LEFT: {
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+			break;
+		}
+	}
+	default:
+		break;
+	}
+	return op;
+}
+
 unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperator> op) {
 	for (idx_t i = 0; i < op->children.size(); i++) {
 		op->children[i] = Optimize(std::move(op->children[i]));
@@ -37,47 +72,13 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 		}
 		return op;
 	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op->Cast<LogicalComparisonJoin>();
-		if (join.join_type == JoinType::INNER) {
-			for (auto &child : op->children) {
-				if (child->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-					op = make_uniq<LogicalEmptyResult>(std::move(op));
-					break;
-				}
-			}
-			return op;
-		}
-		if (join.join_type == JoinType::SEMI && join.children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-			op = make_uniq<LogicalEmptyResult>(std::move(op));
-			break;
-		}
-		if (join.join_type == JoinType::ANTI && join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-			op = make_uniq<LogicalEmptyResult>(std::move(op));
-			break;
-		}
-		if (join.join_type == JoinType::LEFT && join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-			op = make_uniq<LogicalEmptyResult>(std::move(op));
-			break;
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-		auto &join = op->Cast<LogicalAnyJoin>();
-		if (join.join_type == JoinType::INNER) {
-			for (auto &child : op->children) {
-				if (child->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-					op = make_uniq<LogicalEmptyResult>(std::move(op));
-					break;
-				}
-			}
-			return op;
-		}
-		break;
+		op = PullUpEmptyJoinChildren(std::move(op));
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		// if child is empty
-		// replace with 1 row answer;
+		// TODO: if child is empty, replace aggregate columns with
+		// 1 value answer, (i.e count(*) should return row with value 1).
 		break;
 	}
 	default:

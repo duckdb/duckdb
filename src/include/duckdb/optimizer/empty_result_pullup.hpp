@@ -19,7 +19,8 @@ public:
 	}
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
-
+	unique_ptr<LogicalOperator> PullUpEmptyJoinChildren(unique_ptr<LogicalOperator> op);
 };
+
 
 } // namespace duckdb
