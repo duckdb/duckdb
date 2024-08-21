@@ -182,6 +182,22 @@ Value DebugForceNoCrossProduct::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Debug Skip Checkpoint On Commit
+//===--------------------------------------------------------------------===//
+void DebugSkipCheckpointOnCommit::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	config.options.debug_skip_checkpoint_on_commit = BooleanValue::Get(parameter);
+}
+
+void DebugSkipCheckpointOnCommit::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.debug_skip_checkpoint_on_commit = DBConfig().options.debug_skip_checkpoint_on_commit;
+}
+
+Value DebugSkipCheckpointOnCommit::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(*context.db);
+	return Value::BOOLEAN(config.options.debug_skip_checkpoint_on_commit);
+}
+
+//===--------------------------------------------------------------------===//
 // Ordered Aggregate Threshold
 //===--------------------------------------------------------------------===//
 void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
@@ -358,7 +374,7 @@ Value DefaultNullOrderSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Default Null Order
+// Default Secret Storage
 //===--------------------------------------------------------------------===//
 void DefaultSecretStorage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.secret_manager->SetDefaultStorage(input.ToString());

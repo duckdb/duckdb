@@ -39,9 +39,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto internal = deserializer.ReadPropertyWithDefault<bool>(104, "internal");
 	auto on_conflict = deserializer.ReadProperty<OnCreateConflict>(105, "on_conflict");
 	auto sql = deserializer.ReadPropertyWithDefault<string>(106, "sql");
-	auto comment = deserializer.ReadPropertyWithDefault<Value>(107, "comment", Value());
-	auto tags = deserializer.ReadPropertyWithDefault<unordered_map<string, string>>(108, "tags", unordered_map<string, string>());
-	auto dependencies = deserializer.ReadPropertyWithDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
+	auto comment = deserializer.ReadPropertyWithExplicitDefault<Value>(107, "comment", Value());
+	auto tags = deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, string>>(108, "tags", unordered_map<string, string>());
+	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -209,7 +209,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types", result->types);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
 	deserializer.ReadPropertyWithDefault<vector<string>>(204, "names", result->names);
-	deserializer.ReadPropertyWithDefault<vector<Value>>(205, "column_comments", result->column_comments, vector<Value>());
+	deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(205, "column_comments", result->column_comments, vector<Value>());
 	return std::move(result);
 }
 

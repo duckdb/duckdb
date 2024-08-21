@@ -2,6 +2,7 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -1398,25 +1399,56 @@ WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const v
     : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p), context(context) {
 }
 
+class WindowDistinctAggregatorLocalState;
+
 class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
 public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+	// prev_idx, input_idx
+	using ZippedTuple = std::tuple<idx_t, idx_t>;
+	using ZippedElements = vector<ZippedTuple>;
+
 	class DistinctSortTree;
 
 	WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator, idx_t group_count);
+
+	//! Compute the block starts
+	void MeasurePayloadBlocks();
+	//! Patch up the previous index block boundaries
+	void PatchPrevIdcs();
+	bool TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate);
 
 	void Finalize(const FrameStats &stats);
 
 	//	Single threaded sorting for now
 	ClientContext &context;
-	GlobalSortStatePtr global_sort;
 	idx_t memory_per_thread;
+
+	//! Finalize guard
+	mutex lock;
+	//! Finalize stage
+	atomic<PartitionSortStage> stage;
+	//! Tasks launched
+	idx_t total_tasks = 0;
+	//! Tasks launched
+	idx_t tasks_assigned = 0;
+	//! Tasks landed
+	mutable atomic<idx_t> tasks_completed;
 
 	//! The sorted payload data types (partition index)
 	vector<LogicalType> payload_types;
 	//! The aggregate arguments + partition index
 	vector<LogicalType> sort_types;
 
+	//! Sorting operations
+	GlobalSortStatePtr global_sort;
+	//! The block starts (the scanner doesn't know this) plus the total count
+	vector<idx_t> block_starts;
+
+	//! The tree indices
+	mutable ZippedElements prev_idcs;
+	//! The block boundary seconds
+	mutable ZippedElements seconds;
 	//! The merge sort tree for the aggregate.
 	unique_ptr<DistinctSortTree> merge_sort_tree;
 
@@ -1429,7 +1461,7 @@ public:
 WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const WindowDistinctAggregator &aggregator,
                                                                          idx_t group_count)
     : WindowAggregatorGlobalState(aggregator, group_count), context(aggregator.context),
-      levels_flat_native(aggregator.aggr) {
+      stage(PartitionSortStage::INIT), tasks_completed(0), levels_flat_native(aggregator.aggr) {
 	payload_types.emplace_back(LogicalType::UBIGINT);
 
 	//	1:	functionComputePrevIdcs(𝑖𝑛)
@@ -1453,6 +1485,16 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const W
 	global_sort = make_uniq<GlobalSortState>(BufferManager::GetBufferManager(context), orders, payload_layout);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
+
+	//	6:	prevIdcs ← []
+	//	7:	prevIdcs[0] ← “-”
+	prev_idcs.resize(group_count);
+
+	//	To handle FILTER clauses we make the missing elements
+	//	point to themselves so they won't be counted.
+	for (idx_t i = 0; i < group_count; ++i) {
+		prev_idcs[i] = ZippedTuple(i + 1, i);
+	}
 }
 
 class WindowDistinctAggregatorLocalState : public WindowAggregatorState {
@@ -1460,10 +1502,17 @@ public:
 	explicit WindowDistinctAggregatorLocalState(const WindowDistinctAggregatorGlobalState &aggregator);
 
 	void Sink(DataChunk &arg_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	void Sorted();
+	void ExecuteTask();
 	void Evaluate(const WindowDistinctAggregatorGlobalState &gdstate, const DataChunk &bounds, Vector &result,
 	              idx_t count, idx_t row_idx);
 
+	//! Thread-local sorting data
 	LocalSortState local_sort;
+	//! Finalize stage
+	PartitionSortStage stage = PartitionSortStage::INIT;
+	//! Finalize scan block index
+	idx_t block_idx;
 
 protected:
 	//! Flush the accumulated intermediate states into the result states
@@ -1544,13 +1593,131 @@ void WindowDistinctAggregatorLocalState::Sink(DataChunk &arg_chunk, idx_t input_
 	}
 }
 
+void WindowDistinctAggregatorLocalState::ExecuteTask() {
+	auto &global_sort = *gastate.global_sort;
+	switch (stage) {
+	case PartitionSortStage::INIT:
+		//	AddLocalState is thread-safe
+		global_sort.AddLocalState(local_sort);
+		break;
+	case PartitionSortStage::MERGE: {
+		MergeSorter merge_sorter(global_sort, global_sort.buffer_manager);
+		merge_sorter.PerformInMergeRound();
+		break;
+	}
+	case PartitionSortStage::SORTED:
+		Sorted();
+		break;
+	default:
+		break;
+	}
+
+	++gastate.tasks_completed;
+}
+
+void WindowDistinctAggregatorGlobalState::MeasurePayloadBlocks() {
+	const auto &blocks = global_sort->sorted_blocks[0]->payload_data->data_blocks;
+	idx_t count = 0;
+	for (const auto &block : blocks) {
+		block_starts.emplace_back(count);
+		count += block->count;
+	}
+	block_starts.emplace_back(count);
+}
+
+bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate) {
+	lock_guard<mutex> stage_guard(lock);
+
+	switch (stage.load()) {
+	case PartitionSortStage::INIT:
+		// Wait for all the local sorts to be processed
+		if (tasks_completed < locals) {
+			return false;
+		}
+		global_sort->PrepareMergePhase();
+		if (!(global_sort->sorted_blocks.size() / 2)) {
+			if (global_sort->sorted_blocks.empty()) {
+				lstate.stage = stage = PartitionSortStage::FINISHED;
+				return true;
+			}
+			MeasurePayloadBlocks();
+			seconds.resize(block_starts.size() - 1);
+			total_tasks = seconds.size();
+			tasks_completed = 0;
+			tasks_assigned = 0;
+			lstate.stage = stage = PartitionSortStage::SORTED;
+			lstate.block_idx = tasks_assigned++;
+			return true;
+		}
+		global_sort->InitializeMergeRound();
+		lstate.stage = stage = PartitionSortStage::MERGE;
+		total_tasks = locals;
+		tasks_assigned = 1;
+		tasks_completed = 0;
+		return true;
+	case PartitionSortStage::MERGE:
+		if (tasks_assigned < total_tasks) {
+			lstate.stage = PartitionSortStage::MERGE;
+			++tasks_assigned;
+			return true;
+		} else if (tasks_completed < tasks_assigned) {
+			return false;
+		}
+		global_sort->CompleteMergeRound(true);
+		if (!(global_sort->sorted_blocks.size() / 2)) {
+			MeasurePayloadBlocks();
+			seconds.resize(block_starts.size() - 1);
+			total_tasks = seconds.size();
+			tasks_completed = 0;
+			tasks_assigned = 0;
+			lstate.stage = stage = PartitionSortStage::SORTED;
+			lstate.block_idx = tasks_assigned++;
+			return true;
+		}
+		global_sort->InitializeMergeRound();
+		lstate.stage = PartitionSortStage::MERGE;
+		total_tasks = locals;
+		tasks_assigned = 1;
+		tasks_completed = 0;
+		return true;
+	case PartitionSortStage::SORTED:
+		if (tasks_assigned < total_tasks) {
+			lstate.stage = PartitionSortStage::SORTED;
+			lstate.block_idx = tasks_assigned++;
+			return true;
+		} else if (tasks_completed < tasks_assigned) {
+			lstate.stage = PartitionSortStage::FINISHED;
+			// Sleep while other tasks finish
+			return false;
+		}
+		// Last task patches the boundaries
+		PatchPrevIdcs();
+		break;
+	default:
+		break;
+	}
+
+	lstate.stage = stage = PartitionSortStage::FINISHED;
+
+	return true;
+}
+
 void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggregatorState &lstate,
                                         const FrameStats &stats) {
 	auto &gdsink = gsink.Cast<WindowDistinctAggregatorGlobalState>();
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
 
-	//	AddLocalState is thread-safe
-	gdsink.global_sort->AddLocalState(ldstate.local_sort);
+	//	5: Sort sorted lexicographically increasing
+	ldstate.ExecuteTask();
+
+	// Merge in parallel
+	while (gdsink.stage.load() != PartitionSortStage::FINISHED) {
+		if (gdsink.TryPrepareNextStage(ldstate)) {
+			ldstate.ExecuteTask();
+		} else {
+			std::this_thread::yield();
+		}
+	}
 
 	//	Last one out turns off the lights!
 	if (++gdsink.finalized == gdsink.locals) {
@@ -1560,53 +1727,42 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 
 class WindowDistinctAggregatorGlobalState::DistinctSortTree : public MergeSortTree<idx_t, idx_t> {
 public:
-	// prev_idx, input_idx
-	using ZippedTuple = std::tuple<idx_t, idx_t>;
-	using ZippedElements = vector<ZippedTuple>;
-
 	DistinctSortTree(ZippedElements &&prev_idcs, WindowDistinctAggregatorGlobalState &gdsink);
 };
 
-void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
-	//	5: Sort sorted lexicographically increasing
-	global_sort->PrepareMergePhase();
-	while (global_sort->sorted_blocks.size() > 1) {
-		global_sort->InitializeMergeRound();
-		MergeSorter merge_sorter(*global_sort, global_sort->buffer_manager);
-		merge_sorter.PerformInMergeRound();
-		global_sort->CompleteMergeRound(true);
-	}
+void WindowDistinctAggregatorLocalState::Sorted() {
+	using ZippedTuple = WindowDistinctAggregatorGlobalState::ZippedTuple;
+	auto &global_sort = gastate.global_sort;
+	auto &prev_idcs = gastate.prev_idcs;
+	auto &aggregator = gastate.aggregator;
+	auto &scan_chunk = payload_chunk;
 
-	DataChunk scan_chunk;
-	scan_chunk.Initialize(Allocator::DefaultAllocator(), payload_types);
-
-	auto scanner = make_uniq<PayloadScanner>(*global_sort);
-	const auto in_size = scanner->Remaining();
+	auto scanner = make_uniq<PayloadScanner>(*global_sort, block_idx);
+	const auto in_size = gastate.block_starts.at(block_idx + 1);
 	scanner->Scan(scan_chunk);
 	idx_t scan_idx = 0;
 
-	//	6:	prevIdcs ← []
-	//	7:	prevIdcs[0] ← “-”
-	const auto count = inputs.size();
-	using ZippedTuple = DistinctSortTree::ZippedTuple;
-	DistinctSortTree::ZippedElements prev_idcs;
-	prev_idcs.resize(count);
-
-	//	To handle FILTER clauses we make the missing elements
-	//	point to themselves so they won't be counted.
-	if (in_size < count) {
-		for (idx_t i = 0; i < count; ++i) {
-			prev_idcs[i] = ZippedTuple(i + 1, i);
-		}
-	}
-
 	auto *input_idx = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
-	auto i = input_idx[scan_idx++];
-	prev_idcs[i] = ZippedTuple(0, i);
+	idx_t i = 0;
 
 	SBIterator curr(*global_sort, ExpressionType::COMPARE_LESSTHAN);
 	SBIterator prev(*global_sort, ExpressionType::COMPARE_LESSTHAN);
 	auto prefix_layout = global_sort->sort_layout.GetPrefixComparisonLayout(aggregator.arg_types.size());
+
+	const auto block_begin = gastate.block_starts.at(block_idx);
+	if (!block_begin) {
+		// First block, so set up initial sentinel
+		i = input_idx[scan_idx++];
+		prev_idcs[i] = ZippedTuple(0, i);
+		std::get<0>(gastate.seconds[block_idx]) = i;
+	} else {
+		// Move to the to end of the previous block
+		// so we can record the comparison result for the first row
+		curr.SetIndex(block_begin - 1);
+		prev.SetIndex(block_begin - 1);
+		scan_idx = 0;
+		std::get<0>(gastate.seconds[block_idx]) = input_idx[scan_idx];
+	}
 
 	//	8:	for i ← 1 to in.size do
 	for (++curr; curr.GetIndex() < in_size; ++curr, ++prev) {
@@ -1639,8 +1795,28 @@ void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
 			prev_idcs[i] = ZippedTuple(0, i);
 		}
 	}
+
+	// Save the last value of i for patching up the block boundaries
+	std::get<1>(gastate.seconds[block_idx]) = i;
+}
+
+void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 	//	13:	return prevIdcs
 
+	// Patch up the indices at block boundaries
+	// (We don't need to patch block 0.)
+	for (idx_t block_idx = 1; block_idx < seconds.size(); ++block_idx) {
+		// We only need to patch if the first index in the block
+		// was a back link to the previous block (10:)
+		auto i = std::get<0>(seconds.at(block_idx));
+		if (std::get<0>(prev_idcs[i])) {
+			auto second = std::get<1>(seconds.at(block_idx - 1));
+			prev_idcs[i] = ZippedTuple(second + 1, i);
+		}
+	}
+}
+
+void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
 	merge_sort_tree = make_uniq<DistinctSortTree>(std::move(prev_idcs), *this);
 }
 

@@ -62,6 +62,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(CatalogErrorMaxSchema),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_GLOBAL(DebugCheckpointAbort),
+    DUCKDB_GLOBAL(DebugSkipCheckpointOnCommit),
     DUCKDB_GLOBAL(StorageCompatibilityVersion),
     DUCKDB_LOCAL(DebugForceExternal),
     DUCKDB_LOCAL(DebugForceNoCrossProduct),
@@ -438,7 +439,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
 		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
-	return NumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 
 idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
@@ -471,7 +472,7 @@ idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 
-	return NumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 
 // Right now we only really care about access mode when comparing DBConfigs

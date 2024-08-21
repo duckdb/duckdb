@@ -35,6 +35,8 @@ class TableStatistics;
 struct ColumnSegmentInfo;
 class Vector;
 struct ColumnCheckpointState;
+struct PersistentColumnData;
+struct PersistentRowGroupData;
 struct RowGroupPointer;
 struct TransactionData;
 class CollectionScanState;
@@ -44,6 +46,7 @@ struct RowGroupAppendState;
 class MetadataManager;
 class RowVersionManager;
 class ScanFilterInfo;
+class StorageCommitState;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -68,6 +71,7 @@ public:
 public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
 	RowGroup(RowGroupCollection &collection, RowGroupPointer pointer);
+	RowGroup(RowGroupCollection &collection, PersistentRowGroupData &data);
 	~RowGroup();
 
 private:
@@ -139,6 +143,8 @@ public:
 	idx_t GetCommittedRowCount();
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats);
+	bool IsPersistent() const;
+	PersistentRowGroupData SerializeRowGroupInfo() const;
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
@@ -152,6 +158,7 @@ public:
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
+	void MergeIntoStatistics(TableStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
 	void GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result);

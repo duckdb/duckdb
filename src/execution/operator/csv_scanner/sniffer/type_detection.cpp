@@ -272,7 +272,7 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 }
 
 void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type,
-                                               const string &separator, string_t &dummy_val) {
+                                               const string &separator, const string_t &dummy_val) {
 	// If it is the first time running date/timestamp detection we must initialize the format variables
 	InitializeDateAndTimeStampDetection(candidate, separator, sql_type);
 	// generate date format candidates the first time through
@@ -318,6 +318,7 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
                             unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates,
                             idx_t start_idx_detection) {
 	const idx_t chunk_size = data_chunk.size();
+	HasType has_type;
 	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
 		auto &cur_vector = data_chunk.data[col_idx];
 		D_ASSERT(cur_vector.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -339,8 +340,8 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 				// If Value is not Null, Has a numeric date format, and the current investigated candidate is
 				// either a timestamp or a date
 				if (null_mask.RowIsValid(row_idx) && StartsWithNumericDate(separator, vector_data[row_idx]) &&
-				    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
-				     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
+				    ((col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP && !has_type.timestamp) ||
+				     (col_type_candidates.back().id() == LogicalTypeId::DATE && !has_type.date))) {
 					DetectDateAndTimeStampFormats(state_machine, sql_type, separator, vector_data[row_idx]);
 				}
 				// try cast from string to sql_type
@@ -363,6 +364,12 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 				}
 				col_type_candidates.pop_back();
 			}
+		}
+		if (col_type_candidates.back().id() == LogicalTypeId::DATE) {
+			has_type.date = true;
+		}
+		if (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP) {
+			has_type.timestamp = true;
 		}
 	}
 }
@@ -413,9 +420,10 @@ void CSVSniffer::DetectTypes() {
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
 		// best_num_cols.
-		if (varchar_cols<min_varchar_cols &&static_cast<double>(info_sql_types_candidates.size())>(
-		        static_cast<double>(max_columns_found) * 0.7) &&
-		    (!options.ignore_errors.GetValue() || candidate->error_handler->errors.size() < min_errors)) {
+		if (!best_candidate ||
+		    (varchar_cols<min_varchar_cols &&static_cast<double>(info_sql_types_candidates.size())>(
+		         static_cast<double>(max_columns_found) * 0.7) &&
+		     (!options.ignore_errors.GetValue() || candidate->error_handler->errors.size() < min_errors))) {
 			min_errors = candidate->error_handler->errors.size();
 			best_header_row.clear();
 			// we have a new best_options candidate
@@ -439,10 +447,6 @@ void CSVSniffer::DetectTypes() {
 				}
 			}
 		}
-	}
-	if (!best_candidate) {
-		auto error = CSVError::SniffingError(options.file_path);
-		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty());

@@ -104,6 +104,7 @@ SELECT a, b LIKE '%a1.csv%' FROM read_csv('data/csv/*/a?/a*.csv', filename=1) t1
 statement error
 SELECT * FROM read_csv('data/csv/glob/*/*.csv') ORDER BY 1
 ----
+Schema mismatch between globbed files.
 
 # forcing string parsing works
 query I
@@ -171,14 +172,17 @@ SELECT COUNT(*) FROM glob('data//csv///glob///*//////*.csv')
 statement error
 SELECT * FROM read_csv('data/csv/glob/*/a*a.csv') ORDER BY 1
 ----
+No files found that match the pattern "data/csv/glob/*/a*a.csv"
 
 statement error
 SELECT * FROM read_csv(['data/csv/glob/*/a*a.csv']) ORDER BY 1
 ----
+No files found that match the pattern "data/csv/glob/*/a*a.csv"
 
 statement error
 SELECT * FROM read_csv_auto(['data/csv/glob/*/a*a.csv']) ORDER BY 1
 ----
+No files found that match the pattern "data/csv/glob/*/a*a.csv"
 
 query I
 SELECT COUNT(*) FROM glob('data/csv/glob/*/a*a.csv')

@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/typedefs.hpp"
+
 namespace duckdb {
 
-enum class ExplainFormat : uint8_t { DEFAULT, TEXT, JSON };
+enum class ExplainFormat : uint8_t { DEFAULT, TEXT, JSON, HTML, GRAPHVIZ };
 
 } // namespace duckdb

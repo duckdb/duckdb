@@ -103,7 +103,7 @@ select SkipRows, Comment FROM sniff_csv('data/csv/comments/invalid_rows.csv');
 statement error
 select count(*) FROM 'data/csv/comments/error.csv';
 ----
-CSV options could not be auto-detected.
+It was not possible to automatically detect the CSV Parsing dialect
 
 query I
 select count(*) FROM read_csv('data/csv/comments/error.csv', ignore_errors = true);

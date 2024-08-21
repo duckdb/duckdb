@@ -13,12 +13,14 @@
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
+#include "duckdb/execution/operator/csv_scanner/header_value.hpp"
 
 namespace duckdb {
 struct DateTimestampSniffing {
 	bool initialized = false;
 	bool had_match = false;
 	vector<string> format;
+	idx_t initial_size;
 };
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
@@ -46,6 +48,8 @@ struct DialectCandidates {
 	static vector<vector<char>> GetDefaultEscape();
 
 	static vector<char> GetDefaultComment();
+
+	string Print();
 
 	//! Candidates for the delimiter
 	vector<char> delim_candidates;
@@ -104,17 +108,10 @@ struct SetColumns {
 	}
 };
 
-struct HeaderValue {
-	HeaderValue() : is_null(true) {
-	}
-	explicit HeaderValue(const string_t value_p) {
-		value = value_p.GetString();
-	}
-	bool IsNull() {
-		return is_null;
-	}
-	bool is_null = false;
-	string value;
+//! Struct used to know if we have a date or timestamp type already identified in this CSV File
+struct HasType {
+	bool date = false;
+	bool timestamp = false;
 };
 
 //! Sniffer that detects Header, Dialect and Types of CSV Files
@@ -194,14 +191,15 @@ private:
 	void DetectTypes();
 	//! Change the date format for the type to the string
 	//! Try to cast a string value to the specified sql type
-	void SetDateFormat(CSVStateMachine &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
+	static void SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
+	                          const LogicalTypeId &sql_type);
 
 	//! Function that initialized the necessary variables used for date and timestamp detection
 	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
 	                                         const LogicalType &sql_type);
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
-	                                   string_t &dummy_val);
+	                                   const string_t &dummy_val);
 	//! Sniffs the types from a data chunk
 	void SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machine,
 	                unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates, idx_t start_idx_detection);
