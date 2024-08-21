@@ -213,6 +213,11 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_SEQUENCE = 41,
 	DUCKDB_INVALID_CONFIGURATION = 42
 } duckdb_error_type;
+//! An enum over DuckDB's different cast modes.
+typedef enum duckdb_cast_mode {
+	DUCKDB_CAST_STRICT = 0,
+	DUCKDB_CAST_TRY = 1
+} duckdb_cast_mode;
 
 //===--------------------------------------------------------------------===//
 // General type definitions
@@ -557,6 +562,17 @@ typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_c
 typedef struct _duckdb_custom_type {
 	void *internal_ptr;
 } * duckdb_custom_type;
+
+//===--------------------------------------------------------------------===//
+// Cast types
+//===--------------------------------------------------------------------===//
+
+//! A cast function. Must be destroyed with `duckdb_destroy_cast_function`.
+typedef struct _duckdb_cast_function {
+	void *internal_ptr;
+} * duckdb_cast_function;
+
+typedef bool (*duckdb_cast_function_t)(duckdb_function_info info, idx_t count, duckdb_vector input, duckdb_vector output);
 
 //===--------------------------------------------------------------------===//
 // Replacement scan types

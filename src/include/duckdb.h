@@ -219,6 +219,8 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_SEQUENCE = 41,
 	DUCKDB_INVALID_CONFIGURATION = 42
 } duckdb_error_type;
+//! An enum over DuckDB's different cast modes.
+typedef enum duckdb_cast_mode { DUCKDB_CAST_STRICT = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
 
 //===--------------------------------------------------------------------===//
 // General type definitions
@@ -563,6 +565,18 @@ typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_c
 typedef struct _duckdb_custom_type {
 	void *internal_ptr;
 } * duckdb_custom_type;
+
+//===--------------------------------------------------------------------===//
+// Cast types
+//===--------------------------------------------------------------------===//
+
+//! A cast function. Must be destroyed with `duckdb_destroy_cast_function`.
+typedef struct _duckdb_cast_function {
+	void *internal_ptr;
+} * duckdb_cast_function;
+
+typedef bool (*duckdb_cast_function_t)(duckdb_function_info info, idx_t count, duckdb_vector input,
+                                       duckdb_vector output);
 
 //===--------------------------------------------------------------------===//
 // Replacement scan types
@@ -4023,6 +4037,100 @@ It is not known beforehand how many chunks will be returned by this result.
 * @return The resulting data chunk. Returns `NULL` if the result has an error.
 */
 DUCKDB_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
+
+//===--------------------------------------------------------------------===//
+// Cast Functions
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a new cast function object.
+
+* @return The cast function object.
+*/
+DUCKDB_API duckdb_cast_function duckdb_create_cast_function();
+
+/*!
+Sets the source type of the cast function.
+
+* @param cast_function The cast function object.
+* @param source_type The source type to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_source_type(duckdb_cast_function cast_function,
+                                                     duckdb_logical_type source_type);
+
+/*!
+Sets the target type of the cast function.
+
+* @param cast_function The cast function object.
+* @param target_type The target type to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_target_type(duckdb_cast_function cast_function,
+                                                     duckdb_logical_type target_type);
+
+/*!
+Sets the "cost" of implicitly casting the source type to the target type using this function.
+
+* @param cast_function The cast function object.
+* @param cost The cost to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_implicit_cast_cost(duckdb_cast_function cast_function, int64_t cost);
+
+/*!
+Sets the actual cast function to use.
+
+* @param cast_function The cast function object.
+* @param function The function to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_function(duckdb_cast_function cast_function, duckdb_cast_function_t function);
+
+/*!
+Assigns extra information to the cast function that can be fetched during execution, etc.
+
+* @param extra_info The extra information
+* @param destroy The callback that will be called to destroy the extra information (if any)
+*/
+DUCKDB_API void duckdb_cast_function_set_extra_info(duckdb_cast_function cast_function, void *extra_info,
+                                                    duckdb_delete_callback_t destroy);
+
+/*!
+Retrieves the extra info of the function as set in `duckdb_cast_function_set_extra_info`.
+
+* @param info The info object.
+* @return The extra info.
+*/
+DUCKDB_API void *duckdb_cast_function_get_extra_info(duckdb_function_info info);
+
+/*!
+Get the cast execution mode from the given function info.
+
+* @param info The info object.
+* @return The cast mode.
+*/
+DUCKDB_API duckdb_cast_mode duckdb_cast_function_get_cast_mode(duckdb_function_info info);
+
+/*!
+Set the error message to present when a non-TRY_CAST cast using this function fails.
+
+* @param info The info object.
+* @param error The error message.
+*/
+DUCKDB_API void duckdb_cast_function_set_error(duckdb_function_info info, const char *error);
+
+/*!
+Registers a cast function within the given connection.
+
+* @param con The connection to use.
+* @param cast_function The cast function to register.
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_API duckdb_state duckdb_register_cast_function(duckdb_connection con, duckdb_cast_function cast_function);
+
+/*!
+Destroys the cast function object.
+
+* @param cast_function The cast function object.
+*/
+DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
 
 #ifdef __cplusplus
 }

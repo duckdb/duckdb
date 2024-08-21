@@ -18,6 +18,17 @@
         "duckdb_register_custom_type",
         "duckdb_custom_type_set_name",
         "duckdb_custom_type_set_base_type",
-        "duckdb_logical_type_set_alias"
+        "duckdb_logical_type_set_alias",
+        "duckdb_create_cast_function", 
+        "duckdb_cast_function_set_source_type",
+        "duckdb_cast_function_set_target_type",
+        "duckdb_cast_function_set_implicit_cast_cost",
+        "duckdb_cast_function_set_function",
+        "duckdb_cast_function_set_extra_info",
+        "duckdb_cast_function_get_extra_info",
+        "duckdb_cast_function_get_cast_mode",
+        "duckdb_cast_function_set_error",
+        "duckdb_register_cast_function",
+        "duckdb_destroy_cast_function"
     ]
 }
