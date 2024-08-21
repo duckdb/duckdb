@@ -413,6 +413,12 @@ typedef struct {
 	                                                 duckdb_delete_callback_t destroy);
 	void *(*duckdb_aggregate_function_get_extra_info)(duckdb_function_info info);
 	void (*duckdb_aggregate_function_set_error)(duckdb_function_info info, const char *error);
+	duckdb_custom_type (*duckdb_create_custom_type)();
+	void (*duckdb_destroy_custom_type)(duckdb_custom_type *type);
+	duckdb_state (*duckdb_register_custom_type)(duckdb_connection con, duckdb_custom_type type);
+	void (*duckdb_custom_type_set_name)(duckdb_custom_type type, const char *name);
+	void (*duckdb_custom_type_set_base_type)(duckdb_custom_type type, duckdb_logical_type base_type);
+	void (*duckdb_logical_type_set_alias)(duckdb_logical_type type, const char *alias);
 #endif
 
 } duckdb_ext_api_v0;
@@ -750,6 +756,13 @@ typedef struct {
 #define duckdb_table_description_error   duckdb_ext_api.duckdb_table_description_error
 
 // Version dev
+#define duckdb_logical_type_set_alias    duckdb_ext_api.duckdb_logical_type_set_alias
+#define duckdb_create_custom_type        duckdb_ext_api.duckdb_create_custom_type
+#define duckdb_destroy_custom_type       duckdb_ext_api.duckdb_destroy_custom_type
+#define duckdb_custom_type_set_base_type duckdb_ext_api.duckdb_custom_type_set_base_type
+#define duckdb_custom_type_set_name      duckdb_ext_api.duckdb_custom_type_set_name
+#define duckdb_register_custom_type      duckdb_ext_api.duckdb_register_custom_type
+
 #define duckdb_create_aggregate_function               duckdb_ext_api.duckdb_create_aggregate_function
 #define duckdb_destroy_aggregate_function              duckdb_ext_api.duckdb_destroy_aggregate_function
 #define duckdb_aggregate_function_set_name             duckdb_ext_api.duckdb_aggregate_function_set_name

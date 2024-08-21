@@ -351,6 +351,12 @@ typedef struct {
 	                                                 duckdb_delete_callback_t destroy);
 	void *(*duckdb_aggregate_function_get_extra_info)(duckdb_function_info info);
 	void (*duckdb_aggregate_function_set_error)(duckdb_function_info info, const char *error);
+	duckdb_custom_type (*duckdb_create_custom_type)();
+	void (*duckdb_destroy_custom_type)(duckdb_custom_type *type);
+	duckdb_state (*duckdb_register_custom_type)(duckdb_connection con, duckdb_custom_type type);
+	void (*duckdb_custom_type_set_name)(duckdb_custom_type type, const char *name);
+	void (*duckdb_custom_type_set_base_type)(duckdb_custom_type type, duckdb_logical_type base_type);
+	void (*duckdb_logical_type_set_alias)(duckdb_logical_type type, const char *alias);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -662,6 +668,12 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_aggregate_function_set_extra_info = duckdb_aggregate_function_set_extra_info;
 	result.duckdb_aggregate_function_get_extra_info = duckdb_aggregate_function_get_extra_info;
 	result.duckdb_aggregate_function_set_error = duckdb_aggregate_function_set_error;
+	result.duckdb_create_custom_type = duckdb_create_custom_type;
+	result.duckdb_destroy_custom_type = duckdb_destroy_custom_type;
+	result.duckdb_register_custom_type = duckdb_register_custom_type;
+	result.duckdb_custom_type_set_name = duckdb_custom_type_set_name;
+	result.duckdb_custom_type_set_base_type = duckdb_custom_type_set_base_type;
+	result.duckdb_logical_type_set_alias = duckdb_logical_type_set_alias;
 	return result;
 }
 

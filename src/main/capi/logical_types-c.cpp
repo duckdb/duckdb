@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 static bool AssertLogicalTypeId(duckdb_logical_type type, duckdb::LogicalTypeId type_id) {
 	if (!type) {
@@ -323,6 +324,11 @@ char *duckdb_logical_type_get_alias(duckdb_logical_type type) {
 	return logical_type.HasAlias() ? strdup(logical_type.GetAlias().c_str()) : nullptr;
 }
 
+void duckdb_logical_type_set_alias(duckdb_logical_type type, const char *alias) {
+	auto &logical_type = *(reinterpret_cast<duckdb::LogicalType *>(type));
+	logical_type.SetAlias(alias);
+}
+
 duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_t index) {
 	if (!AssertInternalType(type, duckdb::PhysicalType::STRUCT)) {
 		return nullptr;
@@ -333,4 +339,70 @@ duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_
 	}
 	return reinterpret_cast<duckdb_logical_type>(
 	    new duckdb::LogicalType(duckdb::StructType::GetChildType(logical_type, index)));
+}
+
+namespace duckdb {
+struct CCustomType {
+	unique_ptr<LogicalType> base_type;
+	string name;
+};
+} // namespace duckdb
+
+duckdb_custom_type duckdb_create_custom_type() {
+	return reinterpret_cast<duckdb_custom_type>(new duckdb::CCustomType());
+}
+
+void duckdb_destroy_custom_type(duckdb_custom_type *type) {
+	if (type && *type) {
+		const auto custom_type = reinterpret_cast<duckdb::CCustomType *>(*type);
+		delete custom_type;
+		*type = nullptr;
+	}
+}
+
+void duckdb_custom_type_set_name(duckdb_custom_type type, const char *name) {
+	if (!type || !name) {
+		return;
+	}
+	auto &custom_type = *(reinterpret_cast<duckdb::CCustomType *>(type));
+	custom_type.name = name;
+}
+
+void duckdb_custom_type_set_base_type(duckdb_custom_type type, duckdb_logical_type base_type) {
+	if (!type || !base_type) {
+		return;
+	}
+	const auto &logical_type = *(reinterpret_cast<duckdb::LogicalType *>(base_type));
+	auto &custom_type = *(reinterpret_cast<duckdb::CCustomType *>(type));
+	custom_type.base_type = duckdb::make_uniq<LogicalType>(logical_type);
+}
+
+duckdb_state duckdb_register_custom_type(duckdb_connection connection, duckdb_custom_type type) {
+	if (!connection || !type) {
+		return DuckDBError;
+	}
+	const auto &custom_type = *(reinterpret_cast<duckdb::CCustomType *>(type));
+	if (custom_type.name.empty() || !custom_type.base_type) {
+		return DuckDBError;
+	}
+
+	const auto &base_type = *custom_type.base_type;
+	if (duckdb::TypeVisitor::Contains(base_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(base_type, duckdb::LogicalTypeId::ANY)) {
+		return DuckDBError;
+	}
+
+	try {
+		const auto con = reinterpret_cast<duckdb::Connection *>(connection);
+		con->context->RunFunctionInTransaction([&]() {
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
+			duckdb::CreateTypeInfo info(custom_type.name, base_type);
+			info.temporary = true;
+			info.internal = true;
+			catalog.CreateType(*con->context, info);
+		});
+	} catch (...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
 }

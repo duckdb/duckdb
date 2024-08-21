@@ -550,6 +550,15 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
 
 //===--------------------------------------------------------------------===//
+// Custom type types
+//===--------------------------------------------------------------------===//
+
+//! A custom type. Must be destroyed with `duckdb_destroy_custom_type`.
+typedef struct _duckdb_custom_type {
+	void *internal_ptr;
+} * duckdb_custom_type;
+
+//===--------------------------------------------------------------------===//
 // Replacement scan types
 //===--------------------------------------------------------------------===//
 

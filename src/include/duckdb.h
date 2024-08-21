@@ -556,6 +556,15 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
 
 //===--------------------------------------------------------------------===//
+// Custom type types
+//===--------------------------------------------------------------------===//
+
+//! A custom type. Must be destroyed with `duckdb_destroy_custom_type`.
+typedef struct _duckdb_custom_type {
+	void *internal_ptr;
+} * duckdb_custom_type;
+
+//===--------------------------------------------------------------------===//
 // Replacement scan types
 //===--------------------------------------------------------------------===//
 
@@ -2202,6 +2211,14 @@ The result must be destroyed with `duckdb_free`.
 DUCKDB_API char *duckdb_logical_type_get_alias(duckdb_logical_type type);
 
 /*!
+Sets the alias of a duckdb_logical_type.
+
+* @param type The logical type
+* @param alias The alias to set
+*/
+DUCKDB_API void duckdb_logical_type_set_alias(duckdb_logical_type type, const char *alias);
+
+/*!
 Creates a LIST type from its child type.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
@@ -2446,6 +2463,45 @@ Destroys the logical type and de-allocates all memory allocated for that type.
 * @param type The logical type to destroy.
 */
 DUCKDB_API void duckdb_destroy_logical_type(duckdb_logical_type *type);
+
+/*!
+Creates a new custom type.
+
+* @return The custom type.
+*/
+DUCKDB_API duckdb_custom_type duckdb_create_custom_type();
+
+/*!
+Destroys an custom type.
+
+* @param type The custom type to destroy.
+*/
+DUCKDB_API void duckdb_destroy_custom_type(duckdb_custom_type *type);
+
+/*!
+Sets the base type of an custom type.
+
+* @param type The custom type
+* @param base_type The base type to set
+*/
+DUCKDB_API void duckdb_custom_type_set_base_type(duckdb_custom_type type, duckdb_logical_type base_type);
+
+/*!
+Sets the name of an custom type.
+
+* @param type The custom type
+* @param name The name to set
+*/
+DUCKDB_API void duckdb_custom_type_set_name(duckdb_custom_type type, const char *name);
+
+/*!
+Registers a custom type within the given connection.
+
+* @param con The connection to use
+* @param type The custom type to register
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_API duckdb_state duckdb_register_custom_type(duckdb_connection con, duckdb_custom_type type);
 
 //===--------------------------------------------------------------------===//
 // Data Chunk Interface
