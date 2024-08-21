@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 class Vector;
@@ -32,7 +32,7 @@ public:
 public:
 	void Merge(const DistinctStatistics &other);
 
-	unique_ptr<DistinctStatistics> Copy() const;
+	unique_ptr<DistinctStatistics> Copy();
 
 	void Update(Vector &update, idx_t count, bool sample = true);
 	void Update(UnifiedVectorFormat &update_data, const LogicalType &ptype, idx_t count, bool sample = true);
@@ -48,6 +48,8 @@ public:
 private:
 	//! For distinct statistics we sample the input to speed up insertions
 	static constexpr const double SAMPLE_RATE = 0.1;
+	//! For concurrent access
+	mutex lock;
 };
 
 } // namespace duckdb

@@ -3244,8 +3244,10 @@ FunctionStability EnumUtil::FromString<FunctionStability>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value) {
 	switch(value) {
-	case HLLStorageType::UNCOMPRESSED:
-		return "UNCOMPRESSED";
+	case HLLStorageType::HLL_V1:
+		return "HLL_V1";
+	case HLLStorageType::HLL_V2:
+		return "HLL_V2";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3253,8 +3255,11 @@ const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value) {
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
-	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
-		return HLLStorageType::UNCOMPRESSED;
+	if (StringUtil::Equals(value, "HLL_V1")) {
+		return HLLStorageType::HLL_V1;
+	}
+	if (StringUtil::Equals(value, "HLL_V2")) {
+		return HLLStorageType::HLL_V2;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

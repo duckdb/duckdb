@@ -8,63 +8,79 @@
 
 #pragma once
 
-#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "hyperloglog.hpp"
-
-namespace duckdb_hll {
-struct robj; // NOLINT
-}
 
 namespace duckdb {
 
-enum class HLLStorageType : uint8_t { UNCOMPRESSED = 1 };
+enum class HLLStorageType : uint8_t {
+	HLL_V1 = 1, //! Redis HLL
+	HLL_V2 = 2, //! Our own implementation
+};
 
 class Serializer;
 class Deserializer;
 
-//! The HyperLogLog class holds a HyperLogLog counter for approximate cardinality counting
+//! Algorithms from
+//! "New cardinality estimation algorithms for HyperLogLog sketches"
+//! Otmar Ertl, arXiv:1702.01284
 class HyperLogLog {
-public:
-	HyperLogLog();
-	~HyperLogLog();
-	// implicit copying of HyperLogLog is not allowed
-	HyperLogLog(const HyperLogLog &) = delete;
+private:
+	static constexpr idx_t P = 6;
+	static constexpr idx_t Q = 64 - P;
+	static constexpr idx_t M = 1 << P;
+	static constexpr double ALPHA = 0.721347520444481703680; // 1 / (2 log(2))
 
-	//! Adds an element of the specified size to the HyperLogLog counter
-	void Add(data_ptr_t element, idx_t size);
-	//! Return the count of this HyperLogLog counter
+public:
+	HyperLogLog() {
+		memset(k, 0, sizeof(k));
+	}
+
+	//! Algorithm 1
+	inline void InsertElement(hash_t h) {
+		const auto i = h & ((1 << P) - 1);
+		h >>= P;
+		h |= hash_t(1) << Q;
+		const uint8_t z = CountZeros<hash_t>::Trailing(h) + 1;
+		Update(i, z);
+	}
+
 	idx_t Count() const;
-	//! Merge this HyperLogLog counter with another counter to create a new one
-	unique_ptr<HyperLogLog> Merge(HyperLogLog &other);
-	HyperLogLog *MergePointer(HyperLogLog &other);
-	//! Merge a set of HyperLogLogs to create one big one
-	static unique_ptr<HyperLogLog> Merge(HyperLogLog logs[], idx_t count);
-	//! Get the size (in bytes) of a HLL
-	static idx_t GetSize();
-	//! Get pointer to the HLL
-	data_ptr_t GetPtr() const;
+
+	//! Algorithm 2
+	void Merge(const HyperLogLog &other);
+
+public:
+	//! Add a data to this HLL
+	void Update(Vector &input, Vector &hashes, idx_t count);
 	//! Get copy of the HLL
-	unique_ptr<HyperLogLog> Copy();
+	unique_ptr<HyperLogLog> Copy() const;
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<HyperLogLog> Deserialize(Deserializer &deserializer);
 
-public:
-	//! Compute HLL hashes over vdata, and store them in 'hashes'
-	//! Then, compute register indices and prefix lengths, and also store them in 'hashes' as a pair of uint32_t
-	static void ProcessEntries(UnifiedVectorFormat &vdata, const LogicalType &type, uint64_t hashes[], uint8_t counts[],
-	                           idx_t count);
-	//! Add the indices and counts to the logs
-	static void AddToLogs(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[],
-	                      HyperLogLog **logs[], const SelectionVector *log_sel);
-	//! Add the indices and counts to THIS log
-	void AddToLog(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[]);
+private:
+	//! Taken from https://stackoverflow.com/a/72088344
+	static inline uint8_t CountTrailingZeros(const uint64_t &x) {
+		static constexpr const uint64_t DEBRUIJN = 0x03f79d71b4cb0a89;
+		static constexpr const uint8_t LOOKUP[] = {0,  47, 1,  56, 48, 27, 2,  60, 57, 49, 41, 37, 28, 16, 3,  61,
+		                                           54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4,  62,
+		                                           46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45,
+		                                           25, 39, 14, 33, 19, 30, 9,  24, 13, 18, 8,  12, 7,  6,  5,  63};
+		return LOOKUP[(DEBRUIJN * (x ^ (x - 1))) >> 58];
+	}
+
+	inline void Update(const idx_t &i, const uint8_t &z) {
+		k[i] = MaxValue<uint8_t>(k[i], z);
+	}
+
+	//! Algorithm 4
+	void ExtractCounts(uint32_t *c) const;
+	//! Algorithm 6
+	static int64_t EstimateCardinality(uint32_t *c);
 
 private:
-	explicit HyperLogLog(duckdb_hll::robj *hll);
-
-	duckdb_hll::robj *hll;
-	mutex lock;
+	uint8_t k[M];
 };
+
 } // namespace duckdb

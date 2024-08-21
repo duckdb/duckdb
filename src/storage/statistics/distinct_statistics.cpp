@@ -13,26 +13,23 @@ DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample
     : log(std::move(log)), sample_count(sample_count), total_count(total_count) {
 }
 
-unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {
+unique_ptr<DistinctStatistics> DistinctStatistics::Copy() {
+	lock_guard<mutex> guard(lock);
 	return make_uniq<DistinctStatistics>(log->Copy(), sample_count, total_count);
 }
 
 void DistinctStatistics::Merge(const DistinctStatistics &other) {
-	log = log->Merge(*other.log);
+	log->Merge(*other.log);
 	sample_count += other.sample_count;
 	total_count += other.total_count;
 }
 
 void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
+	Vector hash_vec(LogicalType::HASH, count);
+	VectorOperations::Hash(v, hash_vec, count);
+
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(count, vdata);
-	Update(vdata, v.GetType(), count, sample);
-}
-
-void DistinctStatistics::Update(UnifiedVectorFormat &vdata, const LogicalType &type, idx_t count, bool sample) {
-	if (count == 0) {
-		return;
-	}
 
 	total_count += count;
 	if (sample) {
@@ -42,15 +39,12 @@ void DistinctStatistics::Update(UnifiedVectorFormat &vdata, const LogicalType &t
 	}
 	sample_count += count;
 
-	uint64_t indices[STANDARD_VECTOR_SIZE];
-	uint8_t counts[STANDARD_VECTOR_SIZE];
-
-	HyperLogLog::ProcessEntries(vdata, type, indices, counts, count);
-	log->AddToLog(vdata, count, indices, counts);
+	lock_guard<mutex> guard(lock);
+	log->Update(v, hash_vec, count);
 }
 
 string DistinctStatistics::ToString() const {
-	return StringUtil::Format("[Approx Unique: %s]", to_string(GetCount()));
+	return StringUtil::Format("[Approx Unique: %llu]", GetCount());
 }
 
 idx_t DistinctStatistics::GetCount() const {
@@ -59,8 +53,8 @@ idx_t DistinctStatistics::GetCount() const {
 	}
 
 	double u = static_cast<double>(MinValue<idx_t>(log->Count(), sample_count));
-	double s = static_cast<double>(sample_count);
-	double n = static_cast<double>(total_count);
+	double s = static_cast<double>(sample_count.load());
+	double n = static_cast<double>(total_count.load());
 
 	// Assume this proportion of the the sampled values occurred only once
 	double u1 = pow(u / s, 2) * u;

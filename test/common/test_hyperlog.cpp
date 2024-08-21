@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 
 #include <vector>
@@ -11,7 +12,7 @@ TEST_CASE("Test that hyperloglog works", "[hyperloglog]") {
 	// add a million elements of the same value
 	int x = 4;
 	for (size_t i = 0; i < 1000000; i++) {
-		log.Add((uint8_t *)&x, sizeof(int));
+		log.InsertElement(Hash(x));
 	}
 	REQUIRE(log.Count() == 1);
 
@@ -19,19 +20,19 @@ TEST_CASE("Test that hyperloglog works", "[hyperloglog]") {
 	HyperLogLog log2;
 	for (size_t i = 0; i < 1000000; i++) {
 		x = i;
-		log2.Add((uint8_t *)&x, sizeof(int));
+		log2.InsertElement(Hash(x));
 	}
 	// the count is approximate, but should be pretty close to a million
 	size_t count = log2.Count();
-	REQUIRE(count > 995000LL);
-	REQUIRE(count < 1005000LL);
+	REQUIRE(count > 950000LL);
+	REQUIRE(count < 1050000LL);
 
 	// now we can merge the HLLs
-	auto new_log = log.Merge(log2);
+	log.Merge(log2);
 	// the count should be pretty much the same
-	count = new_log->Count();
-	REQUIRE(count > 995000LL);
-	REQUIRE(count < 1005000LL);
+	count = log.Count();
+	REQUIRE(count > 950000LL);
+	REQUIRE(count < 1050000LL);
 
 	// now test composability of the merge
 	// add everything to one big_hll one
@@ -41,11 +42,13 @@ TEST_CASE("Test that hyperloglog works", "[hyperloglog]") {
 	HyperLogLog small_hll[16];
 	for (size_t i = 0; i < 1000000; i++) {
 		x = ((2 * i) + 3) % (i + 3 / 2);
-		big_hll.Add((uint8_t *)&x, sizeof(int));
-		small_hll[i % 16].Add((uint8_t *)&x, sizeof(int));
+		big_hll.InsertElement(Hash(x));
+		small_hll[i % 16].InsertElement(Hash(x));
 	}
 	// now merge them into one big_hll HyperLogLog
-	auto merged = HyperLogLog::Merge(small_hll, 16);
+	for (idx_t i = 1; i < 16; i++) {
+		small_hll[0].Merge(small_hll[i]);
+	}
 	// the result should be identical to the big_hll one
-	REQUIRE(merged->Count() == big_hll.Count());
+	REQUIRE(small_hll[0].Count() == big_hll.Count());
 }
