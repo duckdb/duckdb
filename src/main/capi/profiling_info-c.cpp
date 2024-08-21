@@ -38,6 +38,25 @@ duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const c
 	return duckdb_create_varchar_length(str.c_str(), strlen(str.c_str()));
 }
 
+duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
+	if (!info) {
+		return nullptr;
+	}
+
+	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
+	auto &profiling_info = node.GetProfilingInfo();
+
+	duckdb::unordered_map<duckdb::string, duckdb::string> metrics_map;
+	for (const auto &metric : profiling_info.metrics) {
+		auto key = EnumUtil::ToString(metric.first);
+		auto value = metric.second.ToString();
+		metrics_map[key] = value;
+	}
+
+	auto map = duckdb::Value::MAP(metrics_map);
+	return WrapValue(new duckdb::Value(map));
+}
+
 idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info) {
 	if (!info) {
 		return 0;
