@@ -18,7 +18,7 @@ CREATE TABLE tbl2 (i INT);
 statement ok
 CREATE INDEX idx2 ON tbl2(i);
 
-loop i 0 10
+loop i 0 100
 
 statement ok
 INSERT INTO tbl1 SELECT range FROM range(50000);

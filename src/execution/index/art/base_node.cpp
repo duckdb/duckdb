@@ -11,62 +11,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 template <uint8_t CAPACITY, NType TYPE>
-BaseNode<CAPACITY, TYPE> &BaseNode<CAPACITY, TYPE>::New(ART &art, Node &node) {
-	node = Node::GetAllocator(art, TYPE).New();
-	node.SetMetadata(static_cast<uint8_t>(TYPE));
-
-	auto &n = Node::Ref<BaseNode>(art, node, TYPE);
-	n.count = 0;
-	return n;
-}
-
-template <uint8_t CAPACITY, NType TYPE>
-void BaseNode<CAPACITY, TYPE>::Free(ART &art, Node &node) {
-	auto &n = Node::Ref<BaseNode>(art, node, TYPE);
-	for (uint8_t i = 0; i < n.count; i++) {
-		Node::Free(art, n.children[i]);
-	}
-}
-
-template <uint8_t CAPACITY, NType TYPE>
-void BaseNode<CAPACITY, TYPE>::ReplaceChild(BaseNode &n, const uint8_t byte, const Node child) {
-	D_ASSERT(n.count != 0);
-	for (uint8_t i = 0; i < n.count; i++) {
-		if (n.key[i] == byte) {
-			auto status = n.children[i].GetGateStatus();
-			n.children[i] = child;
-
-			if (status == GateStatus::GATE_SET && child.HasMetadata()) {
-				n.children[i].SetGateStatus(status);
-			}
-			return;
-		}
-	}
-}
-
-template <uint8_t CAPACITY, NType TYPE>
-unsafe_optional_ptr<Node> BaseNode<CAPACITY, TYPE>::GetChild(BaseNode &n, const uint8_t byte) {
-	for (uint8_t i = 0; i < n.count; i++) {
-		if (n.key[i] == byte) {
-			D_ASSERT(n.children[i].HasMetadata());
-			return &n.children[i];
-		}
-	}
-	return nullptr;
-}
-
-template <uint8_t CAPACITY, NType TYPE>
-unsafe_optional_ptr<Node> BaseNode<CAPACITY, TYPE>::GetNextChild(BaseNode &n, uint8_t &byte) {
-	for (uint8_t i = 0; i < n.count; i++) {
-		if (n.key[i] >= byte) {
-			byte = n.key[i];
-			return &n.children[i];
-		}
-	}
-	return nullptr;
-}
-
-template <uint8_t CAPACITY, NType TYPE>
 void BaseNode<CAPACITY, TYPE>::InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child) {
 	// Still space. Insert the child.
 	uint8_t child_pos = 0;

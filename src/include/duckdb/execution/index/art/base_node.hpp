@@ -32,15 +32,60 @@ private:
 
 public:
 	//! Get a new BaseNode and initialize it.
-	static BaseNode &New(ART &art, Node &node);
+	static BaseNode &New(ART &art, Node &node) {
+		node = Node::GetAllocator(art, TYPE).New();
+		node.SetMetadata(static_cast<uint8_t>(TYPE));
+
+		auto &n = Node::Ref<BaseNode>(art, node, TYPE);
+		n.count = 0;
+		return n;
+	}
+
 	//! Free the node and its children.
-	static void Free(ART &art, Node &node);
+	static void Free(ART &art, Node &node) {
+		auto &n = Node::Ref<BaseNode>(art, node, TYPE);
+		for (uint8_t i = 0; i < n.count; i++) {
+			Node::Free(art, n.children[i]);
+		}
+	}
+
 	//! Replace the child at byte.
-	static void ReplaceChild(BaseNode &n, const uint8_t byte, const Node child);
+	static void ReplaceChild(BaseNode &n, const uint8_t byte, const Node child) {
+		D_ASSERT(n.count != 0);
+		for (uint8_t i = 0; i < n.count; i++) {
+			if (n.key[i] == byte) {
+				auto status = n.children[i].GetGateStatus();
+				n.children[i] = child;
+
+				if (status == GateStatus::GATE_SET && child.HasMetadata()) {
+					n.children[i].SetGateStatus(status);
+				}
+				return;
+			}
+		}
+	}
+
 	//! Get the child at byte.
-	static unsafe_optional_ptr<Node> GetChild(BaseNode &n, const uint8_t byte);
+	static unsafe_optional_ptr<Node> GetChild(BaseNode &n, const uint8_t byte) {
+		for (uint8_t i = 0; i < n.count; i++) {
+			if (n.key[i] == byte) {
+				D_ASSERT(n.children[i].HasMetadata());
+				return &n.children[i];
+			}
+		}
+		return nullptr;
+	}
+
 	//! Get the first child greater than or equal to the byte.
-	static unsafe_optional_ptr<Node> GetNextChild(BaseNode &n, uint8_t &byte);
+	static unsafe_optional_ptr<Node> GetNextChild(BaseNode &n, uint8_t &byte) {
+		for (uint8_t i = 0; i < n.count; i++) {
+			if (n.key[i] >= byte) {
+				byte = n.key[i];
+				return &n.children[i];
+			}
+		}
+		return nullptr;
+	}
 
 public:
 	template <class F>

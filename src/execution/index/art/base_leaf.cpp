@@ -13,37 +13,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 template <uint8_t CAPACITY, NType TYPE>
-BaseLeaf<CAPACITY, TYPE> &BaseLeaf<CAPACITY, TYPE>::New(ART &art, Node &node) {
-	node = Node::GetAllocator(art, TYPE).New();
-	node.SetMetadata(static_cast<uint8_t>(TYPE));
-
-	auto &n = Node::Ref<BaseLeaf>(art, node, TYPE);
-	n.count = 0;
-	return n;
-}
-
-template <uint8_t CAPACITY, NType TYPE>
-bool BaseLeaf<CAPACITY, TYPE>::HasByte(uint8_t &byte) const {
-	for (uint8_t i = 0; i < count; i++) {
-		if (key[i] == byte) {
-			return true;
-		}
-	}
-	return false;
-}
-
-template <uint8_t CAPACITY, NType TYPE>
-bool BaseLeaf<CAPACITY, TYPE>::GetNextByte(uint8_t &byte) const {
-	for (uint8_t i = 0; i < count; i++) {
-		if (key[i] >= byte) {
-			byte = key[i];
-			return true;
-		}
-	}
-	return false;
-}
-
-template <uint8_t CAPACITY, NType TYPE>
 void BaseLeaf<CAPACITY, TYPE>::InsertByteInternal(BaseLeaf &n, const uint8_t byte) {
 	// Still space. Insert the child.
 	uint8_t child_pos = 0;
