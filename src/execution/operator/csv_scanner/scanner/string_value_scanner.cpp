@@ -199,7 +199,7 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 	return done;
 }
 
-void SanitizeValue(string &value) {
+static void SanitizeError(string &value) {
 	std::vector<char> char_array(value.begin(), value.end());
 	char_array.push_back('\0'); // Null-terminate the character array
 	Utf8Proc::MakeValid(&char_array[0], char_array.size());
@@ -428,7 +428,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			error << "Could not convert string \"" << std::string(value_ptr, size) << "\" to \'"
 			      << LogicalTypeIdToString(parse_types[chunk_col_id].type_id) << "\'";
 			auto error_string = error.str();
-			SanitizeValue(error_string);
+			SanitizeError(error_string);
 
 			current_errors.ModifyErrorMessageOfLastError(error_string);
 		}
@@ -492,7 +492,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 					      << "\" to \'" << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id)
 					      << "\'";
 					auto error_string = error.str();
-					SanitizeValue(error_string);
+					SanitizeError(error_string);
 					result.current_errors.ModifyErrorMessageOfLastError(error_string);
 				}
 				result.cur_col_id++;
@@ -657,7 +657,7 @@ void StringValueResult::QuotedNewLine(StringValueResult &result) {
 	result.quoted_new_line = true;
 }
 
-void StringValueResult::NullPaddingQuotedNewlineCheck() {
+void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 	// We do some checks for null_padding correctness
 	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line) {
 		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel; We error.
@@ -670,7 +670,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 //! Reconstructs the current line to be used in error messages
 string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
                                                 unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
-                                                bool reconstruct_line) {
+                                                bool reconstruct_line) const {
 	if (!reconstruct_line) {
 		return {};
 	}
@@ -703,7 +703,7 @@ string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
 		}
 	}
 	// sanitize borked line
-	SanitizeValue(result);
+	SanitizeError(result);
 	return result;
 }
 
@@ -863,7 +863,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        const shared_ptr<CSVErrorHandler> &error_handler,
                                        const shared_ptr<CSVFileScan> &csv_file_scan, bool sniffing,
-                                       CSVIterator boundary, idx_t result_size)
+                                       const CSVIterator &boundary, idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, sniffing, csv_file_scan, boundary),
       scanner_idx(scanner_idx_p),
       result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
@@ -875,7 +875,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
 StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size,
-                                       CSVIterator boundary)
+                                       const CSVIterator &boundary)
     : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, boundary), scanner_idx(0),
       result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
@@ -901,7 +901,7 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 	return scanner;
 }
 
-bool StringValueScanner::FinishedIterator() {
+bool StringValueScanner::FinishedIterator() const {
 	return iterator.done;
 }
 
@@ -965,9 +965,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				}
 			}
 			{
-				vector<Value> row;
 
 				if (state_machine->options.ignore_errors.GetValue()) {
+					vector<Value> row;
 					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
 					}
@@ -982,7 +982,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 					      << type.ToString() << "\'";
 					string error_msg = error.str();
-					SanitizeValue(error_msg);
+					SanitizeError(error_msg);
 					auto csv_error = CSVError::CastError(
 					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
 					    lines_per_batch,
@@ -1013,7 +1013,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 						      << LogicalTypeIdToString(type.id()) << "\'";
 						string error_msg = error.str();
-						SanitizeValue(error_msg);
+						SanitizeError(error_msg);
 						auto csv_error =
 						    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_msg,
 						                        col_idx, borked_line, lines_per_batch,
@@ -1364,7 +1364,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 	return false;
 }
 
-void StringValueResult::SkipBOM() {
+void StringValueResult::SkipBOM() const {
 	if (buffer_size >= 3 && buffer_ptr[0] == '\xEF' && buffer_ptr[1] == '\xBB' && buffer_ptr[2] == '\xBF' &&
 	    iterator.pos.buffer_pos == 0) {
 		iterator.pos.buffer_pos = 3;
@@ -1382,9 +1382,9 @@ void StringValueResult::RemoveLastLine() {
 	// decrement row counter
 	number_of_rows--;
 }
-bool StringValueResult::PrintErrorLine() {
-	// To print a lint, result size must be different than one (i.e., this is a SetStart() trying to figure out new
-	// lines) And must either not be ignoring errors. OR must be storing them in a rejects table.
+bool StringValueResult::PrintErrorLine() const {
+	// To print a lint, result size must be different, than one (i.e., this is a SetStart() trying to figure out new
+	// lines) And must either not be ignoring errors OR must be storing them in a rejects table.
 	return result_size != 1 &&
 	       (state_machine.options.store_rejects.GetValue() || !state_machine.options.ignore_errors.GetValue());
 }
@@ -1459,12 +1459,12 @@ void StringValueScanner::SetStart() {
 		return;
 	}
 	// The result size of the data after skipping the row is one line
-	const idx_t result_size = 1;
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
 	bool line_found;
 	unique_ptr<StringValueScanner> scan_finder;
 	do {
+		constexpr idx_t result_size = 1;
 		SkipUntilNewLine();
 		if (state_machine->options.null_padding) {
 			// When Null Padding, we assume we start from the correct new-line
