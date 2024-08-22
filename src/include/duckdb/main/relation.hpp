@@ -136,9 +136,9 @@ public:
 	//! Insert a row (i.e.,list of values) into a table
 	DUCKDB_API void Insert(const vector<vector<Value>> &values);
 	//! Create a table and insert the data from this relation into that table
-	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name);
-	DUCKDB_API void Create(const string &table_name);
-	DUCKDB_API void Create(const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name, bool temporary);
+	DUCKDB_API void Create(const string &table_name, bool temporary = false);
+	DUCKDB_API void Create(const string &schema_name, const string &table_name, bool temporary);
 
 	//! Write a relation to a CSV file
 	DUCKDB_API shared_ptr<Relation>
