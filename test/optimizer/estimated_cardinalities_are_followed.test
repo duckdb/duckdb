@@ -2,6 +2,8 @@
 # description: Make sure estimated cardinalities are respected
 # group: [optimizer]
 
+require notwindows
+
 statement ok
 create table t1 as select range a from range(100000);
 
