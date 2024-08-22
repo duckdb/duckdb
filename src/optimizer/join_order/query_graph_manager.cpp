@@ -322,9 +322,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	//	result_operator->estimated_props = node.estimated_props->Copy();
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
-	if (result_operator->estimated_cardinality == 33 || result_operator->estimated_cardinality == 0) {
-		auto break_here = 0;
-	}
 	if (result_operator->type == LogicalOperatorType::LOGICAL_FILTER &&
 	    result_operator->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 		// FILTER on top of GET, add estimated properties to both

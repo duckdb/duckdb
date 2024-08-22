@@ -57,6 +57,7 @@ InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
 		expressions_info += expressions[i]->GetName();
 	}
 	result["Expressions"] = expressions_info;
+	result["Estimated Cardinality"] = to_string(estimated_cardinality);
 	return result;
 }
 

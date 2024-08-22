@@ -23,6 +23,7 @@ InsertionOrderPreservingMap<string> LogicalComparisonJoin::ParamsToString() cons
 		conditions_info += expr->ToString();
 	}
 	result["Conditions"] = conditions_info;
+	result["Estimated Cardinality"] = to_string(estimated_cardinality);
 	return result;
 }
 

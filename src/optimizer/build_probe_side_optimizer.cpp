@@ -180,16 +180,6 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) {
 			swap = !swap;
 		}
 	}
-	Printer::Print("left has estimate" + to_string(left_child.has_estimated_cardinality));
-	Printer::Print("Left Cardinality: " + to_string(lhs_cardinality));
-	if (lhs_cardinality == 0) {
-		auto break_here = 0;
-	}
-	Printer::Print("Left Side Build Cost: " + to_string(left_side_build_cost));
-
-	Printer::Print("right has estimate" + to_string(right_child.has_estimated_cardinality));
-	Printer::Print("Right Cardinality: " + to_string(rhs_cardinality));
-	Printer::Print("Right Side Build Cost: " + to_string(right_side_build_cost));
 
 	if (swap) {
 		FlipChildren(op);
