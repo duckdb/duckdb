@@ -1,0 +1,5 @@
+# name: test/optimizer/statistics/statistics_join.test
+# description: Statistics propagation test with joins
+# group: [statistics]
+
+mode skip
