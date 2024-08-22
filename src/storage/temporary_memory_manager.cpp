@@ -236,7 +236,7 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 		const auto min_idx = NumericCast<idx_t>(std::distance(der.begin(), std::min_element(der.begin(), der.end())));
 
 		// This is how much memory we will distribute in this round
-		const auto iter_memory = NumericCast<idx_t>(
+		const auto iter_memory = ExactNumericCast<idx_t>(
 		    std::ceil(static_cast<double>(remaining_memory) / static_cast<double>(optimization_iterations - opt_idx)));
 		const auto state_room = siz[min_idx] - res[min_idx];
 		const auto delta = MinValue<idx_t>(iter_memory, state_room);
