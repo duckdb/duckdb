@@ -4,8 +4,13 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "hyperloglog.hpp"
 
 #include <math.h>
+
+namespace duckdb_hll {
+struct robj; // NOLINT
+}
 
 namespace duckdb {
 
@@ -106,21 +111,125 @@ unique_ptr<HyperLogLog> HyperLogLog::Copy() const {
 	return result;
 }
 
+class HLLV1 {
+public:
+	HLLV1() {
+		hll = duckdb_hll::hll_create();
+		duckdb_hll::hllSparseToDense(hll);
+	}
+
+	~HLLV1() {
+		duckdb_hll::hll_destroy(hll);
+	}
+
+public:
+	static idx_t GetSize() {
+		return duckdb_hll::get_size();
+	}
+
+	data_ptr_t GetPtr() const {
+		return data_ptr_cast((hll)->ptr);
+	}
+
+	void ToNew(HyperLogLog &new_hll) const {
+		const idx_t mult = duckdb_hll::num_registers() / HyperLogLog::M;
+		// Old implementation used more registers, so we compress the registers, losing some accuracy
+		for (idx_t i = 0; i < HyperLogLog::M; i++) {
+			uint8_t max_old = 0;
+			for (idx_t j = 0; j < mult; j++) {
+				D_ASSERT(i * mult + j < duckdb_hll::num_registers());
+				max_old = MaxValue<uint8_t>(max_old, duckdb_hll::get_register(hll, i * mult + j));
+			}
+			new_hll.Update(i, max_old);
+		}
+		D_ASSERT(IsWithinAcceptableRange(new_hll.Count(), Count()));
+	}
+
+	void FromNew(const HyperLogLog &new_hll) {
+		const auto new_hll_count = new_hll.Count();
+		if (new_hll_count == 0) {
+			return;
+		}
+
+		const idx_t mult = duckdb_hll::num_registers() / HyperLogLog::M;
+		// When going from less to more registers, we cannot just duplicate the registers,
+		// as each register in the new HLL is the minimum of 'mult' registers in the old HLL.
+		// Duplicating will make for VERY large over-estimations. Instead, we do the following:
+
+		// Set the first of every 'mult' registers in the old HLL to the value in the new HLL
+		// This ensures that we can convert OLD to NEW without loss of information
+		idx_t sum = 0;
+		for (idx_t i = 0; i < HyperLogLog::M; i++) {
+			const auto max_new = MinValue(new_hll.GetRegister(i), duckdb_hll::maximum_zeros());
+			duckdb_hll::set_register(hll, i * mult, max_new);
+			sum += max_new;
+		}
+		const uint8_t avg = NumericCast<uint8_t>(sum / HyperLogLog::M);
+
+		// Set all other registers to a default value, starting with the avg, which is optimized within 4 iterations
+		uint8_t default_val = avg;
+		for (uint8_t epsilon = 4; epsilon >= 1; epsilon--) {
+			for (idx_t i = 0; i < HyperLogLog::M; i++) {
+				const auto max_new = MinValue(new_hll.GetRegister(i), duckdb_hll::maximum_zeros());
+				for (idx_t j = 1; j < mult; j++) {
+					D_ASSERT(i * mult + j < duckdb_hll::num_registers());
+					duckdb_hll::set_register(hll, i * mult + j, MinValue(max_new, default_val));
+				}
+			}
+			if (IsWithinAcceptableRange(new_hll_count, Count())) {
+				break;
+			}
+			if (Count() > new_hll.Count()) {
+				default_val -= epsilon;
+			} else {
+				default_val += epsilon;
+			}
+		}
+		D_ASSERT(IsWithinAcceptableRange(new_hll_count, Count()));
+	}
+
+private:
+	idx_t Count() const {
+		size_t result;
+		if (duckdb_hll::hll_count(hll, &result) != HLL_C_OK) {
+			throw InternalException("Could not count HLL?");
+		}
+		return result;
+	}
+
+	bool IsWithinAcceptableRange(const idx_t &new_hll_count, const idx_t &old_hll_count) const {
+		const auto newd = static_cast<double>(new_hll_count);
+		const auto oldd = static_cast<double>(old_hll_count);
+		return MaxValue(newd, oldd) / MinValue(newd, oldd) < ACCEPTABLE_Q_ERROR;
+	}
+
+private:
+	static constexpr double ACCEPTABLE_Q_ERROR = 2;
+	duckdb_hll::robj *hll;
+};
+
 void HyperLogLog::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(100, "type", HLLStorageType::HLL_V2);
-	serializer.WriteProperty(101, "data", k, sizeof(k));
+	if (serializer.ShouldSerialize(3)) {
+		serializer.WriteProperty(100, "type", HLLStorageType::HLL_V2);
+		serializer.WriteProperty(101, "data", k, sizeof(k));
+	} else {
+		auto old = make_uniq<HLLV1>();
+		old->FromNew(*this);
+
+		serializer.WriteProperty(100, "type", HLLStorageType::HLL_V1);
+		serializer.WriteProperty(101, "data", old->GetPtr(), old->GetSize());
+	}
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Deserialize(Deserializer &deserializer) {
-	static constexpr idx_t HLL_V1_SIZE = 3089;
-
 	auto result = make_uniq<HyperLogLog>();
 	auto storage_type = deserializer.ReadProperty<HLLStorageType>(100, "type");
 	switch (storage_type) {
 	case HLLStorageType::HLL_V1: {
-		auto dummy_array = make_uniq_array_uninitialized<data_t>(HLL_V1_SIZE);
-		deserializer.ReadProperty(101, "data", dummy_array.get(), HLL_V1_SIZE);
-		break; // Deprecated
+		auto old = make_uniq<HLLV1>();
+		deserializer.ReadProperty(101, "data", old->GetPtr(), old->GetSize());
+		old->ToNew(*result);
+		break;
 	}
 	case HLLStorageType::HLL_V2:
 		deserializer.ReadProperty(101, "data", result->k, sizeof(k));

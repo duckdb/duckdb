@@ -25,7 +25,7 @@ class Deserializer;
 //! "New cardinality estimation algorithms for HyperLogLog sketches"
 //! Otmar Ertl, arXiv:1702.01284
 class HyperLogLog {
-private:
+public:
 	static constexpr idx_t P = 6;
 	static constexpr idx_t Q = 64 - P;
 	static constexpr idx_t M = 1 << P;
@@ -41,8 +41,16 @@ public:
 		const auto i = h & ((1 << P) - 1);
 		h >>= P;
 		h |= hash_t(1) << Q;
-		const uint8_t z = CountZeros<hash_t>::Trailing(h) + 1;
+		const uint8_t z = UnsafeNumericCast<uint8_t>(CountZeros<hash_t>::Trailing(h) + 1);
 		Update(i, z);
+	}
+
+	inline void Update(const idx_t &i, const uint8_t &z) {
+		k[i] = MaxValue<uint8_t>(k[i], z);
+	}
+
+	inline uint8_t GetRegister(const idx_t &i) const {
+		return k[i];
 	}
 
 	idx_t Count() const;
@@ -51,18 +59,13 @@ public:
 	void Merge(const HyperLogLog &other);
 
 public:
-	//! Add a data to this HLL
+	//! Add data to this HLL
 	void Update(Vector &input, Vector &hashes, idx_t count);
 	//! Get copy of the HLL
 	unique_ptr<HyperLogLog> Copy() const;
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<HyperLogLog> Deserialize(Deserializer &deserializer);
-
-private:
-	inline void Update(const idx_t &i, const uint8_t &z) {
-		k[i] = MaxValue<uint8_t>(k[i], z);
-	}
 
 	//! Algorithm 4
 	void ExtractCounts(uint32_t *c) const;
