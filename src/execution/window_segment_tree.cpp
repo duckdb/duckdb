@@ -1410,6 +1410,8 @@ public:
 	using ZippedElements = vector<ZippedTuple>;
 
 	void Build(WindowDistinctAggregatorGlobalState &gdastate, WindowDistinctAggregatorLocalState &ldastate);
+	void BuildRun(idx_t level_nr, idx_t i, idx_t level_width, WindowDistinctAggregatorGlobalState &gdsink,
+	              WindowDistinctAggregatorLocalState &ldastate);
 };
 
 class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
@@ -1855,6 +1857,28 @@ void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 
 void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink,
                                    WindowDistinctAggregatorLocalState &ldastate) {
+	auto &zipped_tree = gdsink.zipped_tree;
+
+	//	Walk the distinct value tree building the intermediate aggregates
+	idx_t level_width = 1;
+	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
+		auto &zipped_level = zipped_tree.tree[level_nr].first;
+
+		for (idx_t i = 0; i < zipped_level.size(); i += level_width) {
+			BuildRun(level_nr, i, level_width, gdsink, ldastate);
+		}
+
+		std::swap(tree[level_nr].second, zipped_tree.tree[level_nr].second);
+
+		level_width *= FANOUT;
+	}
+
+	zipped_tree.tree.clear();
+}
+
+void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t i, idx_t level_width,
+                                      WindowDistinctAggregatorGlobalState &gdsink,
+                                      WindowDistinctAggregatorLocalState &ldastate) {
 	auto &aggr = gdsink.aggregator.aggr;
 	auto &allocator = gdsink.allocator;
 	auto &inputs = gdsink.inputs;
@@ -1876,76 +1900,63 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink,
 	auto targets = FlatVector::GetData<data_ptr_t>(target_v);
 
 	auto &zipped_tree = gdsink.zipped_tree;
+	auto &zipped_level = zipped_tree.tree[level_nr].first;
+	auto &level = tree[level_nr].first;
 
-	//	Walk the distinct value tree building the intermediate aggregates
-	idx_t level_width = 1;
-	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
-		auto &zipped_level = zipped_tree.tree[level_nr].first;
-		auto &level = tree[level_nr].first;
+	//	Reset the combine state
+	idx_t nupdate = 0;
+	idx_t ncombine = 0;
+	data_ptr_t prev_state = nullptr;
+	auto next_limit = MinValue<idx_t>(zipped_level.size(), i + level_width);
+	idx_t levels_flat_offset = level_nr * zipped_level.size() + i;
+	for (auto j = i; j < next_limit; ++j) {
+		//	Initialise the next aggregate
+		auto curr_state = levels_flat_native.GetStatePtr(levels_flat_offset++);
 
-		for (idx_t i = 0; i < zipped_level.size(); i += level_width) {
-			//	Reset the combine state
-			idx_t nupdate = 0;
-			idx_t ncombine = 0;
-			data_ptr_t prev_state = nullptr;
-			auto next_limit = MinValue<idx_t>(zipped_level.size(), i + level_width);
-			idx_t levels_flat_offset = level_nr * zipped_level.size() + i;
-			for (auto j = i; j < next_limit; ++j) {
-				//	Initialise the next aggregate
-				auto curr_state = levels_flat_native.GetStatePtr(levels_flat_offset++);
-
-				//	Update this state (if it matches)
-				const auto prev_idx = std::get<0>(zipped_level[j]);
-				level[j] = prev_idx;
-				if (prev_idx < i + 1) {
-					updates[nupdate] = curr_state;
-					//	input_idx
-					sel[nupdate] = UnsafeNumericCast<sel_t>(std::get<1>(zipped_level[j]));
-					++nupdate;
-				}
-
-				//	Merge the previous state (if any)
-				if (prev_state) {
-					sources[ncombine] = prev_state;
-					targets[ncombine] = curr_state;
-					++ncombine;
-				}
-				prev_state = curr_state;
-
-				//	Flush the states if one is maxed out.
-				if (MaxValue<idx_t>(ncombine, nupdate) >= STANDARD_VECTOR_SIZE) {
-					//	Push the updates first so they propagate
-					leaves.Reference(inputs);
-					leaves.Slice(sel, nupdate);
-					aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
-					nupdate = 0;
-
-					//	Combine the states sequentially
-					aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
-					ncombine = 0;
-				}
-			}
-
-			//	Flush any remaining states
-			if (ncombine || nupdate) {
-				//	Push  the updates
-				leaves.Reference(inputs);
-				leaves.Slice(sel, nupdate);
-				aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
-				nupdate = 0;
-
-				//	Combine the states sequentially
-				aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
-				ncombine = 0;
-			}
+		//	Update this state (if it matches)
+		const auto prev_idx = std::get<0>(zipped_level[j]);
+		level[j] = prev_idx;
+		if (prev_idx < i + 1) {
+			updates[nupdate] = curr_state;
+			//	input_idx
+			sel[nupdate] = UnsafeNumericCast<sel_t>(std::get<1>(zipped_level[j]));
+			++nupdate;
 		}
 
-		std::swap(tree[level_nr].second, zipped_tree.tree[level_nr].second);
+		//	Merge the previous state (if any)
+		if (prev_state) {
+			sources[ncombine] = prev_state;
+			targets[ncombine] = curr_state;
+			++ncombine;
+		}
+		prev_state = curr_state;
 
-		level_width *= FANOUT;
+		//	Flush the states if one is maxed out.
+		if (MaxValue<idx_t>(ncombine, nupdate) >= STANDARD_VECTOR_SIZE) {
+			//	Push the updates first so they propagate
+			leaves.Reference(inputs);
+			leaves.Slice(sel, nupdate);
+			aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
+			nupdate = 0;
+
+			//	Combine the states sequentially
+			aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
+			ncombine = 0;
+		}
 	}
 
-	zipped_tree.tree.clear();
+	//	Flush any remaining states
+	if (ncombine || nupdate) {
+		//	Push  the updates
+		leaves.Reference(inputs);
+		leaves.Slice(sel, nupdate);
+		aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
+		nupdate = 0;
+
+		//	Combine the states sequentially
+		aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
+		ncombine = 0;
+	}
 }
 
 void WindowDistinctAggregatorLocalState::FlushStates() {
