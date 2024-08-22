@@ -344,8 +344,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
-		ModifyStatsIfLimit(limit_op.get(), proj_stats);
 		proj.SetEstimatedCardinality(proj_stats.cardinality);
+		ModifyStatsIfLimit(limit_op.get(), proj_stats);
 		AddRelation(input_op, parent, proj_stats);
 		return true;
 	}
