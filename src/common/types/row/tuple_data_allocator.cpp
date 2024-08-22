@@ -3,6 +3,7 @@
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -32,6 +33,23 @@ TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, const Tupl
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
     : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
+}
+
+void TupleDataAllocator::SetCanDestroy() {
+	for (auto &block : row_blocks) {
+		if (block.handle) {
+			block.handle->SetCanDestroy(true);
+		}
+	}
+	for (auto &block : heap_blocks) {
+		if (block.handle) {
+			block.handle->SetCanDestroy(true);
+		}
+	}
+}
+
+TupleDataAllocator::~TupleDataAllocator() {
+	SetCanDestroy();
 }
 
 BufferManager &TupleDataAllocator::GetBufferManager() {
@@ -440,7 +458,10 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
 			case TupleDataPinProperties::ALREADY_PINNED:
 				break;
 			case TupleDataPinProperties::DESTROY_AFTER_DONE:
-				blocks[block_id].handle = nullptr;
+				// Prevent it from being added to the eviction queue
+				blocks[block_id].handle->SetCanDestroy(true);
+				// Destroy
+				blocks[block_id].handle.reset();
 				break;
 			default:
 				D_ASSERT(properties == TupleDataPinProperties::INVALID);
