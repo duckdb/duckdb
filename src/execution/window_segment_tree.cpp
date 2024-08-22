@@ -1873,7 +1873,7 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		auto &zipped_level = zipped_tree.tree[level_nr].first;
 		vector<ElementType> level;
-		level.reserve(zipped_level.size());
+		level.resize(zipped_level.size());
 
 		for (idx_t i = 0; i < zipped_level.size(); i += level_width) {
 			//	Reset the combine state
@@ -1886,7 +1886,7 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 
 				//	Update this state (if it matches)
 				const auto prev_idx = std::get<0>(zipped_level[j]);
-				level.emplace_back(prev_idx);
+				level[j] = prev_idx;
 				if (prev_idx < i + 1) {
 					updates[nupdate] = curr_state;
 					//	input_idx
