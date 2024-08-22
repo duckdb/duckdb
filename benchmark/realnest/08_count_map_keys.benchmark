@@ -9,11 +9,12 @@ require json
 
 require httpfs
 
+cache real_nest.duckdb
+
 load benchmark/realnest/load.sql
 
 run
-SELECT keys, count(*) mentions FROM
-    (SELECT UNNEST(map_keys(tags)) AS keys FROM daylight)
-    GROUP BY keys
-    ORDER BY mentions DESC
-    LIMIT 20;
+SELECT keys, count(*) mentions FROM (
+    SELECT UNNEST(map_keys(tags)) AS keys 
+FROM open_street_map) GROUP BY keys 
+ORDER BY mentions DESC LIMIT 20;

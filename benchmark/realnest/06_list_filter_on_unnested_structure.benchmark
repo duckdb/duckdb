@@ -9,6 +9,8 @@ require json
 
 require httpfs
 
+cache real_nest.duckdb
+
 load benchmark/realnest/load.sql
 
 run
