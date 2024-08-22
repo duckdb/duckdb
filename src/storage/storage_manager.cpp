@@ -89,8 +89,12 @@ void StorageManager::ResetWAL() {
 }
 
 string StorageManager::GetWALPath() {
-
-	std::size_t question_mark_pos = path.find('?');
+	// we append the ".wal" **before** a question mark in case of GET parameters
+	// but only if we are not in a windows long path (which starts with \\?\)
+	std::size_t question_mark_pos = std::string::npos;
+	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
+		question_mark_pos = path.find('?');
+	}
 	auto wal_path = path;
 	if (question_mark_pos != std::string::npos) {
 		wal_path.insert(question_mark_pos, ".wal");
