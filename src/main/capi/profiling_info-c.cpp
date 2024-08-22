@@ -59,7 +59,7 @@ duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
 	}
 
 	auto map = duckdb::Value::MAP(metrics_map);
-	return WrapValue(new duckdb::Value(map));
+	return reinterpret_cast<duckdb_value>(new duckdb::Value(map));
 }
 
 idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info) {
