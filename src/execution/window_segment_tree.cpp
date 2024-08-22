@@ -1401,12 +1401,22 @@ WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const v
 
 class WindowDistinctAggregatorLocalState;
 
-class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
+class WindowDistinctAggregatorGlobalState;
+
+class WindowDistinctSortTree : public MergeSortTree<idx_t, idx_t> {
 public:
-	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
 	// prev_idx, input_idx
 	using ZippedTuple = std::tuple<idx_t, idx_t>;
 	using ZippedElements = vector<ZippedTuple>;
+
+	void Build(WindowDistinctAggregatorGlobalState &gdsink);
+};
+
+class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
+public:
+	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+	using ZippedTuple = WindowDistinctSortTree::ZippedTuple;
+	using ZippedElements = WindowDistinctSortTree::ZippedElements;
 
 	class DistinctSortTree;
 
@@ -1445,12 +1455,12 @@ public:
 	//! The block starts (the scanner doesn't know this) plus the total count
 	vector<idx_t> block_starts;
 
-	//! The tree indices
-	mutable ZippedElements prev_idcs;
 	//! The block boundary seconds
 	mutable ZippedElements seconds;
+	//! The MST with the distinct back pointers
+	mutable MergeSortTree<ZippedTuple> zipped_tree;
 	//! The merge sort tree for the aggregate.
-	unique_ptr<DistinctSortTree> merge_sort_tree;
+	WindowDistinctSortTree merge_sort_tree;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	WindowAggregateStates levels_flat_native;
@@ -1488,7 +1498,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const W
 
 	//	6:	prevIdcs ← []
 	//	7:	prevIdcs[0] ← “-”
-	prev_idcs.resize(group_count);
+	auto &prev_idcs = zipped_tree.Allocate(group_count);
 
 	//	To handle FILTER clauses we make the missing elements
 	//	point to themselves so they won't be counted.
@@ -1719,21 +1729,20 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 		}
 	}
 
+	//	This is a parallel implementation,
+	//	so every thread can call it.
+	gdsink.zipped_tree.Build();
+
 	//	Last one out turns off the lights!
 	if (++gdsink.finalized == gdsink.locals) {
 		gdsink.Finalize(stats);
 	}
 }
 
-class WindowDistinctAggregatorGlobalState::DistinctSortTree : public MergeSortTree<idx_t, idx_t> {
-public:
-	DistinctSortTree(ZippedElements &&prev_idcs, WindowDistinctAggregatorGlobalState &gdsink);
-};
-
 void WindowDistinctAggregatorLocalState::Sorted() {
 	using ZippedTuple = WindowDistinctAggregatorGlobalState::ZippedTuple;
 	auto &global_sort = gastate.global_sort;
-	auto &prev_idcs = gastate.prev_idcs;
+	auto &prev_idcs = gastate.zipped_tree.LowestLevel();
 	auto &aggregator = gastate.aggregator;
 	auto &scan_chunk = payload_chunk;
 
@@ -1805,6 +1814,7 @@ void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 
 	// Patch up the indices at block boundaries
 	// (We don't need to patch block 0.)
+	auto &prev_idcs = zipped_tree.LowestLevel();
 	for (idx_t block_idx = 1; block_idx < seconds.size(); ++block_idx) {
 		// We only need to patch if the first index in the block
 		// was a back link to the previous block (10:)
@@ -1817,11 +1827,10 @@ void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 }
 
 void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
-	merge_sort_tree = make_uniq<DistinctSortTree>(std::move(prev_idcs), *this);
+	merge_sort_tree.Build(*this);
 }
 
-WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedElements &&prev_idcs,
-                                                                        WindowDistinctAggregatorGlobalState &gdsink) {
+void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) {
 	auto &aggr = gdsink.aggregator.aggr;
 	auto &allocator = gdsink.allocator;
 	auto &inputs = gdsink.inputs;
@@ -1849,7 +1858,7 @@ WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedEl
 
 	// compute space required to store aggregation states of merge sort tree
 	// this is one aggregate state per entry per level
-	MergeSortTree<ZippedTuple> zipped_tree(std::move(prev_idcs));
+	auto &zipped_tree = gdsink.zipped_tree;
 	idx_t internal_nodes = 0;
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		internal_nodes += zipped_tree.tree[level_nr].first.size();
@@ -1925,6 +1934,8 @@ WindowDistinctAggregatorGlobalState::DistinctSortTree::DistinctSortTree(ZippedEl
 		aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
 		ncombine = 0;
 	}
+
+	zipped_tree.tree.clear();
 }
 
 void WindowDistinctAggregatorLocalState::FlushStates() {
@@ -1945,7 +1956,7 @@ void WindowDistinctAggregatorLocalState::Evaluate(const WindowDistinctAggregator
 	auto ldata = FlatVector::GetData<const_data_ptr_t>(statel);
 	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
 
-	const auto &merge_sort_tree = *gdstate.merge_sort_tree;
+	const auto &merge_sort_tree = gdstate.merge_sort_tree;
 	const auto &levels_flat_native = gdstate.levels_flat_native;
 	const auto exclude_mode = gdstate.aggregator.exclude_mode;
 
