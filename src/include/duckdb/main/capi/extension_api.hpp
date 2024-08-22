@@ -367,6 +367,8 @@ typedef struct {
 	void *(*duckdb_cast_function_get_extra_info)(duckdb_function_info info);
 	duckdb_cast_mode (*duckdb_cast_function_get_cast_mode)(duckdb_function_info info);
 	void (*duckdb_cast_function_set_error)(duckdb_function_info info, const char *error);
+	void (*duckdb_cast_function_set_row_error)(duckdb_function_info info, const char *error, idx_t row,
+	                                           duckdb_vector output);
 	duckdb_state (*duckdb_register_cast_function)(duckdb_connection con, duckdb_cast_function cast_function);
 	void (*duckdb_destroy_cast_function)(duckdb_cast_function *cast_function);
 } duckdb_ext_api_v0;
@@ -695,6 +697,7 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_cast_function_get_extra_info = duckdb_cast_function_get_extra_info;
 	result.duckdb_cast_function_get_cast_mode = duckdb_cast_function_get_cast_mode;
 	result.duckdb_cast_function_set_error = duckdb_cast_function_set_error;
+	result.duckdb_cast_function_set_row_error = duckdb_cast_function_set_row_error;
 	result.duckdb_register_cast_function = duckdb_register_cast_function;
 	result.duckdb_destroy_cast_function = duckdb_destroy_cast_function;
 	return result;

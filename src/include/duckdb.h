@@ -4109,12 +4109,23 @@ Get the cast execution mode from the given function info.
 DUCKDB_API duckdb_cast_mode duckdb_cast_function_get_cast_mode(duckdb_function_info info);
 
 /*!
-Set the error message to present when a non-TRY_CAST cast using this function fails.
+Report that an error has occurred while executing the cast function.
 
 * @param info The info object.
 * @param error The error message.
 */
 DUCKDB_API void duckdb_cast_function_set_error(duckdb_function_info info, const char *error);
+
+/*!
+Report that an error has occurred while executing the cast function, setting the corresponding output row to NULL.
+
+* @param info The info object.
+* @param error The error message.
+* @param row The index of the row within the output vector to set to NULL.
+* @param output The output vector.
+*/
+DUCKDB_API void duckdb_cast_function_set_row_error(duckdb_function_info info, const char *error, idx_t row,
+                                                   duckdb_vector output);
 
 /*!
 Registers a cast function within the given connection.

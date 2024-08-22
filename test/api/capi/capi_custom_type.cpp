@@ -97,7 +97,7 @@ static bool Vec3DFromVarcharCastFunction(duckdb_function_info info, idx_t count,
 	REQUIRE(*custom_data == "foobar");
 
 	const auto input_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(input));
-	auto output_data = static_cast<float *>(duckdb_vector_get_data(duckdb_array_vector_get_child(output)));
+	const auto output_data = static_cast<float *>(duckdb_vector_get_data(duckdb_array_vector_get_child(output)));
 
 	bool success = true;
 	for (idx_t i = 0; i < count; i++) {
@@ -114,16 +114,12 @@ static bool Vec3DFromVarcharCastFunction(duckdb_function_info info, idx_t count,
 			output_data[i * 3 + 2] = z;
 		} else {
 			// Error
+			duckdb_cast_function_set_row_error(info, "Failed to parse VEC3D", i, output);
 			if (cast_mode == DUCKDB_CAST_TRY) {
-				// Try cast, set the output to NULL
-				duckdb_vector_ensure_validity_writable(output);
-				auto validity = duckdb_vector_get_validity(output);
-				duckdb_validity_set_row_invalid(validity, i);
+				// Try cast, continue with the next row
 				success = false;
 			} else {
 				// Strict cast, short-circuit and return false
-				auto msg = StringUtil::Format("Failed to parse VEC3D at index %d", i);
-				duckdb_cast_function_set_error(info, msg.c_str());
 				return false;
 			}
 		}
@@ -273,8 +269,7 @@ TEST_CASE("Test Custom Type Function", "[capi]") {
 	result = tester.Query("SELECT CAST('<1.0, 3.0, abc' AS VEC3D)");
 	REQUIRE_FAIL(result);
 	REQUIRE(result->ErrorType() == DUCKDB_ERROR_CONVERSION);
-	REQUIRE_THAT(result->ErrorMessage(),
-	             Catch::Matchers::StartsWith("Conversion Error: Failed to parse VEC3D at index 0"));
+	REQUIRE_THAT(result->ErrorMessage(), Catch::Matchers::StartsWith("Conversion Error: Failed to parse VEC3D"));
 
 	// Try a faulty cast with TRY_CAST
 	result = tester.Query("SELECT TRY_CAST('<1.0, 3.0, abc' AS FLOAT[3]) IS NULL");

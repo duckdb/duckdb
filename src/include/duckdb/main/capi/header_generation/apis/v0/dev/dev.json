@@ -28,6 +28,7 @@
         "duckdb_cast_function_get_extra_info",
         "duckdb_cast_function_get_cast_mode",
         "duckdb_cast_function_set_error",
+        "duckdb_cast_function_set_row_error",
         "duckdb_register_cast_function",
         "duckdb_destroy_cast_function"
     ]

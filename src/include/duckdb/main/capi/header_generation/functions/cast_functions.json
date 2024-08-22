@@ -169,10 +169,41 @@
                 }
             ],
             "comment": {
-                "description": "Set the error message to present when a non-TRY_CAST cast using this function fails.\n\n",
+                "description": "Report that an error has occurred while executing the cast function.\n\n",
                 "param_comments": {
                     "info": "The info object.",
                     "error": "The error message."
+                }
+            }
+        },
+        {
+            "name": "duckdb_cast_function_set_row_error",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "error"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                },
+                {
+                    "type": "duckdb_vector",
+                    "name": "output"
+                }
+            ],
+            "comment": {
+                "description": "Report that an error has occurred while executing the cast function, setting the corresponding output row to NULL.\n\n",
+                "param_comments": {
+                    "info": "The info object.",
+                    "error": "The error message.",
+                    "row": "The index of the row within the output vector to set to NULL.",
+                    "output": "The output vector."
                 }
             }
         },

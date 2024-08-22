@@ -131,6 +131,16 @@ void duckdb_cast_function_set_error(duckdb_function_info info, const char *error
 	cast_info.error_message = error;
 }
 
+void duckdb_cast_function_set_row_error(duckdb_function_info info, const char *error, idx_t row, duckdb_vector output) {
+	auto &cast_info = *reinterpret_cast<duckdb::CCastExecuteInfo *>(info);
+	cast_info.error_message = error;
+	if (!output) {
+		return;
+	}
+	auto &output_vector = *reinterpret_cast<duckdb::Vector *>(output);
+	duckdb::FlatVector::SetNull(output_vector, row, true);
+}
+
 void duckdb_cast_function_set_extra_info(duckdb_cast_function cast_function, void *extra_info,
                                          duckdb_delete_callback_t destroy) {
 	if (!cast_function || !extra_info) {
