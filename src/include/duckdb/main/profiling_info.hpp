@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/tree_node_settings.hpp
+// duckdb/main/profiling_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,6 +15,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
@@ -22,28 +23,6 @@ struct yyjson_mut_val;
 } // namespace duckdb_yyjson
 
 namespace duckdb {
-
-enum class MetricsType : uint8_t {
-	QUERY_NAME,
-	BLOCKED_THREAD_TIME,
-	CPU_TIME,
-	EXTRA_INFO,
-	CUMULATIVE_CARDINALITY,
-	OPERATOR_TYPE,
-	OPERATOR_CARDINALITY,
-	CUMULATIVE_ROWS_SCANNED,
-	OPERATOR_ROWS_SCANNED,
-	OPERATOR_TIMING
-};
-
-struct MetricsTypeHashFunction {
-	uint64_t operator()(const MetricsType &index) const {
-		return std::hash<uint8_t>()(static_cast<uint8_t>(index));
-	}
-};
-
-typedef unordered_set<MetricsType, MetricsTypeHashFunction> profiler_settings_t;
-typedef unordered_map<MetricsType, Value, MetricsTypeHashFunction> profiler_metrics_t;
 
 class ProfilingInfo {
 public:
@@ -71,6 +50,7 @@ public:
 public:
 	static profiler_settings_t DefaultSettings();
 	static profiler_settings_t DefaultOperatorSettings();
+	static profiler_settings_t AllSettings();
 
 public:
 	void ResetMetrics();
