@@ -413,6 +413,23 @@ typedef struct {
 	                                                 duckdb_delete_callback_t destroy);
 	void *(*duckdb_aggregate_function_get_extra_info)(duckdb_function_info info);
 	void (*duckdb_aggregate_function_set_error)(duckdb_function_info info, const char *error);
+	void (*duckdb_logical_type_set_alias)(duckdb_logical_type type, const char *alias);
+	duckdb_state (*duckdb_register_logical_type)(duckdb_connection con, duckdb_logical_type type,
+	                                             duckdb_create_type_info info);
+	duckdb_cast_function (*duckdb_create_cast_function)();
+	void (*duckdb_cast_function_set_source_type)(duckdb_cast_function cast_function, duckdb_logical_type source_type);
+	void (*duckdb_cast_function_set_target_type)(duckdb_cast_function cast_function, duckdb_logical_type target_type);
+	void (*duckdb_cast_function_set_implicit_cast_cost)(duckdb_cast_function cast_function, int64_t cost);
+	void (*duckdb_cast_function_set_function)(duckdb_cast_function cast_function, duckdb_cast_function_t function);
+	void (*duckdb_cast_function_set_extra_info)(duckdb_cast_function cast_function, void *extra_info,
+	                                            duckdb_delete_callback_t destroy);
+	void *(*duckdb_cast_function_get_extra_info)(duckdb_function_info info);
+	duckdb_cast_mode (*duckdb_cast_function_get_cast_mode)(duckdb_function_info info);
+	void (*duckdb_cast_function_set_error)(duckdb_function_info info, const char *error);
+	void (*duckdb_cast_function_set_row_error)(duckdb_function_info info, const char *error, idx_t row,
+	                                           duckdb_vector output);
+	duckdb_state (*duckdb_register_cast_function)(duckdb_connection con, duckdb_cast_function cast_function);
+	void (*duckdb_destroy_cast_function)(duckdb_cast_function *cast_function);
 #endif
 
 } duckdb_ext_api_v0;
@@ -750,6 +767,9 @@ typedef struct {
 #define duckdb_table_description_error   duckdb_ext_api.duckdb_table_description_error
 
 // Version dev
+#define duckdb_logical_type_set_alias duckdb_ext_api.duckdb_logical_type_set_alias
+#define duckdb_register_logical_type  duckdb_ext_api.duckdb_register_logical_type
+
 #define duckdb_create_aggregate_function               duckdb_ext_api.duckdb_create_aggregate_function
 #define duckdb_destroy_aggregate_function              duckdb_ext_api.duckdb_destroy_aggregate_function
 #define duckdb_aggregate_function_set_name             duckdb_ext_api.duckdb_aggregate_function_set_name
@@ -762,6 +782,19 @@ typedef struct {
 #define duckdb_aggregate_function_set_extra_info       duckdb_ext_api.duckdb_aggregate_function_set_extra_info
 #define duckdb_aggregate_function_get_extra_info       duckdb_ext_api.duckdb_aggregate_function_get_extra_info
 #define duckdb_aggregate_function_set_error            duckdb_ext_api.duckdb_aggregate_function_set_error
+
+#define duckdb_create_cast_function                 duckdb_ext_api.duckdb_create_cast_function
+#define duckdb_cast_function_set_source_type        duckdb_ext_api.duckdb_cast_function_set_source_type
+#define duckdb_cast_function_set_target_type        duckdb_ext_api.duckdb_cast_function_set_target_type
+#define duckdb_cast_function_set_implicit_cast_cost duckdb_ext_api.duckdb_cast_function_set_implicit_cast_cost
+#define duckdb_cast_function_set_function           duckdb_ext_api.duckdb_cast_function_set_function
+#define duckdb_cast_function_set_extra_info         duckdb_ext_api.duckdb_cast_function_set_extra_info
+#define duckdb_cast_function_get_extra_info         duckdb_ext_api.duckdb_cast_function_get_extra_info
+#define duckdb_cast_function_get_cast_mode          duckdb_ext_api.duckdb_cast_function_get_cast_mode
+#define duckdb_cast_function_set_error              duckdb_ext_api.duckdb_cast_function_set_error
+#define duckdb_cast_function_set_row_error          duckdb_ext_api.duckdb_cast_function_set_row_error
+#define duckdb_register_cast_function               duckdb_ext_api.duckdb_register_cast_function
+#define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
