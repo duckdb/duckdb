@@ -1,7 +1,6 @@
 # name: test/optimizer/estimated_cardinalities_are_followed.test
 # description: Make sure estimated cardinalities are respected
-# group: [statistics]
-
+# group: [optimizer]
 
 statement ok
 create table t1 as select range a from range(100000);
