@@ -1505,6 +1505,15 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const W
 	for (idx_t i = 0; i < group_count; ++i) {
 		prev_idcs[i] = ZippedTuple(i + 1, i);
 	}
+
+	// compute space required to store aggregation states of merge sort tree
+	// this is one aggregate state per entry per level
+	idx_t internal_nodes = 0;
+	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
+		internal_nodes += zipped_tree.tree[level_nr].first.size();
+	}
+	levels_flat_native.Initialize(internal_nodes);
+	merge_sort_tree.tree.reserve(zipped_tree.tree.size());
 }
 
 class WindowDistinctAggregatorLocalState : public WindowAggregatorState {
@@ -1856,19 +1865,11 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 	auto targets = FlatVector::GetData<data_ptr_t>(target_v);
 	idx_t ncombine = 0;
 
-	// compute space required to store aggregation states of merge sort tree
-	// this is one aggregate state per entry per level
 	auto &zipped_tree = gdsink.zipped_tree;
-	idx_t internal_nodes = 0;
-	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
-		internal_nodes += zipped_tree.tree[level_nr].first.size();
-	}
-	levels_flat_native.Initialize(internal_nodes);
 	levels_flat_start.push_back(0);
 	idx_t levels_flat_offset = 0;
 
 	//	Walk the distinct value tree building the intermediate aggregates
-	tree.reserve(zipped_tree.tree.size());
 	idx_t level_width = 1;
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		auto &zipped_level = zipped_tree.tree[level_nr].first;
