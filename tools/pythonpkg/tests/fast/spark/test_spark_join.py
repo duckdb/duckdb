@@ -336,7 +336,7 @@ class TestDataFrameJoin(object):
         df2 = spark.createDataFrame(data2, ["id", "rank"])
 
         df = df1.crossJoin(df2)
-        
+
         res = df.orderBy("rank", "age").collect()
 
         assert res == [

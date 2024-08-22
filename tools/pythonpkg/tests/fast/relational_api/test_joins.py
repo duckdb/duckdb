@@ -82,6 +82,6 @@ class TestRAPIJoins(object):
     def test_cross_join(self, con):
         a = con.table('tbl_a')
         b = con.table('tbl_b')
-        rel = a.join(b, how = 'cross')
+        rel = a.join(b, how='cross')
         res = rel.fetchall()
         assert res == [(1, 1, 1, 4), (2, 1, 1, 4), (3, 2, 1, 4), (1, 1, 3, 5), (2, 1, 3, 5), (3, 2, 3, 5)]
