@@ -25,4 +25,4 @@ SELECT
     sum(len(list_filter(Electron, x -> x.mass > x.eta + x.phi))) as elentron,
     sum(len(list_filter(Photon, x -> x.mass > 0))) as photon,
     sum(len(list_filter(Jet, x -> x.puId != false))) as jet,
-FROM Run2012B_SingleMu;
+FROM run2012B_singleMu;

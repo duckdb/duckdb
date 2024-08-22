@@ -19,6 +19,6 @@ SELECT list_filter(
         x -> x > 0.01)
 FROM (
     SELECT UNNEST(Muon, recursive:=true) AS unnested_muon
-    FROM Run2012B_SingleMu
+    FROM run2012B_singleMu
     )
 ;

@@ -57,6 +57,6 @@ SELECT PV.npvs as npvs,
   avg(list_aggregate(list_transform(Muon, x -> x.dzerr), 'avg')) as mu_avg_dzer, 
   avg(list_aggregate(list_transform(Muon, x -> x.jetidx), 'avg')) as mu_avg_jet, 
   avg(list_aggregate(list_transform(Muon, x -> x.genpartidx), 'avg')) as mu_avg_get
-  FROM Run2012B_SingleMu
+  FROM run2012B_singleMu
   GROUP BY npvs
 ;

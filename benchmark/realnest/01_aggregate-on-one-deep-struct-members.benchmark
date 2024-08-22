@@ -15,5 +15,5 @@ load benchmark/realnest/load.sql
 
 run
 SELECT PV.npvs, sum(PV.x) AS sum_x, sum(PV.y) AS sum_y, sum(PV.z) AS sum_z, avg(MET.pt) as avg_pt, min(MET.phi) as min_phi, max(MET.sumet) as max_sumet
-      FROM Run2012B_SingleMu
+      FROM run2012B_singleMu
       GROUP BY PV.npvs HAVING sum_x > 1;
