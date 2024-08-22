@@ -400,17 +400,6 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector
 // Construct from sorted data.
 //===--------------------------------------------------------------------===//
 
-void ConstructLeaf(ART &art, const unsafe_vector<ARTKey> &keys, Node &node, ARTKeySection &section) {
-	unsafe_vector<ARTKeySection> children;
-	section.GetChildSections(children, keys);
-
-	// Create the node.
-	Node::New(art, node, Node::GetNodeLeafType(children.size()));
-	for (auto &child : children) {
-		Node::InsertChild(art, node, child.key_byte);
-	}
-}
-
 bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
                             ARTKeySection &section) {
 	D_ASSERT(section.start < keys.size());

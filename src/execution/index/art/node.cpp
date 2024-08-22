@@ -44,7 +44,7 @@ void Node::New(ART &art, Node &node, NType type) {
 		Node256::New(art, node);
 		break;
 	default:
-		throw InternalException("Invalid node type for New.");
+		throw InternalException("Invalid node type for New: %d.", static_cast<uint8_t>(type));
 	}
 }
 
@@ -113,7 +113,7 @@ uint8_t Node::GetAllocatorIdx(const NType type) {
 	case NType::NODE_256_LEAF:
 		return 8;
 	default:
-		throw InternalException("Invalid node type for GetAllocatorIdx.");
+		throw InternalException("Invalid node type for GetAllocatorIdx: %d.", static_cast<uint8_t>(type));
 	}
 }
 
@@ -135,14 +135,15 @@ void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) co
 	case NType::NODE_256:
 		return Ref<Node256>(art, *this, type).ReplaceChild(byte, child);
 	default:
-		throw InternalException("Invalid node type for ReplaceChild.");
+		throw InternalException("Invalid node type for ReplaceChild: %d.", static_cast<uint8_t>(type));
 	}
 }
 
 void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 	D_ASSERT(node.HasMetadata());
 
-	switch (node.GetType()) {
+	auto type = node.GetType();
+	switch (type) {
 	case NType::NODE_4:
 		return Node4::InsertChild(art, node, byte, child);
 	case NType::NODE_16:
@@ -158,7 +159,7 @@ void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chil
 	case NType::NODE_256_LEAF:
 		return Node256Leaf::InsertByte(art, node, byte);
 	default:
-		throw InternalException("Invalid node type for InsertChild.");
+		throw InternalException("Invalid node type for InsertChild: %d.", static_cast<uint8_t>(type));
 	}
 }
 
@@ -170,7 +171,8 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, c
                        const ARTKey &row_id) {
 	D_ASSERT(node.HasMetadata());
 
-	switch (node.GetType()) {
+	auto type = node.GetType();
+	switch (type) {
 	case NType::NODE_4:
 		return Node4::DeleteChild(art, node, prefix, byte, status);
 	case NType::NODE_16:
@@ -186,7 +188,7 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, c
 	case NType::NODE_256_LEAF:
 		return Node256Leaf::DeleteByte(art, node, byte);
 	default:
-		throw InternalException("Invalid node type for DeleteChild.");
+		throw InternalException("Invalid node type for DeleteChild: %d.", static_cast<uint8_t>(type));
 	}
 }
 
@@ -210,7 +212,7 @@ unsafe_optional_ptr<Node> GetChildInternal(ART &art, NODE &node, const uint8_t b
 		return Node256::GetChild(Node::Ref<Node256>(art, node, type), byte);
 	}
 	default:
-		throw InternalException("Invalid node type for GetChildInternal.");
+		throw InternalException("Invalid node type for GetChildInternal: %d.", static_cast<uint8_t>(type));
 	}
 }
 
@@ -237,7 +239,7 @@ unsafe_optional_ptr<Node> GetNextChildInternal(ART &art, NODE &node, uint8_t &by
 	case NType::NODE_256:
 		return Node256::GetNextChild(Node::Ref<Node256>(art, node, type), byte);
 	default:
-		throw InternalException("Invalid node type for GetNextChildInternal.");
+		throw InternalException("Invalid node type for GetNextChildInternal: %d.", static_cast<uint8_t>(type));
 	}
 }
 
@@ -252,7 +254,8 @@ unsafe_optional_ptr<Node> Node::GetNextChildMutable(ART &art, uint8_t &byte) con
 bool Node::HasByte(ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 
-	switch (GetType()) {
+	auto type = GetType();
+	switch (type) {
 	case NType::NODE_7_LEAF:
 		return Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF).HasByte(byte);
 	case NType::NODE_15_LEAF:
@@ -260,14 +263,15 @@ bool Node::HasByte(ART &art, uint8_t &byte) const {
 	case NType::NODE_256_LEAF:
 		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).HasByte(byte);
 	default:
-		throw InternalException("Invalid node type for GetNextByte.");
+		throw InternalException("Invalid node type for GetNextByte: %d.", static_cast<uint8_t>(type));
 	}
 }
 
 bool Node::GetNextByte(ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 
-	switch (GetType()) {
+	auto type = GetType();
+	switch (type) {
 	case NType::NODE_7_LEAF:
 		return Ref<const Node7Leaf>(art, *this, NType::NODE_7_LEAF).GetNextByte(byte);
 	case NType::NODE_15_LEAF:
@@ -275,7 +279,7 @@ bool Node::GetNextByte(ART &art, uint8_t &byte) const {
 	case NType::NODE_256_LEAF:
 		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
 	default:
-		throw InternalException("Invalid node type for GetNextByte.");
+		throw InternalException("Invalid node type for GetNextByte: %d.", static_cast<uint8_t>(type));
 	}
 }
 
@@ -300,17 +304,8 @@ idx_t GetCapacity(NType type) {
 	case NType::NODE_256:
 		return Node256::CAPACITY;
 	default:
-		throw InternalException("Invalid node type for GetCapacity.");
+		throw InternalException("Invalid node type for GetCapacity: %d.", static_cast<uint8_t>(type));
 	}
-}
-
-NType Node::GetNodeLeafType(idx_t count) {
-	if (count <= Node7Leaf::CAPACITY) {
-		return NType::NODE_7_LEAF;
-	} else if (count <= Node15Leaf::CAPACITY) {
-		return NType::NODE_15_LEAF;
-	}
-	return NType::NODE_256_LEAF;
 }
 
 NType Node::GetNodeType(idx_t count) {
@@ -642,7 +637,7 @@ void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	case NType::NODE_256_LEAF:
 		return;
 	default:
-		throw InternalException("Invalid node type for Vacuum.");
+		throw InternalException("Invalid node type for Vacuum: %d.", static_cast<uint8_t>(type));
 	}
 }
 
@@ -674,7 +669,7 @@ void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSi
 	case NType::NODE_256:
 		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), allocator);
 	default:
-		throw InternalException("Invalid node type for TransformToDeprecated.");
+		throw InternalException("Invalid node type for TransformToDeprecated: %d.", static_cast<uint8_t>(type));
 	}
 }
 
