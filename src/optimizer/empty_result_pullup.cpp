@@ -10,15 +10,23 @@ unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_pt
 	JoinType join_type = JoinType::INVALID;
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_EXCEPT);
-	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		join_type = op->Cast<LogicalComparisonJoin>().join_type;
-	}
-	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		break;
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		join_type = op->Cast<LogicalAnyJoin>().join_type;
-	}
-	if (op->type == LogicalOperatorType::LOGICAL_EXCEPT) {
+		break;
+	case LogicalOperatorType::LOGICAL_EXCEPT:
 		join_type = JoinType::ANTI;
+		break;
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+		join_type = JoinType::SEMI;
+		break;
+	default:
+		break;
 	}
+
 	switch (join_type) {
 	case JoinType::SEMI:
 	case JoinType::INNER: {
@@ -57,7 +65,6 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_WINDOW:
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-	case LogicalOperatorType::LOGICAL_CTE_REF:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_PIVOT:
