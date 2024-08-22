@@ -66,7 +66,13 @@ static void ThrowNumericCastError(FROM in, TO minval, TO maxval) {
 	                        maxval);
 }
 
-template <class TO, class FROM>
+// NumericCast
+// When: between same types, or when both types are integral
+// Checks: perform checked casts on range
+template <
+    class TO, class FROM,
+    class = typename std::enable_if<(!std::is_floating_point<TO>::value && !std::is_floating_point<FROM>::value) ||
+                                    std::is_same<TO, FROM>::value>::type>
 TO NumericCast(FROM val) {
 	if (std::is_same<TO, FROM>::value) {
 		return static_cast<TO>(val);
@@ -97,6 +103,23 @@ TO NumericCast(FROM val) {
 	return static_cast<TO>(val);
 }
 
+// UnsafeNumericCast
+// When: between same types, or when both types are integral
+// Checks: perform checked casts on range (in DEBUG) otherwise no checks
+template <
+    class TO, class FROM,
+    class = typename std::enable_if<(!std::is_floating_point<TO>::value && !std::is_floating_point<FROM>::value) ||
+                                    std::is_same<TO, FROM>::value>::type>
+TO UnsafeNumericCast(FROM in) {
+#ifdef DEBUG
+	return NumericCast<TO, FROM>(in);
+#endif
+	return static_cast<TO>(in);
+}
+
+// LossyNumericCast
+// When: between double/float to other convertible types
+// Checks: perform checked casts on range (in DEBUG) otherwise no checks
 template <class TO>
 TO LossyNumericCast(double val) {
 	return static_cast<TO>(val);
@@ -107,48 +130,32 @@ TO LossyNumericCast(float val) {
 	return static_cast<TO>(val);
 }
 
+// ExactNumericCast
+// When: between double/float to other convertible types
+// Checks: perform checked casts on range AND checks that casts are invertible (in DEBUG) otherwise no checks
+
 template <class TO>
-TO NumericCast(double val) {
+TO ExactNumericCast(double val) {
 	auto res = LossyNumericCast<TO>(val);
+#ifdef DEBUG
 	if (val != double(res)) {
 		throw InternalException("Information loss on double cast: value %lf outside of target range [%lf, %lf]", val,
 		                        double(res), double(res));
 	}
+#endif
 	return res;
 }
 
 template <class TO>
-TO NumericCast(float val) {
+TO ExactNumericCast(float val) {
 	auto res = LossyNumericCast<TO>(val);
+#ifdef DEBUG
 	if (val != float(res)) {
 		throw InternalException("Information loss on float cast: value %f outside of target range [%f, %f]", val,
 		                        float(res), float(res));
 	}
+#endif
 	return res;
-}
-
-template <class TO, class FROM>
-TO UnsafeNumericCast(FROM in) {
-#ifdef DEBUG
-	return NumericCast<TO, FROM>(in);
-#endif
-	return static_cast<TO>(in);
-}
-
-template <class TO>
-TO UnsafeNumericCast(double val) {
-#ifdef DEBUG
-	return NumericCast<TO>(val);
-#endif
-	return LossyNumericCast<TO>(val);
-}
-
-template <class TO>
-TO UnsafeNumericCast(float val) {
-#ifdef DEBUG
-	return NumericCast<TO>(val);
-#endif
-	return LossyNumericCast<TO>(val);
 }
 
 } // namespace duckdb
