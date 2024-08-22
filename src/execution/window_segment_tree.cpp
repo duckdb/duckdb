@@ -1515,7 +1515,15 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const W
 		levels_flat_start.push_back(internal_nodes);
 	}
 	levels_flat_native.Initialize(internal_nodes);
+
 	merge_sort_tree.tree.reserve(zipped_tree.tree.size());
+	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
+		auto &zipped_level = zipped_tree.tree[level_nr].first;
+		WindowDistinctSortTree::Elements level;
+		WindowDistinctSortTree::Offsets cascades;
+		level.resize(zipped_level.size());
+		merge_sort_tree.tree.emplace_back(std::move(level), std::move(cascades));
+	}
 }
 
 class WindowDistinctAggregatorLocalState : public WindowAggregatorState {
@@ -1872,8 +1880,7 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 	idx_t level_width = 1;
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		auto &zipped_level = zipped_tree.tree[level_nr].first;
-		vector<ElementType> level;
-		level.resize(zipped_level.size());
+		auto &level = tree[level_nr].first;
 
 		for (idx_t i = 0; i < zipped_level.size(); i += level_width) {
 			//	Reset the combine state
@@ -1917,7 +1924,7 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 			}
 		}
 
-		tree.emplace_back(std::move(level), std::move(zipped_tree.tree[level_nr].second));
+		std::swap(tree[level_nr].second, zipped_tree.tree[level_nr].second);
 
 		level_width *= FANOUT;
 	}
