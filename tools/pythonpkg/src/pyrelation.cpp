@@ -1090,6 +1090,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 		throw InvalidInputException("Both relations have the same alias, please change the alias of one or both "
 		                            "relations using 'rel = rel.set_alias(<new alias>)'");
 	}
+	if (dtype == JoinType::CROSS) {
+		return make_uniq<DuckDBPyRelation>(rel->CrossProduct(other->rel));
+	}
 	if (py::isinstance<py::str>(condition)) {
 		auto condition_string = std::string(py::cast<py::str>(condition));
 		return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition_string, dtype));
