@@ -129,11 +129,11 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 
 	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
 	if (info.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-		result->extra_text["Cardinality"] = info.GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
+		result->extra_text[RenderTreeNode::CARDINALITY] = info.GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
 	}
 	if (info.Enabled(MetricsType::OPERATOR_TIMING)) {
 		string timing = StringUtil::Format("%.2f", info.metrics.at(MetricsType::OPERATOR_TIMING).GetValue<double>());
-		result->extra_text["Timing"] = timing + "s";
+		result->extra_text[RenderTreeNode::TIMING] = timing + "s";
 	}
 	return result;
 }
@@ -206,6 +206,26 @@ unique_ptr<RenderTree> RenderTree::CreateRenderTree(const PhysicalOperator &op) 
 
 unique_ptr<RenderTree> RenderTree::CreateRenderTree(const ProfilingNode &op) {
 	return CreateTree<ProfilingNode>(op);
+}
+
+void RenderTree::SanitizeKeyNames() {
+	for (idx_t i = 0; i < width * height; i++) {
+		if (!nodes[i]) {
+			continue;
+		}
+		InsertionOrderPreservingMap<string> new_map;
+		for (auto &entry : nodes[i]->extra_text) {
+			auto key = entry.first;
+			if (StringUtil::StartsWith(key, "__")) {
+				key = StringUtil::Replace(key, "__", "");
+				key = StringUtil::Replace(key, "_", " ");
+				key = StringUtil::Title(key);
+			}
+			auto &value = entry.second;
+			new_map.insert(make_pair(key, value));
+		}
+		nodes[i]->extra_text = std::move(new_map);
+	}
 }
 
 unique_ptr<RenderTree> RenderTree::CreateRenderTree(const Pipeline &pipeline) {

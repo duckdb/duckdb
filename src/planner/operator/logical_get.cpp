@@ -57,7 +57,7 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	}
 
 	if (function.to_string) {
-		result["Stringified"] = function.to_string(bind_data.get());
+		result["__text__"] = function.to_string(bind_data.get());
 	}
 	return result;
 }

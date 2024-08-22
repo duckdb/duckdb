@@ -280,7 +280,7 @@ InsertionOrderPreservingMap<string> PhysicalOrder::ParamsToString() const {
 		orders_info += orders[i].expression->ToString() + " ";
 		orders_info += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
 	}
-	result["Order By"] = orders_info;
+	result["__order_by__"] = orders_info;
 	return result;
 }
 

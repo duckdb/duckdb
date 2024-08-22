@@ -38,7 +38,7 @@ public:
 	void Render(const ProfilingNode &op, std::ostream &ss);
 	void Render(const Pipeline &op, std::ostream &ss);
 
-	void ToStream(RenderTree &root, std::ostream &ss) override;
+	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
 };
 
 } // namespace duckdb
