@@ -1866,13 +1866,11 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 	//! The states to update
 	Vector update_v(LogicalType::POINTER);
 	auto updates = FlatVector::GetData<data_ptr_t>(update_v);
-	idx_t nupdate = 0;
 
 	Vector source_v(LogicalType::POINTER);
 	auto sources = FlatVector::GetData<data_ptr_t>(source_v);
 	Vector target_v(LogicalType::POINTER);
 	auto targets = FlatVector::GetData<data_ptr_t>(target_v);
-	idx_t ncombine = 0;
 
 	auto &zipped_tree = gdsink.zipped_tree;
 
@@ -1884,6 +1882,8 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 
 		for (idx_t i = 0; i < zipped_level.size(); i += level_width) {
 			//	Reset the combine state
+			idx_t nupdate = 0;
+			idx_t ncombine = 0;
 			data_ptr_t prev_state = nullptr;
 			auto next_limit = MinValue<idx_t>(zipped_level.size(), i + level_width);
 			idx_t levels_flat_offset = level_nr * zipped_level.size() + i;
@@ -1922,24 +1922,24 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 					ncombine = 0;
 				}
 			}
+
+			//	Flush any remaining states
+			if (ncombine || nupdate) {
+				//	Push  the updates
+				leaves.Reference(inputs);
+				leaves.Slice(sel, nupdate);
+				aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
+				nupdate = 0;
+
+				//	Combine the states sequentially
+				aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
+				ncombine = 0;
+			}
 		}
 
 		std::swap(tree[level_nr].second, zipped_tree.tree[level_nr].second);
 
 		level_width *= FANOUT;
-	}
-
-	//	Flush any remaining states
-	if (ncombine || nupdate) {
-		//	Push  the updates
-		leaves.Reference(inputs);
-		leaves.Slice(sel, nupdate);
-		aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
-		nupdate = 0;
-
-		//	Combine the states sequentially
-		aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
-		ncombine = 0;
 	}
 
 	zipped_tree.tree.clear();
