@@ -259,7 +259,8 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 
-void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, Index &index, const case_insensitive_map_t<Value> &options) {
+void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, Index &index,
+                         const case_insensitive_map_t<Value> &options) {
 
 	// We will never write an index to the WAL that is not bound
 	D_ASSERT(index.IsBound());
