@@ -1041,10 +1041,9 @@ struct SupportedPythonJoinType {
 } // namespace
 
 static const SupportedPythonJoinType *GetSupportedJoinTypes(idx_t &length) {
-	static const SupportedPythonJoinType SUPPORTED_TYPES[] = {{"left", JoinType::LEFT},   {"right", JoinType::RIGHT},
-	                                                          {"outer", JoinType::OUTER}, {"semi", JoinType::SEMI},
-	                                                          {"inner", JoinType::INNER}, {"anti", JoinType::ANTI},
-															  {"cross", JoinType::CROSS}};
+	static const SupportedPythonJoinType SUPPORTED_TYPES[] = {
+	    {"left", JoinType::LEFT},   {"right", JoinType::RIGHT}, {"outer", JoinType::OUTER}, {"semi", JoinType::SEMI},
+	    {"inner", JoinType::INNER}, {"anti", JoinType::ANTI},   {"cross", JoinType::CROSS}};
 	static const auto SUPPORTED_TYPES_COUNT = sizeof(SUPPORTED_TYPES) / sizeof(SupportedPythonJoinType);
 	length = SUPPORTED_TYPES_COUNT;
 	return reinterpret_cast<const SupportedPythonJoinType *>(SUPPORTED_TYPES);
