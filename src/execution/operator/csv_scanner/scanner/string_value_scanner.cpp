@@ -199,6 +199,13 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 	return done;
 }
 
+void SanitizeValue(string &value) {
+	std::vector<char> char_array(value.begin(), value.end());
+	char_array.push_back('\0'); // Null-terminate the character array
+	Utf8Proc::MakeValid(&char_array[0], char_array.size());
+	value = {char_array.begin(), char_array.end() - 1};
+}
+
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
 	if (HandleTooManyColumnsError(value_ptr, size)) {
 		return;
@@ -420,7 +427,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			// Casting Error Message
 			error << "Could not convert string \"" << std::string(value_ptr, size) << "\" to \'"
 			      << LogicalTypeIdToString(parse_types[chunk_col_id].type_id) << "\'";
-			current_errors.ModifyErrorMessageOfLastError(error.str());
+			auto error_string = error.str();
+			SanitizeValue(error_string);
+
+			current_errors.ModifyErrorMessageOfLastError(error_string);
 		}
 	}
 	cur_col_id++;
@@ -481,7 +491,9 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 					                     buffer_pos - result.quoted_position - 2)
 					      << "\" to \'" << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id)
 					      << "\'";
-					result.current_errors.ModifyErrorMessageOfLastError(error.str());
+					auto error_string = error.str();
+					SanitizeValue(error_string);
+					result.current_errors.ModifyErrorMessageOfLastError(error_string);
 				}
 				result.cur_col_id++;
 				result.chunk_col_id++;
@@ -539,7 +551,15 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 }
 
 bool LineError::HandleErrors(StringValueResult &result) {
-	if (ignore_errors && is_error_in_line && !result.figure_out_new_line) {
+	bool skip_sniffing = false;
+	for (auto &cur_error : current_errors) {
+		if (cur_error.type == CSVErrorType::INVALID_UNICODE) {
+			skip_sniffing = true;
+		}
+	}
+	skip_sniffing = result.sniffing && skip_sniffing;
+
+	if ((ignore_errors || skip_sniffing) && is_error_in_line && !result.figure_out_new_line) {
 		result.RemoveLastLine();
 		Reset();
 		return true;
@@ -683,10 +703,7 @@ string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
 		}
 	}
 	// sanitize borked line
-	std::vector<char> char_array(result.begin(), result.end());
-	char_array.push_back('\0'); // Null-terminate the character array
-	Utf8Proc::MakeValid(&char_array[0], char_array.size());
-	result = {char_array.begin(), char_array.end() - 1};
+	SanitizeValue(result);
 	return result;
 }
 
@@ -965,6 +982,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 					      << type.ToString() << "\'";
 					string error_msg = error.str();
+					SanitizeValue(error_msg);
 					auto csv_error = CSVError::CastError(
 					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
 					    lines_per_batch,
@@ -995,6 +1013,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 						      << LogicalTypeIdToString(type.id()) << "\'";
 						string error_msg = error.str();
+						SanitizeValue(error_msg);
 						auto csv_error =
 						    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_msg,
 						                        col_idx, borked_line, lines_per_batch,
