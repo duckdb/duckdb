@@ -219,8 +219,7 @@ public:
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, payload_types,
-	                                       join_type, rhs_output_columns);
+	auto result = make_uniq<JoinHashTable>(context, conditions, payload_types, join_type, rhs_output_columns);
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
