@@ -1409,7 +1409,7 @@ public:
 	using ZippedTuple = std::tuple<idx_t, idx_t>;
 	using ZippedElements = vector<ZippedTuple>;
 
-	void Build(WindowDistinctAggregatorGlobalState &gdsink);
+	void Build(WindowDistinctAggregatorGlobalState &gdastate, WindowDistinctAggregatorLocalState &ldastate);
 };
 
 class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
@@ -1427,8 +1427,6 @@ public:
 	//! Patch up the previous index block boundaries
 	void PatchPrevIdcs();
 	bool TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate);
-
-	void Finalize(const FrameStats &stats);
 
 	//	Single threaded sorting for now
 	ClientContext &context;
@@ -1542,6 +1540,12 @@ public:
 	PartitionSortStage stage = PartitionSortStage::INIT;
 	//! Finalize scan block index
 	idx_t block_idx;
+	//! Thread-local tree aggregation
+	Vector update_v;
+	Vector source_v;
+	Vector target_v;
+	DataChunk leaves;
+	SelectionVector sel;
 
 protected:
 	//! Flush the accumulated intermediate states into the result states
@@ -1565,8 +1569,8 @@ protected:
 
 WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
     const WindowDistinctAggregatorGlobalState &gastate)
-    : gastate(gastate), statef(gastate.aggregator.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER),
-      flush_count(0) {
+    : update_v(LogicalType::POINTER), source_v(LogicalType::POINTER), target_v(LogicalType::POINTER), gastate(gastate),
+      statef(gastate.aggregator.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
 	InitSubFrames(frames, gastate.aggregator.exclude_mode);
 	payload_chunk.Initialize(Allocator::DefaultAllocator(), gastate.payload_types);
 
@@ -1575,6 +1579,10 @@ WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
 
 	sort_chunk.Initialize(Allocator::DefaultAllocator(), gastate.sort_types);
 	sort_chunk.data.back().Reference(payload_chunk.data[0]);
+
+	//! Input data chunk, used for leaf segment aggregation
+	leaves.Initialize(Allocator::DefaultAllocator(), gastate.inputs.GetTypes());
+	sel.Initialize();
 
 	gastate.locals++;
 }
@@ -1754,7 +1762,7 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 
 	//	Last one out turns off the lights!
 	if (++gdsink.finalized == gdsink.locals) {
-		gdsink.Finalize(stats);
+		gdsink.merge_sort_tree.Build(gdsink, ldstate);
 	}
 }
 
@@ -1845,31 +1853,26 @@ void WindowDistinctAggregatorGlobalState::PatchPrevIdcs() {
 	}
 }
 
-void WindowDistinctAggregatorGlobalState::Finalize(const FrameStats &stats) {
-	merge_sort_tree.Build(*this);
-}
-
-void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) {
+void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink,
+                                   WindowDistinctAggregatorLocalState &ldastate) {
 	auto &aggr = gdsink.aggregator.aggr;
 	auto &allocator = gdsink.allocator;
 	auto &inputs = gdsink.inputs;
 	auto &levels_flat_native = gdsink.levels_flat_native;
 
 	//! Input data chunk, used for leaf segment aggregation
-	DataChunk leaves;
-	leaves.Initialize(Allocator::DefaultAllocator(), gdsink.inputs.GetTypes());
-	SelectionVector sel;
-	sel.Initialize();
+	auto &leaves = ldastate.leaves;
+	auto &sel = ldastate.sel;
 
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 
 	//! The states to update
-	Vector update_v(LogicalType::POINTER);
+	auto &update_v = ldastate.update_v;
 	auto updates = FlatVector::GetData<data_ptr_t>(update_v);
 
-	Vector source_v(LogicalType::POINTER);
+	auto &source_v = ldastate.source_v;
 	auto sources = FlatVector::GetData<data_ptr_t>(source_v);
-	Vector target_v(LogicalType::POINTER);
+	auto &target_v = ldastate.target_v;
 	auto targets = FlatVector::GetData<data_ptr_t>(target_v);
 
 	auto &zipped_tree = gdsink.zipped_tree;
