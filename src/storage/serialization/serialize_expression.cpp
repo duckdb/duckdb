@@ -20,7 +20,7 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "expression_class");
 	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(102, "alias");
-	auto query_location = deserializer.ReadPropertyWithDefault<optional_idx>(103, "query_location", optional_idx());
+	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<Expression> result;
 	switch (expression_class) {

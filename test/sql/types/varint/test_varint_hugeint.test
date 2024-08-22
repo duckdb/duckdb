@@ -1,0 +1,36 @@
+# name: test/sql/types/varint/test_varint_hugeint.test
+# description: Test varint double
+# group: [varint]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+Select 85070591730234614260976917445211069672::VARINT ;
+----
+85070591730234614260976917445211069672
+
+query I
+Select (-85070591730234614260976917445211069672)::VARINT ;
+----
+-85070591730234614260976917445211069672
+
+statement ok
+create table t as select (10 * power(10,i))::hugeint as i from range (0,38) t(i)
+
+query I
+select distinct i::varchar == i::varint::varchar FROM t;
+----
+true
+
+query I
+select distinct (-i)::varchar == (-i)::varint::varchar FROM t;
+----
+true
+
+query I
+select distinct i::uhugeint::varchar == i::uhugeint::varint::varchar FROM t;
+----
+true
+
+

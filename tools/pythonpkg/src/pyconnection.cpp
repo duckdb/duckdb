@@ -376,8 +376,7 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	auto &context = *connection.context;
 
 	if (context.transaction.HasActiveTransaction()) {
-		throw InvalidInputException(
-		    "This function can not be called with an active transaction!, commit or abort the existing one first");
+		context.CancelTransaction();
 	}
 	if (registered_functions.find(name) != registered_functions.end()) {
 		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
@@ -1970,20 +1969,54 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 	return NumpyObjectType::INVALID;
 }
 
+PyArrowObjectType DuckDBPyConnection::GetArrowType(const py::handle &obj) {
+	D_ASSERT(py::gil_check());
+
+	if (py::isinstance<py::capsule>(obj)) {
+		auto capsule = py::reinterpret_borrow<py::capsule>(obj);
+		if (string(capsule.name()) != "arrow_array_stream") {
+			throw InvalidInputException("Expected a 'arrow_array_stream' PyCapsule, got: %s", string(capsule.name()));
+		}
+		auto stream = capsule.get_pointer<struct ArrowArrayStream>();
+		if (!stream->release) {
+			throw InvalidInputException("The ArrowArrayStream was already released");
+		}
+		return PyArrowObjectType::PyCapsule;
+	}
+
+	if (ModuleIsLoaded<PyarrowCacheItem>()) {
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		// First Verify Lib Types
+		auto table_class = import_cache.pyarrow.Table();
+		auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
+		if (py::isinstance(obj, table_class)) {
+			return PyArrowObjectType::Table;
+		} else if (py::isinstance(obj, record_batch_reader_class)) {
+			return PyArrowObjectType::RecordBatchReader;
+		}
+
+		if (ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
+			// Then Verify dataset types
+			auto dataset_class = import_cache.pyarrow.dataset.Dataset();
+			auto scanner_class = import_cache.pyarrow.dataset.Scanner();
+
+			if (py::isinstance(obj, scanner_class)) {
+				return PyArrowObjectType::Scanner;
+			} else if (py::isinstance(obj, dataset_class)) {
+				return PyArrowObjectType::Dataset;
+			}
+		}
+	}
+
+	if (py::hasattr(obj, "__arrow_c_stream__")) {
+		return PyArrowObjectType::PyCapsuleInterface;
+	}
+
+	return PyArrowObjectType::Invalid;
+}
+
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
-	if (!ModuleIsLoaded<PyarrowCacheItem>()) {
-		return false;
-	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	if (py::isinstance(object, import_cache_py.pyarrow.Table()) ||
-	    py::isinstance(object, import_cache_py.pyarrow.RecordBatchReader())) {
-		return true;
-	}
-	if (!ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
-		return false;
-	}
-	return (py::isinstance(object, import_cache_py.pyarrow.dataset.Dataset()) ||
-	        py::isinstance(object, import_cache_py.pyarrow.dataset.Scanner()));
+	return DuckDBPyConnection::GetArrowType(object) != PyArrowObjectType::Invalid;
 }
 
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
