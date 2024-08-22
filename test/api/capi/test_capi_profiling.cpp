@@ -87,15 +87,15 @@ TEST_CASE("Test profiling with a single metric and get_value", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
-	auto profiling_info = duckdb_get_profiling_info(tester.connection);
-	REQUIRE(profiling_info != nullptr);
+	auto info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(info != nullptr);
 	// Retrieve a metric that is not enabled.
-	REQUIRE(duckdb_profiling_info_get_value(profiling_info, "EXTRA_INFO") == nullptr);
+	REQUIRE(duckdb_profiling_info_get_value(info, "EXTRA_INFO") == nullptr);
 
 	duckdb::map<string, double> cumulative_counter;
 	duckdb::map<string, double> cumulative_result;
 
-	TraverseTree(profiling_info, cumulative_counter, cumulative_result);
+	TraverseTree(info, cumulative_counter, cumulative_result);
 	tester.Cleanup();
 }
 
@@ -112,8 +112,8 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
-	auto profiling_info = duckdb_get_profiling_info(tester.connection);
-	REQUIRE(profiling_info != nullptr);
+	auto info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(info != nullptr);
 
 	duckdb::map<string, double> cumulative_counter = {{"OPERATOR_TIMING", 0}, {"OPERATOR_CARDINALITY", 0}};
 	duckdb::map<string, double> cumulative_result {
@@ -121,7 +121,7 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	    {"CUMULATIVE_CARDINALITY", 0},
 	};
 
-	TraverseTree(profiling_info, cumulative_counter, cumulative_result);
+	TraverseTree(info, cumulative_counter, cumulative_result);
 
 	REQUIRE(ConvertToInt(cumulative_result["CPU_TIME"]) == ConvertToInt(cumulative_counter["OPERATOR_TIMING"]));
 	REQUIRE(ConvertToInt(cumulative_result["CUMULATIVE_CARDINALITY"]) ==
@@ -135,8 +135,8 @@ TEST_CASE("Test profiling without profiling enabled", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	// Retrieve info without profiling enabled.
-	auto profiling_info = duckdb_get_profiling_info(tester.connection);
-	REQUIRE(profiling_info == nullptr);
+	auto info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(info == nullptr);
 	tester.Cleanup();
 }
 
@@ -149,11 +149,58 @@ TEST_CASE("Test profiling with detailed profiling mode enabled", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA profiling_mode = 'detailed'"));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
-	auto profiling_info = duckdb_get_profiling_info(tester.connection);
-	REQUIRE(profiling_info != nullptr);
+	auto info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(info != nullptr);
 
 	duckdb::map<string, double> cumulative_counter;
 	duckdb::map<string, double> cumulative_result;
-	TraverseTree(profiling_info, cumulative_counter, cumulative_result);
+	TraverseTree(info, cumulative_counter, cumulative_result);
+	tester.Cleanup();
+}
+
+TEST_CASE("Test invalid use of profiling API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA profiling_mode = 'detailed'"));
+	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
+
+	auto info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(info != nullptr);
+
+	// Incorrect usage tests.
+
+	auto map = duckdb_profiling_info_get_metrics(nullptr);
+	REQUIRE(map == nullptr);
+	map = duckdb_profiling_info_get_metrics(info);
+
+	auto dummy_value = duckdb_create_bool(true);
+	auto count = duckdb_get_map_size(nullptr);
+	REQUIRE(count == 0);
+	count = duckdb_get_map_size(dummy_value);
+	REQUIRE(count == 0);
+	count = duckdb_get_map_size(map);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto key = duckdb_get_map_key(nullptr, i);
+		REQUIRE(key == nullptr);
+		key = duckdb_get_map_key(map, DConstants::INVALID_INDEX);
+		REQUIRE(key == nullptr);
+		key = duckdb_get_map_key(dummy_value, i);
+		REQUIRE(key == nullptr);
+
+		auto value = duckdb_get_map_value(nullptr, i);
+		REQUIRE(value == nullptr);
+		value = duckdb_get_map_value(map, DConstants::INVALID_INDEX);
+		REQUIRE(value == nullptr);
+		value = duckdb_get_map_value(dummy_value, i);
+		REQUIRE(value == nullptr);
+		break;
+	}
+
+	duckdb_destroy_value(&dummy_value);
+	duckdb_destroy_value(&map);
 	tester.Cleanup();
 }
