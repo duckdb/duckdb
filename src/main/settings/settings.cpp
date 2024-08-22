@@ -670,6 +670,7 @@ void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	config.profiler_print_format = ClientConfig().profiler_print_format;
 	config.enable_profiler = ClientConfig().enable_profiler;
 	config.emit_profiler_output = ClientConfig().emit_profiler_output;
+	config.profiler_settings = ClientConfig().profiler_settings;
 }
 
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -678,6 +679,7 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = true;
 	config.emit_profiler_output = true;
+	config.profiler_settings = ClientConfig().profiler_settings;
 
 	if (parameter == "json") {
 		config.profiler_print_format = ProfilerPrintFormat::JSON;
@@ -685,6 +687,18 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else if (parameter == "query_tree_optimizer") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+
+		// add optimizer settings to the profiler settings
+		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
+		for (auto &setting : optimizer_settings) {
+			config.profiler_settings.insert(setting);
+		}
+
+		// add the phase timing settings to the profiler settings
+		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
+		for (auto &setting : phase_timing_settings) {
+			config.profiler_settings.insert(setting);
+		}
 	} else if (parameter == "no_output") {
 		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
 		config.emit_profiler_output = false;
@@ -718,7 +732,17 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 // Custom Profiling Settings
 //===--------------------------------------------------------------------===//
 
-static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &json) {
+bool IsEnabledOptimizer(MetricsType metric, const set<OptimizerType> &disabled_optimizers) {
+	auto matching_optimizer_type = MetricsUtils::GetOptimizerTypeByMetric(metric);
+	if (matching_optimizer_type != OptimizerType::INVALID &&
+	    disabled_optimizers.find(matching_optimizer_type) == disabled_optimizers.end()) {
+		return true;
+	}
+	return false;
+}
+
+static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &json,
+                                                const set<OptimizerType> &disabled_optimizers) {
 	profiler_settings_t metrics;
 
 	string invalid_settings;
@@ -733,7 +757,8 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &j
 			invalid_settings += entry.first;
 			continue;
 		}
-		if (StringUtil::Lower(entry.second) == "true") {
+		if (StringUtil::Lower(entry.second) == "true" &&
+		    (!MetricsUtils::IsOptimizerMetric(setting) || IsEnabledOptimizer(setting, disabled_optimizers))) {
 			metrics.insert(setting);
 		}
 	}
@@ -742,6 +767,17 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &j
 		throw IOException("Invalid custom profiler settings: \"%s\"", invalid_settings);
 	}
 	return metrics;
+}
+
+void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType> &disabled_optimizers) {
+	if (settings.find(MetricsType::ALL_OPTIMIZERS) != settings.end()) {
+		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
+		for (auto &metric : optimizer_metrics) {
+			if (IsEnabledOptimizer(metric, disabled_optimizers)) {
+				settings.insert(metric);
+			}
+		}
+	}
 }
 
 void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
@@ -758,7 +794,12 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 	}
 
 	config.enable_profiler = true;
-	config.profiler_settings = FillTreeNodeSettings(json);
+	auto &db_config = DBConfig::GetConfig(context);
+	auto &disabled_optimizers = db_config.options.disabled_optimizers;
+
+	auto settings = FillTreeNodeSettings(json, disabled_optimizers);
+	AddOptimizerMetrics(settings, disabled_optimizers);
+	config.profiler_settings = settings;
 }
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {
@@ -1546,6 +1587,7 @@ void ProfilingModeSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).enable_profiler = ClientConfig().enable_profiler;
 	ClientConfig::GetConfig(context).enable_detailed_profiling = ClientConfig().enable_detailed_profiling;
 	ClientConfig::GetConfig(context).emit_profiler_output = ClientConfig().emit_profiler_output;
+	ClientConfig::GetConfig(context).profiler_settings = ClientConfig().profiler_settings;
 }
 
 void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -1555,10 +1597,24 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = false;
 		config.emit_profiler_output = true;
+		config.profiler_settings = ClientConfig().profiler_settings;
 	} else if (parameter == "detailed") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = true;
 		config.emit_profiler_output = true;
+		config.profiler_settings = ClientConfig().profiler_settings;
+
+		// add optimizer settings to the profiler settings
+		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
+		for (auto &setting : optimizer_settings) {
+			config.profiler_settings.insert(setting);
+		}
+
+		// add the phase timing settings to the profiler settings
+		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
+		for (auto &setting : phase_timing_settings) {
+			config.profiler_settings.insert(setting);
+		}
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);
 	}

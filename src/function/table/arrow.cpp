@@ -7,12 +7,13 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/table/arrow.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/function/table/arrow/arrow_type_info.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,37 @@ static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSiz
 
 static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
 	auto format = string(schema.format);
+	// Let's first figure out if this type is a special canonical type
+	ArrowSchemaMetadata schema_metadata(schema.metadata);
+	auto arrow_extension = schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
+	if (arrow_extension == "arrow.uuid") {
+		if (format != "w:16") {
+			throw InvalidInputException(
+			    "arrow.uuid must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly defined as: %s",
+			    format);
+		}
+		return make_uniq<ArrowType>(LogicalType::UUID);
+	} else if (arrow_extension == "arrow.json") {
+		if (format == "u") {
+			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+		} else if (format == "U") {
+			return make_uniq<ArrowType>(LogicalType::JSON(),
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		} else if (format == "vu") {
+			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
+		} else {
+			throw InvalidInputException("arrow.json must be of a varchar format (i.e., \'u\',\'U\' or \'vu\'). It is "
+			                            "incorrectly defined as: %s",
+			                            format);
+		}
+	} else if (!arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc")) {
+		// FIXME: ogc is the extension format used in geo.arrow right now we consume these types, but do not create
+		// the proper GEO types
+		throw NotImplementedException(
+		    "Arrow Type with extension name: %s and format: %s, is not currently supported in DuckDB ", arrow_extension,
+		    format);
+	}
+	// If not, we just check the format itself
 	if (format == "n") {
 		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {

@@ -12,6 +12,7 @@ import cmath
 from typing import NamedTuple, Any, List
 
 from duckdb.typing import *
+from arrow_canonical_extensions import UuidType
 
 
 class Candidate(NamedTuple):
@@ -163,6 +164,8 @@ class TestUDFNullFiltering(object):
     )
     @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
     def test_null_filtering(self, duckdb_cursor, table_data: dict, test_type: Candidate, udf_type):
+        if test_type.type == UUID:
+            pa.register_extension_type(UuidType())
         null_count = sum([1 for x in list(zip(*table_data.values())) if any([y == None for y in x])])
         row_count = len(table_data)
         table_data = {
@@ -199,6 +202,8 @@ class TestUDFNullFiltering(object):
         assert len(result) == row_count
         # Only the non-null tuples should have been seen by the UDF
         assert my_func.count == row_count - null_count
+        if test_type.type == UUID:
+            pa.unregister_extension_type("arrow.uuid")
 
     @pytest.mark.parametrize(
         'table_data',

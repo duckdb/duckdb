@@ -129,7 +129,7 @@ public:
 	//! Adds the top level query information to the global profiler.
 	DUCKDB_API void SetInfo(const double &blocked_thread_time);
 
-	DUCKDB_API void StartPhase(string phase);
+	DUCKDB_API void StartPhase(MetricsType phase_metric);
 	DUCKDB_API void EndPhase();
 
 	DUCKDB_API void Initialize(const PhysicalOperator &root);
@@ -191,19 +191,18 @@ private:
 	//! The timer used to time the individual phases of the planning process
 	Profiler phase_profiler;
 	//! A mapping of the phase names to the timings
-	using PhaseTimingStorage = unordered_map<string, double>;
+	using PhaseTimingStorage = unordered_map<MetricsType, double, MetricsTypeHashFunction>;
 	PhaseTimingStorage phase_timings;
 	using PhaseTimingItem = PhaseTimingStorage::value_type;
 	//! The stack of currently active phases
-	vector<string> phase_stack;
+	vector<MetricsType> phase_stack;
 
 private:
-	vector<PhaseTimingItem> GetOrderedPhaseTimings() const;
+	void MoveOptimizerPhasesToRoot();
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
-	void ReadAndSetCustomProfilerSettings(const string &settings_path);
 };
 
 } // namespace duckdb
