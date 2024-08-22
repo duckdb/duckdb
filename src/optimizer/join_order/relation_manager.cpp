@@ -225,11 +225,11 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		}
 
 		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(*op, children_stats);
+		op->SetEstimatedCardinality(combined_stats.cardinality);
 		if (!datasource_filters.empty()) {
 			combined_stats.cardinality = (idx_t)MaxValue(
 			    double(combined_stats.cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
-		op->SetEstimatedCardinality(combined_stats.cardinality);
 		AddRelation(input_op, parent, combined_stats);
 		return true;
 	}
