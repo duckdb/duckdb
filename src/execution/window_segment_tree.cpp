@@ -1509,8 +1509,10 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(const W
 	// compute space required to store aggregation states of merge sort tree
 	// this is one aggregate state per entry per level
 	idx_t internal_nodes = 0;
+	levels_flat_start.push_back(internal_nodes);
 	for (idx_t level_nr = 0; level_nr < zipped_tree.tree.size(); ++level_nr) {
 		internal_nodes += zipped_tree.tree[level_nr].first.size();
+		levels_flat_start.push_back(internal_nodes);
 	}
 	levels_flat_native.Initialize(internal_nodes);
 	merge_sort_tree.tree.reserve(zipped_tree.tree.size());
@@ -1844,7 +1846,6 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 	auto &allocator = gdsink.allocator;
 	auto &inputs = gdsink.inputs;
 	auto &levels_flat_native = gdsink.levels_flat_native;
-	auto &levels_flat_start = gdsink.levels_flat_start;
 
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
@@ -1866,8 +1867,6 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 	idx_t ncombine = 0;
 
 	auto &zipped_tree = gdsink.zipped_tree;
-	levels_flat_start.push_back(0);
-	idx_t levels_flat_offset = 0;
 
 	//	Walk the distinct value tree building the intermediate aggregates
 	idx_t level_width = 1;
@@ -1880,6 +1879,7 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 			//	Reset the combine state
 			data_ptr_t prev_state = nullptr;
 			auto next_limit = MinValue<idx_t>(zipped_level.size(), i + level_width);
+			idx_t levels_flat_offset = level_nr * zipped_level.size() + i;
 			for (auto j = i; j < next_limit; ++j) {
 				//	Initialise the next aggregate
 				auto curr_state = levels_flat_native.GetStatePtr(levels_flat_offset++);
@@ -1919,7 +1919,6 @@ void WindowDistinctSortTree::Build(WindowDistinctAggregatorGlobalState &gdsink) 
 
 		tree.emplace_back(std::move(level), std::move(zipped_tree.tree[level_nr].second));
 
-		levels_flat_start.push_back(levels_flat_offset);
 		level_width *= FANOUT;
 	}
 
