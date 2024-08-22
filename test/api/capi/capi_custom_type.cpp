@@ -4,31 +4,19 @@
 using namespace duckdb;
 using namespace std;
 
-static duckdb_custom_type CAPIGetCustomType(const char *name, duckdb_type duckdb_type) {
-	auto base_type = duckdb_create_logical_type(duckdb_type);
-	duckdb_logical_type_set_alias(base_type, name);
-
-	auto custom_type = duckdb_create_custom_type();
-	duckdb_custom_type_set_name(custom_type, name);
-	duckdb_custom_type_set_base_type(custom_type, base_type);
-
-	duckdb_destroy_logical_type(&base_type);
-
-	return custom_type;
-}
-
 static void CAPIRegisterCustomType(duckdb_connection connection, const char *name, duckdb_type duckdb_type,
                                    duckdb_state expected_outcome) {
 	duckdb_state status;
 
-	auto custom_type = CAPIGetCustomType(name, duckdb_type);
+	auto base_type = duckdb_create_logical_type(duckdb_type);
+	duckdb_logical_type_set_alias(base_type, name);
 
-	status = duckdb_register_custom_type(connection, custom_type);
+	status = duckdb_register_logical_type(connection, base_type, nullptr);
 	REQUIRE(status == expected_outcome);
 
-	duckdb_destroy_custom_type(&custom_type);
-	duckdb_destroy_custom_type(&custom_type);
-	duckdb_destroy_custom_type(nullptr);
+	duckdb_destroy_logical_type(&base_type);
+	duckdb_destroy_logical_type(&base_type);
+	duckdb_destroy_logical_type(nullptr);
 }
 
 static void Vec3DAddFunction(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
@@ -159,11 +147,7 @@ TEST_CASE("Test Custom Type Function", "[capi]") {
 	auto vector_type = duckdb_create_array_type(element_type, 3);
 	duckdb_logical_type_set_alias(vector_type, "VEC3D");
 
-	auto custom_type = duckdb_create_custom_type();
-	duckdb_custom_type_set_name(custom_type, "VEC3D");
-	duckdb_custom_type_set_base_type(custom_type, vector_type);
-
-	REQUIRE(duckdb_register_custom_type(tester.connection, custom_type) == DuckDBSuccess);
+	REQUIRE(duckdb_register_logical_type(tester.connection, vector_type, nullptr) == DuckDBSuccess);
 
 	// Register a scalar function that adds two vectors
 	auto function = duckdb_create_scalar_function();
@@ -207,11 +191,8 @@ TEST_CASE("Test Custom Type Function", "[capi]") {
 	duckdb_destroy_logical_type(&varchar_type);
 	duckdb_destroy_logical_type(&element_type);
 	duckdb_destroy_logical_type(&vector_type);
-	duckdb_destroy_custom_type(&custom_type);
 
 	// Ensure that we can free the casts multiple times without issue
-	duckdb_destroy_custom_type(&custom_type);
-	duckdb_destroy_custom_type(nullptr);
 	duckdb_destroy_cast_function(&from_varchar_cast_function);
 	duckdb_destroy_cast_function(nullptr);
 

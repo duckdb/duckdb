@@ -352,45 +352,20 @@ duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_
 	    new duckdb::LogicalType(duckdb::StructType::GetChildType(logical_type, index)));
 }
 
-duckdb_custom_type duckdb_create_custom_type() {
-	return reinterpret_cast<duckdb_custom_type>(new duckdb::CCustomType());
-}
-
-void duckdb_destroy_custom_type(duckdb_custom_type *type) {
-	if (type && *type) {
-		const auto custom_type = reinterpret_cast<duckdb::CCustomType *>(*type);
-		delete custom_type;
-		*type = nullptr;
-	}
-}
-
-void duckdb_custom_type_set_name(duckdb_custom_type type, const char *name) {
-	if (!type || !name) {
-		return;
-	}
-	auto &custom_type = *(reinterpret_cast<duckdb::CCustomType *>(type));
-	custom_type.name = name;
-}
-
-void duckdb_custom_type_set_base_type(duckdb_custom_type type, duckdb_logical_type base_type) {
-	if (!type || !base_type) {
-		return;
-	}
-	const auto &logical_type = *(reinterpret_cast<duckdb::LogicalType *>(base_type));
-	auto &custom_type = *(reinterpret_cast<duckdb::CCustomType *>(type));
-	custom_type.base_type = duckdb::make_uniq<duckdb::LogicalType>(logical_type);
-}
-
-duckdb_state duckdb_register_custom_type(duckdb_connection connection, duckdb_custom_type type) {
+duckdb_state duckdb_register_logical_type(duckdb_connection connection, duckdb_logical_type type,
+                                          duckdb_create_type_info info) {
 	if (!connection || !type) {
 		return DuckDBError;
 	}
-	const auto &custom_type = *(reinterpret_cast<duckdb::CCustomType *>(type));
-	if (custom_type.name.empty() || !custom_type.base_type) {
+
+	// Unused for now
+	(void)info;
+
+	const auto &base_type = *reinterpret_cast<duckdb::LogicalType *>(type);
+	if (!base_type.HasAlias()) {
 		return DuckDBError;
 	}
 
-	const auto &base_type = *custom_type.base_type;
 	if (duckdb::TypeVisitor::Contains(base_type, duckdb::LogicalTypeId::INVALID) ||
 	    duckdb::TypeVisitor::Contains(base_type, duckdb::LogicalTypeId::ANY)) {
 		return DuckDBError;
@@ -400,7 +375,7 @@ duckdb_state duckdb_register_custom_type(duckdb_connection connection, duckdb_cu
 		const auto con = reinterpret_cast<duckdb::Connection *>(connection);
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
-			duckdb::CreateTypeInfo info(custom_type.name, base_type);
+			duckdb::CreateTypeInfo info(base_type.GetAlias(), base_type);
 			info.temporary = true;
 			info.internal = true;
 			catalog.CreateType(*con->context, info);

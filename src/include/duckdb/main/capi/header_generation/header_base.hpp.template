@@ -443,6 +443,12 @@ typedef struct _duckdb_logical_type {
 	void *internal_ptr;
 } * duckdb_logical_type;
 
+//! Holds extra information used when registering a custom logical type.
+//! Reserved for future use.
+typedef struct _duckdb_create_type_info {
+	void *internal_ptr;
+} * duckdb_create_type_info;
+
 //! Contains a data chunk from a duckdb_result.
 //! Must be destroyed with `duckdb_destroy_data_chunk`.
 typedef struct _duckdb_data_chunk {
@@ -553,15 +559,6 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 
 //! The main function of the table function.
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
-
-//===--------------------------------------------------------------------===//
-// Custom type types
-//===--------------------------------------------------------------------===//
-
-//! A custom type. Must be destroyed with `duckdb_destroy_custom_type`.
-typedef struct _duckdb_custom_type {
-	void *internal_ptr;
-} * duckdb_custom_type;
 
 //===--------------------------------------------------------------------===//
 // Cast types

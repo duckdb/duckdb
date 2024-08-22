@@ -564,74 +564,7 @@
             }
         },
         {
-            "name": "duckdb_create_custom_type",
-            "return_type": "duckdb_custom_type",
-            "params": [],
-            "comment": {
-                "description": "Creates a new custom type.\n\n",
-                "return_value": "The custom type."
-            }
-        },
-        {
-            "name": "duckdb_destroy_custom_type",
-            "return_type": "void",
-            "params": [
-                {
-                    "type": "duckdb_custom_type *",
-                    "name": "type"
-                }
-            ],
-            "comment": {
-                "description": "Destroys an custom type.\n\n",
-                "param_comments": {
-                    "type": "The custom type to destroy."
-                }
-            }
-        },
-        {
-            "name": "duckdb_custom_type_set_base_type",
-            "return_type": "void",
-            "params": [
-                {
-                    "type": "duckdb_custom_type",
-                    "name": "type"
-                },
-                {
-                    "type": "duckdb_logical_type",
-                    "name": "base_type"
-                }
-            ],
-            "comment": {
-                "description": "Sets the base type of an custom type.\n\n",
-                "param_comments": {
-                    "type": "The custom type",
-                    "base_type": "The base type to set"
-                }
-            }
-        },
-        {
-            "name": "duckdb_custom_type_set_name",
-            "return_type": "void",
-            "params": [
-                {
-                    "type": "duckdb_custom_type",
-                    "name": "type"
-                },
-                {
-                    "type": "const char *",
-                    "name": "name"
-                }
-            ],
-            "comment": {
-                "description": "Sets the name of a custom type.\n\n",
-                "param_comments": {
-                    "type": "The custom type",
-                    "name": "The name to set"
-                }
-            }
-        },
-        {
-            "name": "duckdb_register_custom_type",
+            "name": "duckdb_register_logical_type",
             "return_type": "duckdb_state",
             "params": [
                 {
@@ -639,15 +572,20 @@
                     "name": "con"
                 },
                 {
-                    "type": "duckdb_custom_type",
+                    "type": "duckdb_logical_type",
                     "name": "type"
+                },
+                {
+                    "type": "duckdb_create_type_info",
+                    "name": "info"
                 }
             ],
             "comment": {
-                "description": "Registers a custom type within the given connection.\n\n",
+                "description": "Registers a custom type within the given connection.\nThe type must have an alias\n\n",
                 "param_comments": {
                     "con": "The connection to use",
-                    "type": "The custom type to register"
+                    "type": "The custom type to register",
+                    "extra_info": "Optional extra information used when registering the custom type. Can be `NULL`."
                 },
                 "return_value": "Whether or not the registration was successful."
             }
