@@ -64,7 +64,16 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 	auto percentage_x =
 	    SummarizeCreateBinaryFunction("*", std::move(negate_x), make_uniq<ConstantExpression>(Value::DOUBLE(100)));
 
-	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(percentage_x));
+	auto comp_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN, SummarizeCreateCountStar(),
+	                                                 make_uniq<ConstantExpression>(Value::BIGINT(0)));
+	auto case_expr = make_uniq<CaseExpression>();
+	CaseCheck check;
+	check.when_expr = std::move(comp_expr);
+	check.then_expr = std::move(percentage_x);
+	case_expr->case_checks.push_back(std::move(check));
+	case_expr->else_expr = make_uniq<ConstantExpression>(Value());
+
+	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(case_expr));
 }
 
 unique_ptr<BoundTableRef> Binder::BindSummarize(ShowRef &ref) {
