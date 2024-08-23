@@ -11,6 +11,7 @@
 #include "duckdb/common/vector.hpp"
 #include <list>
 #include "duckdb/common/arrow/arrow_appender.hpp"
+#include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
 
@@ -43,6 +44,8 @@ struct DuckDBArrowSchemaHolder {
 	//! This holds strings created to represent decimal types
 	vector<unsafe_unique_array<char>> owned_type_names;
 	vector<unsafe_unique_array<char>> owned_column_names;
+	//! This holds any values created for metadata info
+	vector<unsafe_unique_array<char>> metadata_info;
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -127,8 +130,24 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;
-	case LogicalTypeId::UUID:
+	case LogicalTypeId::UUID: {
+		// This is a canonical extension, hence needs the "arrow." prefix
+		child.format = "w:16";
+		auto schema_metadata = ArrowSchemaMetadata();
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.uuid");
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
+		break;
+	}
 	case LogicalTypeId::VARCHAR:
+		if (type.IsJSONType()) {
+			auto schema_metadata = ArrowSchemaMetadata();
+			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.json");
+			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		}
 		if (options.produce_arrow_string_view) {
 			child.format = "vu";
 		} else {

@@ -54,7 +54,8 @@ class TestTypes(object):
             	fixed_struct_array, 
             	struct_of_fixed_array, 
             	fixed_array_of_int_list,
-                list_of_fixed_int_array
+                list_of_fixed_int_array,
+                varint
 			) from test_all_types()
 		"""
         )

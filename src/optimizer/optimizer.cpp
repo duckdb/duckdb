@@ -74,7 +74,7 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		return;
 	}
 	auto &profiler = QueryProfiler::Get(context);
-	profiler.StartPhase(OptimizerTypeToString(type));
+	profiler.StartPhase(MetricsUtils::GetOptimizerMetricByType(type));
 	callback();
 	profiler.EndPhase();
 	if (plan) {

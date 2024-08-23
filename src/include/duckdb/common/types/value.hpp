@@ -194,8 +194,8 @@ public:
 	//! Creates a bitstring by casting a specified string to a bitstring
 	DUCKDB_API static Value BIT(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIT(const string &data);
-
 	DUCKDB_API static Value VARINT(const_data_ptr_t data, idx_t len);
+	DUCKDB_API static Value VARINT(const string &data);
 
 	//! Creates an aggregate state
 	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT

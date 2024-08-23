@@ -10,6 +10,7 @@
 
 #include "duckdb/core_functions/aggregate/quantile_helpers.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include <algorithm>
 #include <numeric>
@@ -246,7 +247,10 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	using BaseTree = MergeSortTree<IDX, IDX>;
 	using Elements = typename BaseTree::Elements;
 
-	explicit QuantileSortTree(Elements &&lowest_level) : BaseTree(std::move(lowest_level)) {
+	explicit QuantileSortTree(Elements &&lowest_level) {
+		BaseTree::Allocate(lowest_level.size());
+		BaseTree::LowestLevel() = std::move(lowest_level);
+		BaseTree::Build();
 	}
 
 	template <class INPUT_TYPE>
