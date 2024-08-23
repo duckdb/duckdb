@@ -19,4 +19,4 @@ pragma explain_output=OPTIMIZED_ONLY;
 query II
 explain select * from t1, t2, t3 where a = b and b = c;
 ----
-logical_opt	<REGEX>:.*COMPARISON_JOIN.*a = b.*Estimated Cardinality.*10603.*
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*a = b.*~10603.*
