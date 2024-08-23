@@ -110,7 +110,7 @@ template <class TO, class FROM,
           class = typename std::enable_if<(NumericLimits<TO>::IsIntegral() && NumericLimits<FROM>::IsIntegral()) ||
                                           std::is_same<TO, FROM>::value>::type>
 TO UnsafeNumericCast(FROM in) {
-#ifdef DEBUG
+#if defined(DEBUG) || defined(UNSAFE_NUMERIC_CAST)
 	return NumericCast<TO, FROM>(in);
 #endif
 	return static_cast<TO>(in);
@@ -136,7 +136,7 @@ TO LossyNumericCast(float val) {
 template <class TO>
 TO ExactNumericCast(double val) {
 	auto res = LossyNumericCast<TO>(val);
-#ifdef DEBUG
+#if defined(DEBUG) || defined(UNSAFE_NUMERIC_CAST)
 	if (val != double(res)) {
 		throw InternalException("Information loss on double cast: value %lf outside of target range [%lf, %lf]", val,
 		                        double(res), double(res));
@@ -148,7 +148,7 @@ TO ExactNumericCast(double val) {
 template <class TO>
 TO ExactNumericCast(float val) {
 	auto res = LossyNumericCast<TO>(val);
-#ifdef DEBUG
+#if defined(DEBUG) || defined(UNSAFE_NUMERIC_CAST)
 	if (val != float(res)) {
 		throw InternalException("Information loss on float cast: value %f outside of target range [%f, %f]", val,
 		                        float(res), float(res));
