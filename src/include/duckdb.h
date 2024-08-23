@@ -219,6 +219,8 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_SEQUENCE = 41,
 	DUCKDB_INVALID_CONFIGURATION = 42
 } duckdb_error_type;
+//! An enum over DuckDB's different cast modes.
+typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
 
 //===--------------------------------------------------------------------===//
 // General type definitions
@@ -444,6 +446,12 @@ typedef struct _duckdb_logical_type {
 	void *internal_ptr;
 } * duckdb_logical_type;
 
+//! Holds extra information used when registering a custom logical type.
+//! Reserved for future use.
+typedef struct _duckdb_create_type_info {
+	void *internal_ptr;
+} * duckdb_create_type_info;
+
 //! Contains a data chunk from a duckdb_result.
 //! Must be destroyed with `duckdb_destroy_data_chunk`.
 typedef struct _duckdb_data_chunk {
@@ -554,6 +562,18 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 
 //! The main function of the table function.
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
+
+//===--------------------------------------------------------------------===//
+// Cast types
+//===--------------------------------------------------------------------===//
+
+//! A cast function. Must be destroyed with `duckdb_destroy_cast_function`.
+typedef struct _duckdb_cast_function {
+	void *internal_ptr;
+} * duckdb_cast_function;
+
+typedef bool (*duckdb_cast_function_t)(duckdb_function_info info, idx_t count, duckdb_vector input,
+                                       duckdb_vector output);
 
 //===--------------------------------------------------------------------===//
 // Replacement scan types
@@ -2202,6 +2222,14 @@ The result must be destroyed with `duckdb_free`.
 DUCKDB_API char *duckdb_logical_type_get_alias(duckdb_logical_type type);
 
 /*!
+Sets the alias of a duckdb_logical_type.
+
+* @param type The logical type
+* @param alias The alias to set
+*/
+DUCKDB_API void duckdb_logical_type_set_alias(duckdb_logical_type type, const char *alias);
+
+/*!
 Creates a LIST type from its child type.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
@@ -2446,6 +2474,17 @@ Destroys the logical type and de-allocates all memory allocated for that type.
 * @param type The logical type to destroy.
 */
 DUCKDB_API void duckdb_destroy_logical_type(duckdb_logical_type *type);
+
+/*!
+Registers a custom type within the given connection.
+The type must have an alias
+
+* @param con The connection to use
+* @param type The custom type to register
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_API duckdb_state duckdb_register_logical_type(duckdb_connection con, duckdb_logical_type type,
+                                                     duckdb_create_type_info info);
 
 //===--------------------------------------------------------------------===//
 // Data Chunk Interface
@@ -3967,6 +4006,111 @@ It is not known beforehand how many chunks will be returned by this result.
 * @return The resulting data chunk. Returns `NULL` if the result has an error.
 */
 DUCKDB_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
+
+//===--------------------------------------------------------------------===//
+// Cast Functions
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a new cast function object.
+
+* @return The cast function object.
+*/
+DUCKDB_API duckdb_cast_function duckdb_create_cast_function();
+
+/*!
+Sets the source type of the cast function.
+
+* @param cast_function The cast function object.
+* @param source_type The source type to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_source_type(duckdb_cast_function cast_function,
+                                                     duckdb_logical_type source_type);
+
+/*!
+Sets the target type of the cast function.
+
+* @param cast_function The cast function object.
+* @param target_type The target type to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_target_type(duckdb_cast_function cast_function,
+                                                     duckdb_logical_type target_type);
+
+/*!
+Sets the "cost" of implicitly casting the source type to the target type using this function.
+
+* @param cast_function The cast function object.
+* @param cost The cost to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_implicit_cast_cost(duckdb_cast_function cast_function, int64_t cost);
+
+/*!
+Sets the actual cast function to use.
+
+* @param cast_function The cast function object.
+* @param function The function to set.
+*/
+DUCKDB_API void duckdb_cast_function_set_function(duckdb_cast_function cast_function, duckdb_cast_function_t function);
+
+/*!
+Assigns extra information to the cast function that can be fetched during execution, etc.
+
+* @param extra_info The extra information
+* @param destroy The callback that will be called to destroy the extra information (if any)
+*/
+DUCKDB_API void duckdb_cast_function_set_extra_info(duckdb_cast_function cast_function, void *extra_info,
+                                                    duckdb_delete_callback_t destroy);
+
+/*!
+Retrieves the extra info of the function as set in `duckdb_cast_function_set_extra_info`.
+
+* @param info The info object.
+* @return The extra info.
+*/
+DUCKDB_API void *duckdb_cast_function_get_extra_info(duckdb_function_info info);
+
+/*!
+Get the cast execution mode from the given function info.
+
+* @param info The info object.
+* @return The cast mode.
+*/
+DUCKDB_API duckdb_cast_mode duckdb_cast_function_get_cast_mode(duckdb_function_info info);
+
+/*!
+Report that an error has occurred while executing the cast function.
+
+* @param info The info object.
+* @param error The error message.
+*/
+DUCKDB_API void duckdb_cast_function_set_error(duckdb_function_info info, const char *error);
+
+/*!
+Report that an error has occurred while executing the cast function, setting the corresponding output row to NULL.
+
+* @param info The info object.
+* @param error The error message.
+* @param row The index of the row within the output vector to set to NULL.
+* @param output The output vector.
+*/
+DUCKDB_API void duckdb_cast_function_set_row_error(duckdb_function_info info, const char *error, idx_t row,
+                                                   duckdb_vector output);
+
+/*!
+Registers a cast function within the given connection.
+
+* @param con The connection to use.
+* @param cast_function The cast function to register.
+* @return Whether or not the registration was successful.
+*/
+DUCKDB_API duckdb_state duckdb_register_cast_function(duckdb_connection con, duckdb_cast_function cast_function);
+
+/*!
+Destroys the cast function object.
+
+* @param cast_function The cast function object.
+*/
+DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
 
 #ifdef __cplusplus
 }
