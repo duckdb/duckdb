@@ -53,3 +53,11 @@ ORDER BY 1
 2	3	/,-,+	3
 3	1	/	1
 4	3	NULL	3
+
+statement error
+SELECT g, STRING_AGG(DISTINCT y ORDER BY y, ',' ) FILTER (WHERE g < 4)
+FROM strings
+GROUP BY g
+ORDER BY 1
+----
+ORDER BY in aggregate does not support ordering by literals

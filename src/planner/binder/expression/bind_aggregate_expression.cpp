@@ -140,6 +140,13 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// Bind the ORDER BYs, if any
 	if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 		for (auto &order : aggr.order_bys->orders) {
+			if (order.expression->type == ExpressionType::VALUE_CONSTANT) {
+				throw BinderException(*order.expression,
+				                      "ORDER BY in aggregate does not support ordering by literals - cannot "
+				                      "ORDER BY literal %s\n\nPerhaps you misplaced ORDER BY; ORDER BY must appear "
+				                      "after all regular arguments of the aggregate.",
+				                      order.expression->ToString());
+			}
 			aggregate_binder.BindChild(order.expression, 0, error);
 		}
 	}
