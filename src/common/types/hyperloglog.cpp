@@ -95,10 +95,18 @@ void HyperLogLog::Update(Vector &input, Vector &hash_vec, const idx_t count) {
 			InsertElement(hashes[0]);
 		}
 	} else {
-		for (idx_t i = 0; i < count; ++i) {
-			if (idata.validity.RowIsValid(idata.sel->get_index(i))) {
-				const auto hash = hashes[hdata.sel->get_index(i)];
+		D_ASSERT(hash_vec.GetVectorType() == VectorType::FLAT_VECTOR);
+		if (idata.validity.AllValid()) {
+			for (idx_t i = 0; i < count; ++i) {
+				const auto hash = hashes[i];
 				InsertElement(hash);
+			}
+		} else {
+			for (idx_t i = 0; i < count; ++i) {
+				if (idata.validity.RowIsValid(idata.sel->get_index(i))) {
+					const auto hash = hashes[i];
+					InsertElement(hash);
+				}
 			}
 		}
 	}

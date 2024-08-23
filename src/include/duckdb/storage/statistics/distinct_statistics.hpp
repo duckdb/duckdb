@@ -47,7 +47,9 @@ public:
 
 private:
 	//! For distinct statistics we sample the input to speed up insertions
-	static constexpr const double SAMPLE_RATE = 0.1;
+	static constexpr double BASE_SAMPLE_RATE = 0.1;
+	//! For integers, we sample more: more likely to be join keys (and hashing is cheaper than, e.g., strings)
+	static constexpr double INTEGRAL_SAMPLE_RATE = 0.3;
 	//! For concurrent access
 	mutable mutex lock;
 };

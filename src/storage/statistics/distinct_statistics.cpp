@@ -28,9 +28,12 @@ void DistinctStatistics::Merge(const DistinctStatistics &other) {
 void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
 	total_count += count;
 	if (sample) {
-		count = MinValue<idx_t>(
-		    MaxValue<idx_t>(idx_t(SAMPLE_RATE * static_cast<double>(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count))), 1),
-		    count);
+		const auto original_count = count;
+		const auto sample_rate = v.GetType().IsIntegral() ? INTEGRAL_SAMPLE_RATE : BASE_SAMPLE_RATE;
+		// Sample up to 'sample_rate' of STANDARD_VECTOR_SIZE of this vector (at least 1 if we're testing vector size 2)
+		count = MaxValue<idx_t>(LossyNumericCast<idx_t>(sample_rate * static_cast<double>(STANDARD_VECTOR_SIZE)), 1);
+		// But never more than the original count
+		count = MinValue<idx_t>(count, original_count);
 	}
 	sample_count += count;
 
