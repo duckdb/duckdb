@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/common/pair.hpp"
 
 namespace duckdb {
