@@ -9,6 +9,7 @@ benchmark/realnest/08_count_map_keys.benchmark
 benchmark/realnest/09_array_agg.benchmark
 benchmark/realnest/10_list_intersect_hashtags.benchmark
 benchmark/realnest/11_list_sort_reduce_transform.benchmark
-benchmark/realnest/12_map_two_list_values.benchmark
+benchmark/realnest/12_map_list_values.benchmark
 benchmark/realnest/13_multi_join_nested_data_with_filtering.benchmark
-benchmark/realnest/14_list_sort_flatten_slice.benchmark
+benchmark/realnest/14_list_slice.benchmark
+benchmark/realnest/15_list_sort.benchmark
