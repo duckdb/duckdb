@@ -13,6 +13,8 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/parallel/task.hpp"
 
+#include <condition_variable>
+
 namespace duckdb {
 
 //! InterruptMode specifies how operators should block/unblock, note that this will happen transparently to the
