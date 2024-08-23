@@ -6,7 +6,7 @@ PRAGMA enable_verification;
 
 
 query I
-SELECT map_contains(map([1,2,3],[4,5,6]), 2, 5) AS res;
+SELECT map_contains_entry(map([1,2,3],[4,5,6]), 2, 5) AS res;
 ----
 true
 
@@ -16,12 +16,12 @@ SELECT map_contains_value(map([1,2,3],[4,5,6]), 10) AS res;
 false
 
 query I
-SELECT map_contains_key(map([1,2,3],[4,5,6]), 1) AS res;
+SELECT map_contains(map([1,2,3],[4,5,6]), 1) AS res;
 ----
 true
 
 query I
-SELECT map_contains_key(map([1,2,3],[4,5,6]), 6) AS res;
+SELECT map_contains(map([1,2,3],[4,5,6]), 6) AS res;
 ----
 false
 
@@ -36,12 +36,12 @@ SELECT map_contains_value(map([1,2,3],[4,5,6]), 2) AS res;
 false
 
 query I
-SELECT map_contains(map([],[]), 1, 2) AS res;
+SELECT map_contains_entry(map([],[]), 1, 2) AS res;
 ----
 false
 
 query I
-SELECT map_contains_key(map([],[]), 1) AS res;
+SELECT map_contains(map([],[]), 1) AS res;
 ----
 false
 
@@ -72,7 +72,7 @@ INSERT INTO test_maps(m, k, v, res_key, res_val) VALUES
 (map([25,26,27],[28,29,30]), 26, 31, true, false);
 
 query I
-SELECT bool_and(map_contains_key(m, k) = res_key) = bool_and(map_contains_value(m, v) = res_val)
+SELECT bool_and(map_contains(m, k) = res_key) = bool_and(map_contains_value(m, v) = res_val)
 FROM test_maps;
 ----
 true
