@@ -255,6 +255,7 @@ public:
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
 	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t &count) override;
+	bool HasRowGroupData() override;
 
 private:
 	idx_t initial_wal_size = 0;
@@ -327,6 +328,10 @@ optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroup
 	}
 	count = start_entry->second.count;
 	return start_entry->second.row_group_data.get();
+}
+
+bool SingleFileStorageCommitState::HasRowGroupData() {
+	return !optimistically_written_data.empty();
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {
