@@ -32,7 +32,7 @@ public:
 public:
 	void Merge(const DistinctStatistics &other);
 
-	unique_ptr<DistinctStatistics> Copy();
+	unique_ptr<DistinctStatistics> Copy() const;
 
 	void Update(Vector &update, idx_t count, bool sample = true);
 	void Update(UnifiedVectorFormat &update_data, const LogicalType &ptype, idx_t count, bool sample = true);
@@ -49,7 +49,7 @@ private:
 	//! For distinct statistics we sample the input to speed up insertions
 	static constexpr const double SAMPLE_RATE = 0.1;
 	//! For concurrent access
-	mutex lock;
+	mutable mutex lock;
 };
 
 } // namespace duckdb

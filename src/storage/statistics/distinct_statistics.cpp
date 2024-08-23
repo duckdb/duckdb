@@ -14,7 +14,7 @@ DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample
     : log(std::move(log)), sample_count(sample_count), total_count(total_count) {
 }
 
-unique_ptr<DistinctStatistics> DistinctStatistics::Copy() {
+unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {
 	lock_guard<mutex> guard(lock);
 	return make_uniq<DistinctStatistics>(log->Copy(), sample_count, total_count);
 }
