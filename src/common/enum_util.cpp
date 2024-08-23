@@ -3242,6 +3242,29 @@ FunctionStability EnumUtil::FromString<FunctionStability>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<GateStatus>(GateStatus value) {
+	switch(value) {
+	case GateStatus::GATE_NOT_SET:
+		return "GATE_NOT_SET";
+	case GateStatus::GATE_SET:
+		return "GATE_SET";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
+	if (StringUtil::Equals(value, "GATE_NOT_SET")) {
+		return GateStatus::GATE_NOT_SET;
+	}
+	if (StringUtil::Equals(value, "GATE_SET")) {
+		return GateStatus::GATE_SET;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value) {
 	switch(value) {
 	case HLLStorageType::UNCOMPRESSED:
@@ -4544,6 +4567,12 @@ const char* EnumUtil::ToChars<NType>(NType value) {
 		return "NODE_256";
 	case NType::LEAF_INLINED:
 		return "LEAF_INLINED";
+	case NType::NODE_7_LEAF:
+		return "NODE_7_LEAF";
+	case NType::NODE_15_LEAF:
+		return "NODE_15_LEAF";
+	case NType::NODE_256_LEAF:
+		return "NODE_256_LEAF";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4571,6 +4600,15 @@ NType EnumUtil::FromString<NType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LEAF_INLINED")) {
 		return NType::LEAF_INLINED;
+	}
+	if (StringUtil::Equals(value, "NODE_7_LEAF")) {
+		return NType::NODE_7_LEAF;
+	}
+	if (StringUtil::Equals(value, "NODE_15_LEAF")) {
+		return NType::NODE_15_LEAF;
+	}
+	if (StringUtil::Equals(value, "NODE_256_LEAF")) {
+		return NType::NODE_256_LEAF;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -13,26 +13,28 @@
 
 namespace duckdb {
 
+template <class T>
+using json_function_t = std::function<T(yyjson_val *, yyjson_alc *, Vector &, ValidityMask &, idx_t)>;
+
 struct JSONExecutors {
 public:
 	//! Single-argument JSON read function, i.e. json_type('[1, 2, 3]')
 	template <class T>
-	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
-	                         std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
+	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYAlc();
 
 		auto &inputs = args.data[0];
-		UnaryExecutor::Execute<string_t, T>(inputs, result, args.size(), [&](string_t input) {
-			auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
-			return fun(doc->root, alc, result);
-		});
+		UnaryExecutor::ExecuteWithNulls<string_t, T>(
+		    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
+			    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+			    return fun(doc->root, alc, result, mask, idx);
+		    });
 	}
 
 	//! Two-argument JSON read function (with path query), i.e. json_type('[1, 2, 3]', '$[0]')
-	template <class T, bool NULL_IF_NULL = true>
-	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
-	                          std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
+	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
+	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.bind_info->Cast<JSONReadFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
@@ -48,11 +50,11 @@ public:
 					    auto doc =
 					        JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 					    auto val = JSONCommon::GetUnsafe(doc->root, ptr, len);
-					    if (!val || (NULL_IF_NULL && unsafe_yyjson_is_null(val))) {
+					    if (SET_NULL_IF_NOT_FOUND && !val) {
 						    mask.SetInvalid(idx);
 						    return T {};
 					    } else {
-						    return fun(val, alc, result);
+						    return fun(val, alc, result, mask, idx);
 					    }
 				    });
 			} else {
@@ -76,11 +78,7 @@ public:
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
 						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
-						if (NULL_IF_NULL && unsafe_yyjson_is_null(val)) {
-							child_validity.SetInvalid(current_size + i);
-						} else {
-							child_vals[current_size + i] = fun(val, alc, result);
-						}
+						child_vals[current_size + i] = fun(val, alc, result, child_validity, current_size + i);
 					}
 
 					ListVector::SetListSize(result, new_size);
@@ -95,11 +93,11 @@ public:
 			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
 				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 				    auto val = JSONCommon::Get(doc->root, path);
-				    if (!val || unsafe_yyjson_is_null(val)) {
+				    if (SET_NULL_IF_NOT_FOUND && !val) {
 					    mask.SetInvalid(idx);
 					    return T {};
 				    } else {
-					    return fun(val, alc, result);
+					    return fun(val, alc, result, mask, idx);
 				    }
 			    });
 		}
@@ -109,9 +107,8 @@ public:
 	}
 
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
-	template <class T, bool NULL_IF_NULL = true>
-	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result,
-	                        std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
+	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
+	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.bind_info->Cast<JSONReadManyFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
@@ -148,10 +145,10 @@ public:
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;
 				val = JSONCommon::GetUnsafe(doc->root, info.ptrs[path_i], info.lens[path_i]);
-				if (!val || (NULL_IF_NULL && unsafe_yyjson_is_null(val))) {
+				if (SET_NULL_IF_NOT_FOUND && !val) {
 					child_validity.SetInvalid(child_idx);
 				} else {
-					child_data[child_idx] = fun(val, alc, child);
+					child_data[child_idx] = fun(val, alc, child, child_validity, child_idx);
 				}
 			}
 

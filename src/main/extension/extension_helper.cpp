@@ -220,6 +220,25 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
+bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const string &extension_name) noexcept {
+	if (instance.ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
+	auto &dbconfig = DBConfig::GetConfig(instance);
+	try {
+		auto &fs = FileSystem::GetFileSystem(instance);
+		if (dbconfig.options.autoinstall_known_extensions) {
+			auto autoinstall_repo =
+			    ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
+			ExtensionHelper::InstallExtension(dbconfig, fs, extension_name, false, autoinstall_repo, false);
+		}
+		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
+		return true;
+	} catch (...) {
+		return false;
+	}
+}
+
 static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
                                                      const string &full_extension_path, const string &extension_name) {
 	ExtensionUpdateResult result;

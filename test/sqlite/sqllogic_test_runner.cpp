@@ -414,7 +414,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
-	if (param == "noalternativeverify") {
+	if (param == "no_alternative_verify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 		return RequireResult::MISSING;
 #else

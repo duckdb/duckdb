@@ -268,6 +268,7 @@ typedef struct {
 	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
 	idx_t (*duckdb_profiling_info_get_child_count)(duckdb_profiling_info info);
 	duckdb_profiling_info (*duckdb_profiling_info_get_child)(duckdb_profiling_info info, idx_t index);
+	duckdb_value (*duckdb_profiling_info_get_metrics)(duckdb_profiling_info info);
 	void (*duckdb_scalar_function_set_varargs)(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 	void (*duckdb_scalar_function_set_special_handling)(duckdb_scalar_function scalar_function);
 	void (*duckdb_scalar_function_set_volatile)(duckdb_scalar_function scalar_function);
@@ -326,6 +327,9 @@ typedef struct {
 	duckdb_state (*duckdb_add_aggregate_function_to_set)(duckdb_aggregate_function_set set,
 	                                                     duckdb_aggregate_function function);
 	duckdb_state (*duckdb_register_aggregate_function_set)(duckdb_connection con, duckdb_aggregate_function_set set);
+	idx_t (*duckdb_get_map_size)(duckdb_value value);
+	duckdb_value (*duckdb_get_map_key)(duckdb_value value, idx_t index);
+	duckdb_value (*duckdb_get_map_value)(duckdb_value value, idx_t index);
 	// dev
 	// WARNING! the functions below are not (yet) stable
 
@@ -351,6 +355,23 @@ typedef struct {
 	                                                 duckdb_delete_callback_t destroy);
 	void *(*duckdb_aggregate_function_get_extra_info)(duckdb_function_info info);
 	void (*duckdb_aggregate_function_set_error)(duckdb_function_info info, const char *error);
+	void (*duckdb_logical_type_set_alias)(duckdb_logical_type type, const char *alias);
+	duckdb_state (*duckdb_register_logical_type)(duckdb_connection con, duckdb_logical_type type,
+	                                             duckdb_create_type_info info);
+	duckdb_cast_function (*duckdb_create_cast_function)();
+	void (*duckdb_cast_function_set_source_type)(duckdb_cast_function cast_function, duckdb_logical_type source_type);
+	void (*duckdb_cast_function_set_target_type)(duckdb_cast_function cast_function, duckdb_logical_type target_type);
+	void (*duckdb_cast_function_set_implicit_cast_cost)(duckdb_cast_function cast_function, int64_t cost);
+	void (*duckdb_cast_function_set_function)(duckdb_cast_function cast_function, duckdb_cast_function_t function);
+	void (*duckdb_cast_function_set_extra_info)(duckdb_cast_function cast_function, void *extra_info,
+	                                            duckdb_delete_callback_t destroy);
+	void *(*duckdb_cast_function_get_extra_info)(duckdb_function_info info);
+	duckdb_cast_mode (*duckdb_cast_function_get_cast_mode)(duckdb_function_info info);
+	void (*duckdb_cast_function_set_error)(duckdb_function_info info, const char *error);
+	void (*duckdb_cast_function_set_row_error)(duckdb_function_info info, const char *error, idx_t row,
+	                                           duckdb_vector output);
+	duckdb_state (*duckdb_register_cast_function)(duckdb_connection con, duckdb_cast_function cast_function);
+	void (*duckdb_destroy_cast_function)(duckdb_cast_function *cast_function);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -594,6 +615,7 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_profiling_info_get_value = duckdb_profiling_info_get_value;
 	result.duckdb_profiling_info_get_child_count = duckdb_profiling_info_get_child_count;
 	result.duckdb_profiling_info_get_child = duckdb_profiling_info_get_child;
+	result.duckdb_profiling_info_get_metrics = duckdb_profiling_info_get_metrics;
 	result.duckdb_scalar_function_set_varargs = duckdb_scalar_function_set_varargs;
 	result.duckdb_scalar_function_set_special_handling = duckdb_scalar_function_set_special_handling;
 	result.duckdb_scalar_function_set_volatile = duckdb_scalar_function_set_volatile;
@@ -650,6 +672,9 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_destroy_aggregate_function_set = duckdb_destroy_aggregate_function_set;
 	result.duckdb_add_aggregate_function_to_set = duckdb_add_aggregate_function_to_set;
 	result.duckdb_register_aggregate_function_set = duckdb_register_aggregate_function_set;
+	result.duckdb_get_map_size = duckdb_get_map_size;
+	result.duckdb_get_map_key = duckdb_get_map_key;
+	result.duckdb_get_map_value = duckdb_get_map_value;
 	result.duckdb_create_aggregate_function = duckdb_create_aggregate_function;
 	result.duckdb_destroy_aggregate_function = duckdb_destroy_aggregate_function;
 	result.duckdb_aggregate_function_set_name = duckdb_aggregate_function_set_name;
@@ -662,6 +687,20 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_aggregate_function_set_extra_info = duckdb_aggregate_function_set_extra_info;
 	result.duckdb_aggregate_function_get_extra_info = duckdb_aggregate_function_get_extra_info;
 	result.duckdb_aggregate_function_set_error = duckdb_aggregate_function_set_error;
+	result.duckdb_logical_type_set_alias = duckdb_logical_type_set_alias;
+	result.duckdb_register_logical_type = duckdb_register_logical_type;
+	result.duckdb_create_cast_function = duckdb_create_cast_function;
+	result.duckdb_cast_function_set_source_type = duckdb_cast_function_set_source_type;
+	result.duckdb_cast_function_set_target_type = duckdb_cast_function_set_target_type;
+	result.duckdb_cast_function_set_implicit_cast_cost = duckdb_cast_function_set_implicit_cast_cost;
+	result.duckdb_cast_function_set_function = duckdb_cast_function_set_function;
+	result.duckdb_cast_function_set_extra_info = duckdb_cast_function_set_extra_info;
+	result.duckdb_cast_function_get_extra_info = duckdb_cast_function_get_extra_info;
+	result.duckdb_cast_function_get_cast_mode = duckdb_cast_function_get_cast_mode;
+	result.duckdb_cast_function_set_error = duckdb_cast_function_set_error;
+	result.duckdb_cast_function_set_row_error = duckdb_cast_function_set_row_error;
+	result.duckdb_register_cast_function = duckdb_register_cast_function;
+	result.duckdb_destroy_cast_function = duckdb_destroy_cast_function;
 	return result;
 }
 

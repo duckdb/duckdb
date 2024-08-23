@@ -429,12 +429,12 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
-		// this code path is necessary to read older duckdb files
+		// Read older duckdb files.
 		index_storage_info.name = index.name;
 		index_storage_info.root_block_ptr = root_block_pointer;
 
 	} else {
-		// get the matching index storage info
+		// Read the matching index storage info.
 		for (auto const &elem : data_table.GetDataTableInfo()->GetIndexStorageInfo()) {
 			if (elem.name == index.name) {
 				index_storage_info = elem;
@@ -445,10 +445,9 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 
-	// Create an unbound index and add it to the table
+	// Create an unbound index and add it to the table.
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), index_storage_info,
 	                                             TableIOManager::Get(data_table), data_table.db);
-
 	data_table.GetDataTableInfo()->GetIndexes().AddIndex(std::move(unbound_index));
 }
 
@@ -525,9 +524,9 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
 
-	// old file read
+	// Cover reading old storage files.
 	auto index_pointers = deserializer.ReadPropertyWithExplicitDefault<vector<BlockPointer>>(103, "index_pointers", {});
-	// new file read
+	// Cover reading new storage files.
 	auto index_storage_infos =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 
@@ -535,8 +534,9 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 		bound_info.indexes = index_storage_infos;
 
 	} else {
-		// old duckdb file containing index pointers
+		// This is an old duckdb file containing index pointers and deprecated storage.
 		for (idx_t i = 0; i < index_pointers.size(); i++) {
+			// Deprecated storage is always true for old duckdb files.
 			IndexStorageInfo index_storage_info;
 			index_storage_info.root_block_ptr = index_pointers[i];
 			bound_info.indexes.push_back(index_storage_info);

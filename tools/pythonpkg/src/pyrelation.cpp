@@ -1401,7 +1401,7 @@ void DuckDBPyRelation::Insert(const py::object &params) {
 void DuckDBPyRelation::Create(const string &table) {
 	AssertRelation();
 	auto parsed_info = QualifiedName::Parse(table);
-	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name);
+	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name, false);
 	PyExecuteRelation(create);
 }
 

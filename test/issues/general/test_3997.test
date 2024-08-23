@@ -8,7 +8,7 @@ PRAGMA enable_verification;
 statement ok
 create table x (x int);
 
-require noalternativeverify
+require no_alternative_verify
 
 statement ok
 with y(y) as (select 1) insert into x (select y from y);
