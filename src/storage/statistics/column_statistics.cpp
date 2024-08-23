@@ -46,16 +46,7 @@ void ColumnStatistics::SetDistinct(unique_ptr<DistinctStatistics> distinct) {
 }
 
 void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
-	static constexpr idx_t MAXIMUM_STRING_LENGTH_FOR_DISTINCT = 64;
 	if (!distinct_stats) {
-		return;
-	}
-	if (stats.GetType().InternalType() == PhysicalType::VARCHAR && StringStats::HasMaxStringLength(stats) &&
-	    StringStats::MaxStringLength(stats) > MAXIMUM_STRING_LENGTH_FOR_DISTINCT) {
-		// We start bailing out on distinct statistics if we encounter long strings,
-		// because hashing them for HLL is expensive and they probably won't be used as join keys anyway.
-		// If they are used as join keys, we will still have decent join orders (same method as Parquet)
-		distinct_stats.reset();
 		return;
 	}
 	distinct_stats->Update(v, count);
