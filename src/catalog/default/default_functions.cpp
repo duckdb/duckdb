@@ -156,7 +156,6 @@ static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "list_histogram", {"l", nullptr}, {{nullptr, nullptr}}, "list_aggr(l, 'histogram')"},
 
 	// map functions
-	{DEFAULT_SCHEMA, "map_contains", {"map", "key", nullptr}, {{nullptr, nullptr}}, "contains(map_keys(map), key)"},
 	{DEFAULT_SCHEMA, "map_contains_entry", {"map", "key", "value"}, {{nullptr, nullptr}}, "contains(map_entries(map), {'key': key, 'value': value})"},
 	{DEFAULT_SCHEMA, "map_contains_value", {"map", "value", nullptr}, {{nullptr, nullptr}}, "contains(map_values(map), value)"},
 

@@ -77,3 +77,14 @@ FROM test_maps;
 ----
 true
 
+
+# IN operator test
+query I
+SELECT 'my_key' IN map(['my_key'], ['my_value']) AS res;
+----
+true
+
+query I
+SELECT 'my_keyz' IN map(['my_key'], ['my_value']) AS res;
+----
+false
