@@ -13,6 +13,7 @@ set(TEST_API_OBJECTS
     test_api.cpp
     test_config.cpp
     test_custom_allocator.cpp
+    test_extension_setting_autoload.cpp
     test_instance_cache.cpp
     test_results.cpp
     test_reset.cpp

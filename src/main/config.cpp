@@ -101,6 +101,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(EnableMacrosDependencies),
     DUCKDB_GLOBAL(EnableViewDependencies),
     DUCKDB_GLOBAL(LockConfigurationSetting),
+    DUCKDB_GLOBAL(IEEEFloatingPointOpsSetting),
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
     DUCKDB_LOCAL(MaximumExpressionDepthSetting),
@@ -126,6 +127,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
+    DUCKDB_GLOBAL(ScalarSubqueryErrorOnMultipleRows),
     DUCKDB_GLOBAL(SecretDirectorySetting),
     DUCKDB_GLOBAL(DefaultSecretStorage),
     DUCKDB_GLOBAL(TempDirectorySetting),
@@ -550,9 +552,15 @@ SerializationCompatibility SerializationCompatibility::Default() {
 	res.manually_set = false;
 	return res;
 #else
+#ifdef DUCKDB_LATEST_STORAGE
+	auto res = FromString("latest");
+	res.manually_set = false;
+	return res;
+#else
 	auto res = FromString("v0.10.2");
 	res.manually_set = false;
 	return res;
+#endif
 #endif
 }
 

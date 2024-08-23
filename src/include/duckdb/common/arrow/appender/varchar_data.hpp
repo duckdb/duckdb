@@ -21,18 +21,6 @@ struct ArrowVarcharConverter {
 	}
 };
 
-struct ArrowUUIDConverter {
-	template <class SRC>
-	static idx_t GetLength(SRC input) {
-		return UUID::STRING_SIZE;
-	}
-
-	template <class SRC>
-	static void WriteData(data_ptr_t target, SRC input) {
-		UUID::ToString(input, char_ptr_cast(target));
-	}
-};
-
 template <class SRC = string_t, class OP = ArrowVarcharConverter, class BUFTYPE = int64_t>
 struct ArrowVarcharData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {

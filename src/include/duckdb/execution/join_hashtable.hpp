@@ -157,8 +157,8 @@ public:
 		TupleDataChunkState chunk_state;
 	};
 
-	JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
-	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
+	JoinHashTable(ClientContext &context, const vector<JoinCondition> &conditions, vector<LogicalType> build_types,
+	              JoinType type, const vector<idx_t> &output_columns);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -255,6 +255,8 @@ public:
 	bool has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask = DConstants::INVALID_INDEX;
+	//! Whether or not we error on multiple rows found per match in a SINGLE join
+	bool single_join_error_on_multiple_rows = true;
 
 	struct {
 		mutex mj_lock;

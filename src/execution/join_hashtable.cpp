@@ -29,12 +29,12 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 	ht.data_collection->InitializeChunkState(chunk_state, ht.equality_predicate_columns);
 }
 
-JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinCondition> &conditions_p,
+JoinHashTable::JoinHashTable(ClientContext &context, const vector<JoinCondition> &conditions_p,
                              vector<LogicalType> btypes, JoinType type_p, const vector<idx_t> &output_columns_p)
-    : buffer_manager(buffer_manager_p), conditions(conditions_p), build_types(std::move(btypes)),
-      output_columns(output_columns_p), entry_size(0), tuple_size(0), vfound(Value::BOOLEAN(false)), join_type(type_p),
-      finalized(false), has_null(false), radix_bits(INITIAL_RADIX_BITS), partition_start(0), partition_end(0) {
-
+    : buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
+      build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
+      vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
+      radix_bits(INITIAL_RADIX_BITS), partition_start(0), partition_end(0) {
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
@@ -103,6 +103,11 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 
 	dead_end = make_unsafe_uniq_array_uninitialized<data_t>(layout.GetRowWidth());
 	memset(dead_end.get(), 0, layout.GetRowWidth());
+
+	if (join_type == JoinType::SINGLE) {
+		auto &config = DBConfig::GetConfig(context);
+		single_join_error_on_multiple_rows = config.options.scalar_subquery_error_on_multiple_rows;
+	}
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -1173,6 +1178,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 	// this join is similar to the semi join except that
 	// (1) we actually return data from the RHS and
 	// (2) we return NULL for that data if there is no match
+	// (3) if single_join_error_on_multiple_rows is set, we need to keep looking for duplicates after fetching
 	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 
@@ -1213,6 +1219,24 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 
 	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
 	finished = true;
+
+	if (ht.single_join_error_on_multiple_rows && result_count > 0) {
+		// we need to throw an error if there are multiple rows per key
+		// advance pointers for those rows
+		AdvancePointers(result_sel, result_count);
+
+		// now resolve the predicates
+		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, nullptr);
+		if (match_count > 0) {
+			// we found at least one duplicate row - throw
+			throw InvalidInputException(
+			    "More than one row returned by a subquery used as an expression - scalar subqueries can only "
+			    "return a single row.\n\nUse \"SET scalar_subquery_error_on_multiple_rows=false\" to revert to "
+			    "previous behavior of returning a random row.");
+		}
+
+		this->count = 0;
+	}
 }
 
 void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const {

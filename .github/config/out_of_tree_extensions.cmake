@@ -46,7 +46,7 @@ endif()
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
-if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
+if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT WIN32)
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
@@ -111,8 +111,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 50b7870be099186f195bc72bac5e9e11247ee2f9
-        APPLY_PATCHES
+        GIT_TAG 1ee5404c4b9a62a572c9076ebf4cabb7f4181ea6
         )
 
 duckdb_extension_load(sqlsmith
@@ -147,7 +146,6 @@ if (NOT MINGW)
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
-            GIT_TAG 4dd5963cc5f7f04f81a0ea308b104e65791d9975
-            APPLY_PATCHES
+            GIT_TAG 6519c1953655b86f59884bb1b79f554b9fdf551b
             )
 endif()
