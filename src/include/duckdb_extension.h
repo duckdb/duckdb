@@ -328,6 +328,7 @@ typedef struct {
 	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
 	idx_t (*duckdb_profiling_info_get_child_count)(duckdb_profiling_info info);
 	duckdb_profiling_info (*duckdb_profiling_info_get_child)(duckdb_profiling_info info, idx_t index);
+	duckdb_value (*duckdb_profiling_info_get_metrics)(duckdb_profiling_info info);
 	void (*duckdb_scalar_function_set_varargs)(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 	void (*duckdb_scalar_function_set_special_handling)(duckdb_scalar_function scalar_function);
 	void (*duckdb_scalar_function_set_volatile)(duckdb_scalar_function scalar_function);
@@ -386,6 +387,9 @@ typedef struct {
 	duckdb_state (*duckdb_add_aggregate_function_to_set)(duckdb_aggregate_function_set set,
 	                                                     duckdb_aggregate_function function);
 	duckdb_state (*duckdb_register_aggregate_function_set)(duckdb_connection con, duckdb_aggregate_function_set set);
+	idx_t (*duckdb_get_map_size)(duckdb_value value);
+	duckdb_value (*duckdb_get_map_key)(duckdb_value value, idx_t index);
+	duckdb_value (*duckdb_get_map_value)(duckdb_value value, idx_t index);
 #endif
 
 #ifdef DUCKDB_EXTENSION_API_VERSION_DEV // dev
@@ -741,6 +745,9 @@ typedef struct {
 #define duckdb_get_interval         duckdb_ext_api.duckdb_get_interval
 #define duckdb_get_value_type       duckdb_ext_api.duckdb_get_value_type
 #define duckdb_get_blob             duckdb_ext_api.duckdb_get_blob
+#define duckdb_get_map_size         duckdb_ext_api.duckdb_get_map_size
+#define duckdb_get_map_key          duckdb_ext_api.duckdb_get_map_key
+#define duckdb_get_map_value        duckdb_ext_api.duckdb_get_map_value
 
 #define duckdb_scalar_function_set_varargs          duckdb_ext_api.duckdb_scalar_function_set_varargs
 #define duckdb_scalar_function_set_special_handling duckdb_ext_api.duckdb_scalar_function_set_special_handling
@@ -759,6 +766,7 @@ typedef struct {
 
 #define duckdb_get_profiling_info             duckdb_ext_api.duckdb_get_profiling_info
 #define duckdb_profiling_info_get_value       duckdb_ext_api.duckdb_profiling_info_get_value
+#define duckdb_profiling_info_get_metrics     duckdb_ext_api.duckdb_profiling_info_get_metrics
 #define duckdb_profiling_info_get_child_count duckdb_ext_api.duckdb_profiling_info_get_child_count
 #define duckdb_profiling_info_get_child       duckdb_ext_api.duckdb_profiling_info_get_child
 

@@ -42,6 +42,23 @@
             }
         },
         {
+            "name": "duckdb_profiling_info_get_metrics",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_profiling_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Returns the key-value metric map of this profiling node as a MAP duckdb_value.\nThe individual elements are accessible via the duckdb_value MAP functions.\n\n",
+                "param_comments": {
+                    "info": "A profiling information object."
+                },
+                "return_value": "The key-value metric map as a MAP duckdb_value."
+            }
+        },
+        {
             "name": "duckdb_profiling_info_get_child_count",
             "return_type": "idx_t",
             "params": [
