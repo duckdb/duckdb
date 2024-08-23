@@ -79,11 +79,13 @@ struct NumericCastImpl<TO, FROM, false> {
 			ThrowNumericCastError(val, minval, maxval);
 		}
 
-		if (NumericLimits<FROM>::IsSigned() && NumericLimits<TO>::IsSigned() && (signed_in < signed_min || signed_in > signed_max)) {
+		if (NumericLimits<FROM>::IsSigned() && NumericLimits<TO>::IsSigned() &&
+		    (signed_in < signed_min || signed_in > signed_max)) {
 			ThrowNumericCastError(val, minval, maxval);
 		}
 
-		if (NumericLimits<FROM>::IsSigned() != NumericLimits<TO>::IsSigned() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
+		if (NumericLimits<FROM>::IsSigned() != NumericLimits<TO>::IsSigned() &&
+		    (signed_in < signed_min || unsigned_in > unsigned_max)) {
 			ThrowNumericCastError(val, minval, maxval);
 		}
 
@@ -94,10 +96,9 @@ struct NumericCastImpl<TO, FROM, false> {
 // NumericCast
 // When: between same types, or when both types are integral
 // Checks: perform checked casts on range
-template <
-    class TO, class FROM,
-    class = typename std::enable_if<(NumericLimits<TO>::IsIntegral() && NumericLimits<FROM>::IsIntegral()) ||
-                                    std::is_same<TO, FROM>::value>::type>
+template <class TO, class FROM,
+          class = typename std::enable_if<(NumericLimits<TO>::IsIntegral() && NumericLimits<FROM>::IsIntegral()) ||
+                                          std::is_same<TO, FROM>::value>::type>
 TO NumericCast(FROM val) {
 	return NumericCastImpl<TO, FROM, std::is_same<TO, FROM>::value>::Convert(val);
 }
@@ -105,10 +106,9 @@ TO NumericCast(FROM val) {
 // UnsafeNumericCast
 // When: between same types, or when both types are integral
 // Checks: perform checked casts on range (in DEBUG) otherwise no checks
-template <
-    class TO, class FROM,
-    class = typename std::enable_if<(NumericLimits<TO>::IsIntegral() && NumericLimits<FROM>::IsIntegral()) ||
-                                    std::is_same<TO, FROM>::value>::type>
+template <class TO, class FROM,
+          class = typename std::enable_if<(NumericLimits<TO>::IsIntegral() && NumericLimits<FROM>::IsIntegral()) ||
+                                          std::is_same<TO, FROM>::value>::type>
 TO UnsafeNumericCast(FROM in) {
 #ifdef DEBUG
 	return NumericCast<TO, FROM>(in);
