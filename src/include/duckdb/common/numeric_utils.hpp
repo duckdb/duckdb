@@ -45,21 +45,6 @@ struct MakeUnsigned<uhugeint_t> {
 	using type = uhugeint_t;
 };
 
-template <class T>
-struct IsIntegral {
-	static constexpr bool value = std::is_integral<T>::value;
-};
-
-template <>
-struct IsIntegral<hugeint_t> {
-	static constexpr bool value = true;
-};
-
-template <>
-struct IsIntegral<uhugeint_t> {
-	static constexpr bool value = true;
-};
-
 template <class TO, class FROM>
 static void ThrowNumericCastError(FROM in, TO minval, TO maxval) {
 	throw InternalException("Information loss on integer cast: value %d outside of target range [%d, %d]", in, minval,
@@ -89,16 +74,16 @@ struct NumericCastImpl<TO, FROM, false> {
 		auto signed_min = static_cast<typename MakeSigned<TO>::type>(minval);
 		auto signed_max = static_cast<typename MakeSigned<TO>::type>(maxval);
 
-		if (std::is_unsigned<FROM>() && std::is_unsigned<TO>() &&
+		if (!NumericLimits<FROM>::IsSigned() && !NumericLimits<TO>::IsSigned() &&
 		    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
 			ThrowNumericCastError(val, minval, maxval);
 		}
 
-		if (std::is_signed<FROM>() && std::is_signed<TO>() && (signed_in < signed_min || signed_in > signed_max)) {
+		if (NumericLimits<FROM>::IsSigned() && NumericLimits<TO>::IsSigned() && (signed_in < signed_min || signed_in > signed_max)) {
 			ThrowNumericCastError(val, minval, maxval);
 		}
 
-		if (std::is_signed<FROM>() != std::is_signed<TO>() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
+		if (NumericLimits<FROM>::IsSigned() != NumericLimits<TO>::IsSigned() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
 			ThrowNumericCastError(val, minval, maxval);
 		}
 
@@ -111,7 +96,7 @@ struct NumericCastImpl<TO, FROM, false> {
 // Checks: perform checked casts on range
 template <
     class TO, class FROM,
-    class = typename std::enable_if<(!std::is_floating_point<TO>::value && !std::is_floating_point<FROM>::value) ||
+    class = typename std::enable_if<(NumericLimits<TO>::IsIntegral() && NumericLimits<FROM>::IsIntegral()) ||
                                     std::is_same<TO, FROM>::value>::type>
 TO NumericCast(FROM val) {
 	return NumericCastImpl<TO, FROM, std::is_same<TO, FROM>::value>::Convert(val);
@@ -122,7 +107,7 @@ TO NumericCast(FROM val) {
 // Checks: perform checked casts on range (in DEBUG) otherwise no checks
 template <
     class TO, class FROM,
-    class = typename std::enable_if<(!std::is_floating_point<TO>::value && !std::is_floating_point<FROM>::value) ||
+    class = typename std::enable_if<(NumericLimits<TO>::IsIntegral() && NumericLimits<FROM>::IsIntegral()) ||
                                     std::is_same<TO, FROM>::value>::type>
 TO UnsafeNumericCast(FROM in) {
 #ifdef DEBUG
