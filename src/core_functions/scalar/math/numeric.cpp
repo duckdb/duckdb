@@ -1517,7 +1517,7 @@ template <>
 inline int32_t Fastdiv<int32_t>(int32_t a, m_t<int32_t> m, int32_t d) {
 	hugeint_t lhs;
 	if (a < 0) {
-		lhs = hugeint_t(0xffffffffffffffff, a);
+		lhs = hugeint_t(int64_t(0xffffffffffffffff), a);
 	} else {
 		lhs = hugeint_t(0, a);
 	}

@@ -10,6 +10,7 @@
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <cmath>
+#include <cstdint>
 #include <limits>
 
 namespace duckdb {
@@ -360,7 +361,7 @@ hugeint_t Hugeint::SlowMultiply(hugeint_t lhs, hugeint_t rhs) {
 
 	// combine components
 	result.lower = (third32 << 32) | fourth32;
-	result.upper = (first32 << 32) | second32;
+	result.upper = int64_t((first32 << 32) | second32);
 
 	if (lhs_negative ^ rhs_negative) {
 		NegateInPlace<false>(result);
