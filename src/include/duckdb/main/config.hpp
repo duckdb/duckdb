@@ -263,6 +263,8 @@ struct DBConfigOptions {
 	idx_t catalog_error_max_schemas = 100;
 	//!  Whether or not to always write to the WAL file, even if this is not required
 	bool debug_skip_checkpoint_on_commit = false;
+	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
+	bool scalar_subquery_error_on_multiple_rows = true;
 	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
 	bool ieee_floating_point_ops = true;
 
