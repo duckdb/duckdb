@@ -164,6 +164,8 @@ public:
 			avg += static_cast<double>(max_new);
 		}
 		avg /= static_cast<double>(HyperLogLog::M);
+
+		// Using the average will ALWAYS overestimate, so we reduce it a bit here
 		if (avg > 10) {
 			avg *= 0.75;
 		} else if (avg > 2) {
@@ -171,9 +173,9 @@ public:
 		}
 
 		// Set all other registers to a default value, starting with 0 (the initialization value)
-		// We optimize the default value in 4 iterations or until OLD count is close to NEW count
+		// We optimize the default value in 5 iterations or until OLD count is close to NEW count
 		double default_val = 0;
-		for (idx_t opt_idx = 0; opt_idx < 4; opt_idx++) {
+		for (idx_t opt_idx = 0; opt_idx < 5; opt_idx++) {
 			if (IsWithinAcceptableRange(new_hll_count, Count())) {
 				break;
 			}
@@ -221,7 +223,7 @@ private:
 	}
 
 private:
-	static constexpr double ACCEPTABLE_Q_ERROR = 1.5;
+	static constexpr double ACCEPTABLE_Q_ERROR = 1.2;
 	duckdb_hll::robj *hll;
 };
 

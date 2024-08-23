@@ -26,12 +26,6 @@ void DistinctStatistics::Merge(const DistinctStatistics &other) {
 }
 
 void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
-	Vector hash_vec(LogicalType::HASH, count);
-	VectorOperations::Hash(v, hash_vec, count);
-
-	UnifiedVectorFormat vdata;
-	v.ToUnifiedFormat(count, vdata);
-
 	total_count += count;
 	if (sample) {
 		count = MinValue<idx_t>(
@@ -39,6 +33,12 @@ void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
 		    count);
 	}
 	sample_count += count;
+
+	Vector hash_vec(LogicalType::HASH, count);
+	VectorOperations::Hash(v, hash_vec, count);
+
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(count, vdata);
 
 	lock_guard<mutex> guard(lock);
 	log->Update(v, hash_vec, count);

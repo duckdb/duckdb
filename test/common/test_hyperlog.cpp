@@ -65,6 +65,8 @@ TEST_CASE("Test different hyperloglog version serialization", "[hyperloglog]") {
 		original_log.InsertElement(Hash(i));
 
 		switch (i + 1) {
+		case 1:
+		case 10:
 		case 100:
 		case 1000:
 		case 10000:
