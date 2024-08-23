@@ -28,7 +28,12 @@ static void EnumRangeFunction(DataChunk &input, ExpressionState &state, Vector &
 	for (idx_t i = 0; i < enum_size; i++) {
 		enum_values.emplace_back(enum_vector.GetValue(i));
 	}
-	auto val = Value::LIST(enum_values);
+	Value val;
+	if (!enum_values.empty()) {
+		val = Value::LIST(enum_values);
+	} else {
+		val = Value::EMPTYLIST(types[0]);
+	}
 	result.Reference(val);
 }
 
