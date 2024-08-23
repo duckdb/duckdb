@@ -76,17 +76,17 @@ public:
 				stage = WindowGroupStage::FINALIZE;
 				return true;
 			}
-			return false;
+			break;
 		case WindowGroupStage::FINALIZE:
 			if (finalized == blocks) {
 				stage = WindowGroupStage::GETDATA;
 				return true;
 			}
-			return false;
+			break;
 		default:
-			// never block in GETDATA
 			return true;
 		}
+		return false;
 	}
 
 	//! The hash partition data
@@ -363,8 +363,6 @@ public:
 	ClientContext &context;
 	//! All the sunk data
 	WindowGlobalSinkState &gsink;
-	//! State mutex
-	mutable mutex lock;
 	//! The list of tasks
 	vector<Task> tasks;
 	//! The the next task
@@ -375,8 +373,6 @@ public:
 	atomic<bool> stopped;
 	//! The number of rows returned
 	atomic<idx_t> returned;
-	//! The set of blocked tasks
-	mutable vector<InterruptState> blocked_tasks;
 
 public:
 	idx_t MaxThreads() override {
@@ -685,7 +681,7 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 }
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
-	lock_guard<mutex> task_guard(lock);
+	auto guard = Lock();
 	if (next_task >= tasks.size() || stopped) {
 		task = nullptr;
 		return false;
@@ -882,15 +878,15 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 				throw;
 			}
 		} else {
-			lock_guard<mutex> guard(gsource.lock);
+			auto guard = gsource.Lock();
 			if (gsource.TryPrepareNextStage() || !gsource.HasUnfinishedTasks()) {
-				for (auto &state : gsource.blocked_tasks) {
-					state.Callback();
-				}
-				gsource.blocked_tasks.clear();
+				gsource.UnblockTasks(guard);
 			} else {
-				gsource.blocked_tasks.push_back(input.interrupt_state);
-				return SourceResultType::BLOCKED;
+				if (gsource.BlockTask(guard, input.interrupt_state)) {
+					return SourceResultType::BLOCKED;
+				} else {
+					return SourceResultType::FINISHED;
+				}
 			}
 		}
 	}
