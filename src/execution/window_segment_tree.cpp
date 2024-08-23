@@ -1770,14 +1770,12 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 		}
 	}
 
-	//	This is a parallel implementation,
-	//	so every thread can call it.
+	//	These are a parallel implementations,
+	//	so every thread can call them.
 	gdsink.zipped_tree.Build();
+	gdsink.merge_sort_tree.Build(ldstate);
 
-	//	Last one out turns off the lights!
-	if (++gdsink.finalized == gdsink.locals) {
-		gdsink.merge_sort_tree.Build(ldstate);
-	}
+	++gdsink.finalized;
 }
 
 void WindowDistinctAggregatorLocalState::Sorted() {
@@ -1871,6 +1869,11 @@ bool WindowDistinctSortTree::TryNextRun(idx_t &level_idx, idx_t &run_idx) {
 	const auto fanout = FANOUT;
 
 	lock_guard<mutex> stage_guard(build_lock);
+
+	//	Verify we are not done
+	if (build_level >= tree.size()) {
+		return false;
+	}
 
 	// Finished with this level?
 	if (build_complete >= build_num_runs) {
