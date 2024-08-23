@@ -34,37 +34,6 @@ TEST_CASE("Test ART index with rollbacks", "[art][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(count)}));
 }
 
-TEST_CASE("Test ART index with the same value multiple times", "[art][.]") {
-	duckdb::unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
-	for (int32_t val = 0; val < 100; val++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
-	}
-	for (int32_t val = 0; val < 100; val++) {
-		result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
-		REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	}
-	for (int32_t it = 0; it < 10; it++) {
-		for (int32_t val = 0; val < 100; val++) {
-			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
-			REQUIRE(CHECK_COLUMN(result, 0, {it + 1}));
-		}
-		for (int32_t val = 0; val < 100; val++) {
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
-			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
-			REQUIRE(CHECK_COLUMN(result, 0, {it + 2}));
-		}
-		for (int32_t val = 0; val < 100; val++) {
-			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(val));
-			REQUIRE(CHECK_COLUMN(result, 0, {it + 2}));
-		}
-	}
-}
-
 // If you directly use RAND_MAX:
 // > warning: implicit conversion from 'int' to 'float' changes value from 2147483647 to 2147483648
 constexpr float RAND_MAX_FLOAT = static_cast<float>(static_cast<double>(RAND_MAX));

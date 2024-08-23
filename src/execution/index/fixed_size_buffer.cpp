@@ -68,7 +68,7 @@ void FixedSizeBuffer::Destroy() {
 void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments,
                                 const idx_t segment_size, const idx_t bitmask_offset) {
 
-	// we do not serialize a block that is already on disk and not in memory
+	// Early-out, if the block is already on disk and not in memory.
 	if (!InMemory()) {
 		if (!OnDisk() || dirty) {
 			throw InternalException("invalid or missing buffer in FixedSizeAllocator");
@@ -76,12 +76,13 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		return;
 	}
 
-	// we do not serialize a block that is already on disk and not dirty
+	// Early-out, if the buffer is already on disk and not dirty.
 	if (!dirty && OnDisk()) {
 		return;
 	}
 
-	// the allocation possibly changed
+	// Adjust the allocation size.
+	D_ASSERT(segment_count != 0);
 	SetAllocationSize(available_segments, segment_size, bitmask_offset);
 
 	// the buffer is in memory, so we copied it onto a new buffer when pinning
@@ -195,75 +196,23 @@ uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {
 
 void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const idx_t segment_size,
                                         const idx_t bitmask_offset) {
-
-	if (dirty) {
-		auto max_offset = GetMaxOffset(available_segments);
-		allocation_size = max_offset * segment_size + bitmask_offset;
+	if (!dirty) {
+		return;
 	}
-}
 
-uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t available_segments) {
-
-	// this function calls Get() on the buffer
-	D_ASSERT(InMemory());
-
-	// finds the maximum zero bit in a bitmask, and adds one to it,
-	// so that max_offset * segment_size = allocated_size of this bitmask's buffer
-	idx_t entry_size = sizeof(validity_t) * 8;
-	idx_t bitmask_count = available_segments / entry_size;
-	if (available_segments % entry_size != 0) {
-		bitmask_count++;
-	}
-	auto max_offset = UnsafeNumericCast<uint32_t>(bitmask_count * sizeof(validity_t) * 8);
-	auto bits_in_last_entry = available_segments % (sizeof(validity_t) * 8);
-
-	// get the bitmask data
+	// We traverse from the back. A binary search would be faster.
+	// However, buffers are often (almost) full, so the overhead is acceptable.
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
-	const ValidityMask mask(bitmask_ptr);
-	const auto data = mask.GetData();
+	ValidityMask mask(bitmask_ptr);
 
-	D_ASSERT(bitmask_count > 0);
-	for (idx_t i = bitmask_count; i > 0; i--) {
-
-		auto entry = data[i - 1];
-
-		// set all bits after bits_in_last_entry
-		if (i == bitmask_count) {
-			entry |= ~idx_t(0) << bits_in_last_entry;
+	auto max_offset = available_segments;
+	for (idx_t i = available_segments; i > 0; i--) {
+		if (!mask.RowIsValid(i - 1)) {
+			max_offset = i;
+			break;
 		}
-
-		if (entry == ~idx_t(0)) {
-			max_offset -= sizeof(validity_t) * 8;
-			continue;
-		}
-
-		// invert data[entry_idx]
-		auto entry_inv = ~entry;
-		idx_t first_valid_bit = 0;
-
-		// then find the position of the LEFTMOST set bit
-		for (idx_t level = 0; level < 6; level++) {
-
-			// set the right half of the bits of this level to zero and test if the entry is still not zero
-			if (entry_inv & ~BASE[level]) {
-				// first valid bit is in the leftmost s[level] bits
-				// shift by s[level] for the next iteration and add s[level] to the position of the leftmost set bit
-				entry_inv >>= SHIFT[level];
-				first_valid_bit += SHIFT[level];
-			} else {
-				// first valid bit is in the rightmost s[level] bits
-				// permanently set the left half of the bits to zero
-				entry_inv &= BASE[level];
-			}
-		}
-		D_ASSERT(entry_inv);
-		max_offset -= sizeof(validity_t) * 8 - first_valid_bit;
-		D_ASSERT(!mask.RowIsValid(max_offset));
-		return max_offset + 1;
 	}
-
-	// there are no allocations in this buffer
-	throw InternalException("tried to serialize empty buffer");
+	allocation_size = max_offset * segment_size + bitmask_offset;
 }
 
 void FixedSizeBuffer::SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t segment_size,
