@@ -15,6 +15,15 @@ CALL dbgen(sf=0.01, children=2);
 ----
 Step must be defined when children are defined
 
+statement error
+call dbgen(sf=NULL);
+----
+<REGEX>:.*Cannot use NULL.*
+
+statement error
+call dbgen(sf=1, catalog=NULL);
+----
+<REGEX>:.*Cannot use NULL.*
 
 statement ok
 CALL dbgen(sf=1, children =100, step = 0);
@@ -171,3 +180,5 @@ select count (*) from (SELECT * FROM db1.test_schema.${tpch_tbl} EXCEPT SELECT *
 0
 
 endloop
+
+

@@ -635,11 +635,11 @@ public:
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (gstate.file_index + 1)) / total_count;
+			return (100.0 * (static_cast<double>(gstate.file_index) + 1.0)) / static_cast<double>(total_count);
 		}
-		auto percentage = MinValue<double>(
-		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
-		return (percentage + 100.0 * gstate.file_index) / total_count;
+		auto percentage = MinValue<double>(100.0, (static_cast<double>(bind_data.chunk_count) * STANDARD_VECTOR_SIZE *
+		                                           100.0 / static_cast<double>(bind_data.initial_file_cardinality)));
+		return (percentage + 100.0 * static_cast<double>(gstate.file_index)) / static_cast<double>(total_count);
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -795,7 +795,7 @@ public:
 		auto names = deserializer.ReadProperty<vector<string>>(102, "names");
 		auto parquet_options = deserializer.ReadProperty<ParquetOptions>(103, "parquet_options");
 		auto table_columns =
-		    deserializer.ReadPropertyWithDefault<vector<string>>(104, "table_columns", vector<string> {});
+		    deserializer.ReadPropertyWithExplicitDefault<vector<string>>(104, "table_columns", vector<string> {});
 
 		vector<Value> file_path;
 		for (auto &path : files) {
@@ -1076,7 +1076,7 @@ static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const ve
 	D_ASSERT(names.size() == sql_types.size());
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		const auto &col_name = names[col_idx];
-		auto inserted = field_ids.ids->insert(make_pair(col_name, FieldID(field_id++)));
+		auto inserted = field_ids.ids->insert(make_pair(col_name, FieldID(UnsafeNumericCast<int32_t>(field_id++))));
 		D_ASSERT(inserted.second);
 
 		const auto &col_type = sql_types[col_idx];
@@ -1120,8 +1120,10 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 				}
 				names += name.first;
 			}
-			throw BinderException("Column name \"%s\" specified in FIELD_IDS not found. Available column names: [%s]",
-			                      col_name, names);
+			throw BinderException(
+			    "Column name \"%s\" specified in FIELD_IDS not found. Consider using WRITE_PARTITION_COLUMNS if this "
+			    "column is a partition column. Available column names: [%s]",
+			    col_name, names);
 		}
 		D_ASSERT(field_ids.ids->find(col_name) == field_ids.ids->end()); // Caught by STRUCT - deduplicates keys
 
@@ -1152,7 +1154,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 			if (!unique_field_ids.insert(field_id_int).second) {
 				throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_integer_value.ToString());
 			}
-			field_id = FieldID(field_id_int);
+			field_id = FieldID(UnsafeNumericCast<int32_t>(field_id_int));
 		}
 		auto inserted = field_ids.ids->insert(make_pair(col_name, std::move(field_id)));
 		D_ASSERT(inserted.second);
@@ -1435,14 +1437,14 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
 	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(105, "kv_metadata");
 	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
-	deserializer.ReadPropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
-	                                                                          data->encryption_config, nullptr);
-	deserializer.ReadPropertyWithDefault<double>(108, "dictionary_compression_ratio_threshold",
-	                                             data->dictionary_compression_ratio_threshold, 1.0);
+	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
+	                                                                                  data->encryption_config, nullptr);
+	deserializer.ReadPropertyWithExplicitDefault<double>(108, "dictionary_compression_ratio_threshold",
+	                                                     data->dictionary_compression_ratio_threshold, 1.0);
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", data->compression_level);
 	data->row_groups_per_file =
-	    deserializer.ReadPropertyWithDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
-	data->debug_use_openssl = deserializer.ReadPropertyWithDefault<bool>(111, "debug_use_openssl", true);
+	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
+	data->debug_use_openssl = deserializer.ReadPropertyWithExplicitDefault<bool>(111, "debug_use_openssl", true);
 	return std::move(data);
 }
 // LCOV_EXCL_STOP

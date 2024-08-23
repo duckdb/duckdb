@@ -125,6 +125,7 @@ struct StructExtractFun {
 	static ScalarFunction KeyExtractFunction();
 	static ScalarFunction IndexExtractFunction();
 	static ScalarFunctionSet GetFunctions();
+	static unique_ptr<FunctionData> GetBindData(idx_t index);
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

@@ -11,7 +11,8 @@ namespace duckdb {
 PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
                                                idx_t estimated_cardinality,
                                                optionally_owned_ptr<ColumnDataCollection> collection_p)
-    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(std::move(collection_p)) {
+    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(std::move(collection_p)),
+      cte_index(DConstants::INVALID_INDEX) {
 }
 
 PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
@@ -21,10 +22,8 @@ PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, Physic
 
 class PhysicalColumnDataGlobalScanState : public GlobalSourceState {
 public:
-	PhysicalColumnDataGlobalScanState(const ClientContext &context, const ColumnDataCollection &collection)
-	    : max_threads(MaxValue<idx_t>(context.config.verify_parallelism ? collection.ChunkCount()
-	                                                                    : collection.ChunkCount() / CHUNKS_PER_THREAD,
-	                                  1)) {
+	explicit PhysicalColumnDataGlobalScanState(const ColumnDataCollection &collection)
+	    : max_threads(MaxValue<idx_t>(collection.ChunkCount(), 1)) {
 		collection.InitializeScan(global_scan_state);
 	}
 
@@ -35,7 +34,6 @@ public:
 public:
 	ColumnDataParallelScanState global_scan_state;
 
-	static constexpr idx_t CHUNKS_PER_THREAD = 32;
 	const idx_t max_threads;
 };
 
@@ -45,7 +43,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<PhysicalColumnDataGlobalScanState>(context, *collection);
+	return make_uniq<PhysicalColumnDataGlobalScanState>(*collection);
 }
 
 unique_ptr<LocalSourceState> PhysicalColumnDataScan::GetLocalSourceState(ExecutionContext &,
@@ -109,26 +107,23 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 	state.SetPipelineSource(current, *this);
 }
 
-string PhysicalColumnDataScan::ParamsToString() const {
-	string result = "";
+InsertionOrderPreservingMap<string> PhysicalColumnDataScan::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
 	switch (type) {
 	case PhysicalOperatorType::DELIM_SCAN:
 		if (delim_index.IsValid()) {
-			result += "\n[INFOSEPARATOR]\n";
-			result += StringUtil::Format("delim_idx: %llu", delim_index.GetIndex());
+			result["Delim Index"] = StringUtil::Format("%llu", delim_index.GetIndex());
 		}
 		break;
 	case PhysicalOperatorType::CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
-		result += "\n[INFOSEPARATOR]\n";
-		result += StringUtil::Format("idx: %llu", cte_index);
+		result["CTE Index"] = StringUtil::Format("%llu", cte_index);
 		break;
 	}
 	default:
 		break;
 	}
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

@@ -9,7 +9,7 @@ namespace duckdb {
 
 // **** helper functions ****
 static char ComputePadding(idx_t len) {
-	return (8 - (len % 8)) % 8;
+	return UnsafeNumericCast<char>((8 - (len % 8)) % 8);
 }
 
 idx_t Bit::ComputeBitstringLen(idx_t len) {
@@ -281,7 +281,7 @@ idx_t Bit::GetBitInternal(string_t bit_string, idx_t n) {
 	const char *buf = bit_string.GetData();
 	auto idx = Bit::GetBitIndex(n);
 	D_ASSERT(idx < bit_string.GetSize());
-	char byte = buf[idx] >> (7 - (n % 8));
+	auto byte = buf[idx] >> (7 - (n % 8));
 	return (byte & 1 ? 1 : 0);
 }
 
@@ -291,7 +291,7 @@ void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 }
 
 void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
-	auto buf = bit_string.GetDataWriteable();
+	uint8_t *buf = reinterpret_cast<uint8_t *>(bit_string.GetDataWriteable());
 
 	auto idx = Bit::GetBitIndex(n);
 	D_ASSERT(idx < bit_string.GetSize());
@@ -306,8 +306,9 @@ void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
 
 // **** BITWISE operators ****
 void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
-	char *res_buf = result.GetDataWriteable();
-	const char *buf = bit_string.GetData();
+	uint8_t *res_buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *buf = reinterpret_cast<const uint8_t *>(bit_string.GetData());
+
 	res_buf[0] = buf[0];
 	for (idx_t i = 0; i < Bit::BitLength(result); i++) {
 		if (i < shift) {
@@ -321,8 +322,9 @@ void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &r
 }
 
 void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
-	char *res_buf = result.GetDataWriteable();
-	const char *buf = bit_string.GetData();
+	uint8_t *res_buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *buf = reinterpret_cast<const uint8_t *>(bit_string.GetData());
+
 	res_buf[0] = buf[0];
 	for (idx_t i = 0; i < Bit::BitLength(bit_string); i++) {
 		if (i < (Bit::BitLength(bit_string) - shift)) {
@@ -340,9 +342,9 @@ void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result)
 		throw InvalidInputException("Cannot AND bit strings of different sizes");
 	}
 
-	char *buf = result.GetDataWriteable();
-	const char *r_buf = rhs.GetData();
-	const char *l_buf = lhs.GetData();
+	uint8_t *buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *r_buf = reinterpret_cast<const uint8_t *>(rhs.GetData());
+	const uint8_t *l_buf = reinterpret_cast<const uint8_t *>(lhs.GetData());
 
 	buf[0] = l_buf[0];
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
@@ -356,9 +358,9 @@ void Bit::BitwiseOr(const string_t &rhs, const string_t &lhs, string_t &result) 
 		throw InvalidInputException("Cannot OR bit strings of different sizes");
 	}
 
-	char *buf = result.GetDataWriteable();
-	const char *r_buf = rhs.GetData();
-	const char *l_buf = lhs.GetData();
+	uint8_t *buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *r_buf = reinterpret_cast<const uint8_t *>(rhs.GetData());
+	const uint8_t *l_buf = reinterpret_cast<const uint8_t *>(lhs.GetData());
 
 	buf[0] = l_buf[0];
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
@@ -372,9 +374,9 @@ void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result)
 		throw InvalidInputException("Cannot XOR bit strings of different sizes");
 	}
 
-	char *buf = result.GetDataWriteable();
-	const char *r_buf = rhs.GetData();
-	const char *l_buf = lhs.GetData();
+	uint8_t *buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *r_buf = reinterpret_cast<const uint8_t *>(rhs.GetData());
+	const uint8_t *l_buf = reinterpret_cast<const uint8_t *>(lhs.GetData());
 
 	buf[0] = l_buf[0];
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
@@ -384,8 +386,8 @@ void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result)
 }
 
 void Bit::BitwiseNot(const string_t &input, string_t &result) {
-	char *result_buf = result.GetDataWriteable();
-	const char *buf = input.GetData();
+	uint8_t *result_buf = reinterpret_cast<uint8_t *>(result.GetDataWriteable());
+	const uint8_t *buf = reinterpret_cast<const uint8_t *>(input.GetData());
 
 	result_buf[0] = buf[0];
 	for (idx_t i = 1; i < input.GetSize(); i++) {

@@ -22,6 +22,11 @@ struct PipelineRenderNode;
 
 struct RenderTreeNode {
 public:
+	static constexpr const char *CARDINALITY = "__cardinality__";
+	static constexpr const char *ESTIMATED_CARDINALITY = "__estimated_cardinality__";
+	static constexpr const char *TIMING = "__timing__";
+
+public:
 	struct Coordinate {
 	public:
 		Coordinate(idx_t x, idx_t y) : x(x), y(y) {
@@ -31,9 +36,8 @@ public:
 		idx_t x;
 		idx_t y;
 	};
-
-public:
-	RenderTreeNode(const string &name, const string &extra_text) : name(name), extra_text(extra_text) {
+	RenderTreeNode(const string &name, InsertionOrderPreservingMap<string> extra_text)
+	    : name(name), extra_text(std::move(extra_text)) {
 	}
 
 public:
@@ -43,7 +47,7 @@ public:
 
 public:
 	string name;
-	string extra_text;
+	InsertionOrderPreservingMap<string> extra_text;
 	vector<Coordinate> child_positions;
 };
 
@@ -64,6 +68,7 @@ public:
 	optional_ptr<RenderTreeNode> GetNode(idx_t x, idx_t y);
 	void SetNode(idx_t x, idx_t y, unique_ptr<RenderTreeNode> node);
 	bool HasNode(idx_t x, idx_t y);
+	void SanitizeKeyNames();
 
 private:
 	idx_t GetPosition(idx_t x, idx_t y);

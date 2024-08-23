@@ -19,6 +19,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 class Event;
@@ -60,9 +61,10 @@ public:
 
 public:
 	virtual string GetName() const;
-	virtual string ParamsToString() const {
-		return "";
+	virtual InsertionOrderPreservingMap<string> ParamsToString() const {
+		return InsertionOrderPreservingMap<string>();
 	}
+	static void SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result, idx_t estimated_cardinality);
 	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
@@ -75,6 +77,10 @@ public:
 	virtual bool Equals(const PhysicalOperator &other) const {
 		return false;
 	}
+
+	//! Functions to help decide how to set up pipeline dependencies
+	idx_t EstimatedThreadCount() const;
+	bool CanSaturateThreads(ClientContext &context) const;
 
 	virtual void Verify();
 

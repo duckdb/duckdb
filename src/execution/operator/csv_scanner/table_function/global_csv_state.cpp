@@ -60,7 +60,7 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 				// This file is not done, and is a compressed file
 				file_progress = file->buffer_manager->file_handle->GetProgress();
 			} else {
-				file_progress = file->bytes_read;
+				file_progress = static_cast<double>(file->bytes_read);
 			}
 			// This file is an uncompressed file, so we use the more price bytes_read from the scanner
 			percentage += (double(1) / double(total_files)) * std::min(1.0, file_progress / double(file->file_size));

@@ -1,4 +1,16 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/helper.hpp"
+
+namespace duckdb {
+
+struct CCustomType {
+	unique_ptr<LogicalType> base_type;
+	string name;
+};
+
+} // namespace duckdb
 
 static bool AssertLogicalTypeId(duckdb_logical_type type, duckdb::LogicalTypeId type_id) {
 	if (!type) {
@@ -323,6 +335,11 @@ char *duckdb_logical_type_get_alias(duckdb_logical_type type) {
 	return logical_type.HasAlias() ? strdup(logical_type.GetAlias().c_str()) : nullptr;
 }
 
+void duckdb_logical_type_set_alias(duckdb_logical_type type, const char *alias) {
+	auto &logical_type = *(reinterpret_cast<duckdb::LogicalType *>(type));
+	logical_type.SetAlias(alias);
+}
+
 duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_t index) {
 	if (!AssertInternalType(type, duckdb::PhysicalType::STRUCT)) {
 		return nullptr;
@@ -333,4 +350,38 @@ duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_
 	}
 	return reinterpret_cast<duckdb_logical_type>(
 	    new duckdb::LogicalType(duckdb::StructType::GetChildType(logical_type, index)));
+}
+
+duckdb_state duckdb_register_logical_type(duckdb_connection connection, duckdb_logical_type type,
+                                          duckdb_create_type_info info) {
+	if (!connection || !type) {
+		return DuckDBError;
+	}
+
+	// Unused for now
+	(void)info;
+
+	const auto &base_type = *reinterpret_cast<duckdb::LogicalType *>(type);
+	if (!base_type.HasAlias()) {
+		return DuckDBError;
+	}
+
+	if (duckdb::TypeVisitor::Contains(base_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(base_type, duckdb::LogicalTypeId::ANY)) {
+		return DuckDBError;
+	}
+
+	try {
+		const auto con = reinterpret_cast<duckdb::Connection *>(connection);
+		con->context->RunFunctionInTransaction([&]() {
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
+			duckdb::CreateTypeInfo info(base_type.GetAlias(), base_type);
+			info.temporary = true;
+			info.internal = true;
+			catalog.CreateType(*con->context, info);
+		});
+	} catch (...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
 }

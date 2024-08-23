@@ -10,6 +10,7 @@
 
 #include "duckdb/core_functions/aggregate/quantile_helpers.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include <algorithm>
 #include <numeric>
@@ -86,7 +87,7 @@ struct CastInterpolation {
 	template <typename TARGET_TYPE>
 	static inline TARGET_TYPE Interpolate(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
 		const auto delta = hi - lo;
-		return UnsafeNumericCast<TARGET_TYPE>(lo + delta * d);
+		return LossyNumericCast<TARGET_TYPE>(lo + delta * d);
 	}
 };
 
@@ -180,7 +181,7 @@ struct Interpolator<true> {
 		}
 		default:
 			const auto scaled_q = double(n) * q.dbl;
-			floored = UnsafeNumericCast<idx_t>(floor(double(n) - scaled_q));
+			floored = LossyNumericCast<idx_t>(floor(double(n) - scaled_q));
 			break;
 		}
 
@@ -246,7 +247,10 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	using BaseTree = MergeSortTree<IDX, IDX>;
 	using Elements = typename BaseTree::Elements;
 
-	explicit QuantileSortTree(Elements &&lowest_level) : BaseTree(std::move(lowest_level)) {
+	explicit QuantileSortTree(Elements &&lowest_level) {
+		BaseTree::Allocate(lowest_level.size());
+		BaseTree::LowestLevel() = std::move(lowest_level);
+		BaseTree::Build();
 	}
 
 	template <class INPUT_TYPE>

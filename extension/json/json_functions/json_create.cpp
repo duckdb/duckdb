@@ -647,7 +647,7 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 		}
 	}
 
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR || count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }

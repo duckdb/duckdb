@@ -57,7 +57,7 @@ struct ListAggregatesBindData : public FunctionData {
 	}
 
 	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer, ScalarFunction &bound_function) {
-		auto result = deserializer.ReadPropertyWithDefault<unique_ptr<ListAggregatesBindData>>(
+		auto result = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<ListAggregatesBindData>>(
 		    100, "bind_data", unique_ptr<ListAggregatesBindData>(nullptr));
 		if (!result) {
 			return ListAggregatesBindFailure(bound_function);
@@ -224,7 +224,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk
-	idx_t size = aggr.function.state_size();
+	idx_t size = aggr.function.state_size(aggr.function);
 	auto state_buffer = make_unsafe_uniq_array_uninitialized<data_t>(size * count);
 
 	// state vector for initialize and finalize
@@ -244,7 +244,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 		// initialize the state for this list
 		auto state_ptr = state_buffer.get() + size * i;
 		states[i] = state_ptr;
-		aggr.function.initialize(states[i]);
+		aggr.function.initialize(aggr.function, states[i]);
 
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];

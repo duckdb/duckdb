@@ -138,6 +138,8 @@ enum class ExpressionClass : uint8_t;
 
 enum class ExpressionType : uint8_t;
 
+enum class ExtensionABIType : uint8_t;
+
 enum class ExtensionInstallMode : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
@@ -247,8 +249,6 @@ enum class PreparedParamType : uint8_t;
 enum class PreparedStatementMode : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
-
-enum class ProfilingNodeType : uint8_t;
 
 enum class QuantileSerializationType : uint8_t;
 
@@ -515,6 +515,9 @@ template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
 
 template<>
+const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value);
+
+template<>
 const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value);
 
 template<>
@@ -678,9 +681,6 @@ const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value
 
 template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
-
-template<>
-const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
@@ -999,6 +999,9 @@ template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
 
 template<>
+ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value);
+
+template<>
 ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value);
 
 template<>
@@ -1162,9 +1165,6 @@ PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *va
 
 template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
-
-template<>
-ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value);
 
 template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);

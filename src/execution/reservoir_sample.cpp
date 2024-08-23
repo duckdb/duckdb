@@ -239,10 +239,10 @@ void ReservoirSamplePercentage::Finalize() {
 	// Imagine sampling 70% of 100 rows (so 70 rows). We allocate sample_percentage * RESERVOIR_THRESHOLD
 	// -----------------------------------------
 	auto sampled_more_than_required =
-	    current_count > sample_percentage * RESERVOIR_THRESHOLD || finished_samples.empty();
+	    static_cast<double>(current_count) > sample_percentage * RESERVOIR_THRESHOLD || finished_samples.empty();
 	if (current_count > 0 && sampled_more_than_required) {
 		// create a new sample
-		auto new_sample_size = idx_t(round(sample_percentage * current_count));
+		auto new_sample_size = idx_t(round(sample_percentage * static_cast<double>(current_count)));
 		auto new_sample = make_uniq<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
 		while (true) {
 			auto chunk = current_sample->GetChunk();

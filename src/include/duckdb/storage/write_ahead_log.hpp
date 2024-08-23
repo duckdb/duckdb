@@ -36,6 +36,7 @@ class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
 class WriteAheadLogDeserializer;
+struct PersistentCollectionData;
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -95,6 +96,7 @@ public:
 	void WriteAlter(const AlterInfo &info);
 
 	void WriteInsert(DataChunk &chunk);
+	void WriteRowGroupData(const PersistentCollectionData &data);
 	void WriteDelete(DataChunk &chunk);
 	//! Write a single (sub-) column update to the WAL. Chunk must be a pair of (COL, ROW_ID).
 	//! The column_path vector is a *path* towards a column within the table

@@ -302,7 +302,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 			return false;
 		}
 
-		if (pos != len && buf[pos] == '_') {
+		if (pos != len && buf[pos] == '_' && !strict) {
 			// Skip one underscore if it is not the last character and followed by a digit
 			pos++;
 			if (pos == len || !StringUtil::CharacterIsDigit(buf[pos])) {

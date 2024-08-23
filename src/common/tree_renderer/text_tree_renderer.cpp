@@ -44,10 +44,43 @@ void TextTreeRenderer::RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t 
 			ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2 - 1);
 			ss << config.RTCORNER;
 		} else {
+			bool has_adjacent_nodes = false;
+			for (idx_t i = 0; x + i < root.width; i++) {
+				has_adjacent_nodes = has_adjacent_nodes || root.HasNode(x + i, y);
+			}
+			if (!has_adjacent_nodes) {
+				// There are no nodes to the right side of this position
+				// no need to fill the empty space
+				continue;
+			}
+			// there are nodes next to this, fill the space
 			ss << StringUtil::Repeat(" ", config.node_render_width);
 		}
 	}
 	ss << '\n';
+}
+
+static bool NodeHasMultipleChildren(RenderTreeNode &node) {
+	return node.child_positions.size() > 1;
+}
+
+static bool ShouldRenderWhitespace(RenderTree &root, idx_t x, idx_t y) {
+	for (;; x--) {
+		auto node = root.GetNode(x, y);
+		if (node) {
+			if (NodeHasMultipleChildren(*node)) {
+				return true;
+			}
+			return false;
+		}
+		if (root.HasNode(x, y + 1)) {
+			break;
+		}
+		if (x == 0) {
+			break;
+		}
+	}
+	return false;
 }
 
 void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y) {
@@ -55,7 +88,12 @@ void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx
 		if (x * config.node_render_width >= config.maximum_render_width) {
 			break;
 		}
-		if (root.HasNode(x, y)) {
+		bool has_adjacent_nodes = false;
+		for (idx_t i = 0; x + i < root.width; i++) {
+			has_adjacent_nodes = has_adjacent_nodes || root.HasNode(x + i, y);
+		}
+		auto node = root.GetNode(x, y);
+		if (node) {
 			ss << config.LDCORNER;
 			ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2 - 1);
 			if (root.HasNode(x, y + 1)) {
@@ -70,27 +108,37 @@ void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx
 		} else if (root.HasNode(x, y + 1)) {
 			ss << StringUtil::Repeat(" ", config.node_render_width / 2);
 			ss << config.VERTICAL;
-			ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+			if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
+				ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+			}
 		} else {
-			ss << StringUtil::Repeat(" ", config.node_render_width);
+			if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
+				ss << StringUtil::Repeat(" ", config.node_render_width);
+			}
 		}
 	}
 	ss << '\n';
 }
 
 string AdjustTextForRendering(string source, idx_t max_render_width) {
-	idx_t cpos = 0;
+	const idx_t size = source.size();
+	const char *input = source.c_str();
+
 	idx_t render_width = 0;
+
+	// For every character in the input, create a StringSegment
 	vector<StringSegment> render_widths;
-	while (cpos < source.size()) {
-		idx_t char_render_width = Utf8Proc::RenderWidth(source.c_str(), source.size(), cpos);
-		cpos = Utf8Proc::NextGraphemeCluster(source.c_str(), source.size(), cpos);
+	idx_t current_position = 0;
+	while (current_position < size) {
+		idx_t char_render_width = Utf8Proc::RenderWidth(input, size, current_position);
+		current_position = Utf8Proc::NextGraphemeCluster(input, size, current_position);
 		render_width += char_render_width;
-		render_widths.push_back(StringSegment(cpos, render_width));
+		render_widths.push_back(StringSegment(current_position, render_width));
 		if (render_width > max_render_width) {
 			break;
 		}
 	}
+
 	if (render_width > max_render_width) {
 		// need to find a position to truncate
 		for (idx_t pos = render_widths.size(); pos > 0; pos--) {
@@ -107,15 +155,6 @@ string AdjustTextForRendering(string source, idx_t max_render_width) {
 	idx_t half_spaces = total_spaces / 2;
 	idx_t extra_left_space = total_spaces % 2 == 0 ? 0 : 1;
 	return string(half_spaces + extra_left_space, ' ') + source + string(half_spaces, ' ');
-}
-
-static bool NodeHasMultipleChildren(RenderTree &root, idx_t x, idx_t y) {
-	for (; x < root.width && !root.HasNode(x + 1, y); x++) {
-		if (root.HasNode(x + 1, y + 1)) {
-			return true;
-		}
-	}
-	return false;
 }
 
 void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y) {
@@ -140,10 +179,14 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 			if (x * config.node_render_width >= config.maximum_render_width) {
 				break;
 			}
+			bool has_adjacent_nodes = false;
+			for (idx_t i = 0; x + i < root.width; i++) {
+				has_adjacent_nodes = has_adjacent_nodes || root.HasNode(x + i, y);
+			}
 			auto node = root.GetNode(x, y);
 			if (!node) {
 				if (render_y == halfway_point) {
-					bool has_child_to_the_right = NodeHasMultipleChildren(root, x, y);
+					bool has_child_to_the_right = ShouldRenderWhitespace(root, x, y);
 					if (root.HasNode(x, y + 1)) {
 						// node right below this one
 						ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2);
@@ -152,29 +195,39 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 							// but we have another child to the right! keep rendering the line
 							ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2);
 						} else {
-							// only a child below this one: fill the rest with spaces
-							ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+							if (has_adjacent_nodes) {
+								// only a child below this one: fill the rest with spaces
+								ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+							}
 						}
 					} else if (has_child_to_the_right) {
 						// child to the right, but no child right below this one: render a full line
 						ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width);
 					} else {
-						// empty spot: render spaces
-						ss << StringUtil::Repeat(" ", config.node_render_width);
+						if (has_adjacent_nodes) {
+							// empty spot: render spaces
+							ss << StringUtil::Repeat(" ", config.node_render_width);
+						}
 					}
 				} else if (render_y >= halfway_point) {
 					if (root.HasNode(x, y + 1)) {
 						// we have a node below this empty spot: render a vertical line
 						ss << StringUtil::Repeat(" ", config.node_render_width / 2);
 						ss << config.VERTICAL;
-						ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+						if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
+							ss << StringUtil::Repeat(" ", config.node_render_width / 2);
+						}
 					} else {
+						if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
+							// empty spot: render spaces
+							ss << StringUtil::Repeat(" ", config.node_render_width);
+						}
+					}
+				} else {
+					if (has_adjacent_nodes) {
 						// empty spot: render spaces
 						ss << StringUtil::Repeat(" ", config.node_render_width);
 					}
-				} else {
-					// empty spot: render spaces
-					ss << StringUtil::Repeat(" ", config.node_render_width);
 				}
 			} else {
 				ss << config.VERTICAL;
@@ -187,10 +240,35 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 						render_text = extra_info[x][render_y - 1];
 					}
 				}
+				if (render_y + 1 == extra_height && render_text.empty()) {
+					auto entry = node->extra_text.find(RenderTreeNode::CARDINALITY);
+					if (entry != node->extra_text.end()) {
+						render_text = entry->second + " Rows";
+					}
+				}
+				if (render_y == extra_height && render_text.empty()) {
+					auto timing_entry = node->extra_text.find(RenderTreeNode::TIMING);
+					if (timing_entry != node->extra_text.end()) {
+						render_text = "(" + timing_entry->second + ")";
+					} else if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
+						// we only render estimated cardinality if there is no real cardinality
+						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
+						if (entry != node->extra_text.end()) {
+							render_text = "~" + entry->second + " Rows";
+						}
+					}
+					if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
+						// we only render estimated cardinality if there is no real cardinality
+						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
+						if (entry != node->extra_text.end()) {
+							render_text = "~" + entry->second + " Rows";
+						}
+					}
+				}
 				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
 				ss << render_text;
 
-				if (render_y == halfway_point && NodeHasMultipleChildren(root, x, y)) {
+				if (render_y == halfway_point && NodeHasMultipleChildren(*node)) {
 					ss << config.LMIDDLE;
 				} else {
 					ss << config.VERTICAL;
@@ -245,7 +323,7 @@ void TextTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void TextTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+void TextTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	while (root.width * config.node_render_width > config.maximum_render_width) {
 		if (config.node_render_width - 2 < config.minimum_render_width) {
 			break;
@@ -284,62 +362,117 @@ string TextTreeRenderer::RemovePadding(string l) {
 
 void TextTreeRenderer::SplitStringBuffer(const string &source, vector<string> &result) {
 	D_ASSERT(Utf8Proc::IsValid(source.c_str(), source.size()));
-	idx_t max_line_render_size = config.node_render_width - 2;
+	const idx_t max_line_render_size = config.node_render_width - 2;
 	// utf8 in prompt, get render width
-	idx_t cpos = 0;
+	idx_t character_pos = 0;
 	idx_t start_pos = 0;
 	idx_t render_width = 0;
 	idx_t last_possible_split = 0;
-	while (cpos < source.size()) {
-		// check if we can split on this character
-		if (CanSplitOnThisChar(source[cpos])) {
-			last_possible_split = cpos;
-		}
-		size_t char_render_width = Utf8Proc::RenderWidth(source.c_str(), source.size(), cpos);
-		idx_t next_cpos = Utf8Proc::NextGraphemeCluster(source.c_str(), source.size(), cpos);
+
+	const idx_t size = source.size();
+	const char *input = source.c_str();
+
+	while (character_pos < size) {
+		size_t char_render_width = Utf8Proc::RenderWidth(input, size, character_pos);
+		idx_t next_character_pos = Utf8Proc::NextGraphemeCluster(input, size, character_pos);
+
+		// Does the next character make us exceed the line length?
 		if (render_width + char_render_width > max_line_render_size) {
-			if (last_possible_split <= start_pos + 8) {
-				last_possible_split = cpos;
+			if (start_pos + 8 > last_possible_split) {
+				// The last character we can split on is one of the first 8 characters of the line
+				// to not create very small lines we instead split on the current character
+				last_possible_split = character_pos;
 			}
 			result.push_back(source.substr(start_pos, last_possible_split - start_pos));
+			render_width = character_pos - last_possible_split;
 			start_pos = last_possible_split;
-			cpos = last_possible_split;
-			render_width = 0;
+			character_pos = last_possible_split;
 		}
-		cpos = next_cpos;
+		// check if we can split on this character
+		if (CanSplitOnThisChar(source[character_pos])) {
+			last_possible_split = character_pos;
+		}
+		character_pos = next_character_pos;
 		render_width += char_render_width;
 	}
-	if (source.size() > start_pos) {
-		result.push_back(source.substr(start_pos, source.size() - start_pos));
+	if (size > start_pos) {
+		// append the remainder of the input
+		result.push_back(source.substr(start_pos, size - start_pos));
 	}
 }
 
-void TextTreeRenderer::SplitUpExtraInfo(const string &extra_info, vector<string> &result) {
+void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string> &extra_info, vector<string> &result) {
 	if (extra_info.empty()) {
 		return;
 	}
-	if (!Utf8Proc::IsValid(extra_info.c_str(), extra_info.size())) {
-		return;
-	}
-	auto splits = StringUtil::Split(extra_info, "\n");
-	if (!splits.empty() && splits[0] != "[INFOSEPARATOR]") {
-		result.push_back(ExtraInfoSeparator());
-	}
-	for (auto &split : splits) {
-		if (split == "[INFOSEPARATOR]") {
-			result.push_back(ExtraInfoSeparator());
-			continue;
+	for (auto &item : extra_info) {
+		auto &text = item.second;
+		if (!Utf8Proc::IsValid(text.c_str(), text.size())) {
+			return;
 		}
-		string str = RemovePadding(split);
+	}
+	result.push_back(ExtraInfoSeparator());
+
+	bool requires_padding = false;
+	bool was_inlined = false;
+	for (auto &item : extra_info) {
+		string str = RemovePadding(item.second);
 		if (str.empty()) {
 			continue;
 		}
-		SplitStringBuffer(str, result);
+		bool is_inlined = false;
+		if (!StringUtil::StartsWith(item.first, "__")) {
+			// the name is not internal (i.e. not __text__) - so we display the name in addition to the entry
+			const idx_t available_width = (config.node_render_width - 7);
+			idx_t total_size = item.first.size() + str.size() + 2;
+			bool is_multiline = StringUtil::Contains(str, "\n");
+			if (!is_multiline && total_size < available_width) {
+				// we can inline the full entry - no need for any separators unless the previous entry explicitly
+				// requires it
+				str = item.first + ": " + str;
+				is_inlined = true;
+			} else {
+				str = item.first + ":\n" + str;
+			}
+		}
+		if (is_inlined && was_inlined) {
+			// we can skip the padding if we have multiple inlined entries in a row
+			requires_padding = false;
+		}
+		if (requires_padding) {
+			result.emplace_back();
+		}
+		// cardinality, timing and estimated cardinality are rendered separately
+		// this is to allow alignment horizontally across nodes
+		if (item.first == RenderTreeNode::CARDINALITY) {
+			// cardinality - need to reserve space for cardinality AND timing
+			result.emplace_back();
+			if (extra_info.find(RenderTreeNode::TIMING) != extra_info.end()) {
+				result.emplace_back();
+			}
+			break;
+		}
+		if (item.first == RenderTreeNode::ESTIMATED_CARDINALITY) {
+			// estimated cardinality - reserve space for estimate
+			if (extra_info.find(RenderTreeNode::CARDINALITY) != extra_info.end()) {
+				// if we have a true cardinality render that instead of the estimate
+				result.pop_back();
+				continue;
+			}
+			result.emplace_back();
+			break;
+		}
+		auto splits = StringUtil::Split(str, "\n");
+		for (auto &split : splits) {
+			SplitStringBuffer(split, result);
+		}
+		requires_padding = true;
+		was_inlined = is_inlined;
 	}
 }
 
 string TextTreeRenderer::ExtraInfoSeparator() {
-	return StringUtil::Repeat(string(config.HORIZONTAL) + " ", (config.node_render_width - 7) / 2);
+	return StringUtil::Repeat(string(config.HORIZONTAL), (config.node_render_width - 9));
 }
 
 } // namespace duckdb

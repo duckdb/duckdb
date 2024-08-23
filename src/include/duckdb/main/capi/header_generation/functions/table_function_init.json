@@ -1,0 +1,147 @@
+{
+    "group": "table_function_init",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_init_get_extra_info",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The extra info"
+            }
+        },
+        {
+            "name": "duckdb_init_get_bind_data",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.\n\nNote that the bind data should be considered as read-only.\nFor tracking state, use the init data instead.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The bind data object"
+            }
+        },
+        {
+            "name": "duckdb_init_set_init_data",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                },
+                {
+                    "type": "void *",
+                    "name": "init_data"
+                },
+                {
+                    "type": "duckdb_delete_callback_t",
+                    "name": "destroy"
+                }
+            ],
+            "comment": {
+                "description": "Sets the user-provided init data in the init object. This object can be retrieved again during execution.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "init_data": "The init data object.",
+                    "destroy": "The callback that will be called to destroy the init data (if any)"
+                }
+            }
+        },
+        {
+            "name": "duckdb_init_get_column_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of projected columns.\n\nThis function must be used if projection pushdown is enabled to figure out which columns to emit.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The number of projected columns."
+            }
+        },
+        {
+            "name": "duckdb_init_get_column_index",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "column_index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the column index of the projected column at the specified position.\n\nThis function must be used if projection pushdown is enabled to figure out which columns to emit.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "column_index": "The index at which to get the projected column index, from 0..duckdb_init_get_column_count(info)"
+                },
+                "return_value": "The column index of the projected column."
+            }
+        },
+        {
+            "name": "duckdb_init_set_max_threads",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "max_threads"
+                }
+            ],
+            "comment": {
+                "description": "Sets how many threads can process this table function in parallel (default: 1)\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "max_threads": "The maximum amount of threads that can process this table function"
+                }
+            }
+        },
+        {
+            "name": "duckdb_init_set_error",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "error"
+                }
+            ],
+            "comment": {
+                "description": "Report that an error has occurred while calling init.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "error": "The error message"
+                }
+            }
+        }
+    ]
+}

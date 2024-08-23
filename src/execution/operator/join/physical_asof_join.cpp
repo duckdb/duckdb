@@ -169,7 +169,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 
 	// Schedule all the sorts for maximum thread utilisation
-	auto new_event = make_shared_ptr<PartitionMergeEvent>(gstate.rhs_sink, pipeline);
+	auto new_event = make_shared_ptr<PartitionMergeEvent>(gstate.rhs_sink, pipeline, *this);
 	event.InsertEvent(std::move(new_event));
 
 	return SinkFinalizeType::READY;

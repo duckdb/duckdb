@@ -87,13 +87,16 @@ public:
 	void Render(const ProfilingNode &op, std::ostream &ss);
 	void Render(const Pipeline &op, std::ostream &ss);
 
-	void ToStream(RenderTree &root, std::ostream &ss) override;
+	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
 
 	void EnableDetailed() {
 		config.EnableDetailed();
 	}
 	void EnableStandard() {
 		config.EnableStandard();
+	}
+	bool UsesRawKeyNames() override {
+		return true;
 	}
 
 private:
@@ -109,7 +112,7 @@ private:
 	bool CanSplitOnThisChar(char l);
 	bool IsPadding(char l);
 	string RemovePadding(string l);
-	void SplitUpExtraInfo(const string &extra_info, vector<string> &result);
+	void SplitUpExtraInfo(const InsertionOrderPreservingMap<string> &extra_info, vector<string> &result);
 	void SplitStringBuffer(const string &source, vector<string> &result);
 };
 

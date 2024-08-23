@@ -75,10 +75,26 @@ static yyjson_mut_val *RenderRecursive(yyjson_mut_doc *doc, RenderTree &tree, id
 	}
 	yyjson_mut_obj_add_str(doc, object, "name", node.name.c_str());
 	yyjson_mut_obj_add_val(doc, object, "children", children);
+	auto extra_info = yyjson_mut_obj(doc);
+	for (auto &it : node.extra_text) {
+		auto &key = it.first;
+		auto &value = it.second;
+		auto splits = StringUtil::Split(value, "\n");
+		if (splits.size() > 1) {
+			auto list_items = yyjson_mut_arr(doc);
+			for (auto &split : splits) {
+				yyjson_mut_arr_add_strcpy(doc, list_items, split.c_str());
+			}
+			yyjson_mut_obj_add_val(doc, extra_info, key.c_str(), list_items);
+		} else {
+			yyjson_mut_obj_add_strcpy(doc, extra_info, key.c_str(), value.c_str());
+		}
+	}
+	yyjson_mut_obj_add_val(doc, object, "extra_info", extra_info);
 	return object;
 }
 
-void JSONTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+void JSONTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	auto doc = yyjson_mut_doc_new(nullptr);
 	auto result_obj = yyjson_mut_arr(doc);
 	yyjson_mut_doc_set_root(doc, result_obj);

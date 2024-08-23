@@ -33,6 +33,9 @@ public:
 	static inline bool EmptyLine(SkipResult &result, const idx_t buffer_pos);
 	//! Handles QuotedNewline State
 	static inline void QuotedNewLine(SkipResult &result);
+	//! Code to unset comment
+	static inline bool UnsetComment(SkipResult &result, idx_t buffer_pos);
+	//! Internal code to add a row
 	inline void InternalAddRow();
 };
 

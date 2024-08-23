@@ -24,7 +24,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: "66a481954b89a046cb7c48c448163ea5e9179199"
+  DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
@@ -674,11 +674,11 @@ jobs:
 
   threadsan:
     name: Thread Sanitizer
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: clang
+      CXX: clang++
       GEN: ninja
       BUILD_ICU: 1
       BUILD_TPCH: 1
@@ -696,7 +696,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main

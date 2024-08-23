@@ -166,7 +166,7 @@ prof_malloc_sample_object(tsd_t *tsd, const void *ptr, size_t size,
 	if (prof_sample_hook != NULL) {
 		prof_bt_t *bt = &tctx->gctx->bt;
 		pre_reentrancy(tsd, NULL);
-		prof_sample_hook(ptr, size, bt->vec, bt->len);
+		prof_sample_hook(ptr, size, bt->vec, bt->len, usize);
 		post_reentrancy(tsd);
 	}
 }

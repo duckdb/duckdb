@@ -23,7 +23,7 @@ duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection) {
 	return reinterpret_cast<duckdb_profiling_info>(profiling_info_ptr);
 }
 
-const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key) {
+duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key) {
 	if (!info) {
 		return nullptr;
 	}
@@ -33,7 +33,9 @@ const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const ch
 	if (!profiling_info.Enabled(key_enum)) {
 		return nullptr;
 	}
-	return strdup(profiling_info.GetMetricAsString(key_enum).c_str());
+
+	auto str = profiling_info.GetMetricAsString(key_enum);
+	return duckdb_create_varchar_length(str.c_str(), strlen(str.c_str()));
 }
 
 idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info) {
@@ -55,28 +57,4 @@ duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info
 
 	ProfilingNode *profiling_info_ptr = node.GetChild(index).get();
 	return reinterpret_cast<duckdb_profiling_info>(profiling_info_ptr);
-}
-
-const char *duckdb_profiling_info_get_name(duckdb_profiling_info info) {
-	if (!info) {
-		return nullptr;
-	}
-	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	if (node.node_type != duckdb::ProfilingNodeType::OPERATOR) {
-		return nullptr;
-	}
-	auto &op_node = node.Cast<duckdb::OperatorProfilingNode>();
-	return strdup(op_node.name.c_str());
-}
-
-const char *duckdb_profiling_info_get_query(duckdb_profiling_info info) {
-	if (!info) {
-		return nullptr;
-	}
-	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	if (node.node_type != duckdb::ProfilingNodeType::QUERY_ROOT) {
-		return nullptr;
-	}
-	auto &query_node = node.Cast<duckdb::QueryProfilingNode>();
-	return strdup(query_node.query.c_str());
 }

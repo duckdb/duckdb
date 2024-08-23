@@ -2,8 +2,6 @@
 # description: Read a CSV with an incorrect quoted newline, is expected that the csv reader manages to skip dirty lines
 # group: [csv]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 
