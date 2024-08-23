@@ -101,6 +101,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(EnableMacrosDependencies),
     DUCKDB_GLOBAL(EnableViewDependencies),
     DUCKDB_GLOBAL(LockConfigurationSetting),
+    DUCKDB_GLOBAL(IEEEFloatingPointOpsSetting),
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
     DUCKDB_LOCAL(MaximumExpressionDepthSetting),

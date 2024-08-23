@@ -73,6 +73,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'arrow_interface',
     'threading_information',
     'streaming_result_interface',
+    'cast_functions',
 ]
 
 # The file that forms the base for the header generation

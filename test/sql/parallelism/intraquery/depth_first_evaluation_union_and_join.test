@@ -1,0 +1,43 @@
+# name: test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test
+# description: Test that combinations of unions and joins do not lead to circular dependencies due to depth-first
+# group: [intraquery]
+
+require tpcds
+
+statement ok
+call dsdgen(sf=0.01)
+
+# tpcds q14 was giving some issues before
+statement ok
+SELECT ss_quantity quantity,
+       ss_list_price list_price
+FROM store_sales,
+     date_dim
+WHERE ss_sold_date_sk = d_date_sk
+  AND d_year BETWEEN 1999 AND 1999 + 2
+UNION ALL SELECT cs_quantity quantity,
+                 cs_list_price list_price
+FROM catalog_sales,
+     date_dim
+WHERE cs_sold_date_sk = d_date_sk
+  AND d_year BETWEEN 1999 AND 1999 + 2
+
+statement ok
+SELECT ss_quantity quantity,
+       ss_list_price list_price
+FROM store_sales,
+   date_dim
+WHERE ss_sold_date_sk = d_date_sk
+  AND d_year BETWEEN 1999 AND 1999 + 2
+UNION ALL SELECT cs_quantity quantity,
+               cs_list_price list_price
+FROM catalog_sales,
+   date_dim
+WHERE cs_sold_date_sk = d_date_sk
+  AND d_year BETWEEN 1999 AND 1999 + 2
+UNION ALL SELECT ws_quantity quantity,
+               ws_list_price list_price
+FROM web_sales,
+   date_dim
+WHERE ws_sold_date_sk = d_date_sk
+  AND d_year BETWEEN 1999 AND 1999 + 2
