@@ -127,6 +127,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
+    DUCKDB_GLOBAL(ScalarSubqueryErrorOnMultipleRows),
     DUCKDB_GLOBAL(SecretDirectorySetting),
     DUCKDB_GLOBAL(DefaultSecretStorage),
     DUCKDB_GLOBAL(TempDirectorySetting),
