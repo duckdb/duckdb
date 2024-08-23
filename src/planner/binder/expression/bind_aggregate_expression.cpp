@@ -149,7 +149,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 					if (!config.options.order_by_non_integer_literal) {
 						throw BinderException(
 						    *order.expression,
-						    "ORDER BY non-integer literal has no effect\nuse SET order_by_non_integer_literal=true to "
+						    "ORDER BY non-integer literal has no effect.\n* SET order_by_non_integer_literal=true to "
 						    "allow this behavior.\n\nPerhaps you misplaced ORDER BY; ORDER BY must appear "
 						    "after all regular arguments of the aggregate.");
 					}
