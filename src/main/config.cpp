@@ -113,6 +113,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(OldImplicitCasting),
     DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
     DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
+    DUCKDB_GLOBAL(OrderByNonIntegerLiteral),
     DUCKDB_LOCAL(OrderedAggregateThreshold),
     DUCKDB_GLOBAL(PasswordSetting),
     DUCKDB_LOCAL(PerfectHashThresholdSetting),

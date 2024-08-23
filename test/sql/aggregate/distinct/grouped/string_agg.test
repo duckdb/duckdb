@@ -55,9 +55,23 @@ ORDER BY 1
 4	3	NULL	3
 
 statement error
-SELECT g, STRING_AGG(DISTINCT y ORDER BY y, ',' ) FILTER (WHERE g < 4)
+SELECT g, STRING_AGG(DISTINCT y ORDER BY y, '_' ) FILTER (WHERE g < 4)
 FROM strings
 GROUP BY g
 ORDER BY 1
 ----
-ORDER BY in aggregate does not support ordering by literals
+ORDER BY non-integer literal has no effect
+
+statement ok
+SET order_by_non_integer_literal=true
+
+query II
+SELECT g, STRING_AGG(DISTINCT y ORDER BY y, '_' ) FILTER (WHERE g < 4)
+FROM strings
+GROUP BY g
+ORDER BY 1
+----
+1	-,/
+2	+,-,/
+3	/
+4	NULL

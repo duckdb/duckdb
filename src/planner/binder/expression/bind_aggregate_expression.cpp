@@ -1,21 +1,23 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/planner/binder.hpp"
+
+#include <duckdb/parser/expression/constant_expression.hpp>
 
 namespace duckdb {
 
@@ -141,11 +143,17 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 		for (auto &order : aggr.order_bys->orders) {
 			if (order.expression->type == ExpressionType::VALUE_CONSTANT) {
-				throw BinderException(*order.expression,
-				                      "ORDER BY in aggregate does not support ordering by literals - cannot "
-				                      "ORDER BY literal %s\n\nPerhaps you misplaced ORDER BY; ORDER BY must appear "
-				                      "after all regular arguments of the aggregate.",
-				                      order.expression->ToString());
+				auto &const_expr = order.expression->Cast<ConstantExpression>();
+				if (!const_expr.value.type().IsIntegral()) {
+					auto &config = DBConfig::GetConfig(context);
+					if (!config.options.order_by_non_integer_literal) {
+						throw BinderException(
+						    *order.expression,
+						    "ORDER BY non-integer literal has no effect\nuse SET order_by_non_integer_literal=true to "
+						    "allow this behavior.\n\nPerhaps you misplaced ORDER BY; ORDER BY must appear "
+						    "after all regular arguments of the aggregate.");
+					}
+				}
 			}
 			aggregate_binder.BindChild(order.expression, 0, error);
 		}

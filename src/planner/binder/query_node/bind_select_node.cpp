@@ -201,7 +201,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 #endif
 			for (auto &order_node : order.orders) {
 				vector<unique_ptr<ParsedExpression>> order_list;
-				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
+				order_binders[0].get().ExpandStarExpression(std::move(order_node.expression), order_list);
 
 				auto type = config.ResolveOrder(order_node.type);
 				auto null_order = config.ResolveNullOrder(type, order_node.null_order);
@@ -453,7 +453,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// now bind all the result modifiers; including DISTINCT and ORDER BY targets
-	OrderBinder order_binder({this}, statement, bind_state);
+	OrderBinder order_binder({*this}, statement, bind_state);
 	PrepareModifiers(order_binder, statement, *result);
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;

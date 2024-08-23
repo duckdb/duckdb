@@ -1346,6 +1346,22 @@ Value OldImplicitCasting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Old Implicit Casting
+//===--------------------------------------------------------------------===//
+void OrderByNonIntegerLiteral::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.order_by_non_integer_literal = input.GetValue<bool>();
+}
+
+void OrderByNonIntegerLiteral::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.order_by_non_integer_literal = DBConfig().options.order_by_non_integer_literal;
+}
+
+Value OrderByNonIntegerLiteral::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.order_by_non_integer_literal);
+}
+
+//===--------------------------------------------------------------------===//
 // Partitioned Write Flush Threshold
 //===--------------------------------------------------------------------===//
 void PartitionedWriteFlushThreshold::ResetLocal(ClientContext &context) {
