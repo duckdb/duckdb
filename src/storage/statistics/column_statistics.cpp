@@ -49,7 +49,8 @@ void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
 	if (!distinct_stats) {
 		return;
 	}
-	distinct_stats->Update(v, count);
+	// We sample for non-integral types to save cost, and because integers are more likely to be join keys
+	distinct_stats->Update(v, count, !v.GetType().IsIntegral());
 }
 
 shared_ptr<ColumnStatistics> ColumnStatistics::Copy() const {
