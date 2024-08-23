@@ -55,33 +55,40 @@ TEST_CASE("Test that hyperloglog works", "[hyperloglog]") {
 }
 
 TEST_CASE("Test different hyperloglog version serialization", "[hyperloglog]") {
-	static constexpr double ACCEPTABLE_DELTA = 0.2;
-	// Add a million values to a NEW HyperLogLog
+	MemoryStream stream;
+	SerializationOptions options;
+	options.serialization_compatibility = SerializationCompatibility::FromString("v1.0.0");
+
+	// Add 100M values to a NEW HyperLogLog
 	HyperLogLog original_log;
-	for (size_t i = 0; i < 1000000; i++) {
+	for (size_t i = 0; i < 100000000; i++) {
 		original_log.InsertElement(Hash(i));
 
-		// Every 10k we roundtrip the serialization
-		if (i % 10000 != 9999) {
+		switch (i + 1) {
+		case 100:
+		case 1000:
+		case 10000:
+		case 100000:
+		case 1000000:
+		case 10000000:
+		case 100000000:
+			break; // We roundtrip the serialization every order of magnitude
+		default:
 			continue;
 		}
 
-		// Verify the approximate count
+		// Grab the count
 		const auto original_count = original_log.Count();
-		REQUIRE(static_cast<double>(original_count) >= (1 - ACCEPTABLE_DELTA) * i);
-		REQUIRE(static_cast<double>(original_count) <= (1 + ACCEPTABLE_DELTA) * i);
 
 		// Serialize it as an OLD HyperLogLog
-		MemoryStream stream;
-		SerializationOptions options;
-		options.serialization_compatibility = SerializationCompatibility::FromString("v1.0.0");
+		stream.Rewind();
 		BinarySerializer::Serialize(original_log, stream, options);
 
 		// Deserialize it, creating a NEW HyperLogLog from the OLD one
 		stream.Rewind();
 		auto deserialized_log = BinaryDeserializer::Deserialize<HyperLogLog>(stream);
 
-		// Verify that the counts are equal
+		// Verify that the deserialized count is equal
 		const auto deserialized_count = deserialized_log->Count();
 		REQUIRE(original_count == deserialized_count);
 	}

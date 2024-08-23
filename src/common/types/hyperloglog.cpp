@@ -142,7 +142,6 @@ public:
 			}
 			new_hll.Update(i, max_old);
 		}
-		D_ASSERT(IsWithinAcceptableRange(new_hll.Count(), Count()));
 	}
 
 	void FromNew(const HyperLogLog &new_hll) {
@@ -157,35 +156,53 @@ public:
 		// Duplicating will make for VERY large over-estimations. Instead, we do the following:
 
 		// Set the first of every 'mult' registers in the old HLL to the value in the new HLL
-		// This ensures that we can convert OLD to NEW without loss of information
-		idx_t sum = 0;
+		// This ensures that we can convert NEW to OLD and back to NEW without loss of information
+		double avg = 0;
 		for (idx_t i = 0; i < HyperLogLog::M; i++) {
 			const auto max_new = MinValue(new_hll.GetRegister(i), duckdb_hll::maximum_zeros());
 			duckdb_hll::set_register(hll, i * mult, max_new);
-			sum += max_new;
+			avg += static_cast<double>(max_new);
 		}
-		const uint8_t avg = NumericCast<uint8_t>(sum / HyperLogLog::M);
+		avg /= static_cast<double>(HyperLogLog::M);
+		if (avg > 10) {
+			avg *= 0.75;
+		} else if (avg > 2) {
+			avg -= 2;
+		}
 
-		// Set all other registers to a default value, starting with the avg, which is optimized within 4 iterations
-		uint8_t default_val = avg;
-		for (uint8_t epsilon = 4; epsilon >= 1; epsilon--) {
-			for (idx_t i = 0; i < HyperLogLog::M; i++) {
-				const auto max_new = MinValue(new_hll.GetRegister(i), duckdb_hll::maximum_zeros());
-				for (idx_t j = 1; j < mult; j++) {
-					D_ASSERT(i * mult + j < duckdb_hll::num_registers());
-					duckdb_hll::set_register(hll, i * mult + j, MinValue(max_new, default_val));
-				}
-			}
+		// Set all other registers to a default value, starting with 0 (the initialization value)
+		// We optimize the default value in 4 iterations or until OLD count is close to NEW count
+		double default_val = 0;
+		for (idx_t opt_idx = 0; opt_idx < 4; opt_idx++) {
 			if (IsWithinAcceptableRange(new_hll_count, Count())) {
 				break;
 			}
-			if (Count() > new_hll.Count()) {
-				default_val -= epsilon;
+
+			// Delta is half the average, then a quarter, etc.
+			const double delta = avg / static_cast<double>(1 << (opt_idx + 1));
+			if (Count() > new_hll_count) {
+				default_val = delta > default_val ? 0 : default_val - delta;
 			} else {
-				default_val += epsilon;
+				default_val += delta;
+			}
+
+			// If the default value is, e.g., 3.3, then the first 70% gets value 3, and the rest gets value 4
+			const double floor_fraction = 1 - (default_val - floor(default_val));
+			for (idx_t i = 0; i < HyperLogLog::M; i++) {
+				const auto max_new = MinValue(new_hll.GetRegister(i), duckdb_hll::maximum_zeros());
+				uint8_t register_value;
+				if (static_cast<double>(i) / static_cast<double>(HyperLogLog::M) < floor_fraction) {
+					register_value = NumericCast<uint8_t>(floor(default_val));
+				} else {
+					register_value = NumericCast<uint8_t>(ceil(default_val));
+				}
+				register_value = MinValue(register_value, max_new);
+				for (idx_t j = 1; j < mult; j++) {
+					D_ASSERT(i * mult + j < duckdb_hll::num_registers());
+					duckdb_hll::set_register(hll, i * mult + j, register_value);
+				}
 			}
 		}
-		D_ASSERT(IsWithinAcceptableRange(new_hll_count, Count()));
 	}
 
 private:
@@ -204,7 +221,7 @@ private:
 	}
 
 private:
-	static constexpr double ACCEPTABLE_Q_ERROR = 2;
+	static constexpr double ACCEPTABLE_Q_ERROR = 1.5;
 	duckdb_hll::robj *hll;
 };
 

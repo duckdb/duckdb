@@ -66,9 +66,17 @@ idx_t DistinctStatistics::GetCount() const {
 }
 
 bool DistinctStatistics::TypeIsSupported(const LogicalType &type) {
-	auto physical_type = type.InternalType();
-	return physical_type != PhysicalType::LIST && physical_type != PhysicalType::STRUCT &&
-	       physical_type != PhysicalType::ARRAY;
+	switch (type.InternalType()) {
+	case PhysicalType::LIST:
+	case PhysicalType::STRUCT:
+	case PhysicalType::ARRAY:
+		return false; // We don't support nested types
+	case PhysicalType::BIT:
+	case PhysicalType::BOOL:
+		return false; // Doesn't make much sense
+	default:
+		return true;
+	}
 }
 
 } // namespace duckdb
