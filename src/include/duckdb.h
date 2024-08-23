@@ -2196,6 +2196,32 @@ Must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
+/*!
+Returns the number of elements in a MAP value.
+
+* @param value The MAP value.
+* @return The number of elements in the map.
+*/
+DUCKDB_API idx_t duckdb_get_map_size(duckdb_value value);
+
+/*!
+Returns the MAP key at index as a duckdb_value.
+
+* @param value The MAP value.
+* @param index The index of the key.
+* @return The key as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_map_key(duckdb_value value, idx_t index);
+
+/*!
+Returns the MAP value at index as a duckdb_value.
+
+* @param value The MAP value.
+* @param index The index of the value.
+* @return The value as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index);
+
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
 //===--------------------------------------------------------------------===//
@@ -3416,6 +3442,15 @@ Returns the value of the metric of the current profiling info node. Returns null
 * @return The value of the metric. Must be freed with `duckdb_destroy_value`
 */
 DUCKDB_API duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
+
+/*!
+Returns the key-value metric map of this profiling node as a MAP duckdb_value.
+The individual elements are accessible via the duckdb_value MAP functions.
+
+* @param info A profiling information object.
+* @return The key-value metric map as a MAP duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info);
 
 /*!
 Returns the number of children in the current profiling info node.

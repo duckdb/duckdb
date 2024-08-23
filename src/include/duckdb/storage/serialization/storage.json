@@ -75,6 +75,12 @@
         "id": 102,
         "name": "allocator_infos",
         "type": "vector<FixedSizeAllocatorInfo>"
+      },
+      {
+        "id": 103,
+        "name": "options",
+        "type": "case_insensitive_map_t<Value>",
+        "default": "case_insensitive_map_t<Value>()"
       }
     ],
     "pointer_type": "none"

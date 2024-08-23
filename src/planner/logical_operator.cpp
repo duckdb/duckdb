@@ -191,6 +191,11 @@ idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 	return estimated_cardinality;
 }
 
+void LogicalOperator::SetEstimatedCardinality(idx_t _estimated_cardinality) {
+	estimated_cardinality = _estimated_cardinality;
+	has_estimated_cardinality = true;
+}
+
 void LogicalOperator::Print() {
 	Printer::Print(ToString());
 }

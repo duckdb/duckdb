@@ -198,7 +198,7 @@ SELECT * FROM cte
 ----
 NULL
 
-require noalternativeverify
+require no_alternative_verify
 
 query I
 WITH cte AS (SELECT NULL)

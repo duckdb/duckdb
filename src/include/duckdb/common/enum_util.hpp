@@ -168,6 +168,8 @@ enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionStability : uint8_t;
 
+enum class GateStatus : uint8_t;
+
 enum class HLLStorageType : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
@@ -558,6 +560,9 @@ const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
+
+template<>
+const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
@@ -1042,6 +1047,9 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 
 template<>
 FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);
+
+template<>
+GateStatus EnumUtil::FromString<GateStatus>(const char *value);
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);

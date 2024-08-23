@@ -5,6 +5,7 @@
         "duckdb_profiling_info_get_value",
         "duckdb_profiling_info_get_child_count",
         "duckdb_profiling_info_get_child",
+        "duckdb_profiling_info_get_metrics",
         "duckdb_scalar_function_set_varargs",
         "duckdb_scalar_function_set_special_handling",
         "duckdb_scalar_function_set_volatile",
@@ -60,6 +61,9 @@
         "duckdb_create_aggregate_function_set",
         "duckdb_destroy_aggregate_function_set",
         "duckdb_add_aggregate_function_to_set",
-        "duckdb_register_aggregate_function_set"
+        "duckdb_register_aggregate_function_set",
+        "duckdb_get_map_size",
+        "duckdb_get_map_key",
+        "duckdb_get_map_value"
     ]
 }
