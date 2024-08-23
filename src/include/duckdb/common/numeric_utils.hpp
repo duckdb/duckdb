@@ -66,6 +66,46 @@ static void ThrowNumericCastError(FROM in, TO minval, TO maxval) {
 	                        maxval);
 }
 
+template <class TO, class FROM, bool are_same_type>
+struct NumericCastImpl;
+
+template <class TO, class FROM>
+struct NumericCastImpl<TO, FROM, true> {
+	static TO Convert(FROM val) {
+		return static_cast<TO>(val);
+	}
+};
+
+template <class TO, class FROM>
+struct NumericCastImpl<TO, FROM, false> {
+	static TO Convert(FROM val) {
+		// some dance around signed-unsigned integer comparison below
+		auto minval = NumericLimits<TO>::Minimum();
+		auto maxval = NumericLimits<TO>::Maximum();
+		auto unsigned_in = static_cast<typename MakeUnsigned<FROM>::type>(val);
+		auto unsigned_min = static_cast<typename MakeUnsigned<TO>::type>(minval);
+		auto unsigned_max = static_cast<typename MakeUnsigned<TO>::type>(maxval);
+		auto signed_in = static_cast<typename MakeSigned<FROM>::type>(val);
+		auto signed_min = static_cast<typename MakeSigned<TO>::type>(minval);
+		auto signed_max = static_cast<typename MakeSigned<TO>::type>(maxval);
+
+		if (std::is_unsigned<FROM>() && std::is_unsigned<TO>() &&
+		    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
+			ThrowNumericCastError(val, minval, maxval);
+		}
+
+		if (std::is_signed<FROM>() && std::is_signed<TO>() && (signed_in < signed_min || signed_in > signed_max)) {
+			ThrowNumericCastError(val, minval, maxval);
+		}
+
+		if (std::is_signed<FROM>() != std::is_signed<TO>() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
+			ThrowNumericCastError(val, minval, maxval);
+		}
+
+		return static_cast<TO>(val);
+	}
+};
+
 // NumericCast
 // When: between same types, or when both types are integral
 // Checks: perform checked casts on range
@@ -74,33 +114,7 @@ template <
     class = typename std::enable_if<(!std::is_floating_point<TO>::value && !std::is_floating_point<FROM>::value) ||
                                     std::is_same<TO, FROM>::value>::type>
 TO NumericCast(FROM val) {
-	if (std::is_same<TO, FROM>::value) {
-		return static_cast<TO>(val);
-	}
-	// some dance around signed-unsigned integer comparison below
-	auto minval = NumericLimits<TO>::Minimum();
-	auto maxval = NumericLimits<TO>::Maximum();
-	auto unsigned_in = static_cast<typename MakeUnsigned<FROM>::type>(val);
-	auto unsigned_min = static_cast<typename MakeUnsigned<TO>::type>(minval);
-	auto unsigned_max = static_cast<typename MakeUnsigned<TO>::type>(maxval);
-	auto signed_in = static_cast<typename MakeSigned<FROM>::type>(val);
-	auto signed_min = static_cast<typename MakeSigned<TO>::type>(minval);
-	auto signed_max = static_cast<typename MakeSigned<TO>::type>(maxval);
-
-	if (std::is_unsigned<FROM>() && std::is_unsigned<TO>() &&
-	    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
-		ThrowNumericCastError(val, minval, maxval);
-	}
-
-	if (std::is_signed<FROM>() && std::is_signed<TO>() && (signed_in < signed_min || signed_in > signed_max)) {
-		ThrowNumericCastError(val, minval, maxval);
-	}
-
-	if (std::is_signed<FROM>() != std::is_signed<TO>() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
-		ThrowNumericCastError(val, minval, maxval);
-	}
-
-	return static_cast<TO>(val);
+	return NumericCastImpl<TO, FROM, std::is_same<TO, FROM>::value>::Convert(val);
 }
 
 // UnsafeNumericCast
