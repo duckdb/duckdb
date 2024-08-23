@@ -516,6 +516,16 @@ struct LockConfigurationSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct IEEEFloatingPointOpsSetting {
+	static constexpr const char *Name = "ieee_floating_point_ops";
+	static constexpr const char *Description =
+	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ImmediateTransactionModeSetting {
 	static constexpr const char *Name = "immediate_transaction_mode";
 	static constexpr const char *Description =
