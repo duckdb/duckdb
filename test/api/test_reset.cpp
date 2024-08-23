@@ -95,6 +95,7 @@ OptionValueSet GetValueForOption(const string &name, LogicalTypeId type) {
 	    {"profile_output", {"test"}},
 	    {"profiling_mode", {"detailed"}},
 	    {"enable_progress_bar_print", {false}},
+	    {"ieee_floating_point_ops", {false}},
 	    {"progress_bar_time", {0}},
 	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},

@@ -94,7 +94,7 @@ static yyjson_mut_val *RenderRecursive(yyjson_mut_doc *doc, RenderTree &tree, id
 	return object;
 }
 
-void JSONTreeRenderer::ToStream(RenderTree &root, std::ostream &ss) {
+void JSONTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	auto doc = yyjson_mut_doc_new(nullptr);
 	auto result_obj = yyjson_mut_arr(doc);
 	yyjson_mut_doc_set_root(doc, result_obj);

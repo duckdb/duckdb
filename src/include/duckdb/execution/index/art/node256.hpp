@@ -14,50 +14,67 @@
 
 namespace duckdb {
 
-//! Node256 holds up to 256 Node children which can be directly indexed by the key byte
+//! Node256 holds up to 256 children. They are indexed by their key byte.
 class Node256 {
+	friend class Node48;
+
 public:
-	//! Delete copy constructors, as any Node256 can never own its memory
+	static constexpr NType NODE_256 = NType::NODE_256;
+	static constexpr uint16_t CAPACITY = 256;
+	static constexpr uint8_t SHRINK_THRESHOLD = 36;
+
+public:
+	Node256() = delete;
 	Node256(const Node256 &) = delete;
 	Node256 &operator=(const Node256 &) = delete;
 
-	//! Number of non-null children
+private:
 	uint16_t count;
-	//! Node pointers to the child nodes
-	Node children[Node::NODE_256_CAPACITY];
+	Node children[CAPACITY];
 
 public:
-	//! Get a new Node256, might cause a new buffer allocation, and initialize it
+	//! Get a new Node256 and initialize it.
 	static Node256 &New(ART &art, Node &node);
-	//! Free the node (and its subtree)
+	//! Free the node and its children.
 	static void Free(ART &art, Node &node);
 
-	//! Initializes all the fields of the node while growing a Node48 to a Node256
-	static Node256 &GrowNode48(ART &art, Node &node256, Node &node48);
-
-	//! Initializes a merge by incrementing the buffer IDs of the node
-	void InitializeMerge(ART &art, const ARTFlags &flags);
-
-	//! Insert a child node at byte
+	//! Insert a child at byte.
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
-	//! Delete the child node at byte
+	//! Delete the child at byte.
 	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
+	//! Replace the child at byte.
+	void ReplaceChild(const uint8_t byte, const Node child);
 
-	//! Replace the child node at byte
-	inline void ReplaceChild(const uint8_t byte, const Node child) {
-		children[byte] = child;
+public:
+	template <class F, class NODE>
+	static void Iterator(NODE &n, F &&lambda) {
+		for (idx_t i = 0; i < CAPACITY; i++) {
+			if (n.children[i].HasMetadata()) {
+				lambda(n.children[i]);
+			}
+		}
 	}
 
-	//! Get the (immutable) child for the respective byte in the node
-	optional_ptr<const Node> GetChild(const uint8_t byte) const;
-	//! Get the child for the respective byte in the node
-	optional_ptr<Node> GetChildMutable(const uint8_t byte);
-	//! Get the first (immutable) child that is greater or equal to the specific byte
-	optional_ptr<const Node> GetNextChild(uint8_t &byte) const;
-	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChildMutable(uint8_t &byte);
+	template <class NODE>
+	static unsafe_optional_ptr<Node> GetChild(NODE &n, const uint8_t byte) {
+		if (n.children[byte].HasMetadata()) {
+			return &n.children[byte];
+		}
+		return nullptr;
+	}
 
-	//! Vacuum the children of the node
-	void Vacuum(ART &art, const ARTFlags &flags);
+	template <class NODE>
+	static unsafe_optional_ptr<Node> GetNextChild(NODE &n, uint8_t &byte) {
+		for (idx_t i = byte; i < CAPACITY; i++) {
+			if (n.children[i].HasMetadata()) {
+				byte = UnsafeNumericCast<uint8_t>(i);
+				return &n.children[i];
+			}
+		}
+		return nullptr;
+	}
+
+private:
+	static Node256 &GrowNode48(ART &art, Node &node256, Node &node48);
 };
 } // namespace duckdb

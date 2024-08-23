@@ -13,3 +13,8 @@ SELECT * FROM duckdb_indexes();
 
 statement ok nosort duckdb_col
 SELECT * FROM duckdb_indexes;
+
+query I
+select expressions from duckdb_indexes where table_name = 'integers';
+----
+[((j + 1)), k]

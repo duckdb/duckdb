@@ -63,7 +63,7 @@ void ColumnStatistics::Serialize(Serializer &serializer) const {
 
 shared_ptr<ColumnStatistics> ColumnStatistics::Deserialize(Deserializer &deserializer) {
 	auto stats = deserializer.ReadProperty<BaseStatistics>(100, "statistics");
-	auto distinct_stats = deserializer.ReadPropertyWithDefault<unique_ptr<DistinctStatistics>>(
+	auto distinct_stats = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<DistinctStatistics>>(
 	    101, "distinct", unique_ptr<DistinctStatistics>());
 	return make_shared_ptr<ColumnStatistics>(std::move(stats), std::move(distinct_stats));
 }

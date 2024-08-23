@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -26,7 +26,9 @@ struct BuildSize {
 };
 
 class BuildProbeSideOptimizer : LogicalOperatorVisitor {
-	static constexpr double COLUMN_COUNT_PENALTY = 0.1;
+private:
+	static constexpr idx_t COLUMN_COUNT_PENALTY = 2;
+	static constexpr double PREFER_RIGHT_DEEP_PENALTY = 0.15;
 
 public:
 	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op);
@@ -34,9 +36,12 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override {};
 
-	void TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
+private:
+	void TryFlipJoinChildren(LogicalOperator &op);
+	static idx_t ChildHasJoins(LogicalOperator &op);
 
-	BuildSize GetBuildSizes(LogicalOperator &op);
+	static BuildSize GetBuildSizes(const LogicalOperator &op, idx_t lhs_cardinality, idx_t rhs_cardinality);
+	static double GetBuildSize(vector<LogicalType> types, idx_t cardinality);
 
 private:
 	ClientContext &context;

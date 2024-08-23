@@ -121,6 +121,15 @@ struct DebugForceNoCrossProduct {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugSkipCheckpointOnCommit {
+	static constexpr const char *Name = "debug_skip_checkpoint_on_commit";
+	static constexpr const char *Description = "DEBUG SETTING: skip checkpointing on commit";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct OrderedAggregateThreshold {
 	static constexpr const char *Name = "ordered_aggregate_threshold"; // NOLINT
 	static constexpr const char *Description =                         // NOLINT
@@ -528,6 +537,16 @@ struct LogQueryPathSetting {
 struct LockConfigurationSetting {
 	static constexpr const char *Name = "lock_configuration";
 	static constexpr const char *Description = "Whether or not the configuration can be altered";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct IEEEFloatingPointOpsSetting {
+	static constexpr const char *Name = "ieee_floating_point_ops";
+	static constexpr const char *Description =
+	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

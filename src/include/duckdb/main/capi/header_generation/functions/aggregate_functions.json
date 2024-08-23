@@ -253,6 +253,79 @@
                     "error": "The error message"
                 }
             }
+        },
+        {
+            "name": "duckdb_create_aggregate_function_set",
+            "return_type": "duckdb_aggregate_function_set",
+            "params": [
+                {
+                    "type": "const char*",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Creates a new empty aggregate function set.\n\nThe return value should be destroyed with `duckdb_destroy_aggregate_function_set`.\n\n",
+                "return_value": "The aggregate function set object."
+            }
+        },
+        {
+            "name": "duckdb_destroy_aggregate_function_set",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function_set *",
+                    "name": "aggregate_function_set"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the given aggregate function set object.\n\n",
+                "param_comments": {
+                    "aggregate_function": "The aggregate function set to destroy"
+                }
+            }
+        },
+        {
+            "name": "duckdb_add_aggregate_function_to_set",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_aggregate_function_set",
+                    "name": "set"
+                },
+                {
+                    "type": "duckdb_aggregate_function",
+                    "name": "function"
+                }
+            ],
+            "comment": {
+                "description": "Adds the aggregate function as a new overload to the aggregate function set.\n\nReturns DuckDBError if the function could not be added, for example if the overload already exists.",
+                "param_comments": {
+                    "set": "The aggregate function set",
+                    "function": "The function to add"
+                }
+            }
+        },
+        {
+            "name": "duckdb_register_aggregate_function_set",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "con"
+                },
+                {
+                    "type": "duckdb_aggregate_function_set",
+                    "name": "set"
+                }
+            ],
+            "comment": {
+                "description": "Register the aggregate function set within the given connection.\n\nThe set requires at least a single valid overload.\n\nIf the set is incomplete or a function with this name already exists DuckDBError is returned.\n\n",
+                "param_comments": {
+                    "con": "The connection to register it in.",
+                    "set": "The function set to register"
+                },
+                "return_value": "Whether or not the registration was successful."
+            }
         }
     ]
 }

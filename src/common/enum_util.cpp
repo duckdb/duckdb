@@ -32,6 +32,7 @@
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
@@ -100,8 +101,6 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
-#include "duckdb/main/profiling_info.hpp"
-#include "duckdb/main/profiling_node.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
@@ -2063,6 +2062,10 @@ const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value) {
 		return "TEXT";
 	case ExplainFormat::JSON:
 		return "JSON";
+	case ExplainFormat::HTML:
+		return "HTML";
+	case ExplainFormat::GRAPHVIZ:
+		return "GRAPHVIZ";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2078,6 +2081,12 @@ ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "JSON")) {
 		return ExplainFormat::JSON;
+	}
+	if (StringUtil::Equals(value, "HTML")) {
+		return ExplainFormat::HTML;
+	}
+	if (StringUtil::Equals(value, "GRAPHVIZ")) {
+		return ExplainFormat::GRAPHVIZ;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3233,6 +3242,29 @@ FunctionStability EnumUtil::FromString<FunctionStability>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<GateStatus>(GateStatus value) {
+	switch(value) {
+	case GateStatus::GATE_NOT_SET:
+		return "GATE_NOT_SET";
+	case GateStatus::GATE_SET:
+		return "GATE_SET";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
+	if (StringUtil::Equals(value, "GATE_NOT_SET")) {
+		return GateStatus::GATE_NOT_SET;
+	}
+	if (StringUtil::Equals(value, "GATE_SET")) {
+		return GateStatus::GATE_SET;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value) {
 	switch(value) {
 	case HLLStorageType::UNCOMPRESSED:
@@ -4303,14 +4335,88 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 	switch(value) {
+	case MetricsType::QUERY_NAME:
+		return "QUERY_NAME";
+	case MetricsType::BLOCKED_THREAD_TIME:
+		return "BLOCKED_THREAD_TIME";
 	case MetricsType::CPU_TIME:
 		return "CPU_TIME";
 	case MetricsType::EXTRA_INFO:
 		return "EXTRA_INFO";
+	case MetricsType::CUMULATIVE_CARDINALITY:
+		return "CUMULATIVE_CARDINALITY";
+	case MetricsType::OPERATOR_TYPE:
+		return "OPERATOR_TYPE";
 	case MetricsType::OPERATOR_CARDINALITY:
 		return "OPERATOR_CARDINALITY";
+	case MetricsType::CUMULATIVE_ROWS_SCANNED:
+		return "CUMULATIVE_ROWS_SCANNED";
+	case MetricsType::OPERATOR_ROWS_SCANNED:
+		return "OPERATOR_ROWS_SCANNED";
 	case MetricsType::OPERATOR_TIMING:
 		return "OPERATOR_TIMING";
+	case MetricsType::ALL_OPTIMIZERS:
+		return "ALL_OPTIMIZERS";
+	case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
+		return "CUMULATIVE_OPTIMIZER_TIMING";
+	case MetricsType::PLANNER:
+		return "PLANNER";
+	case MetricsType::PLANNER_BINDING:
+		return "PLANNER_BINDING";
+	case MetricsType::PHYSICAL_PLANNER:
+		return "PHYSICAL_PLANNER";
+	case MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING:
+		return "PHYSICAL_PLANNER_COLUMN_BINDING";
+	case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES:
+		return "PHYSICAL_PLANNER_RESOLVE_TYPES";
+	case MetricsType::PHYSICAL_PLANNER_CREATE_PLAN:
+		return "PHYSICAL_PLANNER_CREATE_PLAN";
+	case MetricsType::OPTIMIZER_EXPRESSION_REWRITER:
+		return "OPTIMIZER_EXPRESSION_REWRITER";
+	case MetricsType::OPTIMIZER_FILTER_PULLUP:
+		return "OPTIMIZER_FILTER_PULLUP";
+	case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
+		return "OPTIMIZER_FILTER_PUSHDOWN";
+	case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:
+		return "OPTIMIZER_CTE_FILTER_PUSHER";
+	case MetricsType::OPTIMIZER_REGEX_RANGE:
+		return "OPTIMIZER_REGEX_RANGE";
+	case MetricsType::OPTIMIZER_IN_CLAUSE:
+		return "OPTIMIZER_IN_CLAUSE";
+	case MetricsType::OPTIMIZER_JOIN_ORDER:
+		return "OPTIMIZER_JOIN_ORDER";
+	case MetricsType::OPTIMIZER_DELIMINATOR:
+		return "OPTIMIZER_DELIMINATOR";
+	case MetricsType::OPTIMIZER_UNNEST_REWRITER:
+		return "OPTIMIZER_UNNEST_REWRITER";
+	case MetricsType::OPTIMIZER_UNUSED_COLUMNS:
+		return "OPTIMIZER_UNUSED_COLUMNS";
+	case MetricsType::OPTIMIZER_STATISTICS_PROPAGATION:
+		return "OPTIMIZER_STATISTICS_PROPAGATION";
+	case MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
+		return "OPTIMIZER_COMMON_SUBEXPRESSIONS";
+	case MetricsType::OPTIMIZER_COMMON_AGGREGATE:
+		return "OPTIMIZER_COMMON_AGGREGATE";
+	case MetricsType::OPTIMIZER_COLUMN_LIFETIME:
+		return "OPTIMIZER_COLUMN_LIFETIME";
+	case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
+		return "OPTIMIZER_BUILD_SIDE_PROBE_SIDE";
+	case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
+		return "OPTIMIZER_LIMIT_PUSHDOWN";
+	case MetricsType::OPTIMIZER_TOP_N:
+		return "OPTIMIZER_TOP_N";
+	case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
+		return "OPTIMIZER_COMPRESSED_MATERIALIZATION";
+	case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
+		return "OPTIMIZER_DUPLICATE_GROUPS";
+	case MetricsType::OPTIMIZER_REORDER_FILTER:
+		return "OPTIMIZER_REORDER_FILTER";
+	case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
+		return "OPTIMIZER_JOIN_FILTER_PUSHDOWN";
+	case MetricsType::OPTIMIZER_EXTENSION:
+		return "OPTIMIZER_EXTENSION";
+	case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
+		return "OPTIMIZER_MATERIALIZED_CTE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4318,17 +4424,128 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
+	if (StringUtil::Equals(value, "QUERY_NAME")) {
+		return MetricsType::QUERY_NAME;
+	}
+	if (StringUtil::Equals(value, "BLOCKED_THREAD_TIME")) {
+		return MetricsType::BLOCKED_THREAD_TIME;
+	}
 	if (StringUtil::Equals(value, "CPU_TIME")) {
 		return MetricsType::CPU_TIME;
 	}
 	if (StringUtil::Equals(value, "EXTRA_INFO")) {
 		return MetricsType::EXTRA_INFO;
 	}
+	if (StringUtil::Equals(value, "CUMULATIVE_CARDINALITY")) {
+		return MetricsType::CUMULATIVE_CARDINALITY;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_TYPE")) {
+		return MetricsType::OPERATOR_TYPE;
+	}
 	if (StringUtil::Equals(value, "OPERATOR_CARDINALITY")) {
 		return MetricsType::OPERATOR_CARDINALITY;
 	}
+	if (StringUtil::Equals(value, "CUMULATIVE_ROWS_SCANNED")) {
+		return MetricsType::CUMULATIVE_ROWS_SCANNED;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_ROWS_SCANNED")) {
+		return MetricsType::OPERATOR_ROWS_SCANNED;
+	}
 	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
 		return MetricsType::OPERATOR_TIMING;
+	}
+	if (StringUtil::Equals(value, "ALL_OPTIMIZERS")) {
+		return MetricsType::ALL_OPTIMIZERS;
+	}
+	if (StringUtil::Equals(value, "CUMULATIVE_OPTIMIZER_TIMING")) {
+		return MetricsType::CUMULATIVE_OPTIMIZER_TIMING;
+	}
+	if (StringUtil::Equals(value, "PLANNER")) {
+		return MetricsType::PLANNER;
+	}
+	if (StringUtil::Equals(value, "PLANNER_BINDING")) {
+		return MetricsType::PLANNER_BINDING;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER")) {
+		return MetricsType::PHYSICAL_PLANNER;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_COLUMN_BINDING")) {
+		return MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_RESOLVE_TYPES")) {
+		return MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES;
+	}
+	if (StringUtil::Equals(value, "PHYSICAL_PLANNER_CREATE_PLAN")) {
+		return MetricsType::PHYSICAL_PLANNER_CREATE_PLAN;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_EXPRESSION_REWRITER")) {
+		return MetricsType::OPTIMIZER_EXPRESSION_REWRITER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PULLUP")) {
+		return MetricsType::OPTIMIZER_FILTER_PULLUP;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_FILTER_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_FILTER_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_CTE_FILTER_PUSHER")) {
+		return MetricsType::OPTIMIZER_CTE_FILTER_PUSHER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_REGEX_RANGE")) {
+		return MetricsType::OPTIMIZER_REGEX_RANGE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_IN_CLAUSE")) {
+		return MetricsType::OPTIMIZER_IN_CLAUSE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_ORDER")) {
+		return MetricsType::OPTIMIZER_JOIN_ORDER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_DELIMINATOR")) {
+		return MetricsType::OPTIMIZER_DELIMINATOR;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_UNNEST_REWRITER")) {
+		return MetricsType::OPTIMIZER_UNNEST_REWRITER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_UNUSED_COLUMNS")) {
+		return MetricsType::OPTIMIZER_UNUSED_COLUMNS;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_STATISTICS_PROPAGATION")) {
+		return MetricsType::OPTIMIZER_STATISTICS_PROPAGATION;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_SUBEXPRESSIONS")) {
+		return MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COMMON_AGGREGATE")) {
+		return MetricsType::OPTIMIZER_COMMON_AGGREGATE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COLUMN_LIFETIME")) {
+		return MetricsType::OPTIMIZER_COLUMN_LIFETIME;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_BUILD_SIDE_PROBE_SIDE")) {
+		return MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_LIMIT_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_TOP_N")) {
+		return MetricsType::OPTIMIZER_TOP_N;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_COMPRESSED_MATERIALIZATION")) {
+		return MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_DUPLICATE_GROUPS")) {
+		return MetricsType::OPTIMIZER_DUPLICATE_GROUPS;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_REORDER_FILTER")) {
+		return MetricsType::OPTIMIZER_REORDER_FILTER;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_JOIN_FILTER_PUSHDOWN")) {
+		return MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_EXTENSION")) {
+		return MetricsType::OPTIMIZER_EXTENSION;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER_MATERIALIZED_CTE")) {
+		return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4350,6 +4567,12 @@ const char* EnumUtil::ToChars<NType>(NType value) {
 		return "NODE_256";
 	case NType::LEAF_INLINED:
 		return "LEAF_INLINED";
+	case NType::NODE_7_LEAF:
+		return "NODE_7_LEAF";
+	case NType::NODE_15_LEAF:
+		return "NODE_15_LEAF";
+	case NType::NODE_256_LEAF:
+		return "NODE_256_LEAF";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4377,6 +4600,15 @@ NType EnumUtil::FromString<NType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LEAF_INLINED")) {
 		return NType::LEAF_INLINED;
+	}
+	if (StringUtil::Equals(value, "NODE_7_LEAF")) {
+		return NType::NODE_7_LEAF;
+	}
+	if (StringUtil::Equals(value, "NODE_15_LEAF")) {
+		return NType::NODE_15_LEAF;
+	}
+	if (StringUtil::Equals(value, "NODE_256_LEAF")) {
+		return NType::NODE_256_LEAF;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5701,29 +5933,6 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	}
 	if (StringUtil::Equals(value, "NO_OUTPUT")) {
 		return ProfilerPrintFormat::NO_OUTPUT;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value) {
-	switch(value) {
-	case ProfilingNodeType::QUERY_ROOT:
-		return "QUERY_ROOT";
-	case ProfilingNodeType::OPERATOR:
-		return "OPERATOR";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value) {
-	if (StringUtil::Equals(value, "QUERY_ROOT")) {
-		return ProfilingNodeType::QUERY_ROOT;
-	}
-	if (StringUtil::Equals(value, "OPERATOR")) {
-		return ProfilingNodeType::OPERATOR;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -7831,6 +8040,8 @@ const char* EnumUtil::ToChars<WALType>(WALType value) {
 		return "DELETE_TUPLE";
 	case WALType::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case WALType::ROW_GROUP_DATA:
+		return "ROW_GROUP_DATA";
 	case WALType::WAL_VERSION:
 		return "WAL_VERSION";
 	case WALType::CHECKPOINT:
@@ -7912,6 +8123,9 @@ WALType EnumUtil::FromString<WALType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return WALType::UPDATE_TUPLE;
+	}
+	if (StringUtil::Equals(value, "ROW_GROUP_DATA")) {
+		return WALType::ROW_GROUP_DATA;
 	}
 	if (StringUtil::Equals(value, "WAL_VERSION")) {
 		return WALType::WAL_VERSION;

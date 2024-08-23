@@ -42,18 +42,42 @@ public:
 	IndexPointer New();
 	//! Free the segment of the IndexPointer
 	void Free(const IndexPointer ptr);
-	//! Returns a pointer of type T to a segment. If dirty is false, then T should be a const class
+
+	//! Returns a pointer of type T to a segment. If dirty is false, then T must be a const class.
 	template <class T>
-	inline T *Get(const IndexPointer ptr, const bool dirty = true) {
+	inline unsafe_optional_ptr<T> Get(const IndexPointer ptr, const bool dirty = true) {
 		return (T *)Get(ptr, dirty);
 	}
-	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment
+
+	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment.
 	inline data_ptr_t Get(const IndexPointer ptr, const bool dirty = true) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
+
 		auto &buffer = buffers.find(ptr.GetBufferId())->second;
 		auto buffer_ptr = buffer.Get(dirty);
 		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+	}
+
+	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
+	template <class T>
+	inline unsafe_optional_ptr<T> GetIfLoaded(const IndexPointer ptr) {
+		return (T *)GetIfLoaded(ptr);
+	}
+
+	//! Returns the data_ptr_t to a segment, or nullptr, if the buffer is not in memory.
+	inline data_ptr_t GetIfLoaded(const IndexPointer ptr) {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
+
+		auto &buffer = buffers.find(ptr.GetBufferId())->second;
+		if (!buffer.InMemory()) {
+			return nullptr;
+		}
+
+		auto buffer_ptr = buffer.Get();
+		auto raw_ptr = buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+		return raw_ptr;
 	}
 
 	//! Resets the allocator, e.g., during 'DELETE FROM table'
@@ -61,6 +85,14 @@ public:
 
 	//! Returns the in-memory size in bytes
 	idx_t GetInMemorySize() const;
+	//! Returns the segment size.
+	inline idx_t GetSegmentSize() const {
+		return segment_size;
+	}
+	//! Returns the total segment count.
+	inline idx_t GetSegmentCount() const {
+		return total_segment_count;
+	}
 
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;
@@ -91,6 +123,12 @@ public:
 	void Init(const FixedSizeAllocatorInfo &info);
 	//! Deserializes all metadata of older storage files
 	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
+	//! Removes empty buffers.
+	void RemoveEmptyBuffers();
+	//! Returns true, if the allocator does not contain any segments.
+	inline bool IsEmpty() {
+		return total_segment_count == 0;
+	}
 
 private:
 	//! Allocation size of one segment in a buffer

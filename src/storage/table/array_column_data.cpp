@@ -198,11 +198,11 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
-		serializer.WriteObject(102, "child_column",
-		                       [&](Serializer &serializer) { child_state->WriteDataPointers(writer, serializer); });
+	PersistentColumnData ToPersistentData() override {
+		PersistentColumnData data(PhysicalType::ARRAY);
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		data.child_columns.push_back(child_state->ToPersistentData());
+		return data;
 	}
 };
 
@@ -220,13 +220,22 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_grou
 	return std::move(checkpoint_state);
 }
 
-void ArrayColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	deserializer.ReadObject(101, "validity",
-	                        [&](Deserializer &source) { validity.DeserializeColumn(source, target_stats); });
+bool ArrayColumnData::IsPersistent() {
+	return validity.IsPersistent() && child_column->IsPersistent();
+}
 
+PersistentColumnData ArrayColumnData::Serialize() {
+	PersistentColumnData persistent_data(PhysicalType::ARRAY);
+	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(child_column->Serialize());
+	return persistent_data;
+}
+
+void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	D_ASSERT(column_data.pointers.empty());
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 	auto &child_stats = ArrayStats::GetChildStats(target_stats);
-	deserializer.ReadObject(102, "child_column",
-	                        [&](Deserializer &source) { child_column->DeserializeColumn(source, child_stats); });
+	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 	this->count = validity.count.load();
 }
 

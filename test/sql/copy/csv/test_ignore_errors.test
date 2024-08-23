@@ -15,6 +15,7 @@ COPY integers FROM 'data/csv/test/error_too_little.csv' (HEADER, IGNORE_ERRORS, 
 statement error
 COPY integers FROM 'data/csv/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
 ----
+It was not possible to automatically detect the CSV Parsing dialect
 
 # not enough columns provided
 query II
@@ -35,6 +36,7 @@ INSERT INTO integers SELECT * FROM read_csv('data/csv/test/error_too_little.csv'
 statement error
 INSERT INTO integers SELECT * FROM read_csv('data/csv/test/error_too_little.csv', columns={'i': 'INTEGER'}, null_padding=0)
 ----
+table integers has 2 columns but 1 values were supplied
 
 # not enough columns provided
 query II
@@ -55,6 +57,7 @@ COPY integers FROM 'data/csv/test/error_too_little_single.csv' (HEADER, IGNORE_E
 statement error
 COPY integers FROM 'data/csv/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
 ----
+It was not possible to automatically detect the CSV Parsing dialect
 
 # not enough columns provided, single value
 query II
@@ -71,7 +74,7 @@ COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER, IGNORE_ERRORS, SA
 statement error
 COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER)
 ----
-CSV options could not be auto-detected. Consider setting parser options manually.
+It was not possible to automatically detect the CSV Parsing dialect
 
 # too many columns provided
 query II
@@ -92,6 +95,7 @@ COPY integers FROM 'data/csv/test/error_invalid_type.csv' (HEADER, IGNORE_ERRORS
 statement error
 COPY integers FROM 'data/csv/test/error_invalid_type.csv' (HEADER)
 ----
+This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
 
 # too many columns provided
 query II

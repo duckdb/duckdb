@@ -30,6 +30,7 @@ DEALLOCATE boaz_bug
 statement error
 EXECUTE boaz_bug
 ----
+Prepared statement "boaz_bug" does not exist
 
 # Recreate prepared statement with different file
 

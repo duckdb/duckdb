@@ -69,7 +69,7 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task>
 
 #else
 struct ConcurrentQueue {
-	std::queue<shared_ptr<Task>> q;
+	reference_map_t<QueueProducerToken, std::queue<shared_ptr<Task>>> q;
 	mutex qlock;
 
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
@@ -78,22 +78,35 @@ struct ConcurrentQueue {
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
-	q.push(std::move(task));
+	q[std::ref(*token.token)].push(std::move(task));
 }
 
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> lock(qlock);
-	if (q.empty()) {
+	D_ASSERT(!q.empty());
+
+	const auto it = q.find(std::ref(*token.token));
+	if (it == q.end() || it->second.empty()) {
 		return false;
 	}
-	task = std::move(q.front());
-	q.pop();
+
+	task = std::move(it->second.front());
+	it->second.pop();
+
 	return true;
 }
 
 struct QueueProducerToken {
-	QueueProducerToken(ConcurrentQueue &queue) {
+	explicit QueueProducerToken(ConcurrentQueue &queue) : queue(&queue) {
 	}
+
+	~QueueProducerToken() {
+		lock_guard<mutex> lock(queue->qlock);
+		queue->q.erase(*this);
+	}
+
+private:
+	ConcurrentQueue *queue;
 };
 #endif
 
@@ -278,9 +291,6 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	}
 #endif
 	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
@@ -382,6 +392,9 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		}
 	}
 	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 #endif
 }
 

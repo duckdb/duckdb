@@ -326,7 +326,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
-	profiler.StartPhase("planner");
+	profiler.StartPhase(MetricsType::PLANNER);
 	Planner planner(*this);
 	if (values) {
 		auto &parameter_values = *values;
@@ -352,7 +352,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	plan->Verify(*this);
 #endif
 	if (config.enable_optimizer && plan->RequireOptimizer()) {
-		profiler.StartPhase("optimizer");
+		profiler.StartPhase(MetricsType::ALL_OPTIMIZERS);
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(std::move(plan));
 		D_ASSERT(plan);
@@ -363,7 +363,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 #endif
 	}
 
-	profiler.StartPhase("physical_planner");
+	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER);
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
 	auto physical_plan = physical_planner.CreatePlan(std::move(plan));
@@ -650,8 +650,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
-	auto n_param = statement->n_param;
-	auto named_param_map = std::move(statement->named_param_map);
+	auto named_param_map = statement->named_param_map;
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
@@ -659,7 +658,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement)); }, false);
 	prepared_data->unbound_statement = std::move(unbound_statement);
 	return make_uniq<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),
-	                                    n_param, std::move(named_param_map));
+	                                    std::move(named_param_map));
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
@@ -1029,6 +1028,11 @@ unique_ptr<QueryResult> ClientContext::ExecutePendingQueryInternal(ClientContext
 
 void ClientContext::Interrupt() {
 	interrupted = true;
+}
+
+void ClientContext::CancelTransaction() {
+	auto lock = LockContext();
+	InitialCleanup(*lock);
 }
 
 void ClientContext::EnableProfiling() {
