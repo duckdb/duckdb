@@ -250,7 +250,6 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 	explicit QuantileSortTree(Elements &&lowest_level) {
 		BaseTree::Allocate(lowest_level.size());
 		BaseTree::LowestLevel() = std::move(lowest_level);
-		BaseTree::Build();
 	}
 
 	template <class INPUT_TYPE>
@@ -289,8 +288,11 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE, bool DISCRETE>
 	RESULT_TYPE WindowScalar(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &result,
-	                         const QuantileValue &q) const {
+	                         const QuantileValue &q) {
 		D_ASSERT(n > 0);
+
+		//	Thread safe and idempotent.
+		BaseTree::Build();
 
 		//	Find the interpolated indicies within the frame
 		Interpolator<DISCRETE> interp(q, n, false);
@@ -308,8 +310,11 @@ struct QuantileSortTree : public MergeSortTree<IDX, IDX> {
 
 	template <typename INPUT_TYPE, typename CHILD_TYPE, bool DISCRETE>
 	void WindowList(const INPUT_TYPE *data, const SubFrames &frames, const idx_t n, Vector &list, const idx_t lidx,
-	                const QuantileBindData &bind_data) const {
+	                const QuantileBindData &bind_data) {
 		D_ASSERT(n > 0);
+
+		//	Thread safe and idempotent.
+		BaseTree::Build();
 
 		// Result is a constant LIST<CHILD_TYPE> with a fixed length
 		auto ldata = FlatVector::GetData<list_entry_t>(list);

@@ -268,6 +268,7 @@ typedef struct {
 	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
 	idx_t (*duckdb_profiling_info_get_child_count)(duckdb_profiling_info info);
 	duckdb_profiling_info (*duckdb_profiling_info_get_child)(duckdb_profiling_info info, idx_t index);
+	duckdb_value (*duckdb_profiling_info_get_metrics)(duckdb_profiling_info info);
 	void (*duckdb_scalar_function_set_varargs)(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 	void (*duckdb_scalar_function_set_special_handling)(duckdb_scalar_function scalar_function);
 	void (*duckdb_scalar_function_set_volatile)(duckdb_scalar_function scalar_function);
@@ -326,6 +327,9 @@ typedef struct {
 	duckdb_state (*duckdb_add_aggregate_function_to_set)(duckdb_aggregate_function_set set,
 	                                                     duckdb_aggregate_function function);
 	duckdb_state (*duckdb_register_aggregate_function_set)(duckdb_connection con, duckdb_aggregate_function_set set);
+	idx_t (*duckdb_get_map_size)(duckdb_value value);
+	duckdb_value (*duckdb_get_map_key)(duckdb_value value, idx_t index);
+	duckdb_value (*duckdb_get_map_value)(duckdb_value value, idx_t index);
 	// dev
 	// WARNING! the functions below are not (yet) stable
 
@@ -611,6 +615,7 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_profiling_info_get_value = duckdb_profiling_info_get_value;
 	result.duckdb_profiling_info_get_child_count = duckdb_profiling_info_get_child_count;
 	result.duckdb_profiling_info_get_child = duckdb_profiling_info_get_child;
+	result.duckdb_profiling_info_get_metrics = duckdb_profiling_info_get_metrics;
 	result.duckdb_scalar_function_set_varargs = duckdb_scalar_function_set_varargs;
 	result.duckdb_scalar_function_set_special_handling = duckdb_scalar_function_set_special_handling;
 	result.duckdb_scalar_function_set_volatile = duckdb_scalar_function_set_volatile;
@@ -667,6 +672,9 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_destroy_aggregate_function_set = duckdb_destroy_aggregate_function_set;
 	result.duckdb_add_aggregate_function_to_set = duckdb_add_aggregate_function_to_set;
 	result.duckdb_register_aggregate_function_set = duckdb_register_aggregate_function_set;
+	result.duckdb_get_map_size = duckdb_get_map_size;
+	result.duckdb_get_map_key = duckdb_get_map_key;
+	result.duckdb_get_map_value = duckdb_get_map_value;
 	result.duckdb_create_aggregate_function = duckdb_create_aggregate_function;
 	result.duckdb_destroy_aggregate_function = duckdb_destroy_aggregate_function;
 	result.duckdb_aggregate_function_set_name = duckdb_aggregate_function_set_name;
