@@ -342,8 +342,12 @@ public:
 		idx_t end_idx = 0;
 	};
 	using TaskPtr = optional_ptr<Task>;
+	using PartitionBlock = std::pair<idx_t, idx_t>;
 
 	WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p);
+
+	//! Regenerate the task list because a new local state arrived
+	void AddLocalState();
 
 	//! Are there any more tasks?
 	bool HasMoreTasks() const {
@@ -365,6 +369,10 @@ public:
 	WindowGlobalSinkState &gsink;
 	//! State mutex
 	mutable mutex lock;
+	//! The block count per hash group
+	vector<PartitionBlock> partition_blocks;
+	//! The number of local states
+	idx_t threads = 0;
 	//! The list of tasks
 	vector<Task> tasks;
 	//! The the next task
@@ -417,21 +425,30 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 		return;
 	}
 
-	using PartitionBlock = std::pair<idx_t, idx_t>;
-	vector<PartitionBlock> partition_blocks;
 	for (idx_t group_idx = 0; group_idx < window_hash_groups.size(); ++group_idx) {
 		auto &window_hash_group = window_hash_groups[group_idx];
 		partition_blocks.emplace_back(window_hash_group->rows->blocks.size(), group_idx);
 	}
 	std::sort(partition_blocks.begin(), partition_blocks.end(), std::greater<PartitionBlock>());
+}
+
+void WindowGlobalSourceState::AddLocalState() {
+	// Rebuild the task list because a new local state
+	lock_guard<mutex> gestate_guard(lock);
+	++threads;
+
+	if (partition_blocks.empty()) {
+		return;
+	}
 
 	//	Schedule the largest group on as many threads as possible
-	const auto threads = idx_t(TaskScheduler::GetScheduler(context).NumberOfThreads());
 	const auto &max_block = partition_blocks.front();
 	const auto per_thread = (max_block.first + threads - 1) / threads;
+	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
 
 	//	TODO: Generate dynamically instead of building a big list?
 	vector<WindowGroupStage> states {WindowGroupStage::SINK, WindowGroupStage::FINALIZE, WindowGroupStage::GETDATA};
+	tasks.clear();
 	for (const auto &b : partition_blocks) {
 		auto &window_hash_group = *window_hash_groups[b.second];
 		for (const auto &state : states) {
@@ -682,6 +699,8 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 		output_types.emplace_back(wexpr.return_type);
 	}
 	output_chunk.Initialize(global_partition.allocator, output_types);
+
+	gsource.AddLocalState();
 }
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
