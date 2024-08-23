@@ -55,26 +55,5 @@
         "description": "Returns the values of a map as a list",
         "example": "map_values(map(['key'], ['val']))",
         "type": "scalar_function"
-    },
-    {
-        "name": "map_contains",
-        "parameters": "map, key, value",
-        "description": "Returns true if the map contains the key-value pair, false otherwise",
-        "example": "map_contains(map(['key'], ['val']), 'key', 'val')",
-        "type": "scalar_function"
-    },
-    {
-        "name": "map_contains_key",
-        "parameters": "map, key",
-        "description": "Returns true if the map contains the key, false otherwise",
-        "example": "map_contains(map(['key'], ['val']), 'key')",
-        "type": "scalar_function"
-    },
-    {
-        "name": "map_contains_value",
-        "parameters": "map, value",
-        "description": "Returns true if the map contains the value, false otherwise",
-        "example": "map_contains(map(['key'], ['val']), 'val')",
-        "type": "scalar_function"
     }
 ]
