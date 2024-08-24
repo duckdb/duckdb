@@ -2,6 +2,9 @@
 # description: Test CSV with non-unicode values in header
 # group: [csv]
 
+# Rejects tests must skip reload
+require skip_reload
+
 loop i 0 10
 
 statement ok
