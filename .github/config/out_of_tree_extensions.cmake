@@ -20,7 +20,7 @@ if (NOT MINGW)
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
-            GIT_TAG fa40ec56236953aa5978cf1b4c65ed521424ce69
+            GIT_TAG c50862c82c065096722745631f4230832a3a04e8
             )
 endif()
 
@@ -29,7 +29,7 @@ if (NOT MINGW)
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
-            GIT_TAG 42c78d3f99e1a188a2b178ea59e3c17907af4fb2
+            GIT_TAG e738b4cc07a86d323db8b38220323752cd183a04
             )
 endif()
 
@@ -58,7 +58,7 @@ endif()
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_excel
-    GIT_TAG 391b36dfdcc1c8c187529376efb4f7ddc9f57261
+    GIT_TAG 0e99dc789038c7af658e30d579b818473a6d6ea8
     INCLUDE_DIR extension/excel/include
     )
 
@@ -74,7 +74,7 @@ if (NOT MINGW)
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG fe0471671924ce57308924c79f72efd18103e66b
+            GIT_TAG 3f6d753787252e3da1d12157910b62edf729fc6e
             )
 endif()
 
