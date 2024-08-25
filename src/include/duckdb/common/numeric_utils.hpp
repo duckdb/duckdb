@@ -119,7 +119,7 @@ TO UnsafeNumericCast(FROM in) {
 
 // LossyNumericCast
 // When: between double/float to other convertible types
-// Checks: perform checked casts on range (in DEBUG) otherwise no checks
+// Checks: no checks performed (at the moment, to be improved adding range checks)
 template <class TO>
 TO LossyNumericCast(double val) {
 	return static_cast<TO>(val);
@@ -132,7 +132,7 @@ TO LossyNumericCast(float val) {
 
 // ExactNumericCast
 // When: between double/float to other convertible types
-// Checks: perform checked casts on range AND checks that casts are invertible (in DEBUG) otherwise no checks
+// Checks: perform checks that casts are invertible (in DEBUG) otherwise no checks
 
 template <class TO>
 TO ExactNumericCast(double val) {
