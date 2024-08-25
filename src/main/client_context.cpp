@@ -1071,15 +1071,18 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	    ValidChecker::IsInvalidated(ActiveTransaction())) {
 		throw TransactionException(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
+	D_ASSERT(!active_query);
+	active_query = make_uniq<ActiveQueryContext>();
 	// check if we are on AutoCommit. In this case we should start a transaction
 	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
 	if (require_new_transaction) {
-		D_ASSERT(!active_query);
 		transaction.BeginTransaction();
 	}
+	active_query->query = "<INTERNAL>";
 	try {
 		fun();
 	} catch (std::exception &ex) {
+		active_query.reset();
 		ErrorData error(ex);
 		bool invalidates_transaction = true;
 		if (!Exception::InvalidatesTransaction(error.Type())) {
@@ -1096,6 +1099,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		}
 		throw;
 	}
+	active_query.reset();
 	if (require_new_transaction) {
 		transaction.Commit();
 	}
