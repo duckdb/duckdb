@@ -80,7 +80,7 @@
         "name": "cos",
         "parameters": "x",
         "description": "Computes the cos of `x`.",
-        "example": "cos(90)",
+        "example": "cos(pi())",
         "type": "scalar_function"
     },
     {
@@ -248,7 +248,7 @@
         "name": "sin",
         "parameters": "x",
         "description": "Computes the sin of `x`.",
-        "example": "sin(90)",
+        "example": "sin(pi() / 2)",
         "type": "scalar_function"
     },
     {
@@ -262,7 +262,7 @@
         "name": "tan",
         "parameters": "x",
         "description": "Computes the tan of `x`.",
-        "example": "tan(90)",
+        "example": "tan(pi() / 3)",
         "type": "scalar_function"
     },
     {
