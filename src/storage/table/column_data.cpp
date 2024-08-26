@@ -643,6 +643,7 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 	}
 	serializer.WriteProperty(101, "validity", child_columns[0]);
 	if (physical_type == PhysicalType::ARRAY || physical_type == PhysicalType::LIST) {
+		D_ASSERT(child_columns.size() == 2);
 		serializer.WriteProperty(102, "child_column", child_columns[1]);
 	} else if (physical_type == PhysicalType::STRUCT) {
 		serializer.WriteList(102, "sub_columns", child_columns.size() - 1,
@@ -656,6 +657,7 @@ void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id
 	child_columns.push_back(deserializer.ReadProperty<PersistentColumnData>(field_idx, field_name));
 	deserializer.Unset<LogicalType>();
 }
+
 PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserializer) {
 	auto &type = deserializer.Get<const LogicalType &>();
 	auto physical_type = type.InternalType();

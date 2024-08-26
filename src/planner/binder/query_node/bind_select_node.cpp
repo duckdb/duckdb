@@ -495,6 +495,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 				FunctionBinder function_binder(context);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
+				function->alias = "__collated_group";
 				result->aggregates.push_back(std::move(function));
 			}
 			result->groups.group_expressions.push_back(std::move(bound_expr));
