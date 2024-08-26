@@ -1107,6 +1107,54 @@ Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// HTTP Proxy
+//===--------------------------------------------------------------------===//
+void HTTPProxy::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy = DBConfig().options.http_proxy;
+}
+
+void HTTPProxy::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	config.options.http_proxy = parameter.GetValue<string>();
+}
+
+Value HTTPProxy::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.options.http_proxy;
+}
+
+//===--------------------------------------------------------------------===//
+// HTTP Proxy Username
+//===--------------------------------------------------------------------===//
+void HTTPProxyUsername::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy_username = DBConfig().options.http_proxy_username;
+}
+
+void HTTPProxyUsername::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	config.options.http_proxy_username = parameter.GetValue<string>();
+}
+
+Value HTTPProxyUsername::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.options.http_proxy_username;
+}
+
+//===--------------------------------------------------------------------===//
+// HTTP Proxy Password
+//===--------------------------------------------------------------------===//
+void HTTPProxyPassword::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy_password = DBConfig().options.http_proxy_password;
+}
+
+void HTTPProxyPassword::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	config.options.http_proxy_password = parameter.GetValue<string>();
+}
+
+Value HTTPProxyPassword::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.options.http_proxy_password;
+}
+
+//===--------------------------------------------------------------------===//
 // Integer Division
 //===--------------------------------------------------------------------===//
 void IntegerDivisionSetting::ResetLocal(ClientContext &context) {

@@ -14,6 +14,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
+#include "duckdb/main/secret/default_secrets.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/operator/logical_create_secret.hpp"
@@ -55,6 +56,16 @@ void SecretManager::Initialize(DatabaseInstance &db) {
 
 	// Store the current db for enabling autoloading
 	this->db = &db;
+
+	// Register default types
+	for (auto &type : CreateHTTPSecretFunctions::GetDefaultSecretTypes()) {
+		RegisterSecretTypeInternal(type);
+	}
+
+	// Register default functions
+	for (auto &function : CreateHTTPSecretFunctions::GetDefaultSecretFunctions()) {
+		RegisterSecretFunctionInternal(function, OnCreateConflict::ERROR_ON_CONFLICT);
+	}
 }
 
 void SecretManager::LoadSecretStorage(unique_ptr<SecretStorage> storage) {
@@ -99,23 +110,12 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 
 void SecretManager::RegisterSecretType(SecretType &type) {
 	lock_guard<mutex> lck(manager_lock);
-	auto lookup = secret_types.find(type.name);
-	if (lookup != secret_types.end()) {
-		throw InternalException("Attempted to register an already registered secret type: '%s'", type.name);
-	}
-	secret_types[type.name] = type;
+	RegisterSecretTypeInternal(type);
 }
 
 void SecretManager::RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) {
 	unique_lock<mutex> lck(manager_lock);
-	auto lookup = secret_functions.find(function.secret_type);
-	if (lookup != secret_functions.end()) {
-		lookup->second.AddFunction(function, on_conflict);
-		return;
-	}
-	CreateSecretFunctionSet new_set(function.secret_type);
-	new_set.AddFunction(function, OnCreateConflict::ERROR_ON_CONFLICT);
-	secret_functions.insert({function.secret_type, new_set});
+	RegisterSecretFunctionInternal(std::move(function), on_conflict);
 }
 
 unique_ptr<SecretEntry> SecretManager::RegisterSecret(CatalogTransaction transaction,
@@ -407,6 +407,14 @@ SecretType SecretManager::LookupType(const string &type) {
 	return LookupTypeInternal(type);
 }
 
+void SecretManager::RegisterSecretTypeInternal(SecretType &type) {
+	auto lookup = secret_types.find(type.name);
+	if (lookup != secret_types.end()) {
+		throw InternalException("Attempted to register an already registered secret type: '%s'", type.name);
+	}
+	secret_types[type.name] = type;
+}
+
 SecretType SecretManager::LookupTypeInternal(const string &type) {
 	unique_lock<mutex> lck(manager_lock);
 	auto lookup = secret_types.find(type);
@@ -425,6 +433,17 @@ SecretType SecretManager::LookupTypeInternal(const string &type) {
 	}
 
 	ThrowTypeNotFoundError(type);
+}
+
+void SecretManager::RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict) {
+	auto lookup = secret_functions.find(function.secret_type);
+	if (lookup != secret_functions.end()) {
+		lookup->second.AddFunction(function, on_conflict);
+		return;
+	}
+	CreateSecretFunctionSet new_set(function.secret_type);
+	new_set.AddFunction(function, OnCreateConflict::ERROR_ON_CONFLICT);
+	secret_functions.insert({function.secret_type, new_set});
 }
 
 vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
@@ -519,8 +538,7 @@ void SecretManager::ThrowTypeNotFoundError(const string &type) {
 	auto entry = ExtensionHelper::FindExtensionInEntries(StringUtil::Lower(type), EXTENSION_SECRET_TYPES);
 	if (!entry.empty() && db) {
 		auto error_message = "Secret type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
-		error_message =
-		    ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(*db), error_message, entry);
+		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db, error_message, entry);
 
 		throw InvalidInputException(error_message);
 	}
@@ -539,8 +557,7 @@ void SecretManager::ThrowProviderNotFoundError(const string &type, const string 
 		string error_message = was_default ? "Default secret provider" : "Secret provider";
 		error_message +=
 		    " '" + provider + "' for type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
-		error_message =
-		    ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(*db), error_message, entry);
+		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db, error_message, entry);
 
 		throw InvalidInputException(error_message);
 	}

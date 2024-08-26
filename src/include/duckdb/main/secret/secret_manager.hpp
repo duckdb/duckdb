@@ -153,8 +153,12 @@ public:
 	                                 const string &storage = "");
 
 private:
+	//! Register a secret type
+	void RegisterSecretTypeInternal(SecretType &type);
 	//! Lookup a SecretType
 	SecretType LookupTypeInternal(const string &type);
+	//! Register a secret provider
+	void RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict);
 	//! Lookup a CreateSecretFunction
 	optional_ptr<CreateSecretFunction> LookupFunctionInternal(const string &type, const string &provider);
 	//! Register a new Secret
