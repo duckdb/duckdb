@@ -202,9 +202,9 @@ public:
 				const auto max_new = MinValue(new_hll.GetRegister(i), duckdb_hll::maximum_zeros());
 				uint8_t register_value;
 				if (static_cast<double>(i) / static_cast<double>(HyperLogLog::M) < floor_fraction) {
-					register_value = NumericCast<uint8_t>(floor(default_val));
+					register_value = ExactNumericCast<uint8_t>(floor(default_val));
 				} else {
-					register_value = NumericCast<uint8_t>(ceil(default_val));
+					register_value = ExactNumericCast<uint8_t>(ceil(default_val));
 				}
 				register_value = MinValue(register_value, max_new);
 				for (idx_t j = 1; j < mult; j++) {
