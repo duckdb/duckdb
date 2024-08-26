@@ -211,7 +211,8 @@ struct TestVectorSequence {
 		static constexpr const idx_t SEQ_CARDINALITY = 3;
 
 		auto result = make_uniq<DataChunk>();
-		result->Initialize(Allocator::DefaultAllocator(), info.types, MaxValue<idx_t>(SEQ_CARDINALITY, STANDARD_VECTOR_SIZE));
+		result->Initialize(Allocator::DefaultAllocator(), info.types,
+		                   MaxValue<idx_t>(SEQ_CARDINALITY, STANDARD_VECTOR_SIZE));
 
 		for (idx_t c = 0; c < info.types.size(); c++) {
 			if (info.types[c].id() == LogicalTypeId::MAP) {
@@ -225,7 +226,7 @@ struct TestVectorSequence {
 		info.entries.push_back(std::move(result));
 #else
 		// vsize = 2, split into two smaller data chunks
-		for(idx_t offset = 0; offset < SEQ_CARDINALITY; offset += STANDARD_VECTOR_SIZE) {
+		for (idx_t offset = 0; offset < SEQ_CARDINALITY; offset += STANDARD_VECTOR_SIZE) {
 			auto new_result = make_uniq<DataChunk>();
 			new_result->Initialize(Allocator::DefaultAllocator(), info.types);
 
