@@ -26,7 +26,7 @@ vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
 	return {ColumnBinding(0, 0)};
 }
 
-void LogicalOperator::SetParamsEstimatedCardinality(InsertionOrderPreservingMap<string> &result) const{
+void LogicalOperator::SetParamsEstimatedCardinality(InsertionOrderPreservingMap<string> &result) const {
 	if (has_estimated_cardinality) {
 		result[RenderTreeNode::ESTIMATED_CARDINALITY] = StringUtil::Format("%llu", estimated_cardinality);
 	}
