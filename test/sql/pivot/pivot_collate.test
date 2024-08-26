@@ -1,0 +1,46 @@
+# name: test/sql/pivot/pivot_collate.test
+# description: Test SQL pivot with collations
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Cities(Country VARCHAR COLLATE NOCASE, Name VARCHAR COLLATE NOCASE, Year INT, Population INT);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+statement ok
+SET pivot_filter_threshold=0
+
+query IIIII rowsort
+PIVOT Cities ON Year USING SUM(Population);
+----
+NL	Amsterdam	1005	1065	1158
+US	New York City	8015	8175	8772
+US	Seattle	564	608	738
