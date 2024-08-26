@@ -55,7 +55,7 @@ jobs:
     name: Windows (64 Bit)
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -111,7 +111,7 @@ jobs:
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: duckdb-binaries-windows
         path: |
@@ -130,7 +130,7 @@ jobs:
     needs: win-release-64
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -170,7 +170,7 @@ jobs:
    needs: win-release-64
 
    steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
          ref: ${{ inputs.git_ref }}
@@ -203,7 +203,7 @@ jobs:
          zip -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
 
-     - uses: actions/upload-artifact@v3
+     - uses: actions/upload-artifact@v4
        with:
          name: duckdb-binaries-windows
          path: |
@@ -216,7 +216,7 @@ jobs:
      if: ${{ inputs.skip_tests != 'true' }}
      needs: win-release-64
      steps:
-       - uses: actions/checkout@v3
+       - uses: actions/checkout@v4
          with:
            ref: ${{ inputs.git_ref }}
        - uses: msys2/setup-msys2@v2
@@ -265,7 +265,7 @@ jobs:
          git config --global core.autocrlf false
          git config --global core.eol lf
 
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
          ref: ${{ inputs.git_ref }}

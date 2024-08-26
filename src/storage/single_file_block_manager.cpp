@@ -638,6 +638,10 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	TrimFreeBlocks();
 }
 
+void SingleFileBlockManager::FileSync() {
+	handle->Sync();
+}
+
 void SingleFileBlockManager::TrimFreeBlocks() {
 	if (DBConfig::Get(db).options.trim_free_blocks) {
 		for (auto itr = newly_freed_list.begin(); itr != newly_freed_list.end(); ++itr) {

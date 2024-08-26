@@ -267,6 +267,8 @@ struct DBConfigOptions {
 	bool scalar_subquery_error_on_multiple_rows = true;
 	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
 	bool ieee_floating_point_ops = true;
+	//! Allow ordering by non-integer literals - ordering by such literals has no effect
+	bool order_by_non_integer_literal = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

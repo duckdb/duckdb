@@ -92,9 +92,11 @@ SELECT ARRAY
 ----
 ORDER term out of range
 
-statement ok
+statement error
 SELECT ARRAY
   (SELECT 1 UNION ALL
    SELECT 2 UNION ALL
    SELECT 3
    ORDER by 'hello world') AS new_array;
+----
+ORDER BY non-integer literal has no effect

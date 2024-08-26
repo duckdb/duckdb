@@ -99,7 +99,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make relassert
+      run: UNSAFE_NUMERIC_CAST=1 make relassert
 
     - name: Test
       shell: bash
@@ -670,7 +670,7 @@ jobs:
          make
 
          cd unsafe
-         DISABLE_MEMORY_SAFETY=1 make
+         UNSAFE_NUMERIC_CAST=1 DISABLE_MEMORY_SAFETY=1 make
 
      - name: Set up benchmarks
        shell: bash
