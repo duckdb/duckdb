@@ -271,8 +271,15 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 	SetDateFormat(candidate, format_candidate.format.back(), sql_type.id());
 }
 
+bool ValidSeparator(const string &separator) {
+	// We use https://en.wikipedia.org/wiki/List_of_date_formats_by_country as reference
+	return separator == "-" || separator == "." || separator == "/" || separator == " ";
+}
 void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type,
                                                const string &separator, const string_t &dummy_val) {
+	if (!ValidSeparator(separator)) {
+		return;
+	}
 	// If it is the first time running date/timestamp detection we must initialize the format variables
 	InitializeDateAndTimeStampDetection(candidate, separator, sql_type);
 	// generate date format candidates the first time through
@@ -286,7 +293,7 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 	while (!type_format_candidates.empty()) {
 		//	avoid using exceptions for flow control...
 		auto &current_format = candidate.dialect_options.date_format[sql_type.id()].GetValue();
-		if (current_format.Parse(dummy_val, result)) {
+		if (current_format.Parse(dummy_val, result, true)) {
 			format_candidates[sql_type.id()].had_match = true;
 			break;
 		}
