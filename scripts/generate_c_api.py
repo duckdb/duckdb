@@ -126,6 +126,8 @@ DUCKDB_H_HEADER = HEADER('duckdb.h')
 DUCKDB_EXT_H_HEADER = HEADER('duckdb_extension.h')
 DUCKDB_EXT_INTERNAL_H_HEADER = HEADER('extension_api.hpp')
 
+DUCKDB_EXT_H_HEADER += "\n// WARNING: this API is not yet stable, this means that this API is only guaranteed to work for this specific DuckDB version\n\n"
+
 
 # Loads the template for the header files to be generated
 def fetch_header_template_main():
