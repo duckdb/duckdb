@@ -487,7 +487,7 @@ typedef struct {
 #endif
 
 #ifdef DUCKDB_EXTENSION_API_VERSION_DEV // dev
-                                        // WARNING! the functions below are not (yet) stable
+	                                    // WARNING! the functions below are not (yet) stable
 
 #endif
 
