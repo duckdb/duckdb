@@ -170,3 +170,51 @@ class TestCanonicalExtensionTypes(object):
 
         with pytest.raises(duckdb.NotImplementedException, match=" Arrow Type with extension name: pedro.binary"):
             duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
+
+    def test_hugeint(self, duckdb_cursor):
+        class HugeIntType(pa.ExtensionType):
+            def __init__(self):
+                pa.ExtensionType.__init__(self, pa.binary(16), "duckdb.hugeint")
+
+            def __arrow_ext_serialize__(self):
+                return b''
+
+            @classmethod
+            def __arrow_ext_deserialize__(self, storage_type, serialized):
+                return HugeIntType()
+
+        pa.register_extension_type(HugeIntType())
+
+        storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'] , pa.binary(16))
+        hugeint_type = HugeIntType()
+        storage_array = hugeint_type.wrap_array(storage_array)
+
+        arrow_table = pa.Table.from_arrays([storage_array], names=['numbers'])
+
+        assert duckdb_cursor.execute('FROM arrow_table').fetchall() == [(-1,)] 
+
+        pa.unregister_extension_type("duckdb.hugeint")
+
+    def test_uhugeint(self, duckdb_cursor):
+        class UHugeIntType(pa.ExtensionType):
+            def __init__(self):
+                pa.ExtensionType.__init__(self, pa.binary(16), "duckdb.uhugeint")
+
+            def __arrow_ext_serialize__(self):
+                return b''
+
+            @classmethod
+            def __arrow_ext_deserialize__(self, storage_type, serialized):
+                return UHugeIntType()
+
+        pa.register_extension_type(UHugeIntType())
+
+        storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'] , pa.binary(16))
+        uhugeint_type = UHugeIntType()
+        storage_array = uhugeint_type.wrap_array(storage_array)
+
+        arrow_table = pa.Table.from_arrays([storage_array], names=['numbers'])
+
+        assert duckdb_cursor.execute('FROM arrow_table').fetchall() == [(340282366920938463463374607431768211455,)]
+
+        pa.unregister_extension_type("duckdb.uhugeint")
