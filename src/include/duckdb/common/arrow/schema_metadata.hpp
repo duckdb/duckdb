@@ -22,7 +22,7 @@ public:
 	//! Adds an option to the metadata
 	void AddOption(const string &key, const string &value);
 	//! Gets an option from the metadata, returns an empty string if does not exist.
-	string GetOption(const string &key);
+	string GetOption(const string &key) const;
 	//! Transforms metadata to a char*, used when creating an arrow object
 	unsafe_unique_array<char> SerializeMetadata() const;
 	//! If the arrow extension is set

@@ -124,9 +124,26 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::FLOAT:
 		child.format = "f";
 		break;
-	case LogicalTypeId::HUGEINT:
-		child.format = "d:38,0";
+	case LogicalTypeId::HUGEINT: {
+		// This is a canonical extension, hence needs the "arrow." prefix
+		child.format = "w:16";
+		auto schema_metadata = ArrowSchemaMetadata();
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "duckdb.hugeint");
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
 		break;
+	}
+	case LogicalTypeId::UHUGEINT: {
+		// This is a canonical extension, hence needs the "arrow." prefix
+		child.format = "w:16";
+		auto schema_metadata = ArrowSchemaMetadata();
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "duckdb.hugeint");
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
+		break;
+	}
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;

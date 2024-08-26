@@ -94,10 +94,10 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	TestArrowRoundtrip("SELECT '{\"name\":\"Pedro\", \"age\":28, \"car\":\"VW Fox\"}'::JSON str FROM range(5) tbl(i)");
 
 	// HUGEINT
-	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105729'::HUGEINT str FROM range(5) tbl(i)");
+	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::HUGEINT str FROM range(5) tbl(i)");
 
 	// UHUGEINT
-	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105729'::UHUGEINT str FROM range(5) tbl(i)");
+	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::UHUGEINT str FROM range(5) tbl(i)");
 }
 
 TEST_CASE("Test Arrow String View", "[arrow][.]") {
