@@ -422,9 +422,6 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
-	// dev
-	// WARNING! the functions below are not (yet) stable
-
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//

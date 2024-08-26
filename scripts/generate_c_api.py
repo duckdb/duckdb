@@ -465,6 +465,8 @@ def create_extension_api_struct(
     extension_struct_finished = COMMENT_HEADER("Function pointer struct")
     extension_struct_finished += 'typedef struct {\n'
     for api_version_entry in api_definition:
+        if len(api_version_entry['entries']) == 0:
+            continue
         version = api_version_entry['version']
         if version == DEV_VERSION_TAG:
             if add_version_defines:
@@ -541,8 +543,9 @@ def create_duckdb_ext_h(
     typedefs = ""
     for api_version_entry in api_struct_definition:
         version = api_version_entry['version']
-        typedefs += f"// Version {version}\n"
 
+        # Collect the typedefs for this version
+        grouped_typedefs = []
         for group in function_groups:
             functions_to_add = []
             for function in group['entries']:
@@ -551,12 +554,18 @@ def create_duckdb_ext_h(
                 functions_to_add.append(function)
 
             if functions_to_add:
-                group_name = group['group']
-                # typedefs += f'//! {group_name}\n'
-                for fun_to_add in functions_to_add:
-                    typedefs += create_function_typedef(fun_to_add)
+                grouped_typedefs.append((group['group'], functions_to_add))
 
-                typedefs += '\n'
+        if len(grouped_typedefs) == 0:
+            continue
+
+        typedefs += f"// Version {version}\n"
+
+        for group in grouped_typedefs:
+            for fun_to_add in group[1]:
+                typedefs += create_function_typedef(fun_to_add)
+
+        typedefs += '\n'
 
     # Create the versioning defines
     major, minor, patch = parse_semver(ext_api_version)
