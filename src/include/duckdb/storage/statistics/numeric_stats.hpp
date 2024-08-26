@@ -98,11 +98,4 @@ private:
 	static void TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 };
 
-template <>
-inline void NumericStats::Update<interval_t>(NumericStatsData &nstats, interval_t new_value) {
-}
-template <>
-inline void NumericStats::Update<list_entry_t>(NumericStatsData &nstats, list_entry_t new_value) {
-}
-
 } // namespace duckdb
