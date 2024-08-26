@@ -368,8 +368,6 @@ public:
 	WindowGlobalSinkState &gsink;
 	//! The total number of blocks to process;
 	idx_t total_blocks = 0;
-	//! State mutex
-	mutable mutex lock;
 	//! The number of local states
 	atomic<idx_t> threads;
 	//! The list of tasks
@@ -382,8 +380,6 @@ public:
 	atomic<bool> stopped;
 	//! The number of rows returned
 	atomic<idx_t> returned;
-	//! The set of blocked tasks
-	mutable vector<InterruptState> blocked_tasks;
 
 public:
 	idx_t MaxThreads() override {
@@ -428,7 +424,7 @@ void WindowGlobalSourceState::CreateTaskList() {
 		return;
 	}
 
-	lock_guard<mutex> task_guard(lock);
+	auto guard = Lock();
 
 	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
 	if (!tasks.empty()) {
@@ -709,7 +705,7 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 }
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
-	lock_guard<mutex> task_guard(lock);
+	auto guard = Lock();
 	if (next_task >= tasks.size() || stopped) {
 		task = nullptr;
 		return false;
@@ -908,15 +904,11 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 				throw;
 			}
 		} else {
-			lock_guard<mutex> guard(gsource.lock);
+			auto guard = gsource.Lock();
 			if (gsource.TryPrepareNextStage() || !gsource.HasUnfinishedTasks()) {
-				for (auto &state : gsource.blocked_tasks) {
-					state.Callback();
-				}
-				gsource.blocked_tasks.clear();
+				gsource.UnblockTasks(guard);
 			} else {
-				gsource.blocked_tasks.push_back(input.interrupt_state);
-				return SourceResultType::BLOCKED;
+				return gsource.BlockSource(guard, input.interrupt_state);
 			}
 		}
 	}
