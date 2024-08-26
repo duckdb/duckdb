@@ -194,6 +194,9 @@ true
 
 # test if all phase timings are added when detailed profiling is on
 statement ok
+RESET custom_profiling_settings;
+
+statement ok
 SET profiling_mode = 'detailed';
 
 statement ok
@@ -252,6 +255,9 @@ SELECT unnest(res) from (
 "QUERY_NAME": "true"
 
 # Test if phase timings are not added if detailed mode is off
+statement ok
+RESET custom_profiling_settings;
+
 statement ok
 PRAGMA profiling_mode = 'standard';
 
