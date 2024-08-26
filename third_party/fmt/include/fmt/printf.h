@@ -83,9 +83,17 @@ template <typename T, typename Context> class arg_converter {
   basic_format_arg<Context>& arg_;
   char_type type_;
 
+  bool is_unsigned_type(internal::type t) {
+    return t == uint_type || t == ulong_long_type || t == uint128_type;
+  }
+
  public:
   arg_converter(basic_format_arg<Context>& arg, char_type type)
-      : arg_(arg), type_(type) {}
+      : arg_(arg), type_(type) {
+        if ((type_ == 'd' || type_ == 'i') && is_unsigned_type(arg_.type())) {
+          type_ = 'u';
+        }
+      }
 
   void operator()(bool value) {
     if (type_ != 's') operator()<bool>(value);
