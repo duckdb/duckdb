@@ -112,6 +112,12 @@ public:
 	idx_t GetDistinctCount();
 	static BaseStatistics FromConstant(const Value &input);
 
+	template <class T>
+	void UpdateNumericStats(T new_value) {
+		D_ASSERT(GetStatsType() == StatisticsType::NUMERIC_STATS);
+		NumericStats::Update(stats_union.numeric_data, new_value);
+	}
+
 private:
 	BaseStatistics();
 	explicit BaseStatistics(LogicalType type);
