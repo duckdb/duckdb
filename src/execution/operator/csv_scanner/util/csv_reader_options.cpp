@@ -480,6 +480,9 @@ bool StoreUserDefinedParameter(string &option) {
 void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientContext &context) {
 	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
+		if (kv.second.IsNull()) {
+			throw BinderException("Cannot use NULL as function argument");
+		}
 		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
 		}

@@ -1,0 +1,32 @@
+# name: test/fuzzer/duckfuzz/null_arguments.test
+# description: Null arguments do not throw internal exceptions
+# group: [duckfuzz]
+
+require json
+
+require parquet
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+
+statement error
+SELECT NULL FROM read_ndjson_auto(NULL, timestamp_format := 5469, "compression" := NULL)
+----
+<REGEX>:.*Cannot use NULL.*
+
+statement ok
+COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.parquet' (FORMAT PARQUET);
+
+statement ok
+COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.csv' (FORMAT CSV);
+
+statement error
+SELECT NULL FROM read_parquet('__TEST_DIR__/test_null_args.parquet', filename = NULL);
+----
+<REGEX>:.*Cannot use NULL.*
+
+
+statement error
+SELECT NULL FROM read_csv('__TEST_DIR__/test_null_args.csv', names=NULL);
+----
+<REGEX>:.*Cannot use NULL.*
