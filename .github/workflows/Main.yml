@@ -102,7 +102,6 @@ jobs:
       BUILD_JSON: 1
       BUILD_JEMALLOC: 1
       BUILD_EXTENSIONS: ""
-      CORE_EXTENSIONS: "inet"
       RUN_SLOW_VERIFIERS: 1
 
     steps:
@@ -147,7 +146,6 @@ jobs:
       BUILD_FTS: 1
       BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "inet"
 
     steps:
     - uses: actions/checkout@v3
