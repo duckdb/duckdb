@@ -381,6 +381,16 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 	}
 }
 
+// If we have a predefined date/timestamp format we set it
+void CSVSniffer::SetUserDefinedDateTimeFormat(CSVStateMachine &candidate) {
+	const vector<LogicalTypeId> data_time_formats {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
+	for (auto &date_time_format : data_time_formats) {
+		auto &user_option = options.dialect_options.date_format.at(date_time_format);
+		if (user_option.IsSetByUser()) {
+			SetDateFormat(candidate, user_option.GetValue().format_specifier, date_time_format);
+		}
+	}
+}
 void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
 	idx_t min_errors = NumericLimits<idx_t>::Maximum();
@@ -400,7 +410,7 @@ void CSVSniffer::DetectTypes() {
 
 		// Reset candidate for parsing
 		auto candidate = candidate_cc->UpgradeToStringValueScanner();
-
+		SetUserDefinedDateTimeFormat(*candidate->state_machine);
 		// Parse chunk and read csv with info candidate
 		auto &data_chunk = candidate->ParseChunk().ToChunk();
 		idx_t start_idx_detection = 0;

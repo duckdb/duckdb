@@ -956,7 +956,7 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				}
 				// year without century..
 				// Python uses 69 as a crossover point (i.e. >= 69 is 19.., < 69 is 20..)
-				if (pos - start_pos < 2 && strict){
+				if (pos - start_pos < 2 && strict) {
 					return false;
 				}
 				if (number >= 100) {
@@ -983,7 +983,7 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				default:
 					break;
 				}
-				if (pos - start_pos < 2 && strict){
+				if (pos - start_pos < 2 && strict) {
 					return false;
 				}
 				// year as full number
