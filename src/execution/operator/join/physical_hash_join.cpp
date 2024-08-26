@@ -1194,11 +1194,7 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
 				gstate.UnblockTasks(guard);
 			} else {
-				if (gstate.BlockTask(guard, input.interrupt_state)) {
-					return SourceResultType::BLOCKED;
-				} else {
-					return SourceResultType::FINISHED;
-				}
+				return gstate.BlockSource(guard, input.interrupt_state);
 			}
 		}
 	}

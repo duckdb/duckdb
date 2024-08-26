@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/parallel/task.hpp"
@@ -73,10 +74,10 @@ public:
 	}
 
 	//! Add a task to 'blocked_tasks' before returning SourceResultType::BLOCKED (must hold the lock)
-	bool BlockTask(const unique_lock<mutex> &guard, InterruptState interrupt_state) {
+	bool BlockTask(const unique_lock<mutex> &guard, const InterruptState &interrupt_state) {
 		D_ASSERT(guard.mutex() && RefersToSameObject(*guard.mutex(), lock));
 		if (can_block) {
-			blocked_tasks.push_back(std::move(interrupt_state));
+			blocked_tasks.push_back(interrupt_state);
 			return true;
 		}
 		return false;
@@ -93,6 +94,14 @@ public:
 		}
 		blocked_tasks.clear();
 		return true;
+	}
+
+	SinkResultType BlockSink(const unique_lock<mutex> &guard, const InterruptState &interrupt_state) {
+		return BlockTask(guard, interrupt_state) ? SinkResultType::BLOCKED : SinkResultType::FINISHED;
+	}
+
+	SourceResultType BlockSource(const unique_lock<mutex> &guard, const InterruptState &interrupt_state) {
+		return BlockTask(guard, interrupt_state) ? SourceResultType::BLOCKED : SourceResultType::FINISHED;
 	}
 
 private:
