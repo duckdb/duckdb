@@ -78,6 +78,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				lock_guard<mutex> parallel_lock(main_mutex);
 				cur_idx = last_file_idx++;
 				if (cur_idx >= bind_data.files.size()) {
+					// No more files to scan
 					return nullptr;
 				}
 				if (cur_idx == 0) {
@@ -93,19 +94,20 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			lock_guard<mutex> parallel_lock(main_mutex);
 			file_scans.emplace_back(std::move(file_scan));
 			current_file = file_scans.back();
+			if (current_file->file_size != 0) {
+				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
+				                                                        current_boundary.GetBufferIdx());
+				if (previous_scanner) {
+					previous_scanner->buffer_tracker.reset();
+					current_buffer_in_use.reset();
+					previous_scanner->csv_file_scan->Finish();
+				}
+				return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
+				                                     current_file->state_machine, current_file->error_handler,
+				                                     current_file, false, current_boundary);
+			}
 		} while (current_file->file_size == 0);
-		lock_guard<mutex> parallel_lock(main_mutex);
-		current_boundary = current_file->start_iterator;
-		current_boundary.SetCurrentBoundaryToPosition(single_threaded);
-		current_buffer_in_use =
-		    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
-		if (previous_scanner) {
-			previous_scanner->buffer_tracker.reset();
-			current_buffer_in_use.reset();
-			previous_scanner->csv_file_scan->Finish();
-		}
-		return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
-		                                     current_file->error_handler, current_file, false, current_boundary);
 	}
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (finished) {
