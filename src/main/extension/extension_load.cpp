@@ -278,12 +278,12 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	return false;
 }
 
-bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
+bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
                                      ExtensionInitResult &result, string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	if (!config.options.enable_external_access) {
+	if (!db.config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
 	auto filename = fs.ConvertSeparators(extension);
@@ -318,8 +318,9 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		filename = address;
 #else
 
-		string local_path = !config.options.extension_directory.empty() ? config.options.extension_directory
-		                                                                : ExtensionHelper::DefaultExtensionFolder(fs);
+		string local_path = !db.config.options.extension_directory.empty()
+		                        ? db.config.options.extension_directory
+		                        : ExtensionHelper::DefaultExtensionFolder(fs);
 
 		// convert random separators to platform-canonic
 		local_path = fs.ConvertSeparators(local_path);
@@ -356,17 +357,17 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
 	}
 
-	if (!config.options.allow_unsigned_extensions) {
+	if (!db.config.options.allow_unsigned_extensions) {
 		bool signature_valid;
 		if (parsed_metadata.AppearsValid()) {
 			signature_valid =
-			    CheckExtensionSignature(*handle, parsed_metadata, config.options.allow_community_extensions);
+			    CheckExtensionSignature(*handle, parsed_metadata, db.config.options.allow_community_extensions);
 		} else {
 			signature_valid = false;
 		}
 
 		if (!signature_valid) {
-			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) +
+			throw IOException(db.config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) +
 			                  metadata_mismatch_error);
 		}
 
@@ -374,7 +375,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			// Signed extensions perform the full check
 			throw InvalidInputException(metadata_mismatch_error);
 		}
-	} else if (!config.options.allow_extensions_metadata_mismatch) {
+	} else if (!db.config.options.allow_extensions_metadata_mismatch) {
 		if (!metadata_mismatch_error.empty()) {
 			// Unsigned extensions AND configuration allowing n, loading allowed, mainly for
 			// debugging purposes
@@ -444,17 +445,17 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 #endif
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(config, fs, extension, result, error)) {
+	if (!TryInitialLoad(db, fs, extension, result, error)) {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
-		ExtensionHelper::InstallExtension(config, fs, extension, false);
+		ExtensionHelper::InstallExtension(db, fs, extension, false);
 		// try loading again
-		if (!TryInitialLoad(config, fs, extension, result, error)) {
+		if (!TryInitialLoad(db, fs, extension, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -489,7 +490,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension);
+	auto res = InitialLoad(db, fs, extension);
 	auto init_fun_name = res.filebase + "_init";
 
 	// "OLD WAY" of loading extensions. If the <ext_name>_init exists, we choose that
