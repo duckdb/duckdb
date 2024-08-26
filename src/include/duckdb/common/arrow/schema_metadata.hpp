@@ -25,6 +25,10 @@ public:
 	string GetOption(const string &key);
 	//! Transforms metadata to a char*, used when creating an arrow object
 	unsafe_unique_array<char> SerializeMetadata() const;
+	//! If the arrow extension is set
+	bool HasExtension();
+	//! Get the extension name if set, otherwise returns empty
+	string GetExtensionName() const;
 	//! Key for encode of the extension type name
 	static constexpr const char *ARROW_EXTENSION_NAME = "ARROW:extension:name";
 	//! Key for encode of the metadata key

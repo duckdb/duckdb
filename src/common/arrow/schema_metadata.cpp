@@ -39,6 +39,15 @@ string ArrowSchemaMetadata::GetOption(const string &key) {
 	return metadata_map[key];
 }
 
+string ArrowSchemaMetadata::GetExtensionName() const {
+	return GetOption(ARROW_EXTENSION_NAME);
+}
+bool ArrowSchemaMetadata::HasExtension() {
+	auto arrow_extension = GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
+	// FIXME: We are currently ignoring the ogc extensions
+	return !arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc");
+}
+
 unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {
 	// First we have to figure out the total size:
 	// 1. number of key-value pairs (int32)

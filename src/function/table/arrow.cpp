@@ -30,11 +30,9 @@ static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSiz
 	return make_uniq<ArrowType>(type, std::move(type_info));
 }
 
-static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
-	auto format = string(schema.format);
-	// Let's first figure out if this type is a special canonical type
-	ArrowSchemaMetadata schema_metadata(schema.metadata);
-	auto arrow_extension = schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
+static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &extension_type, const string &format) {
+	auto arrow_extension = extension_type.GetExtensionName();
+	// Check for arrow canonical extensions
 	if (arrow_extension == "arrow.uuid") {
 		if (format != "w:16") {
 			throw InvalidInputException(
@@ -55,12 +53,35 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 			                            "incorrectly defined as: %s",
 			                            format);
 		}
-	} else if (!arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc")) {
-		// FIXME: ogc is the extension format used in geo.arrow right now we consume these types, but do not create
-		// the proper GEO types
+	}
+	// Check for DuckDB canonical extensions
+	else if (arrow_extension == "duckdb.hugeint") {
+		if (format != "w:16") {
+			throw InvalidInputException("duckdb.hugeint must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It "
+			                            "is incorrectly defined as: %s",
+			                            format);
+		}
+		return make_uniq<ArrowType>(LogicalType::HUGEINT);
+
+	} else if (arrow_extension == "duckdb.uhugeint") {
+		if (format != "w:16") {
+			throw InvalidInputException("duckdb.hugeint must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It "
+			                            "is incorrectly defined as: %s",
+			                            format);
+		}
+		return make_uniq<ArrowType>(LogicalType::UHUGEINT);
+	} else {
 		throw NotImplementedException(
 		    "Arrow Type with extension name: %s and format: %s, is not currently supported in DuckDB ", arrow_extension,
 		    format);
+	}
+}
+static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
+	auto format = string(schema.format);
+	// Let's first figure out if this type is an extension type
+	ArrowSchemaMetadata schema_metadata(schema.metadata);
+	if (schema_metadata.HasExtension()) {
+		return GetArrowExtensionType(schema_metadata, format);
 	}
 	// If not, we just check the format itself
 	if (format == "n") {
