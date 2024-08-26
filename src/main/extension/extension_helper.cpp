@@ -232,7 +232,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto autoinstall_repo =
 			    ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(dbconfig, fs, extension_name, false, autoinstall_repo, false);
+			ExtensionHelper::InstallExtension(instance, fs, extension_name, false, autoinstall_repo, false);
 		}
 		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
 		return true;
