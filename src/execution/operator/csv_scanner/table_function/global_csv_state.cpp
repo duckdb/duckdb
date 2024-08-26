@@ -108,8 +108,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
 				                                     current_file->state_machine, current_file->error_handler,
 				                                     current_file, false, current_boundary);
-			} else {
-				int i = 0;
 			}
 		} while (empty_file);
 	}
