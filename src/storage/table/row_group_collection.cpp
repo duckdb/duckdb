@@ -410,9 +410,12 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	auto global_stats_lock = stats.GetLock();
 	auto local_stats_lock = state.stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		auto &global_distinct_stats = stats.GetStats(*global_stats_lock, col_idx).DistinctStats();
-		auto &local_distinct_stats = state.stats.GetStats(*local_stats_lock, col_idx).DistinctStats();
-		global_distinct_stats.Merge(local_distinct_stats);
+		auto &global_stats = stats.GetStats(*global_stats_lock, col_idx);
+		if (!global_stats.HasDistinctStats()) {
+			continue;
+		}
+		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
+		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
 	}
 
 	Verify();

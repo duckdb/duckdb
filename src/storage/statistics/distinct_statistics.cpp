@@ -7,11 +7,14 @@
 
 namespace duckdb {
 
-DistinctStatistics::DistinctStatistics() : log(make_uniq<HyperLogLog>()), sample_count(0), total_count(0) {
+DistinctStatistics::DistinctStatistics()
+    : log(make_uniq<HyperLogLog>()), sample_count(0), total_count(0),
+      hash_vec(LogicalType::HASH, STANDARD_VECTOR_SIZE) {
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count)
-    : log(std::move(log)), sample_count(sample_count), total_count(total_count) {
+    : log(std::move(log)), sample_count(sample_count), total_count(total_count),
+      hash_vec(LogicalType::HASH, STANDARD_VECTOR_SIZE) {
 }
 
 unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {
@@ -30,20 +33,19 @@ void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
 	if (sample) {
 		const auto original_count = count;
 		const auto sample_rate = v.GetType().IsIntegral() ? INTEGRAL_SAMPLE_RATE : BASE_SAMPLE_RATE;
-		// Sample up to 'sample_rate' of STANDARD_VECTOR_SIZE of this vector (at least 1 if we're testing vector size 2)
+		// Sample up to 'sample_rate' of STANDARD_VECTOR_SIZE of this vector (at least 1)
 		count = MaxValue<idx_t>(LossyNumericCast<idx_t>(sample_rate * static_cast<double>(STANDARD_VECTOR_SIZE)), 1);
 		// But never more than the original count
 		count = MinValue<idx_t>(count, original_count);
 	}
 	sample_count += count;
 
-	Vector hash_vec(LogicalType::HASH, count);
+	lock_guard<mutex> guard(lock);
 	VectorOperations::Hash(v, hash_vec, count);
 
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(count, vdata);
 
-	lock_guard<mutex> guard(lock);
 	log->Update(v, hash_vec, count);
 }
 
