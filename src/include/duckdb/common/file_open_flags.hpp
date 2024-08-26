@@ -107,6 +107,9 @@ public:
 	inline bool ReturnNullIfExists() const {
 		return flags & FILE_FLAGS_NULL_IF_EXISTS;
 	}
+	inline idx_t GetFlagsInternal() const {
+		return flags;
+	}
 
 private:
 	idx_t flags = 0;
