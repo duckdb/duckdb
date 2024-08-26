@@ -35,6 +35,12 @@ SELECT printf('%d', 33), printf('%d + %d = %d', 3, 5, 3 + 5)
 ----
 33	3 + 5 = 8
 
+# maximum of ubigint
+query I
+SELECT printf('%d', 18446744073709551615::UBIGINT);
+----
+18446744073709551615
+
 # integers with special formatting specifiers
 query TTT
 SELECT printf('%04d', 33), printf('%s %02d:%02d:%02d %s', 'time', 12, 3, 16, 'AM'), printf('%10d', 1992)
