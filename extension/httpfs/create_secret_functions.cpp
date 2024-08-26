@@ -112,18 +112,6 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
 }
 
 void CreateBearerTokenFunctions::Register(DatabaseInstance &instance) {
-	// Generic Bearer secret
-	SecretType secret_type;
-	secret_type.name = GENERIC_BEARER_TYPE;
-	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
-	secret_type.default_provider = "config";
-	ExtensionUtil::RegisterSecretType(instance, secret_type);
-
-	// Generic Bearer config provider
-	CreateSecretFunction config_fun = {GENERIC_BEARER_TYPE, "config", CreateBearerSecretFromConfig};
-	config_fun.named_parameters["token"] = LogicalType::VARCHAR;
-	ExtensionUtil::RegisterFunction(instance, config_fun);
-
 	// HuggingFace secret
 	SecretType secret_type_hf;
 	secret_type_hf.name = HUGGINGFACE_TYPE;
@@ -148,9 +136,7 @@ unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(
 	// Set scope to user provided scope or the default
 	auto scope = input.scope;
 	if (scope.empty()) {
-		if (input.type == GENERIC_BEARER_TYPE) {
-			scope.push_back("");
-		} else if (input.type == HUGGINGFACE_TYPE) {
+		if (input.type == HUGGINGFACE_TYPE) {
 			scope.push_back("hf://");
 		} else {
 			throw InternalException("Unknown secret type found in httpfs extension: '%s'", input.type);
