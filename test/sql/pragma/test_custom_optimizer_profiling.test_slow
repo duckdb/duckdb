@@ -1,5 +1,5 @@
 # name: test/sql/pragma/test_custom_optimizer_profiling.test_slow
-# description: Test slow PRAGMA custom_profiling_settings with optimizers 
+# description: Test slow PRAGMA custom_profiling_settings with optimizers
 # group: [pragma]
 
 require json
