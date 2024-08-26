@@ -156,6 +156,17 @@ int strerror_fixed(int err, char *buf, size_t buflen) {
 }
 ```
 
+Add this line
+```c++
+buf[0] = '2';
+```
+to this function
+```c++
+static bool
+os_overcommits_proc(void)
+```
+in `pages.c`.
+
 Almost no symbols are leaked due to `private_namespace.h`.
 The `exported_symbols_check.py` script still found a few, so these lines need to be added to `private_namespace.h`:
 ```c++
