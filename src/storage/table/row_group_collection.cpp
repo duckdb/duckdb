@@ -334,6 +334,8 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	state.start_row_group->InitializeAppend(state.row_group_append_state);
 	state.transaction = transaction;
 
+	// initialize thread-local stats so we have less lock contention when updating distinct statistics
+	state.stats = TableStatistics();
 	state.stats.InitializeEmpty(types);
 }
 
