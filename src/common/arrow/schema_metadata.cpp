@@ -42,6 +42,14 @@ string ArrowSchemaMetadata::GetOption(const string &key) const {
 string ArrowSchemaMetadata::GetExtensionName() const {
 	return GetOption(ARROW_EXTENSION_NAME);
 }
+
+ArrowSchemaMetadata ArrowSchemaMetadata::MetadataFromName(const string &extension_name) {
+	ArrowSchemaMetadata metadata;
+	metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, extension_name);
+	metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+	return metadata;
+}
+
 bool ArrowSchemaMetadata::HasExtension() {
 	if (metadata_map.find(ARROW_EXTENSION_NAME) == metadata_map.end()) {
 		return false;

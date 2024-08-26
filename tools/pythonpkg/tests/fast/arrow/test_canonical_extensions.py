@@ -185,13 +185,13 @@ class TestCanonicalExtensionTypes(object):
 
         pa.register_extension_type(HugeIntType())
 
-        storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'] , pa.binary(16))
+        storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
         hugeint_type = HugeIntType()
         storage_array = hugeint_type.wrap_array(storage_array)
 
         arrow_table = pa.Table.from_arrays([storage_array], names=['numbers'])
 
-        assert duckdb_cursor.execute('FROM arrow_table').fetchall() == [(-1,)] 
+        assert duckdb_cursor.execute('FROM arrow_table').fetchall() == [(-1,)]
 
         pa.unregister_extension_type("duckdb.hugeint")
 
@@ -209,7 +209,7 @@ class TestCanonicalExtensionTypes(object):
 
         pa.register_extension_type(UHugeIntType())
 
-        storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'] , pa.binary(16))
+        storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
         uhugeint_type = UHugeIntType()
         storage_array = uhugeint_type.wrap_array(storage_array)
 

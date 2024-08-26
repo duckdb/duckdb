@@ -33,6 +33,8 @@ public:
 	static constexpr const char *ARROW_EXTENSION_NAME = "ARROW:extension:name";
 	//! Key for encode of the metadata key
 	static constexpr const char *ARROW_METADATA_KEY = "ARROW:extension:metadata";
+	//! Creates the metadata based on an extension name
+	static ArrowSchemaMetadata MetadataFromName(const string &extension_name);
 
 private:
 	//! The unordered map that holds the metadata
