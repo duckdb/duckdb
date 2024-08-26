@@ -87,6 +87,17 @@ template <typename T, typename Context> class arg_converter {
     return t == uint_type || t == ulong_long_type || t == uint128_type;
   }
 
+  template <typename To, typename From>
+  typename std::enable_if<std::is_constructible<To, From>::value, To>::type Cast(From x) {
+    return static_cast<To>(x);
+  }
+
+  // workaround for casting (u)int128 to long/long long which may not be implemented
+  template <typename To, typename From>
+  typename std::enable_if<!std::is_constructible<To, From>::value, To>::type Cast(From x) {
+    return static_cast<To>(x.lower);
+  }
+
  public:
   arg_converter(basic_format_arg<Context>& arg, char_type type)
       : arg_(arg), type_(type) {
@@ -99,37 +110,31 @@ template <typename T, typename Context> class arg_converter {
     if (type_ != 's') operator()<bool>(value);
   }
 
-  template <typename U, FMT_ENABLE_IF(is_integral<U>::value && sizeof(conditional_t<std::is_same<T, void>::value, U, T>) > sizeof(int))>
+  template <typename U, FMT_ENABLE_IF(is_integral<U>::value)>
   void operator()(U value) {
     bool is_signed = type_ == 'd' || type_ == 'i';
     using target_type = conditional_t<std::is_same<T, void>::value, U, T>;
-    if (is_signed) {
-      // glibc's printf doesn't sign extend arguments of smaller types:
-      //   std::printf("%lld", -42);  // prints "4294967254"
-      // but we don't have to do the same because it's a UB.
-      if (std::is_same<target_type, int128_t>::value || std::is_same<target_type, uint128_t>::value) {
-        arg_ = internal::make_arg<Context>(static_cast<int128_t>(value));
+    if (const_check(sizeof(target_type) <= sizeof(int))) {
+      // Extra casts are used to silence warnings.
+      if (is_signed) {
+        arg_ = internal::make_arg<Context>(Cast<int>(Cast<target_type>(value)));
       } else {
-        arg_ = internal::make_arg<Context>(static_cast<int64_t>(value));
+        using unsigned_type = typename make_unsigned_or_bool<target_type>::type;
+        arg_ = internal::make_arg<Context>(Cast<unsigned>(Cast<unsigned_type>(value)));
       }
     } else {
-      arg_ = internal::make_arg<Context>(
-          static_cast<typename make_unsigned_or_bool<U>::type>(value));
-    }
-  }
-
-  template <typename U, FMT_ENABLE_IF(is_integral<U>::value && sizeof(conditional_t<std::is_same<T, void>::value, U, T>) <= sizeof(int))>
-  void operator()(U value) {
-    bool is_signed = type_ == 'd' || type_ == 'i';
-    using target_type = conditional_t<std::is_same<T, void>::value, U, T>;
-    // Extra casts are used to silence warnings.
-    if (is_signed) {
-      arg_ = internal::make_arg<Context>(
-          static_cast<int>(static_cast<target_type>(value)));
-    } else {
-      using unsigned_type = typename make_unsigned_or_bool<target_type>::type;
-      arg_ = internal::make_arg<Context>(
-          static_cast<unsigned>(static_cast<unsigned_type>(value)));
+      if (is_signed) {
+        // glibc's printf doesn't sign extend arguments of smaller types:
+        //   std::printf("%lld", -42);  // prints "4294967254"
+        // but we don't have to do the same because it's a UB.
+        if (sizeof(target_type) > sizeof(int64_t)) {
+          arg_ = internal::make_arg<Context>(Cast<int128_t>(value));
+        } else {
+          arg_ = internal::make_arg<Context>(Cast<int64_t>(value));
+        }
+      } else {
+        arg_ = internal::make_arg<Context>(Cast<typename make_unsigned_or_bool<U>::type>(value));
+      }
     }
   }
 
