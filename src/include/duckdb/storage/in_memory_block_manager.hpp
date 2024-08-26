@@ -65,6 +65,9 @@ public:
 	bool InMemory() override {
 		return true;
 	}
+	void FileSync() override {
+		throw InternalException("Cannot perform IO in in-memory database - FileSync!");
+	}
 	idx_t TotalBlocks() override {
 		throw InternalException("Cannot perform IO in in-memory database - TotalBlocks!");
 	}

@@ -345,6 +345,9 @@ public:
 
 	WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p);
 
+	//! Build task list
+	void CreateTaskList();
+
 	//! Are there any more tasks?
 	bool HasMoreTasks() const {
 		return !stopped && next_task < tasks.size();
@@ -363,8 +366,12 @@ public:
 	ClientContext &context;
 	//! All the sunk data
 	WindowGlobalSinkState &gsink;
+	//! The total number of blocks to process;
+	idx_t total_blocks = 0;
 	//! State mutex
 	mutable mutex lock;
+	//! The number of local states
+	atomic<idx_t> threads;
 	//! The list of tasks
 	vector<Task> tasks;
 	//! The the next task
@@ -380,12 +387,12 @@ public:
 
 public:
 	idx_t MaxThreads() override {
-		return tasks.size();
+		return total_blocks;
 	}
 };
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
-    : context(context_p), gsink(gsink_p), next_task(0), finished(0), stopped(false), returned(0) {
+    : context(context_p), gsink(gsink_p), threads(0), next_task(0), finished(0), stopped(false), returned(0) {
 	auto &gpart = gsink.global_partition;
 	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
 
@@ -394,6 +401,7 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 		if (gpart->rows && !gpart->rows->blocks.empty()) {
 			// We need to construct the single WindowHashGroup here because the sort tasks will not be run.
 			window_hash_groups.emplace_back(make_uniq<WindowHashGroup>(gsink, idx_t(0)));
+			total_blocks = gpart->rows->blocks.size();
 		}
 	} else {
 		idx_t batch_base = 0;
@@ -410,6 +418,21 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 			window_hash_group->batch_base = batch_base;
 			batch_base += block_count;
 		}
+		total_blocks = batch_base;
+	}
+}
+
+void WindowGlobalSourceState::CreateTaskList() {
+	//	Check whether we have a task list outside the mutex.
+	if (next_task.load()) {
+		return;
+	}
+
+	lock_guard<mutex> task_guard(lock);
+
+	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
+	if (!tasks.empty()) {
+		return;
 	}
 
 	//    Sort the groups from largest to smallest
@@ -426,7 +449,6 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 	std::sort(partition_blocks.begin(), partition_blocks.end(), std::greater<PartitionBlock>());
 
 	//	Schedule the largest group on as many threads as possible
-	const auto threads = idx_t(TaskScheduler::GetScheduler(context).NumberOfThreads());
 	const auto &max_block = partition_blocks.front();
 	const auto per_thread = (max_block.first + threads - 1) / threads;
 
@@ -682,6 +704,8 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 		output_types.emplace_back(wexpr.return_type);
 	}
 	output_chunk.Initialize(global_partition.allocator, output_types);
+
+	++gsource.threads;
 }
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
@@ -872,6 +896,8 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
                                          OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
+
+	gsource.CreateTaskList();
 
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
 		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
