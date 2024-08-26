@@ -109,7 +109,7 @@ else()
       duckdb_skiplistlib
       duckdb_mbedtls
       duckdb_yyjson)
-      
+
   ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)
   ensure_variable_is_number(DUCKDB_MINOR_VERSION RC_MINOR_VERSION)
   ensure_variable_is_number(DUCKDB_PATCH_VERSION RC_PATCH_VERSION)
