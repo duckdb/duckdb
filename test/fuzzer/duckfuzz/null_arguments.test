@@ -6,11 +6,10 @@ require json
 
 require parquet
 
-statement ok
-create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
-
-statement ok
-SELECT NULL FROM parquet_scan(NULL, "schema" := NULL)
+statement error
+SELECT NULL FROM parquet_scan(NULL, "schema" := NULL);
+----
+<REGEX>:.*Cannot use NULL.*
 
 statement ok
 create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
@@ -23,15 +22,13 @@ SELECT NULL FROM read_ndjson_auto(NULL, timestamp_format := 5469, "compression" 
 statement ok
 COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.parquet' (FORMAT PARQUET);
 
-statement ok
-COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.csv' (FORMAT CSV);
 
 statement error
 SELECT NULL FROM read_parquet('__TEST_DIR__/test_null_args.parquet', filename = NULL);
 ----
 <REGEX>:.*Cannot use NULL.*
 
-statement ok
+statement error
 WITH t10 (c6, c7, c8, c9) AS
 	(
 		SELECT DISTINCT c1, c2
@@ -44,8 +41,14 @@ PIVOT (list_median((NOT c3)) FOR
 (rank() OVER (PARTITION BY c7 ROWS BETWEEN CURRENT ROW AND
 	(c1 IN ("first"(c11), COLUMNS(*), 5251, c12, 4034, c7, c3, list_sem(c2))) FOLLOWING))
 IN ('2262-04-11 23:47:16.854775806'::TIMESTAMP_NS, 5050)) WHERE inet_server_addr() OFFSET #3;
+----
+<REGEX>:.*Cannot use NULL.*
+
+statement ok
+COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.csv' (FORMAT CSV);
 
 statement error
 SELECT NULL FROM read_csv('__TEST_DIR__/test_null_args.csv', names=NULL);
 ----
-<REGEX>:.*Cannot use NULL.*
+<REGEX>:.*read_csv_auto names cannot be NULL.*
+
