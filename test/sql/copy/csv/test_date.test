@@ -8,15 +8,15 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE date_test(d date);
 
-#query I
-#COPY date_test FROM 'data/csv/test/date.csv';
-#----
-#1
-#
-#query T
-#SELECT cast(d as string) FROM date_test;
-#----
-#2019-06-05
+query I
+COPY date_test FROM 'data/csv/test/date.csv';
+----
+1
+
+query T
+SELECT cast(d as string) FROM date_test;
+----
+2019-06-05
 
 query TT
 Select * from read_csv('data/csv/custom_date.csv', header=true, dateformat='%m/%d/%Y, %-I:%-M %p', types = ['BIGINT', 'DATE'] );
