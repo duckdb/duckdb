@@ -84,7 +84,7 @@ public:
 	//! Releases or stores ALL handles in the management state
 	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment);
 	//! Sets 'can_destroy' to true for all blocks so they aren't added to the eviction queue
-	void SetCanDestroy();
+	void SetDestroyBufferUponUnpin();
 
 private:
 	//! Builds out a single part (grabs the lock)

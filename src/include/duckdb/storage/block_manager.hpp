@@ -88,7 +88,7 @@ public:
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
 	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
-	void UnregisterBlock(block_id_t block_id, bool can_destroy);
+	void UnregisterBlock(block_id_t block_id);
 
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
