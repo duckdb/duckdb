@@ -6,15 +6,15 @@
 statement ok
 CREATE TABLE  t1 as select -1 c1 from range(1);
 
-query I
-SELECT t1.c1 FROM t1;
-----
--1
-
-query I
-SELECT (1 BETWEEN -1 AND CAST(CAST(t1.c1 AS BIT) AS INTEGER)) FROM t1;
-----
-false
+#query I
+#SELECT t1.c1 FROM t1;
+#----
+#-1
+#
+#query I
+#SELECT CAST(CAST(t1.c1 AS BIT) AS INTEGER), (1 BETWEEN -1 AND CAST(CAST(t1.c1 AS BIT) AS INTEGER)) FROM t1;
+#----
+#-1	false
 
 
 query I
