@@ -676,7 +676,7 @@ void JoinHashTable::InitializePointerTable() {
 		auto current_capacity = hash_map.GetSize() / sizeof(ht_entry_t);
 		if (capacity > current_capacity) {
 			// Need more space
-			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
+			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
 			entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
 		} else {
 			// Just use the current hash map
@@ -863,7 +863,7 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, const idx_t sel_
 	auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto idx = sel.get_index(i);
-		ptrs[idx] = Load<data_ptr_t>(ptrs[idx] + ht.pointer_offset);
+		ptrs[idx] = reinterpret_cast<data_ptr_t>(Load<uint64_t>(ptrs[idx] + ht.pointer_offset));
 		if (ptrs[idx]) {
 			this->sel_vector.set_index(new_count++, idx);
 		}
@@ -1010,7 +1010,7 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys) {
 				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
 				// Technically it is, but it does not matter, since the only value that can be written is "true"
 				Store<bool>(true, ptr + ht.tuple_size);
-				auto next_ptr = Load<data_ptr_t>(ptr + ht.pointer_offset);
+				auto next_ptr = reinterpret_cast<data_ptr_t>(Load<uint64_t>(ptr + ht.pointer_offset));
 				if (!next_ptr) {
 					break;
 				}
