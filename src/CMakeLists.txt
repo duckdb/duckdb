@@ -110,23 +110,28 @@ else()
       duckdb_mbedtls
       duckdb_yyjson)
 
-  ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)
-  ensure_variable_is_number(DUCKDB_MINOR_VERSION RC_MINOR_VERSION)
-  ensure_variable_is_number(DUCKDB_PATCH_VERSION RC_PATCH_VERSION)
-  ensure_variable_is_number(DUCKDB_DEV_ITERATION RC_DEV_ITERATION)
+  add_library(duckdb SHARED ${ALL_OBJECT_FILES})
 
-  set(CMAKE_RC_FLAGS
-      "${CMAKE_RC_FLAGS} -D DUCKDB_VERSION=\"${DUCKDB_VERSION}\"")
-  set(CMAKE_RC_FLAGS
-      "${CMAKE_RC_FLAGS} -D DUCKDB_MAJOR_VERSION=\"${RC_MAJOR_VERSION}\"")
-  set(CMAKE_RC_FLAGS
-      "${CMAKE_RC_FLAGS} -D DUCKDB_MINOR_VERSION=\"${RC_MINOR_VERSION}\"")
-  set(CMAKE_RC_FLAGS
-      "${CMAKE_RC_FLAGS} -D DUCKDB_PATCH_VERSION=\"${RC_PATCH_VERSION}\"")
-  set(CMAKE_RC_FLAGS
-      "${CMAKE_RC_FLAGS} -D DUCKDB_DEV_ITERATION=\"${RC_DEV_ITERATION}\"")
+  if(WIN32 AND NOT MINGW)
+    ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)
+    ensure_variable_is_number(DUCKDB_MINOR_VERSION RC_MINOR_VERSION)
+    ensure_variable_is_number(DUCKDB_PATCH_VERSION RC_PATCH_VERSION)
+    ensure_variable_is_number(DUCKDB_DEV_ITERATION RC_DEV_ITERATION)
 
-  add_library(duckdb SHARED ${ALL_OBJECT_FILES} version.rc)
+    set(CMAKE_RC_FLAGS
+        "${CMAKE_RC_FLAGS} -D DUCKDB_VERSION=\"${DUCKDB_VERSION}\"")
+    set(CMAKE_RC_FLAGS
+        "${CMAKE_RC_FLAGS} -D DUCKDB_MAJOR_VERSION=\"${RC_MAJOR_VERSION}\"")
+    set(CMAKE_RC_FLAGS
+        "${CMAKE_RC_FLAGS} -D DUCKDB_MINOR_VERSION=\"${RC_MINOR_VERSION}\"")
+    set(CMAKE_RC_FLAGS
+        "${CMAKE_RC_FLAGS} -D DUCKDB_PATCH_VERSION=\"${RC_PATCH_VERSION}\"")
+    set(CMAKE_RC_FLAGS
+        "${CMAKE_RC_FLAGS} -D DUCKDB_DEV_ITERATION=\"${RC_DEV_ITERATION}\"")
+
+    target_sources(duckdb PRIVATE version.rc)
+  endif()
+
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
   link_threads(duckdb)
   link_extension_libraries(duckdb)
