@@ -34,6 +34,7 @@ class JSONType(pa.ExtensionType):
         # metadata.
         return JSONType()
 
+
 class UHugeIntType(pa.ExtensionType):
     def __init__(self):
         pa.ExtensionType.__init__(self, pa.binary(16), "duckdb.uhugeint")
@@ -44,6 +45,7 @@ class UHugeIntType(pa.ExtensionType):
     @classmethod
     def __arrow_ext_deserialize__(self, storage_type, serialized):
         return UHugeIntType()
+
 
 class HugeIntType(pa.ExtensionType):
     def __init__(self):

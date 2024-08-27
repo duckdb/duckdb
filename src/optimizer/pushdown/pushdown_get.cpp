@@ -6,55 +6,54 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
-bool ArrowPushdownType(const LogicalType & type) {
+bool ArrowPushdownType(const LogicalType &type) {
 	switch (type.id()) {
-		case LogicalTypeId::BOOLEAN:
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT:
-		case LogicalTypeId::DATE:
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::TIMESTAMP_TZ:
-		case LogicalTypeId::UTINYINT:
-		case LogicalTypeId::USMALLINT:
-		case LogicalTypeId::UINTEGER:
-		case LogicalTypeId::UBIGINT:
-		case LogicalTypeId::FLOAT:
-		case LogicalTypeId::DOUBLE:
-		case LogicalTypeId::VARCHAR:
-		case LogicalTypeId::BLOB:
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		return true;
+	case LogicalTypeId::DECIMAL: {
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+		case PhysicalType::INT32:
+		case PhysicalType::INT64:
 			return true;
-		case LogicalTypeId::DECIMAL: {
-			switch (type.InternalType()) {
-			case PhysicalType::INT16:
-			case PhysicalType::INT32:
-			case PhysicalType::INT64:
-				return true;
-			default:
-				return false;
-			}
-		}
-		break;
-		case LogicalTypeId::STRUCT: {
-			auto struct_types = StructType::GetChildTypes(type);
-			for (auto& struct_type: struct_types) {
-				if (!ArrowPushdownType(struct_type.second)) {
-					return false;
-				}
-			}
-			return true;
-		}
 		default:
 			return false;
 		}
+	} break;
+	case LogicalTypeId::STRUCT: {
+		auto struct_types = StructType::GetChildTypes(type);
+		for (auto &struct_type : struct_types) {
+			if (!ArrowPushdownType(struct_type.second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
 }
 bool CanArrowPushdown(const vector<LogicalType> &types) {
-	for (auto &type:types) {
+	for (auto &type : types) {
 		if (!ArrowPushdownType(type)) {
 			return false;
 		}
