@@ -18,8 +18,6 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
                                                            bool &changes_made, bool is_root) {
 
 	auto &expr = bindings[0].get().Cast<BoundComparisonExpression>();
-	Printer::Print("before");
-	expr.Print();
 	auto &constant_expr = bindings[1].get();
 	bool column_ref_left = expr.left.get() != &constant_expr;
 	auto column_ref_expr = !column_ref_left ? expr.right.get() : expr.left.get();
@@ -75,8 +73,6 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 			expr.right = std::move(child_expression);
 		}
 	}
-	Printer::Print("after");
-	expr.Print();
 	return nullptr;
 }
 
