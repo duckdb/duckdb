@@ -7,6 +7,9 @@ from conftest import pandas_supports_arrow_backend
 import sys
 from packaging.version import Version
 
+from arrow_canonical_extensions import HugeIntType
+
+
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 ds = pytest.importorskip("pyarrow.dataset")
@@ -158,6 +161,14 @@ def string_check_or_pushdown(connection, tbl_name, create_table):
 
 
 class TestArrowFilterPushdown(object):
+    @classmethod
+    def setup_class(cls):
+        pa.register_extension_type(HugeIntType())
+
+    @classmethod
+    def teardown_class(cls):
+        pa.unregister_extension_type("duckdb.hugeint")
+
     @pytest.mark.parametrize(
         'data_type',
         [
