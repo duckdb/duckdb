@@ -485,8 +485,11 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 		// if we are not in parallel mode, we can just do the operation without any checks
 		ht_entry_t current_entry = entry.load(std::memory_order_relaxed);
 		data_ptr_t current_row_pointer = current_entry.GetPointerOrNull();
+		Printer::PrintF("Storing pointer %llu", reinterpret_cast<uint64_t>(current_row_pointer));
 		StorePointer(current_row_pointer, row_ptr_to_insert + pointer_offset);
+		Printer::PrintF("Trying to set pointer %llu, salt %llu", reinterpret_cast<uint64_t>(row_ptr_to_insert), salt);
 		entry = ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
+		Printer::PrintF("Setting entry to pointer %llu, salt %llu", reinterpret_cast<uint64_t>(entry.load().GetPointer()), entry.load().GetSalt());
 		return nullptr;
 	}
 }
