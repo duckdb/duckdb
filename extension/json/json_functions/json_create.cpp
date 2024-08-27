@@ -223,6 +223,12 @@ struct CreateJSONValue<uhugeint_t, string_t> {
 	}
 };
 
+template <class T>
+inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const T &value) {
+	return nullptr; // This function should only be called with string_t as template
+}
+
+template <>
 inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const string_t &value) {
 	auto value_doc = JSONCommon::ReadDocument(value, JSONCommon::READ_FLAG, &doc->alc);
 	auto result = yyjson_val_mut_copy(doc, value_doc->root);
@@ -273,7 +279,7 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 		if (!value_data.validity.RowIsValid(val_idx)) {
 			vals[i] = yyjson_mut_null(doc);
 		} else if (type_is_json) {
-			vals[i] = CreateJSONValueFromJSON(doc, (string_t &)values[val_idx]);
+			vals[i] = CreateJSONValueFromJSON(doc, values[val_idx]);
 		} else {
 			vals[i] = CreateJSONValue<INPUT_TYPE, TARGET_TYPE>::Operation(doc, values[val_idx]);
 		}
