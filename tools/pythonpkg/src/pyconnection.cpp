@@ -896,7 +896,64 @@ static py::object GetValueOrNone(py::kwargs &kwargs, const string &key) {
 	return py::none();
 }
 
+void AcceptableCSVOptions(const py::kwargs &kwargs) {
+	// List of strings to match against
+	const unordered_set<string> valid_parameters = {"header",
+	                                                "compression",
+	                                                "sep",
+	                                                "delimiter",
+	                                                "dtype",
+	                                                "na_values",
+	                                                "skiprows",
+	                                                "quotechar",
+	                                                "escapechar",
+	                                                "encoding",
+	                                                "parallel",
+	                                                "date_format",
+	                                                "timestamp_format",
+	                                                "sample_size",
+	                                                "all_varchar",
+	                                                "normalize_names",
+	                                                "null_padding",
+	                                                "names",
+	                                                "lineterminator",
+	                                                "columns",
+	                                                "auto_type_candidates",
+	                                                "max_line_size",
+	                                                "ignore_errors",
+	                                                "store_rejects",
+	                                                "rejects_table",
+	                                                "rejects_scan",
+	                                                "rejects_limit",
+	                                                "force_not_null",
+	                                                "buffer_size",
+	                                                "decimal",
+	                                                "allow_quoted_nulls",
+	                                                "filename",
+	                                                "hive_partitioning",
+	                                                "union_by_name",
+	                                                "hive_types",
+	                                                "hive_types_autocast"};
+	for (auto &kwarg : kwargs) {
+		auto parameter = py::str(kwarg.first).cast<std::string>();
+		if (valid_parameters.find(parameter) == valid_parameters.end()) {
+			std::ostringstream error;
+			error << "The methods read_csv and read_csv_auto do not have the \"" << parameter << "\" argument." << '\n';
+			error << "Possible arguments as suggestions: " << '\n';
+			vector<string> parameters(valid_parameters.begin(), valid_parameters.end());
+			auto suggestions = StringUtil::TopNJaroWinkler(parameters, parameter, 3);
+			for (auto &suggestion : suggestions) {
+				error << "* " << suggestion << '\n';
+			}
+			throw InvalidInputException(error.str());
+			throw InvalidInputException("read_csv and read_csv_auto does not have the %s option.");
+		}
+	}
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_p, py::kwargs &kwargs) {
+	AcceptableCSVOptions(kwargs);
+
 	auto header = GetValueOrNone(kwargs, "header");
 	auto compression = GetValueOrNone(kwargs, "compression");
 	auto sep = GetValueOrNone(kwargs, "sep");
