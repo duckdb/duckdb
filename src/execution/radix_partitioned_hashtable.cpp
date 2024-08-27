@@ -79,18 +79,15 @@ enum class AggregatePartitionState : uint8_t {
 	READY_TO_SCAN = 2
 };
 
-struct AggregatePartition {
+struct AggregatePartition : StateWithBlockableTasks {
 	explicit AggregatePartition(unique_ptr<TupleDataCollection> data_p)
 	    : state(AggregatePartitionState::READY_TO_FINALIZE), data(std::move(data_p)), progress(0) {
 	}
 
-	mutex lock;
 	AggregatePartitionState state;
 
 	unique_ptr<TupleDataCollection> data;
 	atomic<double> progress;
-
-	vector<InterruptState> blocked_tasks;
 };
 
 class RadixHTGlobalSinkState;
@@ -173,8 +170,6 @@ public:
 	//! If any thread has called combine
 	atomic<bool> any_combined;
 
-	//! Lock for uncombined_data/stored_allocators
-	mutex lock;
 	//! Uncombined partitioned data that will be put into the AggregatePartitions
 	unique_ptr<PartitionedTupleData> uncombined_data;
 	//! Allocators used during the Sink/Finalize
@@ -239,7 +234,7 @@ void RadixHTGlobalSinkState::Destroy() {
 	}
 
 	// There are aggregates with destructors: Call the destructor for each of the aggregates
-	lock_guard<mutex> guard(lock);
+	auto guard = Lock();
 	RowOperationsState row_state(*stored_allocators.back());
 	for (auto &partition : partitions) {
 		auto &data_collection = *partition->data;
@@ -280,7 +275,7 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external
 		return;
 	}
 
-	lock_guard<mutex> guard(sink.lock);
+	auto guard = sink.Lock();
 	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
 		return;
 	}
@@ -381,7 +376,7 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 		// We're over the thread memory limit
 		if (!gstate.external) {
 			// We haven't yet triggered out-of-core behavior, but maybe we don't have to, grab the lock and check again
-			lock_guard<mutex> guard(gstate.lock);
+			auto guard = gstate.Lock();
 			thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
 			if (total_size > thread_limit) {
 				// Out-of-core would be triggered below, try to increase the reservation
@@ -505,7 +500,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		lstate.abandoned_data = std::move(ht.GetPartitionedData());
 	}
 
-	lock_guard<mutex> guard(gstate.lock);
+	auto guard = gstate.Lock();
 	if (gstate.uncombined_data) {
 		gstate.uncombined_data->Combine(*lstate.abandoned_data);
 	} else {
@@ -660,7 +655,7 @@ RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, con
 SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate,
                                                       InterruptState &interrupt_state) {
 	// First, try to get a partition index
-	lock_guard<mutex> gstate_guard(sink.lock);
+	auto guard = sink.Lock();
 	if (finished || task_idx == sink.partitions.size()) {
 		lstate.ht.reset();
 		return SourceResultType::FINISHED;
@@ -669,7 +664,7 @@ SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &si
 
 	// We got a partition index
 	auto &partition = *sink.partitions[lstate.task_idx];
-	auto partition_lock = unique_lock<mutex>(partition.lock);
+	auto partition_guard = partition.Lock();
 	switch (partition.state) {
 	case AggregatePartitionState::READY_TO_FINALIZE:
 		partition.state = AggregatePartitionState::FINALIZE_IN_PROGRESS;
@@ -678,8 +673,7 @@ SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &si
 	case AggregatePartitionState::FINALIZE_IN_PROGRESS:
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.scan_status = RadixHTScanStatus::INIT;
-		partition.blocked_tasks.push_back(interrupt_state);
-		return SourceResultType::BLOCKED;
+		return partition.BlockSource(partition_guard, interrupt_state);
 	case AggregatePartitionState::READY_TO_SCAN:
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.scan_status = RadixHTScanStatus::INIT;
@@ -754,7 +748,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	partition.data->Combine(*ht->GetPartitionedData()->GetPartitions()[0]);
 
 	// Update thread-global state
-	lock_guard<mutex> global_guard(sink.lock);
+	auto guard = sink.Lock();
 	sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
 	if (task_idx == sink.partitions.size()) {
 		ht.reset();
@@ -767,12 +761,9 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	}
 
 	// Update partition state
-	lock_guard<mutex> partition_guard(partition.lock);
+	auto partition_guard = partition.Lock();
 	partition.state = AggregatePartitionState::READY_TO_SCAN;
-	for (auto &blocked_task : partition.blocked_tasks) {
-		blocked_task.Callback();
-	}
-	partition.blocked_tasks.clear();
+	partition.UnblockTasks(partition_guard);
 
 	// This thread will scan the partition
 	task = RadixHTSourceTaskType::SCAN;
@@ -797,7 +788,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 			data_collection.Reset();
 		}
 		scan_status = RadixHTScanStatus::DONE;
-		lock_guard<mutex> gstate_guard(sink.lock);
+		auto guard = sink.Lock();
 		if (++gstate.task_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}

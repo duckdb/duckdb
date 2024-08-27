@@ -1,24 +1,13 @@
 #include "duckdb/storage/statistics/numeric_stats.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 
-#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
-template <>
-void NumericStats::Update<interval_t>(BaseStatistics &stats, interval_t new_value) {
-}
-
-template <>
-void NumericStats::Update<list_entry_t>(BaseStatistics &stats, list_entry_t new_value) {
-}
-
-//===--------------------------------------------------------------------===//
-// NumericStats
-//===--------------------------------------------------------------------===//
 BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
