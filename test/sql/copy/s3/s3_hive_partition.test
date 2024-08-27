@@ -94,7 +94,7 @@ physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4 AND a IS NOT.*NULL.*File Fil
 
 # There should be Table Filters (id < 50) and file filters (c = 500)
 query II
-EXPLAIN select a from read_csv_auto('s3://test-bucket/hive-partitioning/filter-test-csv/*/*.csv', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0, columns={'a': 'INT', 'b':'INT', 'c':'INT'}) where c=500 and a < 4;
+EXPLAIN select a from read_csv_auto('s3://test-bucket/hive-partitioning/filter-test-csv/*/*.csv', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c=500 and a < 4;
 ----
 physical_plan	<REGEX>:.*FILTER.*(a < 4).*READ_CSV_AUTO.*File Filters:.* \(CAST\(c AS.*INTEGER\) = 500\).*
 
