@@ -206,15 +206,23 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-
 		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
 		}
 		break;
-
+	case LogicalTypeId::BIT: {
+		auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.bit");
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			child.format = "Z";
+		} else {
+			child.format = "z";
+		}
+		break;
+	}
 	case LogicalTypeId::LIST: {
 		if (options.arrow_use_list_view) {
 			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {

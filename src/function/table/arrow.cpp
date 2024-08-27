@@ -70,6 +70,18 @@ static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &ex
 			                            format);
 		}
 		return make_uniq<ArrowType>(LogicalType::UHUGEINT);
+	} else if (arrow_extension == "duckdb.bit") {
+		if (format != "z" && format != "Z") {
+			throw InvalidInputException("duckdb.bit must be a blob (i.e., \'z\' or \'Z\'). It "
+			                            "is incorrectly defined as: %s",
+			                            format);
+		} else if (format == "z") {
+			auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
+			return make_uniq<ArrowType>(LogicalType::BIT, std::move(type_info));
+		}
+		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
+		return make_uniq<ArrowType>(LogicalType::BIT, std::move(type_info));
+
 	} else {
 		throw NotImplementedException(
 		    "Arrow Type with extension name: %s and format: %s, is not currently supported in DuckDB ", arrow_extension,

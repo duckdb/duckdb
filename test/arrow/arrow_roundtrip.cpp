@@ -98,6 +98,9 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 
 	// UHUGEINT
 	TestArrowRoundtrip("SELECT '170141183460469231731687303715884105727'::UHUGEINT str FROM range(5) tbl(i)");
+
+	// BIT
+	TestArrowRoundtrip("SELECT '0101011'::BIT str FROM range(5) tbl(i)");
 }
 
 TEST_CASE("Test Arrow String View", "[arrow][.]") {
