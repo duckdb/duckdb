@@ -169,7 +169,8 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			queue->semaphore.wait();
 		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
 			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
-			Allocator::ThreadFlush(allocator_background_threads, allocator_flush_threshold, requested_thread_count);
+			Allocator::ThreadFlush(allocator_background_threads, allocator_flush_threshold,
+			                       NumericCast<idx_t>(requested_thread_count.load()));
 			if (!queue->semaphore.wait(Allocator::DecayDelay() * 1000000 - INITIAL_FLUSH_WAIT)) {
 				// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
 				// mark it as idle and start an untimed wait
@@ -196,7 +197,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	}
 	// this thread will exit, flush all of its outstanding allocations
 	if (Allocator::SupportsFlush()) {
-		Allocator::ThreadFlush(allocator_background_threads, 0, requested_thread_count);
+		Allocator::ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
 		Allocator::ThreadIdle();
 	}
 #else

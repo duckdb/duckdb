@@ -10,11 +10,11 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/storage/storage_info.hpp"
-#include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/enums/memory_tag.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -23,6 +23,12 @@ class BufferPool;
 class DatabaseInstance;
 
 enum class BlockState : uint8_t { BLOCK_UNLOADED = 0, BLOCK_LOADED = 1 };
+
+enum class BufferDestroyType : uint8_t {
+	DESTROY_BUFFER_WITH_BLOCK = 0,    //! Destroy the buffer with the data when the associated BlockHandle is destroyed
+	DESTROY_BUFFER_UPON_EVICTION = 1, //! Destroy the buffer with the data when it must be evicted to storage
+	DESTROY_BUFFER_UNPON_UNPIN = 2    //! Destroy the buffer with the data immediately when it is unpinned
+};
 
 struct BufferPoolReservation {
 	MemoryTag tag;
