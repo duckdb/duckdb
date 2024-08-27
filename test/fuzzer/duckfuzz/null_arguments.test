@@ -4,6 +4,8 @@
 
 require json
 
+require tpch
+
 require parquet
 
 statement error
@@ -51,4 +53,19 @@ statement error
 SELECT NULL FROM read_csv('__TEST_DIR__/test_null_args.csv', names=NULL);
 ----
 <REGEX>:.*read_csv_auto names cannot be NULL.*
+
+statement ok
+call dbgen(sf=0.01);
+
+#https://github.com/duckdb/duckdb-fuzzer/issues/2703
+statement ok
+SELECT NULL FROM (
+	SELECT
+		hex(CAST(CAST(NULL AS BLOB) AS BLOB)) AS c7,
+		ref_0.r_comment AS c11
+	FROM main.region AS ref_0
+) AS subq_0
+WHERE (
+	(subq_0.c11 ~~ subq_0.c7)
+);
 
