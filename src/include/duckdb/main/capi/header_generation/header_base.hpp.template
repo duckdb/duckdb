@@ -213,6 +213,11 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_SEQUENCE = 41,
 	DUCKDB_INVALID_CONFIGURATION = 42
 } duckdb_error_type;
+//! An enum over DuckDB's different cast modes.
+typedef enum duckdb_cast_mode {
+	DUCKDB_CAST_NORMAL = 0,
+	DUCKDB_CAST_TRY = 1
+} duckdb_cast_mode;
 
 //===--------------------------------------------------------------------===//
 // General type definitions
@@ -438,6 +443,12 @@ typedef struct _duckdb_logical_type {
 	void *internal_ptr;
 } * duckdb_logical_type;
 
+//! Holds extra information used when registering a custom logical type.
+//! Reserved for future use.
+typedef struct _duckdb_create_type_info {
+	void *internal_ptr;
+} * duckdb_create_type_info;
+
 //! Contains a data chunk from a duckdb_result.
 //! Must be destroyed with `duckdb_destroy_data_chunk`.
 typedef struct _duckdb_data_chunk {
@@ -548,6 +559,17 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 
 //! The main function of the table function.
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
+
+//===--------------------------------------------------------------------===//
+// Cast types
+//===--------------------------------------------------------------------===//
+
+//! A cast function. Must be destroyed with `duckdb_destroy_cast_function`.
+typedef struct _duckdb_cast_function {
+	void *internal_ptr;
+} * duckdb_cast_function;
+
+typedef bool (*duckdb_cast_function_t)(duckdb_function_info info, idx_t count, duckdb_vector input, duckdb_vector output);
 
 //===--------------------------------------------------------------------===//
 // Replacement scan types

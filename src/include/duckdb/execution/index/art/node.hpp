@@ -100,8 +100,6 @@ public:
 	//! Counts each node type.
 	void VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 
-	//! Returns the node leaf type for a count.
-	static NType GetNodeLeafType(const idx_t count);
 	//! Returns the node type for a count.
 	static NType GetNodeType(const idx_t count);
 

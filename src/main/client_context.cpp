@@ -326,7 +326,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
-	profiler.StartPhase("planner");
+	profiler.StartPhase(MetricsType::PLANNER);
 	Planner planner(*this);
 	if (values) {
 		auto &parameter_values = *values;
@@ -352,7 +352,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	plan->Verify(*this);
 #endif
 	if (config.enable_optimizer && plan->RequireOptimizer()) {
-		profiler.StartPhase("optimizer");
+		profiler.StartPhase(MetricsType::ALL_OPTIMIZERS);
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(std::move(plan));
 		D_ASSERT(plan);
@@ -363,7 +363,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 #endif
 	}
 
-	profiler.StartPhase("physical_planner");
+	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER);
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
 	auto physical_plan = physical_planner.CreatePlan(std::move(plan));
@@ -450,6 +450,7 @@ void ClientContext::RebindPreparedStatement(ClientContextLock &lock, const strin
 	auto new_prepared =
 	    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
 	D_ASSERT(new_prepared->properties.bound_all_parameters);
+	new_prepared->properties.parameter_count = prepared->properties.parameter_count;
 	prepared = std::move(new_prepared);
 	prepared->properties.bound_all_parameters = false;
 }

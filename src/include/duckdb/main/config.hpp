@@ -176,6 +176,12 @@ struct DBConfigOptions {
 	bool object_cache_enable = false;
 	//! Whether or not the global http metadata cache is used
 	bool http_metadata_cache_enable = false;
+	//! HTTP Proxy config as 'hostname:port'
+	string http_proxy;
+	//! HTTP Proxy username for basic auth
+	string http_proxy_username;
+	//! HTTP Proxy password for basic auth
+	string http_proxy_password;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
@@ -228,7 +234,7 @@ struct DBConfigOptions {
 	//! The set of user-provided options
 	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
-	unordered_map<string, Value> unrecognized_options;
+	case_insensitive_map_t<Value> unrecognized_options;
 	//! Whether or not the configuration settings can be altered
 	bool lock_configuration = false;
 	//! Whether to print bindings when printing the plan (debug mode only)
@@ -263,6 +269,12 @@ struct DBConfigOptions {
 	idx_t catalog_error_max_schemas = 100;
 	//!  Whether or not to always write to the WAL file, even if this is not required
 	bool debug_skip_checkpoint_on_commit = false;
+	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
+	bool scalar_subquery_error_on_multiple_rows = true;
+	//! Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)
+	bool ieee_floating_point_ops = true;
+	//! Allow ordering by non-integer literals - ordering by such literals has no effect
+	bool order_by_non_integer_literal = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

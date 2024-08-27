@@ -186,6 +186,16 @@ unique_ptr<LogicalOperator> FilterPushdown::AddLogicalFilter(unique_ptr<LogicalO
 		return op;
 	}
 	auto filter = make_uniq<LogicalFilter>();
+	if (op->has_estimated_cardinality) {
+		// set the filter's estimated cardinality as the child op's.
+		// if the filter is created during the filter pushdown optimization, the estimated cardinality will be later
+		// overridden during the join order optimization to a more accurate one.
+		// if the filter is created during the statistics propagation, the estimated cardinality won't be set unless set
+		// here. assuming the filters introduced during the statistics propagation have little effect in reducing the
+		// cardinality, we adopt the the cardinality of the child. this could be improved by MinMax info from the
+		// statistics propagation
+		filter->SetEstimatedCardinality(op->estimated_cardinality);
+	}
 	filter->expressions = std::move(expressions);
 	filter->children.push_back(std::move(op));
 	return std::move(filter);

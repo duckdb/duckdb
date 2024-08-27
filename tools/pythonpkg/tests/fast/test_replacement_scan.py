@@ -218,7 +218,7 @@ class TestReplacementScan(object):
                 WITH cte as (select * from df)
                 select * from (
                     WITH cte as (select * from df)
-                    select (
+                    select array(
                         select * from cte
                     ) from cte
                 )
@@ -240,18 +240,18 @@ class TestReplacementScan(object):
             # FIXME: this should probably throw an error...
             assert len(res) >= 0
         else:
-            assert res == [(1,), (1,), (1,)]
+            assert res == [([1, 2, 3],), ([1, 2, 3],), ([1, 2, 3],)]
 
     def test_cte_with_scalar_subquery(self, duckdb_cursor):
         query = """
             WITH cte1 AS (
-                select (select * from df)
+                select array(select * from df)
             )
             select * from cte1;
         """
         rel = create_relation(duckdb_cursor, query)
         res = rel.fetchall()
-        assert res == [(1,)]
+        assert res == [([1, 2, 3],)]
 
     def test_cte_with_joins(self, duckdb_cursor):
         query = """

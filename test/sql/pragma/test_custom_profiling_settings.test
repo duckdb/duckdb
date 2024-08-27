@@ -26,12 +26,12 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.
 statement ok
 SELECT cpu_time, extra_info, operator_cardinality, operator_timing FROM metrics_output;
 
-query I rowsort
+query I
 SELECT unnest(res) from (
 	select current_setting('custom_profiling_settings') as raw_setting,
 	raw_setting.trim('{}') as setting,
 	string_split(setting, ', ') as res
-)
+) ORDER BY ALL
 ----
 "BLOCKED_THREAD_TIME": "true"
 "CPU_TIME": "true"
@@ -46,25 +46,25 @@ SELECT unnest(res) from (
 
 # Turn off all settings
 statement ok
-PRAGMA custom_profiling_settings='{}'
-
-query I rowsort
-SELECT unnest(res) from (
-	select current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') as setting,
-	string_split(setting, ', ') as res
-)
-----
-(empty)
-
-statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
 PRAGMA profiling_output = 'test/sql/pragma/output.json';
 
 statement ok
+PRAGMA custom_profiling_settings='{}'
+
+statement ok
 select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+query I
+SELECT unnest(res) from (
+	select current_setting('custom_profiling_settings') as raw_setting,
+	raw_setting.trim('{}') as setting,
+	string_split(setting, ', ') as res
+) ORDER BY ALL
+----
+(empty)
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
@@ -97,6 +97,12 @@ Referenced column "cumulative_cardinality" not found in FROM clause!
 
 # change the cpu time to false and the rest to true and re-run the query
 statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = 'test/sql/pragma/output.json';
+
+statement ok
 PRAGMA custom_profiling_settings='{"CPU_TIME": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true"}'
 
 query I rowsort
@@ -109,12 +115,6 @@ SELECT unnest(res) from (
 "EXTRA_INFO": "true"
 "OPERATOR_CARDINALITY": "true"
 "OPERATOR_TIMING": "true"
-
-statement ok
-PRAGMA enable_profiling = 'json';
-
-statement ok
-PRAGMA profiling_output = 'test/sql/pragma/output.json';
 
 statement ok
 select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
@@ -134,12 +134,12 @@ SELECT extra_info, operator_cardinality, operator_timing FROM metrics_output;
 statement ok
 PRAGMA custom_profiling_settings='{"CPU_TIME": "true", "EXTRA_INFO": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}'
 
-query I rowsort
+query I
 SELECT unnest(res) from (
 	select current_setting('custom_profiling_settings') as raw_setting,
 	raw_setting.trim('{}') as setting,
 	string_split(setting, ', ') as res
-)
+) ORDER BY ALL
 ----
 "CPU_TIME": "true"
 "CUMULATIVE_CARDINALITY": "true"
@@ -276,12 +276,12 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
 
 # Check that idle thread time is collected
-query I rowsort
+query I
 SELECT unnest(res) from (
 	select current_setting('custom_profiling_settings') as raw_setting,
 	raw_setting.trim('{}') as setting,
 	string_split(setting, ', ') as res
-)
+) ORDER BY ALL
 ----
 "BLOCKED_THREAD_TIME": "true"
 

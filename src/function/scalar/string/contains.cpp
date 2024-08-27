@@ -4,7 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-
+#include "duckdb/core_functions/scalar/map_functions.hpp"
 namespace duckdb {
 
 template <class UNSIGNED, int NEEDLE_SIZE>
@@ -155,9 +155,11 @@ struct ContainsOperator {
 ScalarFunctionSet ContainsFun::GetFunctions() {
 	auto string_fun = GetStringContains();
 	auto list_fun = ListContainsFun::GetFunction();
+	auto map_fun = MapContainsFun::GetFunction();
 	ScalarFunctionSet set("contains");
 	set.AddFunction(string_fun);
 	set.AddFunction(list_fun);
+	set.AddFunction(map_fun);
 	return set;
 }
 

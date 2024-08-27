@@ -390,26 +390,15 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector
 	GenerateKeys<>(allocator, input, keys);
 
 	DataChunk row_id_chunk;
-	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, keys.size());
+	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, input.size());
 	row_id_chunk.data[0].Reference(row_ids);
-	row_id_chunk.SetCardinality(keys.size());
+	row_id_chunk.SetCardinality(input.size());
 	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
 }
 
 //===--------------------------------------------------------------------===//
 // Construct from sorted data.
 //===--------------------------------------------------------------------===//
-
-void ConstructLeaf(ART &art, const unsafe_vector<ARTKey> &keys, Node &node, ARTKeySection &section) {
-	unsafe_vector<ARTKeySection> children;
-	section.GetChildSections(children, keys);
-
-	// Create the node.
-	Node::New(art, node, Node::GetNodeLeafType(children.size()));
-	for (auto &child : children) {
-		Node::InsertChild(art, node, child.key_byte);
-	}
-}
 
 bool ART::ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
                             ARTKeySection &section) {

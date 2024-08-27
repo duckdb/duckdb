@@ -38,6 +38,30 @@ duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const c
 	return duckdb_create_varchar_length(str.c_str(), strlen(str.c_str()));
 }
 
+duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
+	if (!info) {
+		return nullptr;
+	}
+
+	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
+	auto &profiling_info = node.GetProfilingInfo();
+
+	// FIXME: filter between operator metrics and query node metrics.
+	duckdb::unordered_map<duckdb::string, duckdb::string> metrics_map;
+	for (const auto &metric : profiling_info.metrics) {
+		auto key = EnumUtil::ToString(metric.first);
+		if (key == EnumUtil::ToString(MetricsType::OPERATOR_TYPE)) {
+			auto type = duckdb::PhysicalOperatorType(metric.second.GetValue<uint8_t>());
+			metrics_map[key] = EnumUtil::ToString(type);
+		} else {
+			metrics_map[key] = metric.second.ToString();
+		}
+	}
+
+	auto map = duckdb::Value::MAP(metrics_map);
+	return reinterpret_cast<duckdb_value>(new duckdb::Value(map));
+}
+
 idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info) {
 	if (!info) {
 		return 0;

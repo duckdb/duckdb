@@ -198,6 +198,12 @@ ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCo
 		commit_state = storage_manager.GenStorageCommitState(*log);
 		storage->Commit(commit_state.get());
 		undo_buffer.WriteToWAL(*log, commit_state.get());
+		if (commit_state->HasRowGroupData()) {
+			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
+			// optimistically written blocks
+			// hence we need to ensure those optimistically written blocks are persisted
+			storage_manager.GetBlockManager().FileSync();
+		}
 	} catch (std::exception &ex) {
 		if (commit_state) {
 			commit_state->RevertCommit();

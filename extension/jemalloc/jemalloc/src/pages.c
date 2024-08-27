@@ -650,6 +650,7 @@ static bool
 os_overcommits_proc(void) {
 	int fd;
 	char buf[1];
+	buf[0] = '2';
 
 #if defined(JEMALLOC_USE_SYSCALL) && defined(SYS_open)
 	#if defined(O_CLOEXEC)

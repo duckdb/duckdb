@@ -71,6 +71,8 @@ public:
 	void Write(FileBuffer &block, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
 	void WriteHeader(DatabaseHeader header) override;
+	//! Sync changes to the underlying file
+	void FileSync() override;
 	//! Truncate the underlying database file after a checkpoint
 	void Truncate() override;
 
