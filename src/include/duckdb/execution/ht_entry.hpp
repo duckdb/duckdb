@@ -82,7 +82,7 @@ public:
 	}
 
 	static inline ht_entry_t GetDesiredEntry(const data_ptr_t &pointer, const hash_t &salt) {
-		auto desired = reinterpret_cast<uint64_t>(pointer) | (salt & SALT_MASK);
+		auto desired = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(pointer)) | (salt & SALT_MASK);
 		return ht_entry_t(desired);
 	}
 
