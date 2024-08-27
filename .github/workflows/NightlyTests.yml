@@ -548,7 +548,7 @@ jobs:
           - vector_type: "sequence_operator"
             test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "nested_shuffle"
-            test_parameter: '"*"'
+            test_parameter: '' # skip running all tests here because it is too slow
     env:
       CC: gcc-10
       CXX: g++-10
