@@ -96,8 +96,8 @@ public:
 		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
 	}
 
-	IEJoinGlobalState(IEJoinGlobalState &prev)
-	    : GlobalSinkState(prev), tables(std::move(prev.tables)), child(prev.child + 1) {
+	IEJoinGlobalState(IEJoinGlobalState &prev) : tables(std::move(prev.tables)), child(prev.child + 1) {
+		state = prev.state;
 	}
 
 	void Sink(DataChunk &input, IEJoinLocalState &lstate) {
@@ -796,7 +796,7 @@ public:
 	}
 
 	void Initialize() {
-		lock_guard<mutex> initializing(lock);
+		auto guard = Lock();
 		if (initialized) {
 			return;
 		}
@@ -931,7 +931,6 @@ public:
 	const PhysicalIEJoin &op;
 	IEJoinGlobalState &gsink;
 
-	mutex lock;
 	bool initialized;
 
 	// Join queue state

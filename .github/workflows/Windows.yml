@@ -113,7 +113,7 @@ jobs:
 
     - uses: actions/upload-artifact@v4
       with:
-        name: duckdb-binaries-windows
+        name: duckdb-binaries-windows-amd64
         path: |
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
@@ -205,7 +205,7 @@ jobs:
 
      - uses: actions/upload-artifact@v4
        with:
-         name: duckdb-binaries-windows
+         name: duckdb-binaries-windows-arm64
          path: |
            libduckdb-windows-arm64.zip
            duckdb_cli-windows-arm64.zip
@@ -289,3 +289,25 @@ jobs:
          run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
 
+ win-packaged-upload:
+   runs-on: windows-latest
+   needs:
+     - win-release-64
+     - win-release-arm64
+   steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: duckdb-binaries-windows-arm64
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: duckdb-binaries-windows-amd64
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: duckdb-binaries-windows
+        path: |
+          libduckdb-windows-amd64.zip
+          duckdb_cli-windows-amd64.zip
+          libduckdb-windows-arm64.zip
+          duckdb_cli-windows-arm64.zip

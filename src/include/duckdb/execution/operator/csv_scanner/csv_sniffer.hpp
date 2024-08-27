@@ -79,12 +79,12 @@ struct SetColumns {
 	//! Column Names that were detected
 	const vector<string> *names = nullptr;
 	//! If columns are set
-	bool IsSet();
+	bool IsSet() const;
 	//! How many columns
-	idx_t Size();
+	idx_t Size() const;
 	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
 	inline bool IsCandidateUnacceptable(const idx_t num_cols, bool null_padding, bool ignore_errors,
-	                                    bool last_value_always_empty) {
+	                                    bool last_value_always_empty) const {
 		if (!IsSet() || ignore_errors) {
 			// We can't say its unacceptable if it's not set or if we ignore errors
 			return false;
@@ -186,7 +186,7 @@ private:
 	//! ------------------------------------------------------//
 	//! ------------------- Type Detection ------------------ //
 	//! ------------------------------------------------------//
-	//! Second phase of auto detection: detect types, format template candidates
+	//! Second phase of auto-detection: detect types, format template candidates
 	//! ordered by descending specificity (~ from high to low)
 	void DetectTypes();
 	//! Change the date format for the type to the string
@@ -197,6 +197,8 @@ private:
 	//! Function that initialized the necessary variables used for date and timestamp detection
 	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
 	                                         const LogicalType &sql_type);
+	//! Sets user defined date and time formats (if any)
+	void SetUserDefinedDateTimeFormat(CSVStateMachine &candidate);
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
 	                                   const string_t &dummy_val);
