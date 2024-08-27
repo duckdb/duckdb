@@ -14,6 +14,7 @@ add_library_unity(
   copy_function.cpp
   function.cpp
   function_binder.cpp
+  function_list.cpp
   function_set.cpp
   pragma_function.cpp
   macro_function.cpp

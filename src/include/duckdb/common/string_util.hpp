@@ -296,6 +296,9 @@ public:
 	DUCKDB_API static string GetFileExtension(const string &file_name);
 	DUCKDB_API static string GetFileStem(const string &file_name);
 	DUCKDB_API static string GetFilePath(const string &file_path);
+
+	DUCKDB_API static const uint8_t ASCII_TO_LOWER_MAP[];
+	DUCKDB_API static const uint8_t ASCII_TO_UPPER_MAP[];
 };
 
 } // namespace duckdb

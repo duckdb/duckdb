@@ -2,8 +2,6 @@
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
-#include "duckdb/function/scalar/string_functions.hpp"
-
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -11,7 +9,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
-#include "duckdb/function/scalar/regexp.hpp"
+#include "duckdb/functions_internal/scalar/regexp.hpp"
 
 namespace duckdb {
 
