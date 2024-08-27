@@ -205,7 +205,7 @@ jobs:
 
       - name: Test
         shell: bash
-        run: build/release/test/unittest "*"
+        run: build/release/test/unittest
 
   linux-tarball:
      name: Python 3 Tarball
