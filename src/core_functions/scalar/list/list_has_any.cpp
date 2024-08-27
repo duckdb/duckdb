@@ -12,19 +12,41 @@ static unique_ptr<FunctionData> ListHasAnyBind(ClientContext &context, ScalarFun
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
 
-	const auto left_type = ListType::GetChildType(arguments[0]->return_type);
-	const auto right_type = ListType::GetChildType(arguments[1]->return_type);
+	const auto lhs_is_param = arguments[0]->HasParameter();
+	const auto rhs_is_param = arguments[1]->HasParameter();
 
-	if (left_type != LogicalType::SQLNULL && right_type != LogicalType::SQLNULL && left_type != right_type) {
-		LogicalType common_type;
-		if (LogicalType::TryGetMaxLogicalType(context, arguments[0]->return_type, arguments[1]->return_type,
-		                                      common_type)) {
-			arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), common_type);
-			arguments[1] = BoundCastExpression::AddCastToType(context, std::move(arguments[1]), common_type);
-		} else {
+	if (lhs_is_param && rhs_is_param) {
+		throw ParameterNotResolvedException();
+	}
+
+	const auto &lhs_list = arguments[0]->return_type;
+	const auto &rhs_list = arguments[1]->return_type;
+
+	if (lhs_is_param) {
+		bound_function.arguments[0] = rhs_list;
+		bound_function.arguments[1] = rhs_list;
+		return nullptr;
+	}
+	if (rhs_is_param) {
+		bound_function.arguments[0] = lhs_list;
+		bound_function.arguments[1] = lhs_list;
+		return nullptr;
+	}
+
+	bound_function.arguments[0] = lhs_list;
+	bound_function.arguments[1] = rhs_list;
+
+	const auto lhs_child = ListType::GetChildType(bound_function.arguments[0]);
+	const auto rhs_child = ListType::GetChildType(bound_function.arguments[1]);
+
+	if (lhs_child != LogicalType::SQLNULL && rhs_child != LogicalType::SQLNULL && lhs_child != rhs_child) {
+		LogicalType common_child;
+		if (!LogicalType::TryGetMaxLogicalType(context, lhs_child, rhs_child, common_child)) {
 			throw BinderException("list_has_any: cannot compare lists of different types: '%s' and '%s'",
-			                      left_type.ToString(), right_type.ToString());
+			                      lhs_child.ToString(), rhs_child.ToString());
 		}
+		bound_function.arguments[0] = LogicalType::LIST(common_child);
+		bound_function.arguments[1] = LogicalType::LIST(common_child);
 	}
 
 	return nullptr;
