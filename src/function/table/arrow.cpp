@@ -70,6 +70,14 @@ static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &ex
 			                            format);
 		}
 		return make_uniq<ArrowType>(LogicalType::UHUGEINT);
+	} else if (arrow_extension == "duckdb.time_tz") {
+		if (format != "ttu") {
+			throw InvalidInputException("duckdb.time_tz must be a time64 [microseconds] (i.e., \'ttu\'). It "
+			                            "is incorrectly defined as: %s",
+			                            format);
+		}
+		return make_uniq<ArrowType>(LogicalType::TIME_TZ,
+		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
 	} else if (arrow_extension == "duckdb.bit") {
 		if (format != "z" && format != "Z") {
 			throw InvalidInputException("duckdb.bit must be a blob (i.e., \'z\' or \'Z\'). It "

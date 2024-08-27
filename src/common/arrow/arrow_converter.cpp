@@ -168,7 +168,13 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DATE:
 		child.format = "tdD";
 		break;
-	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIME_TZ: {
+		auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.time_tz");
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
+		child.format = "ttu";
+		break;
+	}
 	case LogicalTypeId::TIME:
 		child.format = "ttu";
 		break;
