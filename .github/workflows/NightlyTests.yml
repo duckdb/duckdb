@@ -405,7 +405,7 @@ jobs:
   extension-updating:
     name: Extension updating test
     runs-on: ubuntu-20.04
-#    needs: linux-memory-leaks TODO revert
+    needs: linux-memory-leaks
     env:
       CC: gcc-10
       CXX: g++-10
