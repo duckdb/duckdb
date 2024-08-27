@@ -37,6 +37,47 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 	return expr;
 }
 
+bool FilterPushdown::FilterInputsChangeTypes(Expression &filter, vector<unique_ptr<Expression>> &expressions) {
+	// iterate through expressions of the filter and gather the columns the filter performs on
+	unordered_set<idx_t> columns;
+	ExpressionIterator::EnumerateChildren(filter, [&](Expression &child) {
+		switch (child.expression_class) {
+		case ExpressionClass::BOUND_COLUMN_REF: {
+			auto &colref = child.Cast<BoundColumnRefExpression>();
+			columns.insert(colref.binding.column_index);
+			break;
+		}
+		default:
+			break;
+		}
+	});
+
+	D_ASSERT(columns.size() <= expressions.size());
+
+	// go through the projected columns in the filter, if a column has a cast it is changing types
+	// from what it was below the projection. That means we cannot push this filter down.
+	bool to_return = false;
+	for (auto &column : columns) {
+		auto &proj_expr = expressions.at(column);
+		ExpressionIterator::EnumerateExpression(proj_expr, [&](Expression &child) {
+			switch (child.expression_class) {
+			case ExpressionClass::CAST:
+			case ExpressionClass::BOUND_CAST: {
+				to_return = true;
+				return;
+			}
+			default:
+				break;
+			}
+		});
+		if (to_return) {
+			break;
+		}
+	}
+
+	return to_return;
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto &proj = op->Cast<LogicalProjection>();

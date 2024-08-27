@@ -1,0 +1,41 @@
+# name: test/sql/optimizer/test_no_pushdown_cast_into_cte.test
+# description: No Pushdown cast into cte
+# group: [optimizer]
+
+query II
+WITH t(a, b) AS (
+  SELECT a :: int, b :: int
+  FROM (VALUES
+    ('1', '4'),
+    ('5', '3'),
+    ('2', '*'),
+    ('3', '8'),
+    ('7', '*')) AS _(a, b)
+  WHERE position('*' in b) = 0
+)
+SELECT a, b
+FROM   t
+WHERE  a < b;
+----
+1	4
+3	8
+
+
+#query II
+#select a, b from
+#(
+# select (range*2)::VARCHAR a, range::VARCHAR b from range(120)
+#where range % 2 = 0
+#) as t(a, b) where a > b;
+
+
+
+#with t(a, b) as  (
+#	select a :: varchar, b :: varchar
+#	FROM VALUES
+#	(1, 2),
+#	(3, 4),
+#	(5, 6),
+#	(7, 10) as
+#	_(a, b) where a + 1 = b
+#) select a, b from t;
