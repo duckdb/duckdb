@@ -450,6 +450,7 @@ void ClientContext::RebindPreparedStatement(ClientContextLock &lock, const strin
 	auto new_prepared =
 	    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
 	D_ASSERT(new_prepared->properties.bound_all_parameters);
+	new_prepared->properties.parameter_count = prepared->properties.parameter_count;
 	prepared = std::move(new_prepared);
 	prepared->properties.bound_all_parameters = false;
 }
