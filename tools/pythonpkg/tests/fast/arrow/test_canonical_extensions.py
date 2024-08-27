@@ -6,7 +6,7 @@ from uuid import UUID
 
 pa = pytest.importorskip('pyarrow')
 
-from arrow_canonical_extensions import UuidType, JSONType
+from arrow_canonical_extensions import UuidType, JSONType, UHugeIntType, HugeIntType
 
 
 class TestCanonicalExtensionTypes(object):
@@ -172,17 +172,6 @@ class TestCanonicalExtensionTypes(object):
             duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
 
     def test_hugeint(self, duckdb_cursor):
-        class HugeIntType(pa.ExtensionType):
-            def __init__(self):
-                pa.ExtensionType.__init__(self, pa.binary(16), "duckdb.hugeint")
-
-            def __arrow_ext_serialize__(self):
-                return b''
-
-            @classmethod
-            def __arrow_ext_deserialize__(self, storage_type, serialized):
-                return HugeIntType()
-
         pa.register_extension_type(HugeIntType())
 
         storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
@@ -196,17 +185,6 @@ class TestCanonicalExtensionTypes(object):
         pa.unregister_extension_type("duckdb.hugeint")
 
     def test_uhugeint(self, duckdb_cursor):
-        class UHugeIntType(pa.ExtensionType):
-            def __init__(self):
-                pa.ExtensionType.__init__(self, pa.binary(16), "duckdb.uhugeint")
-
-            def __arrow_ext_serialize__(self):
-                return b''
-
-            @classmethod
-            def __arrow_ext_deserialize__(self, storage_type, serialized):
-                return UHugeIntType()
-
         pa.register_extension_type(UHugeIntType())
 
         storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
