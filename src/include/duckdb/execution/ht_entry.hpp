@@ -59,12 +59,12 @@ public:
 	}
 
 	// Returns the salt, leaves upper salt bits intact, sets lower bits to all 1's
-	static inline hash_t ExtractSalt(const hash_t &hash) {
+	static inline hash_t ExtractSalt(hash_t hash) {
 		return hash | POINTER_MASK;
 	}
 
 	// Returns the salt, leaves upper salt bits intact, sets lower bits to all 0's
-	static inline hash_t ExtractSaltWithNulls(const hash_t &hash) {
+	static inline hash_t ExtractSaltWithNulls(hash_t hash) {
 		return hash & SALT_MASK;
 	}
 

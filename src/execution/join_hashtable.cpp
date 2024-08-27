@@ -434,11 +434,11 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 	return added_count;
 }
 
-static void StorePointer(data_ptr_t pointer, data_ptr_t target) {
+static void StorePointer(const_data_ptr_t pointer, data_ptr_t target) {
 	Store<uint64_t>(reinterpret_cast<uint64_t>(pointer), target);
 }
 
-static data_ptr_t LoadPointer(data_ptr_t source) {
+static data_ptr_t LoadPointer(const_data_ptr_t source) {
 	return reinterpret_cast<data_ptr_t>(Load<uint64_t>(source));
 }
 
@@ -614,7 +614,11 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 				occupied = entry.IsOccupied();
 
 				// condition for incrementing the ht_offset: occupied and row_salt does not match -> move to next entry
-				if (!occupied || entry.GetSalt() == salt) {
+				if (!occupied) {
+					break;
+				}
+				Printer::PrintF("Compare salt %llu with salt %llu", entry.GetSalt(), salt);
+				if (entry.GetSalt() == salt) {
 					break;
 				}
 
