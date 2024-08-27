@@ -434,6 +434,14 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 	return added_count;
 }
 
+static void StorePointer(data_ptr_t pointer, data_ptr_t target) {
+	Store<uint64_t>(reinterpret_cast<uint64_t>(pointer), target);
+}
+
+static data_ptr_t LoadPointer(data_ptr_t source) {
+	return reinterpret_cast<data_ptr_t>(Load<uint64_t>(source));
+}
+
 //! If we consider to insert into an entry we expct to be empty, if it was filled in the meantime the insert will not
 //! happen and we need to return the pointer to the to row with which the new entry would have collided. In any other
 //! case we return a nullptr
@@ -447,7 +455,7 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 		if (EXPECT_EMPTY) {
 
 			// add nullptr to the end of the list to mark the end
-			Store<data_ptr_t>(nullptr, row_ptr_to_insert + pointer_offset);
+			StorePointer(nullptr, row_ptr_to_insert + pointer_offset);
 
 			ht_entry_t new_empty_entry = ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
 			ht_entry_t expected_empty_entry = ht_entry_t::GetEmptyEntry();
@@ -468,7 +476,7 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 
 			do {
 				data_ptr_t current_row_pointer = expected_current_entry.GetPointer();
-				Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
+				StorePointer(current_row_pointer, row_ptr_to_insert + pointer_offset);
 			} while (!std::atomic_compare_exchange_weak(&entry, &expected_current_entry, desired_new_entry));
 
 			return nullptr;
@@ -477,7 +485,7 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 		// if we are not in parallel mode, we can just do the operation without any checks
 		ht_entry_t current_entry = entry.load(std::memory_order_relaxed);
 		data_ptr_t current_row_pointer = current_entry.GetPointerOrNull();
-		Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
+		StorePointer(current_row_pointer, row_ptr_to_insert + pointer_offset);
 		entry = ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
 		return nullptr;
 	}
@@ -863,7 +871,7 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, const idx_t sel_
 	auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto idx = sel.get_index(i);
-		ptrs[idx] = reinterpret_cast<data_ptr_t>(Load<uint64_t>(ptrs[idx] + ht.pointer_offset));
+		ptrs[idx] = LoadPointer(ptrs[idx] + ht.pointer_offset);
 		if (ptrs[idx]) {
 			this->sel_vector.set_index(new_count++, idx);
 		}
@@ -1010,7 +1018,7 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys) {
 				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
 				// Technically it is, but it does not matter, since the only value that can be written is "true"
 				Store<bool>(true, ptr + ht.tuple_size);
-				auto next_ptr = reinterpret_cast<data_ptr_t>(Load<uint64_t>(ptr + ht.pointer_offset));
+				auto next_ptr = LoadPointer(ptr + ht.pointer_offset);
 				if (!next_ptr) {
 					break;
 				}
