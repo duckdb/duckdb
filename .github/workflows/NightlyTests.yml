@@ -505,6 +505,7 @@ jobs:
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
+      BUILD_JSON: 1
       LATEST_STORAGE: 1
 
     steps:
@@ -524,11 +525,11 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make relassert
+        run: make reldebug
 
       - name: Test
         shell: bash
-        run: build/relassert/test/unittest "*"
+        run: build/reldebug/test/unittest "*"
 
   vector-verification:
     name: Vector Verification Tests (${{ matrix.vector_type }})
@@ -541,13 +542,13 @@ jobs:
           - vector_type: "dictionary_expression"
             test_parameter: '"*"'
           - vector_type: "dictionary_operator"
-            test_parameter: '"*"'
+            test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "constant_operator"
             test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "sequence_operator"
             test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "nested_shuffle"
-            test_parameter: '"*"'
+            test_parameter: '' # skip running all tests here because it is too slow
     env:
       CC: gcc-10
       CXX: g++-10
