@@ -9,7 +9,7 @@ include_directories(include)
 set(EXTENSION_NAME demo_capi)
 set(CAPI_MAJOR_VERSION 0)
 set(CAPI_MINOR_VERSION 0)
-set(CAPI_PATCH_VERSION 2)
+set(CAPI_PATCH_VERSION 1)
 
 # Generate semver string
 set(CAPI_VERSION
