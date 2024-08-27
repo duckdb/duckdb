@@ -36,8 +36,8 @@ static unique_ptr<FunctionData> ListHasAnyBind(ClientContext &context, ScalarFun
 	bound_function.arguments[0] = lhs_list;
 	bound_function.arguments[1] = rhs_list;
 
-	const auto lhs_child = ListType::GetChildType(bound_function.arguments[0]);
-	const auto rhs_child = ListType::GetChildType(bound_function.arguments[1]);
+	const auto &lhs_child = ListType::GetChildType(bound_function.arguments[0]);
+	const auto &rhs_child = ListType::GetChildType(bound_function.arguments[1]);
 
 	if (lhs_child != LogicalType::SQLNULL && rhs_child != LogicalType::SQLNULL && lhs_child != rhs_child) {
 		LogicalType common_child;

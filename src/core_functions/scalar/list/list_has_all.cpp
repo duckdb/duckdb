@@ -36,13 +36,13 @@ static unique_ptr<FunctionData> ListHasAllBind(ClientContext &context, ScalarFun
 	bound_function.arguments[0] = lhs_list;
 	bound_function.arguments[1] = rhs_list;
 
-	const auto lhs_child = ListType::GetChildType(bound_function.arguments[0]);
-	const auto rhs_child = ListType::GetChildType(bound_function.arguments[1]);
+	const auto &lhs_child = ListType::GetChildType(bound_function.arguments[0]);
+	const auto &rhs_child = ListType::GetChildType(bound_function.arguments[1]);
 
 	if (lhs_child != LogicalType::SQLNULL && rhs_child != LogicalType::SQLNULL && lhs_child != rhs_child) {
 		LogicalType common_child;
 		if (!LogicalType::TryGetMaxLogicalType(context, lhs_child, rhs_child, common_child)) {
-			throw BinderException("list_has_any: cannot compare lists of different types: '%s' and '%s'",
+			throw BinderException("list_has_all: cannot compare lists of different types: '%s' and '%s'",
 			                      lhs_child.ToString(), rhs_child.ToString());
 		}
 		bound_function.arguments[0] = LogicalType::LIST(common_child);
