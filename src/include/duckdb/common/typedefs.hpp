@@ -76,5 +76,4 @@ SRC *cast_uint64_to_pointer(uint64_t value) {
 	return reinterpret_cast<SRC *>(static_cast<uintptr_t>(value));
 }
 
-
 } // namespace duckdb
