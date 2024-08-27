@@ -6,12 +6,72 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
+bool ArrowPushdownType(const LogicalType & type) {
+	switch (type.id()) {
+		case LogicalTypeId::BOOLEAN:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE:
+		case LogicalTypeId::VARCHAR:
+		case LogicalTypeId::BLOB:
+			return true;
+		case LogicalTypeId::DECIMAL: {
+			switch (type.InternalType()) {
+			case PhysicalType::INT16:
+			case PhysicalType::INT32:
+			case PhysicalType::INT64:
+				return true;
+			default:
+				return false;
+			}
+		}
+		break;
+		case LogicalTypeId::STRUCT: {
+			auto struct_types = StructType::GetChildTypes(type);
+			for (auto& struct_type: struct_types) {
+				if (!ArrowPushdownType(struct_type.second)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		default:
+			return false;
+		}
+}
+bool CanArrowPushdown(const vector<LogicalType> &types) {
+	for (auto &type:types) {
+		if (!ArrowPushdownType(type)) {
+			return false;
+		}
+	}
+	return true;
+}
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op->Cast<LogicalGet>();
 
 	if (get.function.pushdown_complex_filter || get.function.filter_pushdown) {
+		if (get.function.name == "arrow_scan") {
+			if (!CanArrowPushdown(get.returned_types)) {
+				return FinishPushdown(std::move(op));
+			}
+		}
 		// this scan supports some form of filter push-down
 		// check if there are any parameters
 		// if there are, invalidate them to force a re-bind on execution
@@ -54,22 +114,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	//! We generate the table filters that will be executed during the table scan
 	//! Right now this only executes simple AND filters
 	get.table_filters = combiner.GenerateTableScanFilters(get.GetColumnIds());
-
-	// //! For more complex filters if all filters to a column are constants we generate a min max boundary used to
-	// check
-	// //! the zonemaps.
-	// auto zonemap_checks = combiner.GenerateZonemapChecks(get.column_ids, get.table_filters);
-
-	// for (auto &f : get.table_filters) {
-	// 	f.column_index = get.column_ids[f.column_index];
-	// }
-
-	// //! Use zonemap checks as table filters for pre-processing
-	// for (auto &zonemap_check : zonemap_checks) {
-	// 	if (zonemap_check.column_index != COLUMN_IDENTIFIER_ROW_ID) {
-	// 		get.table_filters.push_back(zonemap_check);
-	// 	}
-	// }
 
 	GenerateFilters();
 

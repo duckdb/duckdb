@@ -68,4 +68,3 @@ class TestNativeTimeZone(object):
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").arrow().to_pandas()
         assert res.dtypes["tz"].tz.zone == 'UTC'
         assert res['tz'][0].hour == 21 and res['tz'][0].minute == 52
-
