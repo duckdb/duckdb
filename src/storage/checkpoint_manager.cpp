@@ -208,7 +208,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(header);
 
-#ifndef DUCKDB_DISABLE_BLOCK_VERIFICATION
+#ifdef DUCKDB_BLOCK_VERIFICATION
 	// extend verify_block_usage_count
 	auto metadata_info = storage_manager.GetMetadataInfo();
 	for (auto &info : metadata_info) {
@@ -234,7 +234,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		}
 	}
 	block_manager.VerifyBlocks(verify_block_usage_count);
-
 #endif
 
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {

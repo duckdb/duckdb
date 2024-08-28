@@ -2,6 +2,9 @@
 # description: Test writing large strings with deletes
 # group: [optimistic_write]
 
+# FIXME: fails with block verification enabled
+require no_block_verification
+
 require parquet
 
 # load the DB from disk

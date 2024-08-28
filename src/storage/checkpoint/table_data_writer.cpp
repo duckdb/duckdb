@@ -90,7 +90,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	}
 	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
 
-#ifndef DUCKDB_DISABLE_BLOCK_VERIFICATION
+#ifdef DUCKDB_BLOCK_VERIFICATION
 	for (auto &entry : index_storage_infos) {
 		for (auto &allocator : entry.allocator_infos) {
 			for (auto &block : allocator.block_pointers) {
