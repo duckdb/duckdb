@@ -65,10 +65,6 @@ bool FilterPushdown::FilterInputsChangeTypes(unique_ptr<Expression> filter,
 		auto &proj_expr = expressions.at(column);
 		ExpressionIterator::EnumerateExpression(proj_expr, [&](Expression &child) {
 			switch (child.expression_class) {
-			case ExpressionClass::CAST: {
-				bool break_here = 0;
-				break;
-			}
 			case ExpressionClass::BOUND_CAST: {
 				auto &cast = child.Cast<BoundCastExpression>();
 				// if the max logical type is what is being cast to, then you can push down the filter.
