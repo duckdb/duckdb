@@ -171,11 +171,18 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
 			Allocator::ThreadFlush(allocator_background_threads, allocator_flush_threshold,
 			                       NumericCast<idx_t>(requested_thread_count.load()));
-			if (!queue->semaphore.wait(Allocator::DecayDelay() * 1000000 - INITIAL_FLUSH_WAIT)) {
-				// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
-				// mark it as idle and start an untimed wait
-				Allocator::ThreadIdle();
+			auto decay_delay = Allocator::DecayDelay();
+			if (!decay_delay.IsValid()) {
+				// no decay delay specified - just wait
 				queue->semaphore.wait();
+			} else {
+				if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
+				                           INITIAL_FLUSH_WAIT)) {
+					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
+					// mark it as idle and start an untimed wait
+					Allocator::ThreadIdle();
+					queue->semaphore.wait();
+				}
 			}
 		}
 		if (queue->q.try_dequeue(task)) {
