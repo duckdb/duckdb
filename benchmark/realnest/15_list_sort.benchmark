@@ -16,6 +16,12 @@ load benchmark/realnest/load.sql
 run
 SELECT list_sort(Jet, 'ASC'),
     list_sort(Muon, 'DESC'),
+    list_sort(Muon, 'ASC', 'NULLS FIRST'),
+    list_sort(Muon, 'ASC', 'NULLS LAST'),
     list_sort(Photon, 'ASC'),
-    list_sort(Tau, 'DESC')
+    list_sort(Photon, 'DESC', 'NULLS FIRST'),
+    list_sort(Photon, 'DESC', 'NULLS LAST'),
+    list_sort(Tau, 'DESC'),
+    list_sort(Tau, 'ASC', 'NULLS FIRST'),
+    list_sort(Tau, 'ASC', 'NULLS LAST')
 FROM single_mu_lists;
