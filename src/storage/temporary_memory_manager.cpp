@@ -4,8 +4,6 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include <cmath>
-
 namespace duckdb {
 
 TemporaryMemoryState::TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager_p,
@@ -178,7 +176,7 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 	vector<idx_t> siz(n, 0);
 	vector<idx_t> res(n, 0);
 	vector<double> pen(n, 0);
-	vector<double> der(n, 0);
+	vector<double> der(n, NumericLimits<double>::Maximum());
 
 	idx_t i = 0;
 	for (auto &active_state : active_states) {
@@ -224,14 +222,21 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 		const double intermediate = -(pow(prod_res, 1 / nd) * mat_cost) / (nd * pow(prod_siz, 1 / nd));
 		for (i = 0; i < n; i++) {
 			if (res[i] >= siz[i]) {
-				der[i] = NumericLimits<double>::Maximum();
-			} else {
-				der[i] = intermediate / static_cast<double>(res[i]) - pen[i] * tp_mult / static_cast<double>(siz[i]);
+				continue; // We can't increase the reservation of "maxed" states, so we skip these
 			}
+			der[i] = intermediate / static_cast<double>(res[i]) - pen[i] * tp_mult / static_cast<double>(siz[i]);
 		}
 
-		// Index of the state with the lowest derivative
-		const auto min_idx = NumericCast<idx_t>(std::distance(der.begin(), std::min_element(der.begin(), der.end())));
+		// Find the index of the state with the lowest derivative that is not maxed
+		idx_t min_idx = 0;
+		for (i = 1; i < n; i++) {
+			if (res[i] >= siz[i]) {
+				continue; // We can't increase the reservation of "maxed" states, so we skip these
+			}
+			if (der[i] < der[min_idx]) {
+				min_idx = i;
+			}
+		}
 
 		// This is how much memory we will distribute in this round
 		const auto iter_memory = ExactNumericCast<idx_t>(
