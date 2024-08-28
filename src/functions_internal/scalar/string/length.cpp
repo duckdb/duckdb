@@ -1,11 +1,9 @@
-#include "duckdb/functions_internal/scalar/string_functions.hpp"
-#include "duckdb/functions_internal/scalar/string_common.hpp"
-#include "duckdb/common/types/bit.hpp"
-
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/functions_internal/scalar/string_common.hpp"
+#include "duckdb/functions_internal/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "utf8proc.hpp"
 
@@ -217,9 +215,6 @@ static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &conte
 	}
 }
 
-ScalarFunction array_length_unary =
-    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind);
-
 ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet set("length");
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
@@ -227,7 +222,8 @@ ScalarFunctionSet LengthFun::GetFunctions() {
 	                               nullptr, LengthPropagateStats));
 	set.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
-	set.AddFunction(array_length_unary);
+	set.AddFunction(
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
 	return (set);
 }
 
@@ -241,7 +237,8 @@ ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 
 ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	ScalarFunctionSet set("array_length");
-	set.AddFunction(array_length_unary);
+	set.AddFunction(
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind));
 	set.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::BIGINT,
 	                               nullptr, ArrayOrListLengthBinaryBind));
 	return (set);

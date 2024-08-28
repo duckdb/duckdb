@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 
