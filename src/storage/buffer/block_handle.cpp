@@ -11,17 +11,18 @@ namespace duckdb {
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag)
     : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer(nullptr), eviction_seq_num(0),
-      can_destroy(false), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
+      destroy_buffer_upon(DestroyBufferUpon::BLOCK), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()),
+      unswizzled(nullptr) {
 	eviction_seq_num = 0;
 	state = BlockState::BLOCK_UNLOADED;
 	memory_usage = block_manager.GetBlockAllocSize();
 }
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag,
-                         unique_ptr<FileBuffer> buffer_p, bool can_destroy_p, idx_t block_size,
+                         unique_ptr<FileBuffer> buffer_p, DestroyBufferUpon destroy_buffer_upon_p, idx_t block_size,
                          BufferPoolReservation &&reservation)
     : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), eviction_seq_num(0),
-      can_destroy(can_destroy_p), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()),
+      destroy_buffer_upon(destroy_buffer_upon_p), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()),
       unswizzled(nullptr) {
 	buffer = std::move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
@@ -48,7 +49,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 		D_ASSERT(memory_charge.size == 0);
 	}
 
-	block_manager.UnregisterBlock(block_id, can_destroy);
+	block_manager.UnregisterBlock(block_id);
 }
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
@@ -94,11 +95,11 @@ BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileB
 		block_manager.Read(*block);
 		handle->buffer = std::move(block);
 	} else {
-		if (handle->can_destroy) {
-			return BufferHandle();
-		} else {
+		if (handle->MustWriteToTemporaryFile()) {
 			handle->buffer = block_manager.buffer_manager.ReadTemporaryBuffer(handle->tag, handle->block_id,
 			                                                                  std::move(reusable_buffer));
+		} else {
+			return BufferHandle(); // Destroyed upon unpin/evict, so there is no temp buffer to read
 		}
 	}
 	handle->state = BlockState::BLOCK_LOADED;
@@ -113,8 +114,8 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 	D_ASSERT(!unswizzled);
 	D_ASSERT(CanUnload());
 
-	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
-		// temporary block that cannot be destroyed: write to temporary file
+	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
+		// temporary block that cannot be destroyed upon evict/unpin: write to temporary file
 		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
 	}
 	memory_charge.Resize(0);
@@ -136,7 +137,9 @@ bool BlockHandle::CanUnload() {
 		// there are active readers
 		return false;
 	}
-	if (block_id >= MAXIMUM_BLOCK && !can_destroy && !block_manager.buffer_manager.HasTemporaryDirectory()) {
+	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() &&
+	    !block_manager.buffer_manager.HasTemporaryDirectory()) {
+		// this block cannot be destroyed upon evict/unpin
 		// in order to unload this block we need to write it to a temporary buffer
 		// however, no temporary directory is specified!
 		// hence we cannot unload the block

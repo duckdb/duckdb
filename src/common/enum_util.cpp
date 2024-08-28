@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
@@ -1732,6 +1733,34 @@ DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return DeprecatedIndexType::EXTENSION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value) {
+	switch(value) {
+	case DestroyBufferUpon::BLOCK:
+		return "BLOCK";
+	case DestroyBufferUpon::EVICTION:
+		return "EVICTION";
+	case DestroyBufferUpon::UNPIN:
+		return "UNPIN";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value) {
+	if (StringUtil::Equals(value, "BLOCK")) {
+		return DestroyBufferUpon::BLOCK;
+	}
+	if (StringUtil::Equals(value, "EVICTION")) {
+		return DestroyBufferUpon::EVICTION;
+	}
+	if (StringUtil::Equals(value, "UNPIN")) {
+		return DestroyBufferUpon::UNPIN;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

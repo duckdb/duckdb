@@ -110,8 +110,12 @@ protected:
 	                                             ARGS...);
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
-	//! not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so
-	//! it can be reloaded. The resulting buffer will already be allocated, but needs to be pinned in order to be used.
+	//! not the buffer can be destroyed instead of evicted,
+	//! if true, it will be destroyed,
+	//! if false, it will be written to a temporary file so it can be reloaded
+	//! If we want to change this, e.g., to immediately destroy the buffer upon unpinning,
+	//! we can call BlockHandle::SetDestroyBufferUpon
+	//! The resulting buffer will already be allocated, but needs to be pinned in order to be used.
 	//! This needs to be private to prevent creating blocks without ever pinning them:
 	//! blocks that are never pinned are never added to the eviction queue
 	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy);
