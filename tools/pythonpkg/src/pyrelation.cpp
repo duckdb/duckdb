@@ -1041,9 +1041,9 @@ struct SupportedPythonJoinType {
 } // namespace
 
 static const SupportedPythonJoinType *GetSupportedJoinTypes(idx_t &length) {
-	static const SupportedPythonJoinType SUPPORTED_TYPES[] = {
-	    {"left", JoinType::LEFT},   {"right", JoinType::RIGHT}, {"outer", JoinType::OUTER}, {"semi", JoinType::SEMI},
-	    {"inner", JoinType::INNER}, {"anti", JoinType::ANTI},   {"cross", JoinType::CROSS}};
+	static const SupportedPythonJoinType SUPPORTED_TYPES[] = {{"left", JoinType::LEFT},   {"right", JoinType::RIGHT},
+	                                                          {"outer", JoinType::OUTER}, {"semi", JoinType::SEMI},
+	                                                          {"inner", JoinType::INNER}, {"anti", JoinType::ANTI}};
 	static const auto SUPPORTED_TYPES_COUNT = sizeof(SUPPORTED_TYPES) / sizeof(SupportedPythonJoinType);
 	length = SUPPORTED_TYPES_COUNT;
 	return reinterpret_cast<const SupportedPythonJoinType *>(SUPPORTED_TYPES);
@@ -1078,9 +1078,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	JoinType dtype;
 	string type_string = StringUtil::Lower(type);
 	StringUtil::Trim(type_string);
-
+	auto is_cross = type_string == "cross";
+	std::cout << type_string << " is not " << is_cross << '\n';;
 	dtype = ParseJoinType(type_string);
-	if (dtype == JoinType::INVALID) {
+	if (dtype == JoinType::INVALID && !is_cross) {
 		ThrowUnsupportedJoinTypeError(type);
 	}
 	auto alias = GetAlias();
@@ -1089,7 +1090,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 		throw InvalidInputException("Both relations have the same alias, please change the alias of one or both "
 		                            "relations using 'rel = rel.set_alias(<new alias>)'");
 	}
-	if (dtype == JoinType::CROSS) {
+	if (is_cross) {
 		return make_uniq<DuckDBPyRelation>(rel->CrossProduct(other->rel));
 	}
 	if (py::isinstance<py::str>(condition)) {

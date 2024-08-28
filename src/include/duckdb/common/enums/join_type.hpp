@@ -27,11 +27,10 @@ enum class JoinType : uint8_t {
 	             // partner (false)
 	SINGLE = 8,  // SINGLE join is like LEFT OUTER JOIN, BUT returns at most one join partner per entry on the LEFT side
 	             // (and NULL if no partner is found)
-	RIGHT_SEMI = 9,  // RIGHT SEMI join is created by the optimizer when the children of a semi join need to be switched
-	                 // so that the build side can be the smaller table
-	RIGHT_ANTI = 10, // RIGHT ANTI join is created by the optimizer when the children of an anti join need to be
-	                 // switched so that the build side can be the smaller table
-	CROSS = 11
+	RIGHT_SEMI = 9, // RIGHT SEMI join is created by the optimizer when the children of a semi join need to be switched
+	                // so that the build side can be the smaller table
+	RIGHT_ANTI = 10 // RIGHT ANTI join is created by the optimizer when the children of an anti join need to be
+	                // switched so that the build side can be the smaller table
 };
 
 //! True if join is left or full outer join
