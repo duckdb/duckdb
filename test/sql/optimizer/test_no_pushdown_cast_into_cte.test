@@ -20,22 +20,52 @@ WHERE  a < b;
 1	4
 3	8
 
+# INT can always be cast to varchar, so these
+query II
+with t(a, b) as  (
+	select a :: varchar, b :: varchar
+	FROM VALUES
+	(1, 2),
+	(3, 3),
+	(5, 6),
+	(7, 6) as
+	_(a, b) where a <= b
+) select a, b from t where a[1] = '1';
+----
+1	2
 
-#query II
-#select a, b from
-#(
-# select (range*2)::VARCHAR a, range::VARCHAR b from range(120)
-#where range % 2 = 0
-#) as t(a, b) where a > b;
+
+statement ok
+pragma explain_output='optimized_only';
+
+query II
+EXPLAIN WITH t(a, b) AS (
+  SELECT a :: int, b :: int
+  FROM (VALUES
+    ('1', '4'),
+    ('5', '3'),
+    ('2', '*'),
+    ('3', '8'),
+    ('7', '*')) AS _(a, b)
+  WHERE position('*' in b) = 0
+)
+SELECT a, b
+FROM   t
+WHERE  a < b;
+----
+logical_opt	<REGEX>:.*FILTER.*\(a < b\).*PROJECTION.*CAST.*CAST.*FILTER.*position.*
 
 
-
-#with t(a, b) as  (
-#	select a :: varchar, b :: varchar
-#	FROM VALUES
-#	(1, 2),
-#	(3, 4),
-#	(5, 6),
-#	(7, 10) as
-#	_(a, b) where a + 1 = b
-#) select a, b from t;
+# we should not see two filters, since the filter can be pushed to just above the column data scan
+query II
+explain with t(a, b) as  (
+	select a :: varchar, b :: varchar
+	FROM VALUES
+	(1, 2),
+	(3, 3),
+	(5, 6),
+	(7, 6) as
+	_(a, b) where a <= b
+) select a, b from t where a[1] = '1';
+----
+logical_opt	<!REGEX>:.*FILTER.*PROJECTION.*FILTER.*
