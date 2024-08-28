@@ -140,7 +140,7 @@ private:
 	atomic<idx_t> eviction_seq_num;
 	//! LRU timestamp (for age-based eviction)
 	atomic<int64_t> lru_timestamp_msec;
-	//! When to destroy the data buffer (must be BLOCK_DESTRUCTION for persistent buffers)
+	//! When to destroy the data buffer
 	DestroyBufferUpon destroy_buffer_upon;
 	//! The memory usage of the block (when loaded). If we are pinning/loading
 	//! an unloaded block, this tells us how much memory to reserve.
