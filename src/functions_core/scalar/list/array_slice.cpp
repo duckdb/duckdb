@@ -1,13 +1,12 @@
-#include "duckdb/functions_core/scalar/list_functions.hpp"
-#include "duckdb/functions_internal/scalar/string_common.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/swap.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/functions_core/scalar/list_functions.hpp"
 #include "duckdb/functions_internal/scalar/string_common.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
