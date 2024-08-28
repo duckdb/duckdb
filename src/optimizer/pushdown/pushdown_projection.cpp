@@ -4,9 +4,6 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
-#include <duckdb/planner/expression/bound_case_expression.hpp>
-#include <duckdb/planner/expression/bound_cast_expression.hpp>
-
 namespace duckdb {
 
 static bool IsVolatile(LogicalProjection &proj, const unique_ptr<Expression> &expr) {
