@@ -1692,13 +1692,9 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 	if (parameter == "standard") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = false;
-		config.emit_profiler_output = true;
-		config.profiler_settings = ClientConfig().profiler_settings;
 	} else if (parameter == "detailed") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = true;
-		config.emit_profiler_output = true;
-		config.profiler_settings = ClientConfig().profiler_settings;
 
 		// add optimizer settings to the profiler settings
 		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
