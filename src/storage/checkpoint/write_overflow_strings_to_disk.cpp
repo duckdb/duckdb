@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(BlockManager &block_manager)
-    : block_manager(block_manager), block_id(INVALID_BLOCK), offset(0) {
+WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(PartialBlockManager &partial_block_manager)
+    : partial_block_manager(partial_block_manager), block_id(INVALID_BLOCK), offset(0) {
 }
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
@@ -38,6 +38,7 @@ void UncompressedStringSegmentState::RegisterBlock(BlockManager &manager, block_
 
 void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string,
                                              block_id_t &result_block, int32_t &result_offset) {
+	auto &block_manager = partial_block_manager.GetBlockManager();
 	auto &buffer_manager = block_manager.buffer_manager;
 	if (!handle.IsValid()) {
 		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, block_manager.GetBlockSize());
@@ -83,7 +84,9 @@ void WriteOverflowStringsToDisk::Flush() {
 			memset(handle.Ptr() + offset, 0, GetStringSpace() - offset);
 		}
 		// write to disk
+		auto &block_manager = partial_block_manager.GetBlockManager();
 		block_manager.Write(handle.GetFileBuffer(), block_id);
+		partial_block_manager.AddWrittenBlock(block_id);
 	}
 	block_id = INVALID_BLOCK;
 	offset = 0;
@@ -98,10 +101,12 @@ void WriteOverflowStringsToDisk::AllocateNewBlock(UncompressedStringSegmentState
 	}
 	offset = 0;
 	block_id = new_block_id;
+	auto &block_manager = partial_block_manager.GetBlockManager();
 	state.RegisterBlock(block_manager, new_block_id);
 }
 
 idx_t WriteOverflowStringsToDisk::GetStringSpace() const {
+	auto &block_manager = partial_block_manager.GetBlockManager();
 	return block_manager.GetBlockSize() - sizeof(block_id_t);
 }
 
