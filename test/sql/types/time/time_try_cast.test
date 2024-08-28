@@ -24,17 +24,17 @@ NULL
 query I
 select try_cast('11:' as time)
 ----
-NULL
+11:00:00
 
 query I
 select try_cast('11:11' as time)
 ----
-NULL
+11:11:00
 
 query I
 select try_cast('11:11:' as time)
 ----
-NULL
+11:11:00
 
 query I
 select try_cast('11:11:A' as time)

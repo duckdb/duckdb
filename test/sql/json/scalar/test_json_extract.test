@@ -17,7 +17,7 @@ SELECT json_structure('{"duck":"goose"}'->'duck');
 query T
 select json_extract('{"foo": null}', '$.foo')
 ----
-NULL
+null
 
 query T
 select json_extract('{"foo": null}', '$.foo.bar')
@@ -27,12 +27,12 @@ NULL
 query T
 select json_extract('null', '$')
 ----
-NULL
+null
 
 query T
 select json_extract('[null]', '$[0]')
 ----
-NULL
+null
 
 query T
 select json_extract('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')

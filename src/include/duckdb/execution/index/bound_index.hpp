@@ -106,16 +106,21 @@ public: // Index interface
 	//! Returns the in-memory usage of the index
 	idx_t GetInMemorySize();
 
-	//! Returns the string representation of an index, or only traverses and verifies the index
+	//! Returns the string representation of an index, or only traverses and verifies the index.
 	virtual string VerifyAndToString(IndexLock &state, const bool only_verify) = 0;
-	//! Obtains a lock and calls VerifyAndToString while holding that lock
+	//! Obtains a lock and calls VerifyAndToString.
 	string VerifyAndToString(const bool only_verify);
+
+	//! Ensures that the node allocation counts match the node counts.
+	virtual void VerifyAllocations(IndexLock &state) = 0;
+	//! Obtains a lock and calls VerifyAllocations.
+	void VerifyAllocations();
 
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
 
-	//! Returns all index storage information for serialization
-	virtual IndexStorageInfo GetStorageInfo(const bool get_buffers);
+	//! Returns index storage serialization information.
+	virtual IndexStorageInfo GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal);
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

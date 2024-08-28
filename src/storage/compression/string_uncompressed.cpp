@@ -161,10 +161,9 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 struct SerializedStringSegmentState : public ColumnSegmentState {
 	SerializedStringSegmentState() {
 	}
-	explicit SerializedStringSegmentState(vector<block_id_t> blocks_p) : blocks(std::move(blocks_p)) {
+	explicit SerializedStringSegmentState(vector<block_id_t> blocks_p) {
+		blocks = std::move(blocks_p);
 	}
-
-	vector<block_id_t> blocks;
 
 	void Serialize(Serializer &serializer) const override {
 		serializer.WriteProperty(1, "overflow_blocks", blocks);

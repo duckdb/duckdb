@@ -38,6 +38,9 @@ public:
 	void MarkBlockAsFree(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsFree!");
 	}
+	void MarkBlockAsUsed(block_id_t block_id) override {
+		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsUsed!");
+	}
 	void MarkBlockAsModified(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsModified!");
 	}
@@ -61,6 +64,9 @@ public:
 	}
 	bool InMemory() override {
 		return true;
+	}
+	void FileSync() override {
+		throw InternalException("Cannot perform IO in in-memory database - FileSync!");
 	}
 	idx_t TotalBlocks() override {
 		throw InternalException("Cannot perform IO in in-memory database - TotalBlocks!");

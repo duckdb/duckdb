@@ -106,8 +106,8 @@ public:
 	}
 
 	void insert(pair<string, V> &&value) { // NOLINT: match stl API
+		map_idx[value.first] = map.size();
 		map.push_back(std::move(value));
-		map_idx[value.first] = map.size() - 1;
 	}
 
 	void erase(typename VECTOR_TYPE::iterator it) { // NOLINT: match stl API

@@ -67,9 +67,15 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	    .def("pl", &DuckDBPyRelation::ToPolars, "Execute and fetch all rows as a Polars DataFrame",
 	         py::arg("batch_size") = 1000000)
 	    .def("torch", &DuckDBPyRelation::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors")
-	    .def("tf", &DuckDBPyRelation::FetchTF, "Fetch a result as dict of TensorFlow Tensors")
-	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
-	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
+	    .def("tf", &DuckDBPyRelation::FetchTF, "Fetch a result as dict of TensorFlow Tensors");
+	const char *capsule_docs = R"(
+			Execute and return an ArrowArrayStream through the Arrow PyCapsule Interface.
+
+			https://arrow.apache.org/docs/dev/format/CDataInterface/PyCapsuleInterface.html
+		)";
+	m.def("__arrow_c_stream__", &DuckDBPyRelation::ToArrowCapsule, capsule_docs);
+	m.def("record_batch", &DuckDBPyRelation::ToRecordBatch,
+	      "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
 	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000);
 }

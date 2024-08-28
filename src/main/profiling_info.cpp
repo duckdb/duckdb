@@ -9,52 +9,77 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-void ProfilingInfo::SetSettings(profiler_settings_t const &n_settings) {
-	this->settings = n_settings;
-}
-
-const profiler_settings_t &ProfilingInfo::GetSettings() {
-	return settings;
-}
-
 profiler_settings_t ProfilingInfo::DefaultSettings() {
 	return {
-	    MetricsType::CPU_TIME,
-	    MetricsType::EXTRA_INFO,
-	    MetricsType::CUMULATIVE_CARDINALITY,
-	    MetricsType::OPERATOR_CARDINALITY,
+	    MetricsType::QUERY_NAME,           MetricsType::BLOCKED_THREAD_TIME,     MetricsType::CPU_TIME,
+	    MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY,  MetricsType::OPERATOR_TYPE,
+	    MetricsType::OPERATOR_CARDINALITY, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_ROWS_SCANNED,
 	    MetricsType::OPERATOR_TIMING,
 	};
 }
 
-void ProfilingInfo::ResetSettings() {
-	settings.clear();
-	settings = DefaultSettings();
+profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
+	return {
+	    MetricsType::OPERATOR_CARDINALITY,
+	    MetricsType::OPERATOR_ROWS_SCANNED,
+	    MetricsType::OPERATOR_TIMING,
+	};
+}
+
+profiler_settings_t ProfilingInfo::AllSettings() {
+	auto all_settings = DefaultSettings();
+	auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
+	auto phase_timings = MetricsUtils::GetPhaseTimingMetrics();
+
+	for (auto &setting : optimizer_settings) {
+		all_settings.insert(setting);
+	}
+
+	for (auto &setting : phase_timings) {
+		all_settings.insert(setting);
+	}
+
+	return all_settings;
 }
 
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
 
-	auto default_settings = DefaultSettings();
+	auto all_settings = AllSettings();
 
-	for (auto &metric : default_settings) {
+	for (auto &metric : all_settings) {
 		if (!Enabled(metric)) {
 			continue;
 		}
 
+		if (MetricsUtils::IsOptimizerMetric(metric) || MetricsUtils::IsPhaseTimingMetric(metric)) {
+			metrics[metric] = Value::CreateValue(0.0);
+			continue;
+		}
+
 		switch (metric) {
+		case MetricsType::QUERY_NAME:
+		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
 			metrics[metric] = Value::CreateValue(0.0);
 			break;
 		}
+		case MetricsType::OPERATOR_TYPE: {
+			metrics[metric] = Value::CreateValue<uint8_t>(0);
+			break;
+		}
 		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY: {
+		case MetricsType::OPERATOR_CARDINALITY:
+		case MetricsType::CUMULATIVE_ROWS_SCANNED:
+		case MetricsType::OPERATOR_ROWS_SCANNED: {
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
 			break;
 		}
 		case MetricsType::EXTRA_INFO:
 			break;
+		default:
+			throw Exception(ExceptionType::INTERNAL, "MetricsType" + EnumUtil::ToString(metric) + "not implemented");
 		}
 	}
 }
@@ -63,12 +88,22 @@ bool ProfilingInfo::Enabled(const MetricsType setting) const {
 	if (settings.find(setting) != settings.end()) {
 		return true;
 	}
-	if (setting == MetricsType::OPERATOR_TIMING && Enabled(MetricsType::CPU_TIME)) {
-		return true;
+
+	switch (setting) {
+	case MetricsType::OPERATOR_TIMING:
+		return Enabled(MetricsType::CPU_TIME);
+	case MetricsType::OPERATOR_CARDINALITY:
+		return Enabled(MetricsType::CUMULATIVE_CARDINALITY);
+	case MetricsType::OPERATOR_ROWS_SCANNED:
+		return Enabled(MetricsType::CUMULATIVE_ROWS_SCANNED);
+	default:
+		break;
 	}
-	if (setting == MetricsType::OPERATOR_CARDINALITY && Enabled(MetricsType::CUMULATIVE_CARDINALITY)) {
-		return true;
+
+	if (MetricsUtils::IsOptimizerMetric(setting)) {
+		return Enabled(MetricsType::CUMULATIVE_OPTIMIZER_TIMING);
 	}
+
 	return false;
 }
 
@@ -88,8 +123,13 @@ string ProfilingInfo::GetMetricAsString(MetricsType setting) const {
 		return "\"" + result + "\"";
 	}
 
-	// The metric cannot be NULL, and should have been 0 initialized.
+	// The metric cannot be NULL and must be initialized.
 	D_ASSERT(!metrics.at(setting).IsNull());
+
+	if (setting == MetricsType::OPERATOR_TYPE) {
+		auto type = PhysicalOperatorType(metrics.at(setting).GetValue<uint8_t>());
+		return EnumUtil::ToString(type);
+	}
 
 	return metrics.at(setting).ToString();
 }
@@ -124,14 +164,29 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		// The metric cannot be NULL, and should have been 0 initialized.
 		D_ASSERT(!metrics[metric].IsNull());
 
+		if (MetricsUtils::IsOptimizerMetric(metric) || MetricsUtils::IsPhaseTimingMetric(metric)) {
+			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
+			continue;
+		}
+
 		switch (metric) {
+		case MetricsType::QUERY_NAME:
+			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
+			break;
+		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			break;
 		}
+		case MetricsType::OPERATOR_TYPE: {
+			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, GetMetricAsString(metric).c_str());
+			break;
+		}
 		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY: {
+		case MetricsType::OPERATOR_CARDINALITY:
+		case MetricsType::CUMULATIVE_ROWS_SCANNED:
+		case MetricsType::OPERATOR_ROWS_SCANNED: {
 			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
 			break;
 		}

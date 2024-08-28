@@ -62,6 +62,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(CatalogErrorMaxSchema),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_GLOBAL(DebugCheckpointAbort),
+    DUCKDB_GLOBAL(DebugSkipCheckpointOnCommit),
     DUCKDB_GLOBAL(StorageCompatibilityVersion),
     DUCKDB_LOCAL(DebugForceExternal),
     DUCKDB_LOCAL(DebugForceNoCrossProduct),
@@ -96,10 +97,14 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ForceCompressionSetting),
     DUCKDB_GLOBAL(ForceBitpackingModeSetting),
     DUCKDB_LOCAL(HomeDirectorySetting),
+    DUCKDB_GLOBAL(HTTPProxy),
+    DUCKDB_GLOBAL(HTTPProxyUsername),
+    DUCKDB_GLOBAL(HTTPProxyPassword),
     DUCKDB_LOCAL(LogQueryPathSetting),
     DUCKDB_GLOBAL(EnableMacrosDependencies),
     DUCKDB_GLOBAL(EnableViewDependencies),
     DUCKDB_GLOBAL(LockConfigurationSetting),
+    DUCKDB_GLOBAL(IEEEFloatingPointOpsSetting),
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
     DUCKDB_LOCAL(MaximumExpressionDepthSetting),
@@ -111,6 +116,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(OldImplicitCasting),
     DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
     DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
+    DUCKDB_GLOBAL(OrderByNonIntegerLiteral),
     DUCKDB_LOCAL(OrderedAggregateThreshold),
     DUCKDB_GLOBAL(PasswordSetting),
     DUCKDB_LOCAL(PerfectHashThresholdSetting),
@@ -125,6 +131,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
+    DUCKDB_GLOBAL(ScalarSubqueryErrorOnMultipleRows),
     DUCKDB_GLOBAL(SecretDirectorySetting),
     DUCKDB_GLOBAL(DefaultSecretStorage),
     DUCKDB_GLOBAL(TempDirectorySetting),
@@ -438,7 +445,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
 		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
-	return NumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 
 idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
@@ -471,7 +478,7 @@ idx_t DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 
-	return NumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 
 // Right now we only really care about access mode when comparing DBConfigs
@@ -549,9 +556,15 @@ SerializationCompatibility SerializationCompatibility::Default() {
 	res.manually_set = false;
 	return res;
 #else
+#ifdef DUCKDB_LATEST_STORAGE
+	auto res = FromString("latest");
+	res.manually_set = false;
+	return res;
+#else
 	auto res = FromString("v0.10.2");
 	res.manually_set = false;
 	return res;
+#endif
 #endif
 }
 

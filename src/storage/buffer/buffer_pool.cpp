@@ -1,5 +1,6 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
+
 BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num)
     : handle(std::move(handle_p)), handle_sequence_number(eviction_seq_num) {
 	D_ASSERT(!handle.expired());
@@ -393,6 +395,9 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 		throw OutOfMemoryException(
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
+	}
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
 	}
 }
 

@@ -1054,10 +1054,11 @@ void Vector::Flatten(idx_t count) {
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment, sequence_count;
 		SequenceVector::GetSequence(*this, start, increment, sequence_count);
+		auto seq_count = NumericCast<idx_t>(sequence_count);
 
-		buffer = VectorBuffer::CreateStandardVector(GetType());
+		buffer = VectorBuffer::CreateStandardVector(GetType(), MaxValue<idx_t>(STANDARD_VECTOR_SIZE, seq_count));
 		data = buffer->GetData();
-		VectorOperations::GenerateSequence(*this, NumericCast<idx_t>(sequence_count), start, increment);
+		VectorOperations::GenerateSequence(*this, seq_count, start, increment);
 		break;
 	}
 	default:

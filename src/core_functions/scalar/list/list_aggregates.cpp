@@ -57,7 +57,7 @@ struct ListAggregatesBindData : public FunctionData {
 	}
 
 	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer, ScalarFunction &bound_function) {
-		auto result = deserializer.ReadPropertyWithDefault<unique_ptr<ListAggregatesBindData>>(
+		auto result = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<ListAggregatesBindData>>(
 		    100, "bind_data", unique_ptr<ListAggregatesBindData>(nullptr));
 		if (!result) {
 			return ListAggregatesBindFailure(bound_function);

@@ -70,14 +70,6 @@ set(INSTALL_CMAKE_DIR
     CACHE PATH "Installation directory for CMake files")
 set(DUCKDB_EXPORT_SET "DuckDBExports")
 
-# Make relative install paths absolute
-foreach(p LIB BIN INCLUDE CMAKE)
-  set(var INSTALL_${p}_DIR)
-  if(NOT IS_ABSOLUTE "${${var}}")
-    set(${var} "${CMAKE_INSTALL_PREFIX}/${${var}}")
-  endif()
-endforeach()
-
 # This option allows --gc-sections flag during extension linking to discard any unused functions or data
 if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
@@ -461,6 +453,10 @@ endif()
 
 if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
+endif()
+
+if(LATEST_STORAGE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_LATEST_STORAGE")
 endif()
 
 if(DEBUG_ALLOCATION)
@@ -1417,8 +1413,8 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
                  "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
 
   # Configure cmake package config for the install tree
-  file(RELATIVE_PATH REL_INCLUDE_DIR "${INSTALL_CMAKE_DIR}"
-       "${INSTALL_INCLUDE_DIR}")
+  file(RELATIVE_PATH REL_INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/${INSTALL_CMAKE_DIR}"
+    "${CMAKE_INSTALL_PREFIX}/${INSTALL_INCLUDE_DIR}")
   set(CONF_INCLUDE_DIRS "\${DuckDB_CMAKE_DIR}/${REL_INCLUDE_DIR}")
   configure_file(
     ${CMAKE_CONFIG_TEMPLATE}

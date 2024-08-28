@@ -81,9 +81,17 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	// FIXME: there seems to be a bug in the enum arrow reader in this test when run with vsize=2
 	return;
 #endif
-	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz) REPLACE "
+	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz, varint) REPLACE "
 	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint, uhugeint::DOUBLE as uhugeint) "
 	                   "FROM test_all_types()");
+}
+
+TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
+	// UUID
+	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)");
+
+	// JSON
+	TestArrowRoundtrip("SELECT '{\"name\":\"Pedro\", \"age\":28, \"car\":\"VW Fox\"}'::JSON str FROM range(5) tbl(i)");
 }
 
 TEST_CASE("Test Arrow String View", "[arrow][.]") {

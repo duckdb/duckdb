@@ -140,7 +140,7 @@ SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a + right_table.a 
 
 # correlated subqueries
 query II
-SELECT a as outer_a, (SELECT right_table.b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+SELECT a as outer_a, (SELECT MAX(right_table.b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
 ----
 43	42
 2000	42
@@ -150,8 +150,17 @@ INSERT INTO right_table VALUES (1, 20);
 
 # correlated subqueries
 query II
+SELECT a as outer_a, (SELECT MAX(b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+43	42
+2000	42
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
+# this is probably not deterministic
+query II
 SELECT a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
 ----
 43	20
 2000	20
-
