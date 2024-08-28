@@ -93,13 +93,6 @@ public:
 			}
 			break;
 		}
-		case PhysicalType::VARCHAR: {
-			result.data = owned_data.get();
-			if (result.auxiliary) {
-				result.auxiliary->Cast<VectorStringBuffer>().Destroy();
-			}
-			break;
-		}
 		default:
 			// regular type: no aux data and reset data to cached data
 			result.data = owned_data.get();

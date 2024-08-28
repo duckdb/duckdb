@@ -39,15 +39,8 @@ bool PartitionedColumnData::UseFixedSizeMap() const {
 }
 
 unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
-	auto &buffer_allocator = BufferAllocator::Get(context);
-
 	auto result = make_uniq<DataChunk>();
-	result->Initialize(buffer_allocator, types, BufferSize());
-	for (auto &col : result->data) {
-		if (col.GetType().InternalType() == PhysicalType::VARCHAR) {
-			StringVector::InitializeHeap(col, buffer_allocator);
-		}
-	}
+	result->Initialize(BufferAllocator::Get(context), types, BufferSize());
 	return result;
 }
 
