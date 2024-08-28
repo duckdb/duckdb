@@ -937,7 +937,6 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 		error << "* " << suggestion << '\n';
 	}
 	throw InvalidInputException(error.str());
-	throw InvalidInputException("read_csv and read_csv_auto does not have the %s option.");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_p, py::kwargs &kwargs) {
