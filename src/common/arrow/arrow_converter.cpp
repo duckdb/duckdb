@@ -125,10 +125,14 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "f";
 		break;
 	case LogicalTypeId::HUGEINT: {
-		child.format = "w:16";
-		auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.hugeint");
-		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-		child.metadata = root_holder.metadata_info.back().get();
+		if (options.lossless_conversion) {
+			child.format = "w:16";
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.hugeint");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		} else {
+			child.format = "d:38,0";
+		}
 		break;
 	}
 	case LogicalTypeId::UHUGEINT: {
@@ -169,10 +173,12 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "tdD";
 		break;
 	case LogicalTypeId::TIME_TZ: {
-		auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.time_tz");
-		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-		child.metadata = root_holder.metadata_info.back().get();
 		child.format = "ttu";
+		if (options.lossless_conversion) {
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.time_tz");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		}
 		break;
 	}
 	case LogicalTypeId::TIME:
@@ -219,13 +225,15 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		}
 		break;
 	case LogicalTypeId::BIT: {
-		auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.bit");
-		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-		child.metadata = root_holder.metadata_info.back().get();
 		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
+		}
+		if (options.lossless_conversion) {
+			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.bit");
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
 		}
 		break;
 	}

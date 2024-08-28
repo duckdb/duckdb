@@ -3,6 +3,7 @@ import pytest
 import uuid
 import json
 from uuid import UUID
+import datetime
 
 pa = pytest.importorskip('pyarrow')
 
@@ -171,7 +172,11 @@ class TestCanonicalExtensionTypes(object):
         with pytest.raises(duckdb.NotImplementedException, match=" Arrow Type with extension name: pedro.binary"):
             duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
 
-    def test_hugeint(self, duckdb_cursor):
+    def test_hugeint(self):
+        duckdb_cursor = duckdb.connect()
+
+        duckdb_cursor.execute("SET lossless_conversion = true")
+
         pa.register_extension_type(HugeIntType())
 
         storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
@@ -182,9 +187,16 @@ class TestCanonicalExtensionTypes(object):
 
         assert duckdb_cursor.execute('FROM arrow_table').fetchall() == [(-1,)]
 
+        assert duckdb_cursor.execute('FROM arrow_table').arrow().equals(arrow_table)
+
+        duckdb_cursor.execute("SET lossless_conversion = false")
+
+        assert not duckdb_cursor.execute('FROM arrow_table').arrow().equals(arrow_table)
+
         pa.unregister_extension_type("duckdb.hugeint")
 
     def test_uhugeint(self, duckdb_cursor):
+
         pa.register_extension_type(UHugeIntType())
 
         storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
@@ -196,3 +208,41 @@ class TestCanonicalExtensionTypes(object):
         assert duckdb_cursor.execute('FROM arrow_table').fetchall() == [(340282366920938463463374607431768211455,)]
 
         pa.unregister_extension_type("duckdb.uhugeint")
+
+    def test_bit(self):
+        duckdb_cursor = duckdb.connect()
+
+        res_blob = duckdb_cursor.execute("SELECT '0101011'::BIT str FROM range(5) tbl(i)").arrow()
+
+        duckdb_cursor.execute("SET lossless_conversion = true")
+
+        res_bit = duckdb_cursor.execute("SELECT '0101011'::BIT str FROM range(5) tbl(i)").arrow()
+
+        assert duckdb_cursor.execute("FROM res_blob").fetchall() == [
+            (b'\x01\xab',),
+            (b'\x01\xab',),
+            (b'\x01\xab',),
+            (b'\x01\xab',),
+            (b'\x01\xab',),
+        ]
+        assert duckdb_cursor.execute("FROM res_bit").fetchall() == [
+            ('0101011',),
+            ('0101011',),
+            ('0101011',),
+            ('0101011',),
+            ('0101011',),
+        ]
+
+    def test_timetz(self):
+        duckdb_cursor = duckdb.connect()
+
+        res_blob = duckdb_cursor.execute("SELECT '02:30:00+04'::TIMETZ str FROM range(1) tbl(i)").arrow()
+
+        duckdb_cursor.execute("SET lossless_conversion = true")
+
+        res_bit = duckdb_cursor.execute("SELECT '02:30:00+04'::TIMETZ str FROM range(1) tbl(i)").arrow()
+
+        assert duckdb_cursor.execute("FROM res_blob").fetchall() == [(datetime.time(2, 30),)]
+        assert duckdb_cursor.execute("FROM res_bit").fetchall() == [
+            (datetime.time(2, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=14400))),)
+        ]

@@ -142,8 +142,15 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::INTEGER:
 		InitializeAppenderForType<ArrowScalarData<int32_t>>(append_data);
 		break;
+	case LogicalTypeId::TIME_TZ: {
+		if (append_data.options.lossless_conversion) {
+			InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
+		} else {
+			InitializeAppenderForType<ArrowScalarData<int64_t, dtime_tz_t, ArrowTimeTzConverter>>(append_data);
+		}
+		break;
+	}
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP:
