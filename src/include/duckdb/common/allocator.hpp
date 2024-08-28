@@ -117,7 +117,7 @@ public:
 
 	static bool SupportsFlush();
 	static int64_t DecayDelay();
-	static void ThreadFlush(idx_t threshold);
+	static void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count);
 	static void ThreadIdle();
 	static void FlushAll();
 	static void SetBackgroundThreads(bool enable);
