@@ -389,10 +389,10 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 		handle->readers--;
 		if (handle->readers == 0) {
 			VerifyZeroReaders(handle);
-			if (handle->destroy_buffer_upon == DestroyBufferUpon::UNPIN) {
-				handle->Unload();
-			} else {
+			if (handle->MustAddToEvictionQueue()) {
 				purge = buffer_pool.AddToEvictionQueue(handle);
+			} else {
+				handle->Unload();
 			}
 		}
 	}
