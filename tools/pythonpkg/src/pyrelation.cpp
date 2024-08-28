@@ -1078,6 +1078,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	JoinType dtype;
 	string type_string = StringUtil::Lower(type);
 	StringUtil::Trim(type_string);
+
 	dtype = ParseJoinType(type_string);
 	if (dtype == JoinType::INVALID) {
 		ThrowUnsupportedJoinTypeError(type);
