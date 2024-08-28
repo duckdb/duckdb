@@ -1,0 +1,28 @@
+# name: test/sql/transactions/test_create_drop_conflict.test
+# description: Test a conflict with create/drop across transactions
+# group: [transactions]
+
+load __TEST_DIR__/broken.db
+
+statement ok
+CREATE SCHEMA foo;
+
+statement ok con2
+START TRANSACTION;
+
+statement ok con2
+DROP SCHEMA IF EXISTS foo CASCADE;
+
+# shouldn't the following cause a write-write conflict?
+statement ok con1
+create table foo.bar as select 42;
+
+statement error con2
+COMMIT;
+----
+Cannot drop entry
+
+# FIXME
+# statement ok
+# DROP SCHEMA foo CASCADE;
+

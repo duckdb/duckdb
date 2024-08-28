@@ -140,6 +140,10 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		auto &catalog = catalog_entry->ParentCatalog();
 		D_ASSERT(catalog.IsDuckCatalog());
 
+		auto &parent = catalog_entry->Parent();
+		if (parent.type == CatalogType::DELETED_ENTRY && catalog_entry->set) {
+			catalog_entry->set->CommitDrop(commit_id, *catalog_entry);
+		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
