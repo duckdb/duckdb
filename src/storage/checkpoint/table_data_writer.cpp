@@ -91,9 +91,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
 
 #ifndef DUCKDB_DISABLE_BLOCK_VERIFICATION
-	for(auto &entry : index_storage_infos) {
-		for(auto &allocator : entry.allocator_infos) {
-			for(auto &block : allocator.block_pointers) {
+	for (auto &entry : index_storage_infos) {
+		for (auto &allocator : entry.allocator_infos) {
+			for (auto &block : allocator.block_pointers) {
 				checkpoint_manager.verify_block_usage_count[block.block_id]++;
 			}
 		}
