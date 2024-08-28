@@ -538,7 +538,6 @@ class DataFrame:
                     "right": ["rightouter", "right_outer"],
                     "anti": ["leftanti", "left_anti"],
                     "semi": ["leftsemi", "left_semi"],
-                    "cross": [],
                 }
                 mapped_type = None
                 for type, aliases in known_aliases.items():
@@ -591,7 +590,7 @@ class DataFrame:
         | 16|  Bob|    85|
         +---+-----+------+
         """
-        return self.join(other, how="cross")
+        return DataFrame(self.relation.cross(other.relation), self.session)
 
     def alias(self, alias: str) -> "DataFrame":
         """Returns a new :class:`DataFrame` with an alias set.

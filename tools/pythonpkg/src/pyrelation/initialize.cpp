@@ -257,10 +257,15 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Compute the function of a single column or a list of columns by the optional groups on the relation",
 	         py::arg("function_name"), py::arg("function_aggr"), py::arg("group_expr") = "",
 	         py::arg("function_parameter") = "", py::arg("projected_columns") = "")
+
 	    .def("join", &DuckDBPyRelation::Join,
 	         "Join the relation object with another relation object in other_rel using the join condition expression "
 	         "in join_condition. Types supported are 'inner' and 'left'",
-	         py::arg("other_rel"), py::arg("condition") = py::none(), py::arg("how") = "inner")
+	         py::arg("other_rel"), py::arg("condition"), py::arg("how") = "inner")
+	    .def("cross", &DuckDBPyRelation::Cross,
+	         "Create cross/cartesian product of two relational objects",
+	         py::arg("other_rel"))	
+			 		 
 	    .def("distinct", &DuckDBPyRelation::Distinct, "Retrieve distinct rows from this relation object")
 	    .def("limit", &DuckDBPyRelation::Limit,
 	         "Only retrieve the first n rows from this relation object, starting at offset", py::arg("n"),

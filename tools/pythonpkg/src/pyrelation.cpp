@@ -1078,10 +1078,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	JoinType dtype;
 	string type_string = StringUtil::Lower(type);
 	StringUtil::Trim(type_string);
-	auto is_cross = type_string == "cross";
-	std::cout << type_string << " is not " << is_cross << '\n';;
 	dtype = ParseJoinType(type_string);
-	if (dtype == JoinType::INVALID && !is_cross) {
+	if (dtype == JoinType::INVALID) {
 		ThrowUnsupportedJoinTypeError(type);
 	}
 	auto alias = GetAlias();
@@ -1089,9 +1087,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	if (StringUtil::CIEquals(alias, other_alias)) {
 		throw InvalidInputException("Both relations have the same alias, please change the alias of one or both "
 		                            "relations using 'rel = rel.set_alias(<new alias>)'");
-	}
-	if (is_cross) {
-		return make_uniq<DuckDBPyRelation>(rel->CrossProduct(other->rel));
 	}
 	if (py::isinstance<py::str>(condition)) {
 		auto condition_string = std::string(py::cast<py::str>(condition));
@@ -1105,6 +1100,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	vector<unique_ptr<ParsedExpression>> conditions;
 	conditions.push_back(condition_expr->GetExpression().Copy());
 	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Cross(DuckDBPyRelation *other) {
+	return make_uniq<DuckDBPyRelation>(rel->CrossProduct(other->rel));
 }
 
 static Value NestedDictToStruct(const py::object &dictionary) {
