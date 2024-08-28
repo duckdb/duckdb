@@ -15,6 +15,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/types/varint.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -22,7 +23,6 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "fsst.h"
-#include "duckdb/common/types/varint.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -1929,7 +1929,7 @@ string_t StringVector::AddString(Vector &vector, string_t data) {
 		return data;
 	}
 	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
+		InitializeHeap(vector);
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
@@ -1943,7 +1943,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 		return data;
 	}
 	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
+		InitializeHeap(vector);
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
@@ -1956,7 +1956,7 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 		return string_t(UnsafeNumericCast<uint32_t>(len));
 	}
 	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
+		InitializeHeap(vector);
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
@@ -1966,7 +1966,7 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
+		InitializeHeap(vector);
 	}
 	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
 	string_buffer.AddHeapReference(make_buffer<ManagedVectorBuffer>(std::move(handle)));
@@ -1976,7 +1976,7 @@ void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(buffer.get() != vector.auxiliary.get());
 	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
+		InitializeHeap(vector);
 	}
 	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
 	string_buffer.AddHeapReference(std::move(buffer));
@@ -1994,6 +1994,12 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 		return;
 	}
 	StringVector::AddBuffer(vector, other.auxiliary);
+}
+
+void StringVector::InitializeHeap(Vector &vector, Allocator &allocator) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(!vector.auxiliary);
+	vector.auxiliary = make_buffer<VectorStringBuffer>(allocator);
 }
 
 //===--------------------------------------------------------------------===//

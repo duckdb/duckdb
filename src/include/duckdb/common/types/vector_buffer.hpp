@@ -166,8 +166,8 @@ private:
 
 class VectorStringBuffer : public VectorBuffer {
 public:
-	VectorStringBuffer();
-	explicit VectorStringBuffer(VectorBufferType type);
+	explicit VectorStringBuffer(Allocator &allocator = Allocator::DefaultAllocator());
+	explicit VectorStringBuffer(VectorBufferType type, Allocator &allocator = Allocator::DefaultAllocator());
 
 public:
 	string_t AddString(const char *data, idx_t len) {
@@ -187,6 +187,10 @@ public:
 		references.push_back(std::move(heap));
 	}
 
+	void Destroy() {
+		heap.Destroy();
+	}
+
 private:
 	//! The string heap of this buffer
 	StringHeap heap;
@@ -196,7 +200,7 @@ private:
 
 class VectorFSSTStringBuffer : public VectorStringBuffer {
 public:
-	VectorFSSTStringBuffer();
+	explicit VectorFSSTStringBuffer(Allocator &allocator = Allocator::DefaultAllocator());
 
 public:
 	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p, const idx_t string_block_limit) {

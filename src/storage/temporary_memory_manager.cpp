@@ -143,10 +143,9 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 		if (lower_bound >= upper_bound) {
 			new_reservation = lower_bound;
 		} else {
-			new_reservation =
-			    remaining_size > memory_limit
-			        ? ComputeOptimalReservation(temporary_memory_state, free_memory, lower_bound, upper_bound)
-			        : upper_bound;
+			new_reservation = remaining_size > memory_limit
+			                      ? ComputeOptimalReservation(temporary_memory_state, free_memory, lower_bound)
+			                      : upper_bound;
 		}
 
 		SetReservation(temporary_memory_state, new_reservation);
@@ -170,8 +169,7 @@ void TemporaryMemoryManager::SetReservation(TemporaryMemoryState &temporary_memo
 }
 
 idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state,
-                                                        const idx_t free_memory, const idx_t lower_bound,
-                                                        const idx_t upper_bound) const {
+                                                        const idx_t free_memory, const idx_t lower_bound) const {
 	static constexpr idx_t OPTIMIZATION_ITERATIONS_MULTIPLIER = 5;
 	const idx_t n = active_states.size();
 
@@ -246,8 +244,38 @@ idx_t TemporaryMemoryManager::ComputeOptimalReservation(const TemporaryMemorySta
 	}
 	D_ASSERT(remaining_memory == 0);
 
-	// Return computed reservation of this state
-	return MinValue<idx_t>(res[state_index.GetIndex()], upper_bound);
+	// We computed how the memory should be assigned to the states,
+	// but we did not yet take into account the upper bound of MAXIMUM_FREE_MEMORY_RATIO * free_memory.
+	// We cannot simply bound this state's reservation by that, because order would matter,
+	// and this function is called in arbitrary order for all active states
+	// So, we order the states by derivative, and assign the states with the lowest derivate first.
+	// This way, order does not matter, and the "best" states will always get more memory
+	vector<idx_t> idxs(n, 0);
+	for (i = 0; i < n; i++) {
+		idxs[i] = i;
+	}
+	std::sort(idxs.begin(), idxs.end(), [&](const idx_t &lhs, const idx_t &rhs) { return der[lhs] < der[rhs]; });
+
+	// Loop through sorted indices until we encounter the state index
+	remaining_memory = free_memory;
+	for (const auto idx : idxs) {
+		// Compute upper bound
+		const auto upper_bound =
+		    LossyNumericCast<idx_t>(MAXIMUM_FREE_MEMORY_RATIO * static_cast<double>(remaining_memory));
+		// Bound the state reservation
+		auto state_reservation = MinValue<idx_t>(res[idx], upper_bound);
+		// But make sure it's never less than the lower bound
+		state_reservation = MaxValue<idx_t>(state_reservation, lower_bound);
+		// If this is the current state, we can just return
+		if (idx == state_index.GetIndex()) {
+			return state_reservation;
+		}
+		// Decrement the remaining memory
+		remaining_memory -= state_reservation;
+	}
+
+	// We cannot have gotten through the loop above without finding the current state
+	throw InternalException("Did not find state_index in ComputeOptimalReservation");
 }
 
 void TemporaryMemoryManager::Verify() const {

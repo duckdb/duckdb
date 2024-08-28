@@ -435,6 +435,8 @@ struct StringVector {
 	DUCKDB_API static void AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer);
 	//! Add a reference from this vector to the string heap of the provided vector
 	DUCKDB_API static void AddHeapReference(Vector &vector, Vector &other);
+	//! Initializes the string heap of the vector
+	DUCKDB_API static void InitializeHeap(Vector &vector, Allocator &allocator = Allocator::DefaultAllocator());
 };
 
 struct FSSTVector {

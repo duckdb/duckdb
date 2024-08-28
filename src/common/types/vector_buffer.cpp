@@ -23,13 +23,16 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
 }
 
-VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING_BUFFER) {
+VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
+    : VectorBuffer(VectorBufferType::STRING_BUFFER), heap(allocator) {
 }
 
-VectorStringBuffer::VectorStringBuffer(VectorBufferType type) : VectorBuffer(type) {
+VectorStringBuffer::VectorStringBuffer(VectorBufferType type, Allocator &allocator)
+    : VectorBuffer(type), heap(allocator) {
 }
 
-VectorFSSTStringBuffer::VectorFSSTStringBuffer() : VectorStringBuffer(VectorBufferType::FSST_BUFFER) {
+VectorFSSTStringBuffer::VectorFSSTStringBuffer(Allocator &allocator)
+    : VectorStringBuffer(VectorBufferType::FSST_BUFFER, allocator) {
 }
 
 VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
