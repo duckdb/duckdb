@@ -429,6 +429,8 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags
 
 unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, FileOpenFlags flags,
                                                         optional_ptr<FileOpener> opener) {
+	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
+
 	auto params = HTTPParams::ReadFrom(opener);
 
 	auto secret_manager = FileOpener::TryGetSecretManager(opener);
@@ -447,17 +449,7 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, File
 
 unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlags flags,
                                                 optional_ptr<FileOpener> opener) {
-	idx_t compression_pos = 0;
-	if (StringUtil::Contains(path, ".gz")) {
-			compression_pos = path.find(".gz");
-			flags.SetCompression(FileCompressionType::GZIP);
-		}
-	if (StringUtil::Contains(path, ".zst")) {
-		if (path.find(".zst") > compression_pos) {
-			compression_pos = path.find(".zst");
-			flags.SetCompression(FileCompressionType::ZSTD);
-		}
-	}
+	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
 
 	if (flags.ReturnNullIfNotExists()) {
 		try {

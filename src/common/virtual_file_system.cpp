@@ -14,19 +14,25 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenF
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto detect compression settings based on file name
+		compression = FileCompressionType::UNCOMPRESSED;
 		auto lower_path = StringUtil::Lower(path);
 		if (StringUtil::EndsWith(lower_path, ".tmp")) {
 			// strip .tmp
 			lower_path = lower_path.substr(0, lower_path.length() - 4);
 		}
-		if (StringUtil::EndsWith(lower_path, ".gz")) {
+		idx_t compression_pos = 0;
+		if (StringUtil::Contains(path, ".gz")) {
+			compression_pos = path.find(".gz");
 			compression = FileCompressionType::GZIP;
-		} else if (StringUtil::EndsWith(lower_path, ".zst")) {
-			compression = FileCompressionType::ZSTD;
-		} else {
-			compression = FileCompressionType::UNCOMPRESSED;
+		}
+		if (StringUtil::Contains(path, ".zst")) {
+			if (path.find(".zst") > compression_pos) {
+				compression_pos = path.find(".zst");
+				compression = FileCompressionType::ZSTD;
+			}
 		}
 	}
+
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
 	auto file_handle = FindFileSystem(path).OpenFile(path, flags, opener);
