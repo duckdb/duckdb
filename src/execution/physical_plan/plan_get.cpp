@@ -34,7 +34,7 @@ unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, c
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
-	auto &column_ids = op.GetColumnIds();
+	auto column_ids = op.GetColumnIds();
 	if (!op.children.empty()) {
 		auto child_node = CreatePlan(std::move(op.children[0]));
 		// this is for table producing functions that consume subquery results
@@ -87,29 +87,57 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	}
 	unique_ptr<PhysicalFilter> filter;
 	vector<unique_ptr<Expression>> select_list;
+	auto &projection_ids = op.projection_ids;
 
 	if (table_filters && op.function.supports_pushdown_type) {
 		unique_ptr<Expression> unsupported_filter;
-		vector<idx_t> to_remove;
+		unordered_set<idx_t> to_remove;
 		for (auto &entry : table_filters->filters) {
 			auto column_id = column_ids[entry.first];
 			auto &type = op.returned_types[column_id];
 			if (!op.function.supports_pushdown_type(type)) {
-				auto column = make_uniq<BoundReferenceExpression>(type, entry.first);
+				idx_t column_id_filter = entry.first;
+				if (!projection_ids.empty()) {
+					bool found_projection = false;
+					for (idx_t i = 0; i < projection_ids.size(); i ++){
+						if (column_ids[projection_ids[i]] == column_ids[entry.first]) {
+							column_id_filter = i;
+							found_projection = true;
+							break;
+						}
+					}
+					if (!found_projection) {
+						projection_ids.push_back(column_ids[entry.first]);
+						column_id_filter = projection_ids.size() - 1;
+					}
+				}
+				auto column = make_uniq<BoundReferenceExpression>(type, column_id_filter);
 				select_list.push_back(entry.second->ToExpression(*column));
-				to_remove.push_back(entry.first);
+				to_remove.insert(entry.first);
 			}
 		}
 		for (auto &col : to_remove) {
 			table_filters->filters.erase(col);
 		}
+		// for (auto &col_remove: to_remove) {
+		// 	bool exists = false;
+		// 	for (auto& c: column_ids) {
+		// 		if (col_remove == c) {
+		// 			exists = true;
+		// 			break;
+		// 		}
+		// 	}
+		// 	if (!exists) {
+		// 		op.AddColumnId(col_remove);
+		// 	}
+		// }
+		// column_ids = op.GetColumnIds();
 		// fixme add logic to handle if filter not in the
 		if (!select_list.empty()) {
 			vector<LogicalType> filter_types;
-			for (auto &c : column_ids) {
-				filter_types.push_back(op.returned_types[c]);
+			for (auto &c : projection_ids) {
+				filter_types.push_back(op.returned_types[column_ids[c]]);
 			}
-
 			filter = make_uniq<PhysicalFilter>(filter_types, std::move(select_list), op.estimated_cardinality);
 		}
 	}
