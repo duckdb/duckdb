@@ -87,10 +87,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		op.function.dependency(dependencies, op.bind_data.get());
 	}
 	unique_ptr<PhysicalFilter> filter;
-	vector<unique_ptr<Expression>> select_list;
+
 	auto &projection_ids = op.projection_ids;
 
 	if (table_filters && op.function.supports_pushdown_type) {
+		vector<unique_ptr<Expression>> select_list;
 		unique_ptr<Expression> unsupported_filter;
 		unordered_set<idx_t> to_remove;
 		for (auto &entry : table_filters->filters) {
@@ -170,7 +171,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		    make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
 		if (filter) {
 			filter->children.push_back(std::move(node));
-			projection->children.push_back(std::move(node));
+			projection->children.push_back(std::move(filter));
 		} else {
 			projection->children.push_back(std::move(node));
 		}
