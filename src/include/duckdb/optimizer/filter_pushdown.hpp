@@ -26,7 +26,6 @@ public:
 	ClientContext &GetContext();
 
 	void CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings);
-	static bool FilterInputsChangeTypes(unique_ptr<Expression> filter, vector<unique_ptr<Expression>> &expressions);
 
 	struct Filter {
 		unordered_set<idx_t> bindings;
