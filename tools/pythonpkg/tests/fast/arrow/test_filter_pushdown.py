@@ -7,7 +7,7 @@ from conftest import pandas_supports_arrow_backend
 import sys
 from packaging.version import Version
 
-from arrow_canonical_extensions import HugeIntType
+from arrow_canonical_extensions import HugeIntType, UHugeIntType
 
 
 pa = pytest.importorskip("pyarrow")
@@ -879,3 +879,31 @@ class TestArrowFilterPushdown(object):
             'a': {'b': 3, 'c': True},
             'd': {'e': 4, 'f': 'bar'},
         }
+
+    def test_filter_pushdown_not_supported(self):
+        pa.register_extension_type(UHugeIntType())
+
+        con = duckdb.connect()
+        con.execute(
+            "CREATE TABLE T as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d FROM range(5) tbl(i)"
+        )
+        arrow_tbl = con.execute("FROM T").arrow()
+
+        # No projection just unsupported filter
+        assert con.execute("from arrow_tbl where c == 3").fetchall() == [(3, '3', 3, 3)]
+
+        # No projection unsupported + supported filter
+        assert con.execute("from arrow_tbl where c < 4 and a > 2").fetchall() == [(3, '3', 3, 3)]
+
+        # No projection supported + unsupported + supported filter
+        assert con.execute("from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, '3', 3, 3)]
+        assert con.execute("from arrow_tbl where a > 2 and c < 4 and  b == '0' ").fetchall() == []
+
+        # Projection with unsupported filter column + unsupported + supported filter
+        assert con.execute("select c, b from arrow_tbl where c < 4 and  b == '3' and a > 2 ").fetchall() == [(3, '3')]
+        assert con.execute("select c, b from arrow_tbl where a > 2 and c < 4 and  b == '3'").fetchall() == [(3, '3')]
+
+        # Projection without unsupported filter column + unsupported + supported filter
+        assert con.execute("select a, b from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, '3')]
+
+        pa.unregister_extension_type("duckdb.uhugeint")
