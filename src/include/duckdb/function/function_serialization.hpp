@@ -13,6 +13,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/common/enums/function_deserialization_cast.hpp"
 
 namespace duckdb {
 
@@ -81,10 +82,14 @@ public:
 		auto &function = entry.first;
 		auto has_serialize = entry.second;
 
+		FunctionDeserializationInfo deserialize_info;
+
 		unique_ptr<FunctionData> bind_data;
 		function.return_type = return_type;
 		if (has_serialize) {
+			deserializer.Set<FunctionDeserializationInfo &>(deserialize_info);
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
+			deserializer.Unset<FunctionDeserializationInfo>();
 		} else if (function.bind) {
 			try {
 				bind_data = function.bind(context, function, children);
@@ -94,14 +99,14 @@ public:
 				                             error.RawMessage());
 			}
 		}
-		// ensure the children match the function arguments
-		// note that normally this should already match
-		// but it is possible we need to add casts in case function signatures differ across versions
-		FunctionBinder binder(context);
-		binder.CastToFunctionArguments(function, children);
-
+		if (deserialize_info.add_cast == FunctionDeserializationAddCast::CAST_INPUT_ARGUMENTS) {
+			// ensure the children match the function arguments by adding casts
+			FunctionBinder binder(context);
+			binder.CastToFunctionArguments(function, children);
+		}
 		if (function.return_type != return_type) {
-			throw SerializationException("Return type mismatch in deserialization (deserialized %s, found %s)", return_type, function.return_type);
+			throw SerializationException("Return type mismatch in deserialization (deserialized %s, found %s)",
+			                             return_type, function.return_type);
 		}
 		return make_pair(std::move(function), std::move(bind_data));
 	}

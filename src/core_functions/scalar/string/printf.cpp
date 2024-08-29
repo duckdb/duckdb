@@ -24,7 +24,7 @@ struct FMTFormat {
 
 unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
-	bound_function.arguments = { LogicalType::VARCHAR };
+	bound_function.arguments = {LogicalType::VARCHAR};
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->return_type.id()) {
 		case LogicalTypeId::BOOLEAN:
@@ -117,6 +117,21 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
+			case LogicalTypeId::TINYINT: {
+				auto arg_data = FlatVector::GetData<int8_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::SMALLINT: {
+				auto arg_data = FlatVector::GetData<int16_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::INTEGER: {
+				auto arg_data = FlatVector::GetData<int32_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
 			case LogicalTypeId::BIGINT: {
 				auto arg_data = FlatVector::GetData<int64_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
@@ -124,6 +139,11 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			}
 			case LogicalTypeId::UBIGINT: {
 				auto arg_data = FlatVector::GetData<uint64_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::FLOAT: {
+				auto arg_data = FlatVector::GetData<float>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}

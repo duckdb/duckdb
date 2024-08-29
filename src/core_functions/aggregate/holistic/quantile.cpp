@@ -10,6 +10,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/core_functions/aggregate/sort_key_helpers.hpp"
+#include "duckdb/common/enums/function_deserialization_cast.hpp"
 
 namespace duckdb {
 
@@ -134,6 +135,10 @@ unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserialize
 	for (const auto &r : raw) {
 		result->quantiles.emplace_back(QuantileValue(r));
 	}
+
+	// add cast to input arguments
+	auto &function_info = deserializer.Get<FunctionDeserializationInfo &>();
+	function_info.add_cast = FunctionDeserializationAddCast::CAST_INPUT_ARGUMENTS;
 	return std::move(result);
 }
 

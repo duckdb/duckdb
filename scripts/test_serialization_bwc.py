@@ -14,11 +14,13 @@ queries_path = os.path.join(serialized_path, 'queries.sql')
 result_binary = os.path.join(serialized_path, 'serialized_plans.binary')
 unittest_binary = os.path.join('build', 'debug', 'test', 'unittest')
 
+
 def complete_query(q):
     q = q.strip()
     if q.endswith(';'):
         return q
     return q + ';'
+
 
 def main():
     parser = argparse.ArgumentParser(description="Test serialization")
@@ -46,9 +48,9 @@ def main():
         if loop_count > 0:
             # loops are ignored currently
             continue
-        if not(type(stmt) is sqllogictest.statement.query.Query or
-               type(stmt) is sqllogictest.statement.statement.Statement
-            ):
+        if not (
+            type(stmt) is sqllogictest.statement.query.Query or type(stmt) is sqllogictest.statement.statement.Statement
+        ):
             # only handle query and statement nodes for now
             continue
         if type(stmt) is sqllogictest.statement.statement.Statement:
@@ -113,9 +115,6 @@ def main():
         raise
     finally:
         os.chdir(current_path)
-
-
-
 
 
 if __name__ == "__main__":
