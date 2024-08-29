@@ -156,16 +156,15 @@ int strerror_fixed(int err, char *buf, size_t buflen) {
 }
 ```
 
-Add this line
+Edit the following in `pages.c`:
 ```c++
-buf[0] = '2';
-```
-to this function
-```c++
+// explicitly initialize this buffer to prevent reading uninitialized memory if the file is somehow empty
+// 0 is the default setting for linux if it hasn't been changed so that's what we initialize to
+char buf[1] = {'0'};
+// in this function
 static bool
 os_overcommits_proc(void)
 ```
-in `pages.c`.
 
 Almost no symbols are leaked due to `private_namespace.h`.
 The `exported_symbols_check.py` script still found a few, so these lines need to be added to `private_namespace.h`:
