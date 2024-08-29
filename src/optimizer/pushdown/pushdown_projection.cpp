@@ -35,7 +35,7 @@ static bool ProjectionCastsToLowerType(LogicalProjection &proj, unique_ptr<Expre
 		auto &proj_expr = proj.expressions[colref.binding.column_index];
 		// if max logical type is the child type, then the cast could be VARCHAR -> INT
 		// do not allow pushdown as another filter may filter out non castable VARCHARS
-		if (LogicalType::ForceMaxLogicalType(expr->return_type, proj_expr->return_type) == expr->return_type) {
+		if (expr->return_type != proj_expr->return_type && LogicalType::ForceMaxLogicalType(expr->return_type, proj_expr->return_type) == expr->return_type) {
 			changes_type = true;
 		}
 	}
