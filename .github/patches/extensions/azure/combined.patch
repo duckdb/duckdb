@@ -109,6 +109,63 @@ index 6175421..e32b2ca 100644
  AzureReadOptions AzureStorageFileSystem::ParseAzureReadOptions(optional_ptr<FileOpener> opener) {
  	AzureReadOptions options;
  
+diff --git a/src/azure_http_state.cpp b/src/azure_http_state.cpp
+new file mode 100644
+index 0000000..c65942f
+--- /dev/null
++++ b/src/azure_http_state.cpp
+@@ -0,0 +1,51 @@
++#include "azure_http_state.hpp"
++#include "duckdb/main/client_context.hpp"
++#include "duckdb/main/query_profiler.hpp"
++
++namespace duckdb {
++
++void AzureHTTPState::Reset() {
++	head_count = 0;
++	get_count = 0;
++	put_count = 0;
++	post_count = 0;
++	total_bytes_received = 0;
++	total_bytes_sent = 0;
++}
++
++shared_ptr<AzureHTTPState> AzureHTTPState::TryGetState(ClientContext &context) {
++	return context.registered_state->GetOrCreate<AzureHTTPState>("azure_http_state");
++}
++
++shared_ptr<AzureHTTPState> AzureHTTPState::TryGetState(optional_ptr<FileOpener> opener) {
++	auto client_context = FileOpener::TryGetClientContext(opener);
++	if (client_context) {
++		return TryGetState(*client_context);
++	}
++	return nullptr;
++}
++
++void AzureHTTPState::WriteProfilingInformation(std::ostream &ss) {
++	string read = "in: " + StringUtil::BytesToHumanReadableString(total_bytes_received);
++	string written = "out: " + StringUtil::BytesToHumanReadableString(total_bytes_sent);
++	string head = "#HEAD: " + to_string(head_count);
++	string get = "#GET: " + to_string(get_count);
++	string put = "#PUT: " + to_string(put_count);
++	string post = "#POST: " + to_string(post_count);
++
++	constexpr idx_t TOTAL_BOX_WIDTH = 39;
++	ss << "┌─────────────────────────────────────┐\n";
++	ss << "│┌───────────────────────────────────┐│\n";
++	ss << "││" + QueryProfiler::DrawPadded("Azure HTTP Stats", TOTAL_BOX_WIDTH - 4) + "││\n";
++	ss << "││                                   ││\n";
++	ss << "││" + QueryProfiler::DrawPadded(read, TOTAL_BOX_WIDTH - 4) + "││\n";
++	ss << "││" + QueryProfiler::DrawPadded(written, TOTAL_BOX_WIDTH - 4) + "││\n";
++	ss << "││" + QueryProfiler::DrawPadded(head, TOTAL_BOX_WIDTH - 4) + "││\n";
++	ss << "││" + QueryProfiler::DrawPadded(get, TOTAL_BOX_WIDTH - 4) + "││\n";
++	ss << "││" + QueryProfiler::DrawPadded(put, TOTAL_BOX_WIDTH - 4) + "││\n";
++	ss << "││" + QueryProfiler::DrawPadded(post, TOTAL_BOX_WIDTH - 4) + "││\n";
++	ss << "│└───────────────────────────────────┘│\n";
++	ss << "└─────────────────────────────────────┘\n";
++}
++
++} // namespace duckdb
 diff --git a/src/azure_storage_account_client.cpp b/src/azure_storage_account_client.cpp
 index 11ad859..f206ebd 100644
 --- a/src/azure_storage_account_client.cpp
@@ -171,6 +228,53 @@ index baa3f97..f58b36d 100644
  }
  
  std::unique_ptr<Azure::Core::Http::RawResponse>
+diff --git a/src/include/azure_http_state.hpp b/src/include/azure_http_state.hpp
+new file mode 100644
+index 0000000..9959628
+--- /dev/null
++++ b/src/include/azure_http_state.hpp
+@@ -0,0 +1,41 @@
++#pragma once
++
++#include "duckdb/common/atomic.hpp"
++#include "duckdb/common/file_opener.hpp"
++#include "duckdb/common/file_system.hpp"
++#include "duckdb/main/client_context_state.hpp"
++
++namespace duckdb {
++
++class AzureHTTPState : public ClientContextState {
++public:
++	AzureHTTPState() {
++	}
++
++public:
++	//! Reset all counters
++	void Reset();
++	//! Helper functions to get the HTTP state
++	static shared_ptr<AzureHTTPState> TryGetState(ClientContext &context);
++	static shared_ptr<AzureHTTPState> TryGetState(optional_ptr<FileOpener> opener);
++
++	bool IsEmpty() {
++		return head_count == 0 && get_count == 0 && put_count == 0 && post_count == 0 && total_bytes_received == 0 &&
++		       total_bytes_sent == 0;
++	}
++
++	atomic<idx_t> head_count {0};
++	atomic<idx_t> get_count {0};
++	atomic<idx_t> put_count {0};
++	atomic<idx_t> post_count {0};
++	atomic<idx_t> total_bytes_received {0};
++	atomic<idx_t> total_bytes_sent {0};
++
++	//! Called by the ClientContext when the current query ends
++	void QueryEnd(ClientContext &context) override {
++		Reset();
++	}
++	void WriteProfilingInformation(std::ostream &ss) override;
++};
++
++} // namespace duckdb
 diff --git a/src/include/http_state_policy.hpp b/src/include/http_state_policy.hpp
 index 9db73b6..30563b7 100644
 --- a/src/include/http_state_policy.hpp
