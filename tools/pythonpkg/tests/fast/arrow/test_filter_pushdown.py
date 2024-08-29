@@ -906,4 +906,15 @@ class TestArrowFilterPushdown(object):
         # Projection without unsupported filter column + unsupported + supported filter
         assert con.execute("select a, b from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, '3')]
 
+        # Lets also experiment with multiple unpush-able filters
+        con.execute(
+            "CREATE TABLE T_2 as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d , i::uhugeint e, i::smallint f, i::uhugeint g FROM range(50) tbl(i)"
+        )
+
+        arrow_tbl = con.execute("FROM T_2").arrow()
+
+        assert con.execute(
+            "select a, b from arrow_tbl where a > 2 and c < 40 and b == '28' and g > 15 and e < 30"
+        ).fetchall() == [(28, '28')]
+
         pa.unregister_extension_type("duckdb.uhugeint")
