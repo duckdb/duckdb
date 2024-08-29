@@ -70,10 +70,9 @@ public:
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
 	                                           const vector<unique_ptr<Expression>> &groups);
 
+private:
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);
-
-private:
 	optional_idx BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
 	optional_idx BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
 

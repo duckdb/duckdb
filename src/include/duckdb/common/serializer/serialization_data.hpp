@@ -21,7 +21,6 @@ class ClientContext;
 class Catalog;
 class DatabaseInstance;
 class CompressionInfo;
-class FunctionDeserializationInfo;
 enum class ExpressionType : uint8_t;
 
 struct SerializationData {
@@ -36,7 +35,6 @@ struct SerializationData {
 	stack<const_reference<LogicalType>> types;
 	stack<const_reference<CompressionInfo>> compression_infos;
 	duckdb::unordered_map<std::string, duckdb::stack<duckdb::reference<CustomData>>> customs;
-	stack<reference<FunctionDeserializationInfo>> function_deserialization_info;
 
 	template <class T>
 	void Set(T entry) = delete;
@@ -242,23 +240,6 @@ template <>
 inline void SerializationData::Unset<const CompressionInfo>() {
 	AssertNotEmpty(compression_infos);
 	compression_infos.pop();
-}
-
-template <>
-inline void SerializationData::Set(FunctionDeserializationInfo &info) {
-	function_deserialization_info.emplace(info);
-}
-
-template <>
-inline FunctionDeserializationInfo &SerializationData::Get() {
-	AssertNotEmpty(function_deserialization_info);
-	return function_deserialization_info.top();
-}
-
-template <>
-inline void SerializationData::Unset<FunctionDeserializationInfo>() {
-	AssertNotEmpty(function_deserialization_info);
-	function_deserialization_info.pop();
 }
 
 } // namespace duckdb

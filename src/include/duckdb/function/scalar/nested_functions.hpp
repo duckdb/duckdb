@@ -73,7 +73,6 @@ struct VariableReturnBindData : public FunctionData {
 
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &bound_function) {
 		auto stype = deserializer.ReadProperty<LogicalType>(100, "variable_return_type");
-		bound_function.return_type = stype;
 		return make_uniq<VariableReturnBindData>(std::move(stype));
 	}
 };

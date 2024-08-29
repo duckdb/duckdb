@@ -24,7 +24,6 @@ struct FMTFormat {
 
 unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
-	bound_function.arguments = {LogicalType::VARCHAR};
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->return_type.id()) {
 		case LogicalTypeId::BOOLEAN:
