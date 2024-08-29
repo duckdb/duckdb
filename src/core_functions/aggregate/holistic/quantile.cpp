@@ -134,8 +134,6 @@ unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserialize
 	for (const auto &r : raw) {
 		result->quantiles.emplace_back(QuantileValue(r));
 	}
-
-	// add cast to input arguments
 	return std::move(result);
 }
 
@@ -478,22 +476,16 @@ AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::TINYINT:
-		return OP::template GetFunction<int8_t, double>(type, LogicalType::DOUBLE);
 	case LogicalTypeId::SMALLINT:
-		return OP::template GetFunction<int16_t, double>(type, LogicalType::DOUBLE);
 	case LogicalTypeId::INTEGER:
-		return OP::template GetFunction<int32_t, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::BIGINT:
-		return OP::template GetFunction<int64_t, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::HUGEINT:
-		return OP::template GetFunction<hugeint_t, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::FLOAT:
-		return OP::template GetFunction<float, float>(type, type);
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 		return OP::template GetFunction<double, double>(LogicalType::DOUBLE, LogicalType::DOUBLE);
 	case LogicalTypeId::DECIMAL:
