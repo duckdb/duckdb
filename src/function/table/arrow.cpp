@@ -71,8 +71,8 @@ static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &ex
 		}
 		return make_uniq<ArrowType>(LogicalType::UHUGEINT);
 	} else if (arrow_extension == "duckdb.time_tz") {
-		if (format != "ttu") {
-			throw InvalidInputException("duckdb.time_tz must be a time64 [microseconds] (i.e., \'ttu\'). It "
+		if (format != "w:8") {
+			throw InvalidInputException("duckdb.time_tz must be a fixed-size binary of 8 bytes (i.e., \'w:8\'). It "
 			                            "is incorrectly defined as: %s",
 			                            format);
 		}
