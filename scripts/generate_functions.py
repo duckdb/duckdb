@@ -161,7 +161,7 @@ def create_function_list_file(group, all_function_list):
     with open(function_list_file, 'r') as f:
         text = f.read()
 
-    static_function = 'static const StaticFunctionDefinition internal_functions[] = {'
+    static_function = f'static const StaticFunctionDefinition {group}[]' ' = {'
     pos = text.find(static_function)
     header = text[:pos]
     footer_lines = text[pos:].split('\n')
