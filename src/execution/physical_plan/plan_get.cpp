@@ -86,30 +86,31 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		op.function.dependency(dependencies, op.bind_data.get());
 	}
 	unique_ptr<PhysicalFilter> filter;
+	vector<unique_ptr<Expression>> select_list;
+
 	if (table_filters && op.function.supports_pushdown_type) {
 		unique_ptr<Expression> unsupported_filter;
 		vector<idx_t> to_remove;
 		for (auto &entry : table_filters->filters) {
-			auto column_id = entry.first;
+			auto column_id = column_ids[entry.first];
 			auto &type = op.returned_types[column_id];
 			if (!op.function.supports_pushdown_type(type)) {
-				auto column = make_uniq<BoundReferenceExpression>(type, column_id);
-				if (unsupported_filter) {
-					unsupported_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-					                                                           std::move(unsupported_filter),
-					                                                           entry.second->ToExpression(*column));
-				} else {
-					unsupported_filter = entry.second->ToExpression(*column);
-				}
+				auto column = make_uniq<BoundReferenceExpression>(type, entry.first);
+				select_list.push_back(entry.second->ToExpression(*column));
 				to_remove.push_back(entry.first);
 			}
 		}
-		for (auto &elem : to_remove) {
-			table_filters->filters.erase(elem);
+		for (auto &col : to_remove) {
+			table_filters->filters.erase(col);
 		}
-		if (unsupported_filter) {
-			filter = make_uniq<PhysicalFilter>(op.returned_types);
-			filter->expression = std::move(unsupported_filter);
+		// fixme add logic to handle if filter not in the
+		if (!select_list.empty()) {
+			vector<LogicalType> filter_types;
+			for (auto &c : column_ids) {
+				filter_types.push_back(op.returned_types[c]);
+			}
+
+			filter = make_uniq<PhysicalFilter>(filter_types, std::move(select_list), op.estimated_cardinality);
 		}
 	}
 

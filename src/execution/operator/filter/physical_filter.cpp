@@ -20,9 +20,6 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 	}
 }
 
-PhysicalFilter::PhysicalFilter(vector<LogicalType> types)
-    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, types, {}) {};
-
 class FilterState : public CachingOperatorState {
 public:
 	explicit FilterState(ExecutionContext &context, Expression &expr)
