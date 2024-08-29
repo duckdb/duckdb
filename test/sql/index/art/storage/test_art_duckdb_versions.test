@@ -141,7 +141,7 @@ CREATE INDEX ART_index ON idx_tbl(i);
 statement error
 CREATE INDEX idx_1 ON idx_tbl(i);
 ----
-already exists
+<REGEX>:Catalog Error.*Index with name "idx_1" already exists.*
 
 # now try to use it again
 
