@@ -735,7 +735,7 @@ struct ArrowOutputListView {
 };
 
 struct LosslessConversionArrow {
-	static constexpr const char *Name = "lossless_conversion";
+	static constexpr const char *Name = "arrow_lossless_conversion";
 	static constexpr const char *Description =
 	    "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types "
 	    "with a duckdb.type_name extension name.";

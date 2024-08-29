@@ -1584,19 +1584,19 @@ Value ArrowOutputListView::GetSetting(const ClientContext &context) {
 // LosslessConversionArrow
 //===--------------------------------------------------------------------===//
 void LosslessConversionArrow::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto arrow_lossless_conversion = input.GetValue<bool>();
+	auto arrow_arrow_lossless_conversion = input.GetValue<bool>();
 
-	config.options.arrow_lossless_conversion = arrow_lossless_conversion;
+	config.options.arrow_arrow_lossless_conversion = arrow_arrow_lossless_conversion;
 }
 
 void LosslessConversionArrow::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.arrow_lossless_conversion = DBConfig().options.arrow_lossless_conversion;
+	config.options.arrow_arrow_lossless_conversion = DBConfig().options.arrow_arrow_lossless_conversion;
 }
 
 Value LosslessConversionArrow::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	bool arrow_lossless_conversion = config.options.arrow_lossless_conversion;
-	return Value::BOOLEAN(arrow_lossless_conversion);
+	bool arrow_arrow_lossless_conversion = config.options.arrow_arrow_lossless_conversion;
+	return Value::BOOLEAN(arrow_arrow_lossless_conversion);
 }
 
 //===--------------------------------------------------------------------===//

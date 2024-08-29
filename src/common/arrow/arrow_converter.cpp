@@ -125,7 +125,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "f";
 		break;
 	case LogicalTypeId::HUGEINT: {
-		if (options.lossless_conversion) {
+		if (options.arrow_lossless_conversion) {
 			child.format = "w:16";
 			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.hugeint");
 			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
@@ -174,7 +174,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::TIME_TZ: {
 		child.format = "ttu";
-		if (options.lossless_conversion) {
+		if (options.arrow_lossless_conversion) {
 			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.time_tz");
 			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 			child.metadata = root_holder.metadata_info.back().get();
@@ -230,7 +230,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		} else {
 			child.format = "z";
 		}
-		if (options.lossless_conversion) {
+		if (options.arrow_lossless_conversion) {
 			auto schema_metadata = ArrowSchemaMetadata::MetadataFromName("duckdb.bit");
 			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 			child.metadata = root_holder.metadata_info.back().get();

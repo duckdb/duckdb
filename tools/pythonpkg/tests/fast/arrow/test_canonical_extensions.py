@@ -175,7 +175,7 @@ class TestCanonicalExtensionTypes(object):
     def test_hugeint(self):
         duckdb_cursor = duckdb.connect()
 
-        duckdb_cursor.execute("SET lossless_conversion = true")
+        duckdb_cursor.execute("SET arrow_lossless_conversion = true")
 
         pa.register_extension_type(HugeIntType())
 
@@ -189,7 +189,7 @@ class TestCanonicalExtensionTypes(object):
 
         assert duckdb_cursor.execute('FROM arrow_table').arrow().equals(arrow_table)
 
-        duckdb_cursor.execute("SET lossless_conversion = false")
+        duckdb_cursor.execute("SET arrow_lossless_conversion = false")
 
         assert not duckdb_cursor.execute('FROM arrow_table').arrow().equals(arrow_table)
 
@@ -214,7 +214,7 @@ class TestCanonicalExtensionTypes(object):
 
         res_blob = duckdb_cursor.execute("SELECT '0101011'::BIT str FROM range(5) tbl(i)").arrow()
 
-        duckdb_cursor.execute("SET lossless_conversion = true")
+        duckdb_cursor.execute("SET arrow_lossless_conversion = true")
 
         res_bit = duckdb_cursor.execute("SELECT '0101011'::BIT str FROM range(5) tbl(i)").arrow()
 
@@ -236,13 +236,13 @@ class TestCanonicalExtensionTypes(object):
     def test_timetz(self):
         duckdb_cursor = duckdb.connect()
 
-        res_blob = duckdb_cursor.execute("SELECT '02:30:00+04'::TIMETZ str FROM range(1) tbl(i)").arrow()
+        res_time = duckdb_cursor.execute("SELECT '02:30:00+04'::TIMETZ str FROM range(1) tbl(i)").arrow()
 
-        duckdb_cursor.execute("SET lossless_conversion = true")
+        duckdb_cursor.execute("SET arrow_lossless_conversion = true")
 
-        res_bit = duckdb_cursor.execute("SELECT '02:30:00+04'::TIMETZ str FROM range(1) tbl(i)").arrow()
+        res_tz = duckdb_cursor.execute("SELECT '02:30:00+04'::TIMETZ str FROM range(1) tbl(i)").arrow()
 
-        assert duckdb_cursor.execute("FROM res_blob").fetchall() == [(datetime.time(2, 30),)]
-        assert duckdb_cursor.execute("FROM res_bit").fetchall() == [
+        assert duckdb_cursor.execute("FROM res_time").fetchall() == [(datetime.time(2, 30),)]
+        assert duckdb_cursor.execute("FROM res_tz").fetchall() == [
             (datetime.time(2, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=14400))),)
         ]

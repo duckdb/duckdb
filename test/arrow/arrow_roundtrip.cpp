@@ -13,7 +13,7 @@ static void TestArrowRoundtrip(const string &query, bool export_large_buffer = f
 		REQUIRE(!res->HasError());
 	}
 	if (loseless_conversion) {
-		auto res = con.Query("SET lossless_conversion = true");
+		auto res = con.Query("SET arrow_lossless_conversion = true");
 		REQUIRE(!res->HasError());
 	}
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, true));
