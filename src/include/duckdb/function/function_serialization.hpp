@@ -82,6 +82,7 @@ public:
 		auto has_serialize = entry.second;
 
 		unique_ptr<FunctionData> bind_data;
+		function.return_type = return_type;
 		if (has_serialize) {
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
 		} else if (function.bind) {
