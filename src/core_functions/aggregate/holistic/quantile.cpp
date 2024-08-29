@@ -485,9 +485,10 @@ AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 		return OP::template GetFunction<double, double>(LogicalType::DOUBLE, LogicalType::DOUBLE);
+	case LogicalTypeId::FLOAT:
+		return OP::template GetFunction<float, float>(LogicalType::FLOAT, LogicalType::FLOAT);
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:

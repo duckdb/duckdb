@@ -43,14 +43,18 @@ def main():
             loop_count += 1
         if type(stmt) is sqllogictest.statement.endloop.Endloop:
             loop_count -= 1
+        if loop_count > 0:
+            # loops are ignored currently
+            continue
         if not(type(stmt) is sqllogictest.statement.query.Query or
                type(stmt) is sqllogictest.statement.statement.Statement
             ):
             # only handle query and statement nodes for now
             continue
-        if loop_count > 0:
-            # loops are ignored currently
-            continue
+        if type(stmt) is sqllogictest.statement.statement.Statement:
+            # skip expected errors
+            if stmt.expected_result.type == sqllogictest.ExpectedResult.Type.ERROR:
+                continue
         query = ' '.join(stmt.lines)
         sql_stmt_list = duckdb.extract_statements(query)
         for sql_stmt in sql_stmt_list:

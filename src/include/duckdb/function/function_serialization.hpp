@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -92,7 +93,15 @@ public:
 				                             error.RawMessage());
 			}
 		}
-		function.return_type = std::move(return_type);
+		// ensure the children match the function arguments
+		// note that normally this should already match
+		// but it is possible we need to add casts in case function signatures differ across versions
+		FunctionBinder binder(context);
+		binder.CastToFunctionArguments(function, children);
+
+		if (function.return_type != return_type) {
+			throw SerializationException("Return type mismatch in deserialization (deserialized %s, found %s)", return_type, function.return_type);
+		}
 		return make_pair(std::move(function), std::move(bind_data));
 	}
 };
