@@ -85,7 +85,6 @@ public:
 		FunctionDeserializationInfo deserialize_info;
 
 		unique_ptr<FunctionData> bind_data;
-		function.return_type = return_type;
 		if (has_serialize) {
 			deserializer.Set<FunctionDeserializationInfo &>(deserialize_info);
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
@@ -104,10 +103,7 @@ public:
 			FunctionBinder binder(context);
 			binder.CastToFunctionArguments(function, children);
 		}
-		if (function.return_type != return_type) {
-			throw SerializationException("Return type mismatch in deserialization (deserialized %s, found %s)",
-			                             return_type, function.return_type);
-		}
+		function.return_type = return_type;
 		return make_pair(std::move(function), std::move(bind_data));
 	}
 };
