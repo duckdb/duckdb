@@ -592,15 +592,13 @@ DefaultSecretGenerator::DefaultSecretGenerator(Catalog &catalog, SecretManager &
     : DefaultGenerator(catalog), secret_manager(secret_manager), persistent_secrets(persistent_secrets) {
 }
 
-unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
-
+unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntryInternal(const string &entry_name) {
 	auto secret_lu = persistent_secrets.find(entry_name);
 	if (secret_lu == persistent_secrets.end()) {
 		return nullptr;
 	}
 
 	LocalFileSystem fs;
-	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	string base_secret_path = secret_manager.PersistentSecretPath();
 	string secret_path = fs.JoinPath(base_secret_path, entry_name + ".duckdb_secret");
@@ -653,6 +651,15 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 	throw SerializationException("Failed to deserialize secret '%s' from '%s': file appears empty! Please remove the "
 	                             "file, restart and try again",
 	                             entry_name, secret_path);
+}
+
+unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(CatalogTransaction transaction,
+                                                                    const string &entry_name) {
+	return CreateDefaultEntryInternal(entry_name);
+}
+
+unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
+	return CreateDefaultEntryInternal(entry_name);
 }
 
 vector<string> DefaultSecretGenerator::GetDefaultEntries() {
