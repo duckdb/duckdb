@@ -10,6 +10,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -372,24 +373,15 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	duckdb_httplib::Result res;
 	while (true) {
 		duckdb_httplib::Client cli(url_base.c_str());
-
-		KeyValueSecretReader setting_reader(db, "http", url);
-		string proxy_setting;
-		string proxy_user;
-		string proxy_pass;
-
-		if (setting_reader.TryGetSecretKeyOrSetting("http_proxy", "http_proxy", proxy_setting) &&
-		    !proxy_setting.empty()) {
+		if (!db.config.options.http_proxy.empty()) {
 			idx_t port;
 			string host;
-			HTTPUtil::ParseHTTPProxyHost(proxy_setting, host, port);
+			HTTPUtil::ParseHTTPProxyHost(db.config.options.http_proxy, host, port);
 			cli.set_proxy(host, NumericCast<int>(port));
 		}
 
-		if (setting_reader.TryGetSecretKeyOrSetting("http_proxy_username", "http_proxy_username", proxy_user)) {
-			if (setting_reader.TryGetSecretKeyOrSetting("http_proxy_password", "http_proxy_password", proxy_pass)) {
-			}
-			cli.set_proxy_basic_auth(proxy_user, proxy_pass);
+		if (!db.config.options.http_proxy_username.empty() || !db.config.options.http_proxy_password.empty()) {
+			cli.set_proxy_basic_auth(db.config.options.http_proxy_username, db.config.options.http_proxy_password);
 		}
 
 		if (http_logger) {

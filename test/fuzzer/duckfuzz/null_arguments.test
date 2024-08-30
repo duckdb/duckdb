@@ -31,18 +31,7 @@ SELECT NULL FROM read_parquet('__TEST_DIR__/test_null_args.parquet', filename = 
 <REGEX>:.*Cannot use NULL.*
 
 statement error
-WITH t10 (c6, c7, c8, c9) AS
-	(
-		SELECT DISTINCT c1, c2
-		FROM nation AS t5(c1, c2, c3, c4)
-		ORDER BY c4 NULLS FIRST, c2 ASC NULLS LAST, c1 DESC LIMIT 2445
-	)
-SELECT 7827, 7591, c13, TRY_CAST(1414 AS DATE)
 FROM read_ndjson(NULL, filename := NULL) AS t14(c11, c12, c13)
-PIVOT (list_median((NOT c3)) FOR
-(rank() OVER (PARTITION BY c7 ROWS BETWEEN CURRENT ROW AND
-	(c1 IN ("first"(c11), COLUMNS(*), 5251, c12, 4034, c7, c3, list_sem(c2))) FOLLOWING))
-IN ('2262-04-11 23:47:16.854775806'::TIMESTAMP_NS, 5050)) WHERE inet_server_addr() OFFSET #3;
 ----
 <REGEX>:.*Cannot use NULL.*
 

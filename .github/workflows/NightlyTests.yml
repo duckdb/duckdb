@@ -507,6 +507,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_JSON: 1
       LATEST_STORAGE: 1
+      BLOCK_VERIFICATION: 1
 
     steps:
       - uses: actions/checkout@v3

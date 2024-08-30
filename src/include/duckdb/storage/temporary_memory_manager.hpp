@@ -48,6 +48,8 @@ public:
 	idx_t GetReservation() const;
 	//! Set the materialization penalty for this state
 	void SetMaterializationPenalty(idx_t new_materialization_penalty);
+	//! Get the materialization penalty for this state
+	idx_t GetMaterializationPenalty() const;
 
 private:
 	//! The TemporaryMemoryManager that owns this state
@@ -107,8 +109,7 @@ private:
 	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
 	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation);
 	//! Computes optimal reservation of a TemporaryMemoryState based on a cost function
-	idx_t ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state, idx_t free_memory,
-	                                idx_t lower_bound, idx_t upper_bound) const;
+	idx_t ComputeReservation(const TemporaryMemoryState &temporary_memory_state) const;
 	//! Verify internal counts (must hold the lock)
 	void Verify() const;
 

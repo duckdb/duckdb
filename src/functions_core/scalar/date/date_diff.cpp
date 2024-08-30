@@ -91,8 +91,8 @@ struct DateDiff {
 	struct WeekOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::Epoch(Date::GetMondayOfCurrentWeek(enddate)) / Interval::SECS_PER_WEEK -
-			       Date::Epoch(Date::GetMondayOfCurrentWeek(startdate)) / Interval::SECS_PER_WEEK;
+			//	Weeks do not count Monday crossings, just distance
+			return (enddate.days - startdate.days) / Interval::DAYS_PER_WEEK;
 		}
 	};
 

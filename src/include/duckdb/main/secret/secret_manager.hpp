@@ -208,10 +208,13 @@ public:
 	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, case_insensitive_set_t &persistent_secrets);
 
 public:
+	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name) override;
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
 	vector<string> GetDefaultEntries() override;
 
 protected:
+	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const string &entry_name);
+
 	SecretManager &secret_manager;
 	case_insensitive_set_t persistent_secrets;
 };
