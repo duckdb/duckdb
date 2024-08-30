@@ -353,7 +353,7 @@ public:
 		return !stopped && next_task < tasks.size();
 	}
 	bool HasUnfinishedTasks() const {
-		return !stopped && finished < tasks.size();
+		return !stopped.load() && finished.load() < tasks.size();
 	}
 	//! Try to advance the group stage
 	bool TryPrepareNextStage();
