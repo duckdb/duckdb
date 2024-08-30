@@ -268,6 +268,16 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.oid)));
 
 			auto info = GetExtraConstraintInfo(table, *constraint);
+			auto constraint_name = GetConstraintName(table, *constraint, info);
+			if (data.constraint_names.find(constraint_name) != data.constraint_names.end()) {
+				// duplicate constraint name
+				idx_t index = 2;
+				while (data.constraint_names.find(constraint_name + "_" + to_string(index)) !=
+				       data.constraint_names.end()) {
+					index++;
+				}
+				constraint_name += "_" + to_string(index);
+			}
 			// constraint_index, BIGINT
 			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(data.unique_constraint_offset++)));
 
@@ -305,16 +315,6 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
 
 			// constraint_name, VARCHAR
-			auto constraint_name = GetConstraintName(table, *constraint, info);
-			if (data.constraint_names.find(constraint_name) != data.constraint_names.end()) {
-				// duplicate constraint name
-				idx_t index = 2;
-				while (data.constraint_names.find(constraint_name + "_" + to_string(index)) !=
-				       data.constraint_names.end()) {
-					index++;
-				}
-				constraint_name += "_" + to_string(index);
-			}
 			output.SetValue(col++, count, Value(std::move(constraint_name)));
 
 			// referenced_table, VARCHAR
