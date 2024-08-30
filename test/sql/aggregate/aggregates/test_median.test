@@ -27,60 +27,33 @@ SELECT median(r) FROM quantile
 ----
 4999
 
+# quantitative types get interpolated
+
+foreach type float double smallint integer bigint hugeint decimal(10,2)
+
 query I
-SELECT median(r) FROM quantile
+SELECT median(r::${type}) FROM quantile
 ----
-4999
+4999.5
 
-query R
-SELECT median(r::float) FROM quantile
-----
-4999
-
-query R
-SELECT median(r::double) FROM quantile
-----
-4999
+endloop
 
 query I
 SELECT median(r::tinyint) FROM quantile where r < 100
 ----
-49.500000
-
-query I
-SELECT median(r::smallint) FROM quantile
-----
-4999
-
-query I
-SELECT median(r::integer) FROM quantile
-----
-4999
-
-query I
-SELECT median(r::bigint) FROM quantile
-----
-4999
-
-query I
-SELECT median(r::hugeint) FROM quantile
-----
-4999
-
-query I
-SELECT median(r::decimal(10,2)) FROM quantile
-----
-4999.50
+49.5
 
 query I
 SELECT median(case when r is null then null else [r] end) FROM quantile
 ----
-[4999]
+[4999.5]
 
 query I
 SELECT median(case when r is null then null else {'i': r} end) FROM quantile
 ----
-{'i': 4999}
+{'i': 4999.5}
+
+# qualitative types get floored
 
 # sorting order is different for varchars and numbers
 # so a different result here is expected

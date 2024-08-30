@@ -2,9 +2,9 @@
 # description: Test the list_median aggregate function
 # group: [aggregates]
 
-# types
+# quantitative types get interpolated
 
-foreach type integer float double smallint bigint hugeint decimal(10,2)
+foreach type float double smallint integer bigint hugeint decimal(10,2)
 
 statement ok
 CREATE TABLE quantile AS SELECT LIST(r::${type}) AS r FROM range(10000) t1(r);
@@ -26,6 +26,14 @@ query I
 SELECT list_median(r) FROM quantile
 ----
 49.500000
+
+# qualitative types get floored
+
+# Sort order for strings is weird (ie 1, 10, 11, ... 2, 20, ...) so this is expected.
+query I
+SELECT LIST_MEDIAN(range(100)::varchar[]);
+----
+53
 
 # scalar quantiles
 
