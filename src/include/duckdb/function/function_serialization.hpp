@@ -72,7 +72,7 @@ public:
 	}
 
 	static bool TypeRequiresAssignment(const LogicalType &type) {
-		switch(type.id()) {
+		switch (type.id()) {
 		case LogicalTypeId::SQLNULL:
 		case LogicalTypeId::ANY:
 		case LogicalTypeId::INVALID:
@@ -105,7 +105,6 @@ public:
 		default:
 			return false;
 		}
-
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
@@ -134,7 +133,9 @@ public:
 		if (TypeRequiresAssignment(function.return_type)) {
 			function.return_type = std::move(return_type);
 		} else if (function.return_type != return_type) {
-			throw SerializationException("Return type mismatch for function in deserialization (deserialized %s, but found %s)", return_type, function.return_type);
+			throw SerializationException(
+			    "Return type mismatch for function in deserialization (deserialized %s, but found %s)", return_type,
+			    function.return_type);
 		}
 		return make_pair(std::move(function), std::move(bind_data));
 	}

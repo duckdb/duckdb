@@ -310,9 +310,9 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				// duplicate constraint name
 				idx_t index = 2;
 				while (data.constraint_names.find(constraint_name + "_" + to_string(index)) !=
-					   data.constraint_names.end()) {
+				       data.constraint_names.end()) {
 					index++;
-					   }
+				}
 				constraint_name += "_" + to_string(index);
 			}
 			output.SetValue(col++, count, Value(std::move(constraint_name)));

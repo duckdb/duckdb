@@ -80,7 +80,7 @@ void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionD
 }
 
 unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, AggregateFunction &function) {
-	function.return_type = deserializer.Get<const LogicalType&>();
+	function.return_type = deserializer.Get<const LogicalType &>();
 	return nullptr;
 }
 
