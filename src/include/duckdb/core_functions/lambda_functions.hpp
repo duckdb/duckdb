@@ -125,7 +125,7 @@ public:
 	};
 
 	static vector<ColumnInfo> GetColumnInfo(DataChunk &args, const idx_t row_count);
-	static vector<reference<ColumnInfo>> GetInconstantColumnInfo(vector<ColumnInfo> &data);
+	static vector<reference<ColumnInfo>> GetMutableColumnInfo(vector<ColumnInfo> &data);
 };
 
 } // namespace duckdb
