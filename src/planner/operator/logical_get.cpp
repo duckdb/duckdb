@@ -213,6 +213,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
 
 		for (auto &col_id : result->column_ids) {
+			if (IsRowIdColumnId(col_id)) {
+				// rowid
+				continue;
+			}
 			auto &ret_type = result->returned_types[col_id];
 			auto &col_name = result->names[col_id];
 			if (bind_return_types[col_id] != ret_type) {
