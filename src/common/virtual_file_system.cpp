@@ -9,30 +9,36 @@ VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
+static bool IsFileCompressed(string path, FileCompressionType type) {
+	auto extension = CompressionExtensionFromType(type);
+	std::size_t question_mark_pos = std::string::npos;
+	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
+		question_mark_pos = path.find('?');
+	}
+	path = path.substr(0, question_mark_pos);
+	if (StringUtil::EndsWith(path, extension)) {
+		return true;
+	}
+	return false;
+}
 unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenFlags flags,
                                                    optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
-		// auto detect compression settings based on file name
-		compression = FileCompressionType::UNCOMPRESSED;
+		// auto-detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
 		if (StringUtil::EndsWith(lower_path, ".tmp")) {
 			// strip .tmp
 			lower_path = lower_path.substr(0, lower_path.length() - 4);
 		}
-		idx_t compression_pos = 0;
-		if (StringUtil::Contains(path, ".gz")) {
-			compression_pos = path.find(".gz");
+		if (IsFileCompressed(path, FileCompressionType::GZIP)) {
 			compression = FileCompressionType::GZIP;
-		}
-		if (StringUtil::Contains(path, ".zst")) {
-			if (path.find(".zst") > compression_pos) {
-				compression_pos = path.find(".zst");
-				compression = FileCompressionType::ZSTD;
-			}
+		} else if (IsFileCompressed(path, FileCompressionType::ZSTD)) {
+			compression = FileCompressionType::ZSTD;
+		} else {
+			compression = FileCompressionType::UNCOMPRESSED;
 		}
 	}
-
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
 	auto file_handle = FindFileSystem(path).OpenFile(path, flags, opener);

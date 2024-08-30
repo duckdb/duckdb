@@ -19,4 +19,15 @@ FileCompressionType FileCompressionTypeFromString(const string &input) {
 	}
 }
 
+string CompressionExtensionFromType(const FileCompressionType type) {
+	switch (type) {
+	case FileCompressionType::GZIP:
+		return ".gz";
+	case FileCompressionType::ZSTD:
+		return ".zst";
+	default:
+		throw NotImplementedException("Compression Extension of file compression type is not implemented");
+	}
+}
+
 } // namespace duckdb
