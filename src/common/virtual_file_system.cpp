@@ -9,18 +9,6 @@ VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
-static bool IsFileCompressed(string path, FileCompressionType type) {
-	auto extension = CompressionExtensionFromType(type);
-	std::size_t question_mark_pos = std::string::npos;
-	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
-		question_mark_pos = path.find('?');
-	}
-	path = path.substr(0, question_mark_pos);
-	if (StringUtil::EndsWith(path, extension)) {
-		return true;
-	}
-	return false;
-}
 unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenFlags flags,
                                                    optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();

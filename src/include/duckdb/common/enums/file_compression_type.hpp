@@ -18,4 +18,6 @@ FileCompressionType FileCompressionTypeFromString(const string &input);
 
 string CompressionExtensionFromType(const FileCompressionType type);
 
+bool IsFileCompressed(string path, FileCompressionType type);
+
 } // namespace duckdb
