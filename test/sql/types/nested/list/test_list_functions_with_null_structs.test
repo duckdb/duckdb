@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE struct_data(str STRUCT(val VARCHAR)[]);
 
 statement ok
-INSERT INTO struct_data values (NULL);
+INSERT INTO struct_data VALUES (NULL);
 
 query I
 SELECT list_resize(str, 1) FROM struct_data;
@@ -40,7 +40,7 @@ NULL
 
 endloop
 
-# Add another nesting level.
+# NULL in a STRUCT.
 
 statement ok
 CREATE TABLE nested_struct_data(str STRUCT(str_nested STRUCT(val VARCHAR))[]);
@@ -58,18 +58,32 @@ SELECT list_filter(str, x -> x.str_nested IS NULL) FROM nested_struct_data;
 ----
 [NULL]
 
-# Add another list level.
+# Two list nesting levels.
 
 statement ok
 CREATE TABLE struct_data_two_lists(str STRUCT(val VARCHAR)[][]);
 
 statement ok
-INSERT INTO struct_data_two_lists values (NULL);
+INSERT INTO struct_data_two_lists VALUES (NULL);
 
 query I
 SELECT flatten(str) FROM struct_data_two_lists;
 ----
 NULL
+
+# Nested STRUCTs.
+
+statement ok
+CREATE TABLE many_structs_data(str1 STRUCT(val VARCHAR, str2 STRUCT(val INT[]))[]);
+
+statement ok
+INSERT INTO many_structs_data VALUES (NULL), ([{'val': 'hello', 'str2': NULL}, (NULL, NULL), {'val': 'world', 'str2': {'val': [1, 2]}}]);
+
+query I
+SELECT list_reduce(str1, (a, b) -> a) FROM many_structs_data;
+----
+NULL
+{'val': hello, 'str2': NULL}
 
 # Original issue.
 

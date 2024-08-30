@@ -27,7 +27,7 @@ struct ReduceExecuteInfo {
 				reduced_row_idx++;
 			} else {
 				// Set the row as invalid and remove it from the active rows.
-				info.result_validity->SetInvalid(original_row_idx);
+				FlatVector::SetNull(info.result, original_row_idx, true);
 				active_rows.SetInvalid(original_row_idx);
 			}
 		}
@@ -162,9 +162,9 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	DataChunk even_result_chunk;
 	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->return_type});
 
+	// Execute reduce until all rows are finished.
 	idx_t loops = 0;
 	bool end = false;
-	// Execute reduce until all rows are finished
 	while (!end) {
 		auto &result_chunk = loops % 2 ? odd_result_chunk : even_result_chunk;
 		auto &spare_result_chunk = loops % 2 ? even_result_chunk : odd_result_chunk;
@@ -172,19 +172,6 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 		end = ExecuteReduce(loops, execute_info, info, result_chunk);
 		spare_result_chunk.Reset();
 		loops++;
-	}
-
-	// Propagate NULL rows in STRUCTs.
-	if (info.result.GetType().id() == LogicalTypeId::STRUCT) {
-		auto &children = StructVector::GetEntries(info.result);
-		for (idx_t row_idx = 0; row_idx < info.row_count; row_idx++) {
-			if (!info.result_validity->RowIsValid(row_idx)) {
-				for (auto &child : children) {
-					auto &child_validity = FlatVector::Validity(*child);
-					child_validity.SetInvalid(row_idx);
-				}
-			}
-		}
 	}
 
 	if (info.is_all_constant && !info.is_volatile) {
