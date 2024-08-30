@@ -1,0 +1,151 @@
+# name: test/sql/types/nested/list/test_list_functions_with_null_structs.test
+# description: Test correctly reserving the child vector size in the presence of NULL.
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE struct_data(str STRUCT(val VARCHAR)[]);
+
+statement ok
+INSERT INTO struct_data values (NULL);
+
+query I
+SELECT list_resize(str, 1) FROM struct_data;
+----
+NULL
+
+query I
+SELECT list_reduce(str, (a, b) -> a) FROM struct_data;
+----
+NULL
+
+query I
+SELECT str[1] FROM struct_data;
+----
+NULL
+
+query I
+SELECT list_aggregate(str, 'count') FROM struct_data;
+----
+NULL
+
+foreach f array_pop_back array_pop_front len list_any_value list_distinct list_grade_up list_reverse_sort list_reverse list_sort list_unique
+
+query I
+SELECT ${f}(str) FROM struct_data;
+----
+NULL
+
+endloop
+
+# Add another nesting level.
+
+statement ok
+CREATE TABLE nested_struct_data(str STRUCT(str_nested STRUCT(val VARCHAR))[]);
+
+statement ok
+INSERT INTO nested_struct_data VALUES ([NULL]);
+
+query I
+SELECT list_transform(str, x -> x) FROM nested_struct_data;
+----
+[NULL]
+
+query I
+SELECT list_filter(str, x -> x.str_nested IS NULL) FROM nested_struct_data;
+----
+[NULL]
+
+# Add another list level.
+
+statement ok
+CREATE TABLE struct_data_two_lists(str STRUCT(val VARCHAR)[][]);
+
+statement ok
+INSERT INTO struct_data_two_lists values (NULL);
+
+query I
+SELECT flatten(str) FROM struct_data_two_lists;
+----
+NULL
+
+# Original issue.
+
+query IIIII
+WITH foo AS (
+    SELECT str.reduce((a, b) -> a) AS str FROM struct_data
+)
+SELECT str, str.val, str.val = '', str.val IS NULL, str IS NULL FROM foo;
+----
+NULL	NULL	NULL	true	true
+
+statement ok
+CREATE TABLE filter_data(foo text[]);
+
+statement ok
+INSERT INTO filter_data VALUES
+    (['some value']),
+    (['some value', 'other value']),
+    (['some value', 'other value', 'some value']),
+    (['some value', 'other value', 'some value', 'other value']),
+    (['some value', 'other value', 'some value', 'other value', 'some value']),
+    (['some value', 'other value', 'some value', 'other value', 'some value', 'other value']),
+    (['some value', 'other value', 'some value', 'other value', 'some value', 'other value', 'some value']);
+
+query II
+with
+    transformed as (
+        select
+            foo.list_transform(
+                x -> struct_pack(val := x, conflict := false)
+            ).reduce(
+                (res, x) -> case
+                    when res.conflict then res
+                    when res.val = x.val then res
+                    else struct_pack(val := null, conflict := true)
+                end
+            ) as result
+        from filter_data
+    )
+select
+    result,
+    result.val = ''
+from transformed
+;
+----
+{'val': some value, 'conflict': false}	false
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+{'val': NULL, 'conflict': true}	NULL
+
+query II
+with
+    data_(foo) as (values
+        (null::text[]),
+        (['a', 'b', 'c'])
+    ), transformed as (
+        select
+            foo.list_transform(
+                x -> struct_pack(val := x, conflict := false)
+            ).reduce(
+                (res, x) -> case
+                    when res.conflict then res
+                    when res.val = x.val then res
+                    else struct_pack(val := null, conflict := true)
+                end
+            ) as result
+        from data_
+    )
+select
+    result,
+    result.val = ''
+from transformed
+;
+----
+NULL	NULL
+{'val': NULL, 'conflict': true}	NULL
