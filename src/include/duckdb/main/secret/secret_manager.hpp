@@ -153,8 +153,12 @@ public:
 	                                 const string &storage = "");
 
 private:
+	//! Register a secret type
+	void RegisterSecretTypeInternal(SecretType &type);
 	//! Lookup a SecretType
 	SecretType LookupTypeInternal(const string &type);
+	//! Register a secret provider
+	void RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict);
 	//! Lookup a CreateSecretFunction
 	optional_ptr<CreateSecretFunction> LookupFunctionInternal(const string &type, const string &provider);
 	//! Register a new Secret
@@ -204,10 +208,13 @@ public:
 	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, case_insensitive_set_t &persistent_secrets);
 
 public:
+	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name) override;
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
 	vector<string> GetDefaultEntries() override;
 
 protected:
+	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const string &entry_name);
+
 	SecretManager &secret_manager;
 	case_insensitive_set_t persistent_secrets;
 };

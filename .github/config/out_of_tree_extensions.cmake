@@ -20,7 +20,7 @@ if (NOT MINGW)
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
-            GIT_TAG fa40ec56236953aa5978cf1b4c65ed521424ce69
+            GIT_TAG c50862c82c065096722745631f4230832a3a04e8
             )
 endif()
 
@@ -29,7 +29,7 @@ if (NOT MINGW)
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
-            GIT_TAG 42c78d3f99e1a188a2b178ea59e3c17907af4fb2
+            GIT_TAG e738b4cc07a86d323db8b38220323752cd183a04
             )
 endif()
 
@@ -58,7 +58,7 @@ endif()
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_excel
-    GIT_TAG 391b36dfdcc1c8c187529376efb4f7ddc9f57261
+    GIT_TAG 0e99dc789038c7af658e30d579b818473a6d6ea8
     INCLUDE_DIR extension/excel/include
     )
 
@@ -74,9 +74,18 @@ if (NOT MINGW)
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG fe0471671924ce57308924c79f72efd18103e66b
+            GIT_TAG 3f6d753787252e3da1d12157910b62edf729fc6e
             )
 endif()
+
+################# INET
+duckdb_extension_load(inet
+    LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_inet
+    GIT_TAG eca867b2517af06eabc89ccd6234266e9a7d6d71
+    INCLUDE_DIR src/include
+    TEST_DIR test/sql
+    )
 
 ################# POSTGRES_SCANNER
 # Note: tests for postgres_scanner are currently not run. All of them need a postgres server running. One test
@@ -85,8 +94,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG 120c0b12258d27758e240d61f5dc22a4238a14a6
-            APPLY_PATCHES
+            GIT_TAG d0e0115f29a9dbe44f026aea7290a1c6d4622a73
             )
 endif()
 
@@ -115,8 +123,9 @@ duckdb_extension_load(sqlite_scanner
         )
 
 duckdb_extension_load(sqlsmith
+        DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG 9729cade201987b22ec7fc4b700f6d34e1e4111f
+        GIT_TAG 98fb00dcfc9413ffe58f58022344661e1b45623f
         )
 
 ################# SUBSTRAIT
@@ -124,8 +133,7 @@ if (NOT WIN32)
     duckdb_extension_load(substrait
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG 237931391ebc7e6aee7aa81052fa1411f6c4128e
-            APPLY_PATCHES
+            GIT_TAG 55922a3e77756054abbe3e04dae17ccf4203ad6f
             )
 endif()
 
@@ -135,9 +143,8 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 9ff608f1edc6a1da2e41ee41b1ef42ba3169e71c
+        GIT_TAG 3e192f25de97bdd759f96eeb488c59750db73937
         TEST_DIR test/sql
-        APPLY_PATCHES
     )
 
 ################# MYSQL

@@ -241,6 +241,10 @@ void AttachedDatabase::Close() {
 		}
 	} catch (...) { // NOLINT
 	}
+
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 }
 
 } // namespace duckdb

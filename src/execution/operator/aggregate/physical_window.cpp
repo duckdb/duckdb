@@ -368,10 +368,8 @@ public:
 	WindowGlobalSinkState &gsink;
 	//! The total number of blocks to process;
 	idx_t total_blocks = 0;
-	//! State mutex
-	mutable mutex lock;
 	//! The number of local states
-	atomic<idx_t> threads;
+	atomic<idx_t> locals;
 	//! The list of tasks
 	vector<Task> tasks;
 	//! The the next task
@@ -382,8 +380,6 @@ public:
 	atomic<bool> stopped;
 	//! The number of rows returned
 	atomic<idx_t> returned;
-	//! The set of blocked tasks
-	mutable vector<InterruptState> blocked_tasks;
 
 public:
 	idx_t MaxThreads() override {
@@ -392,7 +388,7 @@ public:
 };
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
-    : context(context_p), gsink(gsink_p), threads(0), next_task(0), finished(0), stopped(false), returned(0) {
+    : context(context_p), gsink(gsink_p), locals(0), next_task(0), finished(0), stopped(false), returned(0) {
 	auto &gpart = gsink.global_partition;
 	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
 
@@ -428,7 +424,7 @@ void WindowGlobalSourceState::CreateTaskList() {
 		return;
 	}
 
-	lock_guard<mutex> task_guard(lock);
+	auto guard = Lock();
 
 	auto &window_hash_groups = gsink.global_partition->window_hash_groups;
 	if (!tasks.empty()) {
@@ -449,8 +445,13 @@ void WindowGlobalSourceState::CreateTaskList() {
 	std::sort(partition_blocks.begin(), partition_blocks.end(), std::greater<PartitionBlock>());
 
 	//	Schedule the largest group on as many threads as possible
+	const auto threads = locals.load();
 	const auto &max_block = partition_blocks.front();
 	const auto per_thread = (max_block.first + threads - 1) / threads;
+	if (!per_thread) {
+		throw InternalException("No blocks per thread! %ld threads, %ld groups, %ld blocks, %ld hash group", threads,
+		                        partition_blocks.size(), max_block.first, max_block.second);
+	}
 
 	//	TODO: Generate dynamically instead of building a big list?
 	vector<WindowGroupStage> states {WindowGroupStage::SINK, WindowGroupStage::FINALIZE, WindowGroupStage::GETDATA};
@@ -705,11 +706,11 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 	}
 	output_chunk.Initialize(global_partition.allocator, output_types);
 
-	++gsource.threads;
+	++gsource.locals;
 }
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
-	lock_guard<mutex> task_guard(lock);
+	auto guard = Lock();
 	if (next_task >= tasks.size() || stopped) {
 		task = nullptr;
 		return false;
@@ -908,15 +909,11 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 				throw;
 			}
 		} else {
-			lock_guard<mutex> guard(gsource.lock);
+			auto guard = gsource.Lock();
 			if (gsource.TryPrepareNextStage() || !gsource.HasUnfinishedTasks()) {
-				for (auto &state : gsource.blocked_tasks) {
-					state.Callback();
-				}
-				gsource.blocked_tasks.clear();
+				gsource.UnblockTasks(guard);
 			} else {
-				gsource.blocked_tasks.push_back(input.interrupt_state);
-				return SourceResultType::BLOCKED;
+				return gsource.BlockSource(guard, input.interrupt_state);
 			}
 		}
 	}

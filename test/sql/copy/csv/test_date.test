@@ -41,3 +41,19 @@ Select * from read_csv('data/csv/custom_date.csv', header=true, timestampformat=
 ----
 123	2023-01-02 12:33:00
 124	2023-12-02 11:57:00
+
+# Check that less than two numbers and @ separator does not become a date
+query III
+select typeof(#1),typeof(#2),typeof(#3) FROM 'data/csv/versions.csv' limit 1
+----
+VARCHAR	DATE	VARCHAR
+
+query I
+select typeof(#1) FROM read_csv('data/csv/dates_special_format.csv', dateformat = '%b %-d, %Y', columns = {'Date': 'DATE'}) limit 1;
+----
+DATE
+
+query I
+select typeof(#1) FROM read_csv('data/csv/dates_special_format.csv', dateformat = '%b %-d, %Y') limit 1;
+----
+DATE

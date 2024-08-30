@@ -487,6 +487,33 @@ struct HomeDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct HTTPProxy {
+	static constexpr const char *Name = "http_proxy";
+	static constexpr const char *Description = "HTTP proxy host";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct HTTPProxyUsername {
+	static constexpr const char *Name = "http_proxy_username";
+	static constexpr const char *Description = "Username for HTTP proxy";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct HTTPProxyPassword {
+	static constexpr const char *Name = "http_proxy";
+	static constexpr const char *Description = "Password for HTTP proxy";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct IntegerDivisionSetting {
 	static constexpr const char *Name = "integer_division";
 	static constexpr const char *Description =
