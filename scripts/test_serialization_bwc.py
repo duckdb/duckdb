@@ -15,11 +15,13 @@ queries_path = os.path.join(serialized_path, 'queries.sql')
 result_binary = os.path.join(serialized_path, 'serialized_plans.binary')
 unittest_binary = os.path.join('build', 'debug', 'test', 'unittest')
 
+
 def complete_query(q):
     q = q.strip()
     if q.endswith(';'):
         return q
     return q + ';'
+
 
 def parse_test_file(filename):
     parser = SQLLogicParser()
@@ -44,7 +46,7 @@ def parse_test_file(filename):
             # loops are ignored currently
             continue
         if not (
-                type(stmt) is sqllogictest.statement.query.Query or type(stmt) is sqllogictest.statement.statement.Statement
+            type(stmt) is sqllogictest.statement.query.Query or type(stmt) is sqllogictest.statement.statement.Statement
         ):
             # only handle query and statement nodes for now
             continue
@@ -130,6 +132,7 @@ def run_test(filename, old_source, new_source, no_exit):
         raise Exception("Deserialization failure")
     os.chdir(current_path)
 
+
 def parse_excluded_tests(path):
     exclusion_list = {}
     with open(path) as f:
@@ -138,6 +141,7 @@ def parse_excluded_tests(path):
                 continue
             exclusion_list[line.strip()] = True
     return exclusion_list
+
 
 def find_tests_recursive(dir, excluded_paths):
     test_list = []
@@ -151,6 +155,7 @@ def find_tests_recursive(dir, excluded_paths):
             test_list.append(path)
     return test_list
 
+
 def main():
     parser = argparse.ArgumentParser(description="Test serialization")
     parser.add_argument("--new-source", type=str, help="Path to the new source", default='.')
@@ -158,9 +163,9 @@ def main():
     parser.add_argument("--start-at", type=str, help="Start running tests at this specific test", default=None)
     parser.add_argument("--no-exit", action="store_true", help="Keep running even if a test fails", default=False)
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default = '')
+    group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default='')
     group.add_argument("--all-tests", action='store_true', help="Run all tests", default=False)
-    group.add_argument("--test-list", type=str, help="Load tests to run from a file list", default = None)
+    group.add_argument("--test-list", type=str, help="Load tests to run from a file list", default=None)
     args = parser.parse_args()
 
     old_source = args.old_source
@@ -168,7 +173,9 @@ def main():
     files = []
     if args.all_tests:
         # run all tests
-        excluded_tests = parse_excluded_tests(os.path.join(new_source, 'test', 'api', 'serialized_plans', 'excluded_tests.list'))
+        excluded_tests = parse_excluded_tests(
+            os.path.join(new_source, 'test', 'api', 'serialized_plans', 'excluded_tests.list')
+        )
         test_dir = os.path.join('test', 'sql')
         if new_source != '.':
             test_dir = os.path.join(new_source, test_dir)
@@ -204,6 +211,7 @@ def main():
         raise
     finally:
         os.chdir(current_path)
+
 
 if __name__ == "__main__":
     main()

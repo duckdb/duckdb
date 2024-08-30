@@ -474,18 +474,24 @@ AggregateFunction GetDiscreteQuantileList(const LogicalType &type) {
 template <class OP>
 AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 	switch (type.id()) {
-	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::TINYINT:
+		return OP::template GetFunction<int8_t, double>(type, LogicalType::DOUBLE);
 	case LogicalTypeId::SMALLINT:
+		return OP::template GetFunction<int16_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::INTEGER:
+		return OP::template GetFunction<int32_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::BIGINT:
+		return OP::template GetFunction<int64_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::HUGEINT:
+		return OP::template GetFunction<hugeint_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::FLOAT:
+		return OP::template GetFunction<float, float>(type, type);
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::UHUGEINT:
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 		return OP::template GetFunction<double, double>(LogicalType::DOUBLE, LogicalType::DOUBLE);
 	case LogicalTypeId::DECIMAL:
@@ -572,6 +578,9 @@ static const Value &CheckQuantile(const Value &quantile_val) {
 
 unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction &function,
                                       vector<unique_ptr<Expression>> &arguments) {
+	if (arguments.size() < 2) {
+		throw BinderException("QUANTILE requires a range argument between [0, 1]");
+	}
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -803,12 +812,16 @@ AggregateFunctionSet QuantileDiscFun::GetFunctions() {
 	    EmptyQuantileFunction<DiscreteQuantileFunction>(LogicalType::ANY, LogicalType::ANY, LogicalType::DOUBLE));
 	set.AddFunction(EmptyQuantileFunction<DiscreteQuantileListFunction>(LogicalType::ANY, LogicalType::ANY,
 	                                                                    LogicalType::LIST(LogicalType::DOUBLE)));
+	// this function is here for deserialization - it cannot be called by users
+	set.AddFunction(
+	    EmptyQuantileFunction<DiscreteQuantileFunction>(LogicalType::ANY, LogicalType::ANY, LogicalType::INVALID));
 	return set;
 }
 
 vector<LogicalType> GetContinuousQuantileTypes() {
-	return {LogicalType::DOUBLE, LogicalType::DATE,         LogicalType::TIMESTAMP,
-	        LogicalType::TIME,   LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ};
+	return {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,      LogicalType::BIGINT,
+	        LogicalType::HUGEINT,   LogicalType::FLOAT,    LogicalType::DOUBLE,       LogicalType::DATE,
+	        LogicalType::TIMESTAMP, LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ};
 }
 
 AggregateFunctionSet QuantileContFun::GetFunctions() {
