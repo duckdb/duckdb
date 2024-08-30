@@ -91,7 +91,7 @@ def build_sources(old_source, new_source):
     os.chdir(current_path)
 
 
-def run_test(filename, old_source, new_source):
+def run_test(filename, old_source, new_source, no_exit):
     statements = parse_test_file(filename)
 
     # generate the sources
@@ -125,6 +125,8 @@ def run_test(filename, old_source, new_source):
 
     res = subprocess.run(['build/debug/test/unittest', "Test deserialized plans from file"]).returncode
     if res != 0:
+        if no_exit:
+            return
         raise Exception("Deserialization failure")
     os.chdir(current_path)
 
@@ -154,9 +156,11 @@ def main():
     parser.add_argument("--new-source", type=str, help="Path to the new source", default='.')
     parser.add_argument("--old-source", type=str, help="Path to the old source")
     parser.add_argument("--start-at", type=str, help="Start running tests at this specific test", default=None)
+    parser.add_argument("--no-exit", action="store_true", help="Keep running even if a test fails", default=False)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default = '')
     group.add_argument("--all-tests", action='store_true', help="Run all tests", default=False)
+    group.add_argument("--test-list", type=str, help="Load tests to run from a file list", default = None)
     args = parser.parse_args()
 
     old_source = args.old_source
@@ -169,9 +173,15 @@ def main():
         if new_source != '.':
             test_dir = os.path.join(new_source, test_dir)
         files = find_tests_recursive(test_dir, excluded_tests)
+    elif args.test_list is not None:
+        with open(args.test_list, 'r') as f:
+            for line in f:
+                if len(line.strip()) == 0:
+                    continue
+                files.append(line.strip())
     else:
         # run a single test
-        files = [args.test_file]
+        files.append(args.test_file)
     files.sort()
 
     current_path = os.getcwd()
@@ -189,7 +199,7 @@ def main():
                     continue
 
             print(f"Run test {filename}")
-            run_test(filename, old_source, new_source)
+            run_test(filename, old_source, new_source, args.no_exit)
     except:
         raise
     finally:
