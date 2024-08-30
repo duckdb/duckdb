@@ -354,11 +354,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		}
 		if (HasOperatorSetting(MetricsType::RESULT_SET_SIZE) && chunk) {
 			auto types = chunk->GetTypes();
-			auto chunk_size = chunk->size();
-			idx_t result_set_size = 0;
-			for (auto const &type : types) {
-				result_set_size += chunk_size * GetTypeIdSize(type.InternalType());
-			}
+			idx_t result_set_size = chunk->GetAllocationSize();
 			curr_operator_info.AddResultSetSize(result_set_size);
 		}
 	}
