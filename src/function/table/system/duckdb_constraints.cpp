@@ -61,9 +61,6 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, Ta
 	names.emplace_back("table_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
-	names.emplace_back("constraint_name");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
 	names.emplace_back("constraint_index");
 	return_types.emplace_back(LogicalType::BIGINT);
 
@@ -82,6 +79,9 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, Ta
 
 	names.emplace_back("constraint_column_names");
 	return_types.push_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("constraint_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	// FOREIGN KEY
 	names.emplace_back("referenced_table");
@@ -268,19 +268,6 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.oid)));
 
 			auto info = GetExtraConstraintInfo(table, *constraint);
-			// constraint_name, VARCHAR
-			auto constraint_name = GetConstraintName(table, *constraint, info);
-			if (data.constraint_names.find(constraint_name) != data.constraint_names.end()) {
-				// duplicate constraint name
-				idx_t index = 2;
-				while (data.constraint_names.find(constraint_name + "_" + to_string(index)) !=
-				       data.constraint_names.end()) {
-					index++;
-				}
-				constraint_name += "_" + to_string(index);
-			}
-			output.SetValue(col++, count, Value(std::move(constraint_name)));
-
 			// constraint_index, BIGINT
 			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(data.unique_constraint_offset++)));
 
@@ -316,6 +303,19 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			// constraint_column_names, LIST
 			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
+
+			// constraint_name, VARCHAR
+			auto constraint_name = GetConstraintName(table, *constraint, info);
+			if (data.constraint_names.find(constraint_name) != data.constraint_names.end()) {
+				// duplicate constraint name
+				idx_t index = 2;
+				while (data.constraint_names.find(constraint_name + "_" + to_string(index)) !=
+					   data.constraint_names.end()) {
+					index++;
+					   }
+				constraint_name += "_" + to_string(index);
+			}
+			output.SetValue(col++, count, Value(std::move(constraint_name)));
 
 			// referenced_table, VARCHAR
 			output.SetValue(col++, count,

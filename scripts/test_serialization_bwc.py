@@ -128,6 +128,9 @@ def run_test(filename, old_source, new_source, no_exit):
     res = subprocess.run(['build/debug/test/unittest', "Test deserialized plans from file"]).returncode
     if res != 0:
         if no_exit:
+            print("BROKEN TEST")
+            with open('broken_tests.list', 'a') as f:
+                f.write(filename + '\n')
             return
         raise Exception("Deserialization failure")
     os.chdir(current_path)
@@ -206,6 +209,7 @@ def main():
                     continue
 
             print(f"Run test {filename}")
+            os.chdir(current_path)
             run_test(filename, old_source, new_source, args.no_exit)
     except:
         raise
