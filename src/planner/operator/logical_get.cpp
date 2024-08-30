@@ -212,28 +212,16 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		}
 		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
 
-		// map the column ids/projection ids through the name map
-		case_insensitive_map_t<idx_t> name_map;
-		for(idx_t i = 0; i < bind_names.size(); i++) {
-			name_map.insert(make_pair(bind_names[i], i));
-		}
-		for(auto &col_id : result->column_ids) {
-			auto &old_name = result->names[col_id];
-			auto &old_type = result->returned_types[col_id];
-			auto name_entry = name_map.find(old_name);
-			if (name_entry == name_map.end()) {
-					throw SerializationException(
-						"Table function deserialization failure in function \"%s\" - column with name %s was referenced but this was not found in the bound names", function.name, old_name);
+		for (auto &col_id : result->column_ids) {
+			auto &ret_type = result->returned_types[col_id];
+			auto &col_name = result->names[col_id];
+			if (bind_return_types[col_id] != ret_type) {
+				throw SerializationException("Table function deserialization failure in function \"%s\" - column with "
+				                             "name %s was serialized with type %s, but now has type %s",
+				                             function.name, col_name, ret_type, bind_return_types[col_id]);
 			}
-			auto new_idx = name_entry->second;
-			if (bind_return_types[new_idx] != old_type) {
-				throw SerializationException(
-					"Table function deserialization failure in function \"%s\" - column with name %s was serialized with type %s, but now has type %s", function.name, old_type, bind_return_types[new_idx]);
-			}
-			col_id = new_idx;
 		}
 		result->returned_types = std::move(bind_return_types);
-		result->names = std::move(bind_names);
 	} else {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}
