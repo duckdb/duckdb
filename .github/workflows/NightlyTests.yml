@@ -58,18 +58,17 @@ jobs:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
 
-      - name: Build
-        shell: bash
-        run: make debug
-
       - name: Build Older Version
         shell: bash
         run: |
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1 duckdb-old
+          git clone --branch $BWC_SERIALIZATION_VERSION https://github.com/duckdb/duckdb.git --depth=1 duckdb-old
           cd duckdb-old
-          git checkout $BWC_SERIALIZATION_VERSION
           make debug
           cd ..
+
+      - name: Build New Version
+        shell: bash
+        run: make debug
 
       - name: Test
         shell: bash
