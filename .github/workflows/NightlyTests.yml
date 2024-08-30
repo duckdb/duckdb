@@ -65,8 +65,7 @@ jobs:
       - name: Build Older Version
         shell: bash
         run: |
-          make
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1 duckdb-old
           cd duckdb-old
           git checkout $BWC_SERIALIZATION_VERSION
           make debug
