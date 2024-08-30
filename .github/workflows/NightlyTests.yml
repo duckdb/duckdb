@@ -81,6 +81,8 @@ jobs:
         if: always()
         shell: bash
         run: |
+          echo 'Printing broken tests.'
+          echo 'If any tests are broken, either try fixing them or add them to test/api/serialized_plans/excluded_tests.list'
           touch broken_tests.list
           cat broken_tests.list
 
