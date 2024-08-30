@@ -114,7 +114,7 @@ def run_test(filename, old_source, new_source, no_exit):
     res = subprocess.run(['build/debug/test/unittest', 'Generate serialized plans file'], env=my_env).returncode
     if res != 0:
         print(f"SKIPPING TEST {filename}")
-        return
+        return True
 
     os.chdir(current_path)
 
@@ -131,9 +131,10 @@ def run_test(filename, old_source, new_source, no_exit):
             print("BROKEN TEST")
             with open('broken_tests.list', 'a') as f:
                 f.write(filename + '\n')
-            return
+            return False
         raise Exception("Deserialization failure")
     os.chdir(current_path)
+    return True
 
 
 def parse_excluded_tests(path):
@@ -198,6 +199,7 @@ def main():
     try:
         build_sources(old_source, new_source)
 
+        all_succeeded = True
         started = False
         if args.start_at is None:
             started = True
@@ -210,7 +212,10 @@ def main():
 
             print(f"Run test {filename}")
             os.chdir(current_path)
-            run_test(filename, old_source, new_source, args.no_exit)
+            if not run_test(filename, old_source, new_source, args.no_exit):
+                all_succeeded = False
+        if not all_succeeded:
+            exit(1)
     except:
         raise
     finally:
