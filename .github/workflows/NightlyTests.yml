@@ -80,7 +80,9 @@ jobs:
       - name: Print Broken Test List
         if: always()
         shell: bash
-        run: cat broken_tests.list
+        run: |
+          touch broken_tests.list
+          cat broken_tests.list
 
 
   
