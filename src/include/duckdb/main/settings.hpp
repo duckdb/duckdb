@@ -761,6 +761,17 @@ struct ArrowOutputListView {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LosslessConversionArrow {
+	static constexpr const char *Name = "arrow_lossless_conversion";
+	static constexpr const char *Description =
+	    "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types "
+	    "with a duckdb.type_name extension name.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ProduceArrowStringView {
 	static constexpr const char *Name = "produce_arrow_string_view";
 	static constexpr const char *Description =

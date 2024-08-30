@@ -207,6 +207,9 @@ struct DBConfigOptions {
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	//! Whether LISTs should produce Arrow ListViews
 	bool arrow_use_list_view = false;
+	//! Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types
+	//! with a duckdb.type_name extension name
+	bool arrow_arrow_lossless_conversion = false;
 	//! Whether when producing arrow objects we produce string_views or regular strings
 	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET

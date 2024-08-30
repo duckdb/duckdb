@@ -113,7 +113,7 @@ void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
-
+	types.clear();
 	if (projection_ids.empty()) {
 		for (auto &index : column_ids) {
 			if (index == COLUMN_IDENTIFIER_ROW_ID) {
