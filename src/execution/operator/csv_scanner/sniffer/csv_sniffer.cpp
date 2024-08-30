@@ -130,14 +130,13 @@ SnifferResult CSVSniffer::MinimalSniff() {
 
 	// Possibly Gather Header
 	vector<HeaderValue> potential_header;
-	if (start_row != 0) {
-		for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
-			auto &cur_vector = data_chunk.data[col_idx];
-			auto vector_data = FlatVector::GetData<string_t>(cur_vector);
-			HeaderValue val(vector_data[0]);
-			potential_header.emplace_back(val);
-		}
+	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
+		auto &cur_vector = data_chunk.data[col_idx];
+		auto vector_data = FlatVector::GetData<string_t>(cur_vector);
+		HeaderValue val(vector_data[0]);
+		potential_header.emplace_back(val);
 	}
+
 	names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
 	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
 
@@ -148,8 +147,13 @@ SnifferResult CSVSniffer::MinimalSniff() {
 		}
 		detected_types.push_back(d_type);
 	}
-
-	return {detected_types, names};
+	bool only_header = data_chunk.size() == 1;
+	for (auto &type : detected_types) {
+		if (type.id() != LogicalTypeId::VARCHAR) {
+			only_header = false;
+		}
+	}
+	return {detected_types, names, only_header};
 }
 
 SnifferResult CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
@@ -158,7 +162,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
 	// Check if we are happy with the result or if we need to do more sniffing
 	if (!error_handler->AnyErrors() && !detection_error_handler->AnyErrors()) {
 		// If we got no errors, we also run full if schemas do not match.
-		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
+		if (!set_columns.IsSet() && !options.file_options.AnySet() && !min_sniff_res.only_header) {
 			string error;
 			run_full =
 			    !file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types, options.file_path);
