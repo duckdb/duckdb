@@ -548,8 +548,8 @@ struct IEEEFloatingPointOpsSetting {
 	static constexpr const char *Description =
 	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -636,8 +636,8 @@ struct OrderByNonIntegerLiteral {
 	static constexpr const char *Description =
 	    "Allow ordering by non-integer literals - ordering by such literals has no effect";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -805,8 +805,8 @@ struct ScalarSubqueryErrorOnMultipleRows {
 	static constexpr const char *Description =
 	    "When a scalar subquery returns multiple rows - return a random row instead of returning an error";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
