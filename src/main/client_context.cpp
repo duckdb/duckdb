@@ -1298,7 +1298,7 @@ ClientProperties ClientContext::GetClientProperties() const {
 		timezone = result.ToString();
 	}
 	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views};
+	        db->config.options.produce_arrow_string_views, db->config.options.arrow_arrow_lossless_conversion};
 }
 
 bool ClientContext::ExecutionIsFinished() {
