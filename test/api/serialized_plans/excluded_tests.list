@@ -719,6 +719,15 @@ test/sql/window/test_window_order_collate.test
 test/sql/window/test_window_range.test
 test/sql/window/test_window_tpcds.test
 test/sql/pg_catalog/system_functions.test
+test/sql/copy/csv/test_soccer_kaggle.test
+test/sql/copy/csv/test_headers_12089.test
+test/sql/order/test_order_range_mapping.test
+test/sql/order/test_order_by_exceptions.test
+test/sql/order/test_order_by.test
+test/sql/order/test_limit.test
+test/sql/table_function/duckdb_constraints.test
+test/sql/table_function/duckdb_constraints_issue12863.test
+test/sql/table_function/information_schema_fkey_constraint_names.test
 
 # infinite loop bug in older version
 test/sql/cte/test_recursive_cte_union.test
@@ -732,7 +741,7 @@ test/sql/types/time/test_time_tz.test
 test/sql/function/operator/test_date_arithmetic.test
 
 # histogram/list_distinct type fix
-test/sql/function/list/list_distinct.tests
+test/sql/function/list/list_distinct.test
 test/sql/function/list/aggregates/histogram.test
 test/sql/aggregate/aggregates/test_mode.test
 test/sql/aggregate/aggregates/test_histogram.test
@@ -741,6 +750,7 @@ test/sql/aggregate/aggregates/test_approx_quantile.test
 # least/greatest type fix
 test/sql/function/generic/test_least_greatest.test
 test/sql/function/generic/least_greatest_enum.test
+test/sql/types/uhugeint/test_uhugeint_functions.test
 
 # null type changes
 test/sql/types/list/list_concat_null.test
@@ -749,7 +759,7 @@ test/sql/function/string/test_concat_binding.test
 test/sql/function/string/test_concat.test
 
 # lateral join plan fix
-test/sql/subquery/lateral/lateral_grouping_sets.testS
+test/sql/subquery/lateral/lateral_grouping_sets.test
 
 # median/quantile type fixes
 test/sql/types/nested/array/array_summarize.test
@@ -777,6 +787,9 @@ test/sql/aggregate/aggregates/test_median.test
 
 # nanosecond fix
 test/sql/function/timestamp/test_strftime_timestamp_ns.test
+
+# concat type change
+test/sql/types/blob/test_blob_function.test
 
 # rowsort (FIXME: this can be addressed in the testing framework)
 test/sql/function/string/regex_capture.test
