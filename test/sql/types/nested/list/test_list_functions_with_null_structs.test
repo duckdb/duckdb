@@ -95,25 +95,19 @@ INSERT INTO filter_data VALUES
     (['some value', 'other value', 'some value', 'other value', 'some value', 'other value', 'some value']);
 
 query II
-with
-    transformed as (
-        select
-            foo.list_transform(
+WITH transformed AS (
+	SELECT foo.list_transform(
                 x -> struct_pack(val := x, conflict := false)
             ).reduce(
-                (res, x) -> case
-                    when res.conflict then res
-                    when res.val = x.val then res
-                    else struct_pack(val := null, conflict := true)
-                end
-            ) as result
-        from filter_data
+                (res, x) -> CASE
+                    WHEN res.conflict THEN res
+                    WHEN res.val = x.val THEN res
+                    ELSE struct_pack(val := null, conflict := true)
+					END
+            ) AS result
+        FROM filter_data
     )
-select
-    result,
-    result.val = ''
-from transformed
-;
+SELECT result, result.val = '' FROM transformed;
 ----
 {'val': some value, 'conflict': false}	false
 {'val': NULL, 'conflict': true}	NULL
@@ -124,28 +118,21 @@ from transformed
 {'val': NULL, 'conflict': true}	NULL
 
 query II
-with
-    data_(foo) as (values
-        (null::text[]),
-        (['a', 'b', 'c'])
-    ), transformed as (
-        select
+WITH data_(foo) AS (VALUES (null::text[]), (['a', 'b', 'c'])
+    ), transformed AS (
+        SELECT
             foo.list_transform(
                 x -> struct_pack(val := x, conflict := false)
             ).reduce(
-                (res, x) -> case
-                    when res.conflict then res
-                    when res.val = x.val then res
-                    else struct_pack(val := null, conflict := true)
-                end
-            ) as result
-        from data_
+                (res, x) -> CASE
+                    WHEN res.conflict THEN res
+                    WHEN res.val = x.val THEN res
+                    ELSE struct_pack(val := null, conflict := true)
+                	END
+            ) AS result
+        FROM data_
     )
-select
-    result,
-    result.val = ''
-from transformed
-;
+SELECT result, result.val = '' FROM transformed;
 ----
 NULL	NULL
 {'val': NULL, 'conflict': true}	NULL
