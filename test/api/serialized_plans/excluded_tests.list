@@ -2,6 +2,10 @@
 # this means either
 # (a) the test does not translate nicely to the serialization test (e.g. involves dropping + recreating a table)
 # (b) this tests a new feature that is not available in the old version
+test/sql/aggregate/aggregates/approx_top_k.test
+test/sql/aggregate/aggregates/arg_min_max_n.test
+test/sql/aggregate/aggregates/arg_min_max_n_tpch.test
+test/sql/aggregate/aggregates/binning.test
 test/sql/aggregate/aggregates/histogram_table_function.test
 test/sql/aggregate/aggregates/test_aggregate_types_scalar.test
 test/sql/aggregate/aggregates/test_any_value.test
