@@ -75,7 +75,7 @@ jobs:
       - name: Test
         shell: bash
         run: |
-          python3 scripts/test_serialization_bwc.py --old-source ../duckdb-old --all-tests --no-exit
+          python3 scripts/test_serialization_bwc.py --old-source duckdb-old --all-tests --no-exit
 
       - name: Print Broken Test List
         if: always()
