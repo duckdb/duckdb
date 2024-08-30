@@ -22,6 +22,11 @@ class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::HASH_JOIN;
 
+	struct JoinProjectionColumns {
+		vector<idx_t> col_idxs;
+		vector<LogicalType> col_types;
+	};
+
 public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
@@ -38,15 +43,12 @@ public:
 	//! The types of the join keys
 	vector<LogicalType> condition_types;
 
-	//! The indices for getting the payload columns
-	vector<idx_t> payload_column_idxs;
-	//! The types of the payload columns
-	vector<LogicalType> payload_types;
-
-	//! Positions of the RHS columns that need to output
-	vector<idx_t> rhs_output_columns;
-	//! The types of the output
-	vector<LogicalType> rhs_output_types;
+	//! The indices/types of the payload columns
+	JoinProjectionColumns payload_columns;
+	//! The indices/types of the lhs columns that need to be output
+	JoinProjectionColumns lhs_output_columns;
+	//! The indices/types of the rhs columns that need to be output
+	JoinProjectionColumns rhs_output_columns;
 
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;

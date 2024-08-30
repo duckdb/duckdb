@@ -8,12 +8,12 @@ LogicalOrder::LogicalOrder(vector<BoundOrderByNode> orders)
 
 vector<ColumnBinding> LogicalOrder::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();
-	if (projections.empty()) {
+	if (projection_map.empty()) {
 		return child_bindings;
 	}
 
 	vector<ColumnBinding> result;
-	for (auto &col_idx : projections) {
+	for (auto &col_idx : projection_map) {
 		result.push_back(child_bindings[col_idx]);
 	}
 	return result;
@@ -34,10 +34,10 @@ InsertionOrderPreservingMap<string> LogicalOrder::ParamsToString() const {
 
 void LogicalOrder::ResolveTypes() {
 	const auto child_types = children[0]->types;
-	if (projections.empty()) {
+	if (projection_map.empty()) {
 		types = child_types;
 	} else {
-		for (auto &col_idx : projections) {
+		for (auto &col_idx : projection_map) {
 			types.push_back(child_types[col_idx]);
 		}
 	}

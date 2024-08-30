@@ -31,7 +31,6 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
       delim_types(std::move(delim_types)), perfect_join_statistics(std::move(perfect_join_stats)) {
-	D_ASSERT(left_projection_map.empty());
 
 	filter_pushdown = std::move(pushdown_info_p);
 
@@ -46,6 +45,22 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		if (condition.right->GetExpressionClass() == ExpressionClass::BOUND_REF) {
 			build_columns_in_conditions.emplace(condition.right->Cast<BoundReferenceExpression>().index, cond_idx);
 		}
+	}
+
+	auto &lhs_input_types = children[0]->GetTypes();
+
+	// Create a projection map for the LHS (if it was empty), for convenience
+	lhs_output_columns.col_idxs = left_projection_map;
+	if (lhs_output_columns.col_idxs.empty()) {
+		lhs_output_columns.col_idxs.reserve(lhs_input_types.size());
+		for (idx_t i = 0; i < lhs_input_types.size(); i++) {
+			lhs_output_columns.col_idxs.emplace_back(i);
+		}
+	}
+
+	for (auto &lhs_col : lhs_output_columns.col_idxs) {
+		auto &lhs_col_type = lhs_input_types[lhs_col];
+		lhs_output_columns.col_types.push_back(lhs_col_type);
 	}
 
 	// For ANTI, SEMI and MARK join, we only need to store the keys, so for these the payload/RHS types are empty
@@ -71,14 +86,14 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		auto it = build_columns_in_conditions.find(rhs_col);
 		if (it == build_columns_in_conditions.end()) {
 			// This rhs column is not a join key
-			payload_column_idxs.push_back(rhs_col);
-			payload_types.push_back(rhs_col_type);
-			rhs_output_columns.push_back(condition_types.size() + payload_types.size() - 1);
+			payload_columns.col_idxs.push_back(rhs_col);
+			payload_columns.col_types.push_back(rhs_col_type);
+			rhs_output_columns.col_idxs.push_back(condition_types.size() + payload_columns.col_types.size() - 1);
 		} else {
 			// This rhs column is a join key
-			rhs_output_columns.push_back(it->second);
+			rhs_output_columns.col_idxs.push_back(it->second);
 		}
-		rhs_output_types.push_back(rhs_col_type);
+		rhs_output_columns.col_types.push_back(rhs_col_type);
 	}
 }
 
@@ -189,8 +204,8 @@ public:
 		}
 		join_keys.Initialize(allocator, op.condition_types);
 
-		if (!op.payload_types.empty()) {
-			payload_chunk.Initialize(allocator, op.payload_types);
+		if (!op.payload_columns.col_types.empty()) {
+			payload_chunk.Initialize(allocator, op.payload_columns.col_types);
 		}
 
 		hash_table = op.InitializeHashTable(context);
@@ -218,7 +233,8 @@ public:
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(context, conditions, payload_types, join_type, rhs_output_columns);
+	auto result = make_uniq<JoinHashTable>(context, conditions, payload_columns.col_types, join_type,
+	                                       rhs_output_columns.col_idxs);
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
@@ -300,7 +316,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 
 	// build the HT
 	auto &ht = *lstate.hash_table;
-	if (payload_types.empty()) {
+	if (payload_columns.col_types.empty()) {
 		// there are only keys: place an empty chunk in the payload
 		lstate.payload_chunk.SetCardinality(chunk.size());
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
@@ -308,8 +324,8 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 		// there are payload columns
 		lstate.payload_chunk.Reset();
 		lstate.payload_chunk.SetCardinality(chunk);
-		for (idx_t i = 0; i < payload_column_idxs.size(); i++) {
-			lstate.payload_chunk.data[i].Reference(chunk.data[payload_column_idxs[i]]);
+		for (idx_t i = 0; i < payload_columns.col_idxs.size(); i++) {
+			lstate.payload_chunk.data[i].Reference(chunk.data[payload_columns.col_idxs[i]]);
 		}
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	}
@@ -677,8 +693,9 @@ public:
 	    : probe_executor(context), scan_structure(*sink.hash_table, join_key_state) {
 	}
 
-	DataChunk join_keys;
+	DataChunk lhs_join_keys;
 	TupleDataChunkState join_key_state;
+	DataChunk lhs_output;
 
 	ExpressionExecutor probe_executor;
 	JoinHashTable::ScanStructure scan_structure;
@@ -699,10 +716,13 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	auto &allocator = BufferAllocator::Get(context.client);
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	auto state = make_uniq<HashJoinOperatorState>(context.client, sink);
+	state->lhs_join_keys.Initialize(allocator, condition_types);
+	if (!lhs_output_columns.col_types.empty()) {
+		state->lhs_output.Initialize(allocator, lhs_output_columns.col_types);
+	}
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {
-		state->join_keys.Initialize(allocator, condition_types);
 		for (auto &cond : conditions) {
 			state->probe_executor.AddExpression(*cond.left);
 		}
@@ -723,17 +743,27 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	D_ASSERT(sink.finalized);
 	D_ASSERT(!sink.scanned_data);
 
+	if (state.scan_structure.is_null || sink.perfect_join_executor) {
+		// place the lhs projected columns in the chunk
+		state.lhs_output.Reset();
+		state.lhs_output.SetCardinality(input);
+		for (idx_t i = 0; i < lhs_output_columns.col_idxs.size(); i++) {
+			state.lhs_output.data[i].Reference(input.data[lhs_output_columns.col_idxs[i]]);
+		}
+	}
+
 	if (sink.hash_table->Count() == 0) {
 		if (EmptyResultIfRHSIsEmpty()) {
 			return OperatorResultType::FINISHED;
 		}
-		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, input, chunk);
+		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_output, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	if (sink.perfect_join_executor) {
 		D_ASSERT(!sink.external);
-		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, chunk, *state.perfect_hash_join_state);
+		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, state.lhs_output, chunk,
+		                                                         *state.perfect_hash_join_state);
 	}
 
 	if (sink.external && !state.initialized) {
@@ -747,19 +777,19 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 
 	if (state.scan_structure.is_null) {
 		// probe the HT, start by resolving the join keys for the left chunk
-		state.join_keys.Reset();
-		state.probe_executor.Execute(input, state.join_keys);
+		state.lhs_join_keys.Reset();
+		state.probe_executor.Execute(input, state.lhs_join_keys);
 
 		// perform the actual probe
 		if (sink.external) {
-			sink.hash_table->ProbeAndSpill(state.scan_structure, state.join_keys, state.join_key_state,
+			sink.hash_table->ProbeAndSpill(state.scan_structure, state.lhs_join_keys, state.join_key_state,
 			                               state.probe_state, input, *sink.probe_spill, state.spill_state,
 			                               state.spill_chunk);
 		} else {
-			sink.hash_table->Probe(state.scan_structure, state.join_keys, state.join_key_state, state.probe_state);
+			sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state);
 		}
 	}
-	state.scan_structure.Next(state.join_keys, input, chunk);
+	state.scan_structure.Next(state.lhs_join_keys, state.lhs_output, chunk);
 
 	if (state.scan_structure.PointersExhausted() && chunk.size() == 0) {
 		state.scan_structure.is_null = true;

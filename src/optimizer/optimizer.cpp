@@ -14,6 +14,7 @@
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
+#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
@@ -26,7 +27,6 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
-#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -170,6 +170,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		cse_optimizer.VisitOperator(*plan);
 	});
 
+	// creates projection maps so unused columns are projected out early
+	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
+		ColumnLifetimeAnalyzer column_lifetime(*this, true);
+		column_lifetime.VisitOperator(*plan);
+	});
+
 	// Once we know the column lifetime, we have more information regarding
 	// what relations should be the build side/probe side.
 	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
@@ -189,12 +195,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = topn.Optimize(std::move(plan));
 	});
 
-	// creates projection maps so unused columns are projected out early
-	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
-		ColumnLifetimeAnalyzer column_lifetime(true);
-		column_lifetime.VisitOperator(*plan);
-	});
-
 	// perform statistics propagation
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
@@ -211,7 +211,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
-		ColumnLifetimeAnalyzer column_lifetime(true);
+		ColumnLifetimeAnalyzer column_lifetime(*this, true);
 		column_lifetime.VisitOperator(*plan);
 	});
 
