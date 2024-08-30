@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 
 namespace duckdb {
 
