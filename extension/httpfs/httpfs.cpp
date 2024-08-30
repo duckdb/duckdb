@@ -3,21 +3,21 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "http_state.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/http_util.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/logging/http_logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/common/helper.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
-#include "duckdb/common/http_util.hpp"
+#include "http_state.hpp"
 
 #include <chrono>
+#include <map>
 #include <string>
 #include <thread>
-#include <map>
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
@@ -462,7 +462,14 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, File
 		}
 	}
 
-	return duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, params);
+	auto result = duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, params);
+
+	auto client_context = FileOpener::TryGetClientContext(opener);
+	if (client_context && ClientConfig::GetConfig(*client_context).enable_http_logging) {
+		result->http_logger = client_context->client_data->http_logger.get();
+	}
+
+	return result;
 }
 
 unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlags flags,
@@ -647,6 +654,11 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	state = HTTPState::TryGetState(opener);
 	if (!state) {
 		state = make_shared_ptr<HTTPState>();
+	}
+
+	auto client_context = FileOpener::TryGetClientContext(opener);
+	if (client_context && ClientConfig::GetConfig(*client_context).enable_http_logging) {
+		http_logger = client_context->client_data->http_logger.get();
 	}
 
 	auto current_cache = TryGetMetadataCache(opener, hfs);
