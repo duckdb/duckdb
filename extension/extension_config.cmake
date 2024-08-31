@@ -14,6 +14,6 @@ duckdb_extension_load(parquet EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
 # Configuring jemalloc properly for 32bit is a hassle, and not worth it so we only enable on 64bit
 # If page sizes vary for an architecture (e.g., arm64), we cannot create a portable binary due to jemalloc config
 # FIXME: after configuring the jemalloc config, jemalloc should work on arm64 again (should try at some point)
-if(CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT FORCE_32_BIT AND OS_NAME STREQUAL "linux" AND (OS_ARCH STREQUAL "amd64" OR OS_ARCH STREQUAL "i386") AND NOT WASM_LOADABLE_EXTENSIONS AND NOT CLANG_TIDY AND NOT ANDROID AND NOT ZOS)
+if(BUILD_JEMALLOC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT FORCE_32_BIT AND OS_NAME STREQUAL "linux" AND (OS_ARCH STREQUAL "amd64" OR OS_ARCH STREQUAL "i386") AND NOT WASM_LOADABLE_EXTENSIONS AND NOT CLANG_TIDY AND NOT ANDROID AND NOT ZOS)
     duckdb_extension_load(jemalloc EXTENSION_VERSION ${DUCKDB_NORMALIZED_VERSION})
 endif()
