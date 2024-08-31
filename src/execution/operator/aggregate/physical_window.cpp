@@ -761,7 +761,7 @@ bool WindowLocalSourceState::TryAssignTask() {
 bool WindowGlobalSourceState::TryPrepareNextStage() {
 	if (next_task >= tasks.size() || stopped) {
 		// cannot prepare next stage anymore - exit
-		return false;
+		return true;
 	}
 
 	auto task = &tasks[next_task];
