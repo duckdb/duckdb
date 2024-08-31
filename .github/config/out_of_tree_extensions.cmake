@@ -117,13 +117,13 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 1ee5404c4b9a62a572c9076ebf4cabb7f4181ea6
+        GIT_TAG 647f1403791890b65a1419841df02bf17d634639
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG 98fb00dcfc9413ffe58f58022344661e1b45623f
+        GIT_TAG 7b00307a0c00fbb85bef2010330946f11311ba4c
         )
 
 ################# SUBSTRAIT
@@ -151,6 +151,6 @@ if (NOT MINGW)
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
-            GIT_TAG 6519c1953655b86f59884bb1b79f554b9fdf551b
+            GIT_TAG 64cb6aec994fbe441157086599c265eb86303c84
             )
 endif()
