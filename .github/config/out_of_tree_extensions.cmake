@@ -38,8 +38,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 49b63dc8cd166952a0a34dfd54e6cfe5b823e05e
-            APPLY_PATCHES
+            GIT_TAG eddc48422c76a2f02a57a45d31b650b2680168f5
             )
 endif()
 
@@ -50,7 +49,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT WIN32)
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG 0b981978e8450a43f3b0bfdb84d382d61afbb1d0
+            GIT_TAG db45fc29f21c3638cd417c3a79394912465db84e
     )
 endif()
 
@@ -118,13 +117,13 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 1ee5404c4b9a62a572c9076ebf4cabb7f4181ea6
+        GIT_TAG 647f1403791890b65a1419841df02bf17d634639
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG 98fb00dcfc9413ffe58f58022344661e1b45623f
+        GIT_TAG 7b00307a0c00fbb85bef2010330946f11311ba4c
         )
 
 ################# SUBSTRAIT
@@ -152,6 +151,6 @@ if (NOT MINGW)
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
-            GIT_TAG 6519c1953655b86f59884bb1b79f554b9fdf551b
+            GIT_TAG 64cb6aec994fbe441157086599c265eb86303c84
             )
 endif()
