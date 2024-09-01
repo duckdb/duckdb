@@ -216,7 +216,6 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		ExpressionBinder::QualifyColumnNames(*this, expression);
 
 		// bind it to verify the function was defined correctly
-		ErrorData error;
 		BoundSelectNode sel_node;
 		BoundGroupInformation group_info;
 		SelectBinder binder(*this, context, sel_node, group_info);
@@ -232,8 +231,17 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				dependencies.AddDependency(entry);
 			});
 		}
-		error = binder.Bind(expression, 0, false);
-		if (error.HasError()) {
+		ErrorData error;
+		try {
+			error = binder.Bind(expression, 0, false);
+			if (error.HasError()) {
+				error.Throw();
+			}
+		} catch (const std::exception &ex) {
+			error = ErrorData(ex);
+		}
+		// if we cannot resolve parameters we postpone binding until the macro function is used
+		if (error.HasError() && error.Type() != ExceptionType::PARAMETER_NOT_RESOLVED) {
 			error.Throw();
 		}
 	}
