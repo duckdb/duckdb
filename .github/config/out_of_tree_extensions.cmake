@@ -49,7 +49,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT WIN32)
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG db45fc29f21c3638cd417c3a79394912465db84e
+            GIT_TAG dfee8b31dfc56d0a25b88d50351389da0d67fdb0
     )
 endif()
 
