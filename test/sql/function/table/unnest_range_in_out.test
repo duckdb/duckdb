@@ -1,0 +1,25 @@
+# name: test/sql/function/table/unnest_range_in_out.test
+# description: Test on unnest(range) being in-out function
+# group: [table]
+
+query I
+select (select pi()) from range(0,2);
+----
+3.141592653589793
+3.141592653589793
+
+query I
+select (select pi()) from unnest( range(0,2) );
+----
+3.141592653589793
+3.141592653589793
+
+query I
+SELECT sum(a) FROM RANGE(1, 2) _ (a);
+----
+1
+
+query I
+SELECT sum(a) FROM unnest(RANGE(1, 2)) _ (a);
+----
+1

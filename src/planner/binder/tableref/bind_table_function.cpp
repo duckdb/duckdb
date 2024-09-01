@@ -36,9 +36,6 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 			break;
 		}
 	}
-	if (all_scalar) {
-		return TableFunctionBindType::STANDARD_TABLE_FUNCTION;
-	}
 	// if we have non-scalar parameters - we need to look at the function definition to decide how to bind
 	// if a function does not have an in_out_function defined, we need to bind as a standard table function regardless
 	bool has_in_out_function = false;
@@ -59,6 +56,10 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 			throw InternalException("Function \"%s\" has neither in_out_function nor function defined",
 			                        table_function.name);
 		}
+	}
+	if (all_scalar) {
+		return has_in_out_function ? TableFunctionBindType::TABLE_IN_OUT_FUNCTION
+		                           : TableFunctionBindType::STANDARD_TABLE_FUNCTION;
 	}
 	if (has_table_parameter) {
 		if (table_function.functions.Size() != 1) {
