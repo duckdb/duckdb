@@ -22,7 +22,7 @@ void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(const vector<ColumnBind
 void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> bindings,
                                                    column_binding_set_t &unused_bindings,
                                                    vector<idx_t> &projection_map) {
-	D_ASSERT(projection_map.empty());
+	projection_map.clear();
 	if (unused_bindings.empty()) {
 		return;
 	}
@@ -40,13 +40,6 @@ void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> binding
 
 void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
-	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		// visit the duplicate eliminated columns on the LHS, if any
-		auto &delim_join = op.Cast<LogicalComparisonJoin>();
-		for (auto &expr : delim_join.duplicate_eliminated_columns) {
-			VisitExpression(&expr);
-		}
-	}
 	VisitOperatorChildren(op);
 }
 
@@ -56,37 +49,6 @@ void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
 		bindings.push_back(bound_ref.binding);
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractColumnBindings(child, bindings); });
-}
-
-void ColumnLifetimeAnalyzer::ClearProjectionMaps(LogicalOperator &op) {
-	if (op.HasProjectionMap()) {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-			auto &join = op.Cast<LogicalJoin>();
-			join.left_projection_map.clear();
-			join.right_projection_map.clear();
-			break;
-		}
-		case LogicalOperatorType::LOGICAL_ORDER_BY: {
-			auto &order = op.Cast<LogicalOrder>();
-			order.projection_map.clear();
-			break;
-		}
-		case LogicalOperatorType::LOGICAL_FILTER: {
-			auto &filter = op.Cast<LogicalFilter>();
-			filter.projection_map.clear();
-			break;
-		}
-		default:
-			throw NotImplementedException("ColumnLifetimeAnalyzer::ClearProjectionMaps for %s",
-			                              EnumUtil::ToString(op.type));
-		}
-	}
-	for (auto &child : op.children) {
-		ClearProjectionMaps(*child);
-	}
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
@@ -107,7 +69,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 
-		// FIXME for now, we only push into the projection map for equality (hash) joins
+		// FIXME: for now, we only push into the projection map for equality (hash) joins
 		idx_t has_range = 0;
 		if (!comp_join.HasEquality(has_range) || optimizer.context.config.prefer_range_joins) {
 			return;

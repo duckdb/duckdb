@@ -187,62 +187,6 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	}
 }
 
-void VisitChildOfOperatorWithProjectionMap(LogicalOperator &child, vector<idx_t> &projection_map,
-                                           const std::function<void(LogicalOperator &)> &fun) {
-	const auto child_bindings_before = child.GetColumnBindings();
-	fun(child);
-	if (projection_map.empty()) {
-		return; // Nothing to fix here
-	}
-	// Child binding order may have changed due to 'fun'.
-	const auto child_bindings_after = child.GetColumnBindings();
-	if (child_bindings_before == child_bindings_after) {
-		return; // Nothing changed
-	}
-	// The desired order is 'projection_map' applied to 'child_bindings_before
-	vector<idx_t> new_projection_map;
-	new_projection_map.reserve(projection_map.size());
-	for (const auto proj_idx_before : projection_map) {
-		auto &desired_binding = child_bindings_before[proj_idx_before];
-		idx_t proj_idx_after;
-		for (proj_idx_after = 0; proj_idx_after < child_bindings_after.size(); proj_idx_after++) {
-			if (child_bindings_after[proj_idx_after] == desired_binding) {
-				break;
-			}
-		}
-		D_ASSERT(proj_idx_after < child_bindings_after.size()); // Must've found it in there
-		new_projection_map.push_back(proj_idx_after);
-	}
-	projection_map = new_projection_map;
-}
-
-void VisitOperatorWithProjectionMapChildren(LogicalOperator &op, const std::function<void(LogicalOperator &)> &fun) {
-	D_ASSERT(op.HasProjectionMap());
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-		auto &join = op.Cast<LogicalJoin>();
-		VisitChildOfOperatorWithProjectionMap(*op.children[0], join.left_projection_map, fun);
-		VisitChildOfOperatorWithProjectionMap(*op.children[1], join.right_projection_map, fun);
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto &order = op.Cast<LogicalOrder>();
-		VisitChildOfOperatorWithProjectionMap(*op.children[0], order.projection_map, fun);
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto &filter = op.Cast<LogicalFilter>();
-		VisitChildOfOperatorWithProjectionMap(*op.children[0], filter.projection_map, fun);
-		break;
-	}
-	default:
-		throw NotImplementedException("RecurseIntoChildrenOfOperatorWithProjectionMap for %s",
-		                              EnumUtil::ToString(op.type));
-	}
-}
-
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
@@ -277,11 +221,18 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
 		auto &join = op.Cast<LogicalJoin>();
-		// We cannot flip if these are set (YET), but not flipping is worse than just clearing them
-		// They will be set in the 2nd round of ColumnLifetimeAnalyzer
-		join.left_projection_map.clear();
-		join.right_projection_map.clear();
-		TryFlipJoinChildren(op);
+		// We do not yet support the RIGHT_SEMI or RIGHT_ANTI join types for these, so don't try to flip
+		switch (join.join_type) {
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+			break; // RIGHT_SEMI/RIGHT_ANTI not supported yet for ANY/ASOF
+		default:
+			// We cannot flip projection maps are set (YET), but not flipping is worse than just clearing them
+			// They will be set in the 2nd round of ColumnLifetimeAnalyzer
+			join.left_projection_map.clear();
+			join.right_projection_map.clear();
+			TryFlipJoinChildren(op);
+		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
@@ -292,11 +243,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 
-	if (op.HasProjectionMap()) {
-		VisitOperatorWithProjectionMapChildren(op, [&](LogicalOperator &child) { VisitOperator(child); });
-	} else {
-		VisitOperatorChildren(op);
-	}
+	VisitOperatorChildren(op);
 }
 
 } // namespace duckdb

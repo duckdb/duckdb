@@ -61,7 +61,6 @@ InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
 }
 
 void LogicalOperator::ResolveOperatorTypes() {
-
 	types.clear();
 	// first resolve child types
 	for (auto &child : children) {
