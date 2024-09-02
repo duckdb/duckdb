@@ -884,9 +884,8 @@ public:
 	DataChunk lhs_join_keys;
 	DataChunk lhs_output;
 	TupleDataChunkState join_key_state;
+	ExpressionExecutor lhs_join_key_executor;
 
-	//! Column indices to easily reference the join keys/payload columns in probe_chunk
-	vector<idx_t> join_key_indices;
 	//! Scan structure for the external probe
 	JoinHashTable::ScanStructure scan_structure;
 	JoinHashTable::ProbeState probe_state;
@@ -1063,7 +1062,7 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 
 HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, const HashJoinGlobalSinkState &sink,
                                                    Allocator &allocator)
-    : local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER),
+    : local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER), lhs_join_key_executor(sink.context),
       scan_structure(*sink.hash_table, join_key_state) {
 	auto &chunk_state = probe_local_scan.current_chunk_state;
 	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
@@ -1073,9 +1072,8 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, c
 	lhs_output.Initialize(allocator, op.lhs_output_columns.col_types);
 	TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
 
-	// Store the indices of the columns to reference them easily
-	for (idx_t col_idx = 0; col_idx < op.condition_types.size(); col_idx++) {
-		join_key_indices.push_back(col_idx);
+	for (auto &cond : op.conditions) {
+		lhs_join_key_executor.AddExpression(*cond.left);
 	}
 }
 
@@ -1146,7 +1144,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	sink.probe_spill->consumer->ScanChunk(probe_local_scan, lhs_probe_chunk);
 
 	// Get the probe chunk columns/hashes
-	lhs_join_keys.ReferenceColumns(lhs_probe_chunk, join_key_indices);
+	lhs_join_key_executor.Execute(chunk, lhs_probe_chunk);
 	lhs_output.ReferenceColumns(lhs_probe_chunk, sink.op.lhs_output_columns.col_idxs);
 	auto precomputed_hashes = &lhs_probe_chunk.data.back();
 
