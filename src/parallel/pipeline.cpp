@@ -74,7 +74,7 @@ ClientContext &Pipeline::GetClientContext() {
 
 bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality) {
 	D_ASSERT(source);
-	source_cardinality = source->estimated_cardinality;
+	source_cardinality = MinValue<idx_t>(source->estimated_cardinality, 1ULL << 48ULL);
 	if (!initialized) {
 		current_percentage = 0;
 		return true;

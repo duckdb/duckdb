@@ -71,6 +71,8 @@ public:
 	void Write(FileBuffer &block, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
 	void WriteHeader(DatabaseHeader header) override;
+	//! Sync changes to the underlying file
+	void FileSync() override;
 	//! Truncate the underlying database file after a checkpoint
 	void Truncate() override;
 
@@ -101,6 +103,9 @@ private:
 	void TrimFreeBlocks();
 
 	void IncreaseBlockReferenceCountInternal(block_id_t block_id);
+
+	//! Verify the block usage count
+	void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) override;
 
 private:
 	AttachedDatabase &db;

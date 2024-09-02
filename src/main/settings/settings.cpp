@@ -1107,6 +1107,54 @@ Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// HTTP Proxy
+//===--------------------------------------------------------------------===//
+void HTTPProxy::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy = DBConfig().options.http_proxy;
+}
+
+void HTTPProxy::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	config.options.http_proxy = parameter.GetValue<string>();
+}
+
+Value HTTPProxy::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.options.http_proxy;
+}
+
+//===--------------------------------------------------------------------===//
+// HTTP Proxy Username
+//===--------------------------------------------------------------------===//
+void HTTPProxyUsername::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy_username = DBConfig().options.http_proxy_username;
+}
+
+void HTTPProxyUsername::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	config.options.http_proxy_username = parameter.GetValue<string>();
+}
+
+Value HTTPProxyUsername::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.options.http_proxy_username;
+}
+
+//===--------------------------------------------------------------------===//
+// HTTP Proxy Password
+//===--------------------------------------------------------------------===//
+void HTTPProxyPassword::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy_password = DBConfig().options.http_proxy_password;
+}
+
+void HTTPProxyPassword::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	config.options.http_proxy_password = parameter.GetValue<string>();
+}
+
+Value HTTPProxyPassword::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.options.http_proxy_password;
+}
+
+//===--------------------------------------------------------------------===//
 // Integer Division
 //===--------------------------------------------------------------------===//
 void IntegerDivisionSetting::ResetLocal(ClientContext &context) {
@@ -1169,17 +1217,17 @@ Value LockConfigurationSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // IEEE Floating Points
 //===--------------------------------------------------------------------===//
-void IEEEFloatingPointOpsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.ieee_floating_point_ops = BooleanValue::Get(input);
+void IEEEFloatingPointOpsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).ieee_floating_point_ops = ClientConfig().ieee_floating_point_ops;
 }
 
-void IEEEFloatingPointOpsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.ieee_floating_point_ops = DBConfig().options.ieee_floating_point_ops;
+void IEEEFloatingPointOpsSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).ieee_floating_point_ops = input.GetValue<bool>();
 }
 
 Value IEEEFloatingPointOpsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.ieee_floating_point_ops);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.ieee_floating_point_ops);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1343,6 +1391,22 @@ void OldImplicitCasting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value OldImplicitCasting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.old_implicit_casting);
+}
+
+//===--------------------------------------------------------------------===//
+// Old Implicit Casting
+//===--------------------------------------------------------------------===//
+void OrderByNonIntegerLiteral::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).order_by_non_integer_literal = ClientConfig().order_by_non_integer_literal;
+}
+
+void OrderByNonIntegerLiteral::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).order_by_non_integer_literal = input.GetValue<bool>();
+}
+
+Value OrderByNonIntegerLiteral::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.order_by_non_integer_literal);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1564,6 +1628,26 @@ Value ArrowOutputListView::GetSetting(const ClientContext &context) {
 	return Value::BOOLEAN(arrow_output_list_view);
 }
 
+//===--------------------------------------------------------------------===//
+// LosslessConversionArrow
+//===--------------------------------------------------------------------===//
+void LosslessConversionArrow::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto arrow_arrow_lossless_conversion = input.GetValue<bool>();
+
+	config.options.arrow_arrow_lossless_conversion = arrow_arrow_lossless_conversion;
+}
+
+void LosslessConversionArrow::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_arrow_lossless_conversion = DBConfig().options.arrow_arrow_lossless_conversion;
+}
+
+Value LosslessConversionArrow::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool arrow_arrow_lossless_conversion = config.options.arrow_arrow_lossless_conversion;
+	return Value::BOOLEAN(arrow_arrow_lossless_conversion);
+}
+
+//===--------------------------------------------------------------------===//
 // ProduceArrowStringView
 //===--------------------------------------------------------------------===//
 void ProduceArrowStringView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1576,6 +1660,22 @@ void ProduceArrowStringView::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 
 Value ProduceArrowStringView::GetSetting(const ClientContext &context) {
 	return Value::BOOLEAN(DBConfig::GetConfig(context).options.produce_arrow_string_views);
+}
+
+//===--------------------------------------------------------------------===//
+// ScalarSubqueryErrorOnMultipleRows
+//===--------------------------------------------------------------------===//
+void ScalarSubqueryErrorOnMultipleRows::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows =
+	    ClientConfig().scalar_subquery_error_on_multiple_rows;
+}
+
+void ScalarSubqueryErrorOnMultipleRows::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows = input.GetValue<bool>();
+}
+
+Value ScalarSubqueryErrorOnMultipleRows::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1612,13 +1712,9 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 	if (parameter == "standard") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = false;
-		config.emit_profiler_output = true;
-		config.profiler_settings = ClientConfig().profiler_settings;
 	} else if (parameter == "detailed") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = true;
-		config.emit_profiler_output = true;
-		config.profiler_settings = ClientConfig().profiler_settings;
 
 		// add optimizer settings to the profiler settings
 		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();

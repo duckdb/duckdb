@@ -47,7 +47,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -95,7 +95,6 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
@@ -106,7 +105,7 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install
       shell: bash
@@ -141,17 +140,15 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      BUILD_EXTENSIONS: "inet"
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install
       shell: bash
@@ -189,7 +186,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install
       shell: bash

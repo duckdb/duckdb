@@ -487,6 +487,33 @@ struct HomeDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct HTTPProxy {
+	static constexpr const char *Name = "http_proxy";
+	static constexpr const char *Description = "HTTP proxy host";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct HTTPProxyUsername {
+	static constexpr const char *Name = "http_proxy_username";
+	static constexpr const char *Description = "Username for HTTP proxy";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct HTTPProxyPassword {
+	static constexpr const char *Name = "http_proxy";
+	static constexpr const char *Description = "Password for HTTP proxy";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct IntegerDivisionSetting {
 	static constexpr const char *Name = "integer_division";
 	static constexpr const char *Description =
@@ -521,8 +548,8 @@ struct IEEEFloatingPointOpsSetting {
 	static constexpr const char *Description =
 	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -601,6 +628,16 @@ struct OldImplicitCasting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct OrderByNonIntegerLiteral {
+	static constexpr const char *Name = "order_by_non_integer_literal";
+	static constexpr const char *Description =
+	    "Allow ordering by non-integer literals - ordering by such literals has no effect";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -724,6 +761,17 @@ struct ArrowOutputListView {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LosslessConversionArrow {
+	static constexpr const char *Name = "arrow_lossless_conversion";
+	static constexpr const char *Description =
+	    "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types "
+	    "with a duckdb.type_name extension name.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ProduceArrowStringView {
 	static constexpr const char *Name = "produce_arrow_string_view";
 	static constexpr const char *Description =
@@ -758,6 +806,16 @@ struct ProgressBarTimeSetting {
 	static constexpr const char *Description =
 	    "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ScalarSubqueryErrorOnMultipleRows {
+	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";
+	static constexpr const char *Description =
+	    "When a scalar subquery returns multiple rows - return a random row instead of returning an error";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);

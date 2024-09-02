@@ -1054,10 +1054,11 @@ void Vector::Flatten(idx_t count) {
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment, sequence_count;
 		SequenceVector::GetSequence(*this, start, increment, sequence_count);
+		auto seq_count = NumericCast<idx_t>(sequence_count);
 
-		buffer = VectorBuffer::CreateStandardVector(GetType());
+		buffer = VectorBuffer::CreateStandardVector(GetType(), MaxValue<idx_t>(STANDARD_VECTOR_SIZE, seq_count));
 		data = buffer->GetData();
-		VectorOperations::GenerateSequence(*this, NumericCast<idx_t>(sequence_count), start, increment);
+		VectorOperations::GenerateSequence(*this, seq_count, start, increment);
 		break;
 	}
 	default:
@@ -1545,6 +1546,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		auto &child_types = StructType::GetChildTypes(type);
 		D_ASSERT(!child_types.empty());
+
 		// create a selection vector of the non-null entries of the struct vector
 		auto &children = StructVector::GetEntries(*vector);
 		D_ASSERT(child_types.size() == children.size());

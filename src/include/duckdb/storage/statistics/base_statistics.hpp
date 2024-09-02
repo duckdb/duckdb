@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
@@ -112,6 +112,12 @@ public:
 	idx_t GetDistinctCount();
 	static BaseStatistics FromConstant(const Value &input);
 
+	template <class T>
+	void UpdateNumericStats(T new_value) {
+		D_ASSERT(GetStatsType() == StatisticsType::NUMERIC_STATS);
+		NumericStats::Update(stats_union.numeric_data, new_value);
+	}
+
 private:
 	BaseStatistics();
 	explicit BaseStatistics(LogicalType type);
@@ -144,5 +150,12 @@ private:
 	//! Child stats (for LIST and STRUCT)
 	unsafe_unique_array<BaseStatistics> child_stats;
 };
+
+template <>
+inline void BaseStatistics::UpdateNumericStats<interval_t>(interval_t new_value) {
+}
+template <>
+inline void BaseStatistics::UpdateNumericStats<list_entry_t>(list_entry_t new_value) {
+}
 
 } // namespace duckdb

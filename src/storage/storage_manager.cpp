@@ -255,6 +255,7 @@ public:
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
 	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t &count) override;
+	bool HasRowGroupData() override;
 
 private:
 	idx_t initial_wal_size = 0;
@@ -303,6 +304,14 @@ void SingleFileStorageCommitState::FlushCommit() {
 
 void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
                                                    unique_ptr<PersistentCollectionData> row_group_data) {
+	if (row_group_data->HasUpdates()) {
+		// cannot serialize optimistic block pointers if in-memory updates exist
+		return;
+	}
+	if (table.HasIndexes()) {
+		// cannot serialize optimistic block pointers if the table has indexes
+		return;
+	}
 	auto &entries = optimistically_written_data[table];
 	auto entry = entries.find(start_index);
 	if (entry != entries.end()) {
@@ -327,6 +336,10 @@ optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroup
 	}
 	count = start_entry->second.count;
 	return start_entry->second.row_group_data.get();
+}
+
+bool SingleFileStorageCommitState::HasRowGroupData() {
+	return !optimistically_written_data.empty();
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {
