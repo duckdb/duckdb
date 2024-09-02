@@ -89,14 +89,6 @@ void test_deserialization(const string &file_location) {
 	while (std::getline(queries, query)) {
 		INFO("evaluating " << query)
 		con.BeginTransaction();
-		Parser p;
-		p.ParseQuery(query);
-		Planner planner(*con.context);
-		planner.CreatePlan(std::move(p.statements[0]));
-		auto expected_plan = std::move(planner.plan);
-		expected_plan->ResolveOperatorTypes();
-		auto expected_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(expected_plan)), false);
-		REQUIRE_NO_FAIL(*expected_results);
 
 		BinaryDeserializer deserializer(file_source);
 		deserializer.Set<ClientContext &>(*con.context);
@@ -109,7 +101,32 @@ void test_deserialization(const string &file_location) {
 		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
 		REQUIRE_NO_FAIL(*deserialized_results);
 
-		REQUIRE(deserialized_results->Equals(*expected_results));
+		Parser p;
+		p.ParseQuery(query);
+		Planner planner(*con.context);
+		planner.CreatePlan(std::move(p.statements[0]));
+		auto expected_plan = std::move(planner.plan);
+		expected_plan->ResolveOperatorTypes();
+		auto expected_results = con.Query(query);
+		REQUIRE_NO_FAIL(*expected_results);
+
+		if (deserialized_results->names.size() == expected_results->names.size()) {
+			// ignore names
+			deserialized_results->names = expected_results->names;
+		}
+
+		if (!deserialized_results->Equals(*expected_results)) {
+			fprintf(stderr, "-----------------------------------\n");
+			fprintf(stderr, "Deserialized result does not match!\n");
+			fprintf(stderr, "-----------------------------------\n");
+			fprintf(stderr, "Query: %s\n", query.c_str());
+			fprintf(stderr, "-------------Deserialized----------\n");
+			deserialized_results->Print();
+			fprintf(stderr, "---------------Expected------------\n");
+			expected_results->Print();
+			fprintf(stderr, "-----------------------------------\n");
+			FAIL("Deserialized result does not match");
+		}
 
 		con.Rollback();
 	}

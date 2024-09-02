@@ -10,20 +10,15 @@ using namespace duckdb_yyjson; // NOLINT
 namespace duckdb {
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
-	return {
-	    MetricsType::QUERY_NAME,           MetricsType::BLOCKED_THREAD_TIME,     MetricsType::CPU_TIME,
-	    MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY,  MetricsType::OPERATOR_TYPE,
-	    MetricsType::OPERATOR_CARDINALITY, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_ROWS_SCANNED,
-	    MetricsType::OPERATOR_TIMING,
-	};
+	return {MetricsType::QUERY_NAME,           MetricsType::BLOCKED_THREAD_TIME,     MetricsType::CPU_TIME,
+	        MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY,  MetricsType::OPERATOR_TYPE,
+	        MetricsType::OPERATOR_CARDINALITY, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_ROWS_SCANNED,
+	        MetricsType::OPERATOR_TIMING,      MetricsType::RESULT_SET_SIZE};
 }
 
 profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
-	return {
-	    MetricsType::OPERATOR_CARDINALITY,
-	    MetricsType::OPERATOR_ROWS_SCANNED,
-	    MetricsType::OPERATOR_TIMING,
-	};
+	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
+	        MetricsType::RESULT_SET_SIZE};
 }
 
 profiler_settings_t ProfilingInfo::AllSettings() {
@@ -69,6 +64,7 @@ void ProfilingInfo::ResetMetrics() {
 			metrics[metric] = Value::CreateValue<uint8_t>(0);
 			break;
 		}
+		case MetricsType::RESULT_SET_SIZE:
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY:
 		case MetricsType::CUMULATIVE_ROWS_SCANNED:
@@ -183,6 +179,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, GetMetricAsString(metric).c_str());
 			break;
 		}
+		case MetricsType::RESULT_SET_SIZE:
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY:
 		case MetricsType::CUMULATIVE_ROWS_SCANNED:

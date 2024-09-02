@@ -11,8 +11,8 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-
-#include <thread>
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/thread.hpp"
 
 namespace duckdb {
 
@@ -96,8 +96,8 @@ public:
 		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
 	}
 
-	IEJoinGlobalState(IEJoinGlobalState &prev)
-	    : GlobalSinkState(prev), tables(std::move(prev.tables)), child(prev.child + 1) {
+	IEJoinGlobalState(IEJoinGlobalState &prev) : tables(std::move(prev.tables)), child(prev.child + 1) {
+		state = prev.state;
 	}
 
 	void Sink(DataChunk &input, IEJoinLocalState &lstate) {
@@ -796,7 +796,7 @@ public:
 	}
 
 	void Initialize() {
-		lock_guard<mutex> initializing(lock);
+		auto guard = Lock();
 		if (initialized) {
 			return;
 		}
@@ -921,8 +921,8 @@ public:
 
 		const auto count = pair_count + left_outers + right_outers;
 
-		const auto l = MinValue(next_left.load(), left_outers);
-		const auto r = MinValue(next_right.load(), right_outers);
+		const auto l = MinValue(next_left.load(), left_outers.load());
+		const auto r = MinValue(next_right.load(), right_outers.load());
 		const auto returned = completed.load() + l + r;
 
 		return count ? (double(returned) / double(count)) : -1;
@@ -931,23 +931,22 @@ public:
 	const PhysicalIEJoin &op;
 	IEJoinGlobalState &gsink;
 
-	mutex lock;
 	bool initialized;
 
 	// Join queue state
-	std::atomic<size_t> next_pair;
-	std::atomic<size_t> completed;
+	atomic<size_t> next_pair;
+	atomic<size_t> completed;
 
 	// Block base row number
 	vector<idx_t> left_bases;
 	vector<idx_t> right_bases;
 
 	// Outer joins
-	idx_t left_outers;
-	std::atomic<idx_t> next_left;
+	atomic<idx_t> left_outers;
+	atomic<idx_t> next_left;
 
-	idx_t right_outers;
-	std::atomic<idx_t> next_right;
+	atomic<idx_t> right_outers;
+	atomic<idx_t> next_right;
 };
 
 unique_ptr<GlobalSourceState> PhysicalIEJoin::GetGlobalSourceState(ClientContext &context) const {
