@@ -138,9 +138,7 @@ public:
 		// For external hash join
 		external = ClientConfig::GetConfig(context).force_external;
 		// Set probe types
-		const auto &payload_types = op.children[0]->types;
-		probe_types.insert(probe_types.end(), op.condition_types.begin(), op.condition_types.end());
-		probe_types.insert(probe_types.end(), payload_types.begin(), payload_types.end());
+		probe_types = op.children[0]->types;
 		probe_types.emplace_back(LogicalType::HASH);
 
 		if (op.filter_pushdown) {

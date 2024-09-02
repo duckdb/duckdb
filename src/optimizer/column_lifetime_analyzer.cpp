@@ -52,7 +52,6 @@ void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
-	D_ASSERT(!op.HasProjectionMap());
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// FIXME: groups that are not referenced can be removed from projection

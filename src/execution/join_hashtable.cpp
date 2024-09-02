@@ -1467,18 +1467,12 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 	return true;
 }
 
-static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &keys, DataChunk &payload, Vector &hashes) {
+static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &payload, Vector &hashes) {
+	D_ASSERT(spill_chunk.ColumnCount() == payload.ColumnCount() + 1);
 	spill_chunk.Reset();
-	idx_t spill_col_idx = 0;
-	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
-		spill_chunk.data[col_idx].Reference(keys.data[col_idx]);
-	}
-	spill_col_idx += keys.ColumnCount();
-	for (idx_t col_idx = 0; col_idx < payload.data.size(); col_idx++) {
-		spill_chunk.data[spill_col_idx + col_idx].Reference(payload.data[col_idx]);
-	}
-	spill_col_idx += payload.ColumnCount();
-	spill_chunk.data[spill_col_idx].Reference(hashes);
+	spill_chunk.Reference(payload);
+	spill_chunk.data.back().Reference(hashes);
+	spill_chunk.SetCardinality(payload);
 }
 
 void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
@@ -1497,7 +1491,7 @@ void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys
 	                                            radix_bits, partition_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
-	CreateSpillChunk(spill_chunk, keys, payload, hashes);
+	CreateSpillChunk(spill_chunk, payload, hashes);
 
 	// can't probe these values right now, append to spill
 	spill_chunk.Slice(false_sel, false_count);
