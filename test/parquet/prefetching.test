@@ -18,8 +18,6 @@ IO Error: The parquet file 'data/parquet-testing/incorrect_index_page_offsets.pa
 statement ok
 set disable_parquet_prefetching=true;
 
-# This file messes with DuckDB's prefetching mechanism, however the prefetching mechanism automatically disables
-# when it detects this situation meaning that the query still succeeds (possibly at a performance penalty) 
 query IIIIIIIIIII
 FROM 'data/parquet-testing/incorrect_index_page_offsets.parquet'
 ----
