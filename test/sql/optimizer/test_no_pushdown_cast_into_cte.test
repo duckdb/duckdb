@@ -5,42 +5,42 @@
 statement ok
 pragma explain_output='optimized_only';
 
-#query II
-#WITH t(a, b) AS (
-#  SELECT a :: int, b :: int
-#  FROM (VALUES
-#    ('1', '4'),
-#    ('5', '3'),
-#    ('2', '*'),
-#    ('3', '8'),
-#    ('7', '*')) AS _(a, b)
-#  WHERE position('*' in b) = 0
-#)
-#SELECT a, b
-#FROM   t
-#WHERE  a < b;
-#----
-#1	4
-#3	8
+query II
+WITH t(a, b) AS (
+  SELECT a :: int, b :: int
+  FROM (VALUES
+    ('1', '4'),
+    ('5', '3'),
+    ('2', '*'),
+    ('3', '8'),
+    ('7', '*')) AS _(a, b)
+  WHERE position('*' in b) = 0
+)
+SELECT a, b
+FROM   t
+WHERE  a < b;
+----
+1	4
+3	8
 
 
 # check filter is above projection that casts the varchar to int
-#query II
-#EXPLAIN WITH t(a, b) AS (
-#  SELECT a :: int, b :: int
-#  FROM (VALUES
-#    ('1', '4'),
-#    ('5', '3'),
-#    ('2', '*'),
-#    ('3', '8'),
-#    ('7', '*')) AS _(a, b)
-#  WHERE position('*' in b) = 0
-#)
-#SELECT a, b
-#FROM   t
-#WHERE  a < b;
-#----
-#logical_opt	<REGEX>:.*FILTER.*\(a < b\).*PROJECTION.*CAST.*CAST.*FILTER.*position.*
+query II
+EXPLAIN WITH t(a, b) AS (
+  SELECT a :: int, b :: int
+  FROM (VALUES
+    ('1', '4'),
+    ('5', '3'),
+    ('2', '*'),
+    ('3', '8'),
+    ('7', '*')) AS _(a, b)
+  WHERE position('*' in b) = 0
+)
+SELECT a, b
+FROM   t
+WHERE  a < b;
+----
+logical_opt	<REGEX>:.*FILTER.*\(a < b\).*PROJECTION.*CAST.*CAST.*FILTER.*position.*
 
 
 # INT can always be cast to varchar, so the filter a[1] = '1'
@@ -59,16 +59,16 @@ with t(a, b) as  (
 1	2
 
 
-## we should not see two filters, since the filter can be pushed to just above the column data scan
-#query II
-#explain with t(a, b) as  (
-#	select a :: varchar, b :: varchar
-#	FROM VALUES
-#	(1, 2),
-#	(3, 3),
-#	(5, 6),
-#	(7, 6) as
-#	_(a, b) where a <= b
-#) select a, b from t where a[1] = '1';
-#----
-#logical_opt	<!REGEX>:.*FILTER.*PROJECTION.*FILTER.*
+# we should not see two filters, since the filter can be pushed to just above the column data scan
+query II
+explain with t(a, b) as  (
+	select a :: varchar, b :: varchar
+	FROM VALUES
+	(1, 2),
+	(3, 3),
+	(5, 6),
+	(7, 6) as
+	_(a, b) where a <= b
+) select a, b from t where a[1] = '1';
+----
+logical_opt	<!REGEX>:.*FILTER.*PROJECTION.*FILTER.*
