@@ -49,8 +49,8 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 unique_ptr<CSVFileHandle> FindFileToSniff(ClientContext &context, const CSVReaderOptions &options,
                                           MultiFileList &file_list) {
 	D_ASSERT(file_list.Size() > 0);
-	if (file_list.Size() == 1) {
-		// We only have one file, don't have to do anything
+	if (file_list.Size() == 1 || !file_list.IsFirstPathGlob()) {
+		// We only have one file or the first file is not a glob, we don't have to do anything.
 		return ReadCSV::OpenCSV(file_list.GetFirstFile(), options.compression, context);
 	}
 

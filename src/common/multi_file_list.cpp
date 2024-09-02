@@ -185,6 +185,10 @@ bool MultiFileList::IsEmpty() {
 	return GetExpandResult() == FileExpandResult::NO_FILES;
 }
 
+bool MultiFileList::IsFirstPathGlob() const {
+	return false;
+}
+
 idx_t MultiFileList::Size() const {
 	return paths.size();
 }
@@ -272,6 +276,10 @@ string SimpleMultiFileList::GetFile(idx_t i) {
 
 idx_t SimpleMultiFileList::GetTotalFileCount() {
 	return paths.size();
+}
+
+bool SimpleMultiFileList::IsFirstPathGlob() const {
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -378,6 +386,11 @@ void GlobMultiFileList::SwapToFirst(const idx_t file_idx) {
 
 idx_t GlobMultiFileList::Size() const {
 	return expanded_files.size();
+}
+
+bool GlobMultiFileList::IsFirstPathGlob() const {
+	auto &fs = FileSystem::GetFileSystem(context);
+	return fs.HasGlob(paths[0]);
 }
 
 bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<string> &result) const {

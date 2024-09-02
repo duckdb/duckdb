@@ -89,6 +89,8 @@ public:
 	virtual idx_t Size() const = 0;
 	//! Swap file from file_idx with 0
 	virtual void SwapToFirst(const idx_t file_idx) = 0;
+	//! If the first path is a Glob
+	virtual bool IsFirstPathGlob() const = 0;
 
 	//! Virtual functions for subclasses
 public:
@@ -138,7 +140,8 @@ public:
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
 	void SwapToFirst(const idx_t file_idx) override;
-	virtual idx_t Size() const override;
+	idx_t Size() const override;
+	bool IsFirstPathGlob() const override;
 
 protected:
 	//! Main MultiFileList API
@@ -163,7 +166,8 @@ public:
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
 	void SwapToFirst(const idx_t file_idx) override;
-	virtual idx_t Size() const override;
+	idx_t Size() const override;
+	bool IsFirstPathGlob() const override;
 
 protected:
 	//! Main MultiFileList API
