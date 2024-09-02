@@ -1046,8 +1046,11 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
 
 			if (to_scan_compressed_bytes > total_row_group_span) {
-				throw InvalidInputException(
-				    "Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
+				// This is actually a malfored parquet file: the sum of the compressed bytes should never exceed the span of the column
+				// chunk for obious reasons. However some parquet files may incorrectly have written the offsets leading to DuckDB
+				// failing to compute the correct byte ranges to prefetch here. Fortunately, we can still scan these columns albeit
+				// without the prefetching mechanism leading potentially to poor performance.
+				return true;
 			}
 
 			if (!reader_data.filters &&
